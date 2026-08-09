@@ -2,10 +2,11 @@
 
 Дата: 2026-06-07
 
-Статус: план рефакторинга, выполнение начато. `csg_cad.py` уже используется как быстрый standalone-полигон, но целевая логика редактора должна жить в общем слое `termin.csg` и переиспользоваться в `termin-app`.
+Статус: основная декомпозиция и native UI migration выполнены 2026-08-09. `csg_cad.py` остаётся быстрым standalone-полигоном, а document/controller/tree/inspector логика живёт в общем слое `termin.csg` и переиспользуется в `termin-app`.
 
 ## Прогресс
 
+- 2026-08-09: standalone CAD переведён с `tcgui` на `termin-gui-native`: native window/runtime, `Viewport3D`, file dialogs и общий tree/inspector projection. Legacy CSG widget modules удалены; `termin-csg` больше не зависит от `tcgui`. Embedded `ProceduralMeshEditorExtension` использует тот же projection через тонкий adapter.
 - 2026-06-07: Phase 1 выполнена. Добавлен `termin.csg.editor_controller`, основные workflow-команды `CadApp` переведены на общий controller.
 - 2026-06-07: Phase 2 начата. `ProceduralMeshEditorExtension` переведен на общий controller для mode/draft/selection/document commands; добавлены embedded-кнопки primitives и boolean operations через тот же controller.
 - 2026-06-07: Phase 3 начата. Добавлен `termin.csg.operation_specs`; defaults, labels, button order, primitive param schema и tree boolean roles переведены на общий registry без изменения serialized format.
@@ -34,11 +35,12 @@
 Реальная точка встраивания в приложение - `ProceduralMeshEditorExtension` для `ProceduralMeshComponent`:
 
 ```text
-termin-app/termin/editor_tcgui/procedural_mesh_editor_extension.py
+termin-app/termin/editor_core/procedural_mesh_editor_extension.py
+termin-app/termin/editor_native/procedural_mesh_extension.py
 termin-components/termin-components-mesh/python/termin/mesh/procedural_mesh_component.py
 ```
 
-Сейчас общая документная логика уже вынесена в `termin.csg`, но standalone editor ушел дальше embedded extension. Это снова создает риск двух несовместимых реализаций редактора.
+Общая документная логика и native tree/inspector projection вынесены в `termin.csg`; standalone и embedded варианты используют один controller-facing facade. Различается только host policy: окно/файлы/камера у standalone и component lifecycle/scene viewport у редактора.
 
 ## Цель
 
@@ -71,10 +73,10 @@ Standalone CAD и `termin-app` должны отличаться только и
 - `document_raycast.py` - raycast по evaluated document;
 - `cad_viewer.py` - standalone viewport/rendering helpers.
 
-Проблемная зона:
+Оставшиеся shell-границы:
 
-- `cad_app.py` смешивает layout, commands, selection, mode, file IO, tree DnD, viewport tools, inspector panels и status handling;
-- `ProceduralMeshEditorExtension` частично повторяет старую версию editor workflow и не имеет parity со standalone CAD.
+- `cad_app.py` собирает только standalone layout, menu/file-dialog policy и связывает native viewport с общей моделью;
+- `ProceduralMeshEditorExtension` добавляет component lifecycle и scene viewport interaction, а общий native tree/inspector строится в `termin.csg.native_editor_panel`.
 
 ## Phase 1: Общий Editor Controller
 

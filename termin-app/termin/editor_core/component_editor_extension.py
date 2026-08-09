@@ -28,6 +28,7 @@ class ComponentExtensionPresentation:
 
     right_panel: object | None = None
     left_panel: object | None = None
+    close: Callable[[], None] | None = None
 
 
 ComponentExtensionPresenter = Callable[
@@ -100,6 +101,7 @@ class ComponentEditorExtensionSession:
         self._clear_presentation = clear_presentation
         self._registry = registry or _registry
         self._active_extension: ComponentEditorExtension | None = None
+        self._active_presentation_close: Callable[[], None] | None = None
         self._active_type_name = ""
 
     @property
@@ -111,6 +113,7 @@ class ComponentEditorExtensionSession:
         extension = self._registry.create(type_name)
         if extension is None:
             return
+        presentation: ComponentExtensionPresentation | None = None
         try:
             extension.attach(self._editor(), entity, component_ref)
             presentation = self._presenter(extension, type_name)
@@ -125,14 +128,25 @@ class ComponentEditorExtensionSession:
                     type_name,
                 )
             self._clear_presentation()
+            if presentation is not None and presentation.close is not None:
+                try:
+                    presentation.close()
+                except Exception:
+                    _logger.exception(
+                        "Failed to close component editor presentation after attach failure for '%s'",
+                        type_name,
+                    )
             raise
         self._active_extension = extension
+        self._active_presentation_close = presentation.close
         self._active_type_name = type_name
 
     def clear(self) -> None:
         extension = self._active_extension
+        presentation_close = self._active_presentation_close
         type_name = self._active_type_name
         self._active_extension = None
+        self._active_presentation_close = None
         self._active_type_name = ""
         detach_error: Exception | None = None
         if extension is not None:
@@ -142,6 +156,15 @@ class ComponentEditorExtensionSession:
                 detach_error = error
                 _logger.exception("Failed to detach component editor extension for '%s'", type_name)
         self._clear_presentation()
+        if presentation_close is not None:
+            try:
+                presentation_close()
+            except Exception:
+                _logger.exception(
+                    "Failed to close component editor presentation for '%s'",
+                    type_name,
+                )
+                raise
         if detach_error is not None:
             raise detach_error
 

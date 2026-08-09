@@ -143,11 +143,18 @@ def test_native_procedural_mesh_projector_mutates_shared_document_and_state():
     root.layout(Rect(0.0, 0.0, 340.0, 702.0))
     assert root.stable_id == "editor.inspector.extension.procedural-mesh"
     assert root.children[0].bounds.x == EDITOR_UI_METRICS.embedded_panel_padding
-    assert root.children[0].bounds.height == EDITOR_UI_METRICS.section_row
-    assert all(
-        root.children[index].bounds.height == EDITOR_UI_METRICS.compact_row
-        for index in (5, 6, 7, 8)
-    )
+    title = _find(root, "native-procedural-title")
+    assert title is not None
+    assert title.bounds.height == EDITOR_UI_METRICS.section_row
+    for debug_name in (
+        "native-procedural-tool-row",
+        "native-procedural-primitive-row",
+        "native-procedural-operation-row",
+        "native-procedural-action-row",
+    ):
+        row = _find(root, debug_name)
+        assert row is not None
+        assert row.bounds.height == EDITOR_UI_METRICS.compact_row
     summary = _find(root, "native-procedural-summary")
     selection = _find(root, "native-procedural-selection")
     status = _find(root, "native-procedural-status")
