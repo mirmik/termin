@@ -1,6 +1,7 @@
 """Button widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -20,16 +21,16 @@ class Button(Widget):
         self.icon: str | None = None
 
         # Colors
-        self.background_color: tuple[float, float, float, float] = _t.bg_button
-        self.hover_color: tuple[float, float, float, float] = _t.hover
-        self.pressed_color: tuple[float, float, float, float] = _t.pressed
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
+        self.background_color: SrgbColor = _t.bg_button
+        self.hover_color: SrgbColor = _t.hover
+        self.pressed_color: SrgbColor = _t.pressed
+        self.text_color: SrgbColor = _t.text_primary
         self.border_radius: float = _t.border_radius
 
         # Toggle mode
         self.checkable: bool = False
         self.checked: bool = False
-        self.checked_color: tuple[float, float, float, float] = _t.accent
+        self.checked_color: SrgbColor = _t.accent
 
         # State
         self.hovered: bool = False

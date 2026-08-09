@@ -23,6 +23,7 @@ from tcgui.widgets.containers import VStack, HStack, Panel
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.units import px, pct
 from termin.display.window import WindowedGraphicsSession, quit_sdl
+from termin.geombase import SrgbColor
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -127,7 +128,7 @@ class _WindowManager:
     def render_all(self):
         for e in list(self._windows):
             vw, vh = e.window.framebuffer_size()
-            tex = e.ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+            tex = e.ui.render_compose(vw, vh, background_color=SrgbColor(0.12, 0.12, 0.14, 1.0))
             if tex is not None:
                 e.window.present(tex)
 
@@ -213,7 +214,7 @@ def build_main_ui(wm, graphics):
     root = Panel()
     root.preferred_width = pct(100)
     root.preferred_height = pct(100)
-    root.background_color = (0.12, 0.12, 0.14, 1.0)
+    root.background_color = SrgbColor(0.12, 0.12, 0.14, 1.0)
     root.padding = 30
 
     stack = VStack()
@@ -222,13 +223,13 @@ def build_main_ui(wm, graphics):
     title = Label()
     title.text = "Multi-Window Example"
     title.font_size = 28
-    title.text_color = (1.0, 1.0, 1.0, 1.0)
+    title.text_color = SrgbColor(1.0, 1.0, 1.0, 1.0)
     stack.add_child(title)
 
     subtitle = Label()
     subtitle.text = "Click buttons below to open widgets in separate windows"
     subtitle.font_size = 14
-    subtitle.text_color = (0.6, 0.6, 0.6, 1.0)
+    subtitle.text_color = SrgbColor(0.6, 0.6, 0.6, 1.0)
     stack.add_child(subtitle)
 
     ui = UI(graphics=graphics)
@@ -251,7 +252,7 @@ def build_main_ui(wm, graphics):
         panel = Panel()
         panel.preferred_width = pct(100)
         panel.preferred_height = pct(100)
-        panel.background_color = (0.15, 0.15, 0.18, 1.0)
+        panel.background_color = SrgbColor(0.15, 0.15, 0.18, 1.0)
         panel.padding = 20
 
         inner = VStack()
@@ -260,7 +261,7 @@ def build_main_ui(wm, graphics):
         lbl = Label()
         lbl.text = f"Window #{counter[0]}"
         lbl.font_size = 22
-        lbl.text_color = (1.0, 1.0, 1.0, 1.0)
+        lbl.text_color = SrgbColor(1.0, 1.0, 1.0, 1.0)
         inner.add_child(lbl)
 
         inp = TextInput()
@@ -271,7 +272,7 @@ def build_main_ui(wm, graphics):
         click_count = [0]
         click_lbl = Label()
         click_lbl.text = "Clicks: 0"
-        click_lbl.text_color = (0.8, 0.8, 0.8, 1.0)
+        click_lbl.text_color = SrgbColor(0.8, 0.8, 0.8, 1.0)
         inner.add_child(click_lbl)
 
         click_btn = Button()
@@ -307,7 +308,7 @@ def build_main_ui(wm, graphics):
 
     status_lbl = Label()
     status_lbl.text = ""
-    status_lbl.text_color = (0.5, 0.9, 0.5, 1.0)
+    status_lbl.text_color = SrgbColor(0.5, 0.9, 0.5, 1.0)
 
     def _open_dialog_window():
         window_ui = ui.create_window("Settings", 450, 350)
@@ -323,7 +324,7 @@ def build_main_ui(wm, graphics):
         name_row.spacing = 8
         name_lbl = Label()
         name_lbl.text = "Name:"
-        name_lbl.text_color = (0.8, 0.8, 0.8, 1.0)
+        name_lbl.text_color = SrgbColor(0.8, 0.8, 0.8, 1.0)
         name_row.add_child(name_lbl)
         name_input = TextInput()
         name_input.text = "Player 1"
@@ -335,7 +336,7 @@ def build_main_ui(wm, graphics):
         speed_row.spacing = 8
         speed_lbl = Label()
         speed_lbl.text = "Speed:"
-        speed_lbl.text_color = (0.8, 0.8, 0.8, 1.0)
+        speed_lbl.text_color = SrgbColor(0.8, 0.8, 0.8, 1.0)
         speed_row.add_child(speed_lbl)
         speed_spin = SpinBox()
         speed_spin.value = 1.0

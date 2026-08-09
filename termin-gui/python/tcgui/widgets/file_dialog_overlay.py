@@ -1,6 +1,7 @@
 """File dialogs implemented in tcgui overlay layer."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 import fnmatch
 import os
@@ -70,8 +71,8 @@ class _OverlayFileDialog:
         self._dialog.title_height = 42
         self._dialog.padding = 14
         self._dialog.button_bar_height = 50
-        self._dialog.background_color = (0.12, 0.13, 0.15, 1.0)
-        self._dialog.title_background_color = (0.08, 0.09, 0.11, 1.0)
+        self._dialog.background_color = SrgbColor(0.12, 0.13, 0.15, 1.0)
+        self._dialog.title_background_color = SrgbColor(0.08, 0.09, 0.11, 1.0)
         self._dialog.border_radius = 8
 
         self._back_button = self._make_nav_button("←", self._go_back)
@@ -103,7 +104,7 @@ class _OverlayFileDialog:
         self._places_list.subtitle_font_size = 11
         self._places_list.on_select = self._on_place_select
         self._places_list.on_activate = self._on_place_select
-        self._places_list.item_background = (0.17, 0.18, 0.22, 0.6)
+        self._places_list.item_background = SrgbColor(0.17, 0.18, 0.22, 0.6)
         self._places_list.icon_provider = self._icons
         self._places_list.icon_size = 18
 
@@ -114,14 +115,14 @@ class _OverlayFileDialog:
         self._list.subtitle_font_size = 11
         self._list.on_select = self._on_select
         self._list.on_activate = self._on_activate
-        self._list.item_background = (0.17, 0.18, 0.22, 0.5)
-        self._list.selected_background = (0.22, 0.43, 0.74, 0.95)
+        self._list.item_background = SrgbColor(0.17, 0.18, 0.22, 0.5)
+        self._list.selected_background = SrgbColor(0.22, 0.43, 0.74, 0.95)
         self._list.icon_provider = self._icons
         self._list.icon_size = 20
 
         self._selection_label = Label()
         self._selection_label.font_size = 12
-        self._selection_label.color = (0.7, 0.73, 0.79, 1.0)
+        self._selection_label.color = SrgbColor(0.7, 0.73, 0.79, 1.0)
         self._selection_label.text = "Selection: none"
 
         self._name_input = TextInput()
@@ -137,7 +138,7 @@ class _OverlayFileDialog:
 
         self._error_label = Label()
         self._error_label.font_size = 12
-        self._error_label.color = (0.94, 0.47, 0.44, 1.0)
+        self._error_label.color = SrgbColor(0.94, 0.47, 0.44, 1.0)
         self._error_label.text = ""
 
         self._dialog.content = self._build_content()
@@ -180,7 +181,7 @@ class _OverlayFileDialog:
         places_title = Label()
         places_title.text = "Places"
         places_title.font_size = 12
-        places_title.color = (0.75, 0.79, 0.86, 1.0)
+        places_title.color = SrgbColor(0.75, 0.79, 0.86, 1.0)
 
         places_column = VStack()
         places_column.spacing = 8
@@ -191,13 +192,13 @@ class _OverlayFileDialog:
         places_panel.preferred_width = px(260)
         places_panel.padding = 10
         places_panel.border_radius = 6
-        places_panel.background_color = (0.14, 0.15, 0.18, 0.95)
+        places_panel.background_color = SrgbColor(0.14, 0.15, 0.18, 0.95)
         places_panel.add_child(places_column)
 
         files_title = Label()
         files_title.text = "Directory contents"
         files_title.font_size = 12
-        files_title.color = (0.75, 0.79, 0.86, 1.0)
+        files_title.color = SrgbColor(0.75, 0.79, 0.86, 1.0)
 
         files_column = VStack()
         files_column.spacing = 8
@@ -208,7 +209,7 @@ class _OverlayFileDialog:
         files_panel = Panel()
         files_panel.padding = 10
         files_panel.border_radius = 6
-        files_panel.background_color = (0.15, 0.16, 0.2, 0.95)
+        files_panel.background_color = SrgbColor(0.15, 0.16, 0.2, 0.95)
         files_panel.add_child(files_column)
 
         body_row = HStack()
@@ -227,7 +228,7 @@ class _OverlayFileDialog:
             name_label.text = "File name:"
             name_label.preferred_width = px(80)
             name_label.font_size = 12
-            name_label.color = (0.75, 0.79, 0.86, 1.0)
+            name_label.color = SrgbColor(0.75, 0.79, 0.86, 1.0)
             name_row.add_child(name_label)
             name_row.add_child(self._name_input)
             root.add_child(name_row)
@@ -239,7 +240,7 @@ class _OverlayFileDialog:
             filter_label.text = "File type:"
             filter_label.preferred_width = px(80)
             filter_label.font_size = 12
-            filter_label.color = (0.75, 0.79, 0.86, 1.0)
+            filter_label.color = SrgbColor(0.75, 0.79, 0.86, 1.0)
             filter_row.add_child(filter_label)
             filter_row.add_child(self._filter_combo)
             root.add_child(filter_row)

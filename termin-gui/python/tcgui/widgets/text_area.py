@@ -1,6 +1,8 @@
 """TextArea widget with word wrap support."""
 
 from __future__ import annotations
+
+from termin.geombase import SrgbColor
 import time
 from typing import TYPE_CHECKING, Callable
 
@@ -37,20 +39,20 @@ class TextArea(Widget):
         self.line_height: float = 0  # 0 = auto
 
         # Colors
-        self.background_color: tuple[float, float, float, float] = _t.bg_input
-        self.focused_background_color: tuple[float, float, float, float] = _t.bg_input_focus
-        self.border_color: tuple[float, float, float, float] = _t.border
-        self.focused_border_color: tuple[float, float, float, float] = _t.border_focus
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.placeholder_color: tuple[float, float, float, float] = _t.text_muted
-        self.cursor_color: tuple[float, float, float, float] = _t.text_primary
-        self.selection_color: tuple[float, float, float, float] = _t.selected
+        self.background_color: SrgbColor = _t.bg_input
+        self.focused_background_color: SrgbColor = _t.bg_input_focus
+        self.border_color: SrgbColor = _t.border
+        self.focused_border_color: SrgbColor = _t.border_focus
+        self.text_color: SrgbColor = _t.text_primary
+        self.placeholder_color: SrgbColor = _t.text_muted
+        self.cursor_color: SrgbColor = _t.text_primary
+        self.selection_color: SrgbColor = _t.selected
 
         # Scrollbar
         self.show_scrollbar: bool = True
         self.scrollbar_width: float = 8.0
-        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
-        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
+        self.scrollbar_color: SrgbColor = _t.scrollbar
+        self.scrollbar_hover_color: SrgbColor = _t.scrollbar_hover
 
         # State
         self.focused: bool = False

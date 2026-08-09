@@ -1,6 +1,7 @@
 """GroupBox container."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -26,12 +27,12 @@ class GroupBox(Widget):
         self.border_radius: float = _t.border_radius
 
         # Colors
-        self.background_color: tuple[float, float, float, float] = _t.bg_group
-        self.title_background_color: tuple[float, float, float, float] = _t.bg_surface
-        self.title_hover_color: tuple[float, float, float, float] = _t.hover_subtle
-        self.title_text_color: tuple[float, float, float, float] = _t.text_primary
-        self.arrow_color: tuple[float, float, float, float] = _t.text_secondary
-        self.border_color: tuple[float, float, float, float] = _t.border
+        self.background_color: SrgbColor = _t.bg_group
+        self.title_background_color: SrgbColor = _t.bg_surface
+        self.title_hover_color: SrgbColor = _t.hover_subtle
+        self.title_text_color: SrgbColor = _t.text_primary
+        self.arrow_color: SrgbColor = _t.text_secondary
+        self.border_color: SrgbColor = _t.border
 
         # State
         self._title_hovered: bool = False

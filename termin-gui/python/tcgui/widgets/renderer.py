@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from termin.geombase import SrgbColor, srgb_to_linear
 
 from tgfx import Canvas2DRenderer
 from tgfx.font import FontTextureAtlas, get_default_font
@@ -163,7 +164,7 @@ class UIRenderer:
         self,
         viewport_w: int,
         viewport_h: int,
-        background_color: tuple[float, float, float, float] | None = None,
+        background_color: SrgbColor | None = None,
         target_color=None,
     ) -> None:
         """Begin UI rendering pass.
@@ -179,7 +180,7 @@ class UIRenderer:
             legacy ``render()``), the renderer draws into its own
             offscreen color+depth pair, which ``end_compose`` then hands
             back to the host to present.
-        background_color : (r, g, b, a) or None
+        background_color : SrgbColor or None
             Only meaningful in standalone mode (target_color is None) —
             the colour the offscreen is cleared to before widgets draw.
             Ignored when target_color is set (otherwise we'd wipe the
@@ -223,7 +224,8 @@ class UIRenderer:
             # Depth is cleared to 1.0 so 3D embedded renderers (tcplot
             # Plot3D, Viewport3D) get a fresh depth buffer each frame.
             if background_color is not None:
-                bg_r, bg_g, bg_b, bg_a = background_color
+                linear_background = srgb_to_linear(background_color)
+                bg_r, bg_g, bg_b, bg_a = linear_background
             else:
                 bg_r = bg_g = bg_b = bg_a = 0.0
             ctx.begin_pass(
@@ -426,7 +428,7 @@ class UIRenderer:
 
     def draw_rect(
         self, x: float, y: float, w: float, h: float,
-        color: tuple[float, float, float, float],
+        color: SrgbColor,
         border_radius: float = 0,
     ) -> None:
         """Draw a filled rectangle. ``border_radius`` is currently
@@ -438,7 +440,7 @@ class UIRenderer:
 
     def draw_rect_outline(
         self, x: float, y: float, w: float, h: float,
-        color: tuple[float, float, float, float],
+        color: SrgbColor,
         thickness: float = 1.0,
     ) -> None:
         """Draw an unfilled rectangle outline."""
@@ -447,7 +449,7 @@ class UIRenderer:
 
     def draw_line(
         self, x1: float, y1: float, x2: float, y2: float,
-        color: tuple[float, float, float, float],
+        color: SrgbColor,
         thickness: float = 1.0,
     ) -> None:
         """Draw a thick line between two pixel coordinates."""
@@ -460,7 +462,7 @@ class UIRenderer:
 
     def draw_text(
         self, x: float, y: float, text: str,
-        color: tuple[float, float, float, float],
+        color: SrgbColor,
         font_size: float = 14,
     ) -> None:
         """Draw text at the given pixel position. ``y`` is the
@@ -480,7 +482,7 @@ class UIRenderer:
 
     def draw_text_centered(
         self, cx: float, cy: float, text: str,
-        color: tuple[float, float, float, float],
+        color: SrgbColor,
         font_size: float = 14,
     ) -> None:
         """Draw text centered on (cx, cy)."""
@@ -533,7 +535,7 @@ class UIRenderer:
     def draw_image(
         self, x: float, y: float, w: float, h: float,
         texture_handle,
-        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+        tint: SrgbColor | None = None,
     ) -> None:
         """Draw an RGBA texture at pixel coordinates, multiplied by ``tint``.
 
@@ -544,7 +546,8 @@ class UIRenderer:
             return
 
         if self._canvas is not None and self._canvas_active:
-            self._canvas.draw_texture(texture_handle, x, y, w, h, tint)
+            resolved_tint = tint if tint is not None else SrgbColor(1.0, 1.0, 1.0, 1.0)
+            self._canvas.draw_texture(texture_handle, x, y, w, h, resolved_tint)
 
     def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
         """Upload a numpy RGBA array as a new GPU texture.
@@ -613,7 +616,7 @@ class UIRenderer:
         flip_v: bool = False,
         channel_mode: int = 0,
         highlight_hdr: bool = False,
-        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+        tint: SrgbColor | None = None,
     ) -> None:
         """Draw a texture preview with optional channel/HDR inspection.
 
@@ -664,7 +667,7 @@ class UIRenderer:
         handle: Tgfx2TextureHandle, tex_w: int, tex_h: int,
         *,
         flip_v: bool = False,
-        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+        tint: SrgbColor | None = None,
     ) -> None:
         """Draw a tgfx2 TextureHandle as a subregion of the current UI pass.
 
@@ -682,7 +685,8 @@ class UIRenderer:
             return
 
         if self._canvas is not None and self._canvas_active:
-            self._canvas.draw_texture(handle, x, y, w, h, tint, flip_v)
+            resolved_tint = tint if tint is not None else SrgbColor(1.0, 1.0, 1.0, 1.0)
+            self._canvas.draw_texture(handle, x, y, w, h, resolved_tint, flip_v)
 
     def load_image(self, path: str) -> Tgfx2TextureHandle:
         """Load an image file and upload it as a GPU texture."""

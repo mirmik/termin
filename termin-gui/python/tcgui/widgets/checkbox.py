@@ -1,6 +1,7 @@
 """Checkbox widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -20,10 +21,10 @@ class Checkbox(Widget):
         self.checked: bool = False
 
         # Colors
-        self.box_color: tuple[float, float, float, float] = _t.bg_button
-        self.check_color: tuple[float, float, float, float] = _t.accent_success
-        self.hover_color: tuple[float, float, float, float] = _t.hover
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
+        self.box_color: SrgbColor = _t.bg_button
+        self.check_color: SrgbColor = _t.accent_success
+        self.hover_color: SrgbColor = _t.hover
+        self.text_color: SrgbColor = _t.text_primary
         self.border_radius: float = _t.border_radius
 
         # State

@@ -1,6 +1,7 @@
 """Base dialog widget for modal dialogs."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 from typing import TYPE_CHECKING, Callable
 
@@ -44,9 +45,9 @@ class Dialog(Widget):
         self.always_on_top: bool = False
 
         # Style
-        self.background_color: tuple[float, float, float, float] = _t.bg_surface
-        self.title_background_color: tuple[float, float, float, float] = (0.18, 0.18, 0.22, 1.0)
-        self.title_text_color: tuple[float, float, float, float] = _t.text_primary
+        self.background_color: SrgbColor = _t.bg_surface
+        self.title_background_color: SrgbColor = SrgbColor(0.18, 0.18, 0.22, 1.0)
+        self.title_text_color: SrgbColor = _t.text_primary
         self.title_font_size: float = _t.font_size + 2
         self.border_radius: float = _t.border_radius + 2
         self.padding: float = 16

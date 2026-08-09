@@ -3,10 +3,13 @@ from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from types import SimpleNamespace
 
-from termin.editor_core.foliage_layer_editor_extension import FoliageLayerEditorExtension
+import pytest
+
+from termin.editor_core.foliage_layer_editor_extension import FoliageLayerEditorExtension, _color
 from termin.editor_native.component_extensions import NativeComponentExtensionContext
 from termin.editor_native.foliage_extension import project_native_foliage_extension
 from termin.editor_native.metrics import EDITOR_UI_METRICS
+from termin.geombase import SrgbColor
 from termin.gui_native import Rect
 
 
@@ -71,6 +74,12 @@ def test_native_foliage_projector_tracks_shared_extension_state_and_lifetime():
     assert not context.dispatch_viewport_click(object())
     assert not context.dispatch_viewport_key(object())
     tc_ui_document_destroy(document)
+
+
+def test_foliage_overlay_colors_are_authored_srgb_colors():
+    color = _color((0.35, 1.0, 0.25, 0.5))
+    assert isinstance(color, SrgbColor)
+    assert tuple(color) == pytest.approx((0.35, 1.0, 0.25, 0.5))
 
 
 def test_native_component_extension_context_dispatches_latest_handler_first():

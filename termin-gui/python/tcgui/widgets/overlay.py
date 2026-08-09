@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tcgui.widgets.panel import Panel
+from termin.geombase import SrgbColor
 
 
 class Overlay(Panel):
@@ -10,7 +11,7 @@ class Overlay(Panel):
 
     def __init__(self):
         super().__init__()
-        self.background_color = (0.0, 0.0, 0.0, 0.0)
+        self.background_color = SrgbColor(0.0, 0.0, 0.0, 0.0)
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:
         if self.preferred_width and self.preferred_height:

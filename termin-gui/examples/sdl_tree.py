@@ -18,6 +18,7 @@ from tcgui.widgets.containers import VStack, HStack, Panel
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.units import px, pct
 from termin.display.window import WindowedGraphicsSession, quit_sdl
+from termin.geombase import SrgbColor
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -75,8 +76,10 @@ def translate_button(sdl_button: int) -> MouseButton:
 
 # --- Helpers to build tree nodes ---
 
-def make_label_node(text, color=(0.9, 0.9, 0.9, 1.0), font_size=14):
+def make_label_node(text, color=None, font_size=14):
     """Create a TreeNode with a simple text label."""
+    if color is None:
+        color = SrgbColor(0.9, 0.9, 0.9, 1.0)
     lbl = Label()
     lbl.text = text
     lbl.color = color
@@ -84,8 +87,10 @@ def make_label_node(text, color=(0.9, 0.9, 0.9, 1.0), font_size=14):
     return TreeNode(content=lbl)
 
 
-def make_icon_node(icon, icon_color, text, text_color=(0.9, 0.9, 0.9, 1.0)):
+def make_icon_node(icon, icon_color, text, text_color=None):
     """Create a TreeNode with icon + text (HStack)."""
+    if text_color is None:
+        text_color = SrgbColor(0.9, 0.9, 0.9, 1.0)
     row = HStack()
     row.spacing = 6
 
@@ -110,7 +115,7 @@ def build_ui(graphics):
     root = Panel()
     root.preferred_width = pct(100)
     root.preferred_height = pct(100)
-    root.background_color = (0.12, 0.12, 0.14, 1.0)
+    root.background_color = SrgbColor(0.12, 0.12, 0.14, 1.0)
     root.padding = 20
 
     layout = VStack()
@@ -121,14 +126,14 @@ def build_ui(graphics):
     title = Label()
     title.text = "TreeWidget Demo"
     title.font_size = 24
-    title.color = (1.0, 1.0, 1.0, 1.0)
+    title.color = SrgbColor(1.0, 1.0, 1.0, 1.0)
     layout.add_child(title)
 
     # Status label
     status = Label()
     status.text = "Click a node, use arrow keys, or drag to reorder"
     status.font_size = 13
-    status.color = (0.5, 0.5, 0.55, 1.0)
+    status.color = SrgbColor(0.5, 0.5, 0.55, 1.0)
     layout.add_child(status)
 
     # Tree
@@ -366,7 +371,7 @@ def main():
             break
 
         vw, vh = window.framebuffer_size()
-        tex = ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+        tex = ui.render_compose(vw, vh, background_color=SrgbColor(0.12, 0.12, 0.14, 1.0))
         if tex is not None:
             window.present(tex)
 

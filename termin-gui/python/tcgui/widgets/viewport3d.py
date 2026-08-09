@@ -9,6 +9,8 @@ Usage::
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -96,7 +98,7 @@ class Viewport3D(Widget):
         if self._display is None or not self._display.is_valid():
             # Render target not ready — placeholder rectangle
             renderer.draw_rect(self.x, self.y, self.width, self.height,
-                               (0.05, 0.05, 0.05, 1.0))
+                               SrgbColor(0.05, 0.05, 0.05, 1.0))
             return
 
         self._composite_texture(renderer)

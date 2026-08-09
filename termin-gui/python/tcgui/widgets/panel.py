@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.theme import current_theme as _t
+from termin.geombase import SrgbColor
 
 if TYPE_CHECKING:
     from tcgui.widgets.renderer import UIRenderer
@@ -18,10 +19,10 @@ class Panel(Widget):
         super().__init__()
         self.padding: float = 0  # pixels
         _bg = _t.bg_surface
-        self.background_color: tuple[float, float, float, float] = (_bg[0], _bg[1], _bg[2], 0.9)
+        self.background_color: SrgbColor = SrgbColor(_bg.r, _bg.g, _bg.b, 0.9)
         self.border_radius: float = 0
         self.background_image: str = ""  # path to background image
-        self.background_tint: tuple[float, float, float, float] = (1, 1, 1, 1)
+        self.background_tint: SrgbColor = SrgbColor(1, 1, 1, 1)
         self._bg_texture = None
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:

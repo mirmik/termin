@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 import time
 from typing import TYPE_CHECKING
 
@@ -33,13 +35,13 @@ class StatusBar(Widget):
         self._temp_expire: float = 0.0
 
         # Style
-        self.background_color: tuple[float, float, float, float] = _t.bg_surface
-        self.text_color: tuple[float, float, float, float] = _t.text_muted
-        self.temp_text_color: tuple[float, float, float, float] = _t.text_secondary
+        self.background_color: SrgbColor = _t.bg_surface
+        self.text_color: SrgbColor = _t.text_muted
+        self.temp_text_color: SrgbColor = _t.text_secondary
         self.font_size: float = _t.font_size_small
         self.padding_x: float = 8.0
         self.padding_y: float = 4.0
-        self.separator_color: tuple[float, float, float, float] = (0.35, 0.35, 0.4, 0.5)
+        self.separator_color: SrgbColor = SrgbColor(0.35, 0.35, 0.4, 0.5)
 
     # ------------------------------------------------------------------
     # Public API

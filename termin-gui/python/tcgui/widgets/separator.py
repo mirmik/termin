@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 from typing import TYPE_CHECKING
 
 from tcgui.widgets.widget import Widget
@@ -17,7 +19,7 @@ class Separator(Widget):
     def __init__(self):
         super().__init__()
         self.orientation: str = "vertical"  # vertical, horizontal
-        self.color: tuple[float, float, float, float] = _t.text_muted
+        self.color: SrgbColor = _t.text_muted
         self.thickness: float = 1
         self.margin: float = 4  # space around separator
 

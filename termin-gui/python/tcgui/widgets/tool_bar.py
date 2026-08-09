@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -57,16 +59,16 @@ class ToolBar(Widget):
         self.items: list[ToolBarItem] = []
 
         # Style
-        self.background_color: tuple[float, float, float, float] = _t.bg_surface
-        self.item_hover_color: tuple[float, float, float, float] = _t.hover_subtle
-        self.item_pressed_color: tuple[float, float, float, float] = _t.pressed
-        self.icon_color: tuple[float, float, float, float] = _t.text_secondary
-        self.icon_hover_color: tuple[float, float, float, float] = _t.text_primary
-        self.icon_disabled_color: tuple[float, float, float, float] = _t.text_muted
-        self.text_color: tuple[float, float, float, float] = _t.text_secondary
-        self.text_hover_color: tuple[float, float, float, float] = _t.text_primary
-        self.text_disabled_color: tuple[float, float, float, float] = _t.text_muted
-        self.separator_color: tuple[float, float, float, float] = _t.text_muted
+        self.background_color: SrgbColor = _t.bg_surface
+        self.item_hover_color: SrgbColor = _t.hover_subtle
+        self.item_pressed_color: SrgbColor = _t.pressed
+        self.icon_color: SrgbColor = _t.text_secondary
+        self.icon_hover_color: SrgbColor = _t.text_primary
+        self.icon_disabled_color: SrgbColor = _t.text_muted
+        self.text_color: SrgbColor = _t.text_secondary
+        self.text_hover_color: SrgbColor = _t.text_primary
+        self.text_disabled_color: SrgbColor = _t.text_muted
+        self.separator_color: SrgbColor = _t.text_muted
         self.border_radius: float = _t.border_radius
         self.font_size: float = _t.font_size
         self.icon_font_size: float = 18.0

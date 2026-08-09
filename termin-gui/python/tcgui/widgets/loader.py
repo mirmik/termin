@@ -1,6 +1,7 @@
 """YAML loader for the widget-based UI system."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -66,7 +67,7 @@ def _as_list(_loader: "UILoader", value: Any) -> list[Any]:
     return list(value)
 
 
-def _as_color(loader: "UILoader", value: Any) -> tuple[float, float, float, float]:
+def _as_color(loader: "UILoader", value: Any) -> SrgbColor:
     return loader._parse_color(value)
 
 
@@ -568,13 +569,13 @@ class UILoader:
         if isinstance(widget, StatusBar) and "text" in data:
             widget.set_text(str(data["text"]))
 
-    def _parse_color(self, value) -> tuple[float, float, float, float]:
+    def _parse_color(self, value) -> SrgbColor:
         """Parse a color from various formats."""
         if isinstance(value, (list, tuple)):
             if len(value) == 3:
-                return (float(value[0]), float(value[1]), float(value[2]), 1.0)
+                return SrgbColor(float(value[0]), float(value[1]), float(value[2]), 1.0)
             elif len(value) == 4:
-                return (float(value[0]), float(value[1]), float(value[2]), float(value[3]))
+                return SrgbColor(float(value[0]), float(value[1]), float(value[2]), float(value[3]))
 
         if isinstance(value, str):
             # Hex color
@@ -584,12 +585,12 @@ class UILoader:
                     r = int(hex_str[0:2], 16) / 255.0
                     g = int(hex_str[2:4], 16) / 255.0
                     b = int(hex_str[4:6], 16) / 255.0
-                    return (r, g, b, 1.0)
+                    return SrgbColor(r, g, b, 1.0)
                 elif len(hex_str) == 8:
                     r = int(hex_str[0:2], 16) / 255.0
                     g = int(hex_str[2:4], 16) / 255.0
                     b = int(hex_str[4:6], 16) / 255.0
                     a = int(hex_str[6:8], 16) / 255.0
-                    return (r, g, b, a)
+                    return SrgbColor(r, g, b, a)
 
         raise ValueError(f"Cannot parse color: {value}")

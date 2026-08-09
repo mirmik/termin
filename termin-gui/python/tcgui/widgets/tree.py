@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -102,13 +104,13 @@ class TreeWidget(Widget):
         self.toggle_font_size: float = max(8.0, _t.font_size - 2.0)
 
         # Colors
-        self.selected_background: tuple[float, float, float, float] = _t.selected
-        self.hover_background: tuple[float, float, float, float] = _t.hover_subtle
-        self.toggle_color: tuple[float, float, float, float] = _t.text_secondary
+        self.selected_background: SrgbColor = _t.selected
+        self.hover_background: SrgbColor = _t.hover_subtle
+        self.toggle_color: SrgbColor = _t.text_secondary
         self.show_scrollbar: bool = True
         self.scrollbar_width: float = 8.0
-        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
-        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
+        self.scrollbar_color: SrgbColor = _t.scrollbar
+        self.scrollbar_hover_color: SrgbColor = _t.scrollbar_hover
 
         # Callbacks
         self.on_select: Callable[[TreeNode], None] | None = None

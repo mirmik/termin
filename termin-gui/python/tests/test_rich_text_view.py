@@ -1,6 +1,7 @@
 from tcgui.widgets.rich_text_view import RichTextView
 from tcgui.widgets.events import KeyEvent
 from tcbase import Key, Mods
+import pytest
 
 
 def test_set_html_preserves_lines_and_plain_text():
@@ -19,7 +20,12 @@ def test_set_html_reads_span_color_and_bold():
     segment = view.lines[0][0]
     assert segment.text == "Writer"
     assert segment.style.bold is True
-    assert segment.style.color == (80 / 255.0, 250 / 255.0, 123 / 255.0, 1.0)
+    color = segment.style.color
+    assert type(color).__name__ == "SrgbColor"
+    assert color.r == pytest.approx(80 / 255.0)
+    assert color.g == pytest.approx(250 / 255.0)
+    assert color.b == pytest.approx(123 / 255.0)
+    assert color.a == pytest.approx(1.0)
 
 
 def test_set_text_replaces_rich_lines():

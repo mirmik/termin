@@ -1,6 +1,7 @@
 """IconButton widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -21,11 +22,11 @@ class IconButton(Widget):
 
         # Colors
         _bg = _t.bg_surface
-        self.background_color: tuple[float, float, float, float] = (_bg[0], _bg[1], _bg[2], 0.9)
-        self.hover_color: tuple[float, float, float, float] = _t.hover
-        self.pressed_color: tuple[float, float, float, float] = _t.pressed
-        self.active_color: tuple[float, float, float, float] = _t.accent
-        self.icon_color: tuple[float, float, float, float] = _t.text_secondary
+        self.background_color: SrgbColor = SrgbColor(_bg.r, _bg.g, _bg.b, 0.9)
+        self.hover_color: SrgbColor = _t.hover
+        self.pressed_color: SrgbColor = _t.pressed
+        self.active_color: SrgbColor = _t.accent
+        self.icon_color: SrgbColor = _t.text_secondary
         self.border_radius: float = _t.border_radius + 1
 
         # State

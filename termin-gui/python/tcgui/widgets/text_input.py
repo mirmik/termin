@@ -1,6 +1,8 @@
 """TextInput widget."""
 
 from __future__ import annotations
+
+from termin.geombase import SrgbColor
 import time
 from typing import TYPE_CHECKING, Callable
 
@@ -31,14 +33,14 @@ class TextInput(Widget):
         self.padding: float = 4
         self.border_width: float = 1
         self.border_radius: float = _t.border_radius
-        self.background_color: tuple[float, float, float, float] = _t.bg_input
-        self.focused_background_color: tuple[float, float, float, float] = _t.bg_input_focus
-        self.border_color: tuple[float, float, float, float] = _t.border
-        self.focused_border_color: tuple[float, float, float, float] = _t.border_focus
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.placeholder_color: tuple[float, float, float, float] = _t.text_muted
-        self.cursor_color: tuple[float, float, float, float] = _t.text_primary
-        self.selection_color: tuple[float, float, float, float] = _t.selected
+        self.background_color: SrgbColor = _t.bg_input
+        self.focused_background_color: SrgbColor = _t.bg_input_focus
+        self.border_color: SrgbColor = _t.border
+        self.focused_border_color: SrgbColor = _t.border_focus
+        self.text_color: SrgbColor = _t.text_primary
+        self.placeholder_color: SrgbColor = _t.text_muted
+        self.cursor_color: SrgbColor = _t.text_primary
+        self.selection_color: SrgbColor = _t.selected
 
         # State
         self.focused: bool = False

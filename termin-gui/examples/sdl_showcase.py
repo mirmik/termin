@@ -48,6 +48,7 @@ from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.frame_time_graph import FrameTimeGraph
 
 from termin.display.window import WindowedGraphicsSession, quit_sdl
+from termin.geombase import SrgbColor
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -108,7 +109,7 @@ def _section_label(text):
     lbl = Label()
     lbl.text = text
     lbl.font_size = 15
-    lbl.color = (0.5, 0.7, 1.0, 1.0)
+    lbl.color = SrgbColor(0.5, 0.7, 1.0, 1.0)
     return lbl
 
 
@@ -356,7 +357,7 @@ def make_sliders_page():
     s2.max_value = 100
     s2.step = 10
     s2.value = 50
-    s2.fill_color = (0.9, 0.5, 0.2, 1.0)
+    s2.fill_color = SrgbColor(0.9, 0.5, 0.2, 1.0)
     s2_lbl = Label()
     s2_lbl.text = "Stepped (0-100, step 10): 50"
     s2_lbl.font_size = 13
@@ -415,7 +416,7 @@ def make_sliders_page():
     pb2.show_text = True
     pb2.preferred_width = px(350)
     pb2.preferred_height = px(24)
-    pb2.fill_color = (0.2, 0.8, 0.4, 1.0)
+    pb2.fill_color = SrgbColor(0.2, 0.8, 0.4, 1.0)
     page.add_child(pb2)
 
     # FrameTimeGraph — connects to Profiler automatically
@@ -469,10 +470,10 @@ def make_containers_page():
     p.preferred_width = px(300)
     p.preferred_height = px(80)
     p.padding = 12
-    p.background_color = (0.2, 0.2, 0.25, 1.0)
+    p.background_color = SrgbColor(0.2, 0.2, 0.25, 1.0)
     p_lbl = Label()
     p_lbl.text = "Content inside a Panel"
-    p_lbl.color = (0.9, 0.9, 0.9, 1.0)
+    p_lbl.color = SrgbColor(0.9, 0.9, 0.9, 1.0)
     p.add_child(p_lbl)
     page.add_child(p)
 
@@ -487,11 +488,11 @@ def make_containers_page():
         row.spacing = 6
         kl = Label()
         kl.text = f"{k}:"
-        kl.color = (0.8, 0.8, 0.8, 1.0)
+        kl.color = SrgbColor(0.8, 0.8, 0.8, 1.0)
         row.add_child(kl)
         vl = Label()
         vl.text = v
-        vl.color = (0.5, 0.8, 1.0, 1.0)
+        vl.color = SrgbColor(0.5, 0.8, 1.0, 1.0)
         row.add_child(vl)
         gb1_content.add_child(row)
     gb1.add_child(gb1_content)
@@ -503,7 +504,7 @@ def make_containers_page():
     gb2.preferred_width = px(350)
     adv = Label()
     adv.text = "Hidden advanced content."
-    adv.color = (0.7, 0.7, 0.7, 1.0)
+    adv.color = SrgbColor(0.7, 0.7, 0.7, 1.0)
     gb2.add_child(adv)
     page.add_child(gb2)
 
@@ -517,7 +518,7 @@ def make_containers_page():
         sl = Label()
         sl.text = f"Scrollable line {i + 1}"
         sl.font_size = 13
-        sl.color = (0.8, 0.8, 0.85, 1.0)
+        sl.color = SrgbColor(0.8, 0.8, 0.85, 1.0)
         sa_content.add_child(sl)
     sa.add_child(sa_content)
     page.add_child(sa)
@@ -532,7 +533,7 @@ def make_containers_page():
     left_panel.preferred_width = px(180)
     left_lbl = Label()
     left_lbl.text = "Left panel"
-    left_lbl.color = (0.9, 0.9, 0.9, 1.0)
+    left_lbl.color = SrgbColor(0.9, 0.9, 0.9, 1.0)
     left_panel.add_child(left_lbl)
     split_row.add_child(left_panel)
 
@@ -544,7 +545,7 @@ def make_containers_page():
     right_panel.stretch = True
     right_lbl = Label()
     right_lbl.text = "Right panel (drag splitter)"
-    right_lbl.color = (0.9, 0.9, 0.9, 1.0)
+    right_lbl.color = SrgbColor(0.9, 0.9, 0.9, 1.0)
     right_panel.add_child(right_lbl)
     split_row.add_child(right_panel)
 
@@ -561,7 +562,7 @@ def make_dialogs_page(ui_ref):
     status = Label()
     status.text = "Result: (none)"
     status.font_size = 13
-    status.color = (0.5, 0.8, 1.0, 1.0)
+    status.color = SrgbColor(0.5, 0.8, 1.0, 1.0)
 
     def show_result(kind, val):
         status.text = f"Result [{kind}]: {val}"
@@ -681,7 +682,7 @@ def build_ui(graphics):
     content = Panel()
     content.preferred_width = pct(100)
     content.preferred_height = px(530)
-    content.background_color = (0.12, 0.12, 0.14, 1.0)
+    content.background_color = SrgbColor(0.12, 0.12, 0.14, 1.0)
     content.padding = 16
 
     layout = VStack()
@@ -691,7 +692,7 @@ def build_ui(graphics):
     title = Label()
     title.text = "tcgui Widget Showcase"
     title.font_size = 22
-    title.color = (1, 1, 1, 1)
+    title.color = SrgbColor(1, 1, 1, 1)
     layout.add_child(title)
 
     tabs = TabView()
@@ -805,7 +806,7 @@ def main():
             break
 
         vw, vh = window.framebuffer_size()
-        tex = ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+        tex = ui.render_compose(vw, vh, background_color=SrgbColor(0.12, 0.12, 0.14, 1.0))
         if tex is not None:
             window.present(tex)
 

@@ -25,6 +25,7 @@ from tcgui.widgets.file_dialog_overlay import (
     show_open_directory_dialog,
 )
 from termin.display.window import WindowedGraphicsSession, quit_sdl
+from termin.geombase import SrgbColor
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -89,7 +90,7 @@ def build_ui(graphics):
     content = Panel()
     content.stretch = True
     content.padding = 20
-    content.background_color = (0.12, 0.12, 0.14, 1.0)
+    content.background_color = SrgbColor(0.12, 0.12, 0.14, 1.0)
 
     stack = VStack()
     stack.spacing = 12
@@ -98,17 +99,17 @@ def build_ui(graphics):
     title = Label()
     title.text = "tcgui File Dialogs Example"
     title.font_size = 24
-    title.text_color = (1.0, 1.0, 1.0, 1.0)
+    title.text_color = SrgbColor(1.0, 1.0, 1.0, 1.0)
 
     hint = Label()
     hint.text = "Dialogs are rendered in tcgui overlay layer with places, path bar, and filters."
     hint.font_size = 14
-    hint.text_color = (0.7, 0.7, 0.75, 1.0)
+    hint.text_color = SrgbColor(0.7, 0.7, 0.75, 1.0)
 
     selection = Label()
     selection.text = "Selected: (none)"
     selection.font_size = 15
-    selection.text_color = (0.9, 0.9, 0.9, 1.0)
+    selection.text_color = SrgbColor(0.9, 0.9, 0.9, 1.0)
 
     status = StatusBar()
     status.text = "Ready"
@@ -233,7 +234,7 @@ def main():
 
 
         vw, vh = window.framebuffer_size()
-        tex = ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+        tex = ui.render_compose(vw, vh, background_color=SrgbColor(0.12, 0.12, 0.14, 1.0))
         if tex is not None:
             window.present(tex)
 

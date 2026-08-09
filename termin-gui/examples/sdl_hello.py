@@ -17,6 +17,7 @@ from tcgui.widgets.basic import Label, Button, TextInput
 from tcgui.widgets.containers import VStack, Panel
 from tcgui.widgets.units import px, pct
 from termin.display.window import WindowedGraphicsSession, quit_sdl
+from termin.geombase import SrgbColor
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -78,7 +79,7 @@ def build_ui(graphics):
     root = Panel()
     root.preferred_width = pct(100)
     root.preferred_height = pct(100)
-    root.background_color = (0.12, 0.12, 0.14, 1.0)
+    root.background_color = SrgbColor(0.12, 0.12, 0.14, 1.0)
     root.padding = 30
 
     stack = VStack()
@@ -87,12 +88,12 @@ def build_ui(graphics):
     title = Label()
     title.text = "tcgui — SDL2 Example"
     title.font_size = 28
-    title.text_color = (1.0, 1.0, 1.0, 1.0)
+    title.text_color = SrgbColor(1.0, 1.0, 1.0, 1.0)
 
     counter_label = Label()
     counter_label.text = "Clicks: 0"
     counter_label.font_size = 18
-    counter_label.text_color = (0.8, 0.8, 0.8, 1.0)
+    counter_label.text_color = SrgbColor(0.8, 0.8, 0.8, 1.0)
 
     count = [0]
 
@@ -171,7 +172,7 @@ def main():
             break
 
         vw, vh = window.framebuffer_size()
-        tex = ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+        tex = ui.render_compose(vw, vh, background_color=SrgbColor(0.12, 0.12, 0.14, 1.0))
         if tex is not None:
             window.present(tex)
 

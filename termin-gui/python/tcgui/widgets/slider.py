@@ -1,6 +1,8 @@
 """Slider widget."""
 
 from __future__ import annotations
+
+from termin.geombase import SrgbColor
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -21,10 +23,10 @@ class Slider(Widget):
         self.max_value: float = 1.0
         self.step: float = 0.0  # 0 = continuous
 
-        self.track_color: tuple[float, float, float, float] = _t.bg_surface
-        self.fill_color: tuple[float, float, float, float] = _t.accent
-        self.thumb_color: tuple[float, float, float, float] = _t.text_secondary
-        self.thumb_hover_color: tuple[float, float, float, float] = _t.text_primary
+        self.track_color: SrgbColor = _t.bg_surface
+        self.fill_color: SrgbColor = _t.accent
+        self.thumb_color: SrgbColor = _t.text_secondary
+        self.thumb_hover_color: SrgbColor = _t.text_primary
         self.track_height: float = 4.0
         self.thumb_radius: float = 8.0
         self.border_radius: float = 2.0
