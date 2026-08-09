@@ -14,21 +14,28 @@ The built-in default and editor pipelines keep every internal scene and
 post-processing color resource in linear `RGBA16F`. Their terminal path is:
 
 ```text
-linear HDR scene -> bloom -> TonemapPass -> linear UI -> OutputTransformPass -> OUTPUT
+linear HDR scene -> bloom -> TonemapPass -> linear UI -> PipelineColorExport(DisplayLinear)
+                                                            |
+                                                            v
+                                                   physical ColorTarget
 ```
 
 `TonemapPass` owns exposure and the selected tone curve (ACES by default). Its
 result is still linear; it never performs gamma or sRGB encoding.
-`OutputTransformPass` is the single display boundary. It applies the IEC sRGB
-optical-electrical transfer function to RGB, preserves alpha as a linear
-coverage value, clamps to the display range, and writes the caller-owned UNORM
-output. `PresentToScreenPass` remains a color-preserving copy for custom
-pipelines that explicitly need no display transform.
+The render executor binds the semantic pipeline export to the caller-owned
+physical target. Matching descriptors are bound directly. Format, extent or
+sample-count mismatches receive one copy/resolve epilogue; an sRGB target
+performs the IEC sRGB transfer at that physical boundary. Scene-linear exports
+are not implicitly tonemapped into SDR targets.
 
-UI is composited before the output transform so scene and UI receive exactly
-one encoding step. UI color literals therefore participate in the linear
-compositing contract; wide-gamut and HDR-display transforms remain separate
-future work.
+`OutputTransformPass` and `PresentToScreenPass` remain available while authored
+and external pipelines migrate away from the legacy `OUTPUT` resource. Built-in
+default and editor pipelines do not use them.
+
+Scene UI is composited before the pipeline export so scene and UI receive
+exactly one encoding step at the eventual display target. UI color literals
+therefore participate in the linear compositing contract; wide-gamut and
+HDR-display transforms remain separate future work.
 
 ## Image-based lighting
 

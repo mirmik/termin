@@ -60,10 +60,6 @@ namespace termin::rendering_manager_detail {
                 "TonemapPass", "Tonemap", {{"input_res", "color"}, {"output_res", "color_tonemapped"}})) {
             adopt_default_pass(ph, p);
         }
-        if (tc_pass* p = create_and_configure_pass(
-                "OutputTransformPass", "OutputTransform", {{"input_res", "color_tonemapped"}})) {
-            adopt_default_pass(ph, p);
-        }
         for (const char* resource : {"empty", "color", "color_tonemapped"}) {
             ResourceSpec spec;
             spec.resource = resource;
@@ -141,11 +137,6 @@ namespace termin::rendering_manager_detail {
 
         if (tc_pass* p = create_and_configure_pass(
                 "UIWidgetPass", "UIWidgets", {{"input_res", "color_tonemapped"}, {"output_res", "color+widgets"}})) {
-            adopt_default_pass(ph, p);
-        }
-
-        if (tc_pass* p = create_and_configure_pass(
-                "OutputTransformPass", "OutputTransform", {{"input_res", "color+widgets"}})) {
             adopt_default_pass(ph, p);
         }
 

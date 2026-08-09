@@ -735,11 +735,13 @@ namespace termin::openxr::detail {
     tgfx::PixelFormat pixel_format_from_vk_format(VkFormat format) {
         switch (format) {
         case VK_FORMAT_R8G8B8A8_UNORM:
-        case VK_FORMAT_R8G8B8A8_SRGB:
             return tgfx::PixelFormat::RGBA8_UNorm;
+        case VK_FORMAT_R8G8B8A8_SRGB:
+            return tgfx::PixelFormat::RGBA8_sRGB;
         case VK_FORMAT_B8G8R8A8_UNORM:
-        case VK_FORMAT_B8G8R8A8_SRGB:
             return tgfx::PixelFormat::BGRA8_UNorm;
+        case VK_FORMAT_B8G8R8A8_SRGB:
+            return tgfx::PixelFormat::BGRA8_sRGB;
         default:
             return tgfx::PixelFormat::Undefined;
         }

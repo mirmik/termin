@@ -100,6 +100,7 @@ class _RenderTargetController:
     set_pipeline = _unexpected
     set_dynamic_resolution = _unexpected
     set_color_format = _unexpected
+    set_color_encoding = _unexpected
     set_depth_format = _unexpected
     set_clear_color_enabled = _unexpected
     set_clear_linear_color = _unexpected

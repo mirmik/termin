@@ -276,7 +276,20 @@ def test_builtin_pipeline_registration_is_idempotent_without_cached_instance() -
         after_first = tc_pipeline_registry_count()
         manager.register_builtin_pipelines()
 
-        assert manager.get_pipeline_asset("Triangle") is not None
+        triangle = manager.get_pipeline_asset("Triangle")
+        assert triangle is not None
+        triangle_pipeline = triangle.pipeline
+        assert triangle_pipeline is not None
+        try:
+            assert triangle_pipeline.color_exports == [
+                {
+                    "resource": "triangle_color",
+                    "viewport_name": "",
+                    "color_content": "display_linear",
+                }
+            ]
+        finally:
+            triangle_pipeline.destroy()
         assert after_first == baseline
         assert tc_pipeline_registry_count() == after_first
     finally:

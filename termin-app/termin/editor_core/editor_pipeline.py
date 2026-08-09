@@ -22,7 +22,6 @@ def make_editor_pipeline() -> RenderPipeline:
         HighlightPass,
         IdPass,
         ImmediateDepthPass,
-        OutputTransformPass,
         ResolvePass,
         ShadowPass,
         SkyBoxPass,
@@ -198,15 +197,11 @@ def make_editor_pipeline() -> RenderPipeline:
             include_scene_entities=False,
             include_internal_entities=True,
         ),
-        OutputTransformPass(
-            input_res="color+widgets",
-            pass_name="OutputTransform",
-        ),
     ]
 
     msaa_samples = 4
-    # Every intermediate remains linear HDR. Only OutputTransformPass encodes
-    # for the caller-owned UNORM display target.
+    # Every intermediate remains linear HDR. The pipeline publishes display-
+    # linear color; the physical target binding owns the final transfer.
     color_fbo_format = "rgba16f"
     pipeline_specs = [
         ResourceSpec(

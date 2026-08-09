@@ -1,6 +1,5 @@
 #include <termin/render/builtin_passes.hpp>
 #include <termin/render/execute_context.hpp>
-#include <termin/render/output_transform_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
 
 #include <tgfx/resources/tc_shader_registry.h>
@@ -96,7 +95,9 @@ namespace {
                                                                 tgfx::TextureUsage::Sampled |
                                                                 tgfx::TextureUsage::CopySrc);
         const tgfx::TextureHandle output = make_texture(
-            *device, tgfx::PixelFormat::RGBA8_UNorm, tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc);
+            *device,
+            tgfx::PixelFormat::RGBA8_sRGB,
+            tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst);
         if (!source || !tonemapped || !output) {
             std::fprintf(stderr, "Failed to create output-transform smoke textures\n");
             return 1;
@@ -118,7 +119,6 @@ namespace {
         tgfx::PipelineCache cache(*device);
         tgfx::RenderContext2 render_ctx(*device, cache);
         termin::TonemapPass tonemap("source", "tonemapped", 1.0f, 0);
-        termin::OutputTransformPass output_transform("tonemapped", "output");
 
         termin::ExecuteContext tonemap_ctx;
         tonemap_ctx.ctx2 = &render_ctx;
@@ -126,15 +126,9 @@ namespace {
         tonemap_ctx.tex2_writes.emplace("tonemapped", tonemapped);
         tonemap_ctx.render_rect = {0, 0, 4, 1};
 
-        termin::ExecuteContext output_ctx;
-        output_ctx.ctx2 = &render_ctx;
-        output_ctx.tex2_reads.emplace("tonemapped", tonemapped);
-        output_ctx.tex2_writes.emplace("output", output);
-        output_ctx.render_rect = {0, 0, 4, 1};
-
         render_ctx.begin_frame();
         tonemap.execute(tonemap_ctx);
-        output_transform.execute(output_ctx);
+        render_ctx.blit(tonemapped, output);
         render_ctx.end_frame();
         device->wait_idle();
 
@@ -156,7 +150,6 @@ namespace {
                 values_ok = false;
         }
 
-        output_transform.destroy();
         tonemap.destroy();
         device->destroy(output);
         device->destroy(tonemapped);
@@ -174,7 +167,7 @@ namespace {
 } // namespace
 
 int main(int argc, char** argv) {
-    std::printf("--- termin-render-passes output transform pixel smoke ---\n");
+    std::printf("--- termin-render color output binding pixel smoke ---\n");
     if (!tgfx::backend_is_compiled(tgfx::BackendType::Vulkan)) {
         std::printf("Vulkan backend not compiled, skipping test\n");
         return 0;
@@ -183,7 +176,6 @@ int main(int argc, char** argv) {
     tc_shader_init();
     termin::register_builtin_render_pass_types();
     termin::TonemapPass::register_type();
-    termin::OutputTransformPass::register_type();
     const int result = run_smoke(argc > 0 ? argv[0] : nullptr);
     tc_shader_shutdown();
     return result;
