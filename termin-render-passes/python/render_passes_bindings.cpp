@@ -21,7 +21,6 @@ extern "C" {
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/grayscale_pass.hpp>
 #include <termin/render/id_pass.hpp>
-#include <termin/render/output_transform_pass.hpp>
 #include <termin/render/present_pass.hpp>
 #include <termin/render/resolve_pass.hpp>
 #include <termin/render/shadow_camera.hpp>
@@ -787,36 +786,6 @@ namespace termin {
         m.attr("TONEMAP_ACES") = 0;
         m.attr("TONEMAP_REINHARD") = 1;
         m.attr("TONEMAP_NONE") = 2;
-
-        nb::class_<OutputTransformPass, CxxFramePass>(m, "OutputTransformPass")
-            .def(
-                "__init__",
-                [](OutputTransformPass* self,
-                   const std::string& input_res,
-                   const std::string& output_res,
-                   const std::string& pass_name) {
-                    new (self) OutputTransformPass(input_res, output_res);
-                    if (!pass_name.empty()) {
-                        self->set_pass_name(pass_name);
-                    }
-                    init_pass_from_python(self, "OutputTransformPass");
-                },
-                nb::arg("input_res") = "color",
-                nb::arg("output_res") = "OUTPUT",
-                nb::arg("pass_name") = "OutputTransform")
-            .def_rw("input_res", &OutputTransformPass::input_res)
-            .def_rw("output_res", &OutputTransformPass::output_res)
-            .def("compute_reads", &OutputTransformPass::compute_reads)
-            .def("compute_writes", &OutputTransformPass::compute_writes)
-            .def("get_inplace_aliases", &OutputTransformPass::get_inplace_aliases)
-            .def_prop_ro("reads", &OutputTransformPass::compute_reads)
-            .def_prop_ro("writes", &OutputTransformPass::compute_writes)
-            .def("destroy", &OutputTransformPass::destroy);
-
-        m.attr("OutputTransformPass").attr("category") = "Output";
-        m.attr("OutputTransformPass").attr("node_inputs") =
-            nb::make_tuple(nb::make_tuple("input_res", "fbo"));
-        m.attr("OutputTransformPass").attr("node_outputs") = nb::make_tuple();
 
         m.def(
             "tc_picking_id_to_rgb",

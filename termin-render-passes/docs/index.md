@@ -24,13 +24,18 @@ linear HDR scene -> bloom -> TonemapPass -> linear UI -> PipelineColorExport(Dis
 result is still linear; it never performs gamma or sRGB encoding.
 The render executor binds the semantic pipeline export to the caller-owned
 physical target. Matching descriptors are bound directly. Format, extent or
-sample-count mismatches receive one copy/resolve epilogue; an sRGB target
-performs the IEC sRGB transfer at that physical boundary. Scene-linear exports
-are not implicitly tonemapped into SDR targets.
+sample-count mismatches receive a copy/resolve epilogue. A single-sample 2D
+display export receives a programmable output operation whenever its transfer
+function differs from the target or an unquantized image enters an 8-bit
+target. That operation applies the IEC sRGB transfer required by the physical
+target and stable spatial dithering immediately before quantization. Scene-linear
+exports are not implicitly tonemapped into SDR targets.
 
-`OutputTransformPass` and `PresentToScreenPass` remain available while authored
-and external pipelines migrate away from the legacy `OUTPUT` resource. Built-in
-default and editor pipelines do not use them.
+Output processing is not an authored framegraph pass and `OUTPUT` is not a
+pipeline resource. Pipelines terminate in `PipelineColorExport`; the executor
+derives the physical operation from the export semantic and the caller-owned
+target. `PresentToScreenPass` remains only as an explicitly authored fullscreen
+copy for pipelines that need such an internal operation.
 
 Scene UI is composited before the pipeline export so scene and UI receive
 exactly one encoding step at the eventual display target. UI color literals

@@ -8,7 +8,6 @@ FRAME_PASS_SPECS: list[tuple[str, str]] = [
     ("termin.render_passes", "SkyBoxPass"),
     ("termin.render_passes", "ShadowPass"),
     ("termin.render_passes", "PresentToScreenPass"),
-    ("termin.render_passes", "OutputTransformPass"),
     ("termin.render_passes", "BlitPass"),
     ("termin.render_passes", "ResolvePass"),
     ("termin.render_passes", "IdPass"),

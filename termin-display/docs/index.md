@@ -41,3 +41,7 @@ Offscreen surface является внутренней backend-реализац
 `Display.offscreen(device, width, height)`. Сам `Display` предоставляет texture,
 pixel extent, resize и typed pointer/wheel/key/text dispatch, поэтому отдельной
 долгоживущей Python surface identity нет.
+
+Offscreen display хранит `DisplayLinear` в `RGBA16F`. Это промежуточная
+композиционная поверхность, а не физический SDR output: перевод в sRGB и
+квантование до восьми бит выполняет конечный presentation sink.

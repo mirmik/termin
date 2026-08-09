@@ -83,7 +83,6 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/ground_grid_pass.cpp
     src/id_pass.cpp
     src/lighting_ubo.cpp
-    src/output_transform_pass.cpp
     src/present_pass.cpp
     src/resolve_pass.cpp
     src/shadow_camera.cpp
@@ -102,7 +101,6 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/bootstrap_core.cpp
         src/color_pass.cpp
         src/environment_lighting.cpp
-        src/output_transform_pass.cpp
         src/present_pass.cpp
         src/resolve_pass.cpp
         src/tonemap_pass.cpp
@@ -127,7 +125,6 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/grayscale_pass.hpp
     include/termin/render/ground_grid_pass.hpp
     include/termin/render/id_pass.hpp
-    include/termin/render/output_transform_pass.hpp
     include/termin/render/present_pass.hpp
     include/termin/render/resolve_pass.hpp
     include/termin/render/shadow_camera.hpp
@@ -307,36 +304,6 @@ if(TERMIN_RENDER_PASSES_BUILD_TESTS)
     )
     termin_add_test_labels(
         termin_render_passes_ui_widget_pass_pixel_smoke
-        "termin:capability:vulkan")
-
-    add_executable(termin_render_passes_output_transform_pixel_smoke
-        tests/test_output_transform_pixel_smoke.cpp
-    )
-    target_link_libraries(
-        termin_render_passes_output_transform_pixel_smoke PRIVATE
-        termin_render_passes
-    )
-    if(TARGET termin_shaderc)
-        add_dependencies(
-            termin_render_passes_output_transform_pixel_smoke
-            termin_shaderc)
-    endif()
-    set_target_properties(
-        termin_render_passes_output_transform_pixel_smoke PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    )
-    add_test(
-        NAME termin_render_passes_output_transform_pixel_smoke
-        COMMAND termin_render_passes_output_transform_pixel_smoke
-    )
-    set_tests_properties(
-        termin_render_passes_output_transform_pixel_smoke PROPERTIES
-        TIMEOUT 20
-        SKIP_REGULAR_EXPRESSION
-            "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
-    )
-    termin_add_test_labels(
-        termin_render_passes_output_transform_pixel_smoke
         "termin:capability:vulkan")
 
     add_executable(termin_render_passes_builtin_shader_sources_test
