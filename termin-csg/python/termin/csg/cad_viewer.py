@@ -9,7 +9,7 @@ from math import cos, sin, tau
 import numpy as np
 
 from tcbase import MouseButton, log
-from tcbase._geom_native import Vec3
+from tcbase._geom_native import LinearColor, Vec3
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent
 from tcgui.widgets.widget import Widget
 from tgfx import (
@@ -235,7 +235,7 @@ class CsgSceneRenderer:
         if opened_frame:
             ctx.begin_frame()
         render_color = self.color_msaa_tex if self.color_msaa_tex is not None else self.color_tex
-        ctx.begin_pass(render_color, self.depth_tex, True, 0.10, 0.10, 0.12, 1.0, 1.0, True)
+        ctx.begin_pass(render_color, self.depth_tex, clear_linear_color=LinearColor(0.10, 0.10, 0.12, 1.0), clear_depth=1.0, clear_depth_enabled=True)
         ctx.set_viewport(0, 0, width, height)
         ctx.set_depth_test(True)
         ctx.set_depth_write(True)

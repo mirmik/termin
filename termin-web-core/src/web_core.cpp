@@ -235,10 +235,7 @@ namespace {
         tgfx::RenderPassDesc pass;
         tgfx::ColorAttachmentDesc color;
         color.texture = surface;
-        color.clear_color[0] = 0.035f;
-        color.clear_color[1] = 0.055f;
-        color.clear_color[2] = 0.09f;
-        color.clear_color[3] = 1.0f;
+        color.clear_color = {0.035f, 0.055f, 0.09f, 1.0f};
         pass.colors.push_back(color);
 
         std::unique_ptr<tgfx::ICommandList> commands = state.device->create_command_list();
@@ -294,12 +291,12 @@ namespace {
 
         const tgfx::TextureHandle surface = state.device->acquire_surface_texture();
         state.device->clear_texture(surface,
-                                    termin::Color4{0.035f, 0.055f, 0.09f, 1.0f},
+                                    termin::LinearColor{0.035f, 0.055f, 0.09f, 1.0f},
                                     termin::Bounds2i::from_size(state.width, state.height));
         state.device->blit_to_texture(surface, copy, full_source, termin::Bounds2i{80, 50, 560, 310});
         state.device->blit_to_texture(surface, copy, termin::Bounds2i{0, 0, 4, 4}, termin::Bounds2i{20, 20, 70, 70});
         state.device->clear_texture(
-            surface, termin::Color4{0.05f, 0.85f, 0.12f, 1.0f}, termin::Bounds2i{280, 140, 360, 220});
+            surface, termin::LinearColor{0.05f, 0.85f, 0.12f, 1.0f}, termin::Bounds2i{280, 140, 360, 220});
         state.device->present();
 
         state.device->destroy(copy);

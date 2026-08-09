@@ -151,9 +151,9 @@ namespace {
                           std::uint32_t height,
                           std::uint32_t outside_x,
                           std::uint32_t outside_y) {
-        const float green[]{0.05f, 0.8f, 0.1f, 1.0f};
+        const termin::LinearColor green{0.05f, 0.8f, 0.1f, 1.0f};
         render_context.begin_frame();
-        render_context.begin_pass(input, {}, green, 1.0f, false);
+        render_context.begin_pass(input, {}, &green, 1.0f, false);
         render_context.end_pass();
 
         termin::ExecuteContext ctx;

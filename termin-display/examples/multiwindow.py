@@ -21,6 +21,7 @@ import ctypes
 import time
 
 import sdl2
+from tcbase._geom_native import LinearColor
 
 from tgfx._tgfx_native import Tgfx2Context, Tgfx2PixelFormat
 
@@ -107,9 +108,7 @@ def render_entry(entry: BackendWindowEntry, ctx: Tgfx2Context, t: float) -> None
     # it does its own submits and the live cmd list would trip over
     # them.
     ctx.context.begin_frame()
-    ctx.context.begin_pass(state.tex,
-                            clear_color_enabled=True,
-                            r=r, g=g, b=b, a=1.0)
+    ctx.context.begin_pass(state.tex, clear_linear_color=LinearColor(r, g, b, 1.0))
     ctx.context.end_pass()
     ctx.context.end_frame()
     entry.window.present(state.tex)

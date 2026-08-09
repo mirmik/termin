@@ -12,7 +12,7 @@ import weakref
 from termin.gui_native import (
     CollectionItem,
     CollectionModel,
-    Color,
+    SrgbColor,
     EdgeInsets,
     FileDialogMode,
     FileDialogModel,
@@ -57,17 +57,17 @@ class NativeLauncherProjection:
     def _configure_theme(self) -> None:
         theme = self.document.theme
         button = theme.role(StyleRole.Button)
-        button.base.background = Color(0.25, 0.25, 0.30, 1.0)
-        button.base.foreground = Color(1.0, 1.0, 1.0, 1.0)
+        button.base.background = SrgbColor(0.25, 0.25, 0.30, 1.0)
+        button.base.foreground = SrgbColor(1.0, 1.0, 1.0, 1.0)
         button.base.corner_radius = 6.0
-        button.hovered.value.background = Color(0.35, 0.35, 0.40, 1.0)
-        button.pressed.value.background = Color(0.18, 0.18, 0.22, 1.0)
-        button.disabled.value.background = Color(0.18, 0.18, 0.20, 0.60)
-        button.disabled.value.foreground = Color(0.50, 0.50, 0.50, 1.0)
+        button.hovered.value.background = SrgbColor(0.35, 0.35, 0.40, 1.0)
+        button.pressed.value.background = SrgbColor(0.18, 0.18, 0.22, 1.0)
+        button.disabled.value.background = SrgbColor(0.18, 0.18, 0.20, 0.60)
+        button.disabled.value.foreground = SrgbColor(0.50, 0.50, 0.50, 1.0)
 
         text_input = theme.role(StyleRole.TextInput)
-        text_input.base.background = Color(0.105, 0.105, 0.125, 0.96)
-        text_input.base.foreground = Color(0.92, 0.93, 0.96, 1.0)
+        text_input.base.background = SrgbColor(0.105, 0.105, 0.125, 0.96)
+        text_input.base.foreground = SrgbColor(0.92, 0.93, 0.96, 1.0)
         text_input.base.border_width = 0.0
         self.document.theme = theme
 
@@ -76,8 +76,8 @@ class NativeLauncherProjection:
         widget,
         *,
         font_size: float | None = None,
-        foreground: Color | None = None,
-        background: Color | None = None,
+        foreground: SrgbColor | None = None,
+        background: SrgbColor | None = None,
         corner_radius: float | None = None,
     ) -> None:
         style = StyleOverride()
@@ -113,7 +113,7 @@ class NativeLauncherProjection:
         right = self.document.create_hstack(f"{stable_id}-right-space")
         panel = self.document.create_vstack(f"{stable_id}-panel")
         panel.stable_id = f"{stable_id}.panel"
-        panel.set_layout_background(Color(0.12, 0.12, 0.16, 0.90))
+        panel.set_layout_background(SrgbColor(0.12, 0.12, 0.16, 0.90))
         panel.set_layout_corner_radius(12.0)
         panel.set_layout_padding(EdgeInsets(30.0, 28.0, 30.0, 28.0))
         panel.set_layout_spacing(12.0)
@@ -140,13 +140,13 @@ class NativeLauncherProjection:
     def _add_heading(self, panel, title: str, subtitle: str) -> None:
         heading = self.document.create_label(title, "launcher-heading")
         heading.stable_id = "launcher.heading"
-        self._style(heading, font_size=28.0, foreground=Color(1.0, 1.0, 1.0, 1.0))
+        self._style(heading, font_size=28.0, foreground=SrgbColor(1.0, 1.0, 1.0, 1.0))
         subheading = self.document.create_label(subtitle, "launcher-subheading")
         subheading.stable_id = "launcher.subheading"
         self._style(
             subheading,
             font_size=14.0,
-            foreground=Color(0.55, 0.60, 0.70, 1.0),
+            foreground=SrgbColor(0.55, 0.60, 0.70, 1.0),
         )
         panel.add_fixed_child(heading, 42.0)
         panel.add_fixed_child(subheading, 24.0)
@@ -154,7 +154,7 @@ class NativeLauncherProjection:
 
     def _section_label(self, text: str):
         label = self.document.create_label(text)
-        self._style(label, font_size=13.0, foreground=Color(0.60, 0.60, 0.65, 1.0))
+        self._style(label, font_size=13.0, foreground=SrgbColor(0.60, 0.60, 0.65, 1.0))
         return label
 
     def _separator(self, *, horizontal: bool):
@@ -163,7 +163,7 @@ class NativeLauncherProjection:
             if horizontal
             else self.document.create_vstack("launcher-vertical-separator")
         )
-        separator.set_layout_background(Color(0.30, 0.30, 0.35, 1.0))
+        separator.set_layout_background(SrgbColor(0.30, 0.30, 0.35, 1.0))
         return separator
 
     def _add_error(self, panel) -> None:
@@ -221,7 +221,7 @@ class NativeLauncherProjection:
         new_button = self._button("New Project", "launcher.action.new", self._show_new_project)
         self._style(
             new_button.widget,
-            background=Color(0.20, 0.45, 0.80, 1.0),
+            background=SrgbColor(0.20, 0.45, 0.80, 1.0),
             corner_radius=6.0,
         )
         open_button = self._button("Open Project", "launcher.action.open", self._open_selected)

@@ -212,7 +212,6 @@ class UIRenderer:
             # draws with depth_test=False anyway.
             ctx.begin_pass(
                 color=target_color,
-                clear_color_enabled=False,
                 clear_depth_enabled=False,
             )
             self._current_target = target_color
@@ -225,14 +224,13 @@ class UIRenderer:
             # Plot3D, Viewport3D) get a fresh depth buffer each frame.
             if background_color is not None:
                 linear_background = srgb_to_linear(background_color)
-                bg_r, bg_g, bg_b, bg_a = linear_background
+                clear_linear_color = linear_background
             else:
-                bg_r = bg_g = bg_b = bg_a = 0.0
+                clear_linear_color = None
             ctx.begin_pass(
                 color=self._offscreen_color_tex,
                 depth=self._offscreen_depth_tex,
-                clear_color_enabled=True,
-                r=bg_r, g=bg_g, b=bg_b, a=bg_a,
+                clear_linear_color=clear_linear_color,
                 clear_depth=1.0,
                 clear_depth_enabled=True,
             )
@@ -414,7 +412,6 @@ class UIRenderer:
         finally:
             pass_args = {
                 "color": self._current_target,
-                "clear_color_enabled": False,
                 "clear_depth_enabled": False,
             }
             if self._current_depth_target is not None:

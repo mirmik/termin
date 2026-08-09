@@ -64,7 +64,7 @@ namespace termin::rendering_manager_detail {
 
         if (profile)
             tc_profiler_begin_section("Present Clear");
-        dev->clear_texture(display_color_tex, Color4{0.1f, 0.1f, 0.1f, 1.0f}, Bounds2i::from_size(width, height));
+        dev->clear_texture(display_color_tex, LinearColor{0.1f, 0.1f, 0.1f, 1.0f}, Bounds2i::from_size(width, height));
         if (profile)
             tc_profiler_end_section();
 

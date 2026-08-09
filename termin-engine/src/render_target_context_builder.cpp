@@ -34,7 +34,9 @@ namespace termin::rendering_manager_detail {
         if (!tc_render_target_handle_valid(rt))
             return;
         ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
-        tc_render_target_get_clear_color_value(rt, ctx.clear_color);
+        tc_linear_color clear_color{};
+        tc_render_target_get_clear_linear_color(rt, &clear_color);
+        ctx.clear_linear_color = {clear_color.r, clear_color.g, clear_color.b, clear_color.a};
         ctx.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(rt);
         ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
     }

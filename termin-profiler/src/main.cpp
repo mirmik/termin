@@ -105,7 +105,7 @@ namespace {
             ui::DocumentRendererConfig renderer;
             renderer.font_path = resolve_font_path(executable);
             renderer.font_size = 15;
-            renderer.clear_color = {0.025f, 0.03f, 0.04f, 1.0f};
+            renderer.clear_linear_color = {0.025f, 0.03f, 0.04f, 1.0f};
             adapter_ = std::make_unique<ui::GuiWindowAdapter>(
                 graphics_->graphics(), document_, renderer, windows_->window(window_));
             build_interface();

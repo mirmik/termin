@@ -8,13 +8,13 @@ import weakref
 
 from termin.editor_core.dialog_service import DialogService
 from termin.gui_native import (
-    Color,
     DialogAction,
     TcDocument,
     FileDialogMode,
     FileDialogModel,
     MessageBoxKind,
     Rect,
+    SrgbColor,
     Size,
 )
 
@@ -196,7 +196,7 @@ class NativeDialogService(DialogService):
         if len(initial) != 4:
             raise ValueError("native color dialog requires four color components")
         dialog = self._document.create_color_dialog(
-            Color(*initial),
+            SrgbColor(*initial),
             show_alpha,
             title,
         )

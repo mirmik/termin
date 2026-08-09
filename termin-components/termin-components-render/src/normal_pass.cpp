@@ -156,10 +156,9 @@ namespace termin {
         entity_names.clear();
         std::set<std::string> seen_entities;
 
-        auto cc = clear_color();
-        float clear_rgba[4] = {cc[0], cc[1], cc[2], cc[3]};
+        const LinearColor clear_rgba = clear_color();
 
-        ctx.ctx2->begin_pass(color_tex2, depth_tex2, clear_rgba, 1.0f, true);
+        ctx.ctx2->begin_pass(color_tex2, depth_tex2, &clear_rgba, 1.0f, true);
         ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
         ctx.ctx2->set_depth_test(true);
         ctx.ctx2->set_depth_write(true);

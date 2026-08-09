@@ -59,8 +59,8 @@ namespace {
                 tc_log_error("remote framegraph smoke: OUTPUT texture is unavailable");
                 return;
             }
-            constexpr float clear[4] = {0.125F, 0.5F, 0.75F, 1.0F};
-            context.ctx2->begin_pass(output->second, {}, clear, 1.0F, false);
+            constexpr termin::LinearColor clear{0.125F, 0.5F, 0.75F, 1.0F};
+            context.ctx2->begin_pass(output->second, {}, &clear, 1.0F, false);
             context.ctx2->end_pass();
         }
     };

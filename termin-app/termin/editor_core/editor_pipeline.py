@@ -1,7 +1,7 @@
 """Editor render pipeline factory."""
 
 from termin.render_framework import RenderPipeline
-from termin.geombase import SrgbColor
+from termin.geombase import LinearColor, SrgbColor
 
 
 def make_editor_pipeline() -> RenderPipeline:
@@ -213,7 +213,7 @@ def make_editor_pipeline() -> RenderPipeline:
             resource="empty",
             samples=msaa_samples,
             format=color_fbo_format,
-            clear_color=(0.2, 0.2, 0.2, 1.0),
+            clear_color=LinearColor(0.2, 0.2, 0.2, 1.0),
             clear_depth=1.0,
         ),
         ResourceSpec(

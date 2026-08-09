@@ -18,12 +18,12 @@ from termin.editor_core.rendering_inspector_models import (
     ViewportInspectorSnapshot,
 )
 from termin.gui_native import TcDocument, Size, WidgetRef
+from termin.geombase import LinearColor
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 from .inspector_fields import (
     ColorDialogHandler,
     LayerMaskDialogHandler,
-    build_native_color_control,
 )
 
 
@@ -282,7 +282,7 @@ class NativeRenderTargetInspector:
             "Clear color", "clear-color-enabled", snapshot.clear_color_enabled,
             self.controller.set_clear_color_enabled,
         )
-        self._append_color(snapshot)
+        self._append_linear_color(snapshot)
         self._append_checkbox(
             "Clear depth", "clear-depth-enabled", snapshot.clear_depth_enabled,
             self.controller.set_clear_depth_enabled,
@@ -329,34 +329,26 @@ class NativeRenderTargetInspector:
         self.content.add_fixed_child(row, 30.0)
         self.controls[key] = control
 
-    def _append_color(self, snapshot: RenderTargetInspectorSnapshot) -> None:
-        weak_owner = weakref.ref(self)
+    def _append_linear_color(self, snapshot: RenderTargetInspectorSnapshot) -> None:
+        row = _row(self.document, "Clear value (linear/HDR)", "target-clear-linear-color")
+        values = [snapshot.clear_linear_color.r, snapshot.clear_linear_color.g,
+                  snapshot.clear_linear_color.b, snapshot.clear_linear_color.a]
+        controls = []
+        for value in values:
+            box = self.document.create_spin_box(float(value))
+            box.set_range(-10000.0, 10000.0)
+            box.step = 0.01
+            box.decimals = 5
+            controls.append(box)
+            row.add_stretch_child(box.widget)
 
-        def clicked() -> None:
-            owner = weak_owner()
-            if owner is None:
-                return
-            if owner.show_color_dialog is None:
-                _logger.error("Render target inspector has no color dialog service")
-                return
+        def changed(_value: float) -> None:
+            self._mutate(lambda: self.controller.set_clear_linear_color(LinearColor(*(box.value for box in controls))))
 
-            def finished(value: tuple[float, ...] | None) -> None:
-                current = weak_owner()
-                if current is not None and value is not None:
-                    current._mutate(lambda: current.controller.set_clear_color_value(value))
-
-            owner.show_color_dialog(snapshot.clear_color_value, finished)
-
-        row = _row(self.document, "Clear value", "target-clear-color-value")
-        control, button = build_native_color_control(
-            self.document,
-            snapshot.clear_color_value,
-            debug_name="native-render-target-clear-color",
-            on_clicked=clicked,
-        )
-        row.add_stretch_child(control)
+        for box in controls:
+            box.connect_changed(changed)
         self.content.add_fixed_child(row, 30.0)
-        self.controls["clear-color-value"] = button
+        self.controls["clear-linear-color"] = tuple(controls)
 
     def _append_size(self, snapshot: RenderTargetInspectorSnapshot) -> None:
         row = _row(self.document, "Size", "target-size")

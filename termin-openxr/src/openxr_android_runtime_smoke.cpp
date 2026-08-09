@@ -719,16 +719,12 @@ namespace termin::openxr {
                 if (config) {
                     tc_render_target_set_layer_mask(xr_render_target, config->layer_mask);
                     tc_render_target_set_clear_color_enabled(xr_render_target, config->clear_color);
-                    tc_render_target_set_clear_color_value(xr_render_target,
-                                                           config->clear_color_value[0],
-                                                           config->clear_color_value[1],
-                                                           config->clear_color_value[2],
-                                                           config->clear_color_value[3]);
+                    tc_render_target_set_clear_linear_color(xr_render_target, config->clear_linear_color);
                     tc_render_target_set_clear_depth_enabled(xr_render_target, config->clear_depth);
                     tc_render_target_set_clear_depth_value(xr_render_target, config->clear_depth_value);
                 } else {
                     tc_render_target_set_clear_color_enabled(xr_render_target, true);
-                    tc_render_target_set_clear_color_value(xr_render_target, 0.015f, 0.018f, 0.024f, 1.0f);
+                    tc_render_target_set_clear_linear_color(xr_render_target, (tc_linear_color){0.015f, 0.018f, 0.024f, 1.0f});
                     tc_render_target_set_clear_depth_enabled(xr_render_target, true);
                     tc_render_target_set_clear_depth_value(xr_render_target, 1.0f);
                 }
@@ -773,7 +769,9 @@ namespace termin::openxr {
                 target.external_textures["XR_MULTIVIEW_TARGET"] = frame.color_texture;
                 target.output_depth_format = tgfx::PixelFormat::D32F;
                 target.clear_color_enabled = tc_render_target_get_clear_color_enabled(render_target);
-                tc_render_target_get_clear_color_value(render_target, target.clear_color);
+                tc_linear_color clear_color{};
+                tc_render_target_get_clear_linear_color(render_target, &clear_color);
+                target.clear_linear_color = {clear_color.r, clear_color.g, clear_color.b, clear_color.a};
                 target.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(render_target);
                 target.clear_depth = tc_render_target_get_clear_depth_value(render_target);
                 const termin::GeneralTransform3 origin_transform = xr_origin->entity().transform();
@@ -1696,10 +1694,10 @@ namespace termin::openxr {
                                 color_attachment.texture = color_texture;
                                 color_attachment.load = tgfx::LoadOp::Clear;
                                 color_attachment.store = tgfx::StoreOp::Store;
-                                color_attachment.clear_color[0] = 0.015f;
-                                color_attachment.clear_color[1] = 0.018f;
-                                color_attachment.clear_color[2] = 0.024f;
-                                color_attachment.clear_color[3] = 1.0f;
+                                color_attachment.clear_color.r = 0.015f;
+                                color_attachment.clear_color.g = 0.018f;
+                                color_attachment.clear_color.b = 0.024f;
+                                color_attachment.clear_color.a = 1.0f;
                                 pass.colors.push_back(color_attachment);
                                 pass.view_count = 2;
                                 cmd->begin_multiview_render_pass(pass);

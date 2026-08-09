@@ -73,8 +73,8 @@ namespace termin {
             0.75f, 0.20f, 1.0f, 0.7f, 0.6f,  0.0f,  0.10f, 0.35f, 1.0f, 1.0f,
         };
 
-        const float clear_color[4] = {0.08f, 0.09f, 0.11f, 1.0f};
-        ctx.ctx2->begin_pass(output_tex2, {}, clear_color, 1.0f, false);
+        const termin::LinearColor clear_color{0.08f, 0.09f, 0.11f, 1.0f};
+        ctx.ctx2->begin_pass(output_tex2, {}, &clear_color, 1.0f, false);
         ctx.ctx2->set_viewport(0, 0, w, h);
         ctx.ctx2->set_depth_test(false);
         ctx.ctx2->set_depth_write(false);

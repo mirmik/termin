@@ -68,7 +68,7 @@ namespace termin {
         // to the legacy Python pass's get_resource_specs.
         ResourceSpec spec;
         spec.resource = input_res;
-        spec.clear_color = std::array<double, 4>{0.2, 0.2, 0.2, 1.0};
+        spec.clear_color = termin::LinearColor{0.2f, 0.2f, 0.2f, 1.0f};
         spec.clear_depth = 1.0f;
         return {spec};
     }

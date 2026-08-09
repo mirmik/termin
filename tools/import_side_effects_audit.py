@@ -31,7 +31,6 @@ RISKY_CALL_NAMES = {
     "AudioEngine",
     "Canvas2DRenderer",
     "CanvasSrgbColor",
-    "Color4",
     "DefaultResourceManager",
     "FontTextureAtlas",
     "Profiler",

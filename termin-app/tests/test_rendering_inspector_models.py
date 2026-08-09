@@ -1,5 +1,8 @@
 import sys
 import types
+import pytest
+
+from termin.geombase import LinearColor
 
 from termin.editor_core.rendering_inspector_models import (
     DisplayInspectorController,
@@ -121,7 +124,7 @@ class _RenderTarget:
         self.color_format = "rgba16f"
         self.depth_format = "depth32f"
         self.clear_color_enabled = False
-        self.clear_color_value = (0.0, 0.0, 0.0, 1.0)
+        self.clear_linear_color = LinearColor(0.0, 0.0, 0.0, 1.0)
         self.clear_depth_enabled = False
         self.clear_depth_value = 1.0
         self.width = 640
@@ -221,7 +224,7 @@ def test_render_target_inspector_snapshot_and_mutations(monkeypatch):
     controller.set_color_format(1)
     controller.set_depth_format(1)
     controller.set_clear_color_enabled(True)
-    controller.set_clear_color_value((0.1, 0.2, 0.3, 1.0))
+    controller.set_clear_linear_color(LinearColor(0.1, 0.2, 0.3, 1.0))
     controller.set_clear_depth_enabled(True)
     controller.set_clear_depth_value(0.5)
     controller.set_size(800, 600)
@@ -238,7 +241,8 @@ def test_render_target_inspector_snapshot_and_mutations(monkeypatch):
     assert target.color_format == "rgba8"
     assert target.depth_format == "depth24"
     assert target.clear_color_enabled is True
-    assert target.clear_color_value == (0.1, 0.2, 0.3, 1.0)
+    assert (target.clear_linear_color.r, target.clear_linear_color.g,
+            target.clear_linear_color.b, target.clear_linear_color.a) == pytest.approx((0.1, 0.2, 0.3, 1.0))
     assert target.clear_depth_enabled is True
     assert target.clear_depth_value == 0.5
     assert (target.width, target.height) == (800, 600)

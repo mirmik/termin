@@ -60,7 +60,7 @@ namespace termin {
         }
 
     protected:
-        std::array<float, 4> clear_color() const override {
+        LinearColor clear_color() const override {
             return {0.5f, 0.5f, 0.5f, 1.0f};
         }
         const char* phase_mark() const override {

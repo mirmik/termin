@@ -208,10 +208,10 @@ namespace {
         context.tex2_depth_writes.emplace("world2d", depth);
         context.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
 
-        const float clear[] = {0.02f, 0.12f, 0.22f, 1.0f};
+        const termin::LinearColor clear{0.02f, 0.12f, 0.22f, 1.0f};
         termin::World2DPass pass("opaque", "world2d");
         render_context.begin_frame();
-        render_context.begin_pass(color, depth, clear, 1.0f, true);
+        render_context.begin_pass(color, depth, &clear, 1.0f, true);
         render_context.end_pass();
         pass.execute(context);
         render_context.end_frame();
