@@ -1,4 +1,9 @@
+from contextlib import contextmanager
 from math import isclose
+from pathlib import Path
+
+from tcbase import Action, MouseButton
+from termin.gui_native import TreeDropPosition
 
 from termin.csg import (
     CsgEditorController,
@@ -16,14 +21,8 @@ from termin.csg import (
     to_mesh3,
 )
 from termin.csg.cad import box, circle, mesh, rect
-from termin.csg.cad_tree_adapter import (
-    CsgTreeNodePayload,
-    find_tree_node,
-    to_tree_node,
-    tree_node_data,
-    tree_node_model,
-)
-from termin.csg.csg_editor_panel import CsgEditorPanel
+from termin.csg.cad_app import CadApp
+from termin.csg.cad_model import StandaloneCsgModel
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
@@ -46,14 +45,43 @@ from termin.csg.viewer_camera import OrbitCamera
 from termin.geombase import Vec3
 
 
-def _test_editor_panel(controller: CsgEditorController) -> CsgEditorPanel:
-    panel = CsgEditorPanel(
-        controller,
-        lambda result, default_status="": result.success,
-        log_prefix="[CsgEditorPanelTest]",
-    )
-    panel.build()
-    return panel
+@contextmanager
+def _native_cad_app():
+    app = CadApp()
+    app.build_ui()
+    try:
+        yield app
+    finally:
+        app.close()
+
+
+def _native_tree_node(
+    panel,
+    selection: tuple[str, str],
+    *,
+    parent_operation_id: str | None = None,
+    boolean_input: bool | None = None,
+):
+    for node, node_selection in panel._tree_selections.items():
+        if node_selection != selection:
+            continue
+        source = panel._tree_nodes[node]
+        if parent_operation_id is not None and source.parent_operation_id != parent_operation_id:
+            continue
+        if boolean_input is not None and source.is_boolean_input != boolean_input:
+            continue
+        return node
+    return None
+
+
+def test_termin_csg_python_and_setup_have_no_tcgui_dependency():
+    package_root = Path(__file__).resolve().parents[1]
+    sources = [package_root / "setup.py", *(package_root / "python").rglob("*.py")]
+    offenders = [
+        str(source.relative_to(package_root)) for source in sources if "tcgui" in source.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == []
 
 
 def test_native_primitives_and_extrude_are_importable_from_python():
@@ -208,21 +236,17 @@ def test_procedural_document_extrudes_outer_contours_with_holes():
     assert outer_node.children[0].text.startswith("[Hole]")
 
 
-def test_cad_tree_adapter_uses_explicit_payload_for_document_nodes():
-    document = ProceduralMeshDocument()
-    operation = document.add_primitive_operation("box")
-    assert operation is not None
+def test_native_csg_panel_maps_document_nodes_to_tree_model():
+    with _native_cad_app() as app:
+        operation = app.document.add_primitive_operation("box")
+        assert operation is not None
 
-    model_root = build_document_tree(document)[0]
-    tree_root = to_tree_node(model_root)
+        app.editor_panel.refresh()
+        node = _native_tree_node(app.editor_panel, ("operation", operation.id))
 
-    assert isinstance(tree_root.data, CsgTreeNodePayload)
-    assert tree_node_data(tree_root) == ("operation", operation.id)
-    assert tree_node_model(tree_root) is model_root
-    assert "csg_document_node" not in vars(tree_root)
-
-    found = find_tree_node(tree_root, ("operation", operation.id))
-    assert found is tree_root
+        assert node is not None
+        assert app.editor_panel._tree_nodes[node].item_id == operation.id
+        assert app.editor_panel._tree_nodes[node].kind == "operation"
 
 
 def test_procedural_document_stores_open_sketch_paths_separately_from_contours():
@@ -1030,284 +1054,312 @@ def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
     assert isclose(restored.camera.pitch, 0.5, abs_tol=1.0e-6)
 
 
-def test_csg_editor_panel_updates_extrude_vector():
-    controller = CsgEditorController()
-    panel = _test_editor_panel(controller)
-    contour = controller.document.add_contour_from_points(
-        [
-            (0.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (1.0, 1.0, 0.0),
-            (0.0, 1.0, 0.0),
-        ]
-    )
-    assert contour is not None
+def test_native_cad_file_dialogs_save_and_open_state(tmp_path):
+    with _native_cad_app() as app:
+        app.last_directory = tmp_path
+        assert app.add_primitive("box")
+        saved_operation_id = app.document.operations[0].id
 
-    sketch_id = controller.document.find_sketch_id_for_contour(contour.id)
-    operation = controller.document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
-    assert operation is not None
+        app.save_state_as_dialog()
+        assert len(app._dialogs) == 1
+        save_dialog = next(iter(app._dialogs.values()))
+        save_dialog.model.file_name = "roundtrip.tcsg.json"
+        assert save_dialog.activate("accept")
+        saved_path = tmp_path / "roundtrip.tcsg.json"
+        assert saved_path.is_file()
+        assert app._dialogs == {}
 
-    controller.selection = ("operation", operation.id)
-    panel.refresh_operation_params_panel()
-    assert panel.operation_params_panel.visible is True
-    assert panel.extrude_vector_inputs["z"].value == 1.0
+        assert app.clear_document()
+        assert app.document.operations == []
+        app.open_state_dialog()
+        assert len(app._dialogs) == 1
+        open_dialog = next(iter(app._dialogs.values()))
+        file_index = next(
+            index for index, entry in enumerate(open_dialog.model.entries) if entry.name == saved_path.name
+        )
+        assert open_dialog.model.select(file_index)
+        assert open_dialog.activate("accept")
 
-    panel.extrude_vector_inputs["x"].value = 0.25
-    panel.extrude_vector_inputs["z"].value = -2.0
-    panel.operation_params._on_extrude_vector_changed(-2.0)
+        assert app._dialogs == {}
+        assert len(app.document.operations) == 1
+        assert app.document.operations[0].id == saved_operation_id
+        assert app.current_path == saved_path
 
-    assert operation.params["vector"] == [0.25, 0.0, -2.0]
+
+def test_native_csg_panel_updates_extrude_vector_through_shared_model():
+    with _native_cad_app() as app:
+        contour = app.document.add_contour_from_points(
+            [
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (1.0, 1.0, 0.0),
+                (0.0, 1.0, 0.0),
+            ]
+        )
+        assert contour is not None
+        sketch_id = app.document.find_sketch_id_for_contour(contour.id)
+        operation = app.document.add_extrude_operation_for_sketch(sketch_id, height=1.0)
+        assert operation is not None
+
+        assert app.model.select_node(("operation", operation.id)) is True
+        assert app.editor_panel.param_host.visible is True
+        assert app.model.set_extrude_vector(operation.id, (0.25, 0.0, -2.0)) is True
+
+        assert operation.params["vector"] == [0.25, 0.0, -2.0]
+        assert app.editor_panel.selection_label.text.startswith("Selection: operation")
 
 
-def test_csg_editor_panel_updates_boolean_transform():
-    controller = CsgEditorController()
-    panel = _test_editor_panel(controller)
-    first = controller.document.add_primitive_operation("box", {"size": [2.0, 2.0, 2.0]})
-    second = controller.document.add_primitive_operation("sphere", {"radius": 0.75})
-    assert first is not None
-    assert second is not None
-    operation = controller.document.add_boolean_operation("subtract", [first.id, second.id])
-    assert operation is not None
+def test_native_csg_panel_updates_boolean_transform_through_shared_model():
+    with _native_cad_app() as app:
+        first = app.document.add_primitive_operation("box", {"size": [2.0, 2.0, 2.0]})
+        second = app.document.add_primitive_operation("sphere", {"radius": 0.75})
+        assert first is not None
+        assert second is not None
+        operation = app.document.add_boolean_operation("subtract", [first.id, second.id])
+        assert operation is not None
 
-    controller.selection = ("operation", operation.id)
-    panel.refresh_operation_params_panel()
-    assert panel.operation_params_panel.visible is True
-    assert "center.x" in panel.operation_transform_inputs
-    assert "rotation.z" in panel.operation_transform_inputs
-    assert panel.extrude_vector_inputs == {}
+        assert app.model.select_node(("operation", operation.id)) is True
+        assert app.editor_panel.param_host.visible is True
+        assert (
+            app.model.set_operation_transform(
+                operation.id,
+                (3.0, 0.0, 0.0),
+                (0.0, 0.0, 45.0),
+            )
+            is True
+        )
 
-    panel.operation_transform_inputs["center.x"].value = 3.0
-    panel.operation_transform_inputs["rotation.z"].value = 45.0
-    panel.operation_params._on_operation_transform_changed(3.0)
-
-    assert operation.params["center"] == [3.0, 0.0, 0.0]
-    assert operation.params["rotation"] == [0.0, 0.0, 45.0]
+        assert operation.params["center"] == [3.0, 0.0, 0.0]
+        assert operation.params["rotation"] == [0.0, 0.0, 45.0]
 
 
 def test_cad_app_tree_drop_adds_and_reorders_boolean_inputs():
-    from termin.csg.cad_app import CadApp
+    with _native_cad_app() as app:
+        first = app.document.add_primitive_operation("box")
+        second = app.document.add_primitive_operation("sphere")
+        assert first is not None
+        assert second is not None
+        operation = app.document.add_boolean_operation("subtract", [first.id, second.id])
+        assert operation is not None
+        third = app.document.add_primitive_operation("cylinder")
+        assert third is not None
+        app.editor_panel.refresh()
 
-    app = CadApp()
-    first = app.document.add_primitive_operation("box")
-    second = app.document.add_primitive_operation("sphere")
-    assert first is not None
-    assert second is not None
-    operation = app.document.add_boolean_operation("subtract", [first.id, second.id])
-    assert operation is not None
-    third = app.document.add_primitive_operation("cylinder")
-    assert third is not None
-    app.refresh_tree()
+        subtract_node = _native_tree_node(app.editor_panel, ("operation", operation.id))
+        third_root_node = _native_tree_node(
+            app.editor_panel,
+            ("operation", third.id),
+            boolean_input=False,
+        )
+        assert subtract_node is not None
+        assert third_root_node is not None
 
-    subtract_node = _first_tree_node(app.tree.root_nodes, ("operation", operation.id))
-    third_root_node = _first_tree_node(app.tree.root_nodes, ("operation", third.id))
-    assert subtract_node is not None
-    assert third_root_node is not None
+        app.editor_panel.drop_node(third_root_node, subtract_node, TreeDropPosition.Inside)
+        assert operation.inputs == [first.id, second.id, third.id]
+        assert len(evaluate_document(app.document)) == 1
 
-    app._on_tree_drop(third_root_node, subtract_node, "inside")
-    assert operation.inputs == [first.id, second.id, third.id]
-    assert len(evaluate_document(app.document)) == 1
+        second_node = _native_tree_node(
+            app.editor_panel,
+            ("operation", second.id),
+            parent_operation_id=operation.id,
+            boolean_input=True,
+        )
+        third_node = _native_tree_node(
+            app.editor_panel,
+            ("operation", third.id),
+            parent_operation_id=operation.id,
+            boolean_input=True,
+        )
+        assert second_node is not None
+        assert third_node is not None
 
-    second_node = _first_tree_node(app.tree.root_nodes, ("operation", second.id))
-    third_node = _first_tree_node(app.tree.root_nodes, ("operation", third.id))
-    assert second_node is not None
-    assert third_node is not None
+        app.editor_panel.drop_node(third_node, second_node, TreeDropPosition.Before)
+        assert operation.inputs == [first.id, third.id, second.id]
 
-    app._on_tree_drop(third_node, second_node, "above")
-    assert operation.inputs == [first.id, third.id, second.id]
-
-    roots = build_document_tree(app.document)
-    assert roots[0].children[0].text.startswith("[Base]")
-    assert roots[0].children[1].text.startswith("[Cut]")
-    assert roots[0].children[2].text.startswith("[Cut]")
-
-
-def _first_tree_node(nodes, data):
-    for node in nodes:
-        if tree_node_data(node) == data:
-            return node
-        found = _first_tree_node(node.subnodes, data)
-        if found is not None:
-            return found
-    return None
-
-
-def test_csg_editor_panel_updates_sketch_plane():
-    controller = CsgEditorController()
-    panel = _test_editor_panel(controller)
-    contour = controller.document.add_contour_from_points(
-        [
-            (0.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (1.0, 1.0, 0.0),
-            (0.0, 1.0, 0.0),
-        ]
-    )
-    assert contour is not None
-
-    sketch_id = controller.document.find_sketch_id_for_contour(contour.id)
-    controller.selection = ("plane", sketch_id)
-    panel.refresh_plane_params_panel()
-    assert panel.plane_params_panel.visible is True
-    assert panel.plane_inputs["origin.z"].value == 0.0
-
-    panel.plane_inputs["origin.z"].value = 2.5
-    panel.plane_params._on_param_changed(2.5)
-
-    sketch = controller.document.find_sketch(sketch_id)
-    assert sketch is not None
-    assert sketch.plane.origin == (0.0, 0.0, 2.5)
+        roots = build_document_tree(app.document)
+        assert roots[0].children[0].text.startswith("[Base]")
+        assert roots[0].children[1].text.startswith("[Cut]")
+        assert roots[0].children[2].text.startswith("[Cut]")
 
 
-def test_csg_editor_panel_updates_contour_points():
-    controller = CsgEditorController()
-    panel = _test_editor_panel(controller)
-    contour = controller.document.add_contour_from_points(
-        [
-            (0.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (1.0, 1.0, 0.0),
-            (0.0, 1.0, 0.0),
-        ]
-    )
-    assert contour is not None
+def test_native_csg_panel_updates_sketch_plane_through_shared_model():
+    with _native_cad_app() as app:
+        contour = app.document.add_contour_from_points(
+            [
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (1.0, 1.0, 0.0),
+                (0.0, 1.0, 0.0),
+            ]
+        )
+        assert contour is not None
+        sketch_id = app.document.find_sketch_id_for_contour(contour.id)
 
-    controller.selection = ("contour", contour.id)
-    panel.refresh_contour_params_panel()
-    assert panel.contour_params_panel.visible is True
-    assert panel.contour_point_inputs[(2, "x")].value == 1.0
-    assert panel.contour_point_inputs[(2, "y")].value == 1.0
+        assert app.model.select_node(("plane", sketch_id)) is True
+        assert app.editor_panel.param_host.visible is True
+        assert (
+            app.model.set_sketch_plane(
+                sketch_id,
+                ProceduralPlane(origin=(0.0, 0.0, 2.5)),
+            )
+            is True
+        )
 
-    panel.contour_point_inputs[(2, "x")].value = 1.75
-    panel.contour_point_inputs[(2, "y")].value = 1.25
-    panel.contour_params._on_point_changed(2, "y", 1.25)
+        sketch = app.document.find_sketch(sketch_id)
+        assert sketch is not None
+        assert sketch.plane.origin == (0.0, 0.0, 2.5)
 
-    assert contour.points[2] == (1.75, 1.25)
+
+def test_native_csg_panel_updates_contour_points_through_shared_model():
+    with _native_cad_app() as app:
+        contour = app.document.add_contour_from_points(
+            [
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (1.0, 1.0, 0.0),
+                (0.0, 1.0, 0.0),
+            ]
+        )
+        assert contour is not None
+
+        assert app.model.select_node(("contour", contour.id)) is True
+        assert app.editor_panel.param_host.visible is True
+        assert app.model.set_contour_point(contour.id, 2, (1.75, 1.25)) is True
+
+        assert contour.points[2] == (1.75, 1.25)
 
 
 def test_cad_app_drags_selected_contour_point_in_viewport_without_drawing():
-    from termin.csg.cad_app import CadApp
+    with _native_cad_app() as app:
+        contour = app.document.add_contour_from_points(
+            [
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (1.0, 1.0, 0.0),
+                (0.0, 1.0, 0.0),
+            ]
+        )
+        assert contour is not None
+        sketch_id = app.document.find_sketch_id_for_contour(contour.id)
+        sketch = app.document.find_sketch(sketch_id)
+        assert sketch is not None
 
-    app = CadApp()
-    app.editor_panel.build_contour_params_panel()
-    contour = app.document.add_contour_from_points(
-        [
-            (0.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (1.0, 1.0, 0.0),
-            (0.0, 1.0, 0.0),
-        ]
-    )
-    assert contour is not None
-    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
-    sketch = app.document.find_sketch(sketch_id)
-    assert sketch is not None
+        app.model.select_node(("contour", contour.id))
+        app.mode = "draw_sketch"
+        width, height = 800, 600
+        app.surface.resize(width, height)
+        start_screen = app.model._project_world_to_screen(sketch.plane.unproject(contour.points[2]), width, height)
+        target_screen = app.model._project_world_to_screen(sketch.plane.unproject((1.5, 1.25)), width, height)
+        assert start_screen is not None
+        assert target_screen is not None
 
-    app.selected_node_data = ("contour", contour.id)
-    app.editor_panel.refresh_contour_params_panel()
-    app.mode = "draw_sketch"
+        assert (
+            app.surface.dispatch_pointer_button(
+                start_screen[0], start_screen[1], int(MouseButton.LEFT), int(Action.PRESS), 0, 1
+            )
+            is True
+        )
+        assert app.draft.points == []
+        assert app.surface.dispatch_pointer_move(target_screen[0], target_screen[1]) is True
+        assert (
+            app.surface.dispatch_pointer_button(
+                target_screen[0], target_screen[1], int(MouseButton.LEFT), int(Action.RELEASE), 0, 1
+            )
+            is True
+        )
 
-    width = 800
-    height = 600
-    start_screen = app._project_world_to_screen(sketch.plane.unproject(contour.points[2]), width, height)
-    target_screen = app._project_world_to_screen(sketch.plane.unproject((1.5, 1.25)), width, height)
-    assert start_screen is not None
-    assert target_screen is not None
-
-    assert app._on_scene_mouse_down(start_screen[0], start_screen[1], width, height) is True
-    assert app.draft.points == []
-    assert app._on_scene_mouse_move(target_screen[0], target_screen[1], width, height) is True
-    assert app._on_scene_mouse_up(target_screen[0], target_screen[1], width, height) is True
-
-    assert isclose(contour.points[2][0], 1.5, abs_tol=1.0e-3)
-    assert isclose(contour.points[2][1], 1.25, abs_tol=1.0e-3)
-    assert isclose(app.editor_panel.contour_point_inputs[(2, "x")].value, 1.5, abs_tol=1.0e-3)
-    assert isclose(app.editor_panel.contour_point_inputs[(2, "y")].value, 1.25, abs_tol=1.0e-3)
-    assert app.draft.points == []
+        assert isclose(contour.points[2][0], 1.5, abs_tol=1.0e-3)
+        assert isclose(contour.points[2][1], 1.25, abs_tol=1.0e-3)
+        assert app.editor_panel.param_host.visible is True
+        assert app.draft.points == []
 
 
 def test_cad_app_drags_selected_path_point_in_viewport_without_drawing():
-    from termin.csg.cad_app import CadApp
+    with _native_cad_app() as app:
+        path = app.document.add_path_on_plane_from_points(
+            [
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (1.0, 1.0, 0.0),
+            ],
+            ProceduralPlane(),
+            purpose="wall",
+        )
+        assert path is not None
+        sketch_id = app.document.find_sketch_id_for_path(path.id)
+        sketch = app.document.find_sketch(sketch_id)
+        assert sketch is not None
+        operation = app.document.add_wall_operation_for_sketch(sketch_id, height=2.0, thickness=0.5)
+        assert operation is not None
 
-    app = CadApp()
-    path = app.document.add_path_on_plane_from_points(
-        [
-            (0.0, 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (1.0, 1.0, 0.0),
-        ],
-        ProceduralPlane(),
-        purpose="wall",
-    )
-    assert path is not None
-    sketch_id = app.document.find_sketch_id_for_path(path.id)
-    sketch = app.document.find_sketch(sketch_id)
-    assert sketch is not None
-    operation = app.document.add_wall_operation_for_sketch(sketch_id, height=2.0, thickness=0.5)
-    assert operation is not None
+        app.model.select_node(("path", path.id))
+        app.mode = "draw_sketch"
+        width, height = 800, 600
+        app.surface.resize(width, height)
+        start_screen = app.model._project_world_to_screen(sketch.plane.unproject(path.points[2]), width, height)
+        target_screen = app.model._project_world_to_screen(sketch.plane.unproject((1.5, 1.25)), width, height)
+        assert start_screen is not None
+        assert target_screen is not None
 
-    app.selected_node_data = ("path", path.id)
-    app.mode = "draw_sketch"
+        assert (
+            app.surface.dispatch_pointer_button(
+                start_screen[0], start_screen[1], int(MouseButton.LEFT), int(Action.PRESS), 0, 1
+            )
+            is True
+        )
+        assert app.draft.points == []
+        assert app.surface.dispatch_pointer_move(target_screen[0], target_screen[1]) is True
+        assert (
+            app.surface.dispatch_pointer_button(
+                target_screen[0], target_screen[1], int(MouseButton.LEFT), int(Action.RELEASE), 0, 1
+            )
+            is True
+        )
 
-    width = 800
-    height = 600
-    start_screen = app._project_world_to_screen(sketch.plane.unproject(path.points[2]), width, height)
-    target_screen = app._project_world_to_screen(sketch.plane.unproject((1.5, 1.25)), width, height)
-    assert start_screen is not None
-    assert target_screen is not None
-
-    assert app._on_scene_mouse_down(start_screen[0], start_screen[1], width, height) is True
-    assert app.draft.points == []
-    assert app._on_scene_mouse_move(target_screen[0], target_screen[1], width, height) is True
-    assert app._on_scene_mouse_up(target_screen[0], target_screen[1], width, height) is True
-
-    assert isclose(path.points[2][0], 1.5, abs_tol=1.0e-3)
-    assert isclose(path.points[2][1], 1.25, abs_tol=1.0e-3)
-    evaluated = evaluate_document(app.document)
-    assert len(evaluated) == 1
-    assert evaluated[0].operation_id == operation.id
-    assert evaluated[0].solid.volume > 1.0
-    assert app.draft.points == []
-
-
-def test_cad_app_draw_sketch_scene_click_uses_controller_draft_state():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    app.start_draw_sketch()
-
-    assert app._on_scene_click(400.0, 300.0, 800, 600) is True
-
-    assert app.mode == "draw_sketch"
-    assert len(app.draft.points) == 1
-    assert app.preview_revision == 2
+        assert isclose(path.points[2][0], 1.5, abs_tol=1.0e-3)
+        assert isclose(path.points[2][1], 1.25, abs_tol=1.0e-3)
+        evaluated = evaluate_document(app.document)
+        assert len(evaluated) == 1
+        assert evaluated[0].operation_id == operation.id
+        assert evaluated[0].solid.volume > 1.0
+        assert app.draft.points == []
 
 
-def test_cad_app_close_contour_leaves_draw_sketch_mode():
-    from termin.csg.cad_app import CadApp
+def test_cad_app_draw_sketch_surface_click_uses_controller_draft_state():
+    with _native_cad_app() as app:
+        app.start_draw_sketch()
+        app.surface.resize(800, 600)
+
+        assert app.surface.dispatch_pointer_button(400.0, 300.0, int(MouseButton.LEFT), int(Action.PRESS), 0, 1) is True
+
+        assert app.mode == "draw_sketch"
+        assert len(app.draft.points) == 1
+        assert app.preview_revision == 2
+
+
+def test_standalone_csg_model_close_contour_leaves_draw_sketch_mode():
     from termin.csg.document_edit import start_sketch_draft
 
-    app = CadApp()
-    app.start_draw_sketch()
-    app.draft = start_sketch_draft()
-    app.draft.plane = ProceduralPlane()
-    app.draft.points = [
+    model = StandaloneCsgModel(lambda: None)
+    model.start_draw_sketch()
+    model.controller.draft = start_sketch_draft()
+    model.controller.draft.plane = ProceduralPlane()
+    model.controller.draft.points = [
         (0.0, 0.0, 0.0),
         (1.0, 0.0, 0.0),
         (1.0, 1.0, 0.0),
     ]
 
-    app.close_contour()
+    model.close_contour()
 
-    assert app.mode == "idle"
-    assert app.draft.points == []
-    assert app.document.contour_count() == 1
+    assert model.controller.mode == "idle"
+    assert model.controller.draft.points == []
+    assert model.controller.document.contour_count() == 1
 
 
-def test_cad_app_add_wall_path_action_finishes_open_path():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    contour = app.document.add_contour_from_points(
+def test_standalone_csg_model_add_wall_path_action_finishes_open_path():
+    model = StandaloneCsgModel(lambda: None)
+    contour = model.controller.document.add_contour_from_points(
         [
             (0.0, 0.0, 0.0),
             (2.0, 0.0, 0.0),
@@ -1316,34 +1368,32 @@ def test_cad_app_add_wall_path_action_finishes_open_path():
     )
     assert contour is not None
 
-    sketch_id = app.document.find_sketch_id_for_contour(contour.id)
-    app.selected_node_data = ("sketch", sketch_id)
-    app.start_add_wall_path()
+    sketch_id = model.controller.document.find_sketch_id_for_contour(contour.id)
+    model.select_node(("sketch", sketch_id))
+    model.start_add_wall_path()
 
-    assert app.mode == "draw_sketch"
-    assert app.draft.sketch_id == sketch_id
-    assert app.draft.purpose == "wall"
+    assert model.controller.mode == "draw_sketch"
+    assert model.controller.draft.sketch_id == sketch_id
+    assert model.controller.draft.purpose == "wall"
 
-    app.draft.points = [
+    model.controller.draft.points = [
         (0.0, 0.0, 0.0),
         (1.0, 0.0, 0.0),
     ]
-    app.finish_wall_path()
+    model.finish_wall_path()
 
-    assert app.mode == "idle"
-    assert app.selected_node_data is not None
-    assert app.selected_node_data[0] == "path"
-    assert app.document.path_count() == 1
-    path_ref = app.document.find_path_ref(app.selected_node_data[1])
+    assert model.controller.mode == "idle"
+    assert model.controller.selection is not None
+    assert model.controller.selection[0] == "path"
+    assert model.controller.document.path_count() == 1
+    path_ref = model.controller.document.find_path_ref(model.controller.selection[1])
     assert path_ref is not None
     assert path_ref[1].closed is False
 
 
-def test_cad_app_wall_action_and_params_update_operation():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    path = app.document.add_path_on_plane_from_points(
+def test_standalone_csg_model_wall_action_and_params_update_operation():
+    model = StandaloneCsgModel(lambda: None)
+    path = model.controller.document.add_path_on_plane_from_points(
         [
             (0.0, 0.0, 0.0),
             (2.0, 0.0, 0.0),
@@ -1352,41 +1402,32 @@ def test_cad_app_wall_action_and_params_update_operation():
         purpose="wall",
     )
     assert path is not None
-    sketch_id = app.document.find_sketch_id_for_path(path.id)
+    sketch_id = model.controller.document.find_sketch_id_for_path(path.id)
 
-    app.selected_node_data = ("sketch", sketch_id)
-    app.wall_selected()
+    model.select_node(("sketch", sketch_id))
+    model.wall_selected()
 
-    assert app.selected_node_data is not None
-    assert app.selected_node_data[0] == "operation"
-    operation = app.document.find_operation(app.selected_node_data[1])
+    assert model.controller.selection is not None
+    assert model.controller.selection[0] == "operation"
+    operation = model.controller.document.find_operation(model.controller.selection[1])
     assert operation is not None
     assert operation.kind == OPERATION_KIND_WALL
     assert operation.params["source_sketch_id"] == sketch_id
     assert operation.inputs == [path.id]
 
-    app.editor_panel.refresh_operation_params_panel()
-    assert app.editor_panel.operation_params_panel.visible is True
-    assert app.editor_panel.wall_param_inputs["height"].value == 3.0
-    assert app.editor_panel.wall_param_inputs["thickness"].value == 0.2
-
-    app.editor_panel.wall_param_inputs["height"].value = 2.5
-    app.editor_panel.wall_param_inputs["thickness"].value = 0.4
-    app.editor_panel.set_wall_alignment("left")
+    assert model.set_wall_params(operation.id, 2.5, 0.4, "left") is True
 
     assert operation.params["height"] == 2.5
     assert operation.params["thickness"] == 0.4
     assert operation.params["alignment"] == "left"
-    evaluated = evaluate_document(app.document)
+    evaluated = evaluate_document(model.controller.document)
     assert len(evaluated) == 1
     assert isclose(evaluated[0].solid.volume, 2.0, abs_tol=1.0e-6)
 
 
-def test_cad_app_add_hole_action_closes_contour_inside_selected_outer():
-    from termin.csg.cad_app import CadApp
-
-    app = CadApp()
-    outer = app.document.add_contour_from_points(
+def test_standalone_csg_model_add_hole_action_closes_contour_inside_selected_outer():
+    model = StandaloneCsgModel(lambda: None)
+    outer = model.controller.document.add_contour_from_points(
         [
             (0.0, 0.0, 0.0),
             (4.0, 0.0, 0.0),
@@ -1396,68 +1437,65 @@ def test_cad_app_add_hole_action_closes_contour_inside_selected_outer():
     )
     assert outer is not None
 
-    sketch_id = app.document.find_sketch_id_for_contour(outer.id)
-    app.selected_node_data = ("contour", outer.id)
-    app.start_add_hole_contour()
-    assert app.mode == "draw_sketch"
-    assert app.draft.sketch_id == sketch_id
-    assert app.draft.contour_role == CONTOUR_ROLE_HOLE
-    assert app.draft.parent_contour_id == outer.id
+    sketch_id = model.controller.document.find_sketch_id_for_contour(outer.id)
+    model.select_node(("contour", outer.id))
+    model.start_add_hole_contour()
+    assert model.controller.mode == "draw_sketch"
+    assert model.controller.draft.sketch_id == sketch_id
+    assert model.controller.draft.contour_role == CONTOUR_ROLE_HOLE
+    assert model.controller.draft.parent_contour_id == outer.id
 
-    app.draft.points = [
+    model.controller.draft.points = [
         (1.0, 1.0, 0.0),
         (3.0, 1.0, 0.0),
         (3.0, 3.0, 0.0),
     ]
-    app.close_contour()
+    model.close_contour()
 
-    assert app.mode == "idle"
-    assert app.selected_node_data is not None
-    assert app.selected_node_data[0] == "contour"
-    contour_ref = app.document.find_contour_ref(app.selected_node_data[1])
+    assert model.controller.mode == "idle"
+    assert model.controller.selection is not None
+    assert model.controller.selection[0] == "contour"
+    contour_ref = model.controller.document.find_contour_ref(model.controller.selection[1])
     assert contour_ref is not None
     _sketch, hole = contour_ref
     assert hole.role == CONTOUR_ROLE_HOLE
     assert hole.parent_contour_id == outer.id
 
 
-def test_csg_editor_panel_updates_primitive_operation_params():
-    controller = CsgEditorController()
-    panel = _test_editor_panel(controller)
-    panel.add_primitive("box")
+def test_native_csg_panel_updates_primitive_operation_params_through_shared_model():
+    with _native_cad_app() as app:
+        assert app.model.add_primitive("box") is True
+        assert app.controller.selection is not None
+        operation = app.document.find_operation(app.controller.selection[1])
+        assert operation is not None
+        assert operation.kind == "primitive"
+        assert app.editor_panel.param_host.visible is True
 
-    assert controller.selection is not None
-    operation = controller.document.find_operation(controller.selection[1])
-    assert operation is not None
-    assert operation.kind == "primitive"
+        assert (
+            app.model.set_primitive_params(
+                operation.id,
+                {"size": [2.5, 1.0, 1.0], "center": [0.0, 0.0, 1.25]},
+            )
+            is True
+        )
 
-    panel.refresh_primitive_params_panel()
-    assert panel.primitive_params_panel.visible is True
-    assert panel.primitive_param_inputs["size.x"].value == 1.0
-
-    panel.primitive_param_inputs["size.x"].value = 2.5
-    panel.primitive_param_inputs["center.z"].value = 1.25
-    panel.primitive_params._on_param_changed(2.5)
-
-    assert operation.params["size"] == [2.5, 1.0, 1.0]
-    assert operation.params["center"] == [0.0, 0.0, 1.25]
-    evaluated = evaluate_document(controller.document)
-    assert len(evaluated) == 1
-    assert isclose(evaluated[0].solid.volume, 2.5, abs_tol=1.0e-6)
+        assert operation.params["size"] == [2.5, 1.0, 1.0]
+        assert operation.params["center"] == [0.0, 0.0, 1.25]
+        evaluated = evaluate_document(app.document)
+        assert len(evaluated) == 1
+        assert isclose(evaluated[0].solid.volume, 2.5, abs_tol=1.0e-6)
 
 
-def test_cad_app_wireframe_toggle_updates_preview_state():
-    from termin.csg.cad_app import CadApp
+def test_standalone_csg_model_wireframe_toggle_updates_preview_state():
+    model = StandaloneCsgModel(lambda: None)
+    assert model.show_wireframe is True
+    assert model.preview_revision == 0
 
-    app = CadApp()
-    assert app.show_wireframe is True
-    assert app.preview_revision == 0
+    model.set_wireframe_visible(False)
 
-    app._on_wireframe_changed(False)
-
-    assert app.show_wireframe is False
-    assert app.preview_revision == 1
-    assert app.dirty is True
+    assert model.show_wireframe is False
+    assert model.preview_revision == 1
+    assert model.dirty is True
 
 
 def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
@@ -1470,9 +1508,7 @@ def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
         sum(
             1
             for line in reference.lines or []
-            if line.start == (-10, 0.0, 0.0)
-            and line.end == (10, 0.0, 0.0)
-            and line.color == (0.92, 0.18, 0.18, 1.0)
+            if line.start == (-10, 0.0, 0.0) and line.end == (10, 0.0, 0.0) and line.color == (0.92, 0.18, 0.18, 1.0)
         )
         == 1
     )
@@ -1480,9 +1516,7 @@ def test_cad_viewer_builds_auxiliary_geometry_for_immediate_renderer():
         sum(
             1
             for line in reference.lines or []
-            if line.start == (0.0, -10, 0.0)
-            and line.end == (0.0, 10, 0.0)
-            and line.color == (0.18, 0.82, 0.22, 1.0)
+            if line.start == (0.0, -10, 0.0) and line.end == (0.0, 10, 0.0) and line.color == (0.18, 0.82, 0.22, 1.0)
         )
         == 1
     )

@@ -205,7 +205,7 @@ def rotate(solid, x=0.0, y=0.0, z=0.0):
 def draw(*solids, title="termin-csg", show_wireframe=True):
     """Open a lightweight preview window for one or more solids.
 
-    This is a termin-graphics/tcgui preview path, not a scene component path:
+    This is a direct termin-graphics preview path, not a scene component path:
     no Entity, MeshComponent, or MeshRenderer is created.
     """
     from termin.csg.preview import draw_solids
