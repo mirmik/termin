@@ -253,66 +253,174 @@ namespace termin::runtime {
             return {};
         }
 
-        void
-        apply_material_uniforms(TcMaterial& material, const nos::trent* uniforms, const std::string& material_uuid) {
+        bool set_material_uniform_checked(tc_material* material,
+                                          const char* name,
+                                          tc_uniform_type type,
+                                          const void* value,
+                                          const std::string& material_uuid,
+                                          std::string& error) {
+            if (!material || material->phase_count == 0) {
+                error = "material '" + material_uuid + "' has no writable phases";
+                tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                return false;
+            }
+            if (!name || name[0] == '\0' || std::strlen(name) >= TC_UNIFORM_NAME_MAX) {
+                error = "material '" + material_uuid + "' has an invalid uniform name";
+                tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                return false;
+            }
+
+            // Validate every phase first so a structural failure cannot leave
+            // a multi-phase material only partially updated.
+            for (size_t phase_index = 0; phase_index < material->phase_count; ++phase_index) {
+                tc_material_phase* phase = &material->phases[phase_index];
+                tc_uniform_value* existing = tc_material_phase_find_uniform(phase, name);
+                if (existing && existing->type != static_cast<uint8_t>(type)) {
+                    error = "material '" + material_uuid + "' uniform '" + name +
+                            "' conflicts with an existing phase uniform kind";
+                    tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                    return false;
+                }
+                if (!existing && phase->uniform_count >= TC_MATERIAL_MAX_UNIFORMS) {
+                    error = "material '" + material_uuid + "' phase uniform capacity is exhausted while setting '" +
+                            name + "'";
+                    tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                    return false;
+                }
+            }
+
+            for (size_t phase_index = 0; phase_index < material->phase_count; ++phase_index) {
+                if (!tc_material_phase_set_uniform(&material->phases[phase_index], name, type, value)) {
+                    error = "material '" + material_uuid + "' failed to set uniform '" + name + "'";
+                    tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        bool apply_material_uniforms(TcMaterial& material,
+                                     const nos::trent* uniforms,
+                                     const TcShaderProgram& program,
+                                     const std::string& material_uuid,
+                                     std::string& error) {
             if (!uniforms) {
-                return;
+                return true;
             }
             if (!uniforms->is_dict()) {
-                tc_log_error("RuntimePackageLoader: material '%s' uniforms must be an object", material_uuid.c_str());
-                return;
+                error = "material '" + material_uuid + "' uniforms must be an object";
+                tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                return false;
             }
+
+            tc_material* raw_material = material.get();
 
             for (const auto& item : uniforms->as_dict()) {
                 const std::string& name = item.first;
                 const nos::trent& value = item.second;
                 if (name.empty()) {
-                    tc_log_error("RuntimePackageLoader: material '%s' uniform name must not be empty",
-                                 material_uuid.c_str());
+                    error = "material '" + material_uuid + "' uniform name must not be empty";
+                    tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                    return false;
+                }
+                std::string declared_type;
+                if (program.is_valid()) {
+                    const tc_shader_program* raw_program = program.get();
+                    for (uint32_t index = 0; index < raw_program->property_count; ++index) {
+                        if (name == raw_program->properties[index].name) {
+                            declared_type = raw_program->properties[index].property_type;
+                            break;
+                        }
+                    }
+                }
+                const nos::trent* payload = &value;
+                const std::string& semantic_type = declared_type;
+                if (value.is_dict()) {
+                    error = "material '" + material_uuid + "' uniform '" + name +
+                            "' must be an array/scalar; its kind belongs to the shader schema";
+                    tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                    return false;
+                }
+                if (payload->is_bool()) {
+                    if (!semantic_type.empty() && semantic_type != "Bool") {
+                        error = "material '" + material_uuid + "' uniform '" + name +
+                                "' is boolean but shader schema requires '" + semantic_type + "'";
+                        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                        return false;
+                    }
+                    int v = payload->as_bool() ? 1 : 0;
+                    if (!set_material_uniform_checked(
+                            raw_material, name.c_str(), TC_UNIFORM_BOOL, &v, material_uuid, error))
+                        return false;
                     continue;
                 }
-                if (value.is_bool()) {
-                    int v = value.as_bool() ? 1 : 0;
-                    material.set_uniform_int(name.c_str(), v);
+                if (payload->is_numer()) {
+                    if (!semantic_type.empty() && semantic_type != "Int" && semantic_type != "Float") {
+                        error = "material '" + material_uuid + "' uniform '" + name +
+                                "' is scalar but shader schema requires '" + semantic_type + "'";
+                        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                        return false;
+                    }
+                    if (semantic_type == "Int") {
+                        int v = static_cast<int>(payload->as_numer());
+                        if (!set_material_uniform_checked(
+                                raw_material, name.c_str(), TC_UNIFORM_INT, &v, material_uuid, error))
+                            return false;
+                    } else {
+                        float v = static_cast<float>(payload->as_numer());
+                        if (!set_material_uniform_checked(
+                                raw_material, name.c_str(), TC_UNIFORM_FLOAT, &v, material_uuid, error))
+                            return false;
+                    }
                     continue;
                 }
-                if (value.is_numer()) {
-                    material.set_uniform_float(name.c_str(), static_cast<float>(value.as_numer()));
-                    continue;
-                }
-                if (value.is_list()) {
-                    const auto& values = value.as_list();
-                    bool all_numbers = true;
+                if (payload->is_list()) {
+                    const auto& values = payload->as_list();
+                    bool all_numbers = !values.empty();
                     for (const nos::trent& element : values) {
                         if (!element.is_numer()) {
                             all_numbers = false;
                             break;
                         }
                     }
-                    if (all_numbers && values.size() == 3) {
-                        material.set_uniform_vec3(name.c_str(),
-                                                  Vec3{
-                                                      static_cast<float>(values[0].as_numer()),
-                                                      static_cast<float>(values[1].as_numer()),
-                                                      static_cast<float>(values[2].as_numer()),
-                                                  });
-                        continue;
+                    tc_uniform_type uniform_type = TC_UNIFORM_NONE;
+                    size_t expected_components = 0;
+                    if (semantic_type == "Vec2") {
+                        uniform_type = TC_UNIFORM_VEC2;
+                        expected_components = 2;
+                    } else if (semantic_type == "Vec3" || (semantic_type.empty() && values.size() == 3)) {
+                        uniform_type = TC_UNIFORM_VEC3;
+                        expected_components = 3;
+                    } else if (semantic_type == "Vec4" || (semantic_type.empty() && values.size() == 4)) {
+                        uniform_type = TC_UNIFORM_VEC4;
+                        expected_components = 4;
+                    } else if (semantic_type == "SrgbColor") {
+                        uniform_type = TC_UNIFORM_SRGB_COLOR;
+                        expected_components = 4;
+                    } else if (semantic_type == "LinearColor") {
+                        uniform_type = TC_UNIFORM_LINEAR_COLOR;
+                        expected_components = 4;
+                    } else if (semantic_type == "Mat4") {
+                        uniform_type = TC_UNIFORM_MAT4;
+                        expected_components = 16;
                     }
-                    if (all_numbers && values.size() == 4) {
-                        material.set_uniform_vec4(name.c_str(),
-                                                  Vec4{
-                                                      static_cast<float>(values[0].as_numer()),
-                                                      static_cast<float>(values[1].as_numer()),
-                                                      static_cast<float>(values[2].as_numer()),
-                                                      static_cast<float>(values[3].as_numer()),
-                                                  });
+                    if (all_numbers && uniform_type != TC_UNIFORM_NONE && values.size() == expected_components) {
+                        float components[16] = {};
+                        for (size_t index = 0; index < values.size(); ++index)
+                            components[index] = static_cast<float>(values[index].as_numer());
+                        if (!set_material_uniform_checked(
+                                raw_material, name.c_str(), uniform_type, components, material_uuid, error))
+                            return false;
                         continue;
                     }
                 }
-                tc_log_error("RuntimePackageLoader: material '%s' uniform '%s' has unsupported value",
-                             material_uuid.c_str(),
-                             name.c_str());
+                error = "material '" + material_uuid + "' uniform '" + name + "' has a value incompatible with" +
+                        (semantic_type.empty() ? " supported runtime uniform types"
+                                               : " shader schema '" + semantic_type + "'");
+                tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                return false;
             }
+            return true;
         }
 
         bool material_texture_slot_encoding(const TcMaterial& material,
@@ -772,13 +880,13 @@ namespace termin::runtime {
                 error = "shader program scalar property default must be numeric";
                 return false;
             }
-            const size_t expected_components = property_type == "Vec2" ? 2u
-                                               : property_type == "Vec3" ? 3u
-                                               : (property_type == "Vec4" || property_type == "SrgbColor" ||
-                                                  property_type == "LinearColor") ? 4u
-                                                                                  : 0u;
-            if (expected_components != 0u &&
-                (!input->is_list() || input->as_list().size() != expected_components)) {
+            const size_t expected_components =
+                property_type == "Vec2"                                                                       ? 2u
+                : property_type == "Vec3"                                                                     ? 3u
+                : (property_type == "Vec4" || property_type == "SrgbColor" || property_type == "LinearColor") ? 4u
+                : property_type == "Mat4"                                                                     ? 16u
+                                                                                                              : 0u;
+            if (expected_components != 0u && (!input->is_list() || input->as_list().size() != expected_components)) {
                 error = "shader program property '" + property_type + "' default requires exactly " +
                         std::to_string(expected_components) + " components";
                 return false;
@@ -804,11 +912,12 @@ namespace termin::runtime {
             }
             if (input->is_list()) {
                 const auto& elements = input->as_list();
-                if (elements.size() < 2 || elements.size() > 4) {
-                    error = "shader program property vector default requires 2-4 components";
+                if (elements.size() != expected_components) {
+                    error = "shader program property '" + property_type + "' default requires exactly " +
+                            std::to_string(expected_components) + " components";
                     return false;
                 }
-                float components[4] = {};
+                float components[16] = {};
                 for (size_t index = 0; index < elements.size(); ++index) {
                     if (!elements[index].is_numer()) {
                         error = "shader program property vector default contains a non-number";
@@ -816,9 +925,23 @@ namespace termin::runtime {
                     }
                     components[index] = static_cast<float>(elements[index].as_numer());
                 }
-                value.type =
-                    elements.size() == 2 ? TC_UNIFORM_VEC2 : (elements.size() == 3 ? TC_UNIFORM_VEC3 : TC_UNIFORM_VEC4);
-                std::memcpy(value.data.v4, components, elements.size() * sizeof(float));
+                value.type = property_type == "Mat4" ? TC_UNIFORM_MAT4
+                             : elements.size() == 2
+                                 ? TC_UNIFORM_VEC2
+                                 : (elements.size() == 3 ? TC_UNIFORM_VEC3
+                                                         : (property_type == "SrgbColor"     ? TC_UNIFORM_SRGB_COLOR
+                                                            : property_type == "LinearColor" ? TC_UNIFORM_LINEAR_COLOR
+                                                                                             : TC_UNIFORM_VEC4));
+                if (property_type == "SrgbColor") {
+                    value.data.srgb_color = tc_srgb_color{components[0], components[1], components[2], components[3]};
+                } else if (property_type == "LinearColor") {
+                    value.data.linear_color =
+                        tc_linear_color{components[0], components[1], components[2], components[3]};
+                } else if (property_type == "Mat4") {
+                    std::memcpy(value.data.m4, components, sizeof(components));
+                } else {
+                    std::memcpy(value.data.v4, components, elements.size() * sizeof(float));
+                }
                 return true;
             }
             error = "shader program property default has unsupported JSON type";
@@ -1088,7 +1211,9 @@ namespace termin::runtime {
             if (program.is_valid() && !configure_material_texture_slots(material, program, uuid, error)) {
                 return false;
             }
-            apply_material_uniforms(material, dict_get(spec, "uniforms"), uuid);
+            if (!apply_material_uniforms(material, dict_get(spec, "uniforms"), program, uuid, error)) {
+                return false;
+            }
             if (!apply_material_textures(material, dict_get(spec, "textures"), uuid, error)) {
                 return false;
             }

@@ -236,8 +236,13 @@ def _apply_uniform_defaults(phase, shader_phase, uniforms: dict):
             phase.set_uniform_int(name, 1 if default else 0)
         elif prop_type == "Vec3" and isinstance(default, (list, tuple)) and len(default) >= 3:
             phase.set_uniform_vec3(name, Vec3(default[0], default[1], default[2]))
-        elif prop_type in ("Vec4", "Color") and isinstance(default, (list, tuple)) and len(default) >= 4:
+        elif prop_type == "Vec4" and isinstance(default, (list, tuple)) and len(default) == 4:
             phase.set_uniform_vec4(name, Vec4(default[0], default[1], default[2], default[3]))
+        elif prop_type in ("SrgbColor", "LinearColor") and isinstance(default, (list, tuple)) and len(default) == 4:
+            from termin.geombase import LinearColor, SrgbColor
+            color_type = SrgbColor if prop_type == "SrgbColor" else LinearColor
+            setter = phase.set_uniform_srgb_color if prop_type == "SrgbColor" else phase.set_uniform_linear_color
+            setter(name, color_type(*default[:4]))
 
     # Apply extra uniforms (from .material file)
     for name, value in uniforms.items():
@@ -292,9 +297,20 @@ def _apply_canonical_property_defaults(phase, properties: list[dict], uniforms: 
         elif prop_type == "Vec3":
             vector = value if isinstance(value, Vec3) else Vec3(*value[:3])
             phase.set_uniform_vec3(name, vector)
-        elif prop_type in ("Vec4", "Color"):
+        elif prop_type == "Vec4":
             vector = value if isinstance(value, Vec4) else Vec4(*value[:4])
             phase.set_uniform_vec4(name, vector)
+        elif prop_type in ("SrgbColor", "LinearColor"):
+            from termin.geombase import LinearColor, SrgbColor
+            color_type = SrgbColor if prop_type == "SrgbColor" else LinearColor
+            setter = phase.set_uniform_srgb_color if prop_type == "SrgbColor" else phase.set_uniform_linear_color
+            if isinstance(value, color_type):
+                color = value
+            else:
+                if not isinstance(value, (list, tuple)) or len(value) != 4:
+                    raise ValueError(f"Material uniform '{name}' ({prop_type}) requires exactly 4 components")
+                color = color_type(*value)
+            setter(name, color)
         elif prop_type == "Mat4":
             if isinstance(value, (Mat44, Mat44f)):
                 matrix = value
@@ -588,6 +604,7 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
     """
     from termin.materials import TcMaterial
     from termin.geombase import Vec3, Vec4
+    from termin.geombase import LinearColor, SrgbColor
     from termin_assets import get_resource_manager
 
     shader_name = material.shader_name
@@ -630,10 +647,13 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
         # Save material-level uniforms aggregated across phases.
         uniforms_data: Dict[str, Any] = {}
         for name, value in material.uniforms.items():
-            if isinstance(value, Vec3):
+            if isinstance(value, (SrgbColor, LinearColor)):
+                uniforms_data[name] = [value.r, value.g, value.b, value.a]
+            elif isinstance(value, Vec3):
                 uniforms_data[name] = [value.x, value.y, value.z]
             elif isinstance(value, Vec4):
-                uniforms_data[name] = [value.x, value.y, value.z, value.w]
+                components = [value.x, value.y, value.z, value.w]
+                uniforms_data[name] = components
             elif isinstance(value, (int, float, bool)):
                 uniforms_data[name] = value
             elif isinstance(value, tuple):

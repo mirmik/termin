@@ -321,13 +321,17 @@ def material_to_spec(
 
 def material_uniforms_to_json(material: Any) -> dict[str, Any]:
     from termin.geombase import Vec3, Vec4
+    from termin.geombase import LinearColor, SrgbColor
 
     result: dict[str, Any] = {}
     for name, value in material.uniforms.items():
-        if isinstance(value, Vec3):
+        if isinstance(value, (SrgbColor, LinearColor)):
+            result[name] = [float(value.r), float(value.g), float(value.b), float(value.a)]
+        elif isinstance(value, Vec3):
             result[name] = [float(value.x), float(value.y), float(value.z)]
         elif isinstance(value, Vec4):
-            result[name] = [float(value.x), float(value.y), float(value.z), float(value.w)]
+            components = [float(value.x), float(value.y), float(value.z), float(value.w)]
+            result[name] = components
         elif isinstance(value, bool):
             result[name] = value
         elif isinstance(value, (int, float)):
