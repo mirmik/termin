@@ -36,6 +36,10 @@ namespace {
                     for (auto item : targets) {
                         if (!item.is_none()) {
                             self.node_targets.push_back(nb::cast<Entity>(item));
+                        } else {
+                            // Preserve positional identity: bulk animation
+                            // tracks address this array by glTF node index.
+                            self.node_targets.emplace_back();
                         }
                     }
                 })
