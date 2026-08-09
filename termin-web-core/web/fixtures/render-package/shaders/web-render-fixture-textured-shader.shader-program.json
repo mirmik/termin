@@ -8,7 +8,7 @@
   "properties": [
     {
       "name": "u_tint_color",
-      "property_type": "Color",
+      "property_type": "SrgbColor",
       "label": "",
       "default": [
         1.0,

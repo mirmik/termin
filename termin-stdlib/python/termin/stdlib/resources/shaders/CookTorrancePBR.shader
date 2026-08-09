@@ -18,10 +18,10 @@
 @glCull true
 @endsettings
 
-@property Color u_color = Color(1.0, 1.0, 1.0, 1.0)
+@property SrgbColor u_color = SrgbColor(1.0, 1.0, 1.0, 1.0)
 @property Float u_metallic = 0.0 range(0.0, 1.0)
 @property Float u_roughness = 0.5 range(0.0, 1.0)
-@property Color u_emission_color = Color(0.0, 0.0, 0.0, 1.0)
+@property SrgbColor u_emission_color = SrgbColor(0.0, 0.0, 0.0, 1.0)
 @property Float u_emission_intensity = 0.0 range(0.0, 100.0)
 @property Texture2D u_albedo_texture = "white" encoding(srgb)
 @property Texture2D u_normal_texture = "normal" encoding(linear)

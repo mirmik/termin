@@ -1612,7 +1612,7 @@ def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) 
 def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -> None:
     import tgfx
     from termin.materials import TcMaterial
-    from termin.geombase import Vec4
+    from termin.geombase import SrgbColor
     from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
     project = tmp_path / "LiveResourceGame"
@@ -1631,9 +1631,9 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
         properties=[
             {
                 "name": "u_color",
-                "property_type": "Color",
+                "property_type": "SrgbColor",
                 "label": "Color",
-                "default": [1.0, 1.0, 1.0, 1.0],
+                "default": SrgbColor(1.0, 1.0, 1.0, 1.0),
             },
             {
                 "name": "u_roughness",
@@ -1701,7 +1701,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     shader = tgfx.TcShader.from_uuid(shader_uuid)
     assert shader.is_valid
     shader.set_feature(1)
-    material.set_uniform_vec4("u_color", Vec4(0.25, 0.5, 0.75, 1.0))
+    material.set_uniform_srgb_color("u_color", SrgbColor(0.25, 0.5, 0.75, 1.0))
     material.set_uniform_float("u_roughness", 0.625)
 
     _write_json(

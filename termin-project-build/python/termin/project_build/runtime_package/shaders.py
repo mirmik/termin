@@ -200,6 +200,8 @@ def write_shaders(
 
 
 def shader_program_to_spec(program: Any) -> dict[str, Any]:
+    from termin.geombase import LinearColor, SrgbColor
+
     if program is None or not program.is_valid:
         raise ValueError("Cannot export an invalid TcShaderProgram")
 
@@ -220,7 +222,10 @@ def shader_program_to_spec(program: Any) -> dict[str, Any]:
             item["expected_encoding"] = str(prop["expected_encoding"])
         default = prop.get("default")
         if default is not None:
-            item["default"] = list(default) if isinstance(default, tuple) else default
+            if isinstance(default, (SrgbColor, LinearColor)):
+                item["default"] = [float(default.r), float(default.g), float(default.b), float(default.a)]
+            else:
+                item["default"] = list(default) if isinstance(default, tuple) else default
         if prop.get("range_min") is not None:
             item["range_min"] = float(prop["range_min"])
         if prop.get("range_max") is not None:
