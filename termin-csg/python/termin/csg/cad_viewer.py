@@ -8,10 +8,8 @@ from math import cos, sin, tau
 
 import numpy as np
 
-from tcbase import MouseButton, log
+from tcbase import log
 from tcbase._geom_native import LinearColor, Vec3
-from tcgui.widgets.events import MouseEvent, MouseWheelEvent
-from tcgui.widgets.widget import Widget
 from tgfx import (
     CULL_NONE,
     ImmediateRenderer,
@@ -77,122 +75,6 @@ void main() {
 """
 
 CSG_CAD_MSAA_SAMPLES = 4
-
-
-class CadViewportWidget(Widget):
-    """tcgui widget that displays a pre-rendered CSG scene texture."""
-
-    def __init__(self, camera: OrbitCamera) -> None:
-        super().__init__()
-        self.focusable = True
-        self.camera = camera
-        self.texture = None
-        self.texture_size = (0, 0)
-        self.on_changed = None
-        self.on_scene_mouse_down = None
-        self.on_scene_mouse_move = None
-        self.on_scene_mouse_up = None
-        self.on_scene_click = None
-        self._drag_mode = ""
-        self._drag_x = 0.0
-        self._drag_y = 0.0
-
-    def render(self, renderer) -> None:
-        current_size = (max(int(self.width), 1), max(int(self.height), 1))
-        if self.texture_size != current_size:
-            self._notify_changed()
-        renderer.draw_rect(self.x, self.y, self.width, self.height, (0.08, 0.085, 0.095, 1.0))
-        if self.texture is not None:
-            renderer.draw_texture(
-                self.x,
-                self.y,
-                self.width,
-                self.height,
-                self.texture,
-                int(self.texture_size[0]),
-                int(self.texture_size[1]),
-            )
-
-    def on_mouse_down(self, event: MouseEvent) -> bool:
-        if event.button == MouseButton.LEFT:
-            scene_x = float(event.x - self.x)
-            scene_y = float(event.y - self.y)
-            scene_width = max(int(self.width), 1)
-            scene_height = max(int(self.height), 1)
-            if self.on_scene_mouse_down is not None:
-                handled = self.on_scene_mouse_down(scene_x, scene_y, scene_width, scene_height)
-                if handled:
-                    self._begin_drag("scene", event)
-                    self._notify_changed()
-                    return True
-            if self.on_scene_click is not None:
-                handled = self.on_scene_click(scene_x, scene_y, scene_width, scene_height)
-                if handled:
-                    self._notify_changed()
-                    return True
-            return True
-        if event.button == MouseButton.MIDDLE:
-            self._begin_drag("orbit", event)
-            return True
-        if event.button == MouseButton.RIGHT:
-            self._begin_drag("pan", event)
-            return True
-        return False
-
-    def _begin_drag(self, mode: str, event: MouseEvent) -> None:
-        self._drag_mode = mode
-        self._drag_x = float(event.x)
-        self._drag_y = float(event.y)
-
-    def on_mouse_up(self, event: MouseEvent) -> None:
-        if self._drag_mode == "scene":
-            if self.on_scene_mouse_up is not None:
-                handled = self.on_scene_mouse_up(
-                    float(event.x - self.x),
-                    float(event.y - self.y),
-                    max(int(self.width), 1),
-                    max(int(self.height), 1),
-                )
-                if handled:
-                    self._notify_changed()
-            self._drag_mode = ""
-            return
-        self._drag_mode = ""
-
-    def on_mouse_move(self, event: MouseEvent) -> None:
-        if not self._drag_mode:
-            return
-        x = float(event.x)
-        y = float(event.y)
-        if self._drag_mode == "scene":
-            if self.on_scene_mouse_move is not None:
-                handled = self.on_scene_mouse_move(
-                    float(x - self.x),
-                    float(y - self.y),
-                    max(int(self.width), 1),
-                    max(int(self.height), 1),
-                )
-                if handled:
-                    self._notify_changed()
-            return
-        dx = x - self._drag_x
-        dy = y - self._drag_y
-        if self._drag_mode == "orbit":
-            self.camera.orbit(dx, dy)
-        elif self._drag_mode == "pan":
-            self.camera.pan(-dx, dy)
-        self._drag_x = x
-        self._drag_y = y
-        self._notify_changed()
-
-    def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
-        self.camera.zoom(float(event.dy))
-        self._notify_changed()
-        return True
-
-    def _notify_changed(self) -> None:
-        if self.on_changed is not None:
-            self.on_changed()
 
 
 class CsgSceneRenderer:
@@ -428,10 +310,7 @@ def build_document_immediate_geometry(
                 vertices = _mesh_vertices_array(mesh, "cad-solid-wire")
                 if vertices is None:
                     continue
-                transformed = [
-                    evaluated.point_transform((float(v[0]), float(v[1]), float(v[2])))
-                    for v in vertices
-                ]
+                transformed = [evaluated.point_transform((float(v[0]), float(v[1]), float(v[2]))) for v in vertices]
                 triangles = np.asarray(mesh.triangles, dtype=np.uint32).reshape(-1)
                 for start, end in _edge_segments_from_triangles(transformed, triangles):
                     lines.append(ImmediateLineSegment(start, end, edge_color, False))
@@ -755,7 +634,6 @@ def _srgb_color(color: tuple[float, float, float, float]) -> SrgbColor:
 
 
 __all__ = [
-    "CadViewportWidget",
     "CsgSceneRenderer",
     "ImmediateGeometry",
     "build_document_immediate_geometry",

@@ -36,7 +36,10 @@ def test_component_extension_session_replaces_and_clears_exactly_once():
 
     def presenter(extension, type_name):
         events.append(f"project:{type_name}")
-        return ComponentExtensionPresentation(right_panel=f"right:{extension.name}")
+        return ComponentExtensionPresentation(
+            right_panel=f"right:{extension.name}",
+            close=lambda: events.append(f"close:{extension.name}"),
+        )
 
     session = ComponentEditorExtensionSession(
         editor=lambda: "editor",
@@ -59,11 +62,13 @@ def test_component_extension_session_replaces_and_clears_exactly_once():
         "present:First",
         "detach:first",
         "clear",
+        "close:first",
         "attach:second",
         "project:Second",
         "present:Second",
         "detach:second",
         "clear",
+        "close:second",
     ]
 
 
