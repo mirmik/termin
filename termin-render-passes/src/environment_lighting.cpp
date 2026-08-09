@@ -1,5 +1,6 @@
 #include <termin/lighting/environment_lighting.hpp>
 
+#include <termin/geom/color.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_graph_resource_registry.hpp>
 #include <termin/render/scene_render_services.hpp>
@@ -134,17 +135,26 @@ namespace termin {
             return tangent_to_world({std::cos(phi) * sine, std::sin(phi) * sine, cosine}, normal);
         }
 
-        Float3 sample_environment(const std::array<float, 11>& signature, Float3 direction) {
+        Float3 sample_environment(const std::array<float, 16>& signature, Float3 direction) {
             const int skybox_type = static_cast<int>(signature[0]);
             const Float3 solid{signature[1], signature[2], signature[3]};
             const Float3 top{signature[4], signature[5], signature[6]};
-            const Float3 bottom{signature[7], signature[8], signature[9]};
-            const float intensity = std::max(0.0f, signature[10]);
+            const Float3 horizon{signature[7], signature[8], signature[9]};
+            const Float3 bottom{signature[10], signature[11], signature[12]};
+            const float top_exponent = std::max(signature[13], 0.001f);
+            const float bottom_exponent = std::max(signature[14], 0.001f);
+            const float intensity = std::max(0.0f, signature[15]);
 
             Float3 radiance;
             if (skybox_type == TC_SKYBOX_GRADIENT) {
-                const float t = std::clamp(direction.z * 0.5f + 0.5f, 0.0f, 1.0f);
-                radiance = bottom * (1.0f - t) + top * t;
+                const float height = std::clamp(direction.z, -1.0f, 1.0f);
+                if (height >= 0.0f) {
+                    const float t = std::pow(height, top_exponent);
+                    radiance = horizon * (1.0f - t) + top * t;
+                } else {
+                    const float t = std::pow(-height, bottom_exponent);
+                    radiance = horizon * (1.0f - t) + bottom * t;
+                }
             } else {
                 // A hidden sky still retains scene ambient illumination; solid
                 // sky uses its authored color as the environment.
@@ -153,7 +163,7 @@ namespace termin {
             return radiance * intensity;
         }
 
-        std::vector<float> build_diffuse_irradiance(const std::array<float, 11>& signature) {
+        std::vector<float> build_diffuse_irradiance(const std::array<float, 16>& signature) {
             std::vector<float> pixels(kDiffuseSize * kDiffuseSize * 4u);
             for (uint32_t y = 0; y < kDiffuseSize; ++y) {
                 for (uint32_t x = 0; x < kDiffuseSize; ++x) {
@@ -175,7 +185,7 @@ namespace termin {
             return pixels;
         }
 
-        std::vector<std::vector<float>> build_prefiltered_specular(const std::array<float, 11>& signature) {
+        std::vector<std::vector<float>> build_prefiltered_specular(const std::array<float, 16>& signature) {
             std::vector<std::vector<float>> mips;
             mips.reserve(kSpecularMipCount);
             for (uint32_t mip = 0; mip < kSpecularMipCount; ++mip) {
@@ -330,23 +340,35 @@ namespace termin {
         device_ = &device;
 
         const tc_scene_handle scene = services->scene.handle();
-        std::array<float, 11> signature{};
+        std::array<float, 16> signature{};
         signature[0] = static_cast<float>(tc_scene_get_skybox_type(scene));
         tc_srgb_color solid{};
         tc_srgb_color top{};
+        tc_srgb_color horizon{};
         tc_srgb_color bottom{};
         tc_scene_get_skybox_srgb_color(scene, &solid);
         tc_scene_get_skybox_top_srgb_color(scene, &top);
+        tc_scene_get_skybox_horizon_srgb_color(scene, &horizon);
         tc_scene_get_skybox_bottom_srgb_color(scene, &bottom);
-        signature[1] = solid.r; signature[2] = solid.g; signature[3] = solid.b;
-        signature[4] = top.r; signature[5] = top.g; signature[6] = top.b;
-        signature[7] = bottom.r; signature[8] = bottom.g; signature[9] = bottom.b;
+        const LinearColor solid_linear = srgb_to_linear({solid.r, solid.g, solid.b, 1.0f});
+        const LinearColor top_linear = srgb_to_linear({top.r, top.g, top.b, 1.0f});
+        const LinearColor horizon_linear = srgb_to_linear({horizon.r, horizon.g, horizon.b, 1.0f});
+        const LinearColor bottom_linear = srgb_to_linear({bottom.r, bottom.g, bottom.b, 1.0f});
+        signature[1] = solid_linear.r; signature[2] = solid_linear.g; signature[3] = solid_linear.b;
+        signature[4] = top_linear.r; signature[5] = top_linear.g; signature[6] = top_linear.b;
+        signature[7] = horizon_linear.r; signature[8] = horizon_linear.g; signature[9] = horizon_linear.b;
+        signature[10] = bottom_linear.r; signature[11] = bottom_linear.g; signature[12] = bottom_linear.b;
+        signature[13] = tc_scene_get_skybox_top_exponent(scene);
+        signature[14] = tc_scene_get_skybox_bottom_exponent(scene);
 
         tc_scene_render_state* render_state = tc_scene_render_state_get(scene);
         const tc_scene_lighting* lighting = render_state ? &render_state->lighting : nullptr;
         if (lighting) {
-            const Float3 ambient_tint{
-                lighting->ambient_color.r, lighting->ambient_color.g, lighting->ambient_color.b};
+            const LinearColor ambient_linear = srgb_to_linear({lighting->ambient_color.r,
+                                                               lighting->ambient_color.g,
+                                                               lighting->ambient_color.b,
+                                                               1.0f});
+            const Float3 ambient_tint{ambient_linear.r, ambient_linear.g, ambient_linear.b};
             const float intensity = std::max(0.0f, lighting->ambient_intensity);
             signature[1] *= ambient_tint.x;
             signature[2] *= ambient_tint.y;
@@ -357,9 +379,12 @@ namespace termin {
             signature[7] *= ambient_tint.x;
             signature[8] *= ambient_tint.y;
             signature[9] *= ambient_tint.z;
-            signature[10] = intensity;
+            signature[10] *= ambient_tint.x;
+            signature[11] *= ambient_tint.y;
+            signature[12] *= ambient_tint.z;
+            signature[15] = intensity;
         } else {
-            signature[10] = 0.1f;
+            signature[15] = 0.1f;
         }
 
         const bool resources_ready = diffuse_irradiance_ && prefiltered_specular_ && brdf_lut_ && sampler_;

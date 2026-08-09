@@ -146,7 +146,10 @@ class ScenePropertiesSnapshot:
     skybox_type: str
     skybox_color: tuple[float, float, float]
     skybox_top_color: tuple[float, float, float]
+    skybox_horizon_color: tuple[float, float, float]
     skybox_bottom_color: tuple[float, float, float]
+    skybox_top_exponent: float
+    skybox_bottom_exponent: float
     pipelines: tuple[ScenePipelineSnapshot, ...]
     debug_geometry: tuple[DebugGeometrySettingSnapshot, ...]
 
@@ -197,7 +200,10 @@ class ScenePropertiesController:
             skybox_type=str(state.skybox_type),
             skybox_color=_color(state.skybox_srgb_color, alpha=False),
             skybox_top_color=_color(state.skybox_top_srgb_color, alpha=False),
+            skybox_horizon_color=_color(state.skybox_horizon_srgb_color, alpha=False),
             skybox_bottom_color=_color(state.skybox_bottom_srgb_color, alpha=False),
+            skybox_top_exponent=float(state.skybox_top_exponent),
+            skybox_bottom_exponent=float(state.skybox_bottom_exponent),
             pipelines=pipelines,
             debug_geometry=debug_geometry,
         )
@@ -294,11 +300,38 @@ class ScenePropertiesController:
             "skybox_top_color", state.skybox_top_srgb_color, _srgb_color(value, alpha=False), merge=False
         )
 
+    def set_skybox_horizon_color(self, value) -> ScenePropertiesSnapshot:
+        state = _render_state(self._scene)
+        return self._edit(
+            "skybox_horizon_color",
+            state.skybox_horizon_srgb_color,
+            _srgb_color(value, alpha=False),
+            merge=False,
+        )
+
     def set_skybox_bottom_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
         return self._edit(
             "skybox_bottom_color", state.skybox_bottom_srgb_color, _srgb_color(value, alpha=False), merge=False
         )
+
+    def set_skybox_top_exponent(self, value: float) -> ScenePropertiesSnapshot:
+        return self._set_skybox_exponent("skybox_top_exponent", value)
+
+    def set_skybox_bottom_exponent(self, value: float) -> ScenePropertiesSnapshot:
+        return self._set_skybox_exponent("skybox_bottom_exponent", value)
+
+    def _set_skybox_exponent(self, name: str, value: float) -> ScenePropertiesSnapshot:
+        exponent = float(value)
+        if not math.isfinite(exponent) or not 0.1 <= exponent <= 8.0:
+            raise ValueError("skybox gradient exponent must be in range 0.1..8.0")
+        state = _render_state(self._scene)
+        old_value = (
+            float(state.skybox_top_exponent)
+            if name == "skybox_top_exponent"
+            else float(state.skybox_bottom_exponent)
+        )
+        return self._edit(name, old_value, exponent, merge=True)
 
     def remove_pipeline(self, index: int) -> ScenePropertiesSnapshot:
         mount = scene_render_mount(self._scene)
@@ -323,8 +356,14 @@ class ScenePropertiesController:
                 state.skybox_srgb_color = new_value
             elif name == "skybox_top_color":
                 state.skybox_top_srgb_color = new_value
+            elif name == "skybox_horizon_color":
+                state.skybox_horizon_srgb_color = new_value
             elif name == "skybox_bottom_color":
                 state.skybox_bottom_srgb_color = new_value
+            elif name == "skybox_top_exponent":
+                state.skybox_top_exponent = new_value
+            elif name == "skybox_bottom_exponent":
+                state.skybox_bottom_exponent = new_value
             else:
                 raise RuntimeError(f"unsupported direct scene property: {name}")
 

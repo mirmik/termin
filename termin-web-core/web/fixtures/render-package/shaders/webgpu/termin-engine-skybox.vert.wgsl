@@ -9,7 +9,10 @@ struct MaterialParams_std140_0
     @align(16) u_skybox_type_0 : i32,
     @align(16) u_skybox_color_0 : vec4<f32>,
     @align(16) u_skybox_top_color_0 : vec4<f32>,
+    @align(16) u_skybox_horizon_color_0 : vec4<f32>,
     @align(16) u_skybox_bottom_color_0 : vec4<f32>,
+    @align(16) u_skybox_top_exponent_0 : f32,
+    @align(4) u_skybox_bottom_exponent_0 : f32,
 };
 
 @binding(8) @group(0) var<uniform> material_0 : MaterialParams_std140_0;

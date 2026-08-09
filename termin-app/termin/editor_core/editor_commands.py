@@ -33,7 +33,10 @@ _SCENE_PROPERTIES = {
     "ambient_intensity",
     "skybox_color",
     "skybox_top_color",
+    "skybox_horizon_color",
     "skybox_bottom_color",
+    "skybox_top_exponent",
+    "skybox_bottom_exponent",
     "skybox_type",
     "fixed_timestep",
     "time_scale",
@@ -88,8 +91,17 @@ def _set_scene_property(scene, property_name: str, value: Any) -> None:
     if property_name == "skybox_top_color":
         rs.skybox_top_srgb_color = _coerce_scene_vector_value(rs.skybox_top_srgb_color, value)
         return
+    if property_name == "skybox_horizon_color":
+        rs.skybox_horizon_srgb_color = _coerce_scene_vector_value(rs.skybox_horizon_srgb_color, value)
+        return
     if property_name == "skybox_bottom_color":
         rs.skybox_bottom_srgb_color = _coerce_scene_vector_value(rs.skybox_bottom_srgb_color, value)
+        return
+    if property_name == "skybox_top_exponent":
+        rs.skybox_top_exponent = float(value)
+        return
+    if property_name == "skybox_bottom_exponent":
+        rs.skybox_bottom_exponent = float(value)
         return
     if property_name == "skybox_type":
         rs.skybox_type = str(value)

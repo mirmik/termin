@@ -399,23 +399,22 @@ class MaterialInspectorController:
 
     def _save_material_asset(self) -> None:
         material = self._require_material()
-        material_name = self._resource_manager.find_material_name(material)
-        if material_name is None:
-            _logger.warning(
-                "Material changes are runtime-only: material '%s' has no registered asset",
-                material.name,
-            )
-            return
-        asset = self._resource_manager.get_material_asset(material_name)
+        material_uuid = str(material.uuid or "")
+        asset = (
+            self._resource_manager.get_material_asset_by_uuid(material_uuid)
+            if material_uuid
+            else None
+        )
         if asset is None:
             _logger.warning(
-                "Material changes are runtime-only: registered material '%s' has no asset",
-                material_name,
+                "Material changes are runtime-only: material '%s' (%s) has no registered asset",
+                material.name,
+                material_uuid or "no UUID",
             )
             return
         if not asset.save_to_file():
-            _logger.error("Failed to save material asset '%s'", material_name)
-            raise RuntimeError(f"failed to save material asset '{material_name}'")
+            _logger.error("Failed to save material asset '%s'", asset.name)
+            raise RuntimeError(f"failed to save material asset '{asset.name}'")
 
 
 __all__ = [

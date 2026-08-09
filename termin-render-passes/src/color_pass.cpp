@@ -1078,9 +1078,6 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
                 true});
             extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
                 "ibl_brdf_lut", data.environment_lighting->brdf_lut, data.environment_lighting->sampler, true});
-        } else if (!environment_res.empty() && !cached_draw_calls_.empty()) {
-            tc::Log::error("[ColorPass:%s] environment lighting resource is missing or incomplete",
-                           get_pass_name().c_str());
         }
         for (const auto& [uniform_name, resource_name] : extra_textures) {
             auto it = ctx.tex2_reads.find(resource_name);
@@ -1339,9 +1336,9 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
 
         const EnvironmentLightingResource* environment_lighting = nullptr;
         if (!environment_res.empty()) {
-            environment_lighting =
-                ctx.get_frame_graph_resource_as<EnvironmentLightingResource>(environment_res);
-            if (!environment_lighting) {
+            FrameGraphResource* environment_resource = ctx.get_frame_graph_resource(environment_res);
+            environment_lighting = dynamic_cast<EnvironmentLightingResource*>(environment_resource);
+            if (environment_resource && !environment_lighting) {
                 tc::Log::error("[ColorPass:%s] resource '%s' is not an environment_lighting resource",
                                get_pass_name().c_str(),
                                environment_res.c_str());

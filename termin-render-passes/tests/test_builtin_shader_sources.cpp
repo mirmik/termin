@@ -694,7 +694,13 @@ TEST_CASE("built-in skybox shader is explicit Slang material shader") {
     CHECK(fragment.find("material.u_skybox_type") != std::string::npos);
     CHECK(fragment.find("material.u_skybox_color") != std::string::npos);
     CHECK(fragment.find("material.u_skybox_top_color") != std::string::npos);
+    CHECK(fragment.find("material.u_skybox_horizon_color") != std::string::npos);
     CHECK(fragment.find("material.u_skybox_bottom_color") != std::string::npos);
+    CHECK(fragment.find("material.u_skybox_top_exponent") != std::string::npos);
+    CHECK(fragment.find("material.u_skybox_bottom_exponent") != std::string::npos);
+    CHECK(fragment.find("if (height >= 0.0)") != std::string::npos);
+    CHECK(fragment.find("pow(height") != std::string::npos);
+    CHECK(fragment.find("pow(-height") != std::string::npos);
 }
 
 TEST_CASE("stdlib normal debug material shaders use standard material fragment semantics") {

@@ -99,6 +99,9 @@ class _Resources:
     def find_material_name(self, _material):
         return None
 
+    def get_material_asset_by_uuid(self, _uuid):
+        return None
+
 
 def test_material_inspector_snapshot_and_property_edits_share_one_controller():
     material = _Material()
@@ -157,6 +160,38 @@ def test_material_inspector_file_texture_and_name_edits():
 
     assert material.name == "Renamed"
     assert material.texture_assignments == [("albedo", resources.texture)]
+
+
+def test_material_inspector_saves_asset_by_uuid_without_name_lookup():
+    class SavingAsset:
+        name = "Probe"
+
+        def __init__(self) -> None:
+            self.save_count = 0
+
+        def save_to_file(self) -> bool:
+            self.save_count += 1
+            return True
+
+    class SavingResources(_Resources):
+        def __init__(self) -> None:
+            super().__init__()
+            self.material_asset = SavingAsset()
+
+        def get_material_asset_by_uuid(self, uuid):
+            return self.material_asset if uuid == "material-uuid" else None
+
+        def find_material_name(self, _material):
+            raise AssertionError("material persistence must not resolve by name")
+
+    material = _Material()
+    resources = SavingResources()
+    controller = MaterialInspectorController(resources)
+    controller.set_target(material)
+
+    controller.set_name("Saved Probe")
+
+    assert resources.material_asset.save_count == 1
 
 
 def test_material_inspector_edits_unconstrained_texture_property():

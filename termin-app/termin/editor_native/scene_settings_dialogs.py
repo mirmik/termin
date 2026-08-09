@@ -157,7 +157,10 @@ class NativeScenePropertiesDialog:
     skybox_type: object
     skybox_color: object
     skybox_top: object
+    skybox_horizon: object
     skybox_bottom: object
+    skybox_top_exponent: object
+    skybox_bottom_exponent: object
     pipelines: object
     remove_pipeline: object
     debug_geometry_rows: WidgetRef
@@ -192,7 +195,10 @@ class NativeScenePropertiesDialog:
             self.skybox_type.selected_index = SKYBOX_TYPES.index(snapshot.skybox_type)
             self.skybox_color.set_text(_color_text(snapshot.skybox_color))
             self.skybox_top.set_text(_color_text(snapshot.skybox_top_color))
+            self.skybox_horizon.set_text(_color_text(snapshot.skybox_horizon_color))
             self.skybox_bottom.set_text(_color_text(snapshot.skybox_bottom_color))
+            self.skybox_top_exponent.value = snapshot.skybox_top_exponent
+            self.skybox_bottom_exponent.value = snapshot.skybox_bottom_exponent
             _set_combo_items(self.pipelines, (
                 f"{item.name} ({item.uuid[:8]}...)" if item.valid else item.name
                 for item in snapshot.pipelines
@@ -254,6 +260,7 @@ class NativeScenePropertiesDialog:
             "ambient": self.snapshot.ambient_color + (1.0,),
             "skybox": self.snapshot.skybox_color + (1.0,),
             "skybox_top": self.snapshot.skybox_top_color + (1.0,),
+            "skybox_horizon": self.snapshot.skybox_horizon_color + (1.0,),
             "skybox_bottom": self.snapshot.skybox_bottom_color + (1.0,),
         }
         initial = colors[field]
@@ -271,6 +278,8 @@ class NativeScenePropertiesDialog:
                 snapshot = owner.controller.set_skybox_color(value)
             elif field == "skybox_top":
                 snapshot = owner.controller.set_skybox_top_color(value)
+            elif field == "skybox_horizon":
+                snapshot = owner.controller.set_skybox_horizon_color(value)
             else:
                 snapshot = owner.controller.set_skybox_bottom_color(value)
             owner.apply_snapshot(snapshot)
@@ -292,6 +301,14 @@ class NativeScenePropertiesDialog:
     def set_skybox_type(self, index: int) -> None:
         if not self._updating and 0 <= index < len(SKYBOX_TYPES):
             self.apply_snapshot(self.controller.set_skybox_type(SKYBOX_TYPES[index]))
+
+    def set_skybox_top_exponent(self, value: float) -> None:
+        if not self._updating:
+            self.apply_snapshot(self.controller.set_skybox_top_exponent(value))
+
+    def set_skybox_bottom_exponent(self, value: float) -> None:
+        if not self._updating:
+            self.apply_snapshot(self.controller.set_skybox_bottom_exponent(value))
 
     def remove_selected_pipeline(self) -> None:
         if self.snapshot is None:
@@ -396,7 +413,7 @@ def build_native_scene_properties_dialog(
 ):
     root = document.create_vstack("native-scene-properties")
     root.stable_id = "editor.scene-properties"
-    root.preferred_size = Size(600.0, 620.0)
+    root.preferred_size = Size(600.0, 720.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     fixed_update_frequency = document.create_spin_box()
@@ -416,7 +433,31 @@ def build_native_scene_properties_dialog(
     skybox_type = document.create_combo_box()
     skybox_color = document.create_button("Skybox Color")
     skybox_top = document.create_button("Skybox Top")
+    skybox_horizon = document.create_button("Skybox Horizon")
     skybox_bottom = document.create_button("Skybox Bottom")
+    gradient_colors = document.create_hstack("skybox-gradient-colors")
+    gradient_colors.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    for short_label, color_button in (
+        ("Z", skybox_top),
+        ("H", skybox_horizon),
+        ("N", skybox_bottom),
+    ):
+        gradient_colors.add_fixed_child(document.create_label(short_label), 14.0)
+        gradient_colors.add_stretch_child(_ref(document, color_button))
+    skybox_top_exponent = document.create_spin_box()
+    skybox_top_exponent.set_range(0.1, 8.0)
+    skybox_top_exponent.step = 0.1
+    skybox_top_exponent.decimals = 2
+    skybox_bottom_exponent = document.create_spin_box()
+    skybox_bottom_exponent.set_range(0.1, 8.0)
+    skybox_bottom_exponent.step = 0.1
+    skybox_bottom_exponent.decimals = 2
+    gradient_curves = document.create_hstack("skybox-gradient-curves")
+    gradient_curves.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    gradient_curves.add_fixed_child(document.create_label("Upper"), 44.0)
+    gradient_curves.add_stretch_child(_ref(document, skybox_top_exponent))
+    gradient_curves.add_fixed_child(document.create_label("Lower"), 44.0)
+    gradient_curves.add_stretch_child(_ref(document, skybox_bottom_exponent))
     for label, control in (
         ("Fixed Update, Hz", fixed_update_frequency),
         ("Simulation Time Scale", time_scale),
@@ -425,8 +466,8 @@ def build_native_scene_properties_dialog(
         ("Ambient Intensity", intensity),
         ("Skybox Type", skybox_type),
         ("Skybox Color", skybox_color),
-        ("Gradient Top", skybox_top),
-        ("Gradient Bottom", skybox_bottom),
+        ("Gradient Z / H / N", gradient_colors),
+        ("Gradient Curves", gradient_curves),
     ):
         root.add_fixed_child(_row(document, label, control), EDITOR_UI_METRICS.field_row)
     root.add_fixed_child(document.create_label("Scene Pipelines"), EDITOR_UI_METRICS.section_row)
@@ -459,7 +500,10 @@ def build_native_scene_properties_dialog(
         skybox_type,
         skybox_color,
         skybox_top,
+        skybox_horizon,
         skybox_bottom,
+        skybox_top_exponent,
+        skybox_bottom_exponent,
         pipelines,
         remove_pipeline,
         debug_geometry_rows,
@@ -476,6 +520,7 @@ def build_native_scene_properties_dialog(
         (ambient, "ambient"),
         (skybox_color, "skybox"),
         (skybox_top, "skybox_top"),
+        (skybox_horizon, "skybox_horizon"),
         (skybox_bottom, "skybox_bottom"),
     ):
         button.connect_clicked(
@@ -498,6 +543,16 @@ def build_native_scene_properties_dialog(
     )
     skybox_type.connect_changed(
         lambda index, _text: owner().set_skybox_type(index) if owner() is not None else None
+    )
+    skybox_top_exponent.connect_changed(
+        lambda value: owner().set_skybox_top_exponent(value)
+        if owner() is not None
+        else None
+    )
+    skybox_bottom_exponent.connect_changed(
+        lambda value: owner().set_skybox_bottom_exponent(value)
+        if owner() is not None
+        else None
     )
     remove_pipeline.connect_clicked(
         lambda: owner().remove_selected_pipeline() if owner() is not None else None

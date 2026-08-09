@@ -26,6 +26,7 @@ extern "C" {
 }
 
 #include <chrono>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -39,6 +40,14 @@ namespace {
 
     constexpr uint32_t kWidth = 64;
     constexpr uint32_t kHeight = 64;
+
+    std::string captured_environment_lighting_error;
+
+    void capture_environment_lighting_error(tc_log_level level, const char* message) {
+        if (level == TC_LOG_ERROR && message && std::strstr(message, "environment lighting")) {
+            captured_environment_lighting_error = message;
+        }
+    }
 
     constexpr const char* kColorPassSmokeShader = R"(
 import termin_prelude;
@@ -371,7 +380,10 @@ FragmentOutput fs_main(FragmentInput input) {
         render_ctx.begin_pass(target, {}, &clear_color, 1.0f, false);
         render_ctx.end_pass();
 
+        captured_environment_lighting_error.clear();
+        tc_log_set_callback(capture_environment_lighting_error);
         pass.execute(exec_ctx);
+        tc_log_set_callback(nullptr);
         const bool named_camera_reached_draw_collection =
             pass.entity_names.size() == 1 && pass.entity_names[0] == "ColorPassSmokeTriangle";
 
@@ -408,7 +420,7 @@ FragmentOutput fs_main(FragmentInput input) {
         const bool entity_seen = pass.entity_names.size() == 1 && pass.entity_names[0] == "ColorPassSmokeTriangle";
         const bool pass_ok = read_ok && matches_material_color(center) && matches_clear_color(corner) &&
                              pipeline_cache_size >= 1 && entity_seen && named_camera_reached_draw_collection &&
-                             missing_camera_skipped;
+                             missing_camera_skipped && captured_environment_lighting_error.empty();
 
         pass.destroy();
         device->destroy(target);
@@ -416,12 +428,13 @@ FragmentOutput fs_main(FragmentInput input) {
         if (!pass_ok) {
             std::fprintf(stderr,
                          "ColorPass pixel smoke failed: read_ok=%s cache_size=%zu entity_seen=%s named_camera=%s "
-                         "missing_camera=%s\n",
+                         "missing_camera=%s environment_error=%s\n",
                          read_ok ? "true" : "false",
                          pipeline_cache_size,
                          entity_seen ? "true" : "false",
                          named_camera_reached_draw_collection ? "true" : "false",
-                         missing_camera_skipped ? "true" : "false");
+                         missing_camera_skipped ? "true" : "false",
+                         captured_environment_lighting_error.empty() ? "false" : "true");
             return 1;
         }
 
