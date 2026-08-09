@@ -1,6 +1,7 @@
 """ImageWidget widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,7 @@ class ImageWidget(Widget):
     def __init__(self):
         super().__init__()
         self.image_path: str = ""
-        self.tint: tuple[float, float, float, float] = (1, 1, 1, 1)
+        self.tint: SrgbColor = SrgbColor(1, 1, 1, 1)
         self._texture = None
         self._image_w: int = 0
         self._image_h: int = 0

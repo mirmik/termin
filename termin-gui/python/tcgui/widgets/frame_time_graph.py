@@ -1,6 +1,7 @@
 """Frame-time bar graph widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.units import px
@@ -11,13 +12,13 @@ _TARGET_60 = 1000.0 / 60.0   # 16.67 ms
 _TARGET_30 = 1000.0 / 30.0   # 33.33 ms
 
 # Colors (RGBA 0-1)
-_BG = (0.16, 0.16, 0.16, 1.0)
-_GRID = (0.24, 0.24, 0.24, 1.0)
-_TARGET_LINE = (0.40, 0.40, 0.40, 1.0)
-_LABEL = (0.55, 0.55, 0.55, 1.0)
-_GREEN = (0.31, 0.71, 0.31, 1.0)
-_YELLOW = (0.78, 0.71, 0.31, 1.0)
-_RED = (0.78, 0.31, 0.31, 1.0)
+_BG = SrgbColor(0.16, 0.16, 0.16, 1.0)
+_GRID = SrgbColor(0.24, 0.24, 0.24, 1.0)
+_TARGET_LINE = SrgbColor(0.40, 0.40, 0.40, 1.0)
+_LABEL = SrgbColor(0.55, 0.55, 0.55, 1.0)
+_GREEN = SrgbColor(0.31, 0.71, 0.31, 1.0)
+_YELLOW = SrgbColor(0.78, 0.71, 0.31, 1.0)
+_RED = SrgbColor(0.78, 0.31, 0.31, 1.0)
 
 
 class FrameTimeGraph(Widget):

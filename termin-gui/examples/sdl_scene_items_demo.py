@@ -20,6 +20,7 @@ from tcgui.widgets.ui import UI
 from tcgui.widgets.units import pct
 from tcgui.widgets.vstack import VStack
 from termin.display.window import WindowedGraphicsSession, quit_sdl
+from termin.geombase import SrgbColor
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -84,7 +85,7 @@ def build_scene() -> GraphicsScene:
     a.width = 180
     a.height = 90
     a.draggable = True
-    a.fill_color = (0.19, 0.28, 0.36, 1.0)
+    a.fill_color = SrgbColor(0.19, 0.28, 0.36, 1.0)
     scene.add_item(a)
 
     b = RectItem("Pass: Bloom")
@@ -93,7 +94,7 @@ def build_scene() -> GraphicsScene:
     b.width = 170
     b.height = 90
     b.draggable = True
-    b.fill_color = (0.30, 0.22, 0.18, 1.0)
+    b.fill_color = SrgbColor(0.30, 0.22, 0.18, 1.0)
     scene.add_item(b)
 
     c = RectItem("Resource: GBuffer")
@@ -102,7 +103,7 @@ def build_scene() -> GraphicsScene:
     c.width = 220
     c.height = 80
     c.draggable = True
-    c.fill_color = (0.20, 0.24, 0.18, 1.0)
+    c.fill_color = SrgbColor(0.20, 0.24, 0.18, 1.0)
     scene.add_item(c)
 
     return scene
@@ -178,7 +179,7 @@ def main():
 
 
             w, h = window.framebuffer_size()
-            tex = ui.render_compose(w, h, background_color=(0.08, 0.08, 0.10, 1.0))
+            tex = ui.render_compose(w, h, background_color=SrgbColor(0.08, 0.08, 0.10, 1.0))
             if tex is not None:
                 window.present(tex)
     finally:

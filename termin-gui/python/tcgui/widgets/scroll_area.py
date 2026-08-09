@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 from typing import TYPE_CHECKING
 
 from tcgui.widgets.widget import Widget
@@ -22,8 +24,8 @@ class ScrollArea(Widget):
         self.scroll_speed: float = 30.0
         self.show_scrollbar: bool = True
         self.scrollbar_width: float = 8.0
-        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
-        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
+        self.scrollbar_color: SrgbColor = _t.scrollbar
+        self.scrollbar_hover_color: SrgbColor = _t.scrollbar_hover
 
         self._content_w: float = 0.0
         self._content_h: float = 0.0

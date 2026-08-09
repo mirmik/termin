@@ -8,6 +8,7 @@ from tcgui.scene.item import GraphicsItem, GraphicsWidgetItem, SceneTransform
 from tcgui.scene.scene import GraphicsScene
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
 from tcgui.widgets.widget import Widget
+from termin.geombase import SrgbColor
 
 
 class SceneView(Widget):
@@ -20,9 +21,9 @@ class SceneView(Widget):
 
         self.scene = scene if scene is not None else GraphicsScene()
 
-        self.background_color = (0.10, 0.11, 0.13, 1.0)
-        self.grid_color = (0.17, 0.19, 0.24, 1.0)
-        self.grid_axis_color = (0.30, 0.33, 0.42, 1.0)
+        self.background_color = SrgbColor(0.10, 0.11, 0.13, 1.0)
+        self.grid_color = SrgbColor(0.17, 0.19, 0.24, 1.0)
+        self.grid_axis_color = SrgbColor(0.30, 0.33, 0.42, 1.0)
         self.show_grid = True
         self.grid_step = 40.0
 

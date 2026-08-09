@@ -15,6 +15,7 @@ from tcgui.widgets.renderer import UIRenderer
 from tcgui.widgets.loader import UILoader
 from tcgui.widgets.shortcuts import ShortcutRegistry
 from tcbase.profiler import Profiler
+from termin.geombase import SrgbColor
 
 
 @dataclass
@@ -283,7 +284,7 @@ class UI:
         self,
         viewport_w: int,
         viewport_h: int,
-        background_color: tuple[float, float, float, float] | None = None,
+        background_color: SrgbColor | None = None,
     ):
         """Render the UI and return the composite TextureHandle.
 
@@ -305,7 +306,7 @@ class UI:
         self,
         viewport_w: int,
         viewport_h: int,
-        background_color: tuple[float, float, float, float] | None = None,
+        background_color: SrgbColor | None = None,
         target_color=None,
     ):
         """Render the UI and return the composite TextureHandle.
@@ -331,7 +332,7 @@ class UI:
         self,
         viewport_w: int,
         viewport_h: int,
-        background_color: tuple[float, float, float, float] | None,
+        background_color: SrgbColor | None,
         target_color=None,
     ) -> bool:
         if not self._root and not self._overlays:
@@ -363,8 +364,13 @@ class UI:
                     x = (viewport_w - w) / 2
                     y = (viewport_h - h) / 2
                     entry.widget.layout(x, y, w, h, viewport_w, viewport_h)
-                    self._renderer.draw_rect(0, 0, viewport_w, viewport_h,
-                                             (0, 0, 0, 0.3))
+                    self._renderer.draw_rect(
+                        0,
+                        0,
+                        viewport_w,
+                        viewport_h,
+                        SrgbColor(0.0, 0.0, 0.0, 0.3),
+                    )
                 entry.widget.render(self._renderer)
         return True
 
@@ -472,14 +478,14 @@ class UI:
         from tcgui.widgets.basic import Label
 
         panel = Panel()
-        panel.background_color = (0.15, 0.15, 0.18, 0.95)
+        panel.background_color = SrgbColor(0.15, 0.15, 0.18, 0.95)
         panel.border_radius = 4
         panel.padding = 6
 
         label = Label()
         label.text = text
         label.font_size = 12
-        label.color = (0.9, 0.9, 0.9, 1.0)
+        label.color = SrgbColor(0.9, 0.9, 0.9, 1.0)
         panel.add_child(label)
 
         vw, vh = self._viewport_w, self._viewport_h

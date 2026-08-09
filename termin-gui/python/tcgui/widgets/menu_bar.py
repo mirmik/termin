@@ -8,6 +8,7 @@ from tcgui.widgets.widget import Widget
 from tcgui.widgets.menu import Menu
 from tcgui.widgets.events import MouseEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
+from termin.geombase import SrgbColor
 
 if TYPE_CHECKING:
     from tcgui.widgets.renderer import UIRenderer
@@ -30,12 +31,12 @@ class MenuBar(Widget):
         self._entries: list[tuple[str, Menu]] = []
 
         # Style
-        self.background_color: tuple[float, float, float, float] = _t.bg_surface
-        self.text_color: tuple[float, float, float, float] = _t.text_secondary
-        self.hover_text_color: tuple[float, float, float, float] = _t.text_primary
-        self.active_text_color: tuple[float, float, float, float] = _t.text_primary
-        self.hover_color: tuple[float, float, float, float] = _t.hover_subtle
-        self.active_color: tuple[float, float, float, float] = _t.hover
+        self.background_color: SrgbColor = _t.bg_surface
+        self.text_color: SrgbColor = _t.text_secondary
+        self.hover_text_color: SrgbColor = _t.text_primary
+        self.active_text_color: SrgbColor = _t.text_primary
+        self.hover_color: SrgbColor = _t.hover_subtle
+        self.active_color: SrgbColor = _t.hover
         self.font_size: float = _t.font_size
         self.item_padding_x: float = 10.0
         self.item_padding_y: float = 6.0

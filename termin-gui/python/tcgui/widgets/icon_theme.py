@@ -3,7 +3,6 @@
 All icons are rendered as RGBA numpy arrays and uploaded to GPU on first use.
 """
 from __future__ import annotations
-
 import mimetypes
 from typing import TYPE_CHECKING
 

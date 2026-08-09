@@ -1,6 +1,8 @@
 """SpinBox widget."""
 
 from __future__ import annotations
+
+from termin.geombase import SrgbColor
 import time
 from typing import TYPE_CHECKING, Callable
 
@@ -35,15 +37,15 @@ class SpinBox(Widget):
         self.button_width: float = 18
 
         # Colors
-        self.background_color: tuple[float, float, float, float] = _t.bg_input
-        self.focused_background_color: tuple[float, float, float, float] = _t.bg_input_focus
-        self.border_color: tuple[float, float, float, float] = _t.border
-        self.focused_border_color: tuple[float, float, float, float] = _t.border_focus
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.cursor_color: tuple[float, float, float, float] = _t.text_primary
-        self.button_color: tuple[float, float, float, float] = _t.bg_surface
-        self.button_hover_color: tuple[float, float, float, float] = _t.hover
-        self.arrow_color: tuple[float, float, float, float] = _t.text_secondary
+        self.background_color: SrgbColor = _t.bg_input
+        self.focused_background_color: SrgbColor = _t.bg_input_focus
+        self.border_color: SrgbColor = _t.border
+        self.focused_border_color: SrgbColor = _t.border_focus
+        self.text_color: SrgbColor = _t.text_primary
+        self.cursor_color: SrgbColor = _t.text_primary
+        self.button_color: SrgbColor = _t.bg_surface
+        self.button_hover_color: SrgbColor = _t.hover
+        self.arrow_color: SrgbColor = _t.text_secondary
 
         # State
         self.focused: bool = False

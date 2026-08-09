@@ -6,6 +6,7 @@ from typing import Callable
 
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.theme import current_theme as _t
+from termin.geombase import SrgbColor
 
 
 class Buttons:
@@ -24,10 +25,10 @@ _TYPE_ICONS = {
 }
 
 _TYPE_COLORS = {
-    "info":     (0.3, 0.6, 0.9, 1.0),
-    "warning":  (0.9, 0.7, 0.2, 1.0),
-    "error":    (0.9, 0.3, 0.3, 1.0),
-    "question": (0.3, 0.8, 0.5, 1.0),
+    "info":     SrgbColor(0.3, 0.6, 0.9, 1.0),
+    "warning":  SrgbColor(0.9, 0.7, 0.2, 1.0),
+    "error":    SrgbColor(0.9, 0.3, 0.3, 1.0),
+    "question": SrgbColor(0.3, 0.8, 0.5, 1.0),
 }
 
 

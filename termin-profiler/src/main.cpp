@@ -222,7 +222,7 @@ namespace {
             root.add_fixed_child(*gpu_summary_, 26.0f);
 
             timeline_legend_model_ = std::make_shared<ui::RichTextModel>();
-            const auto legend_segment = [](std::string text, tc_ui_color color, bool bold, bool italic) {
+            const auto legend_segment = [](std::string text, tc_ui_srgb_color color, bool bold, bool italic) {
                 ui::RichTextStyle style;
                 style.color = color;
                 style.bold = bold;

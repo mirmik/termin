@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.widget import Widget
@@ -24,12 +26,12 @@ class TabBar(Widget):
         self.font_size: float = 14.0
 
         _bg = _t.bg_surface
-        self.tab_color: tuple[float, float, float, float] = _bg
-        self.selected_tab_color: tuple[float, float, float, float] = _t.hover_subtle
-        self.hover_tab_color: tuple[float, float, float, float] = (_bg[0] + 0.05, _bg[1] + 0.05, _bg[2] + 0.05, _bg[3])
-        self.text_color: tuple[float, float, float, float] = _t.text_secondary
-        self.selected_text_color: tuple[float, float, float, float] = _t.text_primary
-        self.indicator_color: tuple[float, float, float, float] = _t.accent
+        self.tab_color: SrgbColor = _bg
+        self.selected_tab_color: SrgbColor = _t.hover_subtle
+        self.hover_tab_color: SrgbColor = SrgbColor(_bg.r + 0.05, _bg.g + 0.05, _bg.b + 0.05, _bg.a)
+        self.text_color: SrgbColor = _t.text_secondary
+        self.selected_text_color: SrgbColor = _t.text_primary
+        self.indicator_color: SrgbColor = _t.accent
         self.indicator_height: float = 2.0
         self.border_radius: float = _t.border_radius + 1
 

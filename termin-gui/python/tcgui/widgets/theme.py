@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from copy import copy
+from termin.geombase import SrgbColor
+
+
+def _srgb(r: float, g: float, b: float, a: float = 1.0) -> SrgbColor:
+    return SrgbColor(r, g, b, a)
 
 
 class Theme:
@@ -15,37 +20,37 @@ class Theme:
 
     def __init__(self):
         # --- Backgrounds ---
-        self.bg_primary: tuple = (0.12, 0.12, 0.14, 1.0)
-        self.bg_surface: tuple = (0.2, 0.2, 0.2, 1.0)
-        self.bg_group: tuple = (0.15, 0.15, 0.17, 1.0)
-        self.bg_input: tuple = (0.15, 0.15, 0.15, 1.0)
-        self.bg_input_focus: tuple = (0.18, 0.18, 0.22, 1.0)
+        self.bg_primary = _srgb(0.12, 0.12, 0.14)
+        self.bg_surface = _srgb(0.2, 0.2, 0.2)
+        self.bg_group = _srgb(0.15, 0.15, 0.17)
+        self.bg_input = _srgb(0.15, 0.15, 0.15)
+        self.bg_input_focus = _srgb(0.18, 0.18, 0.22)
 
         # --- Interactive states ---
-        self.hover: tuple = (0.4, 0.4, 0.4, 1.0)
-        self.pressed: tuple = (0.15, 0.15, 0.17, 1.0)
-        self.selected: tuple = (0.2, 0.35, 0.6, 0.9)
-        self.hover_subtle: tuple = (0.22, 0.22, 0.28, 0.9)
+        self.hover = _srgb(0.4, 0.4, 0.4)
+        self.pressed = _srgb(0.15, 0.15, 0.17)
+        self.selected = _srgb(0.2, 0.35, 0.6, 0.9)
+        self.hover_subtle = _srgb(0.22, 0.22, 0.28, 0.9)
 
         # --- Buttons ---
-        self.bg_button: tuple = (0.24, 0.24, 0.27, 1.0)
+        self.bg_button = _srgb(0.24, 0.24, 0.27)
 
         # --- Accent ---
-        self.accent: tuple = (0.3, 0.6, 0.9, 1.0)
-        self.accent_success: tuple = (0.3, 0.8, 0.4, 1.0)
+        self.accent = _srgb(0.3, 0.6, 0.9)
+        self.accent_success = _srgb(0.3, 0.8, 0.4)
 
         # --- Text ---
-        self.text_primary: tuple = (1.0, 1.0, 1.0, 1.0)
-        self.text_secondary: tuple = (0.7, 0.7, 0.7, 1.0)
-        self.text_muted: tuple = (0.5, 0.5, 0.5, 1.0)
+        self.text_primary = _srgb(1.0, 1.0, 1.0)
+        self.text_secondary = _srgb(0.7, 0.7, 0.7)
+        self.text_muted = _srgb(0.5, 0.5, 0.5)
 
         # --- Borders ---
-        self.border: tuple = (0.4, 0.4, 0.4, 1.0)
-        self.border_focus: tuple = (0.3, 0.5, 0.9, 1.0)
+        self.border = _srgb(0.4, 0.4, 0.4)
+        self.border_focus = _srgb(0.3, 0.5, 0.9)
 
         # --- Scrollbar ---
-        self.scrollbar: tuple = (0.5, 0.5, 0.5, 0.5)
-        self.scrollbar_hover: tuple = (0.7, 0.7, 0.7, 0.7)
+        self.scrollbar = _srgb(0.5, 0.5, 0.5, 0.5)
+        self.scrollbar_hover = _srgb(0.7, 0.7, 0.7, 0.7)
 
         # --- Metrics ---
         self.font_size: float = 12.0
@@ -63,9 +68,9 @@ class Theme:
         """Return a shallow copy of this theme for customization."""
         return copy(self)
 
-    def _with_alpha(self, color: tuple, alpha: float) -> tuple:
+    def _with_alpha(self, color: SrgbColor, alpha: float) -> SrgbColor:
         """Return *color* with replaced alpha channel."""
-        return (color[0], color[1], color[2], alpha)
+        return _srgb(color.r, color.g, color.b, alpha)
 
     # --- Application to widget trees ---
 

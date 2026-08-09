@@ -1,6 +1,7 @@
 """Label widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 from typing import TYPE_CHECKING
 
@@ -17,25 +18,25 @@ class Label(Widget):
     def __init__(self):
         super().__init__()
         self.text: str = ""
-        self._text_color: tuple[float, float, float, float] = _t.text_primary
+        self._text_color: SrgbColor = _t.text_primary
         self.font_size: float = _t.font_size
         self.alignment: str = "left"  # left, center, right
         self.mouse_transparent = True
 
     @property
-    def color(self) -> tuple[float, float, float, float]:
+    def color(self) -> SrgbColor:
         return self._text_color
 
     @color.setter
-    def color(self, value: tuple[float, float, float, float]) -> None:
+    def color(self, value: SrgbColor) -> None:
         self._text_color = value
 
     @property
-    def text_color(self) -> tuple[float, float, float, float]:
+    def text_color(self) -> SrgbColor:
         return self._text_color
 
     @text_color.setter
-    def text_color(self, value: tuple[float, float, float, float]) -> None:
+    def text_color(self, value: SrgbColor) -> None:
         self._text_color = value
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:

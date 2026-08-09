@@ -10,9 +10,10 @@ from tcbase import Key, MouseButton, log
 from tcgui.widgets.events import MouseEvent, MouseWheelEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.widget import Widget
+from termin.geombase import SrgbColor
 
 
-Color = tuple[float, float, float, float]
+Color = SrgbColor
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ def _parse_css_color(value: str) -> Color | None:
                 r = int(hex_value[0:2], 16) / 255.0
                 g = int(hex_value[2:4], 16) / 255.0
                 b = int(hex_value[4:6], 16) / 255.0
-                return (r, g, b, 1.0)
+                return SrgbColor(r, g, b, 1.0)
             except ValueError as exc:
                 log.debug(f"[rich_text_view] Invalid CSS hex color '{value}': {exc}")
                 return None

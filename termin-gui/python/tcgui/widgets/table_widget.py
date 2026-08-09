@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -43,24 +45,18 @@ class TableWidget(Widget):
         self.cell_padding: float = 6
 
         # Colors
-        self.header_background: tuple[float, float, float, float] = _t.bg_surface
-        self.header_text_color: tuple[float, float, float, float] = _t.text_muted
-        self.header_border_color: tuple[float, float, float, float] = (
-            _t.border[0], _t.border[1], _t.border[2], 0.5,
-        )
+        self.header_background: SrgbColor = _t.bg_surface
+        self.header_text_color: SrgbColor = _t.text_muted
+        self.header_border_color: SrgbColor = SrgbColor(_t.border.r, _t.border.g, _t.border.b, 0.5)
         _bif = _t.bg_input_focus
-        self.row_background: tuple[float, float, float, float] = (
-            _bif[0], _bif[1], _bif[2], 0.3,
-        )
-        self.row_alt_background: tuple[float, float, float, float] = (
-            _bif[0], _bif[1], _bif[2], 0.15,
-        )
-        self.selected_background: tuple[float, float, float, float] = _t.selected
-        self.hover_background: tuple[float, float, float, float] = _t.hover_subtle
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.selected_text_color: tuple[float, float, float, float] = _t.text_primary
+        self.row_background: SrgbColor = SrgbColor(_bif.r, _bif.g, _bif.b, 0.3)
+        self.row_alt_background: SrgbColor = SrgbColor(_bif.r, _bif.g, _bif.b, 0.15)
+        self.selected_background: SrgbColor = _t.selected
+        self.hover_background: SrgbColor = _t.hover_subtle
+        self.text_color: SrgbColor = _t.text_primary
+        self.selected_text_color: SrgbColor = _t.text_primary
         self.empty_text: str = "No data"
-        self.empty_color: tuple[float, float, float, float] = _t.text_muted
+        self.empty_color: SrgbColor = _t.text_muted
 
         # Callbacks
         self.on_select: Callable[[int, Any], None] | None = None

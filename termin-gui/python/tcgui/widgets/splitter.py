@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from termin.geombase import SrgbColor
+
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent
 from tcgui.widgets.units import px
@@ -38,8 +40,8 @@ class Splitter(Widget):
         else:
             self.preferred_width = px(5)
 
-        self.color: tuple[float, float, float, float] = _t.text_muted
-        self.hover_color: tuple[float, float, float, float] = _t.accent
+        self.color: SrgbColor = _t.text_muted
+        self.hover_color: SrgbColor = _t.accent
         self.bar_width: float = 1.0
 
         self._dragging = False

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.theme import current_theme as _t
+from termin.geombase import SrgbColor
 
 if TYPE_CHECKING:
     from tcgui.widgets.renderer import UIRenderer
@@ -17,11 +18,11 @@ class ProgressBar(Widget):
     def __init__(self):
         super().__init__()
         self.value: float = 0.0
-        self.background_color: tuple[float, float, float, float] = _t.bg_surface
-        self.fill_color: tuple[float, float, float, float] = _t.accent
+        self.background_color: SrgbColor = _t.bg_surface
+        self.fill_color: SrgbColor = _t.accent
         self.border_radius: float = _t.border_radius
         self.show_text: bool = False
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
+        self.text_color: SrgbColor = _t.text_primary
         self.font_size: float = _t.font_size_small + 1
 
     def compute_size(self, viewport_w: float, viewport_h: float) -> tuple[float, float]:

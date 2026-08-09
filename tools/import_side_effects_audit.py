@@ -30,7 +30,7 @@ DEFAULT_ROOT_PREFIXES = ("termin-", "tcplot")
 RISKY_CALL_NAMES = {
     "AudioEngine",
     "Canvas2DRenderer",
-    "CanvasColor",
+    "CanvasSrgbColor",
     "Color4",
     "DefaultResourceManager",
     "FontTextureAtlas",

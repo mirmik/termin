@@ -1,6 +1,7 @@
 """FileGridWidget widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 import math
 import time
@@ -33,19 +34,19 @@ class FileGridWidget(Widget):
         self.subtitle_font_size: float = _t.font_size_small
         self.border_radius: float = _t.border_radius + 1
 
-        self.background_color: tuple[float, float, float, float] = _t.bg_input
-        self.tile_background: tuple[float, float, float, float] = (_t.bg_input[0], _t.bg_input[1], _t.bg_input[2], 0.0)
-        self.selected_background: tuple[float, float, float, float] = _t.selected
-        self.hover_background: tuple[float, float, float, float] = _t.hover_subtle
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.subtitle_color: tuple[float, float, float, float] = _t.text_muted
-        self.selected_text_color: tuple[float, float, float, float] = _t.text_primary
+        self.background_color: SrgbColor = _t.bg_input
+        self.tile_background: SrgbColor = SrgbColor(_t.bg_input.r, _t.bg_input.g, _t.bg_input.b, 0.0)
+        self.selected_background: SrgbColor = _t.selected
+        self.hover_background: SrgbColor = _t.hover_subtle
+        self.text_color: SrgbColor = _t.text_primary
+        self.subtitle_color: SrgbColor = _t.text_muted
+        self.selected_text_color: SrgbColor = _t.text_primary
         self.empty_text: str = "No items"
-        self.empty_color: tuple[float, float, float, float] = _t.text_muted
+        self.empty_color: SrgbColor = _t.text_muted
         self.show_scrollbar: bool = True
         self.scrollbar_width: float = 8.0
-        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
-        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
+        self.scrollbar_color: SrgbColor = _t.scrollbar
+        self.scrollbar_hover_color: SrgbColor = _t.scrollbar_hover
 
         self.on_select: Callable[[int, dict], None] | None = None
         self.on_activate: Callable[[int, dict], None] | None = None
@@ -126,7 +127,7 @@ class FileGridWidget(Widget):
     def _has_scrollbar(self) -> bool:
         return self.show_scrollbar and self._max_scroll() > 0.0
 
-    def _scrollbar_thumb_rect(self) -> tuple[float, float, float, float]:
+    def _scrollbar_thumb_rect(self) -> SrgbColor:
         content_h = max(self._content_height(), self.height)
         viewport_ratio = self.height / content_h
         thumb_h = max(20.0, self.height * viewport_ratio)
@@ -143,7 +144,7 @@ class FileGridWidget(Widget):
         sb_x = self.x + self.width - self.scrollbar_width
         return x >= sb_x and self.y <= y < self.y + self.height
 
-    def _item_rect(self, index: int) -> tuple[float, float, float, float]:
+    def _item_rect(self, index: int) -> SrgbColor:
         cols = self._column_count()
         col = index % cols
         row = index // cols
@@ -252,7 +253,7 @@ class FileGridWidget(Widget):
         baseline_y: float,
         max_width: float,
         text: str,
-        color: tuple[float, float, float, float],
+        color: SrgbColor,
         font_size: float,
     ) -> None:
         if not text:

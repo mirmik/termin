@@ -1,6 +1,7 @@
 """ComboBox widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 from typing import TYPE_CHECKING, Callable
 
 from tcbase import MouseButton
@@ -22,25 +23,25 @@ class ComboBox(Widget):
         self.placeholder: str = "Select..."
 
         # Style
-        self.background_color: tuple[float, float, float, float] = _t.bg_input
-        self.border_color: tuple[float, float, float, float] = _t.border
-        self.focused_border_color: tuple[float, float, float, float] = _t.border_focus
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.placeholder_color: tuple[float, float, float, float] = _t.text_muted
-        self.arrow_color: tuple[float, float, float, float] = _t.text_secondary
+        self.background_color: SrgbColor = _t.bg_input
+        self.border_color: SrgbColor = _t.border
+        self.focused_border_color: SrgbColor = _t.border_focus
+        self.text_color: SrgbColor = _t.text_primary
+        self.placeholder_color: SrgbColor = _t.text_muted
+        self.arrow_color: SrgbColor = _t.text_secondary
         self.font_size: float = max(10.0, _t.font_size - 2.0)
         self.border_radius: float = _t.border_radius
         self.border_width: float = 1.0
         self.padding: float = 5.0
 
         # Dropdown style
-        self.dropdown_background: tuple[float, float, float, float] = (0.18, 0.18, 0.22, 0.98)
-        self.dropdown_item_hover: tuple[float, float, float, float] = _t.hover_subtle
+        self.dropdown_background: SrgbColor = SrgbColor(0.18, 0.18, 0.22, 0.98)
+        self.dropdown_item_hover: SrgbColor = _t.hover_subtle
         self.dropdown_max_visible: int = 8
         self.dropdown_item_height: float = 24.0
         self.dropdown_scrollbar_width: float = 8.0
-        self.dropdown_scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
-        self.dropdown_scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
+        self.dropdown_scrollbar_color: SrgbColor = _t.scrollbar
+        self.dropdown_scrollbar_hover_color: SrgbColor = _t.scrollbar_hover
 
         # State
         self.hovered: bool = False
@@ -194,7 +195,7 @@ class _DropdownList(Widget):
     def _has_scrollbar(self) -> bool:
         return self._max_scroll() > 0.0
 
-    def _scrollbar_track_rect(self) -> tuple[float, float, float, float]:
+    def _scrollbar_track_rect(self) -> SrgbColor:
         c = self._combo
         return (
             self.x + self.width - c.dropdown_scrollbar_width,
@@ -203,7 +204,7 @@ class _DropdownList(Widget):
             self.height,
         )
 
-    def _scrollbar_thumb_rect(self) -> tuple[float, float, float, float]:
+    def _scrollbar_thumb_rect(self) -> SrgbColor:
         track_x, track_y, track_w, track_h = self._scrollbar_track_rect()
         content_h = self._content_height()
         thumb_h = max(20.0, track_h * (track_h / content_h))

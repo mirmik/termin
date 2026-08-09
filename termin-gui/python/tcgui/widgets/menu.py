@@ -8,6 +8,7 @@ from tcbase import MouseButton
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import MouseEvent, KeyEvent
 from tcgui.widgets.theme import current_theme as _t
+from termin.geombase import SrgbColor
 
 
 class MenuItem:
@@ -71,13 +72,13 @@ class Menu(Widget):
         self.items: list[MenuItem] = []
 
         # Style
-        self.background_color: tuple[float, float, float, float] = (0.18, 0.18, 0.22, 0.98)
-        self.item_hover_color: tuple[float, float, float, float] = _t.hover_subtle
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.text_disabled_color: tuple[float, float, float, float] = _t.text_muted
-        self.shortcut_color: tuple[float, float, float, float] = _t.text_muted
-        self.icon_color: tuple[float, float, float, float] = _t.text_secondary
-        self.separator_color: tuple[float, float, float, float] = (0.35, 0.35, 0.4, 0.7)
+        self.background_color: SrgbColor = SrgbColor(0.18, 0.18, 0.22, 0.98)
+        self.item_hover_color: SrgbColor = _t.hover_subtle
+        self.text_color: SrgbColor = _t.text_primary
+        self.text_disabled_color: SrgbColor = _t.text_muted
+        self.shortcut_color: SrgbColor = _t.text_muted
+        self.icon_color: SrgbColor = _t.text_secondary
+        self.separator_color: SrgbColor = SrgbColor(0.35, 0.35, 0.4, 0.7)
         self.border_radius: float = _t.border_radius + 1
         self.font_size: float = _t.font_size
         self.icon_width: float = 22.0
@@ -88,8 +89,8 @@ class Menu(Widget):
         self.shortcut_gap: float = 32.0
         self.scroll_speed: float = 30.0
         self.scrollbar_width: float = 8.0
-        self.scrollbar_color: tuple[float, float, float, float] = _t.scrollbar
-        self.scrollbar_hover_color: tuple[float, float, float, float] = _t.scrollbar_hover
+        self.scrollbar_color: SrgbColor = _t.scrollbar
+        self.scrollbar_hover_color: SrgbColor = _t.scrollbar_hover
         self.viewport_margin: float = 4.0
         self.min_scrollable_height: float = 80.0
 
@@ -417,7 +418,7 @@ class Menu(Widget):
                 track_y,
                 track_w,
                 track_h,
-                (0.0, 0.0, 0.0, 0.18),
+                SrgbColor(0.0, 0.0, 0.0, 0.18),
             )
             renderer.draw_rect(
                 thumb_x,

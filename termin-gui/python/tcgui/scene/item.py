@@ -7,6 +7,7 @@ from typing import Any
 
 from tcgui.widgets.events import KeyEvent, MouseEvent, MouseWheelEvent, TextEvent
 from tcgui.widgets.widget import Widget
+from termin.geombase import SrgbColor
 
 
 @dataclass
@@ -103,10 +104,10 @@ class RectItem(GraphicsItem):
     def __init__(self, label: str = "") -> None:
         super().__init__()
         self.label = label
-        self.fill_color = (0.22, 0.24, 0.30, 1.0)
-        self.border_color = (0.36, 0.40, 0.50, 1.0)
-        self.border_selected_color = (0.95, 0.72, 0.20, 1.0)
-        self.text_color = (0.90, 0.92, 0.96, 1.0)
+        self.fill_color = SrgbColor(0.22, 0.24, 0.30, 1.0)
+        self.border_color = SrgbColor(0.36, 0.40, 0.50, 1.0)
+        self.border_selected_color = SrgbColor(0.95, 0.72, 0.20, 1.0)
+        self.text_color = SrgbColor(0.90, 0.92, 0.96, 1.0)
         self.font_size = 13.0
         self.border_width = 1.0
 

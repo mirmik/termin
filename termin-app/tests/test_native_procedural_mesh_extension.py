@@ -8,11 +8,13 @@ import pytest
 from tcbase._geom_native import Vec3
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.editor_core.procedural_mesh_editor_extension import ProceduralMeshExtensionModel
+from termin.editor_core.procedural_mesh_viewport_interaction import ProceduralMeshViewportInteraction
 from termin.editor_native.component_extensions import NativeComponentExtensionContext
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.procedural_mesh_extension import (
     project_native_procedural_mesh_extension,
 )
+from termin.geombase import SrgbColor
 from termin.gui_native import EventResult, PointerEvent, PointerEventType, Rect
 
 
@@ -208,6 +210,18 @@ def test_native_procedural_mesh_projector_mutates_shared_document_and_state():
 def test_procedural_mesh_model_rejects_commands_without_component_cleanly():
     extension = ProceduralMeshExtensionModel()
     assert not extension.ensure_component_document()
+
+
+def test_procedural_viewport_overlay_styles_are_authored_srgb_colors():
+    selected = ProceduralMeshViewportInteraction._solid_style(True)
+    unselected = ProceduralMeshViewportInteraction._solid_style(False)
+
+    assert isinstance(selected.fill_color, SrgbColor)
+    assert isinstance(selected.edge_color, SrgbColor)
+    assert isinstance(unselected.fill_color, SrgbColor)
+    assert isinstance(unselected.edge_color, SrgbColor)
+    assert selected.fill_color.a == pytest.approx(0.32)
+    assert unselected.edge_color.a == pytest.approx(0.85)
 
 
 def test_native_procedural_wall_and_transform_params_use_shared_commands():

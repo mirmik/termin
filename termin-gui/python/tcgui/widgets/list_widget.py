@@ -1,6 +1,7 @@
 """ListWidget widget."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 import time
 from typing import TYPE_CHECKING, Callable
 
@@ -28,15 +29,15 @@ class ListWidget(Widget):
         self.item_padding: float = 10
 
         # Colors
-        self.background_color: tuple[float, float, float, float] = _t.bg_input
-        self.item_background: tuple[float, float, float, float] = _t.bg_input
-        self.selected_background: tuple[float, float, float, float] = _t.selected
-        self.hover_background: tuple[float, float, float, float] = _t.hover_subtle
-        self.text_color: tuple[float, float, float, float] = _t.text_primary
-        self.subtitle_color: tuple[float, float, float, float] = _t.text_muted
-        self.selected_text_color: tuple[float, float, float, float] = _t.text_primary
+        self.background_color: SrgbColor = _t.bg_input
+        self.item_background: SrgbColor = _t.bg_input
+        self.selected_background: SrgbColor = _t.selected
+        self.hover_background: SrgbColor = _t.hover_subtle
+        self.text_color: SrgbColor = _t.text_primary
+        self.subtitle_color: SrgbColor = _t.text_muted
+        self.selected_text_color: SrgbColor = _t.text_primary
         self.empty_text: str = "No items"
-        self.empty_color: tuple[float, float, float, float] = _t.text_muted
+        self.empty_color: SrgbColor = _t.text_muted
 
         # Callbacks: (index, item_dict)
         self.on_select: Callable[[int, dict], None] | None = None

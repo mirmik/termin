@@ -1,6 +1,7 @@
 """Color picker dialog — HSV-based with optional alpha channel."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 import colorsys
 from typing import Callable
@@ -213,7 +214,7 @@ class _ColorPickerContent(Widget):
         pw = self.SV_SIZE / 2 - 4
         # Old color
         ro, go, bo, ao = self._old_rgba
-        old_c = (ro / 255, go / 255, bo / 255, ao / 255)
+        old_c = SrgbColor(ro / 255, go / 255, bo / 255, ao / 255)
         renderer.draw_rect(self._preview_x, self._preview_y,
                            pw, self.PREVIEW_HEIGHT, old_c)
         renderer.draw_rect_outline(self._preview_x, self._preview_y,
@@ -221,7 +222,7 @@ class _ColorPickerContent(Widget):
 
         # New color
         rn, gn, bn, an = self._current_rgba()
-        new_c = (rn / 255, gn / 255, bn / 255, an / 255)
+        new_c = SrgbColor(rn / 255, gn / 255, bn / 255, an / 255)
         new_x = self._preview_x + pw + 8
         renderer.draw_rect(new_x, self._preview_y,
                            pw, self.PREVIEW_HEIGHT, new_c)

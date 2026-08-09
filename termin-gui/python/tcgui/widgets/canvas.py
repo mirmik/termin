@@ -1,6 +1,7 @@
 """Canvas — zoomable, pannable image display widget with interaction hooks."""
 
 from __future__ import annotations
+from termin.geombase import SrgbColor
 
 from typing import TYPE_CHECKING, Callable
 
@@ -65,7 +66,7 @@ class Canvas(Widget):
         self._pan_start_offset_y: float = 0.0
 
         # --- Style ---
-        self.background_color: tuple = _t.bg_primary
+        self.background_color: SrgbColor = _t.bg_primary
 
         # --- Callbacks ---
         self.on_canvas_mouse_down: Callable | None = None

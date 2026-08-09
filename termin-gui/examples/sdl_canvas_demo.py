@@ -22,6 +22,7 @@ from tcgui.widgets.panel import Panel
 from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.units import px, pct
 from termin.display.window import WindowedGraphicsSession, quit_sdl
+from termin.geombase import SrgbColor
 from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
@@ -133,7 +134,7 @@ def build_ui(graphics):
     toolbar_bg = Panel()
     toolbar_bg.preferred_width = pct(100)
     toolbar_bg.preferred_height = px(36)
-    toolbar_bg.background_color = (0.2, 0.2, 0.2, 1.0)
+    toolbar_bg.background_color = SrgbColor(0.2, 0.2, 0.2, 1.0)
     toolbar_bg.padding = 6
 
     # Selection state
@@ -181,7 +182,7 @@ def build_ui(graphics):
     zoom_label = Label()
     zoom_label.text = "Zoom: 100%"
     zoom_label.font_size = 12
-    zoom_label.color = (0.7, 0.7, 0.7, 1.0)
+    zoom_label.color = SrgbColor(0.7, 0.7, 0.7, 1.0)
 
     toolbar_row = HStack()
     toolbar_row.spacing = 8
@@ -257,10 +258,10 @@ def build_ui(graphics):
             w = wx1 - wx0
             h = wy1 - wy0
             # Fill
-            renderer.draw_rect(wx0, wy0, w, h, (0.2, 0.5, 0.9, 0.15))
+            renderer.draw_rect(wx0, wy0, w, h, SrgbColor(0.2, 0.5, 0.9, 0.15))
             # Outline
             renderer.draw_rect_outline(wx0, wy0, w, h,
-                                       (0.3, 0.6, 1.0, 0.8), thickness=2)
+                                       SrgbColor(0.3, 0.6, 1.0, 0.8), thickness=2)
 
     canvas.on_render_overlay = draw_overlay
 
@@ -343,7 +344,7 @@ def main():
             break
 
         vw, vh = window.framebuffer_size()
-        tex = ui.render_compose(vw, vh, background_color=(0.12, 0.12, 0.14, 1.0))
+        tex = ui.render_compose(vw, vh, background_color=SrgbColor(0.12, 0.12, 0.14, 1.0))
         if tex is not None:
             window.present(tex)
 
