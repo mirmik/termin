@@ -168,13 +168,28 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
         try:
             graph_pipeline = compile_graph_from_json(json.dumps(data))
             pass_list = graph_pipeline.serialize()
+            serialized_targets = {
+                str(item.get("viewport_name", "")): item
+                for item in pass_list.get("targets", [])
+                if isinstance(item, dict)
+            }
             pass_list["name"] = str(data.get("name", self._name))
             pass_list["uuid"] = self.uuid
             pass_list["execution_model"] = str(data.get("execution_model", "single_view"))
             pass_list["targets"] = [
                 {
                     "viewport_name": str(frame.get("viewport_name", "main")),
-                    "export_name": str(frame.get("export_name", "")),
+                    "export_name": str(
+                        frame.get("export_name")
+                        or serialized_targets.get(str(frame.get("viewport_name", "main")), {}).get(
+                            "export_name", ""
+                        )
+                    ),
+                    "color_content": str(
+                        serialized_targets.get(str(frame.get("viewport_name", "main")), {}).get(
+                            "color_content", "display_linear"
+                        )
+                    ),
                     "width": int(frame.get("target_width", 0)),
                     "height": int(frame.get("target_height", 0)),
                 }
@@ -293,7 +308,7 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
         return _PipelineCandidate(
             pipeline=pipeline,
             pass_parameters=_pass_parameters(pipeline),
-            targets=(),
+            targets=tuple(dict(item) for item in serialized.get("targets", [])),
             material_names=frozenset(material_pass_materials(serialized)),
             external_params=(),
             source_format=source_format,

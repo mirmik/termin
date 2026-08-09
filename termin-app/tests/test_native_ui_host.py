@@ -588,8 +588,8 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
             self.created = []
             self.destroyed = []
 
-        def create_texture_rgba8(self, width, height, pixels):
-            self.created.append((width, height, pixels.copy()))
+        def create_texture_rgba8(self, width, height, pixels, encoding):
+            self.created.append((width, height, pixels.copy(), encoding))
             return "preview-texture"
 
         def destroy_texture(self, texture) -> None:
@@ -610,6 +610,9 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
 
     assert host.context.created[0][:2] == (1, 1)
     assert host.context.created[0][2].tolist() == [[[12, 34, 56, 255]]]
+    from tgfx import TextureEncoding
+
+    assert host.context.created[0][3] == TextureEncoding.SRGB
     assert image.textures[0][0] == "preview-texture"
     release()
     assert host.context.destroyed == ["preview-texture"]
@@ -638,8 +641,8 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
         def __init__(self) -> None:
             self.created = []
 
-        def create_texture_rgba8(self, width, height, pixels):
-            self.created.append((width, height))
+        def create_texture_rgba8(self, width, height, pixels, encoding):
+            self.created.append((width, height, encoding))
             return "artwork-texture"
 
     host = NativeWidgetContent.__new__(NativeWidgetContent)
@@ -655,7 +658,9 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
     )
     host._sync_image_previews()
 
-    assert host.context.created == [(1200, 800)]
+    from tgfx import TextureEncoding
+
+    assert host.context.created == [(1200, 800, TextureEncoding.SRGB)]
 
 
 def test_native_ui_host_applies_font_size_to_all_theme_roles():

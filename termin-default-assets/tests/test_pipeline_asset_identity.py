@@ -290,7 +290,13 @@ def test_graph_and_its_lowered_pass_list_publish_equivalent_descriptors(tmp_path
         lowered_pipeline.destroy()
     pass_list_data["uuid"] = "pass-list-equivalence-uuid"
     pass_list_data["targets"] = [
-        {"viewport_name": "main", "export_name": "", "width": 1920, "height": 1080}
+        {
+            "viewport_name": "main",
+            "export_name": pass_list_data["targets"][0]["export_name"],
+            "color_content": pass_list_data["targets"][0]["color_content"],
+            "width": 1920,
+            "height": 1080,
+        }
     ]
     pass_list_path = tmp_path / "pass-list.pipeline"
     pass_list_path.write_text(json.dumps(pass_list_data), encoding="utf-8")

@@ -134,9 +134,10 @@ def register_triangle_pipeline(rm: DefaultAssetsResourceApiMixin) -> None:
     pipeline = RenderPipeline(
         name="Triangle",
         _init_passes=[
-            DebugTrianglePass(output_res="OUTPUT", pass_name="DebugTriangle"),
+            DebugTrianglePass(output_res="triangle_color", pass_name="DebugTriangle"),
         ],
     )
+    pipeline.set_color_export("triangle_color", "display_linear")
     rm.register_pipeline("Triangle", pipeline, uuid=BUILTIN_UUIDS.get("TrianglePipeline"))
 
 

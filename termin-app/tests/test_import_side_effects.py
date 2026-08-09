@@ -351,7 +351,7 @@ del engine
         text=True,
     )
 
-    assert result.stdout == "11\n"
+    assert result.stdout == "10\n"
     assert "nanobind: leaked" not in result.stderr
 
 

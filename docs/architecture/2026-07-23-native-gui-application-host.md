@@ -237,7 +237,7 @@ The core `Canvas` widget continues to store a non-owning `TextureHandle`; it
 does not acquire GPU ownership or a Python/numpy dependency.
 
 The public C++ surface is `DynamicTextureLease(GuiWindowHost&)`. An owned lease
-accepts tightly packed RGBA8 bytes through `set_rgba8()` and
+accepts tightly packed RGBA8 bytes plus an explicit `TextureEncoding` through `set_rgba8()` and
 `update_region_rgba8()`. A same-size full update preserves the handle; a size
 change creates and uploads the replacement before destroying the old texture,
 then updates every bound Canvas. `clear()` returns the lease to reusable
@@ -262,12 +262,15 @@ The Python projection accepts C-contiguous `uint8[height, width, 4]` arrays:
 ```python
 lease = DynamicTextureLease(window)
 lease.bind_canvas(canvas)
-lease.set_rgba8(image)
+lease.set_rgba8(image, TextureEncoding.SRGB)
 lease.update_region_rgba8(x, y, changed_pixels)
 ```
 
 Numpy conversion and shape validation live exclusively in the binding. The
-C++ lease and Canvas have no numpy dependency.
+encoding is mandatory: authored images use `SRGB`, while generated linear
+surfaces and masks declare their own linear formats. Borrowed textures retain
+the encoding of their live texture descriptor. The C++ lease and Canvas have
+no numpy dependency.
 
 ## Python projection
 

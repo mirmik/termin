@@ -7,7 +7,6 @@ import pytest
 from termin.engine import EngineCore
 from termin.render_passes import (
     EnvironmentLightingPass,
-    OutputTransformPass,
     ResolvePass,
     UIWidgetPass,
 )
@@ -64,20 +63,13 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx(rendering_manager)
     assert "ResolvePass" in pass_types
     assert "World2DPass" in pass_types
     assert "TonemapPass" in pass_types
-    assert "OutputTransformPass" in pass_types
+    assert "OutputTransformPass" not in pass_types
     assert "EnvironmentLightingPass" in pass_types
     assert pass_names.index("EnvironmentLighting") < pass_names.index("Color")
     assert pass_names.index("World2D") < pass_names.index("Resolve")
     assert pass_names.index("Resolve") < pass_names.index("Bloom")
     assert pass_names.index("Bloom") < pass_names.index("Tonemap")
     assert pass_names.index("Tonemap") < pass_names.index("UIWidgets")
-    assert pass_names.index("UIWidgets") < pass_names.index("OutputTransform")
-
-    output_transform = next(
-        frame_pass for frame_pass in pipeline.passes
-        if frame_pass.type_name == "OutputTransformPass"
-    )
-    assert isinstance(output_transform.to_python(), OutputTransformPass)
     environment = next(
         frame_pass for frame_pass in pipeline.passes
         if frame_pass.type_name == "EnvironmentLightingPass"

@@ -182,11 +182,14 @@ class OffscreenEditorContent:
                 self._release_image_preview(preview)
                 continue
             if preview.texture is None:
+                from tgfx import TextureEncoding
+
                 height, width, _channels = preview.pixels.shape
                 preview.texture = self.context.create_texture_rgba8(
                     width,
                     height,
                     preview.pixels,
+                    TextureEncoding.SRGB,
                 )
                 preview.image.set_texture(preview.texture, Size(float(width), float(height)))
 
