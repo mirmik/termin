@@ -54,6 +54,11 @@ namespace termin {
         // Rebuilt when clip changes
         std::vector<ChannelMapping> _channel_mappings;
 
+        // Bulk glTF tracks are mapped by their stable source node index.  The
+        // mapping is kept separate from legacy name-grouped channels so the
+        // two representations cannot be mixed accidentally.
+        std::vector<ChannelMapping> _track_mappings;
+
         // Cached samples buffer for reuse
         std::vector<tc_channel_sample> _samples_buffer;
 
@@ -114,6 +119,9 @@ namespace termin {
 
         // Build channel target mapping for current clip
         void _build_channel_mapping();
+
+        // Sample and apply exact bulk tracks (vec3 scale and STEP included).
+        void _apply_tracks_at_time(const tc_animation* animation, double t_seconds);
 
         // Resolve non-bone target entity by channel target name
         Entity _find_node_target(const char* target_name) const;

@@ -8,6 +8,9 @@
 
 ## Протоколы
 
+- [Native cgltf Importer](2026-08-09-native-cgltf-importer.md)
+  — последовательный native GLB path на cgltf, transactional публикация
+  `tc_mesh` и сохранение embedded asset UUID без Python per-index обработки.
 - [Canonical LineRenderer Contract](2026-08-07-line-renderer-contract.md)
   — один production world-space tube contract, pass-owned mono/multiview
   projection и удаление renderer modes из scene-level API.

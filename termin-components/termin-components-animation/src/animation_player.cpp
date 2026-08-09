@@ -1,4 +1,5 @@
 #include <cstring>
+#include <cmath>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/animation/animation_player.hpp>
@@ -132,6 +133,7 @@ namespace termin {
 
     void AnimationPlayer::_build_channel_mapping() {
         _channel_mappings.clear();
+        _track_mappings.clear();
 
         if (_current_index < 0 || _current_index >= (int)clips.size()) {
             return;
@@ -146,6 +148,44 @@ namespace termin {
         tc_skeleton* skel = nullptr;
         if (SkeletonInstance* skel_inst = target_skeleton()) {
             skel = skel_inst->_skeleton;
+        }
+
+        if (anim->track_count > 0) {
+            SkeletonInstance* skel_inst = target_skeleton();
+            _track_mappings.resize(anim->track_count);
+            for (size_t i = 0; i < anim->track_count; ++i) {
+                const tc_animation_track& track = anim->tracks[i];
+                ChannelMapping& mapping = _track_mappings[i];
+                if (track.target_node_index >= 0 &&
+                    static_cast<size_t>(track.target_node_index) < node_targets.size()) {
+                    mapping.node_entity = node_targets[static_cast<size_t>(track.target_node_index)];
+                }
+                if (skel_inst && mapping.node_entity.valid()) {
+                    const std::vector<Entity>& bones = skel_inst->bone_entities();
+                    for (size_t bone_index = 0; bone_index < bones.size(); ++bone_index) {
+                        if (bones[bone_index] == mapping.node_entity) {
+                            mapping.bone_index = static_cast<int>(bone_index);
+                            break;
+                        }
+                    }
+                }
+                if (track.interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE ||
+                    track.path == TC_ANIMATION_PATH_WEIGHTS) {
+                    tc::Log::warn(
+                        "[AnimationPlayer::_build_channel_mapping] track %zu target node %d "
+                        "is preserved but playback for path=%u interpolation=%u is unsupported",
+                        i,
+                        track.target_node_index,
+                        static_cast<unsigned>(track.path),
+                        static_cast<unsigned>(track.interpolation));
+                } else if (!mapping.node_entity.valid()) {
+                    tc::Log::warn(
+                        "[AnimationPlayer::_build_channel_mapping] no entity for track %zu target node %d",
+                        i,
+                        track.target_node_index);
+                }
+            }
+            return;
         }
 
         // Build mapping from channel index to either bone index or imported node entity.
@@ -176,6 +216,10 @@ namespace termin {
         time += dt;
 
         const animation::TcAnimationClip& clip = clips[_current_index];
+        if (tc_animation* anim = clip.get(); anim && anim->track_count > 0) {
+            _apply_tracks_at_time(anim, time);
+            return;
+        }
         size_t count = clip.sample_into(time, _samples_buffer.data(), _samples_buffer.size());
         _apply_sample(_samples_buffer.data(), count);
     }
@@ -194,6 +238,10 @@ namespace termin {
         }
 
         const animation::TcAnimationClip& clip = clips[_current_index];
+        if (tc_animation* anim = clip.get(); anim && anim->track_count > 0) {
+            _apply_tracks_at_time(anim, t);
+            return;
+        }
         size_t count = clip.sample_into(t, _samples_buffer.data(), _samples_buffer.size());
         _apply_sample(_samples_buffer.data(), count);
     }
@@ -213,6 +261,59 @@ namespace termin {
             }
         }
         return Entity();
+    }
+
+    void AnimationPlayer::_apply_tracks_at_time(const tc_animation* animation, double t_seconds) {
+        if (!animation || animation->track_count == 0) {
+            return;
+        }
+        if (_track_mappings.size() != animation->track_count) {
+            _build_channel_mapping();
+        }
+
+        if (animation->loop && animation->duration > 0.0) {
+            t_seconds = std::fmod(t_seconds, animation->duration);
+            if (t_seconds < 0.0) {
+                t_seconds += animation->duration;
+            }
+        }
+        const double t_ticks = t_seconds * animation->tps;
+        SkeletonInstance* skel_inst = target_skeleton();
+        for (size_t i = 0; i < animation->track_count && i < _track_mappings.size(); ++i) {
+            const tc_animation_track& track = animation->tracks[i];
+            if (track.interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE ||
+                track.path == TC_ANIMATION_PATH_WEIGHTS) {
+                continue;
+            }
+
+            double value[4] = {};
+            if (!tc_animation_track_sample(&track, t_ticks, value, 4)) {
+                tc::Log::error("[AnimationPlayer::_apply_tracks_at_time] failed to sample track %zu", i);
+                continue;
+            }
+
+            const double* translation = track.path == TC_ANIMATION_PATH_TRANSLATION ? value : nullptr;
+            const double* rotation = track.path == TC_ANIMATION_PATH_ROTATION ? value : nullptr;
+            const double* scale = track.path == TC_ANIMATION_PATH_SCALE ? value : nullptr;
+            const ChannelMapping& mapping = _track_mappings[i];
+            if (mapping.bone_index >= 0) {
+                if (skel_inst) {
+                    skel_inst->set_bone_transform(mapping.bone_index, translation, rotation, scale);
+                }
+                continue;
+            }
+            Entity node = mapping.node_entity;
+            if (!node.valid()) {
+                continue;
+            }
+            if (translation) {
+                node.set_local_position(translation);
+            } else if (rotation) {
+                node.set_local_rotation(rotation);
+            } else if (scale) {
+                node.set_local_scale(scale);
+            }
+        }
     }
 
     void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t count) {

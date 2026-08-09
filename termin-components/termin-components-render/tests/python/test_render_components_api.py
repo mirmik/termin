@@ -177,7 +177,7 @@ def test_skinned_mesh_renderer_computes_bones_in_renderer_space():
         1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
+        -1.0, 0.0, 0.0, 1.0,
     ]
     skeleton.rebuild_roots()
 
@@ -203,7 +203,9 @@ def test_skinned_mesh_renderer_computes_bones_in_renderer_space():
 
         matrix = renderer.get_bone_matrices_flat().reshape(-1)
         assert renderer._bone_count == 1
-        assert matrix[12] == pytest.approx(3.0)
+        # bone(5) relative to mesh(2), then inverse-bind translation(-1).
+        # Translation at flat index 12 pins the column-major TcBone ABI.
+        assert matrix[12] == pytest.approx(2.0)
         assert matrix[13] == pytest.approx(0.0)
         assert matrix[14] == pytest.approx(0.0)
     finally:
