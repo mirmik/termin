@@ -21,6 +21,7 @@ from termin.gui_native import (
     Point,
     Rect,
     Size,
+    ToolBarAlignment,
     TreeDropPosition,
     TreeExpansionModel,
     TreeModel,
@@ -247,6 +248,7 @@ def build_native_scene_tree(
         ]
     )
     toolbar = document.create_tool_bar(toolbar_model)
+    toolbar.alignment = ToolBarAlignment.End
     root.add_fixed_child(_ref(document, toolbar), EDITOR_UI_METRICS.toolbar)
 
     tree_model = TreeModel()
