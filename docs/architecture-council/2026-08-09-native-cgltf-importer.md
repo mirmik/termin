@@ -61,8 +61,10 @@ native importer сначала соберёт собственный полны�
 - Y-up to Z-up conversion для geometry выполняется во время native unpacking.
   Nodes, skins и animation data проходят ту же явно выбранную conversion policy,
   поэтому опубликованный mesh и scene metadata не расходятся.
-- Parser не генерирует normals/tangents и не меняет topology неявно. Такие
-  операции остаются отдельными управляемыми стадиями.
+- Сам cgltf не генерирует normals/tangents и не меняет topology. Termin adapter
+  выполняет явно протестированную tangent preparation для static UV meshes,
+  когда этого требует PBR vertex contract; skinned layout сохраняет authored
+  tangent либо нулевой fallback, совместимый с текущим shader path.
 - Ошибочные и unsupported assets возвращают structured diagnostics. Production
   backend не делает автоматический fallback на Python после cgltf error.
 - Во время миграции backend можно выбрать явно для differential tests. JSON
@@ -152,4 +154,3 @@ prepare, а resource registries и `Asset.ensure_loaded()` пока имеют
 - `termin-glb/python/termin/glb/instantiator.py`.
 - `termin-mesh/src/resources/tc_mesh_registry.c`.
 - `/home/mirmik/project/Hunyuan3D-Omni-test/gltf_loader_benchmark`.
-

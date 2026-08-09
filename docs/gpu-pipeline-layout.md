@@ -174,12 +174,10 @@ are free to declare an `in` at it but should tolerate zero data.
 | 1 | `normal` (vec3) | lit, skinned, shadow (partial) |
 | 2 | `uv` (vec2) | color, depth, normal |
 | 3 | `tangent` (vec4, xyz = tangent, w = handedness) | PBR color, skinned |
-| 4 | *(reserved — do not reuse; historical skinning joints lived here)* | — |
-| 5 | `color` (vec4) | `pos_normal_uv_color` layout only |
-| 6 | `joints` (vec4, indices stored as floats) | skinned |
-| 7 | `weights` (vec4) | skinned |
+| 4 | `joints` (vec4, indices stored as floats) | skinned |
+| 5 | `weights` (vec4), or `color` (vec4) | skinned, or `pos_normal_uv_color` |
 
-`tgfx_vertex_layout_skinned()` covers locations 0, 1, 2, 3, 6, 7 — stride 80 B.
+`tgfx_vertex_layout_skinned()` covers locations 0, 1, 2, 3, 4, 5 — stride 80 B.
 If the GLB source has no tangent, the loader fills zeros at location 3; the
 PBR shader's `length(a_tangent.xyz) > 0.001` check handles that case.
 
