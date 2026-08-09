@@ -196,12 +196,17 @@ Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin-mo
 На 2026-07-30 сюда перенесены standard/scene/postprocess/debug passes:
 `PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`,
 `DebugGeometryPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`,
-`GrayscalePass`, `TonemapPass`, `OutputTransformPass`, `BloomPass`, `ColorPass`, `ShadowPass`,
+`GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`,
 `SkyBoxPass`, `IdPass` и единый native `UIWidgetPass` для desktop, Android и
 OpenXR. Модуль также владеет `ShadowMapArrayResource` и регистрацией его
 framegraph factory/sampled preview, picking RGB/id cache helper, shadow camera
 helpers, shader skinning injection, material UBO apply helper и Python API
 `termin.render_passes`.
+
+Цветовое преобразование физического выхода не является authored render pass:
+`PipelineColorExport` задаёт семантику результата, а render executor выбирает
+копирование либо общий programmable output transform с transfer-функцией и
+дизерингом под формат caller-owned target.
 
 `SolidPrimitiveRenderer` сейчас живет в editor-private native surface `termin.editor._editor_native`; публичные render-pass helpers импортируются из `termin.render_passes`.
 

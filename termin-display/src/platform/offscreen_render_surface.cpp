@@ -54,7 +54,10 @@ namespace termin {
                 tgfx::TextureDesc color_desc;
                 color_desc.width = static_cast<uint32_t>(width_);
                 color_desc.height = static_cast<uint32_t>(height_);
-                color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+                // An offscreen display is a compositing boundary, not an encoded
+                // presentation surface. Preserve DisplayLinear precision until
+                // the eventual physical sink performs its output transform.
+                color_desc.format = tgfx::PixelFormat::RGBA16F;
                 color_desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment |
                                    tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
                 color_tex_ = device_->create_texture(color_desc);

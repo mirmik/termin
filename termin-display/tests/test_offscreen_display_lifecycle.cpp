@@ -86,11 +86,13 @@ int main() {
     tc_display_handle display = termin::create_offscreen_display(&device, 320, 200, "offscreen-lifecycle");
     assert(tc_display_handle_valid(display));
     assert(device.created.size() == 2u);
+    assert(device.created[0].format == tgfx::PixelFormat::RGBA16F);
     assert(tc_display_get_color_texture_id(display) != 0u);
     assert(tc_display_get_graphics_domain_key(display) == reinterpret_cast<uintptr_t>(&device));
 
     assert(tc_display_resize(display, 640, 360));
     assert(device.created.size() == 4u);
+    assert(device.created[2].format == tgfx::PixelFormat::RGBA16F);
     assert(device.destroyed.size() == 2u);
 
     // Explicit display destruction semantically releases both current GPU
