@@ -743,6 +743,13 @@ namespace termin::runtime {
             return value && value->is_bool() ? value->as_bool() : default_value;
         }
 
+        bool is_supported_shader_program_property_type(const std::string& property_type) {
+            return property_type == "Bool" || property_type == "Int" || property_type == "Float" ||
+                   property_type == "Vec2" || property_type == "Vec3" || property_type == "Vec4" ||
+                   property_type == "SrgbColor" || property_type == "LinearColor" || property_type == "Mat4" ||
+                   property_type == "Texture" || property_type == "Texture2D";
+        }
+
         bool shader_program_property_default(const nos::trent& property,
                                              const std::string& property_type,
                                              tc_uniform_value& value,
@@ -751,6 +758,30 @@ namespace termin::runtime {
             const nos::trent* input = dict_get(property, "default");
             if (!input) {
                 return true;
+            }
+            const bool is_texture = property_type == "Texture" || property_type == "Texture2D";
+            if (is_texture && !input->is_string()) {
+                error = "shader program texture property default must be a string";
+                return false;
+            }
+            if (property_type == "Bool" && !input->is_bool()) {
+                error = "shader program Bool property default must be boolean";
+                return false;
+            }
+            if ((property_type == "Float" || property_type == "Int") && !input->is_numer()) {
+                error = "shader program scalar property default must be numeric";
+                return false;
+            }
+            const size_t expected_components = property_type == "Vec2" ? 2u
+                                               : property_type == "Vec3" ? 3u
+                                               : (property_type == "Vec4" || property_type == "SrgbColor" ||
+                                                  property_type == "LinearColor") ? 4u
+                                                                                  : 0u;
+            if (expected_components != 0u &&
+                (!input->is_list() || input->as_list().size() != expected_components)) {
+                error = "shader program property '" + property_type + "' default requires exactly " +
+                        std::to_string(expected_components) + " components";
+                return false;
             }
             if (input->is_string()) {
                 text = input->as_string();
@@ -846,6 +877,18 @@ namespace termin::runtime {
                     tc_log_error("RuntimePackageLoader: %s", error.c_str());
                     return false;
                 }
+                if (property_types.back() == "Color") {
+                    error = "shader program property '" + property_names.back() +
+                            "' uses legacy property_type 'Color'; use 'SrgbColor' or 'LinearColor'";
+                    tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                    return false;
+                }
+                if (!is_supported_shader_program_property_type(property_types.back())) {
+                    error = "shader program property '" + property_names.back() + "' has unsupported property_type '" +
+                            property_types.back() + "'";
+                    tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                    return false;
+                }
                 tc_uniform_value& default_value = property_defaults[index];
                 std::memset(&default_value, 0, sizeof(default_value));
                 if (!shader_program_property_default(
@@ -899,8 +942,10 @@ namespace termin::runtime {
 
             const size_t phase_count = phase_list->as_list().size();
             std::vector<std::string> phase_marks;
+            std::vector<std::string> phase_shader_uuids;
             std::vector<tc_shader_program_phase_desc> phases;
             phase_marks.reserve(phase_count);
+            phase_shader_uuids.reserve(phase_count);
             phases.reserve(phase_count);
             for (const nos::trent& item : phase_list->as_list()) {
                 if (!item.is_dict()) {
@@ -939,6 +984,7 @@ namespace termin::runtime {
                 desc.priority = static_cast<int32_t>(number_field(item, "priority", 0));
                 desc.state = render_state;
                 phases.push_back(desc);
+                phase_shader_uuids.push_back(shader_uuid);
             }
 
             TcShaderProgram program = TcShaderProgram::declare(uuid, name);
@@ -956,6 +1002,25 @@ namespace termin::runtime {
                 error = "failed to publish shader program '" + uuid + "'";
                 tc_log_error("RuntimePackageLoader: %s", error.c_str());
                 return false;
+            }
+            const std::vector<std::pair<std::string, std::string>> shader_property_types = [&]() {
+                std::vector<std::pair<std::string, std::string>> result;
+                result.reserve(property_count);
+                for (size_t index = 0; index < property_count; ++index) {
+                    result.emplace_back(property_names[index], property_types[index]);
+                }
+                return result;
+            }();
+            for (const std::string& phase_shader_uuid : phase_shader_uuids) {
+                TcShader phase_shader = TcShader::from_uuid(phase_shader_uuid);
+                if (phase_shader.is_valid()) {
+                    if (!detail::set_shader_material_ubo_property_types(
+                            phase_shader.get(), shader_property_types, error)) {
+                        error = "shader program '" + uuid + "': " + error;
+                        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+                        return false;
+                    }
+                }
             }
             keepalive.shader_programs.push_back(std::move(program));
             return true;

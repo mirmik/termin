@@ -188,6 +188,50 @@ namespace termin::runtime::detail {
                     layout.block_size);
     }
 
+    bool set_shader_material_ubo_property_types(
+        tc_shader* shader,
+        const std::vector<std::pair<std::string, std::string>>& properties,
+        std::string& error) {
+        if (!shader) {
+            error = "cannot apply shader property metadata to a null shader";
+            return false;
+        }
+        std::vector<std::pair<tc_material_ubo_entry*, const std::string*>> updates;
+        for (const auto& property : properties) {
+            if (property.second != "SrgbColor" && property.second != "LinearColor" && property.second != "Vec4") {
+                continue;
+            }
+            tc_material_ubo_entry* match = nullptr;
+            for (uint32_t index = 0; index < shader->material_ubo_entry_count; ++index) {
+                if (property.first == shader->material_ubo_entries[index].name) {
+                    match = &shader->material_ubo_entries[index];
+                    break;
+                }
+            }
+            if (!match) {
+                // Material properties are canonical across phases. A phase may
+                // legitimately optimize out or not reference a property.
+                continue;
+            }
+            const std::string reflected_type = match->property_type;
+            if (reflected_type == property.second) {
+                continue; // Idempotent when phases share the same shader.
+            }
+            if (reflected_type != "Vec4") {
+                error = "package property '" + property.first + "' kind '" + property.second +
+                        "' requires a shader-side vec4 UBO field, got '" + match->property_type + "'";
+                return false;
+            }
+            updates.emplace_back(match, &property.second);
+        }
+        // Validate the complete mapping before mutating reflection metadata.
+        for (const auto& update : updates) {
+            std::snprintf(
+                update.first->property_type, sizeof(update.first->property_type), "%s", update.second->c_str());
+        }
+        return true;
+    }
+
     void set_shader_features_from_glsl(tc_shader* shader, const std::string& fragment_source) {
         if (!shader) {
             return;

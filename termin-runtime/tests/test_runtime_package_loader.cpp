@@ -83,15 +83,17 @@ namespace {
 #version 330 core
 uniform sampler2D u_albedo_texture;
 uniform sampler2D u_normal_texture;
-layout(std140) uniform Material {
-    vec4 u_color;
+layout(std140) uniform MaterialParams {
+    vec4 u_vec4;
+    vec4 u_srgb_color;
+    vec4 u_linear_color;
     float u_roughness;
     vec3 u_emissive;
     int u_enabled;
 };
 out vec4 FragColor;
 void main() {
-    FragColor = u_color;
+    FragColor = u_vec4 + u_srgb_color + u_linear_color;
 }
 )";
     }
@@ -147,8 +149,8 @@ void main() {
             << "    \"fragment_inputs\": [{\"semantic\": \"world_pos\", \"type\": 3}],\n"
             << "    \"resources\": [{\"name\": \"material\", \"kind\": 1, "
                "\"scope\": 3, \"stage_mask\": 2, \"size\": 16, "
-               "\"element_stride\": 0, \"fields\": [{\"name\": \"u_color\", "
-               "\"type\": \"Color\", \"offset\": 0, \"size\": 16}]}]\n"
+               "\"element_stride\": 0, \"fields\": [{\"name\": \"u_srgb_color\", "
+               "\"type\": \"SrgbColor\", \"offset\": 0, \"size\": 16}]}]\n"
             << "  }\n"
             << "}\n";
         return out.str();
@@ -164,8 +166,12 @@ void main() {
             << "  \"language\": \"glsl\",\n"
             << "  \"features\": 1,\n"
             << "  \"properties\": [\n"
-            << "    {\"name\": \"u_color\", \"property_type\": \"Color\", "
+            << "    {\"name\": \"u_vec4\", \"property_type\": \"Vec4\", "
+               "\"default\": [0.1, 0.2, 0.3, 0.4]},\n"
+            << "    {\"name\": \"u_srgb_color\", \"property_type\": \"SrgbColor\", "
                "\"default\": [1.0, 0.5, 0.25, 1.0]},\n"
+            << "    {\"name\": \"u_linear_color\", \"property_type\": \"LinearColor\", "
+               "\"default\": [2.0, 1.5, 0.5, 0.75]},\n"
             << "    {\"name\": \"u_albedo_texture\", \"property_type\": \"Texture\", "
                "\"expected_encoding\": \"srgb\", \"default\": \"white\"},\n"
             << "    {\"name\": \"u_normal_texture\", \"property_type\": \"Texture\", "
@@ -209,7 +215,9 @@ void main() {
             << "    {\"shader\": \"" << kShaderUuid << "\", \"mark\": \"opaque\", \"priority\": 0}\n"
             << "  ],\n"
             << "  \"uniforms\": {\n"
-            << "    \"u_color\": [0.25, 0.5, 0.75, 1.0],\n"
+            << "    \"u_vec4\": [0.1, 0.2, 0.3, 0.4],\n"
+            << "    \"u_srgb_color\": [0.25, 0.5, 0.75, 1.0],\n"
+            << "    \"u_linear_color\": [2.0, 1.5, 0.5, 0.75],\n"
             << "    \"u_roughness\": 0.42,\n"
             << "    \"u_emissive\": [0.1, 0.2, 0.3],\n"
             << "    \"u_enabled\": true\n"
@@ -648,10 +656,13 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     CHECK_EQ(std::string(material.shader_program_uuid()), std::string(kProgramUuid));
     CHECK_EQ(material.shader_program_version(), program.version());
     REQUIRE(program.get() != nullptr);
-    REQUIRE_EQ(program.get()->property_count, 3u);
-    CHECK(program.get()->properties[1].has_expected_encoding != 0);
-    CHECK(program.get()->properties[1].expected_encoding == TC_TEXTURE_ENCODING_SRGB);
-    CHECK(program.get()->properties[2].expected_encoding == TC_TEXTURE_ENCODING_LINEAR);
+    REQUIRE_EQ(program.get()->property_count, 5u);
+    CHECK_EQ(std::string(program.get()->properties[0].property_type), "Vec4");
+    CHECK_EQ(std::string(program.get()->properties[1].property_type), "SrgbColor");
+    CHECK_EQ(std::string(program.get()->properties[2].property_type), "LinearColor");
+    CHECK(program.get()->properties[3].has_expected_encoding != 0);
+    CHECK(program.get()->properties[3].expected_encoding == TC_TEXTURE_ENCODING_SRGB);
+    CHECK(program.get()->properties[4].expected_encoding == TC_TEXTURE_ENCODING_LINEAR);
     CHECK_EQ(program.get()->phase_count, 1u);
     tc_shader* program_phase_shader = tc_shader_get(program.get()->phases[0].shader);
     REQUIRE(program_phase_shader != nullptr);
@@ -679,13 +690,29 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     REQUIRE_EQ(producer.resource_count, 1u);
     CHECK_EQ(std::string(producer.resources[0].name), std::string("material"));
     REQUIRE_EQ(producer.resources[0].field_count, 1u);
-    CHECK_EQ(std::string(producer.resources[0].fields[0].name), std::string("u_color"));
+    CHECK_EQ(std::string(producer.resources[0].fields[0].name), std::string("u_srgb_color"));
 
-    tc_uniform_value* color = require_uniform(phase, "u_color", TC_UNIFORM_VEC4);
+    const tc_material_ubo_entry* reflected = tc_shader_material_ubo_entries(shader.get());
+    REQUIRE(reflected != nullptr);
+    REQUIRE_EQ(tc_shader_material_ubo_entry_count(shader.get()), 6u);
+    CHECK_EQ(std::string(reflected[0].property_type), "Vec4");
+    CHECK_EQ(std::string(reflected[1].property_type), "SrgbColor");
+    CHECK_EQ(std::string(reflected[2].property_type), "LinearColor");
+
+    tc_uniform_value* vec4 = require_uniform(phase, "u_vec4", TC_UNIFORM_VEC4);
+    CHECK(std::fabs(vec4->data.v4[0] - 0.1f) < 0.0001f);
+    CHECK(std::fabs(vec4->data.v4[3] - 0.4f) < 0.0001f);
+
+    tc_uniform_value* color = require_uniform(phase, "u_srgb_color", TC_UNIFORM_VEC4);
     CHECK(std::fabs(color->data.v4[0] - 0.25f) < 0.0001f);
     CHECK(std::fabs(color->data.v4[1] - 0.5f) < 0.0001f);
     CHECK(std::fabs(color->data.v4[2] - 0.75f) < 0.0001f);
     CHECK(std::fabs(color->data.v4[3] - 1.0f) < 0.0001f);
+
+    tc_uniform_value* linear = require_uniform(phase, "u_linear_color", TC_UNIFORM_VEC4);
+    CHECK(std::fabs(linear->data.v4[0] - 2.0f) < 0.0001f);
+    CHECK(std::fabs(linear->data.v4[1] - 1.5f) < 0.0001f);
+    CHECK(std::fabs(linear->data.v4[3] - 0.75f) < 0.0001f);
 
     tc_uniform_value* roughness = require_uniform(phase, "u_roughness", TC_UNIFORM_FLOAT);
     CHECK(std::fabs(roughness->data.f - 0.42f) < 0.0001f);
@@ -912,6 +939,52 @@ TEST_CASE("RuntimePackageLoader rejects incompatible shader program schema") {
     CHECK(result.message.find("requires schema_version 1") != std::string::npos);
 }
 
+TEST_CASE("RuntimePackageLoader rejects legacy and unknown shader property kinds") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    write_text(root / "shaders" / "test.shader-program.json",
+               replace_once(shader_program_spec(),
+                            "\"property_type\": \"Vec4\"",
+                            "\"property_type\": \"Color\""));
+    termin::runtime::RuntimePackageLoadResult legacy = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(legacy.ok);
+    CHECK(legacy.message.find("legacy property_type 'Color'") != std::string::npos);
+    CHECK(legacy.message.find("SrgbColor") != std::string::npos);
+    CHECK(legacy.message.find("LinearColor") != std::string::npos);
+
+    write_text(root / "shaders" / "test.shader-program.json",
+               replace_once(shader_program_spec(),
+                            "\"property_type\": \"Vec4\"",
+                            "\"property_type\": \"DisplayColor\""));
+    termin::runtime::RuntimePackageLoadResult unknown = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(unknown.ok);
+    CHECK(unknown.message.find("unsupported property_type 'DisplayColor'") != std::string::npos);
+}
+
+TEST_CASE("RuntimePackageLoader validates typed color defaults") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    write_text(root / "shaders" / "test.shader-program.json",
+               replace_once(shader_program_spec(),
+                            "\"default\": [1.0, 0.5, 0.25, 1.0]",
+                            "\"default\": [1.0, 0.5, 0.25]"));
+    termin::runtime::RuntimePackageLoadResult short_color = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(short_color.ok);
+    CHECK(short_color.message.find("SrgbColor") != std::string::npos);
+    CHECK(short_color.message.find("exactly 4 components") != std::string::npos);
+
+    write_text(root / "shaders" / "test.shader-program.json",
+               replace_once(shader_program_spec(),
+                            "\"default\": [2.0, 1.5, 0.5, 0.75]",
+                            "\"default\": \"white\""));
+    termin::runtime::RuntimePackageLoadResult wrong_shape = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(wrong_shape.ok);
+    CHECK(wrong_shape.message.find("LinearColor") != std::string::npos);
+    CHECK(wrong_shape.message.find("exactly 4 components") != std::string::npos);
+}
+
 TEST_CASE("RuntimePackageLoader accepts shader texture property without encoding constraint") {
     const std::filesystem::path root = make_package_root();
     write_test_package_with_texture(root);
@@ -923,8 +996,8 @@ TEST_CASE("RuntimePackageLoader accepts shader texture property without encoding
 
     termin::TcShaderProgram program = termin::TcShaderProgram::find(kProgramUuid);
     REQUIRE(program.is_valid());
-    REQUIRE(program.get()->property_count > 1);
-    CHECK(program.get()->properties[1].has_expected_encoding == 0);
+    REQUIRE(program.get()->property_count > 3);
+    CHECK(program.get()->properties[3].has_expected_encoding == 0);
 
     termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
     REQUIRE(material.is_valid());
