@@ -11,6 +11,7 @@ from termin.gui_native import (
     TcDocument,
     MenuBarEntry,
     Size,
+    ToolBarAlignment,
     WidgetRef,
 )
 from termin.editor_core.menu_bar_model import build_editor_menu_inventory
@@ -256,7 +257,7 @@ def build_native_editor_shell(document: TcDocument) -> NativeEditorShell:
     tool_bar = document.create_tool_bar(toolbar_model)
     # The editor owns a single Play action in this strip. Center its visible
     # content while retaining the full-width toolbar background and hit area.
-    tool_bar.centered = True
+    tool_bar.alignment = ToolBarAlignment.Center
     prefab_toolbar_model = CommandModel()
     prefab_label_command = prefab_toolbar_model.append(
         CommandData("prefab-label", "Editing Prefab", enabled=False)
@@ -264,7 +265,7 @@ def build_native_editor_shell(document: TcDocument) -> NativeEditorShell:
     prefab_save_command = prefab_toolbar_model.append(CommandData("prefab-save", "Save"))
     prefab_exit_command = prefab_toolbar_model.append(CommandData("prefab-exit", "Exit"))
     prefab_tool_bar = document.create_tool_bar(prefab_toolbar_model)
-    prefab_tool_bar.centered = True
+    prefab_tool_bar.alignment = ToolBarAlignment.Center
     prefab_tool_bar.widget.visible = False
 
     central = document.create_vstack("native-editor-central")
