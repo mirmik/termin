@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from termin.geombase import SrgbColor
 
 from termin.project_build.runtime_package.shaders import shader_program_to_spec
 
@@ -49,6 +50,14 @@ def test_shader_program_spec_preserves_expected_texture_encoding() -> None:
                 "range_min": None,
                 "range_max": None,
             },
+            {
+                "name": "u_tint",
+                "property_type": "SrgbColor",
+                "expected_encoding": None,
+                "default": SrgbColor(0.25, 0.5, 0.75, 1.0),
+                "range_min": None,
+                "range_max": None,
+            },
         ],
         phases=[
             {
@@ -65,6 +74,8 @@ def test_shader_program_spec_preserves_expected_texture_encoding() -> None:
     assert spec["properties"][0]["expected_encoding"] == "srgb"
     assert spec["properties"][1]["expected_encoding"] == "linear"
     assert "expected_encoding" not in spec["properties"][2]
+    assert spec["properties"][3]["property_type"] == "SrgbColor"
+    assert spec["properties"][3]["default"] == [0.25, 0.5, 0.75, 1.0]
 
 
 def test_shader_program_spec_rejects_legacy_color_kind() -> None:

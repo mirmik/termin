@@ -7,7 +7,7 @@
 @glDepthMask true
 @glCull true
 
-@property Color u_tint_color = Color(1.0, 1.0, 1.0, 1.0)
+@property SrgbColor u_tint_color = SrgbColor(1.0, 1.0, 1.0, 1.0)
 @property Texture2D u_tint_texture = "white" encoding(srgb)
 
 @stage vertex

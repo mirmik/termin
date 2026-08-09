@@ -204,10 +204,12 @@ namespace termin {
         std::vector<MaterialProperty> values;
         values.emplace_back("u_inv_view_projection", "Mat4", std::move(inv_view_projection_data));
         values.emplace_back("u_skybox_type", "Int", variant_int);
-        values.emplace_back("u_skybox_color", "Color", std::vector<double>{solid_rgb.x, solid_rgb.y, solid_rgb.z, 1.0});
-        values.emplace_back("u_skybox_top_color", "Color", std::vector<double>{top_rgb.x, top_rgb.y, top_rgb.z, 1.0});
         values.emplace_back(
-            "u_skybox_bottom_color", "Color", std::vector<double>{bot_rgb.x, bot_rgb.y, bot_rgb.z, 1.0});
+            "u_skybox_color", "SrgbColor", std::vector<double>{solid_rgb.x, solid_rgb.y, solid_rgb.z, 1.0});
+        values.emplace_back(
+            "u_skybox_top_color", "SrgbColor", std::vector<double>{top_rgb.x, top_rgb.y, top_rgb.z, 1.0});
+        values.emplace_back(
+            "u_skybox_bottom_color", "SrgbColor", std::vector<double>{bot_rgb.x, bot_rgb.y, bot_rgb.z, 1.0});
 
         // Begin pass with LoadOp::Load — inplace alias means input_res already
         // holds whatever the framegraph allocator cleared it to.
