@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from termin.project_build.runtime_package.shaders import shader_program_to_spec
 
 
@@ -63,3 +65,27 @@ def test_shader_program_spec_preserves_expected_texture_encoding() -> None:
     assert spec["properties"][0]["expected_encoding"] == "srgb"
     assert spec["properties"][1]["expected_encoding"] == "linear"
     assert "expected_encoding" not in spec["properties"][2]
+
+
+def test_shader_program_spec_rejects_legacy_color_kind() -> None:
+    program = SimpleNamespace(
+        is_valid=True,
+        uuid="legacy-program",
+        name="Legacy",
+        source_path="Assets/Legacy.shader",
+        language="slang",
+        features=0,
+        properties=[
+            {
+                "name": "u_color",
+                "property_type": "Color",
+                "default": [1.0, 1.0, 1.0, 1.0],
+                "range_min": None,
+                "range_max": None,
+            }
+        ],
+        phases=[],
+    )
+
+    with pytest.raises(ValueError, match="SrgbColor.*LinearColor"):
+        shader_program_to_spec(program)

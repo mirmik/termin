@@ -27,12 +27,22 @@ def _feature_flags(features: list[str]) -> int:
 
 
 def _property_descriptor(prop) -> dict:
+    default = prop.default
+    if prop.property_type in ("SrgbColor", "LinearColor") and default is not None:
+        from termin.geombase import LinearColor, SrgbColor
+
+        if len(default) != 4:
+            raise ValueError(
+                f"Shader property '{prop.name}' ({prop.property_type}) requires exactly 4 default components"
+            )
+        color_type = SrgbColor if prop.property_type == "SrgbColor" else LinearColor
+        default = color_type(*default)
     return {
         "name": prop.name,
         "property_type": prop.property_type,
         "expected_encoding": prop.expected_encoding,
         "label": prop.label or "",
-        "default": prop.default,
+        "default": default,
         "range_min": prop.range_min,
         "range_max": prop.range_max,
     }

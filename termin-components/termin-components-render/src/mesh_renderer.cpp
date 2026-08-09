@@ -385,6 +385,11 @@ namespace termin {
         }
     }
 
+    static bool tc_val_is_number(const tc_value* value) {
+        return value &&
+               (value->type == TC_VALUE_INT || value->type == TC_VALUE_FLOAT || value->type == TC_VALUE_DOUBLE);
+    }
+
     static tc_value serialize_uniform_value(const tc_uniform_value& uniform) {
         switch (uniform.type) {
         case TC_UNIFORM_BOOL:
@@ -412,6 +417,21 @@ namespace termin {
             tc_value_list_push(&v, tc_value_float(uniform.data.v4[1]));
             tc_value_list_push(&v, tc_value_float(uniform.data.v4[2]));
             tc_value_list_push(&v, tc_value_float(uniform.data.v4[3]));
+            return v;
+        }
+        case TC_UNIFORM_SRGB_COLOR:
+        case TC_UNIFORM_LINEAR_COLOR: {
+            tc_value v = tc_value_dict_new();
+            tc_value_dict_set(
+                &v, "kind", tc_value_string(uniform.type == TC_UNIFORM_SRGB_COLOR ? "SrgbColor" : "LinearColor"));
+            tc_value components = tc_value_list_new();
+            const float* color =
+                uniform.type == TC_UNIFORM_SRGB_COLOR ? &uniform.data.srgb_color.r : &uniform.data.linear_color.r;
+            tc_value_list_push(&components, tc_value_float(color[0]));
+            tc_value_list_push(&components, tc_value_float(color[1]));
+            tc_value_list_push(&components, tc_value_float(color[2]));
+            tc_value_list_push(&components, tc_value_float(color[3]));
+            tc_value_dict_set(&v, "value", components);
             return v;
         }
         default:
@@ -443,27 +463,92 @@ namespace termin {
                     if (!key || !val)
                         continue;
 
+                    tc_uniform_type schema_type = TC_UNIFORM_NONE;
+                    for (uint32_t uniform_index = 0; uniform_index < phase->uniform_count; ++uniform_index) {
+                        if (std::strcmp(phase->uniforms[uniform_index].name, key) == 0) {
+                            schema_type = static_cast<tc_uniform_type>(phase->uniforms[uniform_index].type);
+                            break;
+                        }
+                    }
+                    if (val->type == TC_VALUE_DICT) {
+                        tc_value* kind = tc_value_dict_get(val, "kind");
+                        tc_value* payload = tc_value_dict_get(val, "value");
+                        if (!kind || kind->type != TC_VALUE_STRING || !payload || payload->type != TC_VALUE_LIST) {
+                            tc_log_error("MeshRenderer: invalid typed uniform override '%s'", key);
+                            continue;
+                        }
+                        const char* kind_name = kind->data.s;
+                        tc_uniform_type requested = std::strcmp(kind_name, "SrgbColor") == 0 ? TC_UNIFORM_SRGB_COLOR
+                                                    : std::strcmp(kind_name, "LinearColor") == 0
+                                                        ? TC_UNIFORM_LINEAR_COLOR
+                                                    : std::strcmp(kind_name, "Vec4") == 0 ? TC_UNIFORM_VEC4
+                                                                                          : TC_UNIFORM_NONE;
+                        if (requested == TC_UNIFORM_NONE || schema_type != requested ||
+                            tc_value_list_size(payload) != 4) {
+                            tc_log_error("MeshRenderer: typed uniform override '%s' does not match material schema",
+                                         key);
+                            continue;
+                        }
+                        float values[4] = {};
+                        bool valid_components = true;
+                        for (size_t component = 0; component < 4; ++component) {
+                            const tc_value* item = tc_value_list_get(payload, component);
+                            if (!tc_val_is_number(item)) {
+                                valid_components = false;
+                                break;
+                            }
+                            values[component] = static_cast<float>(tc_val_as_double(item));
+                        }
+                        if (!valid_components || !tc_material_phase_set_uniform(phase, key, requested, values))
+                            tc_log_error("MeshRenderer: failed to apply typed uniform override '%s'", key);
+                        continue;
+                    }
+
                     if (val->type == TC_VALUE_BOOL) {
+                        if (schema_type != TC_UNIFORM_BOOL) {
+                            tc_log_error("MeshRenderer: boolean override '%s' does not match material schema", key);
+                            continue;
+                        }
                         int v = val->data.b ? 1 : 0;
-                        tc_material_phase_set_uniform(phase, key, TC_UNIFORM_INT, &v);
+                        if (!tc_material_phase_set_uniform(phase, key, TC_UNIFORM_BOOL, &v))
+                            tc_log_error("MeshRenderer: failed to apply boolean uniform override '%s'", key);
                     } else if (val->type == TC_VALUE_INT || val->type == TC_VALUE_FLOAT ||
                                val->type == TC_VALUE_DOUBLE) {
-                        float v = static_cast<float>(tc_val_as_double(val));
-                        tc_material_phase_set_uniform(phase, key, TC_UNIFORM_FLOAT, &v);
+                        if (schema_type == TC_UNIFORM_INT && val->type == TC_VALUE_INT) {
+                            int v = static_cast<int>(val->data.i);
+                            if (!tc_material_phase_set_uniform(phase, key, TC_UNIFORM_INT, &v))
+                                tc_log_error("MeshRenderer: failed to apply integer uniform override '%s'", key);
+                        } else if (schema_type == TC_UNIFORM_FLOAT) {
+                            float v = static_cast<float>(tc_val_as_double(val));
+                            if (!tc_material_phase_set_uniform(phase, key, TC_UNIFORM_FLOAT, &v))
+                                tc_log_error("MeshRenderer: failed to apply float uniform override '%s'", key);
+                        } else {
+                            tc_log_error("MeshRenderer: scalar override '%s' does not match material schema", key);
+                        }
                     } else if (val->type == TC_VALUE_LIST) {
                         size_t lst_size = tc_value_list_size(val);
-                        if (lst_size == 3) {
-                            float v[3] = {static_cast<float>(tc_val_as_double(tc_value_list_get(val, 0))),
-                                          static_cast<float>(tc_val_as_double(tc_value_list_get(val, 1))),
-                                          static_cast<float>(tc_val_as_double(tc_value_list_get(val, 2)))};
-                            tc_material_phase_set_uniform(phase, key, TC_UNIFORM_VEC3, v);
-                        } else if (lst_size == 4) {
-                            float v[4] = {static_cast<float>(tc_val_as_double(tc_value_list_get(val, 0))),
-                                          static_cast<float>(tc_val_as_double(tc_value_list_get(val, 1))),
-                                          static_cast<float>(tc_val_as_double(tc_value_list_get(val, 2))),
-                                          static_cast<float>(tc_val_as_double(tc_value_list_get(val, 3)))};
-                            tc_material_phase_set_uniform(phase, key, TC_UNIFORM_VEC4, v);
+                        const tc_uniform_type requested = lst_size == 2   ? TC_UNIFORM_VEC2
+                                                          : lst_size == 3 ? TC_UNIFORM_VEC3
+                                                          : lst_size == 4 ? TC_UNIFORM_VEC4
+                                                                          : TC_UNIFORM_NONE;
+                        if (requested == TC_UNIFORM_NONE || schema_type != requested) {
+                            tc_log_error("MeshRenderer: vector override '%s' does not match material schema", key);
+                            continue;
                         }
+                        float values[4] = {};
+                        bool valid_components = true;
+                        for (size_t component = 0; component < lst_size; ++component) {
+                            const tc_value* item = tc_value_list_get(val, component);
+                            if (!tc_val_is_number(item)) {
+                                valid_components = false;
+                                break;
+                            }
+                            values[component] = static_cast<float>(tc_val_as_double(item));
+                        }
+                        if (!valid_components || !tc_material_phase_set_uniform(phase, key, requested, values))
+                            tc_log_error("MeshRenderer: failed to apply vector uniform override '%s'", key);
+                    } else {
+                        tc_log_error("MeshRenderer: unsupported persisted uniform override '%s'", key);
                     }
                 }
             }

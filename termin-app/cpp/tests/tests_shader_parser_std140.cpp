@@ -1,7 +1,9 @@
 #include "guard_main.h"
 #include "termin/materials/shader_parser.hpp"
 #include "termin/render/shader_skinning.hpp"
+#include <termin/geom/color.hpp>
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -137,11 +139,11 @@ TEST_CASE("std140: float vec3 forces vec3 to next 16-byte boundary") {
 TEST_CASE("std140: mixed types in realistic material") {
     std::vector<MaterialProperty> props = {
         mk("u_albedo", "SrgbColor"), // float4 at 0
-        mk("u_metallic", "Float"),  // float at 16
-        mk("u_roughness", "Float"), // float at 20
-        mk("u_ao", "Float"),        // float at 24
-        mk("u_emissive", "Vec3"),   // vec3 needs 16 align → 32..44
-        mk("u_opacity", "Float"),   // float at 44
+        mk("u_metallic", "Float"),   // float at 16
+        mk("u_roughness", "Float"),  // float at 20
+        mk("u_ao", "Float"),         // float at 24
+        mk("u_emissive", "Vec3"),    // vec3 needs 16 align → 32..44
+        mk("u_opacity", "Float"),    // float at 44
     };
     MaterialUboLayout layout = compute_std140_layout(props);
     CHECK_EQ(layout.entries.size(), 6u);
@@ -648,7 +650,7 @@ TEST_CASE("std140_pack: float + vec3 jumps vec3 to offset 16") {
     CHECK_EQ(read_float_at(buf, 28), 0.0f); // padding slot
 }
 
-TEST_CASE("std140_pack: explicit color kinds pack 4 floats at aligned offset") {
+TEST_CASE("std140_pack: SrgbColor decodes RGB once and preserves alpha") {
     std::vector<MaterialProperty> schema = {
         mk("u_strength", "Float"),
         mk("u_tint", "SrgbColor"),
@@ -664,11 +666,49 @@ TEST_CASE("std140_pack: explicit color kinds pack 4 floats at aligned offset") {
     std140_pack(layout, values, buf.data());
 
     CHECK_EQ(read_float_at(buf, 0), 2.0f);
+    const termin::LinearColor expected = termin::srgb_to_linear({0.9f, 0.8f, 0.7f, 0.6f});
     // [4..16) padding.
-    CHECK_EQ(read_float_at(buf, 16), 0.9f);
-    CHECK_EQ(read_float_at(buf, 20), 0.8f);
-    CHECK_EQ(read_float_at(buf, 24), 0.7f);
-    CHECK_EQ(read_float_at(buf, 28), 0.6f);
+    CHECK_EQ(read_float_at(buf, 16), expected.r);
+    CHECK_EQ(read_float_at(buf, 20), expected.g);
+    CHECK_EQ(read_float_at(buf, 24), expected.b);
+    CHECK_EQ(read_float_at(buf, 28), expected.a);
+}
+
+TEST_CASE("std140_pack: LinearColor and Vec4 remain literal including HDR") {
+    std::vector<MaterialProperty> schema = {
+        mk("u_linear", "LinearColor"),
+        mk("u_vec", "Vec4"),
+    };
+    std::vector<MaterialProperty> values = {
+        mk_vec("u_linear", "LinearColor", {4.0, 0.5, -2.0, 0.5}),
+        mk_vec("u_vec", "Vec4", {0.5, 0.5, 0.5, 0.5}),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    std::vector<uint8_t> buf(layout.block_size, 0);
+    std140_pack(layout, values, buf.data());
+    CHECK_EQ(read_float_at(buf, 0), 4.0f);
+    CHECK_EQ(read_float_at(buf, 4), 0.5f);
+    CHECK_EQ(read_float_at(buf, 8), -2.0f);
+    CHECK_EQ(read_float_at(buf, 12), 0.5f);
+    CHECK_EQ(read_float_at(buf, 16), 0.5f);
+}
+
+TEST_CASE("std140_pack: color kinds reject Vec4 and legacy Color without writes") {
+    std::vector<MaterialProperty> schema = {mk("u_tint", "SrgbColor")};
+    std::vector<MaterialProperty> values = {mk_vec("u_tint", "Vec4", {0.5, 0.5, 0.5, 0.5})};
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    std::vector<uint8_t> buf(layout.block_size, 0xCD);
+    std140_pack(layout, values, buf.data());
+    for (uint8_t byte : buf)
+        CHECK_EQ(byte, 0xCD);
+
+    schema = {mk("u_tint", "Color")};
+    values = {mk_vec("u_tint", "Color", {0.5, 0.5, 0.5, 0.5})};
+    layout = compute_std140_layout(schema);
+    buf.assign(layout.block_size, 0xCD);
+    std140_pack(layout, values, buf.data());
+    for (uint8_t byte : buf)
+        CHECK_EQ(byte, 0xCD);
 }
 
 TEST_CASE("std140_pack: Int and Bool") {
@@ -732,10 +772,11 @@ TEST_CASE("std140_pack: realistic PBR material") {
     std::vector<uint8_t> buf(layout.block_size, 0);
     std140_pack(layout, values, buf.data());
 
-    CHECK_EQ(read_float_at(buf, 0), 0.1f);
-    CHECK_EQ(read_float_at(buf, 4), 0.2f);
-    CHECK_EQ(read_float_at(buf, 8), 0.3f);
-    CHECK_EQ(read_float_at(buf, 12), 1.0f);
+    const termin::LinearColor expected_albedo = termin::srgb_to_linear({0.1f, 0.2f, 0.3f, 1.0f});
+    CHECK_EQ(read_float_at(buf, 0), expected_albedo.r);
+    CHECK_EQ(read_float_at(buf, 4), expected_albedo.g);
+    CHECK_EQ(read_float_at(buf, 8), expected_albedo.b);
+    CHECK_EQ(read_float_at(buf, 12), expected_albedo.a);
     CHECK_EQ(read_float_at(buf, 16), 0.5f);  // u_metallic
     CHECK_EQ(read_float_at(buf, 20), 0.25f); // u_roughness
     CHECK_EQ(read_float_at(buf, 24), 1.0f);  // u_ao

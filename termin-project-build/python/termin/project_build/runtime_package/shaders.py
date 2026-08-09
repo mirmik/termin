@@ -205,9 +205,15 @@ def shader_program_to_spec(program: Any) -> dict[str, Any]:
 
     properties: list[dict[str, Any]] = []
     for prop in program.properties:
+        property_type = str(prop["property_type"])
+        if property_type == "Color":
+            raise ValueError(
+                f"Shader program '{program.uuid}' property '{prop['name']}' uses legacy "
+                "property_type 'Color'; use 'SrgbColor' or 'LinearColor'"
+            )
         item: dict[str, Any] = {
             "name": str(prop["name"]),
-            "property_type": str(prop["property_type"]),
+            "property_type": property_type,
             "label": str(prop.get("label", "")),
         }
         if prop.get("expected_encoding") is not None:
