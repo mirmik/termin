@@ -13,12 +13,9 @@ from tcgui.widgets.widget import Widget
 from termin.geombase import SrgbColor
 
 
-Color = SrgbColor
-
-
 @dataclass(frozen=True)
 class RichTextStyle:
-    color: Color | None = None
+    color: SrgbColor | None = None
     bold: bool = False
     italic: bool = False
 
@@ -32,7 +29,7 @@ class RichTextSegment:
 RichTextLine = list[RichTextSegment]
 
 
-def _parse_css_color(value: str) -> Color | None:
+def _parse_css_color(value: str) -> SrgbColor | None:
     value = value.strip()
     if not value:
         return None
@@ -152,16 +149,16 @@ class RichTextView(Widget):
         self.border_radius: float = _t.border_radius
         self.line_height: float = 0.0
 
-        self.background_color: Color = _t.bg_input
-        self.border_color: Color = _t.border
-        self.text_color: Color = _t.text_primary
-        self.placeholder_color: Color = _t.text_muted
-        self.selection_color: Color = _t.selected
+        self.background_color: SrgbColor = _t.bg_input
+        self.border_color: SrgbColor = _t.border
+        self.text_color: SrgbColor = _t.text_primary
+        self.placeholder_color: SrgbColor = _t.text_muted
+        self.selection_color: SrgbColor = _t.selected
 
         self.show_scrollbar: bool = True
         self.scrollbar_width: float = 8.0
-        self.scrollbar_color: Color = _t.scrollbar
-        self.scrollbar_hover_color: Color = _t.scrollbar_hover
+        self.scrollbar_color: SrgbColor = _t.scrollbar
+        self.scrollbar_hover_color: SrgbColor = _t.scrollbar_hover
 
         self._scroll_y: float = 0.0
         self._dragging_scrollbar: bool = False
@@ -315,7 +312,7 @@ class RichTextView(Widget):
         self._visual_content_w = content_w
         self._scroll_y = max(0.0, min(self._scroll_y, self._max_scroll_y()))
 
-    def _style_color(self, style: RichTextStyle) -> Color:
+    def _style_color(self, style: RichTextStyle) -> SrgbColor:
         return style.color if style.color is not None else self.text_color
 
     def _visual_line_text(self, row: int) -> str:

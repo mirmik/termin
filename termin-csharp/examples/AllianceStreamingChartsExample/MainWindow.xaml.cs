@@ -32,8 +32,8 @@ public partial class MainWindow : Window
             Chart2D chart,
             Func<double, double> primarySignal,
             Func<double, double> secondarySignal,
-            PlotColor2D primaryColor,
-            PlotColor2D secondaryColor)
+            PlotSrgbColor2D primaryColor,
+            PlotSrgbColor2D secondaryColor)
         {
             Chart = chart;
             _primarySignal = primarySignal;
@@ -282,8 +282,8 @@ public partial class MainWindow : Window
         double yMaximum,
         Func<double, double> primarySignal,
         Func<double, double> secondarySignal,
-        PlotColor2D primaryColor,
-        PlotColor2D secondaryColor)
+        PlotSrgbColor2D primaryColor,
+        PlotSrgbColor2D secondaryColor)
     {
         Chart2D chart = owner.Panels[index].Chart;
         chart.SetRange(new PlotRange2D(
@@ -334,23 +334,23 @@ public partial class MainWindow : Window
             SecondaryColor(index));
     }
 
-    private static PlotColor2D PrimaryColor(int index) => (index % 5) switch
+    private static PlotSrgbColor2D PrimaryColor(int index) => (index % 5) switch
     {
-        0 => new PlotColor2D(0.20f, 0.72f, 1.0f),
-        1 => new PlotColor2D(1.0f, 0.45f, 0.20f),
-        2 => new PlotColor2D(0.72f, 0.48f, 1.0f),
-        3 => new PlotColor2D(0.32f, 0.90f, 0.46f),
-        _ => new PlotColor2D(1.0f, 0.78f, 0.24f),
+        0 => new PlotSrgbColor2D(0.20f, 0.72f, 1.0f),
+        1 => new PlotSrgbColor2D(1.0f, 0.45f, 0.20f),
+        2 => new PlotSrgbColor2D(0.72f, 0.48f, 1.0f),
+        3 => new PlotSrgbColor2D(0.32f, 0.90f, 0.46f),
+        _ => new PlotSrgbColor2D(1.0f, 0.78f, 0.24f),
     };
 
-    private static PlotColor2D SecondaryColor(int index) =>
+    private static PlotSrgbColor2D SecondaryColor(int index) =>
         (index % 5) switch
         {
-            0 => new PlotColor2D(0.35f, 0.95f, 0.70f),
-            1 => new PlotColor2D(1.0f, 0.78f, 0.24f),
-            2 => new PlotColor2D(0.95f, 0.45f, 0.82f),
-            3 => new PlotColor2D(1.0f, 0.34f, 0.35f),
-            _ => new PlotColor2D(0.50f, 0.82f, 1.0f),
+            0 => new PlotSrgbColor2D(0.35f, 0.95f, 0.70f),
+            1 => new PlotSrgbColor2D(1.0f, 0.78f, 0.24f),
+            2 => new PlotSrgbColor2D(0.95f, 0.45f, 0.82f),
+            3 => new PlotSrgbColor2D(1.0f, 0.34f, 0.35f),
+            _ => new PlotSrgbColor2D(0.50f, 0.82f, 1.0f),
         };
 
     private static RectItemRef2D CreatePortalAnchor(TcVisualScene2D scene)
@@ -358,7 +358,7 @@ public partial class MainWindow : Window
         var anchor = RectItemRef2D.Create(
             scene,
             new VisualRect2f(0, 0, 1, 1),
-            new VisualFillPaint2D(new VisualColor4f(0, 0, 0, 0)));
+            new VisualFillPaint2D(new VisualSrgbColor(0, 0, 0, 0)));
         anchor.ZOrder = 1_000;
         return anchor;
     }
@@ -677,15 +677,15 @@ public partial class MainWindow : Window
     {
         anchor.Set(
             new VisualRect2f(x, y, width, height),
-            new VisualFillPaint2D(new VisualColor4f(0, 0, 0, 0)));
+            new VisualFillPaint2D(new VisualSrgbColor(0, 0, 0, 0)));
     }
 
     private static Chart2DTheme CreatePanelTheme() => new()
     {
-        BackgroundColor = new VisualColor4f(0.075f, 0.08f, 0.095f),
-        PlotBackgroundColor = new VisualColor4f(0.105f, 0.115f, 0.14f),
-        ForegroundColor = new VisualColor4f(0.86f, 0.88f, 0.92f),
-        AxisColor = new VisualColor4f(0.54f, 0.58f, 0.66f),
+        BackgroundColor = new VisualSrgbColor(0.075f, 0.08f, 0.095f),
+        PlotBackgroundColor = new VisualSrgbColor(0.105f, 0.115f, 0.14f),
+        ForegroundColor = new VisualSrgbColor(0.86f, 0.88f, 0.92f),
+        AxisColor = new VisualSrgbColor(0.54f, 0.58f, 0.66f),
         GridStyle = new PlotGridStyle2D(0.30f, 0.34f, 0.42f, 0.62f),
         AxisWidthLogicalPx = 1,
         FontSizeLogicalPx = 10,

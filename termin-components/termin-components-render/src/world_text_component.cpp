@@ -548,12 +548,8 @@ namespace termin {
         phase->phase_mark[TC_PHASE_MARK_MAX - 1] = '\0';
         phase->priority = priority;
         phase->state = make_text_render_state(*this);
-        const LinearColor linear_color = srgb_to_linear(color);
-        tc_material_phase_set_color(phase,
-                                    linear_color.r,
-                                    linear_color.g,
-                                    linear_color.b,
-                                    linear_color.a);
+        const float numeric_color[4] = {color.r, color.g, color.b, color.a};
+        tc_material_phase_set_uniform(phase, "u_color", TC_UNIFORM_VEC4, numeric_color);
         return phase;
     }
 

@@ -44,7 +44,7 @@ public partial class MainWindow : Window
                 _chart.Scene,
                 new VisualRect2f(0, 0, 1, 1),
                 new VisualFillPaint2D(
-                    new VisualColor4f(0, 0, 0, 0)),
+                    new VisualSrgbColor(0, 0, 0, 0)),
                 parent: _chart.Chrome);
             _buttonAnchor.ZOrder = 100;
 
@@ -100,14 +100,14 @@ public partial class MainWindow : Window
             x,
             x.Select(value => Math.Sin(value)).ToArray(),
             style: new PlotLineSeriesStyle2D(
-                new PlotColor2D(0.20f, 0.72f, 1.0f),
+                new PlotSrgbColor2D(0.20f, 0.72f, 1.0f),
                 thicknessPx: 2.2f));
         chart.AddLineSeries(
             "0.45 cos(2.3x)",
             x,
             x.Select(value => 0.45 * Math.Cos(2.3 * value)).ToArray(),
             style: new PlotLineSeriesStyle2D(
-                new PlotColor2D(1.0f, 0.48f, 0.22f),
+                new PlotSrgbColor2D(1.0f, 0.48f, 0.22f),
                 thicknessPx: 1.5f,
                 lineStyle: PlotLineStyle2D.Dash));
         return chart;
@@ -129,7 +129,7 @@ public partial class MainWindow : Window
                 width,
                 height),
             new VisualFillPaint2D(
-                new VisualColor4f(0, 0, 0, 0)));
+                new VisualSrgbColor(0, 0, 0, 0)));
     }
 
     private void OnThemeButtonClick(object sender, RoutedEventArgs e)
@@ -194,10 +194,10 @@ public partial class MainWindow : Window
 
     private static Chart2DTheme CreateWarmTheme() => new()
     {
-        BackgroundColor = new VisualColor4f(0.10f, 0.06f, 0.055f),
-        PlotBackgroundColor = new VisualColor4f(0.16f, 0.085f, 0.065f),
-        ForegroundColor = new VisualColor4f(1.0f, 0.89f, 0.76f),
-        AxisColor = new VisualColor4f(0.93f, 0.60f, 0.36f),
+        BackgroundColor = new VisualSrgbColor(0.10f, 0.06f, 0.055f),
+        PlotBackgroundColor = new VisualSrgbColor(0.16f, 0.085f, 0.065f),
+        ForegroundColor = new VisualSrgbColor(1.0f, 0.89f, 0.76f),
+        AxisColor = new VisualSrgbColor(0.93f, 0.60f, 0.36f),
         GridStyle = new PlotGridStyle2D(0.70f, 0.34f, 0.22f, 0.55f),
     };
 

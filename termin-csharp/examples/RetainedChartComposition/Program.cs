@@ -32,7 +32,7 @@ ChartLineSeries2D sine = chart.AddLineSeries(
     x,
     x.Select(Math.Sin).ToArray(),
     style: new PlotLineSeriesStyle2D(
-        new PlotColor2D(0.25f, 0.75f, 1),
+        new PlotSrgbColor2D(0.25f, 0.75f, 1),
         thicknessPx: 2));
 if (sine.Name != "sin(x)" || !sine.Visible || !sine.ShowInLegend ||
     sine.DataBounds is not PlotRange2D bounds ||
@@ -51,7 +51,7 @@ chart.Fit();
 var customPlotBackground = RectItemRef2D.Create(
     chart.Scene,
     new VisualRect2f(0, 0, 1, 1),
-    new VisualFillPaint2D(new VisualColor4f(0.03f, 0.07f, 0.12f)));
+    new VisualFillPaint2D(new VisualSrgbColor(0.03f, 0.07f, 0.12f)));
 chart.PlotBackground.Replace(customPlotBackground);
 
 PlotRect2D plotArea = chart.Layout.PlotArea;
@@ -146,7 +146,7 @@ for (int index = 0; index < multiPanelCount; ++index)
         multiX,
         new[] { 1.5, -index / 10.0, -1.5 },
         style: new PlotLineSeriesStyle2D(
-            new PlotColor2D(0.95f, 0.55f, 0.2f),
+            new PlotSrgbColor2D(0.95f, 0.55f, 0.2f),
             thicknessPx: 1.5f,
             lineStyle: PlotLineStyle2D.Dash),
         showInLegend: false);

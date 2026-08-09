@@ -7,13 +7,13 @@ namespace Termin.Native;
 
 public sealed class Chart2DTheme
 {
-    public VisualColor4f BackgroundColor { get; set; } =
+    public VisualSrgbColor BackgroundColor { get; set; } =
         new(0.08f, 0.09f, 0.11f);
-    public VisualColor4f PlotBackgroundColor { get; set; } =
+    public VisualSrgbColor PlotBackgroundColor { get; set; } =
         new(0.12f, 0.13f, 0.16f);
-    public VisualColor4f ForegroundColor { get; set; } =
+    public VisualSrgbColor ForegroundColor { get; set; } =
         new(0.88f, 0.89f, 0.92f);
-    public VisualColor4f AxisColor { get; set; } =
+    public VisualSrgbColor AxisColor { get; set; } =
         new(0.65f, 0.67f, 0.72f);
     public PlotGridStyle2D GridStyle { get; set; } =
         new(0.35f, 0.37f, 0.42f, 0.55f);
@@ -951,10 +951,10 @@ internal static class Chart2DNative
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct Theme
     {
-        internal readonly VisualColor4f BackgroundColor;
-        internal readonly VisualColor4f PlotBackgroundColor;
-        internal readonly VisualColor4f ForegroundColor;
-        internal readonly VisualColor4f AxisColor;
+        internal readonly VisualSrgbColor BackgroundColor;
+        internal readonly VisualSrgbColor PlotBackgroundColor;
+        internal readonly VisualSrgbColor ForegroundColor;
+        internal readonly VisualSrgbColor AxisColor;
         internal readonly PlotGridStyle2D GridStyle;
         internal readonly float AxisWidthLogicalPx;
         internal readonly float FontSizeLogicalPx;

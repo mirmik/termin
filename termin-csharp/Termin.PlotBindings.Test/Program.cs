@@ -6,9 +6,9 @@ static void TestRetainedVisualSceneFactories()
     using var otherScene = new TcVisualScene2D();
     var group = GroupItemRef2D.Create(scene);
     var fill = new VisualFillPaint2D(
-        new VisualColor4f(0.2f, 0.3f, 0.4f));
+        new VisualSrgbColor(0.2f, 0.3f, 0.4f));
     var stroke = new VisualStrokePaint2D(
-        new VisualColor4f(1, 1, 1),
+        new VisualSrgbColor(1, 1, 1),
         2,
         dashPattern: new[] { 4.0f, 2.0f });
     var rect = RectItemRef2D.Create(
@@ -56,7 +56,7 @@ static void TestRetainedVisualSceneFactories()
         "ui://default-font",
         new VisualVec2f(0, 12),
         12,
-        new VisualColor4f(1, 1, 1),
+        new VisualSrgbColor(1, 1, 1),
         new VisualBounds2f(0, 0, 80, 20),
         parent: group);
     var image = ImageItemRef2D.Create(
@@ -64,7 +64,7 @@ static void TestRetainedVisualSceneFactories()
         "asset://plot-icon",
         new VisualRect2f(0, 0, 16, 16),
         new VisualRect2f(0, 0, 1, 1),
-        new VisualColor4f(1, 1, 1),
+        new VisualSrgbColor(1, 1, 1),
         parent: group);
     var hit = HitRegionItemRef2D.Create(
         scene, triangle, parent: group);
@@ -163,11 +163,11 @@ static void TestRetainedPlotItems()
             "Projection or native nearest-point query failed.");
 
     line.Style = new PlotLineSeriesStyle2D(
-        new PlotColor2D(1, 0, 0),
+        new PlotSrgbColor2D(1, 0, 0),
         thicknessPx: 3,
         lineStyle: PlotLineStyle2D.Dash);
     scatter.Style = new PlotScatterSeriesStyle2D(
-        new PlotColor2D(0, 1, 0),
+        new PlotSrgbColor2D(0, 1, 0),
         diameterPx: 7);
     grid.Style = new PlotGridStyle2D(0.2f, 0.2f, 0.2f, widthPx: 2);
     if (line.Style.ThicknessPx != 3 ||
@@ -237,9 +237,9 @@ static void TestManagedChartComposition(GpuHost host)
     chart.ZoomAt(2, 7, 0.25);
     chart.ApplyTheme(new Chart2DTheme
     {
-        BackgroundColor = new VisualColor4f(0.02f, 0.03f, 0.05f),
-        PlotBackgroundColor = new VisualColor4f(0.06f, 0.08f, 0.12f),
-        AxisColor = new VisualColor4f(0.8f, 0.82f, 0.9f),
+        BackgroundColor = new VisualSrgbColor(0.02f, 0.03f, 0.05f),
+        PlotBackgroundColor = new VisualSrgbColor(0.06f, 0.08f, 0.12f),
+        AxisColor = new VisualSrgbColor(0.8f, 0.82f, 0.9f),
         GridStyle = new PlotGridStyle2D(0.3f, 0.4f, 0.55f, 0.5f),
     });
 
@@ -259,7 +259,7 @@ static void TestManagedChartComposition(GpuHost host)
     var replacement = RectItemRef2D.Create(
         chart.Scene,
         new VisualRect2f(0, 0, 1, 1),
-        new VisualFillPaint2D(new VisualColor4f(0.1f, 0.14f, 0.2f)));
+        new VisualFillPaint2D(new VisualSrgbColor(0.1f, 0.14f, 0.2f)));
     chart.PlotBackground.Replace(replacement);
     if (oldPlotBackground.IsValid ||
         chart.PlotBackground.Item?.Handle != replacement.Handle ||

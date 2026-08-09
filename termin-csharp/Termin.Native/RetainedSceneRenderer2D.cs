@@ -74,11 +74,10 @@ public sealed class RetainedSceneRenderer2D : IDisposable
         }
     }
 
-    public void SetClearColor(VisualColor4f color)
+    public void SetClearColor(VisualSrgbColor color)
     {
         ThrowIfDisposed();
-        RetainedSceneRendererNative.SetClearColor(
-            _native, color.R, color.G, color.B, color.A);
+        RetainedSceneRendererNative.SetClearColor(_native, color);
     }
 
     public uint RenderToTextureHandleId(int width, int height)
@@ -137,13 +136,10 @@ internal static class RetainedSceneRendererNative
 
     [DllImport(
         Dll,
-        EntryPoint = "tc_retained_scene_renderer2d_set_clear_color")]
+        EntryPoint = "tc_retained_scene_renderer2d_set_clear_srgb_color")]
     internal static extern void SetClearColor(
         IntPtr renderer,
-        float r,
-        float g,
-        float b,
-        float a);
+        VisualSrgbColor color);
 
     [DllImport(
         Dll,

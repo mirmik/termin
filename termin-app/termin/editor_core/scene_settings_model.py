@@ -7,6 +7,7 @@ import math
 from typing import Callable
 
 from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
+from termin.geombase import SrgbColor
 from termin.render import debug_geometry_types, scene_render_mount, scene_render_state
 
 
@@ -18,6 +19,13 @@ SHADOW_METHODS = ("Hard", "PCF", "Poisson")
 def _color(value, *, alpha: bool) -> tuple[float, ...]:
     result = (float(value[0]), float(value[1]), float(value[2]))
     return result + (float(value[3]),) if alpha else result
+
+
+def _srgb_color(value, *, alpha: bool) -> SrgbColor:
+    components = _color(value, alpha=alpha)
+    if alpha:
+        return SrgbColor(*components)
+    return SrgbColor(*components, 1.0)
 
 
 def _render_state(scene):
@@ -183,13 +191,13 @@ class ScenePropertiesController:
         return ScenePropertiesSnapshot(
             fixed_update_frequency=1.0 / float(self._scene.fixed_timestep),
             time_scale=float(self._scene.time_scale),
-            background_color=_color(state.background_color, alpha=True),
-            ambient_color=_color(state.ambient_color, alpha=False),
+            background_color=_color(state.background_srgb_color, alpha=True),
+            ambient_color=_color(state.ambient_srgb_color, alpha=False),
             ambient_intensity=float(state.ambient_intensity),
             skybox_type=str(state.skybox_type),
-            skybox_color=_color(state.skybox_color, alpha=False),
-            skybox_top_color=_color(state.skybox_top_color, alpha=False),
-            skybox_bottom_color=_color(state.skybox_bottom_color, alpha=False),
+            skybox_color=_color(state.skybox_srgb_color, alpha=False),
+            skybox_top_color=_color(state.skybox_top_srgb_color, alpha=False),
+            skybox_bottom_color=_color(state.skybox_bottom_srgb_color, alpha=False),
             pipelines=pipelines,
             debug_geometry=debug_geometry,
         )
@@ -245,12 +253,14 @@ class ScenePropertiesController:
 
     def set_background_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
-        color = _color(value, alpha=True)
-        return self._edit("background_color", state.background_color, color, merge=False)
+        color = _srgb_color(value, alpha=True)
+        return self._edit("background_color", state.background_srgb_color, color, merge=False)
 
     def set_ambient_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
-        return self._edit("ambient_color", state.ambient_color, _color(value, alpha=False), merge=False)
+        return self._edit(
+            "ambient_color", state.ambient_srgb_color, _srgb_color(value, alpha=False), merge=False
+        )
 
     def set_ambient_intensity(self, value: float) -> ScenePropertiesSnapshot:
         intensity = float(value)
@@ -274,15 +284,21 @@ class ScenePropertiesController:
 
     def set_skybox_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
-        return self._edit("skybox_color", state.skybox_color, _color(value, alpha=False), merge=False)
+        return self._edit(
+            "skybox_color", state.skybox_srgb_color, _srgb_color(value, alpha=False), merge=False
+        )
 
     def set_skybox_top_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
-        return self._edit("skybox_top_color", state.skybox_top_color, _color(value, alpha=False), merge=False)
+        return self._edit(
+            "skybox_top_color", state.skybox_top_srgb_color, _srgb_color(value, alpha=False), merge=False
+        )
 
     def set_skybox_bottom_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
-        return self._edit("skybox_bottom_color", state.skybox_bottom_color, _color(value, alpha=False), merge=False)
+        return self._edit(
+            "skybox_bottom_color", state.skybox_bottom_srgb_color, _srgb_color(value, alpha=False), merge=False
+        )
 
     def remove_pipeline(self, index: int) -> ScenePropertiesSnapshot:
         mount = scene_render_mount(self._scene)
@@ -298,17 +314,17 @@ class ScenePropertiesController:
 
         def apply_direct() -> None:
             if name == "background_color":
-                state.background_color = new_value
+                state.background_srgb_color = new_value
             elif name == "ambient_color":
-                state.ambient_color = new_value
+                state.ambient_srgb_color = new_value
             elif name == "ambient_intensity":
                 state.ambient_intensity = new_value
             elif name == "skybox_color":
-                state.skybox_color = new_value
+                state.skybox_srgb_color = new_value
             elif name == "skybox_top_color":
-                state.skybox_top_color = new_value
+                state.skybox_top_srgb_color = new_value
             elif name == "skybox_bottom_color":
-                state.skybox_bottom_color = new_value
+                state.skybox_bottom_srgb_color = new_value
             else:
                 raise RuntimeError(f"unsupported direct scene property: {name}")
 

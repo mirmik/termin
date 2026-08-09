@@ -20,7 +20,7 @@ from termin.editor_core.editor_commands import (
 from termin.editor_core.undo_stack import UndoStack
 from termin.editor_core.inspector_fields_model import collect_inspect_fields
 from termin.editor_core.entity_inspector_model import EntityInspectorController
-from termin.geombase import GeneralPose3, Quat, Vec3
+from termin.geombase import GeneralPose3, Quat, SrgbColor, Vec3
 from termin.inspect import InspectField
 from termin.scene import PythonComponent, TcScene, publish_python_component
 from termin.bootstrap import bootstrap_player, shutdown_player
@@ -613,16 +613,16 @@ class TestEditorUndoCommands(unittest.TestCase):
 
     def test_scene_property_command_edits_render_state(self) -> None:
         rs = scene_render_state(self.scene)
-        old_color = rs.background_color.copy()
-        new_color = np.array([0.2, 0.3, 0.4, 1.0], dtype=np.float32)
+        old_color = rs.background_srgb_color
+        new_color = SrgbColor(0.2, 0.3, 0.4, 1.0)
 
         stack = UndoStack()
         stack.push(ScenePropertyEditCommand(self.scene, "background_color", old_color, new_color))
 
-        np.testing.assert_allclose(rs.background_color, new_color)
+        np.testing.assert_allclose(tuple(rs.background_srgb_color), tuple(new_color))
 
         stack.undo()
-        np.testing.assert_allclose(rs.background_color, old_color)
+        np.testing.assert_allclose(tuple(rs.background_srgb_color), tuple(old_color))
 
     def test_scene_property_command_merges_same_property(self) -> None:
         rs = scene_render_state(self.scene)

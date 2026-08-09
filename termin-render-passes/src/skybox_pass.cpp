@@ -191,9 +191,15 @@ namespace termin {
         Vec3f solid_rgb{0, 0, 0};
         Vec3f top_rgb{0, 0, 0};
         Vec3f bot_rgb{0, 0, 0};
-        tc_scene_get_skybox_color(scene, &solid_rgb.x, &solid_rgb.y, &solid_rgb.z);
-        tc_scene_get_skybox_top_color(scene, &top_rgb.x, &top_rgb.y, &top_rgb.z);
-        tc_scene_get_skybox_bottom_color(scene, &bot_rgb.x, &bot_rgb.y, &bot_rgb.z);
+        tc_srgb_color solid_color{};
+        tc_srgb_color top_color{};
+        tc_srgb_color bottom_color{};
+        tc_scene_get_skybox_srgb_color(scene, &solid_color);
+        tc_scene_get_skybox_top_srgb_color(scene, &top_color);
+        tc_scene_get_skybox_bottom_srgb_color(scene, &bottom_color);
+        solid_rgb = {solid_color.r, solid_color.g, solid_color.b};
+        top_rgb = {top_color.r, top_color.g, top_color.b};
+        bot_rgb = {bottom_color.r, bottom_color.g, bottom_color.b};
 
         Mat44 view64 = primary_view->get_view_matrix();
         Mat44 proj64 = primary_view->get_projection_matrix();

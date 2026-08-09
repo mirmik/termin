@@ -221,14 +221,14 @@ public sealed class PlotProjectionRef2D : IDisposable
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct PlotColor2D
+public readonly struct PlotSrgbColor2D
 {
     public readonly float R;
     public readonly float G;
     public readonly float B;
     public readonly float A;
 
-    public PlotColor2D(float r, float g, float b, float a = 1)
+    public PlotSrgbColor2D(float r, float g, float b, float a = 1)
     {
         R = r;
         G = g;
@@ -257,7 +257,7 @@ public enum PlotColorMap2D
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct PlotLineSeriesStyle2D
 {
-    public readonly PlotColor2D Color;
+    public readonly PlotSrgbColor2D Color;
     public readonly float ThicknessPx;
     public readonly PlotLineStyle2D LineStyle;
     public readonly float DashPx;
@@ -269,7 +269,7 @@ public readonly struct PlotLineSeriesStyle2D
     public readonly double ScalarMax;
 
     public PlotLineSeriesStyle2D(
-        PlotColor2D color,
+        PlotSrgbColor2D color,
         float thicknessPx = 1.5f,
         PlotLineStyle2D lineStyle = PlotLineStyle2D.Solid,
         float dashPx = 8,
@@ -291,17 +291,17 @@ public readonly struct PlotLineSeriesStyle2D
     }
 
     public static PlotLineSeriesStyle2D Default =>
-        new(new PlotColor2D(0.2f, 0.55f, 1));
+        new(new PlotSrgbColor2D(0.2f, 0.55f, 1));
 }
 
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct PlotScatterSeriesStyle2D
 {
-    public readonly PlotColor2D Color;
+    public readonly PlotSrgbColor2D Color;
     public readonly float DiameterPx;
 
     public PlotScatterSeriesStyle2D(
-        PlotColor2D color,
+        PlotSrgbColor2D color,
         float diameterPx = 4)
     {
         Color = color;
@@ -309,7 +309,7 @@ public readonly struct PlotScatterSeriesStyle2D
     }
 
     public static PlotScatterSeriesStyle2D Default =>
-        new(new PlotColor2D(1, 0.45f, 0.15f));
+        new(new PlotSrgbColor2D(1, 0.45f, 0.15f));
 }
 
 [StructLayout(LayoutKind.Sequential)]

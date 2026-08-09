@@ -755,9 +755,9 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
 
     tc_scene_lighting* lighting = termin::scene_lighting(result.scene);
     REQUIRE(lighting != nullptr);
-    CHECK(std::fabs(lighting->ambient_color[0] - 0.7f) < 0.0001f);
-    CHECK(std::fabs(lighting->ambient_color[1] - 0.8f) < 0.0001f);
-    CHECK(std::fabs(lighting->ambient_color[2] - 0.9f) < 0.0001f);
+    CHECK(std::fabs(lighting->ambient_color.r - 0.7f) < 0.0001f);
+    CHECK(std::fabs(lighting->ambient_color.g - 0.8f) < 0.0001f);
+    CHECK(std::fabs(lighting->ambient_color.b - 0.9f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_intensity - 0.33f) < 0.0001f);
 }
 
