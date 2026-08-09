@@ -455,6 +455,62 @@ TEST_CASE("MeshRenderer override data treats builtin textures as symbolic defaul
     tc_material_shutdown();
 }
 
+TEST_CASE("MeshRenderer migrates legacy Color override arrays to schema-declared SrgbColor") {
+    tc_material_init();
+    {
+        tc_material_handle material_handle =
+            tc_material_create("mesh-renderer-legacy-color-material", "mesh-renderer-legacy-color-material");
+        REQUIRE(tc_material_is_valid(material_handle));
+        tc_material* material = tc_material_get(material_handle);
+        REQUIRE(material != nullptr);
+        tc_material_phase* phase = tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0);
+        REQUIRE(phase != nullptr);
+        REQUIRE(tc_material_phase_set_srgb_color(phase, "u_color", tc_srgb_color{1.0f, 1.0f, 1.0f, 1.0f}));
+
+        termin::MeshRenderer renderer;
+        renderer.set_material(termin::TcMaterial(material_handle));
+        renderer.set_override_material(true);
+
+        tc_value legacy = tc_value_dict_new();
+        tc_value legacy_phases = tc_value_list_new();
+        tc_value legacy_phase = tc_value_dict_new();
+        tc_value legacy_color = tc_value_list_new();
+        tc_value_list_push(&legacy_color, tc_value_float(0.125f));
+        tc_value_list_push(&legacy_color, tc_value_float(0.5f));
+        tc_value_list_push(&legacy_color, tc_value_float(0.75f));
+        tc_value_list_push(&legacy_color, tc_value_float(0.8f));
+        tc_value_dict_set(&legacy_phase, "u_color", legacy_color);
+        tc_value_list_push(&legacy_phases, legacy_phase);
+        tc_value_dict_set(&legacy, "phases_uniforms", legacy_phases);
+        renderer.set_override_data(&legacy);
+        tc_value_free(&legacy);
+
+        termin::TcMaterial overridden = renderer.get_overridden_material();
+        REQUIRE(overridden.is_valid());
+        tc_srgb_color restored{};
+        REQUIRE(tc_material_phase_get_srgb_color(overridden.default_phase(), "u_color", &restored));
+        CHECK_EQ(restored.r, 0.125f);
+        CHECK_EQ(restored.g, 0.5f);
+        CHECK_EQ(restored.b, 0.75f);
+        CHECK_EQ(restored.a, 0.8f);
+
+        tc_value serialized = renderer.get_override_data();
+        tc_value* serialized_phases = tc_value_dict_get(&serialized, "phases_uniforms");
+        REQUIRE(serialized_phases != nullptr);
+        tc_value* serialized_phase = tc_value_list_get(serialized_phases, 0);
+        REQUIRE(serialized_phase != nullptr);
+        tc_value* serialized_color = tc_value_dict_get(serialized_phase, "u_color");
+        REQUIRE(serialized_color != nullptr);
+        REQUIRE(serialized_color->type == TC_VALUE_DICT);
+        tc_value* kind = tc_value_dict_get(serialized_color, "kind");
+        REQUIRE(kind != nullptr);
+        REQUIRE(kind->type == TC_VALUE_STRING);
+        CHECK_EQ(std::string(kind->data.s), "SrgbColor");
+        tc_value_free(&serialized);
+    }
+    tc_material_shutdown();
+}
+
 TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     tc_material_init();
     tc_mesh_init();

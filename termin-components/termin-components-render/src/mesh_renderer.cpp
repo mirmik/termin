@@ -527,10 +527,17 @@ namespace termin {
                         }
                     } else if (val->type == TC_VALUE_LIST) {
                         size_t lst_size = tc_value_list_size(val);
-                        const tc_uniform_type requested = lst_size == 2   ? TC_UNIFORM_VEC2
-                                                          : lst_size == 3 ? TC_UNIFORM_VEC3
-                                                          : lst_size == 4 ? TC_UNIFORM_VEC4
-                                                                          : TC_UNIFORM_NONE;
+                        // Before color uniforms had semantic types, scene overrides persisted
+                        // authored Color values as bare Vec4 arrays. The old editor color picker
+                        // authored those components in sRGB. Use the current material schema to
+                        // migrate that one unambiguous legacy representation; a bare array is not
+                        // accepted for LinearColor because its encoding cannot be inferred.
+                        const bool legacy_srgb_color = lst_size == 4 && schema_type == TC_UNIFORM_SRGB_COLOR;
+                        const tc_uniform_type requested = legacy_srgb_color ? TC_UNIFORM_SRGB_COLOR
+                                                          : lst_size == 2   ? TC_UNIFORM_VEC2
+                                                          : lst_size == 3   ? TC_UNIFORM_VEC3
+                                                          : lst_size == 4   ? TC_UNIFORM_VEC4
+                                                                            : TC_UNIFORM_NONE;
                         if (requested == TC_UNIFORM_NONE || schema_type != requested) {
                             tc_log_error("MeshRenderer: vector override '%s' does not match material schema", key);
                             continue;
