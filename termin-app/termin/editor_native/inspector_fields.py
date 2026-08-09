@@ -21,7 +21,7 @@ from termin.editor_core.inspector_special_choices import (
 from termin.gui_native import (
     CollectionItem,
     CollectionModel,
-    Color,
+    SrgbColor,
     TcDocument,
     EdgeInsets,
     Size,
@@ -90,8 +90,8 @@ def build_native_color_control(
     control = document.create_hstack(f"{debug_name}-control")
     control.set_layout_spacing(4.0)
     swatch = document.create_hstack(f"{debug_name}-swatch")
-    swatch.set_layout_background(Color(*color))
-    swatch.set_layout_border(Color(0.75, 0.78, 0.84, 1.0), 1.0)
+    swatch.set_layout_background(SrgbColor(*color))
+    swatch.set_layout_border(SrgbColor(0.75, 0.78, 0.84, 1.0), 1.0)
     control.add_fixed_child(swatch, 28.0)
     button = document.create_button(_color_label(color), debug_name)
     button.connect_clicked(on_clicked)
@@ -166,7 +166,7 @@ class NativeInspectorFields:
                 self.root.add_fixed_child(label, 26.0)
             elif row.kind == "separator":
                 separator = self.document.create_hstack("native-inspector-separator")
-                separator.set_layout_background(Color(0.24, 0.26, 0.31, 1.0))
+                separator.set_layout_background(SrgbColor(0.24, 0.26, 0.31, 1.0))
                 self.root.add_fixed_child(separator, 1.0)
             elif row.kind == "field":
                 self._append_field(row)

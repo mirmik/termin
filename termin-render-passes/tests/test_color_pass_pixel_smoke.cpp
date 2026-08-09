@@ -366,9 +366,9 @@ FragmentOutput fs_main(FragmentInput input) {
         capabilities.add(scene_services);
         exec_ctx.capabilities = &capabilities;
 
-        const float clear_color[4] = {0.02f, 0.03f, 0.04f, 1.0f};
+        const termin::LinearColor clear_color{0.02f, 0.03f, 0.04f, 1.0f};
         render_ctx.begin_frame();
-        render_ctx.begin_pass(target, {}, clear_color, 1.0f, false);
+        render_ctx.begin_pass(target, {}, &clear_color, 1.0f, false);
         render_ctx.end_pass();
 
         pass.execute(exec_ctx);

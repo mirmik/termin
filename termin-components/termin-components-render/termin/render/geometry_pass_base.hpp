@@ -13,6 +13,7 @@
 
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
+#include <termin/geom/color.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/render/execute_context.hpp>
@@ -89,7 +90,7 @@ namespace termin {
         void destroy() override;
 
     protected:
-        virtual std::array<float, 4> clear_color() const = 0;
+        virtual LinearColor clear_color() const = 0;
 
         // Drawable/material routing label requested by this pass. It is mandatory
         // when asking drawables for geometry, but it is not a shader layout or pass

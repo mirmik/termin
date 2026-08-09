@@ -49,7 +49,7 @@ namespace termin {
         }
 
     protected:
-        std::array<float, 4> clear_color() const override {
+        LinearColor clear_color() const override {
             return {0.0f, 0.0f, 0.0f, 0.0f};
         }
         // Public picking representation label. Object-id shader resources and

@@ -511,7 +511,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             input_res,
             "fbo",                                     // resource_type
             std::nullopt,                              // size
-            std::array<double, 4>{0.2, 0.2, 0.2, 1.0}, // clear_color
+            termin::LinearColor{0.2f, 0.2f, 0.2f, 1.0f}, // clear_color
             1.0f                                       // clear_depth
         }};
     }

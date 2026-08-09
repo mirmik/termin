@@ -102,7 +102,7 @@ class _RenderTargetController:
     set_color_format = _unexpected
     set_depth_format = _unexpected
     set_clear_color_enabled = _unexpected
-    set_clear_color_value = _unexpected
+    set_clear_linear_color = _unexpected
     set_clear_depth_enabled = _unexpected
     set_clear_depth_value = _unexpected
     set_size = _unexpected

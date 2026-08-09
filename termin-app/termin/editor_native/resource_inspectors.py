@@ -15,7 +15,7 @@ from termin.editor_core.resource_inspector_models import (
     TextureInspectorController,
     TextureInspectorSnapshot,
 )
-from termin.gui_native import Color, TcDocument, EdgeInsets, Size, WidgetRef
+from termin.gui_native import SrgbColor, TcDocument, EdgeInsets, Size, WidgetRef
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
@@ -97,7 +97,7 @@ class NativeTextureInspector:
             self.request_render()
             return
         preview_box = self.document.create_hstack("native-texture-preview-box")
-        preview_box.set_layout_background(Color(0.08, 0.09, 0.11, 1.0))
+        preview_box.set_layout_background(SrgbColor(0.08, 0.09, 0.11, 1.0))
         image = self.document.create_image_widget()
         image.set_preserve_aspect(True)
         preview_box.add_stretch_child(image.widget)

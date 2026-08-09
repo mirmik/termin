@@ -15,6 +15,7 @@
 #include <tcbase/tc_log.hpp>
 #include <tcbase/trent/json.h>
 #include <termin/tc_scene.hpp>
+#include <termin/geom/color.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
 
 namespace termin {
@@ -343,7 +344,7 @@ namespace termin {
         return material;
     }
 
-    std::array<float, 4> navmesh_poly_color(int poly_index) {
+    SrgbColor navmesh_poly_color(int poly_index) {
         float hue = std::fmod((poly_index + 1) * 0.618033988749895f, 1.0f);
         float saturation = 0.5f;
         float value = 1.0f;
@@ -402,17 +403,18 @@ namespace termin {
 
     void push_detour_vertex(std::vector<NavMeshDebugVertex>& vertices,
                             const float* rc_pos,
-                            const std::array<float, 4>& color) {
+                            SrgbColor color) {
+        const LinearColor linear = srgb_to_linear(color);
         vertices.push_back({{
                                 rc_pos[0],
                                 rc_pos[2],
                                 rc_pos[1],
                             },
                             {
-                                color[0],
-                                color[1],
-                                color[2],
-                                color[3],
+                                linear.r,
+                                linear.g,
+                                linear.b,
+                                linear.a,
                             }});
     }
 

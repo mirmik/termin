@@ -9,6 +9,7 @@ from typing import Any
 
 from termin.editor_core.material_texture_sources import MaterialTextureSourceCatalog
 from termin.editor_core.signal import Signal
+from termin.geombase import LinearColor
 
 
 _logger = logging.getLogger(__name__)
@@ -318,7 +319,7 @@ class RenderTargetInspectorSnapshot:
     depth_formats: tuple[InspectorChoice, ...] = tuple(InspectorChoice(label, value) for value, label in DEPTH_FORMATS)
     depth_format_index: int = 0
     clear_color_enabled: bool = False
-    clear_color_value: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
+    clear_linear_color: LinearColor = LinearColor(0.0, 0.0, 0.0, 1.0)
     clear_depth_enabled: bool = False
     clear_depth_value: float = 1.0
     width: int = 512
@@ -399,7 +400,7 @@ class RenderTargetInspectorController:
             color_format_index=color_index,
             depth_format_index=depth_index,
             clear_color_enabled=bool(target.clear_color_enabled),
-            clear_color_value=tuple(float(value) for value in target.clear_color_value),
+            clear_linear_color=target.clear_linear_color,
             clear_depth_enabled=bool(target.clear_depth_enabled),
             clear_depth_value=float(target.clear_depth_value),
             width=int(target.width),
@@ -456,11 +457,11 @@ class RenderTargetInspectorController:
         self._require_target().clear_color_enabled = bool(value)
         return self._commit()
 
-    def set_clear_color_value(self, value: Iterable[float]):
-        color = tuple(float(component) for component in value)
-        if len(color) != 4:
-            raise ValueError("clear color requires four components")
-        self._require_target().clear_color_value = color
+    def set_clear_linear_color(self, value: LinearColor):
+        if not isinstance(value, LinearColor):
+            _logger.error("render target clear_linear_color expects LinearColor, got %s", type(value).__name__)
+            raise ValueError("render target clear_linear_color expects LinearColor")
+        self._require_target().clear_linear_color = value
         return self._commit()
 
     def set_clear_depth_enabled(self, value: bool):

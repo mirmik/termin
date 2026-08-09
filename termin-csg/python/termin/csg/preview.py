@@ -12,6 +12,7 @@ import uuid
 import numpy as np
 
 from tcbase import Key, MouseButton
+from tcbase._geom_native import LinearColor
 from termin.csg import Solid, to_mesh3, to_tc_mesh
 from termin.csg.viewer_camera import OrbitCamera
 from termin.display.window import (
@@ -283,7 +284,7 @@ def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 76
 
             mvp = camera.view_projection(w, h)
             ctx.begin_frame()
-            ctx.begin_pass(color_tex, depth_tex, True, 0.10, 0.10, 0.12, 1.0, 1.0, True)
+            ctx.begin_pass(color_tex, depth_tex, clear_linear_color=LinearColor(0.10, 0.10, 0.12, 1.0), clear_depth=1.0, clear_depth_enabled=True)
             ctx.set_viewport(0, 0, w, h)
             ctx.set_depth_test(True)
             ctx.set_depth_write(True)

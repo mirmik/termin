@@ -611,11 +611,7 @@ namespace termin {
             tc_render_target_set_layer_mask(rt, rtc->layer_mask);
             tc_render_target_set_enabled(rt, rtc->enabled);
             tc_render_target_set_clear_color_enabled(rt, rtc->clear_color);
-            tc_render_target_set_clear_color_value(rt,
-                                                   rtc->clear_color_value[0],
-                                                   rtc->clear_color_value[1],
-                                                   rtc->clear_color_value[2],
-                                                   rtc->clear_color_value[3]);
+            tc_render_target_set_clear_linear_color(rt, rtc->clear_linear_color);
             tc_render_target_set_clear_depth_enabled(rt, rtc->clear_depth);
             tc_render_target_set_clear_depth_value(rt, rtc->clear_depth_value);
 

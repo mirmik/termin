@@ -85,7 +85,7 @@ namespace termin {
         }
 
     protected:
-        std::array<float, 4> clear_color() const override;
+        LinearColor clear_color() const override;
         const char* phase_mark() const override {
             return pass_phase_mark.c_str();
         }

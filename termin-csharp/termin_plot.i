@@ -65,11 +65,11 @@ enum class BackendType {
 
 namespace tcplot {
 
-struct Color4 {
+struct SrgbColor {
     float r, g, b, a;
 
-    Color4();
-    Color4(float r, float g, float b, float a = 1.0f);
+    SrgbColor();
+    SrgbColor(float r, float g, float b, float a = 1.0f);
 };
 
 enum class SurfaceColorMap {
@@ -202,7 +202,7 @@ public:
               double thickness = 1.5,
               const char* label = "") {
         tcplot::LinePlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.thickness = thickness;
         options.label = label ? label : "";
         $self->plot(tcplot::SeriesData3DView{x, y, z, n}, options);
@@ -214,7 +214,7 @@ public:
                  double size = 4.0,
                  const char* label = "") {
         tcplot::ScatterPlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.size = size;
         options.label = label ? label : "";
         $self->scatter(tcplot::SeriesData3DView{x, y, z, n}, options);
@@ -226,7 +226,7 @@ public:
                  bool wireframe = false,
                  const char* label = "") {
         tcplot::SurfacePlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.wireframe = wireframe;
         options.label = label ? label : "";
         $self->surface(tcplot::SurfaceDataView{X, Y, Z, rows, cols}, options);
@@ -240,7 +240,7 @@ public:
                           const char* label = "",
                           bool colormap_reversed = false) {
         tcplot::SurfacePlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.colormap = colormap;
         options.wireframe = wireframe;
         options.label = label ? label : "";
@@ -256,7 +256,7 @@ public:
         options.visible = visible;
         options.row_step = row_step;
         options.col_step = col_step;
-        options.color = tcplot::Color4{r, g, b, a};
+        options.color = tcplot::SrgbColor{r, g, b, a};
         options.width_px = width_px;
         return $self->set_surface_grid(surface_idx, options);
     }
@@ -272,7 +272,7 @@ public:
               double thickness = 1.5,
               const char* label = "") {
         tcplot::LinePlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.thickness = thickness;
         options.label = label ? label : "";
         $self->plot(tcplot::SeriesData2DView{x, y, n}, options);
@@ -301,7 +301,7 @@ public:
                  double size = 4.0,
                  const char* label = "") {
         tcplot::ScatterPlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.size = size;
         options.label = label ? label : "";
         $self->scatter(tcplot::SeriesData2DView{x, y, n}, options);
@@ -319,7 +319,7 @@ public:
                  double thickness = 1.5,
                  const char* label = "") {
         tcplot::LinePlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.thickness = thickness;
         options.label = label ? label : "";
         return $self->add_line(panel_idx, tcplot::SeriesData2DView{x, y, n}, options);
@@ -354,7 +354,7 @@ public:
                     double size = 4.0,
                     const char* label = "") {
         tcplot::ScatterPlotOptions options;
-        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.color = tcplot::SrgbColor{cr, cg, cb, ca};
         options.size = size;
         options.label = label ? label : "";
         return $self->add_scatter(panel_idx, tcplot::SeriesData2DView{x, y, n}, options);

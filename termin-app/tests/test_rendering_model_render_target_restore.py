@@ -4,6 +4,7 @@ import types
 from pathlib import Path
 
 import pytest
+from termin.geombase import LinearColor
 
 _MODEL_PATH = (
     Path(__file__).resolve().parents[1]
@@ -91,7 +92,7 @@ class _RenderTargetConfig:
         self.color_format = "rgba16f"
         self.depth_format = "depth32f"
         self.clear_color = False
-        self.clear_color_value = (0.0, 0.0, 0.0, 1.0)
+        self.clear_linear_color = LinearColor(0.0, 0.0, 0.0, 1.0)
         self.clear_depth = False
         self.clear_depth_value = 1.0
         self.pipeline_uuid = ""
@@ -143,7 +144,7 @@ class _RenderTarget:
         self.color_format = "rgba16f"
         self.depth_format = "depth32f"
         self.clear_color_enabled = False
-        self.clear_color_value = (0.0, 0.0, 0.0, 1.0)
+        self.clear_linear_color = LinearColor(0.0, 0.0, 0.0, 1.0)
         self.clear_depth_enabled = False
         self.clear_depth_value = 1.0
         self.pipeline = None
@@ -396,7 +397,7 @@ def test_sync_render_target_configs_preserves_clear_settings(monkeypatch):
     render_target = _RenderTarget("ClearRT", pool)
     render_target.scene = scene
     render_target.clear_color_enabled = True
-    render_target.clear_color_value = (0.1, 0.2, 0.3, 1.0)
+    render_target.clear_linear_color = LinearColor(0.1, 0.2, 0.3, 1.0)
     render_target.clear_depth_enabled = True
     render_target.clear_depth_value = 0.5
     manager.managed_render_targets.append(render_target)
@@ -405,7 +406,8 @@ def test_sync_render_target_configs_preserves_clear_settings(monkeypatch):
 
     config = scene._mount.render_target_configs[0]
     assert config.clear_color is True
-    assert config.clear_color_value == (0.1, 0.2, 0.3, 1.0)
+    assert (config.clear_linear_color.r, config.clear_linear_color.g,
+            config.clear_linear_color.b, config.clear_linear_color.a) == pytest.approx((0.1, 0.2, 0.3, 1.0))
     assert config.clear_depth is True
     assert config.clear_depth_value == 0.5
 
@@ -439,16 +441,17 @@ def _assert_formats_roundtrip(serialized, restored):
 
 def _configure_clear_settings(config):
     config.clear_color = True
-    config.clear_color_value = (0.1, 0.2, 0.3, 1.0)
+    config.clear_linear_color = LinearColor(0.1, 0.2, 0.3, 1.0)
     config.clear_depth = True
     config.clear_depth_value = 0.5
 
 
 def _assert_clear_settings_roundtrip(serialized, restored):
-    assert serialized["clear_color"] == [0.1, 0.2, 0.3, 1.0]
+    assert serialized["clear_color"] == pytest.approx([0.1, 0.2, 0.3, 1.0])
     assert serialized["clear_depth"] == 0.5
     assert restored.clear_color is True
-    assert restored.clear_color_value == (0.1, 0.2, 0.3, 1.0)
+    assert (restored.clear_linear_color.r, restored.clear_linear_color.g,
+            restored.clear_linear_color.b, restored.clear_linear_color.a) == pytest.approx((0.1, 0.2, 0.3, 1.0))
     assert restored.clear_depth is True
     assert restored.clear_depth_value == 0.5
 

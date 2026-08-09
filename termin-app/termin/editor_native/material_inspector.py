@@ -15,7 +15,7 @@ from termin.editor_core.material_inspector_model import (
     material_vector,
 )
 from termin.editor_core.material_texture_sources import MaterialTextureSourceCatalog
-from termin.gui_native import Color, TcDocument, EdgeInsets, Size, WidgetRef
+from termin.gui_native import SrgbColor, TcDocument, EdgeInsets, Size, WidgetRef
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 from .inspector_fields import (
@@ -142,8 +142,8 @@ class NativeMaterialInspector:
         control = self.document.create_hstack(f"native-material-texture-{prop.name}")
         control.set_layout_spacing(6.0)
         preview = self.document.create_hstack(f"native-material-texture-preview-{prop.name}")
-        preview.set_layout_background(Color(0.08, 0.09, 0.11, 1.0))
-        preview.set_layout_border(Color(0.38, 0.40, 0.46, 1.0), 1.0)
+        preview.set_layout_background(SrgbColor(0.08, 0.09, 0.11, 1.0))
+        preview.set_layout_border(SrgbColor(0.38, 0.40, 0.46, 1.0), 1.0)
         image = self.document.create_image_widget()
         image.set_preserve_aspect(False)
         preview.add_stretch_child(image.widget)

@@ -32,7 +32,7 @@ namespace {
 
     constexpr uint32_t kWidth = 64;
     constexpr uint32_t kHeight = 64;
-    constexpr float kClear[4] = {0.02f, 0.10f, 0.20f, 1.0f};
+    constexpr termin::LinearColor kClear{0.02f, 0.10f, 0.20f, 1.0f};
 
     bool existing_file(const std::filesystem::path& path) {
         std::error_code error;
@@ -176,7 +176,7 @@ namespace {
         termin::DebugGeometryPass pass("debug", "debug", "DebugGeometryPixelSmoke");
 
         render_context.begin_frame();
-        render_context.begin_pass(target, {}, kClear, 1.0f, true);
+        render_context.begin_pass(target, {}, &kClear, 1.0f, true);
         render_context.end_pass();
         pass.execute(context);
         render_context.end_frame();
@@ -187,7 +187,7 @@ namespace {
         if (!collect_line(scene.handle(), type_id, false))
             return 1;
         render_context.begin_frame();
-        render_context.begin_pass(target, {}, kClear, 1.0f, true);
+        render_context.begin_pass(target, {}, &kClear, 1.0f, true);
         render_context.end_pass();
         pass.execute(context);
         render_context.end_frame();
