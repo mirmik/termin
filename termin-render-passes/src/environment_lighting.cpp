@@ -332,15 +332,21 @@ namespace termin {
         const tc_scene_handle scene = services->scene.handle();
         std::array<float, 11> signature{};
         signature[0] = static_cast<float>(tc_scene_get_skybox_type(scene));
-        tc_scene_get_skybox_color(scene, &signature[1], &signature[2], &signature[3]);
-        tc_scene_get_skybox_top_color(scene, &signature[4], &signature[5], &signature[6]);
-        tc_scene_get_skybox_bottom_color(scene, &signature[7], &signature[8], &signature[9]);
+        tc_srgb_color solid{};
+        tc_srgb_color top{};
+        tc_srgb_color bottom{};
+        tc_scene_get_skybox_srgb_color(scene, &solid);
+        tc_scene_get_skybox_top_srgb_color(scene, &top);
+        tc_scene_get_skybox_bottom_srgb_color(scene, &bottom);
+        signature[1] = solid.r; signature[2] = solid.g; signature[3] = solid.b;
+        signature[4] = top.r; signature[5] = top.g; signature[6] = top.b;
+        signature[7] = bottom.r; signature[8] = bottom.g; signature[9] = bottom.b;
 
         tc_scene_render_state* render_state = tc_scene_render_state_get(scene);
         const tc_scene_lighting* lighting = render_state ? &render_state->lighting : nullptr;
         if (lighting) {
             const Float3 ambient_tint{
-                lighting->ambient_color[0], lighting->ambient_color[1], lighting->ambient_color[2]};
+                lighting->ambient_color.r, lighting->ambient_color.g, lighting->ambient_color.b};
             const float intensity = std::max(0.0f, lighting->ambient_intensity);
             signature[1] *= ambient_tint.x;
             signature[2] *= ambient_tint.y;

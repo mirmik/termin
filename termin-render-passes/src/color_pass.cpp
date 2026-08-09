@@ -1321,7 +1321,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             tc_scene_lighting* lighting = render_state ? &render_state->lighting : nullptr;
             if (lighting) {
                 ambient_color =
-                    Vec3{lighting->ambient_color[0], lighting->ambient_color[1], lighting->ambient_color[2]};
+                    Vec3{lighting->ambient_color.r, lighting->ambient_color.g, lighting->ambient_color.b};
                 ambient_intensity = lighting->ambient_intensity;
                 shadow_settings.method = lighting->shadow_method;
                 shadow_settings.softness = lighting->shadow_softness;

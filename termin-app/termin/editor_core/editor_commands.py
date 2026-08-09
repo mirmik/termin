@@ -74,22 +74,22 @@ def _set_scene_property(scene, property_name: str, value: Any) -> None:
         return
     rs = scene_render_state(scene)
     if property_name == "background_color":
-        rs.background_color = _coerce_scene_vector_value(rs.background_color, value)
+        rs.background_srgb_color = _coerce_scene_vector_value(rs.background_srgb_color, value)
         return
     if property_name == "ambient_color":
-        rs.ambient_color = _coerce_scene_vector_value(rs.ambient_color, value)
+        rs.ambient_srgb_color = _coerce_scene_vector_value(rs.ambient_srgb_color, value)
         return
     if property_name == "ambient_intensity":
         rs.ambient_intensity = float(value)
         return
     if property_name == "skybox_color":
-        rs.skybox_color = _coerce_scene_vector_value(rs.skybox_color, value)
+        rs.skybox_srgb_color = _coerce_scene_vector_value(rs.skybox_srgb_color, value)
         return
     if property_name == "skybox_top_color":
-        rs.skybox_top_color = _coerce_scene_vector_value(rs.skybox_top_color, value)
+        rs.skybox_top_srgb_color = _coerce_scene_vector_value(rs.skybox_top_srgb_color, value)
         return
     if property_name == "skybox_bottom_color":
-        rs.skybox_bottom_color = _coerce_scene_vector_value(rs.skybox_bottom_color, value)
+        rs.skybox_bottom_srgb_color = _coerce_scene_vector_value(rs.skybox_bottom_srgb_color, value)
         return
     if property_name == "skybox_type":
         rs.skybox_type = str(value)

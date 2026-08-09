@@ -36,25 +36,17 @@ def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_
             "render_state",
             "collision_world",
         ]
-        assert tuple(round(value, 3) for value in render_state.get_background_color()) == (
-            0.25,
-            0.5,
-            0.75,
-            1.0,
-        )
-        assert tuple(round(value, 3) for value in render_state.ambient_color) == (
-            0.1,
-            0.2,
-            0.3,
-        )
+        background = render_state.get_background_srgb_color()
+        assert (round(background.r, 3), round(background.g, 3), round(background.b, 3), round(background.a, 3)) == (
+            0.25, 0.5, 0.75, 1.0)
+        ambient = render_state.ambient_srgb_color
+        assert (round(ambient.r, 3), round(ambient.g, 3), round(ambient.b, 3)) == (0.1, 0.2, 0.3)
         assert round(render_state.ambient_intensity, 3) == 2.0
         assert isinstance(lighting, TcSceneLighting)
         assert lighting.valid()
-        assert tuple(round(value, 3) for value in lighting.ambient_color) == (
-            0.1,
-            0.2,
-            0.3,
-        )
+        lighting_ambient = lighting.ambient_srgb_color
+        assert (round(lighting_ambient.r, 3), round(lighting_ambient.g, 3), round(lighting_ambient.b, 3)) == (
+            0.1, 0.2, 0.3)
     finally:
         scene.destroy()
 

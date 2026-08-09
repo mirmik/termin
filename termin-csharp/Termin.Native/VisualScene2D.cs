@@ -123,14 +123,14 @@ public readonly struct VisualAffine2f
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct VisualColor4f
+public readonly struct VisualSrgbColor
 {
     public readonly float R;
     public readonly float G;
     public readonly float B;
     public readonly float A;
 
-    public VisualColor4f(float r, float g, float b, float a = 1)
+    public VisualSrgbColor(float r, float g, float b, float a = 1)
     {
         R = r;
         G = g;
@@ -218,11 +218,11 @@ public sealed class VisualPath2D
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct VisualFillPaint2D
 {
-    public readonly VisualColor4f Color;
+    public readonly VisualSrgbColor Color;
     public readonly VisualFillRule2D Rule;
 
     public VisualFillPaint2D(
-        VisualColor4f color,
+        VisualSrgbColor color,
         VisualFillRule2D rule = VisualFillRule2D.NonZero)
     {
         Color = color;
@@ -232,7 +232,7 @@ public readonly struct VisualFillPaint2D
 
 public sealed class VisualStrokePaint2D
 {
-    public VisualColor4f Color { get; }
+    public VisualSrgbColor Color { get; }
     public float Width { get; }
     public VisualStrokeJoin2D Join { get; }
     public VisualStrokeCap2D Cap { get; }
@@ -241,7 +241,7 @@ public sealed class VisualStrokePaint2D
     public float DashOffset { get; }
 
     public VisualStrokePaint2D(
-        VisualColor4f color,
+        VisualSrgbColor color,
         float width = 1,
         VisualStrokeJoin2D join = VisualStrokeJoin2D.Miter,
         VisualStrokeCap2D cap = VisualStrokeCap2D.Butt,
@@ -650,7 +650,7 @@ public sealed class TextItemRef2D : GraphicItemRef2D
         string fontUri,
         VisualVec2f origin,
         float sizePx,
-        VisualColor4f color,
+        VisualSrgbColor color,
         VisualBounds2f layoutBounds,
         VisualTextAnchor2D anchor = VisualTextAnchor2D.Left,
         GraphicItemRef2D? parent = null)
@@ -670,7 +670,7 @@ public sealed class TextItemRef2D : GraphicItemRef2D
         string fontUri,
         VisualVec2f origin,
         float sizePx,
-        VisualColor4f color,
+        VisualSrgbColor color,
         VisualBounds2f layoutBounds,
         VisualTextAnchor2D anchor = VisualTextAnchor2D.Left)
     {
@@ -700,7 +700,7 @@ public sealed class ImageItemRef2D : GraphicItemRef2D
         string imageUri,
         VisualRect2f rect,
         VisualRect2f uv,
-        VisualColor4f tint,
+        VisualSrgbColor tint,
         VisualTextureSampling2D sampling =
             VisualTextureSampling2D.Linear,
         GraphicItemRef2D? parent = null)
@@ -719,7 +719,7 @@ public sealed class ImageItemRef2D : GraphicItemRef2D
         string imageUri,
         VisualRect2f rect,
         VisualRect2f uv,
-        VisualColor4f tint,
+        VisualSrgbColor tint,
         VisualTextureSampling2D sampling =
             VisualTextureSampling2D.Linear)
     {
@@ -799,7 +799,7 @@ internal static unsafe class VisualSceneNative
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct NativeStroke
     {
-        internal readonly VisualColor4f Color;
+        internal readonly VisualSrgbColor Color;
         internal readonly float Width;
         internal readonly VisualStrokeJoin2D Join;
         internal readonly VisualStrokeCap2D Cap;
@@ -830,7 +830,7 @@ internal static unsafe class VisualSceneNative
         internal string FontUri;
         internal VisualVec2f Origin;
         internal float SizePx;
-        internal VisualColor4f Color;
+        internal VisualSrgbColor Color;
         internal VisualTextAnchor2D Anchor;
         internal VisualBounds2f LayoutBounds;
 
@@ -839,7 +839,7 @@ internal static unsafe class VisualSceneNative
             string fontUri,
             VisualVec2f origin,
             float sizePx,
-            VisualColor4f color,
+            VisualSrgbColor color,
             VisualTextAnchor2D anchor,
             VisualBounds2f layoutBounds)
         {
@@ -860,14 +860,14 @@ internal static unsafe class VisualSceneNative
         internal string ImageUri;
         internal VisualRect2f Rect;
         internal VisualRect2f Uv;
-        internal VisualColor4f Tint;
+        internal VisualSrgbColor Tint;
         internal VisualTextureSampling2D Sampling;
 
         internal ImageDesc(
             string imageUri,
             VisualRect2f rect,
             VisualRect2f uv,
-            VisualColor4f tint,
+            VisualSrgbColor tint,
             VisualTextureSampling2D sampling)
         {
             ImageUri = imageUri;

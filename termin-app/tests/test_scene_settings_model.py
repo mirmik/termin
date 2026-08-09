@@ -99,7 +99,7 @@ def test_scene_properties_controller_owns_undoable_render_mutations(scene):
     stack.undo()
     assert scene.fixed_timestep == pytest.approx(initial.fixed_update_frequency**-1)
     stack.undo()
-    assert tuple(scene_render_state(scene).background_color) == pytest.approx(initial.background_color)
+    assert tuple(scene_render_state(scene).background_srgb_color) == pytest.approx(initial.background_color)
     assert len(changed) == 5
     with pytest.raises(ValueError):
         controller.set_ambient_intensity(12.0)

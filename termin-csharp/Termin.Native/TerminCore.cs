@@ -525,12 +525,6 @@ public static class TerminCore
     [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_add_phase", CharSet = CharSet.Ansi)]
     public static extern IntPtr MaterialAddPhase(IntPtr material, TcShaderHandle shader, string phaseMark, int priority);
 
-    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_set_color")]
-    public static extern void MaterialSetColor(IntPtr material, float r, float g, float b, float a);
-
-    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_phase_set_color")]
-    public static extern void MaterialPhaseSetColor(IntPtr phase, float r, float g, float b, float a);
-
     [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_phase_make_transparent")]
     public static extern void MaterialPhaseMakeTransparent(IntPtr phase);
 
