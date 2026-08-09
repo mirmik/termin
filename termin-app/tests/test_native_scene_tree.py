@@ -79,6 +79,12 @@ def test_native_scene_tree_projects_selection_actions_and_drag_drop() -> None:
         document.layout_roots(Rect(0.0, 0.0, 420.0, 320.0))
 
         assert tree.tree_model.node_count == 3
+        toolbar_commands = {command.data.stable_id: command.data for command in tree.toolbar_model.commands}
+        assert toolbar_commands["add-root"].icon_id == "add"
+        assert toolbar_commands["add-root"].label == ""
+        assert toolbar_commands["collapse-all"].icon_id == "collapse-all"
+        assert toolbar_commands["refresh"].icon_id == "refresh"
+        assert toolbar_commands["refresh"].shortcut == "F5"
         tree.tree_widget.select(tree.id_nodes[child.uuid])
         assert selected[-1].uuid == child.uuid
         assert controller.snapshot().selected_id == child.uuid
