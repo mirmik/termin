@@ -2,6 +2,7 @@ import json
 import numpy as np
 import pytest
 
+from termin.geombase import LinearColor, SrgbColor, Vec4
 from termin.image import write_png_rgba8_file
 from termin.materials import SurfaceContractRegistry
 from termin.default_assets.render.material_asset import (
@@ -86,6 +87,89 @@ def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(t
 
     data = json.loads(material_path.read_text(encoding="utf-8"))
     assert data["textures"]["u_albedo_texture"] == texture_uuid
+
+
+def test_material_typed_colors_save_and_reload_without_losing_semantics(tmp_path) -> None:
+    from termin.default_assets.render.shader_plugin import ShaderImportPlugin
+
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+    shader_path = tmp_path / "TypedPersistence.shader"
+    shader_path.write_text(
+        """@program TypedPersistence
+@language slang
+@property SrgbColor u_authored = SrgbColor(1.0, 1.0, 1.0, 1.0)
+@property LinearColor u_radiance = LinearColor(1.0, 1.0, 1.0, 1.0)
+@property Vec4 u_numeric = Vec4(0.0, 0.0, 0.0, 0.0)
+@phase opaque
+@stage vertex
+[shader(\"vertex\")] float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0); }
+@endstage
+@stage fragment
+[shader(\"fragment\")] float4 main() : SV_Target0 { return float4(1.0, 1.0, 1.0, 1.0); }
+@endstage
+@endphase
+""",
+        encoding="utf-8",
+    )
+    shader_path.with_suffix(".shader.meta").write_text('{"uuid": "typed-persistence-shader"}\n', encoding="utf-8")
+    shader_asset = ShaderImportPlugin().preload(str(shader_path))
+    assert shader_asset is not None
+    rm.register_file(shader_asset)
+
+    with pytest.raises(ValueError, match="u_authored.*exactly four numeric components"):
+        _parse_material_content(
+            json.dumps(
+                {
+                    "uuid": "typed-persistence-invalid",
+                    "shader": "TypedPersistence",
+                    "shader_uuid": "typed-persistence-shader",
+                    "uniforms": {"u_authored": [0.5, 0.5, 0.5]},
+                }
+            ),
+            name="TypedPersistenceInvalid",
+        )
+
+    authored = SrgbColor(128.0 / 255.0, 128.0 / 255.0, 128.0 / 255.0, 0.5)
+    radiance = LinearColor(4.0, 2.0, -1.0, 0.75)
+    numeric = Vec4(0.25, 0.5, 0.75, 1.0)
+    material = _parse_material_content(
+        json.dumps(
+            {
+                "uuid": "typed-persistence-material",
+                "shader": "TypedPersistence",
+                "shader_uuid": "typed-persistence-shader",
+                "uniforms": {
+                    "u_authored": [authored.r, authored.g, authored.b, authored.a],
+                    "u_radiance": [radiance.r, radiance.g, radiance.b, radiance.a],
+                    "u_numeric": [numeric.x, numeric.y, numeric.z, numeric.w],
+                },
+            }
+        ),
+        name="TypedPersistence",
+    )[0]
+    assert isinstance(material.uniforms["u_authored"], SrgbColor)
+    assert isinstance(material.uniforms["u_radiance"], LinearColor)
+    assert isinstance(material.uniforms["u_numeric"], Vec4)
+
+    material_path = tmp_path / "typed-persistence.material"
+    _save_material_file(material, material_path, uuid="typed-persistence-material")
+    saved = json.loads(material_path.read_text(encoding="utf-8"))
+    assert saved["uniforms"]["u_authored"] == pytest.approx([128.0 / 255.0] * 3 + [0.5])
+    assert saved["uniforms"]["u_radiance"] == [4.0, 2.0, -1.0, 0.75]
+    assert saved["uniforms"]["u_numeric"] == [0.25, 0.5, 0.75, 1.0]
+
+    reload_data = dict(saved)
+    # The native registry rejects two live materials with the same UUID; use a
+    # fresh identity for this in-process reload while preserving the payload.
+    reload_data["uuid"] = "typed-persistence-reloaded"
+    reloaded = _parse_material_content(json.dumps(reload_data), name="TypedPersistence")[0]
+    assert isinstance(reloaded.uniforms["u_authored"], SrgbColor)
+    assert isinstance(reloaded.uniforms["u_radiance"], LinearColor)
+    assert isinstance(reloaded.uniforms["u_numeric"], Vec4)
+    assert tuple(reloaded.uniforms["u_authored"]) == pytest.approx(tuple(authored))
+    assert tuple(reloaded.uniforms["u_radiance"]) == pytest.approx(tuple(radiance))
+    assert tuple(reloaded.uniforms["u_numeric"]) == pytest.approx(tuple(numeric))
 
 
 def test_material_load_resolves_texture_uuid_with_lazy_loaded_texture_asset(tmp_path) -> None:

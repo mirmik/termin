@@ -196,6 +196,7 @@ class NativeMaterialInspector:
 
     def _property_control(self, prop: MaterialPropertySnapshot) -> WidgetRef:
         weak_owner = weakref.ref(self)
+        from termin.geombase import LinearColor, SrgbColor, Vec4
         if prop.kind == "Bool":
             checkbox = self.document.create_checkbox(bool(prop.value))
             checkbox.connect_changed(lambda value: self._mutate(lambda: self.controller.set_property(prop.name, value)))
@@ -212,8 +213,8 @@ class NativeMaterialInspector:
             box.connect_changed(lambda value: self._mutate(lambda: self.controller.set_property(prop.name, value)))
             self.controls[prop.name] = box
             return box.widget
-        if prop.kind in ("Vec2", "Vec3", "Vec4"):
-            size = {"Vec2": 2, "Vec3": 3, "Vec4": 4}[prop.kind]
+        if prop.kind in ("Vec2", "Vec3", "Vec4", "LinearColor"):
+            size = {"Vec2": 2, "Vec3": 3, "Vec4": 4, "LinearColor": 4}[prop.kind]
             values = material_vector(prop.value, size)
             vector_row = self.document.create_hstack(f"native-material-vector-{prop.name}")
             vector_row.set_layout_spacing(2.0)
@@ -230,14 +231,24 @@ class NativeMaterialInspector:
             def changed(_value: float) -> None:
                 owner = weak_owner()
                 if owner is not None:
-                    owner._mutate(lambda: owner.controller.set_property(prop.name, [box.value for box in controls]))
+                    values = [box.value for box in controls]
+                    if prop.kind == "Vec4":
+                        value = Vec4(*values)
+                    elif prop.kind == "LinearColor":
+                        value = LinearColor(*values)
+                    else:
+                        value = values
+                    owner._mutate(lambda: owner.controller.set_property(prop.name, value))
 
             for box in controls:
                 box.connect_changed(changed)
             self.controls[prop.name] = controls
             return vector_row
-        if prop.kind == "Color":
-            color = material_vector(prop.value, 4, color=True)
+        if prop.kind == "SrgbColor":
+            if not isinstance(prop.value, SrgbColor):
+                _logger.error("Material property '%s' has mismatched sRGB value %r", prop.name, prop.value)
+                return self.document.create_label("Invalid sRGB color", f"native-material-error-{prop.name}")
+            color = (prop.value.r, prop.value.g, prop.value.b, prop.value.a)
 
             def clicked() -> None:
                 owner = weak_owner()
@@ -250,7 +261,8 @@ class NativeMaterialInspector:
                 def finished(value: tuple[float, ...] | None) -> None:
                     current = weak_owner()
                     if current is not None and value is not None:
-                        current._mutate(lambda: current.controller.set_property(prop.name, value))
+                        typed = SrgbColor(*value)
+                        current._mutate(lambda: current.controller.set_property(prop.name, typed))
 
                 owner.show_color_dialog(color, finished)
 
