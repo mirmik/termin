@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 import weakref
 
 from termin.editor_core.inspector_fields_model import (
@@ -32,6 +32,12 @@ from termin.inspect import parse_uint32
 
 
 _logger = logging.getLogger(__name__)
+
+
+class InlineInspectorLifecycle(Protocol):
+    def close(self) -> None: ...
+
+
 ColorDialogHandler = Callable[
     [tuple[float, float, float, float], Callable[[tuple[float, ...] | None], None]],
     None,
@@ -148,6 +154,7 @@ class NativeInspectorFields:
     resource_catalog: InspectorResourceCatalog | None = None
     special_choices: InspectorSpecialChoiceProvider = field(default_factory=InspectorSpecialChoices)
     field_widgets: dict[str, object] = field(default_factory=dict)
+    inline_material_inspectors: list[InlineInspectorLifecycle] = field(default_factory=list)
 
     def set_targets(self, targets) -> None:
         self.rebuild(self.controller.set_targets(targets))
@@ -175,6 +182,9 @@ class NativeInspectorFields:
         self.request_render()
 
     def _destroy_rows(self) -> None:
+        for inspector in self.inline_material_inspectors:
+            inspector.close()
+        self.inline_material_inspectors.clear()
         for child in tuple(self.root.children):
             if not self.document.destroy_widget_recursive(child.handle):
                 _logger.error("Failed to destroy native inspector row: %s", child.debug_name)
@@ -253,6 +263,7 @@ class NativeInspectorFields:
         inspector.set_target(row.value)
         height = max(28.0, inspector.root.preferred_size.height)
         self.field_widgets[row.key] = inspector
+        self.inline_material_inspectors.append(inspector)
         self.root.add_fixed_child(inspector.root, height)
 
     def _append_interval_slider_field(self, row: InspectorFieldRow) -> None:

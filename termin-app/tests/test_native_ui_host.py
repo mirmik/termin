@@ -575,9 +575,13 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
 
         def __init__(self) -> None:
             self.textures = []
+            self.cleared = False
 
         def set_texture(self, texture, size) -> None:
             self.textures.append((texture, size))
+
+        def clear_texture(self) -> None:
+            self.cleared = True
 
     class _ImagePreviewDocument:
         def is_alive(self, handle) -> bool:
@@ -615,6 +619,7 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
     assert host.context.created[0][3] == TextureEncoding.SRGB
     assert image.textures[0][0] == "preview-texture"
     release()
+    assert image.cleared
     assert host.context.destroyed == ["preview-texture"]
 
 

@@ -16,7 +16,7 @@ RenderTargetTextureResolver = Callable[[str, str], Any | None]
 @dataclass(frozen=True)
 class MaterialTextureValue:
     tag: str
-    name: str
+    identifier: str
     default_kind: str = "white"
     expected_encoding: str = "linear"
 
@@ -223,7 +223,7 @@ class MaterialInspectorController:
         self,
         name: str,
         tag: str,
-        texture_name: str = "",
+        source_identifier: str = "",
         *,
         default_kind: str = "white",
     ) -> MaterialInspectorSnapshot:
@@ -242,7 +242,7 @@ class MaterialInspectorController:
             raise ValueError(f"texture property '{name}' cannot use normal default")
         texture = self._resolve_texture(
             tag,
-            texture_name,
+            source_identifier,
             default_kind,
             expected_encoding or "linear",
         )
@@ -251,7 +251,7 @@ class MaterialInspectorController:
                 "Cannot resolve valid material texture '%s' (%s:%s)",
                 name,
                 tag,
-                texture_name,
+                source_identifier,
             )
             raise ValueError(f"invalid texture for material property '{name}'")
         applied = material.set_texture(name, texture)
@@ -262,7 +262,7 @@ class MaterialInspectorController:
             material.set_texture_source(
                 name,
                 "render_target",
-                texture_name,
+                source_identifier,
                 "depth" if tag == "rt_depth" else "color",
             )
         self._commit_change()
@@ -323,14 +323,19 @@ class MaterialInspectorController:
             return MaterialTextureValue(
                 "default", "", default_kind, expected_encoding
             )
-        asset_name = self._resource_manager.find_texture_name(texture)
-        if asset_name and asset_name not in (
+        texture_uuid = str(texture.uuid or "")
+        asset = (
+            self._resource_manager.get_texture_asset_by_uuid(texture_uuid)
+            if texture_uuid
+            else None
+        )
+        if asset is not None and asset.name not in (
             "__white_1x1__",
             "__white_srgb_1x1__",
             "__normal_1x1__",
         ):
             return MaterialTextureValue(
-                "file", asset_name, default_kind, expected_encoding
+                "file", asset.uuid, default_kind, expected_encoding
             )
         from termin.default_assets.render.material_asset import _classify_render_target_texture
 
@@ -365,7 +370,7 @@ class MaterialInspectorController:
                 else get_white_texture_handle(expected_encoding)
             )
         if tag == "file":
-            return self._resource_manager.get_texture_handle(name)
+            return self._resource_manager.get_handle_by_uuid("texture", name)
         if tag in ("rt_color", "rt_depth") and self._render_target_texture is not None:
             return self._render_target_texture(name, "depth" if tag == "rt_depth" else "color")
         _logger.error("Unknown or unavailable material texture source '%s'", tag)

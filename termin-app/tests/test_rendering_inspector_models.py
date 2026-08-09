@@ -99,8 +99,8 @@ class _ResourceManager:
     def get_pipeline_asset(self, name):
         return _PipelineAsset() if name == "Post" else None
 
-    def list_texture_names(self):
-        return ["Noise"]
+    def iter_runtime_assets(self, type_id):
+        return (self.texture,) if type_id == "texture" else ()
 
     def get_texture_asset(self, name):
         return self.texture if name == "Noise" else None
@@ -233,7 +233,7 @@ def test_render_target_inspector_snapshot_and_mutations(monkeypatch):
     file_index = next(
         index
         for index, choice in enumerate(controller.snapshot.pipeline_parameters[0].choices)
-        if choice.value == ("file", "Noise")
+        if choice.value == ("file", "texture-noise")
     )
     controller.set_pipeline_parameter("source", file_index)
     controller.set_pipeline(1)
