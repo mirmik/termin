@@ -72,6 +72,7 @@ function Copy-PlotD3D11ShaderPack {
         "termin-engine-tcplot-3d",
         "termin-engine-tcplot-2d-line",
         "termin-engine-tcplot-2d-styled-line",
+        "termin-engine-tcplot-2d-scatter",
         "termin-engine-canvas2d-solid",
         "termin-engine-canvas2d-texture",
         "termin-engine-text2d",
