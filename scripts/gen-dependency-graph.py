@@ -328,7 +328,7 @@ def parse_cmake_deps(cmake_path):
     otherwise implicit dependencies.  Test and binding targets are omitted
     because this is a graph of repository modules, not build-only targets.
     """
-    with open(cmake_path) as f:
+    with open(cmake_path, encoding="utf-8") as f:
         content = f.read()
 
     deps = set()
@@ -372,7 +372,7 @@ def parse_cmake_deps(cmake_path):
 
 def parse_python_deps(setup_path):
     """Extract install_requires from setup.py."""
-    with open(setup_path) as f:
+    with open(setup_path, encoding="utf-8") as f:
         content = f.read()
 
     deps = set()
@@ -413,7 +413,7 @@ def parse_python_imports(python_dir):
                 continue
             filepath = os.path.join(dirpath, fname)
             try:
-                with open(filepath) as f:
+                with open(filepath, encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
                         m = re.match(r'(?:from|import)\s+([\w.]+)', line)
@@ -441,7 +441,7 @@ def render_interactive_html(all_nodes, direct_edges, node_to_group):
             for source, dependency in sorted(direct_edges)
         ],
     }
-    with open(HTML_TEMPLATE) as f:
+    with open(HTML_TEMPLATE, encoding="utf-8") as f:
         html = f.read()
     encoded_data = json.dumps(html_data, ensure_ascii=False, separators=(",", ":"))
     return html.replace(

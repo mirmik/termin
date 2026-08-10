@@ -62,6 +62,7 @@ if(TERMIN_BUILD_TESTS)
         termin_engine::termin_engine
     )
     if(WIN32)
+        target_compile_definitions(termin_framegraph_remote_target_service_test PRIVATE NOMINMAX)
         target_link_libraries(termin_framegraph_remote_target_service_test PRIVATE ws2_32)
     endif()
     termin_set_rpath_test(termin_framegraph_remote_target_service_test)
