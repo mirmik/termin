@@ -38,6 +38,23 @@ chart.Camera.Reset(); // также возвращает каноническу�
 не должны неожиданно сбрасывать пользовательский ракурс. Если новые bounds
 нужно вписать, потребитель вызывает `Camera.Fit()` явно.
 
+`RetainedChart3DHost` работает on-demand по умолчанию. Первый attach,
+resize/DPI, возврат из `Collapsed` и camera input сами запрашивают кадр. После
+прямой мутации chart из C# кадр запрашивает consumer:
+
+```csharp
+ChartHost.Attach(chart);
+
+surface.SetData(nextX, nextY, nextZ, rows, columns);
+chart.Camera.Fit();
+ChartHost.RequestRender();
+```
+
+Для настоящей непрерывной анимации можно установить
+`ChartHost.ContinuousRendering = true`. Статические surface-графики не должны
+включать этот режим: без mutation host сохраняет последний `D3DImage` и не
+выполняет native render/present на каждом WPF composition frame.
+
 Справочник по тому, что сейчас доступно из `Termin.Native.PlotView3D` для
 3D-графиков в Alliance. Методы ниже - это SWIG C# API, поэтому имена остаются
 в `snake_case`.

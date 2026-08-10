@@ -1,9 +1,43 @@
-# tcplot — кастомизация графиков (C# / `PlotView2DMulti`)
+# tcplot — кастомизация 2D-графиков из C#
+
+## Retained API для нового кода
+
+Новый WPF-код должен использовать тонкие обёртки `Chart2D` и
+`MultiChart2D`. Компоновка, тики, проекция, общая X-ось и виртуальный скролл
+принадлежат tcplot, но собранная `TcVisualScene2D` и именованные части чарта
+остаются доступны C#-потребителю для кастомизации.
+
+```csharp
+using var chart = new Chart2D(
+    host, 1, 1, new PlotRange2D(0, 1, -1, 1));
+ChartLineSeries2D signal = chart.AddLineSeries(
+    "signal", x, y,
+    style: new PlotLineSeriesStyle2D(
+        new PlotColor2D(0.2f, 0.8f, 1.0f), thicknessPx: 1.5f));
+
+sceneHost.Attach(host, chart.Scene);
+using var interaction = new Chart2DWpfInteraction(sceneHost, chart);
+
+// Стандартные части не спрятаны за facade.
+chart.TitleText = "Receiver signal";
+chart.Title.Item!.Visible = true;
+chart.ApplyTheme(theme);
+sceneHost.AddPortal(button, new Rect(12, 12, 110, 30));
+sceneHost.RequestRender();
+```
+
+Для набора панелей создаётся один `MultiChart2D`; его `Panels` возвращает
+заимствованные `Chart2D`, а `MultiChart2DWpfInteraction` синхронизирует X и
+переключает колесо между навигацией и виртуальным скроллом. Оба WPF-хоста
+рендерят on-demand по `RequestRender()` и автоматически реагируют на resize,
+DPI и пользовательскую навигацию.
+
+## Legacy facade
 
 Справочник по основным runtime-настройкам `Termin.Native.PlotView2DMulti` без пересборки нативной части. Методы ниже — обычные snake_case из SWIG-обёртки; styling-вызовы применяются ко всем панелям сразу (broadcast-семантика).
 
-> Эта setter-based поверхность является переходной. Целевая архитектура
-> описана в
+> Эта setter-based поверхность оставлена для старых потребителей. Архитектура
+> retained composer описана в
 > [Open retained chart composer](../../docs/plans/2026-08-06-open-retained-chart-composer-plan.md):
 > native `tcplot` собирает стандартный chart как публичное дерево
 > `TcVisualScene2D`, а C# получает thin wrappers и полный доступ к его parts.
