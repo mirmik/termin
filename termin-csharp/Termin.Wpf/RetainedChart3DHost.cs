@@ -19,6 +19,9 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     private readonly Dictionary<FrameworkElement, Rect> _portals = new();
     private RetainedChart3D? _chart;
     private bool _renderingSubscribed;
+    private bool _renderRequested = true;
+    private bool _continuousRendering;
+    private bool _pointerInteractionActive;
     private bool _disposed;
     private int _lastWidth;
     private int _lastHeight;
@@ -42,6 +45,18 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
 
     public RetainedChart3D? Chart => _chart;
     public Tgfx2D3D11ImageHost RenderHost => _renderHost;
+    public bool ContinuousRendering
+    {
+        get => _continuousRendering;
+        set
+        {
+            ThrowIfDisposed();
+            if (_continuousRendering == value)
+                return;
+            _continuousRendering = value;
+            RequestRender();
+        }
+    }
 
     public event EventHandler<RetainedSceneFramebufferChangedEventArgs>?
         FramebufferChanged;
@@ -55,6 +70,7 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         _lastWidth = 0;
         _lastHeight = 0;
         _lastPixelScale = 0;
+        _renderRequested = true;
         SubscribeRendering();
     }
 
@@ -62,6 +78,8 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     {
         UnsubscribeRendering();
         _chart = null;
+        _pointerInteractionActive = false;
+        _renderRequested = false;
     }
 
     public void AddPortal(FrameworkElement content, Rect bounds)
@@ -104,6 +122,11 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         ThrowIfDisposed();
         if (_chart is null)
             return;
+        // Consume the request before callbacks and native rendering. A
+        // mutation requested from FramebufferChanged must survive and produce
+        // another composition frame instead of being cleared at the end of
+        // this one.
+        _renderRequested = false;
 
         int width = Math.Max(1, _renderHost.FramebufferWidth);
         int height = Math.Max(1, _renderHost.FramebufferHeight);
@@ -128,6 +151,17 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
                 "Failed to present retained Chart3D through the WPF D3DImage bridge.");
     }
 
+    /// <summary>
+    /// Schedules one composition render when <see cref="ContinuousRendering"/>
+    /// is false. Call this after mutating chart data, style, camera, or chrome.
+    /// </summary>
+    public void RequestRender()
+    {
+        ThrowIfDisposed();
+        _renderRequested = true;
+        SubscribeRendering();
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -150,6 +184,7 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _renderRequested = true;
         UpdateRenderingSubscription();
     }
 
@@ -158,12 +193,15 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         UnsubscribeRendering();
         _renderHost.ReleaseNativeResources();
         _chart?.ReleaseGpuResources();
+        _renderRequested = true;
     }
 
     private void OnIsVisibleChanged(
         object sender,
         DependencyPropertyChangedEventArgs e)
     {
+        if (IsVisible)
+            _renderRequested = true;
         UpdateRenderingSubscription();
     }
 
@@ -193,6 +231,9 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
 
     private void OnRendering(object? sender, EventArgs e)
     {
+        if (!_continuousRendering && !_renderRequested &&
+            !FramebufferStateChanged())
+            return;
         try
         {
             RenderFrame();
@@ -214,13 +255,19 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
             return;
         _renderHost.FocusNativeWindow();
         e.Handled = _chart.PointerDown(e.X, e.Y, e.Button);
+        _pointerInteractionActive = e.Handled;
+        if (e.Handled)
+            RequestRender();
     }
 
     private void OnMouseMove(
         object? sender,
         Tgfx2D3D11MouseMoveEventArgs e)
     {
-        _chart?.PointerMove(e.X, e.Y);
+        if (_chart is null || !_pointerInteractionActive)
+            return;
+        _chart.PointerMove(e.X, e.Y);
+        RequestRender();
     }
 
     private void OnMouseUp(
@@ -230,6 +277,10 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         if (_chart is null)
             return;
         _chart.PointerUp(e.X, e.Y, e.Button);
+        bool wasActive = _pointerInteractionActive;
+        _pointerInteractionActive = false;
+        if (wasActive)
+            RequestRender();
         e.Handled = true;
     }
 
@@ -240,6 +291,18 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         if (_chart is null)
             return;
         e.Handled = _chart.Wheel(e.X, e.Y, e.Delta);
+        if (e.Handled)
+            RequestRender();
+    }
+
+    private bool FramebufferStateChanged()
+    {
+        int width = Math.Max(1, _renderHost.FramebufferWidth);
+        int height = Math.Max(1, _renderHost.FramebufferHeight);
+        float pixelScale =
+            (float)VisualTreeHelper.GetDpi(this).DpiScaleX;
+        return width != _lastWidth || height != _lastHeight ||
+            Math.Abs(pixelScale - _lastPixelScale) > 0.0001f;
     }
 
     private static void ValidateBounds(Rect bounds)

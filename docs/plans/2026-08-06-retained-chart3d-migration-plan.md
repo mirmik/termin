@@ -155,6 +155,9 @@ chart-owned chrome renderer; public handles и C# API при этом не из�
   настраиваемый MSAA с детерминированным пересозданием attachments.
 - [x] WPF retained hosts приостанавливают `CompositionTarget.Rendering` при
   effective invisibility, включая `Collapsed` ancestor.
+- [x] `RetainedChart3DHost` работает on-demand по умолчанию: attach,
+  resize/DPI, visibility и camera input инвалидируют кадр автоматически, а
+  direct chart mutations используют явный `RequestRender()`.
 - [x] Цвет разреженной data-grid поверхности входит в typed retained style и
   больше не зашит в renderer body.
 - [x] Добавлен Vulkan lifecycle/invalidation test для generation handles,
