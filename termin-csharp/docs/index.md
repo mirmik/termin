@@ -103,7 +103,11 @@ checked surface, scatter and grid references. Surface/scatter `SetData`
 preserves item identity, style and unrelated GPU caches. `Camera.Fit()` frames
 axis-scaled data without changing orbit orientation; `Camera.Reset()` also
 restores the canonical orientation. `MsaaSamples` owns render-target sampling,
-and `RetainedChart3DHost` suspends rendering while effectively invisible. See
+and `RetainedChart3DHost` renders on demand by default. Attach, resize, DPI,
+visibility and camera input schedule frames automatically; consumers call
+`RequestRender()` after direct data, style, camera or chrome mutations.
+Animated consumers can opt into `ContinuousRendering = true`. The host also
+suspends rendering while effectively invisible. See
 `examples/RetainedChart3DWpfExample` for the complete D3D11 vertical slice.
 The generic `RetainedScene2DHost` exposes the same MSAA policy and visibility
 suspension for composed 2D scenes. It renders continuously by default for

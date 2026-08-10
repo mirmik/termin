@@ -107,6 +107,7 @@ public partial class MainWindow : Window
             _resetCameraButton.Click += OnResetCameraClick;
 
             ChartHost.Attach(_chart);
+            ChartHost.ContinuousRendering = false;
             ChartHost.AddPortal(_title, new Rect(12, 10, 390, 36));
             ChartHost.AddPortal(_dataButton, new Rect(496, 10, 116, 34));
             ChartHost.AddPortal(_wireframeButton, new Rect(620, 10, 116, 34));
@@ -161,6 +162,7 @@ public partial class MainWindow : Window
             CreateSurface(_surfacePhase);
         _surface.SetData(x, y, z, SurfaceRows, SurfaceColumns);
         _chart.Camera.Fit();
+        ChartHost.RequestRender();
         ReportCallback("Surface data changed in C# without replacing its handle");
     }
 
@@ -185,6 +187,7 @@ public partial class MainWindow : Window
             style.SurfaceGridB,
             style.SurfaceGridA);
         _wireframeButton.Content = _wireframe ? "Filled surface" : "Wireframe";
+        ChartHost.RequestRender();
         ReportCallback("Surface style changed in C#");
     }
 
@@ -193,12 +196,14 @@ public partial class MainWindow : Window
         _shading = !_shading;
         _chart.SetSurfaceShading(_shading, 0.42f);
         _shadingButton.Content = _shading ? "Shading: on" : "Shading: off";
+        ChartHost.RequestRender();
         ReportCallback("Shader policy changed in C#");
     }
 
     private void OnResetCameraClick(object sender, RoutedEventArgs e)
     {
         _chart.Camera.Reset();
+        ChartHost.RequestRender();
         ReportCallback("Camera reset in C#");
     }
 
