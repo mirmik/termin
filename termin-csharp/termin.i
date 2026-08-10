@@ -1161,7 +1161,7 @@ public:
                          const char* z_label);
     bool set_surface_colormap(int surface_idx, SurfaceColorMap colormap);
     bool set_surface_colormap_reversed(int surface_idx, bool reversed);
-    bool set_surface_color(int surface_idx, float r, float g, float b, float a);
+    bool set_surface_color(int surface_idx, SrgbColor color);
     void toggle_wireframe();
     void toggle_marker_mode();
     void set_z_scale(float s);
@@ -1203,8 +1203,8 @@ public:
     void set_title(const char* title);
     void set_x_label(const char* label);
     void set_y_label(const char* label);
-    bool set_line_color(int idx, float r, float g, float b, float a);
-    bool set_scatter_color(int idx, float r, float g, float b, float a);
+    bool set_line_color(int idx, SrgbColor color);
+    bool set_scatter_color(int idx, SrgbColor color);
     bool set_line_style(int idx, LineStyle style,
                         float dash_px = 8.0f,
                         float gap_px = 5.0f);
@@ -1438,17 +1438,15 @@ public:
     void set_scroll_offset(float offset);
     float total_virtual_height() const;
 
-    void set_bg_color       (float r, float g, float b, float a);
-    void set_plot_bg_color  (float r, float g, float b, float a);
-    void set_grid_color     (float r, float g, float b, float a);
-    void set_axis_color     (float r, float g, float b, float a);
-    void set_label_color    (float r, float g, float b, float a);
-    void set_title_color    (float r, float g, float b, float a);
+    void set_bg_color       (SrgbColor color);
+    void set_plot_bg_color  (SrgbColor color);
+    void set_grid_color     (SrgbColor color);
+    void set_axis_color     (SrgbColor color);
+    void set_label_color    (SrgbColor color);
+    void set_title_color    (SrgbColor color);
     void clear_title_color  ();
-    void set_line_color     (int panel_idx, int series_idx,
-                             float r, float g, float b, float a);
-    void set_scatter_color  (int panel_idx, int series_idx,
-                             float r, float g, float b, float a);
+    void set_line_color     (int panel_idx, int series_idx, SrgbColor color);
+    void set_scatter_color  (int panel_idx, int series_idx, SrgbColor color);
     void set_line_style     (int panel_idx, int series_idx,
                              LineStyle style,
                              float dash_px = 8.0f,
