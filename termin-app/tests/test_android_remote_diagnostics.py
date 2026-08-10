@@ -5,6 +5,11 @@ import subprocess
 import pytest
 
 
+POSIX_HELPER_ONLY = pytest.mark.skipif(
+    os.name == "nt", reason="exercises POSIX Android diagnostic shell helpers"
+)
+
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACTIVITY = (
     REPO_ROOT
@@ -73,6 +78,7 @@ def test_openxr_remote_profiler_is_debuggable_gated_and_does_not_log_token() -> 
         ("android-framegraph-forward", "46052", "termin.framegraph"),
     ],
 )
+@POSIX_HELPER_ONLY
 def test_android_diagnostics_forward_helpers_launch_expected_service(
     tmp_path: Path,
     helper: str,
@@ -115,6 +121,7 @@ def test_android_diagnostics_forward_helpers_launch_expected_service(
     assert f"editor port:   {port}" in result.stdout
 
 
+@POSIX_HELPER_ONLY
 def test_android_diagnostics_forward_supports_native_activity(tmp_path: Path) -> None:
     calls = tmp_path / "adb-calls"
     fake_adb = tmp_path / "adb"

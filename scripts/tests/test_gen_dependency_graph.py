@@ -12,10 +12,10 @@ SPEC.loader.exec_module(GRAPH)
 
 class CMakeDependencyParserTests(unittest.TestCase):
     def parse(self, content):
-        with tempfile.NamedTemporaryFile("w", suffix="CMakeLists.txt") as cmake_file:
-            cmake_file.write(content)
-            cmake_file.flush()
-            return GRAPH.parse_cmake_deps(cmake_file.name)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            cmake_file = Path(temporary_directory) / "CMakeLists.txt"
+            cmake_file.write_text(content, encoding="utf-8")
+            return GRAPH.parse_cmake_deps(cmake_file)
 
     def test_reads_repository_package_helper_inside_condition(self):
         deps = self.parse(
