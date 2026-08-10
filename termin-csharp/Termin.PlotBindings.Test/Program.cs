@@ -250,7 +250,8 @@ static void TestManagedChartComposition(GpuHost host)
         !line.IsValid || !scatter.IsValid ||
         currentGrid is null ||
         !currentGrid.Snapshot.Projection.Equals(projectionHandle) ||
-        chart.XTicks.Count == 0 || chart.YTicks.Count == 0)
+        chart.XTickLabels.ChildCount == 0 ||
+        chart.YTickLabels.ChildCount == 0)
         throw new InvalidOperationException(
             "Compact chart updates did not preserve retained native parts.");
 
