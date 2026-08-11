@@ -129,7 +129,6 @@ public:
                          const char* z_label);
     bool set_surface_colormap(int surface_idx, SurfaceColorMap colormap);
     bool set_surface_colormap_reversed(int surface_idx, bool reversed);
-    bool set_surface_color(int surface_idx, float r, float g, float b, float a);
     void toggle_wireframe();
     void toggle_marker_mode();
     void set_z_scale(float s);
@@ -171,8 +170,6 @@ public:
     void set_title(const char* title);
     void set_x_label(const char* label);
     void set_y_label(const char* label);
-    bool set_line_color(int idx, float r, float g, float b, float a);
-    bool set_scatter_color(int idx, float r, float g, float b, float a);
     bool set_line_style(int idx, LineStyle style,
                         float dash_px = 8.0f,
                         float gap_px = 5.0f);
@@ -196,6 +193,11 @@ public:
 %apply double INPUT[] { const double* x, const double* y }
 
 %extend PlotView3D {
+    bool set_surface_color(int surface_idx, float r, float g, float b, float a) {
+        return $self->set_surface_color(
+            surface_idx, tcplot::SrgbColor{r, g, b, a});
+    }
+
     void plot(const double* x, const double* y, const double* z,
               size_t n,
               float cr, float cg, float cb, float ca,
@@ -267,6 +269,14 @@ public:
 }
 
 %extend PlotView2D {
+    bool set_line_color(int idx, float r, float g, float b, float a) {
+        return $self->set_line_color(idx, tcplot::SrgbColor{r, g, b, a});
+    }
+
+    bool set_scatter_color(int idx, float r, float g, float b, float a) {
+        return $self->set_scatter_color(idx, tcplot::SrgbColor{r, g, b, a});
+    }
+
     void plot(const double* x, const double* y, size_t n,
               float cr, float cg, float cb, float ca,
               double thickness = 1.5,
@@ -313,6 +323,42 @@ public:
 }
 
 %extend PlotView2DMulti {
+    void set_bg_color(float r, float g, float b, float a) {
+        $self->set_bg_color(tcplot::SrgbColor{r, g, b, a});
+    }
+
+    void set_plot_bg_color(float r, float g, float b, float a) {
+        $self->set_plot_bg_color(tcplot::SrgbColor{r, g, b, a});
+    }
+
+    void set_grid_color(float r, float g, float b, float a) {
+        $self->set_grid_color(tcplot::SrgbColor{r, g, b, a});
+    }
+
+    void set_axis_color(float r, float g, float b, float a) {
+        $self->set_axis_color(tcplot::SrgbColor{r, g, b, a});
+    }
+
+    void set_label_color(float r, float g, float b, float a) {
+        $self->set_label_color(tcplot::SrgbColor{r, g, b, a});
+    }
+
+    void set_title_color(float r, float g, float b, float a) {
+        $self->set_title_color(tcplot::SrgbColor{r, g, b, a});
+    }
+
+    void set_line_color(int panel_idx, int series_idx,
+                        float r, float g, float b, float a) {
+        $self->set_line_color(
+            panel_idx, series_idx, tcplot::SrgbColor{r, g, b, a});
+    }
+
+    void set_scatter_color(int panel_idx, int series_idx,
+                           float r, float g, float b, float a) {
+        $self->set_scatter_color(
+            panel_idx, series_idx, tcplot::SrgbColor{r, g, b, a});
+    }
+
     int add_line(int panel_idx,
                  const double* x, const double* y, size_t n,
                  float cr, float cg, float cb, float ca,
@@ -392,17 +438,7 @@ public:
     void set_scroll_offset(float offset);
     float total_virtual_height() const;
 
-    void set_bg_color       (float r, float g, float b, float a);
-    void set_plot_bg_color  (float r, float g, float b, float a);
-    void set_grid_color     (float r, float g, float b, float a);
-    void set_axis_color     (float r, float g, float b, float a);
-    void set_label_color    (float r, float g, float b, float a);
-    void set_title_color    (float r, float g, float b, float a);
     void clear_title_color  ();
-    void set_line_color     (int panel_idx, int series_idx,
-                             float r, float g, float b, float a);
-    void set_scatter_color  (int panel_idx, int series_idx,
-                             float r, float g, float b, float a);
     void set_line_style     (int panel_idx, int series_idx,
                              LineStyle style,
                              float dash_px = 8.0f,
