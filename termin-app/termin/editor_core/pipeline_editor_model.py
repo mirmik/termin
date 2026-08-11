@@ -330,7 +330,7 @@ def _material_pass_texture_inputs(material_name: object) -> list[tuple[str, str]
 
 
 def _set_dynamic_input_sockets(
-    graph: Graph,
+    controller: GraphController,
     node: Node,
     dynamic_inputs: list[tuple[str, str]],
     keep_sockets: set[str],
@@ -352,10 +352,10 @@ def _set_dynamic_input_sockets(
     }
     for edge_id in [
         edge_id
-        for edge_id, edge in graph.edges.items()
+        for edge_id, edge in controller.graph.edges.items()
         if edge.dst_node_id == node.id and edge.dst_socket in remove_names
     ]:
-        del graph.edges[edge_id]
+        controller.remove_edge(edge_id)
     node.inputs = [socket for socket in node.inputs if socket.name not in remove_names]
     existing = {socket.name: socket for socket in node.inputs}
     for socket_name, socket_type in filtered:
@@ -365,14 +365,15 @@ def _set_dynamic_input_sockets(
         else:
             socket.socket_type = socket_type
     node.data["dynamic_inputs"] = filtered
+    controller.update_node(node.id, inputs=node.inputs, data=node.data)
 
 
-def sync_material_pass_inputs(graph: Graph, node: Node) -> bool:
+def sync_material_pass_inputs(controller: GraphController, node: Node) -> bool:
     if str(node.data.get("graph_type", "")) != "MaterialPass":
         return False
     static_inputs, _, _ = _extract_pass_socket_info("MaterialPass")
     _set_dynamic_input_sockets(
-        graph,
+        controller,
         node,
         _material_pass_texture_inputs(node.params.get("material", "")),
         {name for name, _ in static_inputs},
@@ -499,11 +500,11 @@ def load_pipeline_graph(data: dict) -> Graph:
     execution_model = str(data.get("execution_model", "single_view"))
     if execution_model not in ("single_view", "xr_multiview"):
         raise ValueError(f"Unsupported pipeline execution_model: {execution_model}")
-    graph.data["execution_model"] = execution_model
     controller = GraphController(
         graph,
         validator=PipelineConnectionValidator(),
     )
+    controller.set_graph_data({"execution_model": execution_model})
     node_ids = []
     for index, node_data in enumerate(nodes_data):
         if not isinstance(node_data, dict):
@@ -535,10 +536,18 @@ def load_pipeline_graph(data: dict) -> Graph:
             }
         )
         _configure_node(controller, node, node_type, graph_type)
+        controller.update_node(
+            node.id,
+            width=node.width,
+            height=node.height,
+            params=node.params,
+            data=node.data,
+        )
+        node = graph.nodes[node.id]
         for dynamic in node.data["dynamic_inputs"]:
             if len(dynamic) == 2 and not any(socket.name == str(dynamic[0]) for socket in node.inputs):
                 controller.add_input_socket(node.id, str(dynamic[0]), str(dynamic[1]))
-        sync_material_pass_inputs(graph, node)
+        sync_material_pass_inputs(controller, graph.nodes[node.id])
         node_ids.append(node.id)
     for index, connection in enumerate(connections_data):
         _load_pipeline_connection(controller, node_ids, index, connection)
@@ -552,7 +561,9 @@ def load_pipeline_graph(data: dict) -> Graph:
             float(frame.get("width", 600.0)),
             float(frame.get("height", 400.0)),
         )
-        group.data["viewport_name"] = str(frame.get("viewport_name", "main"))
+        controller.set_group_data(
+            group.id, {"viewport_name": str(frame.get("viewport_name", "main"))}
+        )
     return graph
 
 
@@ -589,7 +600,8 @@ def pass_list_to_pipeline_graph(data: dict) -> Graph:
         if not isinstance(pass_values, dict):
             raise ValueError(f"pipeline pass {index} data must be an object")
         node.params.update(pass_values)
-        sync_material_pass_inputs(graph, node)
+        controller.update_node(node.id, params=node.params, data=node.data)
+        sync_material_pass_inputs(controller, graph.nodes[node.id])
     return graph
 
 
@@ -919,30 +931,31 @@ class PipelineEditorController:
             }
         )
         _configure_node(self.graph_controller, node, node_type, graph_type)
-        sync_material_pass_inputs(self.graph, node)
+        self.graph_controller.update_node(node.id, params=node.params, data=node.data)
+        sync_material_pass_inputs(self.graph_controller, self.graph.nodes[node.id])
         self.graph_changed.emit(self.graph)
-        return node
+        return self.graph.nodes[node.id]
 
     def rename_node(self, node_id: str, name: str) -> bool:
         node = self.graph.nodes.get(node_id)
         normalized = name.strip()
         if node is None or not normalized:
             return False
-        node.title = normalized
         node.data["instance_name"] = normalized
+        self.graph_controller.update_node(node_id, title=normalized, data=node.data)
         self.graph_changed.emit(self.graph)
         return True
 
     def set_param(self, node: Node, name: str, value: object) -> None:
         if not self.graph_controller.set_node_param(node.id, name, value):
             raise KeyError(node.id)
-        self.synchronize_param(node)
+        self.synchronize_param(self.graph.nodes[node.id])
         self.notify_graph_changed()
 
     def synchronize_param(self, node: Node) -> None:
-        if self.graph.nodes.get(node.id) is not node:
+        if node.id not in self.graph.nodes:
             raise KeyError(node.id)
-        sync_material_pass_inputs(self.graph, node)
+        sync_material_pass_inputs(self.graph_controller, self.graph.nodes[node.id])
 
     def remove_node(self, node_id: str) -> bool:
         if not self.graph_controller.remove_node(node_id):
