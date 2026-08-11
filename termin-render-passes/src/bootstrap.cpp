@@ -11,6 +11,7 @@
 #include <termin/render/resolve_pass.hpp>
 #include <termin/render/shadow_pass.hpp>
 #include <termin/render/skybox_pass.hpp>
+#include <termin/render/standard_gbuffer_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
 #include <termin/render/ui_widget_pass.hpp>
 #include <termin/render/world2d_pass.hpp>
@@ -36,6 +37,7 @@ namespace termin {
         MultiviewResolvePass::register_type();
         ShadowPass::register_type();
         SkyBoxPass::register_type();
+        StandardGBufferPass::register_type();
         TonemapPass::register_type();
         MultiviewTonemapPass::register_type();
         World2DPass::register_type();
