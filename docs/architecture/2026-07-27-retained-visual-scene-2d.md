@@ -117,14 +117,22 @@ they are unrelated to the removed visual-scene snapshots.
 
 ## Integration
 
+The accepted target for shared placement, draw lowering and cross-tree
+projections is documented in
+[Shared 2D Composition](2026-08-11-shared-2d-composition.md). Visual-scene
+remains a separate owner and semantic tree while its value-level composition
+mechanics converge with GUI on `termin-base`/`termin-graphics`.
+
 `termin-gui-native::SceneView` accepts a `TcVisualScene` handle facade,
 paints it generically and never inspects concrete graphic item types. It owns
 camera behavior and forwards input in world coordinates; selection, dragging,
 stable IDs and other domain policies remain in the scene owner. Because the
 thread-confined scene has no observer/revision subsystem, a mutating owner
 explicitly invalidates the view. Widget portal associations currently remain
-in a GUI side table keyed by `GraphicItemHandle`; moving that association into
-a generic scene-to-widget-tree projection is a possible later design step.
+in a GUI side table keyed by `GraphicItemHandle`. That working vertical slice
+is planned to become a reusable handle-based scene-to-widget projection owned
+by the GUI-facing composition layer; it does not move widget ownership into
+the visual scene.
 
 `PlotAnnotationLayer2D` owns semantic annotation handles and projects each
 annotation into one or more ordinary visual items. A minimal tcplot consumer

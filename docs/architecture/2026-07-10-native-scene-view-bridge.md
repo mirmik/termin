@@ -1,5 +1,10 @@
 # Native SceneView Bridge
 
+The broader target boundary is defined by
+[Shared 2D Composition](2026-08-11-shared-2d-composition.md). This document
+describes the current `SceneView` vertical slice; its portal side table is
+planned to become a reusable projection bridge without changing ownership.
+
 `SceneView` is the deliberately small `termin-gui-native` host for
 `termin-visual-scene`. It is a widget, not a second scene model.
 
@@ -67,8 +72,9 @@ associates one `GraphicItemHandle` with one `tc_widget_handle`.
 - destroying the view detaches portal widgets without destroying them;
 - one widget cannot be associated with two scene items in the same view.
 
-During layout, a portal widget receives the camera-projected world bounds of
-its item. Portal widgets paint above scene primitives in stable visual order
-and remain clipped by the `SceneView` bounds. Passing portal/tree information
-through a more general scene projection may be designed later; it is not
-encoded as concrete-item knowledge in the view.
+During layout, a portal widget receives the logical world bounds of its item.
+The view applies camera translation and uniform zoom through the widget
+subtree-transform contract, so paint and input use the same mapping. Portal
+widgets paint above scene primitives in stable visual order and remain clipped
+by the `SceneView` bounds. The planned reusable projection bridge preserves
+this behavior and keeps concrete-item knowledge out of the view.
