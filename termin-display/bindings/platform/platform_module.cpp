@@ -13,6 +13,7 @@ namespace nb = nanobind;
 
 namespace termin {
 
+#ifndef TERMIN_PLATFORM_LEGACY_ONLY
     void bind_backend_window(nb::module_& m) {
         nb::class_<BackendWindow>(m, "BackendWindow")
             .def("window_size", &BackendWindow::window_size)
@@ -20,15 +21,22 @@ namespace termin {
             .def_prop_ro("content_scale", &BackendWindow::content_scale);
         nb::class_<BackendWindowSystem>(m, "BackendWindowSystem");
     }
+#endif
 
 } // namespace termin
 
 NB_MODULE(_platform_native, m) {
     m.attr("HAS_SDL") = nb::bool_(false);
+#ifndef TERMIN_PLATFORM_LEGACY_ONLY
     termin::bind_backend_window(m);
+#endif
 
 #ifdef TERMIN_DISPLAY_HAS_SDL
     m.attr("HAS_SDL") = nb::bool_(true);
+
+#ifdef TERMIN_PLATFORM_LEGACY_ONLY
+    nb::module_::import_("termin.window._window_native");
+#endif
 
     // BackendWindow::present() takes tgfx::TextureHandle and the windowed
     // session binding returns tgfx::GraphicsHost — both are

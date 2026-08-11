@@ -9,15 +9,18 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("termin_window")
 preload_sdk_libs("termin_display_window")
 
-from termin.display._platform_native import (  # noqa: E402
+from termin.window import (  # noqa: E402
     BackendWindow,
     BackendWindowSystem,
     PresentationMode,
     SDLBackendWindow,
-    SystemCursorShape,
     WindowHandle,
     WindowManager,
     WindowedGraphicsSession,
+)
+from termin.display._platform_native import (  # noqa: E402
+    SystemCursorShape,
+    attach_window_input_display,
     get_clipboard_text,
     poll_sdl_events,
     quit_sdl,
@@ -43,6 +46,7 @@ __all__ = [
     "WindowHandle",
     "WindowManager",
     "WindowedGraphicsSession",
+    "attach_window_input_display",
     "get_clipboard_text",
     "poll_sdl_events",
     "quit_sdl",

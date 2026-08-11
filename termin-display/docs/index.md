@@ -22,13 +22,17 @@ routing и backend-neutral offscreen output surfaces. Native windows и
 
 ## Публичный API
 
-Python bindings пока повторно экспортируют window types:
+Python bindings пока повторно экспортируют window types для совместимости:
 
 ```python
-from termin.display import SDLBackendWindow
+from termin.display.window import WindowManager
 ```
 
-`BackendWindow` является abstract/native base; прикладной код должен использовать concrete implementation, например `SDLBackendWindow`.
+Новый прикладной код должен импортировать их из owning package:
+
+```python
+from termin.window import WindowManager, WindowedGraphicsSession
+```
 
 Это packaging compatibility, а не ownership: C++ `BackendWindow` и
 `SDLBackendWindow` уже реализованы в `termin-window`. Новая display/render

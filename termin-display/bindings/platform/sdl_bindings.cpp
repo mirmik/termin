@@ -480,6 +480,18 @@ namespace termin {
             .def("poll_events", &SDLWindowBackend::poll_events)
             .def("terminate", &SDLWindowBackend::terminate);
 
+#ifdef TERMIN_PLATFORM_LEGACY_ONLY
+        m.def(
+            "attach_window_input_display",
+            [](BackendWindow& window, uint32_t index, uint32_t generation) {
+                attach_window_input_display(window, tc_display_handle{index, generation});
+            },
+            nb::arg("window"),
+            nb::arg("index"),
+            nb::arg("generation"));
+#endif
+
+#ifndef TERMIN_PLATFORM_LEGACY_ONLY
         // One WindowedGraphicsSession composes the canonical GraphicsHost with an
         // SDL window system. Every visible window is an equal presentation target.
         nb::enum_<tgfx::PresentationMode>(m, "PresentationMode")
@@ -625,6 +637,7 @@ namespace termin {
             .def("pending_event_count", &WindowManager::pending_event_count, nb::arg("handle"))
             .def("close", &WindowManager::close)
             .def_prop_ro("is_open", &WindowManager::is_open);
+#endif
     }
 
 } // namespace termin

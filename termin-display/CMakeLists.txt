@@ -200,7 +200,9 @@ if(TERMIN_BUILD_PYTHON)
             bindings/platform/platform_module.cpp
             bindings/platform/sdl_bindings.cpp
         )
-        target_compile_definitions(_platform_native PRIVATE TERMIN_DISPLAY_HAS_SDL)
+        target_compile_definitions(_platform_native PRIVATE
+            TERMIN_DISPLAY_HAS_SDL
+            TERMIN_PLATFORM_LEGACY_ONLY)
         target_include_directories(_platform_native PRIVATE ${SDL2_INCLUDE_DIRS})
         target_link_libraries(_platform_native PRIVATE termin_display_window)
         target_include_directories(_platform_native PRIVATE

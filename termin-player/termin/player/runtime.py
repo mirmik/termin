@@ -663,6 +663,7 @@ class PlayerRuntime:
         """Set up input handling."""
         from tcbase import log
         from termin.display import BasicDisplayInputManager
+        from termin.display.window import attach_window_input_display
 
         if self._display is None:
             log.error("[PlayerRuntime] Cannot set up input without display")
@@ -687,7 +688,7 @@ class PlayerRuntime:
                 log.error(f"[PlayerRuntime] Failed to create input manager for viewport '{viewport.name}'")
 
         if self.window is not None:
-            self.window.set_input_display(*self._display.handle)
+            attach_window_input_display(self.window, *self._display.handle)
 
         self._input_manager = input_manager
         log.info(f"[PlayerRuntime] Input configured for {active_viewports} viewport(s)")
@@ -809,7 +810,9 @@ class PlayerRuntime:
                 manager.remove_display(self._display)
 
         if self.window is not None:
-            self.window.set_input_display(0xFFFFFFFF, 0)
+            from termin.display.window import attach_window_input_display
+
+            attach_window_input_display(self.window, 0xFFFFFFFF, 0)
         if self._input_manager is not None:
             self._input_manager.close()
             self._input_manager = None
