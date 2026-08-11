@@ -42,6 +42,64 @@ def _pass_parameters(pipeline: "RenderPipeline") -> tuple[str, ...]:
     return tuple(result)
 
 
+def _deserialize_pass_list_pipeline(data: dict, resource_manager):
+    from termin.render_framework import RenderPipeline
+
+    passes = data.get("passes")
+    if not isinstance(passes, list):
+        raise ValueError("pipeline has a non-list 'passes' field")
+    targets = data.get("targets", [])
+    if not isinstance(targets, list) or not all(isinstance(item, dict) for item in targets):
+        raise ValueError("pipeline has invalid target metadata")
+    resource_views = data.get("resource_views", {})
+    fbo_compositions = data.get("fbo_compositions", {})
+    execution_model = data.get("execution_model", "single_view")
+    if execution_model not in ("single_view", "xr_multiview"):
+        raise ValueError(f"pipeline has invalid execution model '{execution_model}'")
+    if (
+        not isinstance(resource_views, dict)
+        or not all(
+            isinstance(name, str) and isinstance(item, dict)
+            for name, item in resource_views.items()
+        )
+        or not isinstance(fbo_compositions, dict)
+        or not all(
+            isinstance(name, str) and isinstance(item, dict)
+            for name, item in fbo_compositions.items()
+        )
+    ):
+        raise ValueError("pipeline has an invalid resource recipe")
+    pipeline = RenderPipeline.deserialize(data, resource_manager)
+    if pipeline is None:
+        raise ValueError("pipeline deserializer returned no pipeline")
+    return pipeline
+
+
+def validate_pipeline_document(data: dict, resource_manager=None) -> None:
+    """Validate authored pipeline data through the runtime import boundary."""
+    if not isinstance(data, dict):
+        raise ValueError("pipeline document must be a JSON object")
+    has_pass_list = "passes" in data
+    has_graph = any(key in data for key in ("nodes", "connections", "viewport_frames"))
+    if has_pass_list and has_graph:
+        raise ValueError("pipeline document mixes graph and pass-list fields")
+    if has_graph:
+        from termin.render_framework import compile_graph_from_json
+
+        pipeline = compile_graph_from_json(json.dumps(data))
+    elif has_pass_list:
+        if resource_manager is None:
+            from termin_assets import get_resource_manager
+
+            resource_manager = get_resource_manager()
+        if resource_manager is None:
+            raise ValueError("pipeline resource manager is not configured")
+        pipeline = _deserialize_pass_list_pipeline(data, resource_manager)
+    else:
+        raise ValueError("pipeline document has no supported authored format")
+    pipeline.destroy()
+
+
 class PipelineAsset(DataAsset["TcPipelineTemplate"]):
     """Strong owner of one stable, versioned canonical pipeline template."""
 
@@ -230,53 +288,19 @@ class PipelineAsset(DataAsset["TcPipelineTemplate"]):
     ) -> _PipelineCandidate | None:
         from termin_assets import get_resource_manager
         from termin.default_assets.render.pipeline_dependencies import material_pass_materials
-        from termin.render_framework import RenderPipeline
-
-        passes = data.get("passes")
-        if not isinstance(passes, list):
-            log.error(f"[PipelineAsset] Pipeline '{self._name}' has a non-list 'passes' field")
-            return None
         targets = data.get("targets", [])
-        if not isinstance(targets, list) or not all(isinstance(item, dict) for item in targets):
-            log.error(f"[PipelineAsset] Pipeline '{self._name}' has invalid target metadata")
-            return None
-        resource_views = data.get("resource_views", {})
-        fbo_compositions = data.get("fbo_compositions", {})
         execution_model = data.get("execution_model", "single_view")
-        if execution_model not in ("single_view", "xr_multiview"):
-            log.error(
-                f"[PipelineAsset] Pipeline '{self._name}' has invalid execution model "
-                f"'{execution_model}'"
-            )
-            return None
-        if (
-            not isinstance(resource_views, dict)
-            or not all(
-                isinstance(name, str) and isinstance(item, dict)
-                for name, item in resource_views.items()
-            )
-            or not isinstance(fbo_compositions, dict)
-            or not all(
-                isinstance(name, str) and isinstance(item, dict)
-                for name, item in fbo_compositions.items()
-            )
-        ):
-            log.error(f"[PipelineAsset] Pipeline '{self._name}' has invalid resource recipe")
-            return None
         rm = self._resource_manager or get_resource_manager()
         if rm is None:
             log.error(f"[PipelineAsset] Resource manager is not configured for '{self._name}'")
             return None
         try:
-            pipeline = RenderPipeline.deserialize(data, rm)
+            pipeline = _deserialize_pass_list_pipeline(data, rm)
         except Exception:
             log.error(
                 f"[PipelineAsset] Failed to deserialize pass-list pipeline '{self._name}'",
                 exc_info=True,
             )
-            return None
-        if pipeline is None:
-            log.error(f"[PipelineAsset] Deserializer returned no pipeline for '{self._name}'")
             return None
         pipeline.name = self._name
         external_params = tuple(

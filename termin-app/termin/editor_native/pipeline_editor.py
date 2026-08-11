@@ -259,6 +259,7 @@ def build_native_pipeline_editor(
         document,
         controller.graph,
         request_render=request_render,
+        controller=controller.graph_controller,
     )
     content.add_stretch_child(graph_view.root)
     status = document.create_status_bar(controller.status)
