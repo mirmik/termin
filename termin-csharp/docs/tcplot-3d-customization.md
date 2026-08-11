@@ -32,6 +32,13 @@ SurfaceItemRef3D surface = chart.Scene.AddSurface(
 surface.SetData(nextX, nextY, nextZ, rows, columns);
 chart.Camera.Fit();   // сохраняет текущий azimuth/elevation
 chart.Camera.Reset(); // также возвращает каноническую ориентацию
+
+// A colorbar is tied to the live surface item and follows its colormap.
+chart.ShowColorBar(surface, "amplitude", new ColorBarStyle3D(
+    tickCount: 7,
+    widthPx: 20,
+    textSizePx: 12));
+// chart.HideColorBar();
 ```
 
 `SetData` не двигает камеру автоматически: streaming и смена выбранного кадра
@@ -378,5 +385,4 @@ Picking сейчас стоит рассматривать как инструм
 
 Если это понадобится в Alliance, править надо не только C# слой, но и
 `tcplot`/shader-side часть.
-
 
