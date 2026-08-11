@@ -33,18 +33,24 @@ function packageBaseUrl(packageUrl) {
 }
 
 function describeThrown(module, error) {
-    if (error instanceof Error) return error.message;
+    if (error instanceof Error && error.message) return error.message;
     try {
         const [type, message] = module.getExceptionMessage(error);
         if (message) return type ? `${type}: ${message}` : message;
     } catch {
         // Not an Emscripten C++ exception; use its serializable JS shape below.
     }
-    try {
-        return JSON.stringify(error);
-    } catch {
-        return String(error);
+    if (error instanceof Error && error.cause !== undefined) {
+        const cause = describeThrown(module, error.cause);
+        if (cause) return cause;
     }
+    try {
+        const serialized = JSON.stringify(error);
+        if (serialized && serialized !== "{}") return serialized;
+    } catch {
+        // Fall through to the generic string representation.
+    }
+    return String(error);
 }
 
 export class TerminWebHost {

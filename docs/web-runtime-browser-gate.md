@@ -44,6 +44,8 @@ Gate поднимает временный HTTP server только на loopbac
 - orbit, wheel, keyboard, focus и canvas resize/DPR;
 - изменение пикселей сцены после input, а не только рост event counter;
 - тот же orbit path непосредственно в полноэкранном `viewer.html`.
+- retained `TcVisualScene` → `DrawList2D` → `Canvas2DRenderer` путь на отдельной
+  странице `visual-scene.html`, включая устойчивые pixel probes.
 
 Успех обозначается маркером `TERMIN_WEB_CORE_SMOKE_PASSED`. При любой ошибке
 команда возвращает ненулевой exit code и сохраняет diagnostics.
@@ -68,6 +70,22 @@ Report schema v1 содержит:
 
 GitHub Actions job `web-runtime-chromium` запускает этот же публичный build
 wrapper и публикует JSON как artifact `web-runtime-chromium-gate`.
+
+## Retained VisualScene2D example
+
+После сборки страница `build/web-core/bin/visual-scene.html` показывает
+самостоятельный retained 2D пример. Она создаёт дерево `TcVisualScene` в Wasm,
+понижает его в канонический `DrawList2D` и исполняет список через
+`Canvas2DRenderer` на WebGPU.
+
+Страница загружает fixture runtime package без запуска scene frame loop:
+package предоставляет закреплённые WGSL-артефакты общих canvas2d-шейдеров.
+Пример автоматически проверяется общим `termin_web_core_browser_smoke`. Для
+быстрого изолированного прогона только этого пути доступна цель:
+
+```bash
+cmake --build build/web-core --target termin_web_visual_scene_browser_smoke
+```
 
 ## Firefox manual scenario
 

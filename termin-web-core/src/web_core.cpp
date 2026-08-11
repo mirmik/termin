@@ -26,6 +26,7 @@
 #include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin_scene/termin_scene.h>
 #include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/webgpu/webgpu_render_device.hpp>
@@ -37,6 +38,7 @@ extern "C" {
 #include <render/tc_viewport_input_manager.h>
 }
 
+#include "visual_scene_example.hpp"
 #include "web_render_shaders.hpp"
 
 namespace {
@@ -82,6 +84,7 @@ namespace {
     int web_player_graphics_status = 0;
     std::string web_player_graphics_error;
     std::string web_host_error;
+    std::string web_visual_scene_error;
     std::shared_ptr<termin::runtime::RuntimePackageReader> web_pending_package_reader;
     std::uint32_t web_host_frame_count = 0;
     bool web_host_loop_running = false;
@@ -106,6 +109,8 @@ namespace {
         web_host_loop_running = false;
         web_host_loop_last_timestamp = -1.0;
         web_headless_package.destroy();
+        tgfx::set_builtin_shader_read_callback({});
+        tgfx::set_builtin_shader_root(nullptr);
         if (!web_player) {
             web_host_frame_count = 0;
             return;
@@ -513,6 +518,23 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
         render_engine->set_graphics_host(*web_player->graphics_host);
         termin::ShaderArtifactResolver::ReadCallback read_artifact;
         if (web_player->package.shader_runtime.resource_provider) {
+            const auto provider = web_player->package.shader_runtime.resource_provider;
+            tgfx::set_builtin_shader_root(web_player->package.shader_runtime.builtin_shader_root.c_str());
+            tgfx::set_builtin_shader_read_callback([provider](std::string_view path, std::string& output) {
+                if (!provider->contains(path))
+                    return false;
+                try {
+                    const termin::runtime::RuntimePackageBytes bytes = provider->read(path);
+                    output.assign(reinterpret_cast<const char*>(bytes.view().data()), bytes.view().size());
+                    return true;
+                } catch (const std::exception& exception) {
+                    tc_log_error("TerminWebHost built-in shader read failed for '%.*s': %s",
+                                 static_cast<int>(path.size()),
+                                 path.data(),
+                                 exception.what());
+                    return false;
+                }
+            });
             read_artifact = [provider = web_player->package.shader_runtime.resource_provider](
                                 std::string_view path, std::vector<std::uint8_t>& output) {
                 if (!provider->contains(path))
@@ -788,6 +810,25 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_text(const char* te
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_focus_lost() {
     return web_host_input_ready() && tc_display_dispatch_focus_lost(web_player->presentation_display);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_visual_scene_render() {
+    if (!web_player || web_player_graphics_status != 2 || !web_player->device || !web_player->graphics_host) {
+        web_visual_scene_error = "WebGPU player is not initialized";
+        tc_log_error("TerminWebVisualScene: %s", web_visual_scene_error.c_str());
+        return 0;
+    }
+    return termin::web::render_visual_scene_example(*web_player->device,
+                                                    *web_player->graphics_host,
+                                                    web_player->width,
+                                                    web_player->height,
+                                                    web_visual_scene_error)
+               ? 1
+               : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_visual_scene_error() {
+    return web_visual_scene_error.c_str();
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t width, uint32_t height) {
