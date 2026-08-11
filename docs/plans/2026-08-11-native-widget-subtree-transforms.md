@@ -4,7 +4,9 @@
 
 Статус: transform foundation, SceneView portals и termin-nodegraph migration
 реализованы; остался renderer-level pixel acceptance и interactive smoke.
-Проектная доска для этой работы недоступна.
+Последующая консолидация widget и visual-scene placement mechanics ведётся в
+umbrella #1519 и архитектуре
+[Shared 2D Composition](../architecture/2026-08-11-shared-2d-composition.md).
 
 Связанные документы:
 
