@@ -6,6 +6,7 @@
 
 ## 2026-08
 
+- [Native widget subtree transforms and scalable SceneView portals](2026-08-11-native-widget-subtree-transforms.md)
 - [Retained Chart3D migration](2026-08-06-retained-chart3d-migration-plan.md)
 - [Open retained chart composer](2026-08-06-open-retained-chart-composer-plan.md)
 
