@@ -303,6 +303,21 @@ namespace termin {
             return;
         }
 
+        try {
+            painter_->prepare_documents(*ctx.ctx2, width, height, submissions);
+        } catch (const std::exception& error) {
+            tc::Log::error(
+                "[UIWidgetPass] failed to prepare render widgets for %zu native document(s): %s",
+                submissions.size(),
+                error.what());
+            return;
+        } catch (...) {
+            tc::Log::error("[UIWidgetPass] failed to prepare render widgets for %zu native document(s) with "
+                           "an unknown exception",
+                           submissions.size());
+            return;
+        }
+
         ctx.ctx2->begin_pass(output, {}, nullptr, 1.0f, false);
         ctx.ctx2->set_viewport(0, 0, width, height);
         try {
