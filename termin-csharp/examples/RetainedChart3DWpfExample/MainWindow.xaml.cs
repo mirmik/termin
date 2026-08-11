@@ -58,6 +58,7 @@ public partial class MainWindow : Window
                     surfaceGridG: 0.88f,
                     surfaceGridB: 0.92f,
                     surfaceGridA: 0.58f));
+            _chart.ShowColorBar(_surface, "amplitude");
 
             (double[] sx, double[] sy, double[] sz) = CreateScatter();
             _scatter = _chart.Scene.AddScatter(
