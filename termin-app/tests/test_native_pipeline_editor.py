@@ -49,6 +49,7 @@ def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Pa
         request_render=lambda: renders.append(True),
         default_directory=tmp_path,
     )
+    assert editor.graph_view.controller is controller.graph_controller
 
     connect_pipeline_editor_command(shell.menu_bar, shell.pipeline_editor_command, editor)
     editor.show()
@@ -72,6 +73,7 @@ def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Pa
     editor.execute_context("add-pipeline-output")
     assert len(editor.graph_view.node_items) == 2
     editor.load(path)
+    assert editor.graph_view.controller is controller.graph_controller
     assert len(controller.graph.nodes) == 1
     assert len(editor.graph_view.node_items) == 1
     assert renders

@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
+import tempfile
 from typing import Any
 
 from tcnodegraph.controller import GraphController
 from tcnodegraph.model import Graph, Node, Socket
+from tcnodegraph.schema import ConnectionValidator
 
 from termin.editor_core.signal import Signal
 
@@ -39,6 +44,14 @@ _FBO_FORMAT_CHOICES = [
 ]
 _COLOR_TEXTURE_FORMAT_CHOICES = _FBO_FORMAT_CHOICES[1:]
 _DEPTH_TEXTURE_FORMAT_CHOICES = [("depth32f", "Depth 32F")]
+
+
+@dataclass(frozen=True)
+class _PassNodeBaseline:
+    envelope: dict
+    graph_type: str
+    instance_name: str
+    params: dict
 
 
 def _default_for_param_kind(kind: str, choices) -> object:
@@ -433,15 +446,68 @@ def _configure_node(controller: GraphController, node: Node, node_type: str, gra
                 controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
 
 
+def _load_pipeline_connection(
+    controller: GraphController,
+    node_ids: list[str],
+    index: int,
+    connection: object,
+) -> None:
+    if not isinstance(connection, dict):
+        raise ValueError(f"pipeline connection {index} must be an object")
+    source = connection.get("from_node")
+    destination = connection.get("to_node")
+    if isinstance(source, bool) or not isinstance(source, int):
+        raise ValueError(f"pipeline connection {index} from_node must be an integer")
+    if isinstance(destination, bool) or not isinstance(destination, int):
+        raise ValueError(f"pipeline connection {index} to_node must be an integer")
+    if not 0 <= source < len(node_ids):
+        raise ValueError(f"pipeline connection {index} from_node is out of range: {source}")
+    if not 0 <= destination < len(node_ids):
+        raise ValueError(f"pipeline connection {index} to_node is out of range: {destination}")
+    source_socket = connection.get("from_socket")
+    destination_socket = connection.get("to_socket")
+    if not isinstance(source_socket, str) or not source_socket:
+        raise ValueError(f"pipeline connection {index} from_socket must be a nonempty string")
+    if not isinstance(destination_socket, str) or not destination_socket:
+        raise ValueError(f"pipeline connection {index} to_socket must be a nonempty string")
+    result = controller.connect(
+        node_ids[source],
+        source_socket,
+        node_ids[destination],
+        destination_socket,
+    )
+    if not result.ok:
+        raise ValueError(
+            f"pipeline connection {index} rejected "
+            f"({source}.{source_socket} -> {destination}.{destination_socket}): "
+            f"{result.reason}"
+        )
+
+
 def load_pipeline_graph(data: dict) -> Graph:
+    nodes_data = data.get("nodes")
+    if not isinstance(nodes_data, list):
+        raise ValueError("pipeline graph nodes must be a list")
+    connections_data = data.get("connections", [])
+    if not isinstance(connections_data, list):
+        raise ValueError("pipeline graph connections must be a list")
+    viewport_frames = data.get("viewport_frames", [])
+    if not isinstance(viewport_frames, list):
+        raise ValueError("pipeline graph viewport_frames must be a list")
+
     graph = Graph()
     execution_model = str(data.get("execution_model", "single_view"))
     if execution_model not in ("single_view", "xr_multiview"):
         raise ValueError(f"Unsupported pipeline execution_model: {execution_model}")
     graph.data["execution_model"] = execution_model
-    controller = GraphController(graph)
+    controller = GraphController(
+        graph,
+        validator=PipelineConnectionValidator(),
+    )
     node_ids = []
-    for index, node_data in enumerate(data.get("nodes", [])):
+    for index, node_data in enumerate(nodes_data):
+        if not isinstance(node_data, dict):
+            raise ValueError(f"pipeline graph node {index} must be an object")
         node_type = str(node_data.get("node_type", "pass"))
         raw_type = str(node_data.get("type", "Node"))
         instance_name = str(node_data.get("name", ""))
@@ -474,24 +540,11 @@ def load_pipeline_graph(data: dict) -> Graph:
                 controller.add_input_socket(node.id, str(dynamic[0]), str(dynamic[1]))
         sync_material_pass_inputs(graph, node)
         node_ids.append(node.id)
-    for connection in data.get("connections", []):
-        if connection is None:
-            continue
-        source = connection.get("from_node")
-        destination = connection.get("to_node")
-        if not isinstance(source, int) or not isinstance(destination, int):
-            continue
-        if not (0 <= source < len(node_ids) and 0 <= destination < len(node_ids)):
-            continue
-        result = controller.connect(
-            node_ids[source],
-            str(connection.get("from_socket", "")),
-            node_ids[destination],
-            str(connection.get("to_socket", "")),
-        )
-        if not result.ok:
-            _logger.warning("Pipeline graph ignored invalid connection: %s", result.reason)
-    for frame in data.get("viewport_frames", []):
+    for index, connection in enumerate(connections_data):
+        _load_pipeline_connection(controller, node_ids, index, connection)
+    for index, frame in enumerate(viewport_frames):
+        if not isinstance(frame, dict):
+            raise ValueError(f"pipeline graph viewport frame {index} must be an object")
         group = controller.add_group(
             str(frame.get("title", "Viewport")),
             float(frame.get("x", 0.0)),
@@ -504,9 +557,14 @@ def load_pipeline_graph(data: dict) -> Graph:
 
 
 def pass_list_to_pipeline_graph(data: dict) -> Graph:
+    passes = data.get("passes")
+    if not isinstance(passes, list):
+        raise ValueError("pipeline pass-list passes must be a list")
     graph = Graph()
     controller = GraphController(graph)
-    for index, pass_data in enumerate(data.get("passes", [])):
+    for index, pass_data in enumerate(passes):
+        if not isinstance(pass_data, dict):
+            raise ValueError(f"pipeline pass {index} must be an object")
         pass_type = str(pass_data.get("type", "Unknown"))
         pass_name = str(pass_data.get("pass_name", pass_type))
         graph_type = _pass_class_name(pass_type)
@@ -528,21 +586,11 @@ def pass_list_to_pipeline_graph(data: dict) -> Graph:
         )
         _configure_node(controller, node, "pass", graph_type)
         pass_values = pass_data.get("data", {})
-        if isinstance(pass_values, dict):
-            node.params.update(pass_values)
+        if not isinstance(pass_values, dict):
+            raise ValueError(f"pipeline pass {index} data must be an object")
+        node.params.update(pass_values)
         sync_material_pass_inputs(graph, node)
     return graph
-
-
-def lower_pipeline_graph_to_pass_list(graph: Graph) -> dict:
-    """Use the runtime graph compiler as the single graph-to-pass-list lowering."""
-    from termin.render_framework import compile_graph_from_json
-
-    pipeline = compile_graph_from_json(json.dumps(save_pipeline_graph(graph)))
-    try:
-        return pipeline.serialize()
-    finally:
-        pipeline.destroy()
 
 
 def save_pipeline_graph(graph: Graph) -> dict:
@@ -604,7 +652,7 @@ def save_pipeline_graph(graph: Graph) -> dict:
     }
 
 
-def reload_pipeline_asset(file_path: str | Path) -> None:
+def reload_pipeline_asset(file_path: str | Path) -> bool:
     try:
         from termin.editor_core.resource_manager import ResourceManager
 
@@ -614,8 +662,55 @@ def reload_pipeline_asset(file_path: str | Path) -> None:
                 asset.mark_just_saved()
             else:
                 _logger.error("Pipeline editor could not reload asset for %s", file_path)
+                return False
+        return True
     except Exception:
         _logger.exception("Pipeline editor failed to reload asset for %s", file_path)
+        return False
+
+
+def _replace_file_bytes(file_path: Path, content: bytes) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{file_path.name}.",
+        suffix=".tmp",
+        dir=file_path.parent,
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        mode = file_path.stat().st_mode & 0o777 if file_path.exists() else 0o644
+        os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "wb") as temporary_file:
+            descriptor = -1
+            temporary_file.write(content)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.replace(temporary_path, file_path)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+class PipelineConnectionValidator(ConnectionValidator):
+    """Apply the renderer's canonical socket assignment contract in the editor."""
+
+    def validate(
+        self,
+        src_type: str,
+        dst_type: str,
+        *,
+        src_node_id: str,
+        src_socket: str,
+        dst_node_id: str,
+        dst_socket: str,
+    ) -> bool:
+        del src_node_id, src_socket, dst_node_id, dst_socket
+        from termin.render_framework import graph_socket_type_assignable
+
+        return graph_socket_type_assignable(src_type, dst_type)
 
 
 class PipelineEditorController:
@@ -623,23 +718,30 @@ class PipelineEditorController:
 
     def __init__(self, graph: Graph | None = None) -> None:
         self.graph = graph or Graph()
-        self.graph_controller = GraphController(self.graph)
+        self.graph_controller = GraphController(
+            self.graph,
+            validator=PipelineConnectionValidator(),
+        )
         self.file_path: Path | None = None
         self.file_uuid: str | None = None
         self.source_format = "graph"
+        self._pass_list_source: dict | None = None
+        self._pass_node_baselines: dict[str, _PassNodeBaseline] = {}
         self.status = "Ready"
         self.graph_changed = Signal()
         self.status_changed = Signal()
 
     def set_graph(self, graph: Graph) -> None:
         self.graph = graph
-        self.graph_controller = GraphController(graph)
+        self.graph_controller.replace_graph(graph)
         self.graph_changed.emit(graph)
 
     def load(self, path: str | Path) -> Graph:
         file_path = Path(path)
         try:
             data = json.loads(file_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("pipeline document must be a JSON object")
             has_pass_list = "passes" in data
             has_graph = any(key in data for key in ("nodes", "connections", "viewport_frames"))
             if has_pass_list and has_graph:
@@ -647,18 +749,24 @@ class PipelineEditorController:
             if has_pass_list:
                 graph = pass_list_to_pipeline_graph(data)
                 source_format = "pass-list"
+                pass_list_source, pass_node_baselines = self._make_pass_list_state(data, graph)
             elif "nodes" in data:
                 graph = load_pipeline_graph(data)
                 source_format = "graph"
+                pass_list_source, pass_node_baselines = None, {}
             else:
                 raise ValueError("pipeline document has no supported authored format")
             file_uuid = data.get("uuid")
             if file_uuid is not None and not isinstance(file_uuid, str):
                 raise ValueError("pipeline uuid must be a string")
+            self.graph_controller.replace_graph(graph)
+            self.graph = graph
             self.file_uuid = file_uuid
             self.source_format = source_format
             self.file_path = file_path
-            self.set_graph(graph)
+            self._pass_list_source = pass_list_source
+            self._pass_node_baselines = pass_node_baselines
+            self.graph_changed.emit(graph)
             self._set_status(f"Loaded: {file_path}")
             return graph
         except Exception:
@@ -670,23 +778,129 @@ class PipelineEditorController:
         file_path = Path(path) if path is not None else self.file_path
         if file_path is None:
             raise ValueError("pipeline editor has no save path")
-        data = (
-            lower_pipeline_graph_to_pass_list(self.graph)
-            if self.source_format == "pass-list"
-            else save_pipeline_graph(self.graph)
-        )
-        if self.file_uuid:
-            data["uuid"] = self.file_uuid
         try:
-            file_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            reload_pipeline_asset(file_path)
+            data = (
+                self._merge_pass_list_document()
+                if self.source_format == "pass-list"
+                else save_pipeline_graph(self.graph)
+            )
+            if self.file_uuid:
+                data["uuid"] = self.file_uuid
+            self._validate_save_candidate(data)
+            serialized = json.dumps(data, indent=2).encode("utf-8")
+            original_exists = file_path.exists()
+            original_content = file_path.read_bytes() if original_exists else None
+            _replace_file_bytes(file_path, serialized)
+            if not reload_pipeline_asset(file_path):
+                try:
+                    if original_content is None:
+                        file_path.unlink()
+                    else:
+                        _replace_file_bytes(file_path, original_content)
+                except Exception:
+                    _logger.exception(
+                        "Pipeline editor failed to restore %s after reload failure",
+                        file_path,
+                    )
+                raise RuntimeError(f"pipeline asset reload failed: {file_path}")
             self.file_path = file_path
+            if self.source_format == "pass-list":
+                self._pass_list_source, self._pass_node_baselines = self._make_pass_list_state(
+                    data,
+                    self.graph,
+                )
             self._set_status(f"Saved: {file_path}")
             return file_path
         except Exception:
             _logger.exception("Pipeline editor failed to save %s", file_path)
             self._set_status(f"Save failed: {file_path}")
             raise
+
+    @staticmethod
+    def _make_pass_list_state(
+        data: dict,
+        graph: Graph,
+    ) -> tuple[dict, dict[str, _PassNodeBaseline]]:
+        snapshot = deepcopy(data)
+        passes = snapshot.get("passes")
+        if not isinstance(passes, list):
+            raise ValueError("pipeline pass-list passes must be a list")
+        nodes = list(graph.nodes.values())
+        if len(nodes) != len(passes):
+            raise ValueError("pipeline pass-list graph does not match its source passes")
+        baselines = {
+            node.id: _PassNodeBaseline(
+                envelope=deepcopy(pass_data),
+                graph_type=str(node.data.get("graph_type", node.title)),
+                instance_name=str(node.data.get("instance_name", "")),
+                params=deepcopy(node.params),
+            )
+            for node, pass_data in zip(nodes, passes, strict=True)
+        }
+        return snapshot, baselines
+
+    @staticmethod
+    def _stored_pass_params(graph_type: str, params: dict) -> dict:
+        result = deepcopy(params)
+        if graph_type == "MaterialPass" and "material" in result:
+            result["material"] = _material_reference_for_storage(result["material"])
+        return result
+
+    def _merge_pass_list_document(self) -> dict:
+        if self._pass_list_source is None:
+            raise ValueError("pipeline editor has no pass-list source snapshot")
+        if self.graph.edges:
+            raise ValueError("pass-list pipelines cannot be saved with graph connections")
+        if self.graph.groups:
+            raise ValueError("pass-list pipelines cannot be saved with viewport groups")
+
+        merged = deepcopy(self._pass_list_source)
+        merged_passes = []
+        for node in self.graph.nodes.values():
+            node_type = str(node.data.get("node_type", node.kind))
+            if node_type not in ("pass", "effect"):
+                raise ValueError(
+                    f"pass-list pipelines cannot contain non-pass node '{node.id}'"
+                )
+            graph_type = str(node.data.get("graph_type", node.title))
+            instance_name = str(node.data.get("instance_name", ""))
+            stored_params = self._stored_pass_params(graph_type, node.params)
+            baseline = self._pass_node_baselines.get(node.id)
+            if baseline is None:
+                merged_passes.append(
+                    {
+                        "type": graph_type,
+                        "pass_name": instance_name or graph_type,
+                        "data": stored_params,
+                    }
+                )
+                continue
+            if graph_type != baseline.graph_type:
+                raise ValueError(f"pass-list pass type edits are not supported: {node.id}")
+
+            envelope = deepcopy(baseline.envelope)
+            if instance_name != baseline.instance_name:
+                envelope["pass_name"] = instance_name or graph_type
+            pass_data = envelope.get("data", {})
+            if not isinstance(pass_data, dict):
+                raise ValueError(f"pipeline pass '{node.id}' data must be an object")
+            baseline_params = self._stored_pass_params(graph_type, baseline.params)
+            for name in baseline_params.keys() | stored_params.keys():
+                if name not in stored_params:
+                    pass_data.pop(name, None)
+                elif name not in baseline_params or stored_params[name] != baseline_params[name]:
+                    pass_data[name] = deepcopy(stored_params[name])
+            envelope["data"] = pass_data
+            merged_passes.append(envelope)
+        merged["passes"] = merged_passes
+        return merged
+
+    @staticmethod
+    def _validate_save_candidate(data: dict) -> None:
+        from termin.default_assets.render.pipeline_asset import validate_pipeline_document
+        from termin.editor_core.resource_manager import ResourceManager
+
+        validate_pipeline_document(data, ResourceManager.instance())
 
     def create_node(self, node_type: str, graph_type: str, x: float, y: float) -> Node:
         display = (
@@ -776,7 +990,6 @@ class PipelineEditorController:
 __all__ = [
     "PipelineEditorController",
     "load_pipeline_graph",
-    "lower_pipeline_graph_to_pass_list",
     "pass_list_to_pipeline_graph",
     "reload_pipeline_asset",
     "save_pipeline_graph",
