@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Termin VisualScene2D · WebGPU</title>
+<style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #030711; color: #dceaff; }
+    main { width: min(960px, 100vw); }
+    canvas { display: block; width: 100%; height: auto; background: #030711; }
+    p { margin: 14px 18px 24px; color: #8fa9d2; font-size: 13px; }
+    code { color: #d9f8ff; }
+</style>
+</head>
+<body>
+<main>
+    <canvas id="termin-canvas" width="960" height="600" aria-label="Termin retained VisualScene2D example"></canvas>
+    <p id="status">Загрузка WebGPU…</p>
+</main>
+<script type="module">
+import {createTerminCore} from "./termin-web-core.mjs?v=20260807-packageblob1";
+import {createTerminWebHost} from "./termin-web-host.mjs?v=20260807-packageblob1";
+
+const status = document.querySelector("#status");
+let core = null;
+let host = null;
+globalThis.__terminVisualSceneExample = {status: "loading", error: ""};
+try {
+    core = await createTerminCore();
+    host = createTerminWebHost(core, {logger: console});
+    await host.load("./fixtures/render-package/", {autoStart: false});
+    core.renderVisualSceneExample();
+    globalThis.__terminVisualSceneExample = {status: "ready", core, host, error: ""};
+    status.innerHTML = "Retained <code>TcVisualScene</code> → <code>DrawList2D</code> → <code>Canvas2DRenderer</code> → WebGPU";
+} catch (error) {
+    const diagnostics = [];
+    if (host?.error) diagnostics.push(host.error);
+    let current = error;
+    while (current !== undefined && current !== null) {
+        if (current instanceof Error && current.message) diagnostics.push(current.message);
+        if (core?.module) {
+            try {
+                const [type, details] = core.module.getExceptionMessage(current);
+                if (details) diagnostics.push(type ? `${type}: ${details}` : details);
+            } catch {
+                // This value is not an Emscripten exception.
+            }
+        }
+        current = current instanceof Error ? current.cause : null;
+    }
+    if (core?.module) {
+        try {
+            const nativeError = core.module.UTF8ToString(core.module._termin_web_host_graphics_error());
+            if (nativeError) diagnostics.push(nativeError);
+        } catch {
+            // Graphics initialization did not reach the native host.
+        }
+    }
+    const uniqueDiagnostics = [...new Set(diagnostics.filter(Boolean))];
+    const message = uniqueDiagnostics.join("\n") || String(error);
+    globalThis.__terminVisualSceneExample = {status: "error", error: message};
+    status.textContent = message;
+    console.error("Termin VisualScene2D example failed", error);
+}
+</script>
+</body>
+</html>

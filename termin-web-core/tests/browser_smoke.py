@@ -45,6 +45,7 @@ def artifact_measurements(output_directory: str) -> dict:
         "termin-web-host.mjs",
         "termin-web-input.mjs",
         "viewer.html",
+        "visual-scene.html",
     )
     primary = [measure(root / name) for name in primary_names]
     package_root = root / "fixtures" / "render-package"
@@ -255,6 +256,23 @@ def wait_for_viewer(devtools: DevToolsSocket, timeout: float = 30.0) -> dict:
                 raise RuntimeError(f"viewer entered error state: {state}")
         time.sleep(0.05)
     raise RuntimeError("viewer did not reach running state")
+
+
+def wait_for_visual_scene_example(devtools: DevToolsSocket, timeout: float = 30.0) -> dict:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        result = devtools.call("Runtime.evaluate", {
+            "expression": "JSON.stringify(globalThis.__terminVisualSceneExample ? {status:globalThis.__terminVisualSceneExample.status,error:globalThis.__terminVisualSceneExample.error ?? ''} : null)",
+            "returnByValue": True,
+        }).get("result", {}).get("value", "")
+        if result and result != "null":
+            state = json.loads(result)
+            if state.get("status") == "ready":
+                return state
+            if state.get("status") == "error":
+                raise RuntimeError(f"VisualScene2D example failed: {state}")
+        time.sleep(0.05)
+    raise RuntimeError("VisualScene2D example did not reach ready state")
 
 
 def analyze_png(
@@ -608,6 +626,59 @@ def main() -> int:
                 "state": viewer_state,
                 "before_frame": before_metrics,
                 "after_frame": after_metrics,
+            }
+
+            devtools.call("Emulation.setDeviceMetricsOverride", {
+                "width": 960,
+                "height": 700,
+                "deviceScaleFactor": 1,
+                "mobile": False,
+            })
+            visual_scene_url = f"http://127.0.0.1:{server.server_port}/visual-scene.html"
+            devtools.call("Page.navigate", {"url": visual_scene_url})
+            wait_for_visual_scene_example(devtools)
+            time.sleep(0.25)
+            visual_scene_state = wait_for_visual_scene_example(devtools)
+            visual_scene_screenshot = devtools.call("Page.captureScreenshot", {
+                "format": "png",
+                "clip": {"x": 0, "y": 0, "width": 960, "height": 600, "scale": 1},
+                "captureBeyondViewport": False,
+            })
+            visual_scene_metrics = analyze_png(
+                base64.b64decode(visual_scene_screenshot["data"]),
+                {
+                    "background": (20, 20),
+                    "header": (100, 100),
+                    "panel": (820, 250),
+                    "orbit_center": (248, 316),
+                    "star_center": (520, 305),
+                    "chart_line": (670, 350),
+                    "action": (720, 440),
+                },
+            )
+            probes = visual_scene_metrics["probes"]
+            expected_visual_scene = {
+                "background": lambda r, g, b: max(r, g, b) < 70,
+                "header": lambda r, g, b: b > 130 and g > 90 and r < 100,
+                "panel": lambda r, g, b: b > r and b > g and max(r, g, b) < 150,
+                "orbit_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
+                "star_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
+                "chart_line": lambda r, g, b: g > 150 and r < 130 and b < 150,
+                "action": lambda r, g, b: r > 150 and g < 130 and b < 100,
+            }
+            failed_visual_scene_probes = [
+                name for name, predicate in expected_visual_scene.items()
+                if not predicate(*probes[name])
+            ]
+            if failed_visual_scene_probes or visual_scene_metrics["quantized_colors"] < 7:
+                raise RuntimeError(
+                    "VisualScene2D WebGPU pixel probes failed: "
+                    f"failed={failed_visual_scene_probes} metrics={visual_scene_metrics}; "
+                    f"state={visual_scene_state}; console={console_diagnostics(devtools)}"
+                )
+            report["visual_scene"] = {
+                "state": visual_scene_state,
+                "frame": visual_scene_metrics,
             }
     except Exception as error:
         failure = error

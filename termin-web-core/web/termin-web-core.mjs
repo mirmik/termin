@@ -29,6 +29,12 @@ export async function createTerminCore(options = {}) {
                 throw new Error("Termin Web core shutdown failed");
             }
         },
+        renderVisualSceneExample() {
+            if (!module._termin_web_visual_scene_render()) {
+                const error = module.UTF8ToString(module._termin_web_visual_scene_error());
+                throw new Error(`Termin VisualScene2D example failed: ${error}`);
+            }
+        },
         async renderSmoke() {
             module._termin_web_render_smoke_start();
             for (;;) {
