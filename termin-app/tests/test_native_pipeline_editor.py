@@ -28,6 +28,7 @@ def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Pa
         }
     )
     node.params["enabled"] = True
+    graph_controller.update_node(node.id, params=node.params, data=node.data)
     graph_controller.add_output_socket(node.id, "fbo", "fbo")
     controller = PipelineEditorController(graph)
     graph_events = []
@@ -61,7 +62,7 @@ def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Pa
 
     checkbox = editor.graph_view.param_widgets[(node.id, "enabled")]
     checkbox.checked = False
-    assert node.params["enabled"] is False
+    assert graph.nodes[node.id].params["enabled"] is False
     assert graph_events == [graph]
 
     path = tmp_path / "probe.pipeline"

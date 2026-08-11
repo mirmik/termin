@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tcnodegraph.model import Edge, Graph
+from tcnodegraph.model import Graph
 import termin.editor_core.pipeline_editor_model as pipeline_editor_model
 from termin.editor_core.pipeline_editor_model import (
     PipelineConnectionValidator,
@@ -75,7 +75,7 @@ def test_pipeline_editor_controller_load_save_and_signals_are_consistent(tmp_pat
     assert graph_events[-1] is graph
     assert output.id in graph.nodes
     assert controller.rename_node(output.id, "Final")
-    assert output.title == "Final"
+    assert graph.nodes[output.id].title == "Final"
 
     saved = tmp_path / "saved.pipeline"
     assert controller.save(saved) == saved
@@ -437,7 +437,13 @@ def test_pipeline_editor_rejects_unsupported_pass_list_graph_before_writing(
     controller = PipelineEditorController()
     controller.load(source)
     if unsupported == "edge":
-        controller.graph.edges["edge"] = Edge("edge", "node_0", "out", "node_0", "in")
+        source_node = controller.graph.nodes["node_0"]
+        target_node = controller.graph_controller.create_node("pass", title="Target")
+        controller.graph_controller.add_output_socket(source_node.id, "out")
+        controller.graph_controller.add_input_socket(target_node.id, "in")
+        assert controller.graph_controller.connect(
+            source_node.id, "out", target_node.id, "in", edge_id="edge"
+        ).ok
         message = "graph connections"
     elif unsupported == "group":
         controller.graph_controller.add_group("Viewport", 0.0, 0.0, 100.0, 100.0)
