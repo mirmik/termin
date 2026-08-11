@@ -283,8 +283,11 @@ Plot-domain data, projection, ticks и оптимизированные series i
 
 Необязательный leaf-модуль `tcplot-gui-native` зависит одновременно от
 `tcplot` и `termin-gui-native` и предоставляет готовый runtime-виджет
-`termin.gui.Plot2D`. Он нужен там, где полная ручная композиция chart parts не
-оправдана. Обратных зависимостей из plot и UI core на этот bridge нет.
+`termin.gui.Plot2D`, а также интерактивный texture-backed
+`termin.gui.Plot3D`. Последний оборачивает `RetainedChart3D` и поддерживает
+обычную widget-tree и portal-композицию, в том числе внутри nodegraph body. Эти
+виджеты нужны там, где полная ручная композиция chart parts не оправдана.
+Обратных зависимостей из plot и UI core на этот bridge нет.
 
 ### termin-nodegraph
 

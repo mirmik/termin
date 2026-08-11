@@ -98,3 +98,4 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-player` | `termin-player` | `termin.player` | Standalone/source/headless player runtime. |
 | `termin-nodegraph` | `termin-nodegraph` | `tcnodegraph` | Public import keeps historical short namespace. |
 | `tcplot` | `tcplot` | `tcplot` | Legacy short distribution/import name. |
+| `tcplot-gui-native` | `tcplot-gui-native` | `tcplot_gui_native` | Optional native UI adapters for tcplot widgets. |
