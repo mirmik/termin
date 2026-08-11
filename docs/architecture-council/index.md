@@ -8,6 +8,9 @@
 
 ## Протоколы
 
+- [Shared 2D Composition Boundary](2026-08-11-shared-2d-composition-boundary.md)
+  — раздельные Widget и GraphicItem trees поверх общего value-level
+  composition backend и handle-based projection bridge.
 - [Native cgltf Importer](2026-08-09-native-cgltf-importer.md)
   — последовательный native GLB path на cgltf, transactional публикация
   `tc_mesh` и сохранение embedded asset UUID без Python per-index обработки.
