@@ -186,6 +186,57 @@ public readonly struct GridItemStyle3D
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public readonly struct ColorBarStyle3D
+{
+    public readonly uint TickCount;
+    public readonly float WidthPx;
+    public readonly float HeightRatio;
+    public readonly float MarginRightPx;
+    public readonly float TextGapPx;
+    public readonly float TextSizePx;
+    public readonly float LabelR;
+    public readonly float LabelG;
+    public readonly float LabelB;
+    public readonly float LabelA;
+    public readonly float BorderR;
+    public readonly float BorderG;
+    public readonly float BorderB;
+    public readonly float BorderA;
+
+    public ColorBarStyle3D(
+        uint tickCount = 5,
+        float widthPx = 18,
+        float heightRatio = 0.62f,
+        float marginRightPx = 18,
+        float textGapPx = 8,
+        float textSizePx = 13,
+        float labelR = 0.8f,
+        float labelG = 0.8f,
+        float labelB = 0.8f,
+        float labelA = 1,
+        float borderR = 0.42f,
+        float borderG = 0.45f,
+        float borderB = 0.52f,
+        float borderA = 1)
+    {
+        TickCount = tickCount;
+        WidthPx = widthPx;
+        HeightRatio = heightRatio;
+        MarginRightPx = marginRightPx;
+        TextGapPx = textGapPx;
+        TextSizePx = textSizePx;
+        LabelR = labelR;
+        LabelG = labelG;
+        LabelB = labelB;
+        LabelA = labelA;
+        BorderR = borderR;
+        BorderG = borderG;
+        BorderB = borderB;
+        BorderA = borderA;
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public readonly struct PlotItemSnapshot3D
 {
     public readonly PlotItemKind3D Kind;
@@ -665,6 +716,34 @@ public sealed class RetainedChart3D : IDisposable
                 "Light direction must be finite and non-zero.");
     }
 
+    public void ShowColorBar(
+        SurfaceItemRef3D surface,
+        string label = "",
+        ColorBarStyle3D? style = null)
+    {
+        ThrowIfDisposed();
+        if (surface is null)
+            throw new ArgumentNullException(nameof(surface));
+        if (!ReferenceEquals(surface.Chart, this))
+            throw new ArgumentException(
+                "Surface belongs to another Chart3D.", nameof(surface));
+        surface.ThrowIfStale();
+        var resolved = style ?? new ColorBarStyle3D();
+        if (RetainedChart3DNative.SetColorBar(
+                _native,
+                surface.Handle,
+                label ?? string.Empty,
+                ref resolved) == 0)
+            throw new InvalidOperationException(
+                "Failed to show Chart3D colorbar. See native log.");
+    }
+
+    public void HideColorBar()
+    {
+        ThrowIfDisposed();
+        RetainedChart3DNative.ClearColorBar(_native);
+    }
+
     public void SetAxisScale(float x, float y, float z)
     {
         ThrowIfDisposed();
@@ -867,6 +946,19 @@ internal static class RetainedChart3DNative
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_light_direction")]
     internal static extern int SetLightDirection(
         IntPtr chart, float x, float y, float z);
+
+    [DllImport(
+        Dll,
+        EntryPoint = "tc_retained_chart3d_set_colorbar",
+        CharSet = CharSet.Ansi)]
+    internal static extern int SetColorBar(
+        IntPtr chart,
+        PlotItemHandle3D surface,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string label,
+        ref ColorBarStyle3D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_clear_colorbar")]
+    internal static extern void ClearColorBar(IntPtr chart);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_axis_scale")]
     internal static extern int SetAxisScale(
