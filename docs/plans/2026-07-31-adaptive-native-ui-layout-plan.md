@@ -13,6 +13,12 @@
   space`;
 - `#1138 [ui/native/layout] Add generic widget layout spec`.
 
+Связанный runtime contract:
+
+- [Native widget subtree transforms and scalable SceneView portals](2026-08-11-native-widget-subtree-transforms.md)
+  добавляет inherited transform внутри logical document space. Это
+  отдельный слой от document-wide density/font presentation metrics.
+
 ## Цель
 
 Сделать `termin-gui-native` пригодным для одного декларативного UI на desktop,
