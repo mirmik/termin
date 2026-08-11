@@ -14,6 +14,7 @@ extern "C" {
 #include "tc_picking.h"
 }
 
+#include <termin/lighting/environment_lighting.hpp>
 #include <termin/render/bloom_pass.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/debug_geometry_pass.hpp>
@@ -26,10 +27,10 @@ extern "C" {
 #include <termin/render/shadow_camera.hpp>
 #include <termin/render/shadow_pass.hpp>
 #include <termin/render/skybox_pass.hpp>
+#include <termin/render/standard_gbuffer_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
 #include <termin/render/ui_widget_pass.hpp>
 #include <termin/render/world2d_pass.hpp>
-#include <termin/lighting/environment_lighting.hpp>
 
 namespace nb = nanobind;
 
@@ -422,13 +423,14 @@ namespace termin {
 
         auto environment_lighting_pass =
             nb::class_<EnvironmentLightingPass, CxxFramePass>(m, "EnvironmentLightingPass")
-                .def("__init__",
-                     [](EnvironmentLightingPass* self, std::string output_res, std::string pass_name) {
-                         new (self) EnvironmentLightingPass(output_res, pass_name);
-                         init_pass_from_python(self, "EnvironmentLightingPass");
-                     },
-                     nb::arg("output_res") = "environment_lighting",
-                     nb::arg("pass_name") = "EnvironmentLighting")
+                .def(
+                    "__init__",
+                    [](EnvironmentLightingPass* self, std::string output_res, std::string pass_name) {
+                        new (self) EnvironmentLightingPass(output_res, pass_name);
+                        init_pass_from_python(self, "EnvironmentLightingPass");
+                    },
+                    nb::arg("output_res") = "environment_lighting",
+                    nb::arg("pass_name") = "EnvironmentLighting")
                 .def_rw("output_res", &EnvironmentLightingPass::output_res)
                 .def_prop_ro("reads", &EnvironmentLightingPass::compute_reads)
                 .def_prop_ro("writes", &EnvironmentLightingPass::compute_writes)
@@ -519,10 +521,9 @@ namespace termin {
 
         color_pass.attr("category") = "Render";
         color_pass.attr("has_dynamic_inputs") = true;
-        color_pass.attr("node_inputs") =
-            nb::make_tuple(nb::make_tuple("input_res", "fbo"),
-                           nb::make_tuple("shadow_res", "shadow"),
-                           nb::make_tuple("environment_res", "environment_lighting"));
+        color_pass.attr("node_inputs") = nb::make_tuple(nb::make_tuple("input_res", "fbo"),
+                                                        nb::make_tuple("shadow_res", "shadow"),
+                                                        nb::make_tuple("environment_res", "environment_lighting"));
         color_pass.attr("node_outputs") = nb::make_tuple(nb::make_tuple("output_res", "fbo"));
         color_pass.attr("node_inplace_pairs") = nb::make_tuple(nb::make_tuple("input_res", "output_res"));
         {
@@ -531,6 +532,56 @@ namespace termin {
             camera_cond["_outside_viewport"] = true;
             visibility["camera_name"] = camera_cond;
             color_pass.attr("node_param_visibility") = visibility;
+        }
+
+        auto standard_gbuffer_pass = nb::class_<StandardGBufferPass, CxxFramePass>(m, "StandardGBufferPass")
+                                         .def(
+                                             "__init__",
+                                             [](StandardGBufferPass* self,
+                                                std::string base_ao_res,
+                                                std::string normal_rough_res,
+                                                std::string metal_emit_res,
+                                                std::string depth_res,
+                                                std::string camera_name,
+                                                std::string pass_name) {
+                                                 StandardGBufferPassConfig config;
+                                                 config.base_ao_res = std::move(base_ao_res);
+                                                 config.normal_rough_res = std::move(normal_rough_res);
+                                                 config.metal_emit_res = std::move(metal_emit_res);
+                                                 config.depth_res = std::move(depth_res);
+                                                 config.camera_name = std::move(camera_name);
+                                                 config.pass_name = std::move(pass_name);
+                                                 new (self) StandardGBufferPass(config);
+                                                 init_pass_from_python(self, "StandardGBufferPass");
+                                             },
+                                             nb::arg("base_ao_res") = "gbuffer_base_ao",
+                                             nb::arg("normal_rough_res") = "gbuffer_normal_rough",
+                                             nb::arg("metal_emit_res") = "gbuffer_metal_emit",
+                                             nb::arg("depth_res") = "scene_depth",
+                                             nb::arg("camera_name") = "",
+                                             nb::arg("pass_name") = "StandardGBuffer")
+                                         .def_rw("base_ao_res", &StandardGBufferPass::base_ao_res)
+                                         .def_rw("normal_rough_res", &StandardGBufferPass::normal_rough_res)
+                                         .def_rw("metal_emit_res", &StandardGBufferPass::metal_emit_res)
+                                         .def_rw("depth_res", &StandardGBufferPass::depth_res)
+                                         .def_rw("camera_name", &StandardGBufferPass::camera_name)
+                                         .def("compute_reads", &StandardGBufferPass::compute_reads)
+                                         .def("compute_writes", &StandardGBufferPass::compute_writes)
+                                         .def("get_resource_specs", &StandardGBufferPass::get_resource_specs)
+                                         .def_prop_ro("reads", &StandardGBufferPass::compute_reads)
+                                         .def_prop_ro("writes", &StandardGBufferPass::compute_writes);
+        standard_gbuffer_pass.attr("category") = "Render";
+        standard_gbuffer_pass.attr("node_inputs") = nb::make_tuple();
+        standard_gbuffer_pass.attr("node_outputs") = nb::make_tuple(nb::make_tuple("base_ao_res", "color_texture"),
+                                                                    nb::make_tuple("normal_rough_res", "color_texture"),
+                                                                    nb::make_tuple("metal_emit_res", "color_texture"),
+                                                                    nb::make_tuple("depth_res", "depth_texture"));
+        {
+            nb::dict visibility;
+            nb::dict camera_cond;
+            camera_cond["_outside_viewport"] = true;
+            visibility["camera_name"] = camera_cond;
+            standard_gbuffer_pass.attr("node_param_visibility") = visibility;
         }
 
         auto world2d_pass =

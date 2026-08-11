@@ -4,6 +4,7 @@ from __future__ import annotations
 
 FRAME_PASS_SPECS: list[tuple[str, str]] = [
     ("termin.render_passes", "ColorPass"),
+    ("termin.render_passes", "StandardGBufferPass"),
     ("termin.render_passes", "EnvironmentLightingPass"),
     ("termin.render_passes", "SkyBoxPass"),
     ("termin.render_passes", "ShadowPass"),

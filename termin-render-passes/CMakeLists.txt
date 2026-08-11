@@ -89,6 +89,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/shadow_pass.cpp
     src/shadow_resource.cpp
     src/skybox_pass.cpp
+    src/standard_gbuffer_pass.cpp
     src/tc_picking.c
     src/tonemap_pass.cpp
     src/ui_widget_pass.cpp
@@ -106,6 +107,7 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/tonemap_pass.cpp
         src/lighting_ubo.cpp
         src/shadow_resource.cpp
+        src/standard_gbuffer_pass.cpp
     )
 endif()
 
@@ -130,6 +132,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/shadow_camera.hpp
     include/termin/render/shadow_pass.hpp
     include/termin/render/skybox_pass.hpp
+    include/termin/render/standard_gbuffer_pass.hpp
     include/termin/render/tonemap_pass.hpp
     include/termin/render/ui_widget_pass.hpp
     include/termin/render/world2d_pass.hpp
@@ -470,6 +473,37 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
         NAME termin_render_passes_standard_surface_forward_test
         COMMAND termin_render_passes_standard_surface_forward_test
     )
+
+    add_executable(termin_render_passes_standard_gbuffer_pass_pixel_smoke
+        tests/test_standard_gbuffer_pass_pixel_smoke.cpp
+    )
+    target_link_libraries(
+        termin_render_passes_standard_gbuffer_pass_pixel_smoke PRIVATE
+        termin_render_passes
+    )
+    if(TARGET termin_shaderc)
+        add_dependencies(termin_render_passes_standard_gbuffer_pass_pixel_smoke termin_shaderc)
+        target_compile_definitions(
+            termin_render_passes_standard_gbuffer_pass_pixel_smoke PRIVATE
+            TERMIN_STANDARD_GBUFFER_PIXEL_SMOKE_SHADERC="$<TARGET_FILE:termin_shaderc>")
+    endif()
+    set_target_properties(
+        termin_render_passes_standard_gbuffer_pass_pixel_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_standard_gbuffer_pass_pixel_smoke
+        COMMAND termin_render_passes_standard_gbuffer_pass_pixel_smoke
+    )
+    set_tests_properties(
+        termin_render_passes_standard_gbuffer_pass_pixel_smoke PROPERTIES
+        TIMEOUT 30
+        SKIP_REGULAR_EXPRESSION
+            "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
+    )
+    termin_add_test_labels(
+        termin_render_passes_standard_gbuffer_pass_pixel_smoke
+        "termin:capability:vulkan")
 
     add_executable(termin_render_passes_bloom_pass_pixel_smoke
         tests/test_bloom_pass_pixel_smoke.cpp

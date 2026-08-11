@@ -85,8 +85,8 @@ The missing boundary was fragment producer/consumer composition.
 
 ## Implemented foundation
 
-Cards #1013, #1014, #1018, and #1016 establish and verify the composition
-boundary:
+Cards #1013, #1014, #1018, #1016, and #1020 establish and verify the
+composition boundary and its first MRT consumer:
 
 - exact versioned surface contracts are owner-aware registry entries;
 - `.shader` phases publish evaluator-only producer metadata on `tc_shader`;
@@ -105,9 +105,17 @@ boundary:
   custom field through public APIs, composes and compiles its final variant,
   then revokes the owner while the standard contract remains intact; future
   planning rejects the removed contract without reading stale registry data.
+- `StandardGBufferPass` claims only exact `termin.surface.standard-pbr@1`
+  producers, composes static/skinned/foliage variants, and writes three
+  independently named `RGBA16F` planes plus shared `D32F` depth through the
+  backend-neutral ordered MRT contract;
+- final-color and incompatible surface materials are normal routing declines,
+  while a compatible producer which fails assembly remains an explicit error;
+- pass-aware shader usage collection emits only the executable composed
+  G-buffer variants, never evaluator-only producers.
 
-The later prototype cards still own standard consumers, G-buffer passes,
-routing, package enumeration, and deferred-pipeline integration.
+The later prototype cards still own deferred lighting, complementary forward
+routing, full package enumeration gates, and deferred-pipeline integration.
 
 ## Goals
 

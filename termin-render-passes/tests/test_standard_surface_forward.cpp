@@ -9,10 +9,11 @@ GUARD_TEST_MAIN();
 #include <string>
 #include <vector>
 
-#include <termin/materials/surface_contract_registry.h>
 #include <termin/lighting/lighting_ubo.hpp>
+#include <termin/materials/surface_contract_registry.h>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/standard_gbuffer_pass.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 
 namespace {
@@ -142,6 +143,57 @@ TerminStandardSurfaceV1 evaluate_standard_surface(FragmentInput input) {
         return termin::TcShader::from_sources(create_info);
     }
 
+    termin::TcShader make_final_color_shader() {
+        constexpr const char* source = R"slang(
+struct VertexInput { float3 position : POSITION; };
+struct VertexOutput { float4 position : SV_Position; };
+[shader("vertex")]
+VertexOutput vs_main(VertexInput input) {
+    VertexOutput output;
+    output.position = float4(input.position, 1.0);
+    return output;
+}
+[shader("fragment")]
+float4 fs_main() : SV_Target0 { return float4(1.0, 0.0, 0.0, 1.0); }
+)slang";
+        termin::TcShaderCreateInfo create_info{};
+        create_info.sources.vertex = source;
+        create_info.sources.fragment = source;
+        create_info.sources.name = "FinalColorRoutingTest";
+        create_info.sources.vertex_entry = "vs_main";
+        create_info.sources.fragment_entry = "fs_main";
+        create_info.uuid = "termin-final-color-routing-test";
+        create_info.language = TC_SHADER_LANGUAGE_SLANG;
+        return termin::TcShader::from_sources(create_info);
+    }
+
+    termin::TcShader make_surface_routing_probe(const char* contract_id,
+                                                uint32_t contract_version,
+                                                const char* surface_type,
+                                                const char* uuid) {
+        const tc_shader_surface_producer_desc producer = {
+            TC_SHADER_SURFACE_PRODUCER_SCHEMA_VERSION,
+            contract_id,
+            contract_version,
+            surface_type,
+            "evaluate_standard_surface",
+            STANDARD_EVALUATOR,
+            uuid,
+            nullptr,
+            0u,
+            nullptr,
+            0u,
+        };
+        termin::TcShaderCreateInfo create_info{};
+        create_info.sources.fragment = STANDARD_EVALUATOR;
+        create_info.sources.name = "SurfaceRoutingProbe";
+        create_info.sources.fragment_entry = "evaluate_standard_surface";
+        create_info.uuid = uuid;
+        create_info.language = TC_SHADER_LANGUAGE_SLANG;
+        create_info.surface_producer = &producer;
+        return termin::TcShader::from_sources(create_info);
+    }
+
     void require_vulkan_compilation(const termin::TcShader& shader) {
         std::vector<uint8_t> vertex_artifact;
         std::vector<uint8_t> fragment_artifact;
@@ -218,4 +270,94 @@ TEST_CASE("lighting UBO explicitly distinguishes ambient fallback from environme
 
     lighting.update_from_lights({}, ambient, 0.75f, camera, shadows, true);
     CHECK(lighting.data.environment_lighting_enabled == 1.0f);
+}
+
+TEST_CASE("standard G-buffer consumer composes static skinned and foliage variants") {
+    tc_shader_init();
+    tc_surface_contract_registry_clear();
+    REQUIRE(tc_surface_contract_registry_register_builtins());
+
+    termin::TcShader producer = make_standard_surface_producer();
+    REQUIRE(producer.is_valid());
+
+    const termin::MaterialPipelinePassContract pass = termin::standard_gbuffer_material_pass_contract();
+    REQUIRE(pass.fragment_composition == termin::MaterialFragmentComposition::SurfaceConsumer);
+    REQUIRE(pass.surface_consumer.has_value());
+    CHECK(pass.surface_consumer->resources.empty());
+    CHECK(termin::material_pipeline_pass_accepts_shader(pass, producer));
+    CHECK_FALSE(termin::material_pipeline_pass_accepts_shader(pass, make_final_color_shader()));
+    const termin::TcShader foreign =
+        make_surface_routing_probe("game.surface.foreign", 1u, "GameSurface", "foreign-surface-routing-probe");
+    CHECK_FALSE(termin::material_pipeline_pass_accepts_shader(pass, foreign));
+    const termin::TcShader malformed_compatible =
+        make_surface_routing_probe(TC_STANDARD_PBR_SURFACE_CONTRACT_ID,
+                                   TC_STANDARD_PBR_SURFACE_CONTRACT_VERSION,
+                                   "WrongStandardSurfaceType",
+                                   "malformed-standard-surface-routing-probe");
+    CHECK(termin::material_pipeline_pass_accepts_shader(pass, malformed_compatible));
+    termin::MaterialShaderOverrideRequest malformed_request{};
+    malformed_request.original_shader = malformed_compatible;
+    malformed_request.vertex_transform_kind = termin::VertexTransformKind::StaticMesh;
+    malformed_request.pass_contract = pass;
+    malformed_request.debug_context = "standard-gbuffer-malformed-compatible-test";
+    CHECK_FALSE(termin::assemble_material_shader_override(malformed_request).is_valid());
+
+    const termin::VertexTransformKind transforms[] = {
+        termin::VertexTransformKind::StaticMesh,
+        termin::VertexTransformKind::SkinnedMesh,
+        termin::VertexTransformKind::Foliage,
+    };
+    ScopedArtifactConfiguration artifacts;
+    for (termin::VertexTransformKind transform : transforms) {
+        termin::MaterialShaderOverrideRequest request{};
+        request.original_shader = producer;
+        request.vertex_transform_kind = transform;
+        request.pass_contract = pass;
+        request.debug_context = "standard-gbuffer-test";
+        termin::TcShader variant = termin::assemble_material_shader_override(request);
+        REQUIRE(variant.is_valid());
+        REQUIRE(variant.is_executable());
+        CHECK(std::strstr(variant.fragment_source(), "termin_standard_gbuffer_fs") != nullptr);
+        CHECK(std::strstr(variant.fragment_source(), "SV_Target0") != nullptr);
+        CHECK(std::strstr(variant.fragment_source(), "SV_Target1") != nullptr);
+        CHECK(std::strstr(variant.fragment_source(), "SV_Target2") != nullptr);
+
+        tc_shader_contract_view contract{};
+        REQUIRE(tc_shader_get_contract_view(variant.get(), &contract));
+        REQUIRE(contract_resource(contract, "standard_material") != nullptr);
+        CHECK(contract_resource(contract, "lighting") == nullptr);
+        CHECK(contract_resource(contract, "shadow_block") == nullptr);
+        CHECK(contract_resource(contract, "shadow_maps") == nullptr);
+        CHECK(contract_resource(contract, "ibl_diffuse_irradiance") == nullptr);
+        CHECK(contract_resource(contract, "ibl_prefiltered_specular") == nullptr);
+        CHECK(contract_resource(contract, "ibl_brdf_lut") == nullptr);
+        require_vulkan_compilation(variant);
+    }
+
+    tc_surface_contract_registry_clear();
+    tc_shader_shutdown();
+}
+
+TEST_CASE("standard G-buffer pass publishes independent high precision planes and depth") {
+    const termin::StandardGBufferPass pass;
+    const std::vector<termin::ResourceSpec> specs = pass.get_resource_specs();
+    REQUIRE(specs.size() == 4);
+    CHECK(specs[0].resource == "gbuffer_base_ao");
+    CHECK(specs[1].resource == "gbuffer_normal_rough");
+    CHECK(specs[2].resource == "gbuffer_metal_emit");
+    CHECK(specs[3].resource == "scene_depth");
+    for (size_t index = 0; index < 3; ++index) {
+        CHECK(specs[index].resource_type == "color_texture");
+        REQUIRE(specs[index].format.has_value());
+        CHECK(*specs[index].format == "rgba16f");
+        CHECK(specs[index].samples == 1);
+    }
+    CHECK(specs[3].resource_type == "depth_texture");
+    REQUIRE(specs[3].format.has_value());
+    CHECK(*specs[3].format == "depth32f");
+    CHECK(specs[3].samples == 1);
+
+    CHECK(pass.compute_reads().empty());
+    const std::set<const char*> writes = pass.compute_writes();
+    CHECK(writes.size() == 4);
 }
