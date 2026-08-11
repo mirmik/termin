@@ -58,6 +58,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-materials` | `termin-materials` | `termin.materials` | Material runtime API. |
 | `termin-shader-runtime` | `termin-shader-runtime` | `termin.shader_tools`, `termin.shader_runtime` | Shared shader tool resolution and source-project shader runtime helpers. |
 | `termin-gui` | `tcgui` | `tcgui` | Legacy short distribution/import name. |
+| `termin-window` | `termin-window` | `termin.window` | Framework-neutral native window infrastructure. |
 | `termin-gui-native` | `termin-gui-native` | `termin.gui_native` | Native retained UI document prototype. |
 | `termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
 | `termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
