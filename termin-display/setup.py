@@ -28,6 +28,7 @@ setup(
     install_requires=[
         "termin-nanobind",
         "termin-scene",
+        "termin-window",
         "tgfx",
     ],
     ext_modules=native_extensions_for_source(_DIR),

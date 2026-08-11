@@ -9,9 +9,6 @@ class _InputSink:
     def __init__(self):
         self.display_handle = None
 
-    def set_input_display(self, index, generation):
-        self.display_handle = (index, generation)
-
 
 class _Viewport:
     def __init__(self, name, input_mode, index, generation):
@@ -44,8 +41,17 @@ class _BasicDisplayInputManager:
 
 def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monkeypatch):
     import termin.display
+    import termin.display.window
+
+    def attach_input(window, index, generation):
+        window.display_handle = (index, generation)
 
     monkeypatch.setattr(termin.display, "BasicDisplayInputManager", _BasicDisplayInputManager)
+    monkeypatch.setattr(
+        termin.display.window,
+        "attach_window_input_display",
+        attach_input,
+    )
     _BasicDisplayInputManager.instances.clear()
 
     runtime = PlayerRuntime(".", "scene.json")
