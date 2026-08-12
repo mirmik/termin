@@ -1314,13 +1314,16 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
         shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
-    shader_names = {
-        json.loads(path.read_text(encoding="utf-8"))["name"]
-        for path in (result.package_dir / "shaders").glob("*.shader.json")
+    shader_specs = {
+        shader_spec["name"]: shader_spec
+        for shader_spec in (
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in (result.package_dir / "shaders").glob("*.shader.json")
+        )
     }
-    assert "DefaultLineShader" in shader_names
-    assert "DefaultLineShader_LineTubeBody" in shader_names
-    assert "DefaultLineShader_LineTubeCap" in shader_names
+    line_pipeline_variant = "DefaultLineShader_MaterialPipeline_world_tube_line_color"
+    assert set(shader_specs) == {"DefaultLineShader", line_pipeline_variant}
+    assert shader_specs[line_pipeline_variant]["artifact_role"] == "pipeline_variant"
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     requirements = manifest["pipeline_shader_requirements"]
     assert len(requirements) == 1
@@ -1328,10 +1331,9 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
     assert requirements[0]["pipeline_uuid"] == pipeline_uuid
     assert {
         variant["name"] for variant in requirements[0]["variants"]
-    } >= {
+    } == {
         "DefaultLineShader",
-        "DefaultLineShader_LineTubeBody",
-        "DefaultLineShader_LineTubeCap",
+        line_pipeline_variant,
     }
     assert all(
         variant["source_identity"].startswith("sha256:")
