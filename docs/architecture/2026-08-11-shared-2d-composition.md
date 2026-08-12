@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted target architecture. The common affine values, `DrawList2D`,
-`SceneView` and widget portals exist; consolidation behind one composition
-evaluator and reusable projection bridge is planned in Kanboard #1519.
+Implemented architecture. Canonical affine values, `DrawList2D`, the value-level
+`CompositionEvaluator2D`, both semantic-tree migrations and the reusable
+widget-scene projection bridge are shipped. Cross-tree platform and interactive
+verification is tracked separately under Kanboard #1525.
 
 The decision rationale is recorded in the
 [architecture council protocol](../architecture-council/2026-08-11-shared-2d-composition-boundary.md).
@@ -44,8 +45,8 @@ values at composition boundaries.
 
 ### `termin-graphics`
 
-Owns paths, paints, draw commands, `DrawList2D` and the planned non-owning 2D
-composition evaluator. The evaluator operates on values and scoped effective
+Owns paths, paints, draw commands, `DrawList2D` and the non-owning 2D
+`CompositionEvaluator2D`. The evaluator operates on values and scoped effective
 state:
 
 - accumulated affine and fallible inverse;
@@ -69,8 +70,8 @@ existing item vtable and scene handle lifetime.
 
 Owns widget constraint layout, focus, keyboard/text routing, style,
 accessibility, overlays and UI presentation metrics. Layout produces logical
-bounds. A later composition phase maps an already measured widget subtree into
-document presentation space.
+bounds. A composition phase maps an already measured widget subtree into
+document presentation space through the shared evaluator.
 
 The public widget subtree transform may intentionally remain translation plus
 positive uniform scale. At the shared boundary it is converted exactly to
@@ -79,7 +80,7 @@ positive uniform scale. At the shared boundary it is converted exactly to
 ## Rendering contract
 
 `tgfx::DrawList2D` is the single backend-neutral execution vocabulary.
-Visual-scene already emits it directly. `tc_ui_draw_list` remains permitted as
+Visual-scene emits it directly. `tc_ui_draw_list` remains permitted as
 a language-neutral widget paint frontend, especially for UI text and host
 resources, but transform, clip and nested-scene commands lower through the
 same `termin-graphics` composition semantics.
@@ -141,7 +142,8 @@ document-owned widget subtree. The portal receives scene/world logical bounds
 and a camera-derived subtree transform; it does not become a graphic item or
 transfer widget ownership to the scene.
 
-The reusable bridge belongs to the GUI-facing adapter/composition layer.
+`WidgetSceneProjectionBridge` is the reusable GUI-facing adapter/composition
+layer.
 `termin-visual-scene` contains no Widget knowledge and has no reverse
 dependency on `termin-gui-native`.
 
@@ -175,9 +177,9 @@ silently approximated by stretched bounds.
 
 Kanboard #1519 is the implementation umbrella:
 
-- #1520 — common `termin-graphics` composition evaluator;
-- #1521 — visual-scene traversal migration;
-- #1522 — GUI render/lowering migration;
-- #1523 — GUI bounds and pointer-mapping migration;
-- #1524 — reusable widget-scene projection bridge;
-- #1525 — cross-tree verification and removal of obsolete paths.
+- #1520 — common `termin-graphics` composition evaluator (implemented);
+- #1521 — visual-scene traversal migration (implemented);
+- #1522 — GUI render/lowering migration (implemented);
+- #1523 — GUI bounds and pointer-mapping migration (implemented);
+- #1524 — reusable widget-scene projection bridge (implemented);
+- #1525 — cross-tree verification and removal of obsolete paths (verification).
