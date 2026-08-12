@@ -86,6 +86,41 @@ UI-neutral models и операции остаются в `editor_core`, нап�
 возвращает служебные editor entities в пользовательскую metadata и не смешивает
 сцены при повторном использовании slot-а.
 
+## Editor-only 3D overlay
+
+Интерактивные служебные объекты viewport-а живут в отдельной retained
+`VisualScene3D`, которой владеет `EditorInteractionSystem`. Она не является
+частью пользовательской `tc_scene`: world drawables, ID picking и массовая
+debug geometry продолжают идти через обычный scene/render lifecycle.
+
+Viewport сначала преобразует pointer position в world ray и отправляет его в
+overlay `SceneInteraction3D`. Попадание или активный capture поглощает событие;
+miss сохраняет прежний путь component extensions, selection и camera controls.
+При очистке или уничтожении overlay активным controller-ам сначала приходят
+`Cancel`/`Leave`.
+
+Visual items публикуют renderer-neutral draw packets. Editor render stage знает
+только протокол `termin.editor.overlay-drawable.v1` и вызывает указанный в нём
+renderer adapter; concrete item types в host не проверяются. На время миграции
+старый `GizmoManager` рисуется в том же pass перед retained overlay и временно
+обслуживает только ещё не перенесённые gizmo (сейчас camera frustum debug).
+
+`GizmoVisualItem3D` является переходным adapter-ом для старой gizmo geometry:
+collider id становится стабильным `part`, drag constraint исполняется внешним
+controller-ом через target pointer events, а item остаётся presentation-only с
+точки зрения `VisualScene3D`. `ComponentEditorVisualRegistry` возвращает generic
+owned overlay contributions и больше не регистрирует component handles в
+`GizmoManager`. В частности, endpoint handles `OffMeshLink` используют этот
+путь; сама линия/стрелка link-а остаётся world `Drawable` в `tc_scene`.
+Основной `TransformGizmo` также является постоянным overlay item и не
+регистрируется в `GizmoManager`. Смена target или уничтожение overlay отменяют
+его активный capture: стартовая global pose восстанавливается без создания
+undo-команды.
+
+Controller или transform target не должен хранить raw component pointer.
+OffMeshLink endpoint адресует компонент через owner `Entity` и стабильный
+component `source_id`, повторно разрешая его перед каждым чтением/изменением.
+
 ## Как расширять редактор
 
 ### Новая scene-операция

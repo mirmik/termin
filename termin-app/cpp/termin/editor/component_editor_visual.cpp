@@ -13,16 +13,17 @@ namespace termin {
         }
     }
 
-    void ComponentEditorVisualRegistry::collect_gizmos(Entity entity,
-                                                       tc_component* component,
-                                                       const ComponentEditorVisualContext& context,
-                                                       std::vector<std::unique_ptr<Gizmo>>& out_gizmos) {
+    void ComponentEditorVisualRegistry::collect_overlay_items(
+        Entity entity,
+        tc_component* component,
+        const ComponentEditorVisualContext& context,
+        std::vector<ComponentEditorVisualContribution>& out_items) {
         if (!entity.valid() || !component) {
             return;
         }
 
         for (const auto& provider : _providers) {
-            provider->collect_gizmos(entity, component, context, out_gizmos);
+            provider->collect_overlay_items(entity, component, context, out_items);
         }
     }
 

@@ -11,6 +11,7 @@
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/editor/component_editor_visual.hpp"
 #include "termin/editor/editor_snap.hpp"
+#include "termin/editor/gizmo_visual_item3d.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include <components/mesh_component.hpp>
@@ -18,6 +19,7 @@
 #include <tcbase/tc_log.h>
 #include <termin/entity/component.hpp>
 #include <termin/tc_scene.hpp>
+#include <tgfx2/render_context.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -122,7 +124,15 @@ namespace termin {
                 on_transform_end(old_pose, new_pose);
             }
         };
-        gizmo_manager.add_gizmo(&_transform_gizmo);
+        auto transform_visual = std::make_unique<GizmoVisualItem3D>(_transform_gizmo);
+        auto* transform_visual_controller = transform_visual.get();
+        const auto transform_visual_handle = _overlay_scene.scene().adopt(std::move(transform_visual));
+        if (!transform_visual_handle) {
+            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] failed to adopt the TransformGizmo overlay item");
+        } else {
+            _transform_gizmo_visual = *transform_visual_handle;
+            transform_visual_controller->bind_controller(_overlay_scene.interaction());
+        }
         gizmo_manager.add_gizmo(&_camera_frustum_debug_gizmo);
 
         tc_log(TC_LOG_INFO, "[EditorInteractionSystem] Created");
@@ -130,8 +140,8 @@ namespace termin {
 
     EditorInteractionSystem::~EditorInteractionSystem() {
         _clear_component_visual_gizmos();
+        _destroy_transform_gizmo_visual();
         gizmo_manager.remove_gizmo(&_camera_frustum_debug_gizmo);
-        gizmo_manager.remove_gizmo(&_transform_gizmo);
 
         if (g_editor_interaction_instance == this) {
             g_editor_interaction_instance = nullptr;
@@ -199,24 +209,51 @@ namespace termin {
         ComponentEditorVisualContext context;
         context.transform_gizmo = &_transform_gizmo;
 
-        std::vector<std::unique_ptr<Gizmo>> new_gizmos;
+        std::vector<ComponentEditorVisualContribution> contributions;
         size_t count = entity.component_count();
         for (size_t i = 0; i < count; ++i) {
             tc_component* component = entity.component_at(i);
-            ComponentEditorVisualRegistry::instance().collect_gizmos(entity, component, context, new_gizmos);
+            ComponentEditorVisualRegistry::instance().collect_overlay_items(entity, component, context, contributions);
         }
 
-        for (auto& gizmo : new_gizmos) {
-            gizmo_manager.add_gizmo(gizmo.get());
-            _component_visual_gizmos.push_back(std::move(gizmo));
+        for (auto& contribution : contributions) {
+            if (!contribution.item) {
+                tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] component visual provider returned an empty item");
+                continue;
+            }
+            const auto handle = _overlay_scene.scene().adopt(std::move(contribution.item));
+            if (!handle) {
+                tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] failed to adopt a component overlay item");
+                continue;
+            }
+            if (contribution.bind_controller)
+                contribution.bind_controller(_overlay_scene.interaction(), *handle);
+            _component_visual_items.push_back(*handle);
         }
     }
 
     void EditorInteractionSystem::_clear_component_visual_gizmos() {
-        for (auto& gizmo : _component_visual_gizmos) {
-            gizmo_manager.remove_gizmo(gizmo.get());
+        if (!_component_visual_items.empty() && _overlay_scene.interaction().cancel_all(_overlay_scene.scene()))
+            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] component overlay cancellation callback failed");
+        for (const auto handle : _component_visual_items) {
+            _overlay_scene.interaction().clear_target_pointer_handler(handle);
+            _overlay_scene.interaction().clear_action_handler(handle);
+            if (!_overlay_scene.scene().destroy(handle))
+                tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] failed to destroy a component overlay item");
         }
-        _component_visual_gizmos.clear();
+        _component_visual_items.clear();
+    }
+
+    void EditorInteractionSystem::_destroy_transform_gizmo_visual() {
+        if (tc_visual_item3d_handle_is_invalid(_transform_gizmo_visual))
+            return;
+        if (_overlay_scene.interaction().cancel_all(_overlay_scene.scene()))
+            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] TransformGizmo overlay cancellation callback failed");
+        _overlay_scene.interaction().clear_target_pointer_handler(_transform_gizmo_visual);
+        _overlay_scene.interaction().clear_action_handler(_transform_gizmo_visual);
+        if (!_overlay_scene.scene().destroy(_transform_gizmo_visual))
+            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] failed to destroy the TransformGizmo overlay item");
+        _transform_gizmo_visual = tc_visual_item3d_handle_invalid();
     }
 
     // ============================================================================
@@ -231,6 +268,12 @@ namespace termin {
                                                   float y,
                                                   tc_viewport_handle vp,
                                                   tc_display_handle display) {
+        const auto overlay_kind = action == TC_INPUT_PRESS ? visual::PointerEventKind3D::Down
+                                                           : visual::PointerEventKind3D::Up;
+        if (_route_overlay_pointer(overlay_kind, Vec2f{x, y}, button, vp, display)) {
+            _request_update();
+            return;
+        }
         const std::string phase = action == TC_INPUT_PRESS ? "down" : "up";
         if (_dispatch_viewport_pointer(
                 ViewportPointerEvent{phase, Vec2f{x, y}, Vec2f{0.0f, 0.0f}, button, action, mods})) {
@@ -259,6 +302,10 @@ namespace termin {
 
     void EditorInteractionSystem::on_mouse_move(
         float x, float y, float dx, float dy, tc_viewport_handle vp, tc_display_handle display) {
+        if (_route_overlay_pointer(visual::PointerEventKind3D::Move, Vec2f{x, y}, 0, vp, display)) {
+            _request_update();
+            return;
+        }
         if (_dispatch_viewport_pointer(ViewportPointerEvent{"move", Vec2f{x, y}, Vec2f{dx, dy}, -1, -1, 0})) {
             _request_update();
             return;
@@ -374,6 +421,24 @@ namespace termin {
         }
     }
 
+    void EditorInteractionSystem::render_overlays(ImmediateRenderer* renderer,
+                                                   tgfx::RenderContext2* render_context,
+                                                   const Mat44f& view,
+                                                   const Mat44f& projection) {
+        gizmo_manager.render(renderer, render_context, view, projection);
+        const int width = render_context ? render_context->viewport_width() : 0;
+        const int height = render_context ? render_context->viewport_height() : 0;
+        if (_overlay_scene.scene().size() > 0 &&
+            !_overlay_scene.paint(renderer,
+                                  render_context,
+                                  view,
+                                  projection,
+                                  static_cast<std::uint32_t>(std::max(width, 0)),
+                                  static_cast<std::uint32_t>(std::max(height, 0)))) {
+            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] failed to render editor overlay scene");
+        }
+    }
+
     void EditorInteractionSystem::_process_pending_press() {
         Vec2f screen = _pending_press.screen;
         tc_viewport_handle vp = _pending_press.vp;
@@ -486,6 +551,23 @@ namespace termin {
 
     bool EditorInteractionSystem::_dispatch_viewport_pointer(const ViewportPointerEvent& event) {
         return on_viewport_pointer_event ? on_viewport_pointer_event(event) : false;
+    }
+
+    bool EditorInteractionSystem::_route_overlay_pointer(visual::PointerEventKind3D kind,
+                                                          Vec2f screen,
+                                                          int button,
+                                                          tc_viewport_handle viewport,
+                                                          tc_display_handle display) {
+        if (!tc_viewport_handle_valid(viewport))
+            return false;
+        Vec3f origin;
+        Vec3f direction;
+        if (!_screen_to_ray(screen, viewport, display, origin, direction))
+            return false;
+        return _overlay_scene.route_pointer(kind,
+                                            Ray3{{origin.x, origin.y, origin.z},
+                                                 {direction.x, direction.y, direction.z}},
+                                            static_cast<std::uint32_t>(std::max(button, 0)));
     }
 
     bool

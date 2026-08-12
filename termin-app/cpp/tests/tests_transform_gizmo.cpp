@@ -70,3 +70,30 @@ TEST_CASE("TransformGizmo edits logical channels below affine ancestry") {
 
     tc_entity_pool_registry_destroy(pool);
 }
+
+TEST_CASE("TransformGizmo cancel restores the captured target without committing undo") {
+    const tc_entity_pool_handle pool = tc_entity_pool_registry_create(4);
+    REQUIRE(tc_entity_pool_handle_valid(pool));
+
+    termin::Entity target = termin::Entity::create(pool, "target");
+    target.transform().set_global_position({1.0, 2.0, 3.0});
+    termin::TransformGizmo gizmo;
+    gizmo.set_target(target);
+    int transform_updates = 0;
+    int undo_commits = 0;
+    gizmo.on_transform_changed = [&]() { ++transform_updates; };
+    gizmo.on_drag_end = [&](const auto&, const auto&) { ++undo_commits; };
+
+    const int translate_x_id = static_cast<int>(termin::TransformElement::TRANSLATE_X);
+    const termin::Vec3f start_hit{1.0f, 2.0f, 3.0f};
+    gizmo.on_click(translate_x_id, &start_hit);
+    gizmo.on_drag(translate_x_id, {7.0f, 2.0f, 3.0f}, {6.0f, 0.0f, 0.0f});
+    REQUIRE_FALSE(vec_near(target.transform().global_position(), {1.0, 2.0, 3.0}));
+
+    gizmo.on_cancel(translate_x_id);
+    CHECK(vec_near(target.transform().global_position(), {1.0, 2.0, 3.0}));
+    CHECK_EQ(transform_updates, 2);
+    CHECK_EQ(undo_commits, 0);
+
+    tc_entity_pool_registry_destroy(pool);
+}
