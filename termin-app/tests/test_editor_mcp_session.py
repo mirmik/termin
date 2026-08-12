@@ -9,6 +9,7 @@ from termin.editor_core.mcp_session import (
     default_editor_mcp_registry_dir,
     new_editor_mcp_session_file,
 )
+from termin.mcp.session import new_sdk_session_file, sdk_session_registry_dir
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -67,3 +68,26 @@ def test_helper_default_registry_matches_checkout_sdk_root():
 
     expected = default_editor_mcp_registry_dir(sdk_root=REPOSITORY_ROOT / "sdk")
     assert Path(completed.stdout.strip()) == expected
+
+
+def test_editor_compatibility_facade_matches_shared_mcp_helpers(tmp_path: Path):
+    sdk_root = tmp_path / "sdk"
+
+    assert default_editor_mcp_registry_dir(
+        sdk_root=sdk_root,
+        temp_dir=tmp_path,
+    ) == sdk_session_registry_dir(
+        "editor",
+        sdk_root=sdk_root,
+        temp_dir=tmp_path,
+    )
+    assert new_editor_mcp_session_file(
+        sdk_root=sdk_root,
+        temp_dir=tmp_path,
+        instance_id="external-consumer",
+    ) == new_sdk_session_file(
+        "editor",
+        sdk_root=sdk_root,
+        temp_dir=tmp_path,
+        instance_id="external-consumer",
+    )

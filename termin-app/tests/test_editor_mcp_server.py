@@ -498,8 +498,8 @@ def test_editor_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatc
     expected_session = tmp_path / "registry" / "instance.json"
     monkeypatch.setattr(
         mcp_server_module,
-        "new_editor_mcp_session_file",
-        lambda: expected_session,
+        "new_sdk_session_file",
+        lambda runtime_name: expected_session,
     )
 
     config = load_editor_mcp_config()
