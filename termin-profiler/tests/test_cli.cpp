@@ -1,9 +1,13 @@
 #include "guard_main.h"
 
+#include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -17,6 +21,33 @@ namespace {
         const std::vector<const char*> argv(arguments);
         return parse_cli_options(static_cast<int>(argv.size()), argv.data());
     }
+
+    struct InterruptingAdb {
+        ProcessResult run(const std::vector<std::string>& arguments, std::chrono::milliseconds) {
+            std::lock_guard lock(mutex);
+            calls.push_back(arguments);
+            if (arguments.size() >= 3 && arguments[1] == "devices") {
+                return {0, false, "List of devices attached\nquest-1 device model:Quest_3\n", {}};
+            }
+            if (!arguments.empty() && arguments.back() == "get-state") {
+                return {0, false, "device\n", {}};
+            }
+            if (arguments.size() >= 6 && arguments[3] == "forward" && arguments[4] == "tcp:0") {
+                interrupted.store(true);
+                return {0, false, "47123\n", {}};
+            }
+            return {0, false, {}, {}};
+        }
+
+        std::vector<std::vector<std::string>> copy_calls() const {
+            std::lock_guard lock(mutex);
+            return calls;
+        }
+
+        std::atomic_bool interrupted = false;
+        mutable std::mutex mutex;
+        std::vector<std::vector<std::string>> calls;
+    };
 } // namespace
 
 TEST_CASE("Profiler CLI parses an agent-oriented Quest capture") {
@@ -55,6 +86,29 @@ TEST_CASE("Profiler CLI rejects ambiguous or unsafe capture arguments") {
     CHECK(!parse({"termin_profiler_cli", "capture", "quest", "--package", "p", "--device-port", "65536"})
                .options.has_value());
     CHECK(!parse({"termin_profiler_cli", "devices", "--serial", "unexpected"}).options.has_value());
+}
+
+TEST_CASE("Profiler CLI interruption removes only its owned ADB route") {
+    auto fake = std::make_shared<InterruptingAdb>();
+    CliOptions options;
+    options.command = CliCommand::CaptureQuest;
+    options.adb_path = "adb";
+    options.serial = "quest-1";
+    options.package_name = "org.termin.openxr";
+    options.timeout = std::chrono::seconds(2);
+
+    const int exit_code = run_cli(
+        options,
+        [fake](const auto& arguments, auto timeout) { return fake->run(arguments, timeout); },
+        [fake] { return fake->interrupted.load(); });
+
+    CHECK_EQ(exit_code, static_cast<int>(CliExitCode::Interrupted));
+    const auto calls = fake->copy_calls();
+    const std::vector<std::string> owned_remove{"adb", "-s", "quest-1", "forward", "--remove", "tcp:47123"};
+    CHECK_EQ(std::count(calls.begin(), calls.end(), owned_remove), 1);
+    CHECK(std::none_of(calls.begin(), calls.end(), [](const auto& call) {
+        return call.size() >= 6 && call[3] == "forward" && call[4] == "--remove" && call[5] != "tcp:47123";
+    }));
 }
 
 TEST_CASE("Profiler capture JSON distinguishes missing GPU timing and escapes data") {

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -43,10 +44,13 @@ namespace termin::profiler_app {
         Connection = 4,
         Capture = 5,
         Output = 6,
+        Interrupted = 130,
     };
+
+    using CliCancellationProbe = std::function<bool()>;
 
     CliParseResult parse_cli_options(int argc, const char* const* argv);
     std::string cli_usage();
-    int run_cli(const CliOptions& options, ProcessRunner runner = {});
+    int run_cli(const CliOptions& options, ProcessRunner runner = {}, CliCancellationProbe cancellation_probe = {});
 
 } // namespace termin::profiler_app
