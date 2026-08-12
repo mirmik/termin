@@ -15,6 +15,14 @@ namespace termin::profiler_app {
     namespace {
         using Clock = std::chrono::steady_clock;
 
+        struct CliInterrupted {};
+
+        void throw_if_cancelled(const CliCancellationProbe& cancellation_probe) {
+            if (cancellation_probe && cancellation_probe()) {
+                throw CliInterrupted{};
+            }
+        }
+
         bool parse_unsigned(std::string_view text, std::uint64_t& value) {
             value = 0;
             const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -40,14 +48,19 @@ namespace termin::profiler_app {
         }
 
         template <typename Update, typename Predicate>
-        bool wait_until(Clock::time_point deadline, Update&& update, Predicate&& predicate) {
+        bool wait_until(Clock::time_point deadline,
+                        const CliCancellationProbe& cancellation_probe,
+                        Update&& update,
+                        Predicate&& predicate) {
             while (Clock::now() < deadline) {
+                throw_if_cancelled(cancellation_probe);
                 update();
                 if (predicate()) {
                     return true;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
+            throw_if_cancelled(cancellation_probe);
             update();
             return predicate();
         }
@@ -97,13 +110,15 @@ namespace termin::profiler_app {
             });
         }
 
-        int run_devices(const CliOptions& options, ProcessRunner runner) {
+        int run_devices(const CliOptions& options,
+                        ProcessRunner runner,
+                        const CliCancellationProbe& cancellation_probe) {
             AndroidProfilerBridge bridge(std::move(runner));
             if (!bridge.refresh_devices(options.adb_path)) {
                 return fail(CliExitCode::Device, "could not start ADB device discovery");
             }
             const auto deadline = Clock::now() + options.timeout;
-            if (!wait_until(deadline, [] {}, [&] { return !bridge.snapshot().busy; })) {
+            if (!wait_until(deadline, cancellation_probe, [] {}, [&] { return !bridge.snapshot().busy; })) {
                 return fail(CliExitCode::Device, "ADB device discovery timed out");
             }
             const AndroidBridgeSnapshot snapshot = bridge.snapshot();
@@ -114,13 +129,15 @@ namespace termin::profiler_app {
             return static_cast<int>(CliExitCode::Success);
         }
 
-        int run_capture_quest(const CliOptions& options, ProcessRunner runner) {
+        int run_capture_quest(const CliOptions& options,
+                              ProcessRunner runner,
+                              const CliCancellationProbe& cancellation_probe) {
             AndroidProfilerBridge bridge(std::move(runner));
             if (!bridge.refresh_devices(options.adb_path)) {
                 return fail(CliExitCode::Device, "could not start ADB device discovery");
             }
             auto deadline = Clock::now() + options.timeout;
-            if (!wait_until(deadline, [] {}, [&] { return !bridge.snapshot().busy; })) {
+            if (!wait_until(deadline, cancellation_probe, [] {}, [&] { return !bridge.snapshot().busy; })) {
                 return fail(CliExitCode::Device, "ADB device discovery timed out");
             }
             AndroidBridgeSnapshot bridge_snapshot = bridge.snapshot();
@@ -148,7 +165,7 @@ namespace termin::profiler_app {
                 return fail(CliExitCode::Device, bridge.snapshot().status);
             }
             deadline = Clock::now() + options.timeout;
-            if (!wait_until(deadline, [] {}, [&] { return !bridge.snapshot().busy; })) {
+            if (!wait_until(deadline, cancellation_probe, [] {}, [&] { return !bridge.snapshot().busy; })) {
                 return fail(CliExitCode::Device, "Android profiler route setup timed out");
             }
             bridge_snapshot = bridge.snapshot();
@@ -167,7 +184,8 @@ namespace termin::profiler_app {
                 return fail(CliExitCode::Connection, "could not start remote profiler client");
             }
             deadline = Clock::now() + options.timeout;
-            if (!wait_until(deadline, [&] { session.update(); }, [&] { return session.connected(); })) {
+            if (!wait_until(
+                    deadline, cancellation_probe, [&] { session.update(); }, [&] { return session.connected(); })) {
                 return fail(CliExitCode::Connection,
                             "remote profiler handshake timed out: " + session.snapshot()->status.detail);
             }
@@ -178,6 +196,7 @@ namespace termin::profiler_app {
             deadline = Clock::now() + options.timeout;
             if (!wait_until(
                     deadline,
+                    cancellation_probe,
                     [&] { session.update(); },
                     [&] { return session.snapshot()->status.profiling_sections == options.sections; })) {
                 return fail(CliExitCode::Capture, "section profiling control was not acknowledged");
@@ -187,6 +206,7 @@ namespace termin::profiler_app {
                 const auto control_deadline = Clock::now() + options.timeout;
                 return wait_until(
                     control_deadline,
+                    cancellation_probe,
                     [&] { session.update(); },
                     [&] {
                         const auto snapshot = session.snapshot();
@@ -197,13 +217,19 @@ namespace termin::profiler_app {
                 session.profiler().start_capture();
                 const auto control_deadline = Clock::now() + options.timeout;
                 return wait_until(
-                    control_deadline, [&] { session.update(); }, [&] { return session.snapshot()->status.capturing; });
+                    control_deadline,
+                    cancellation_probe,
+                    [&] { session.update(); },
+                    [&] { return session.snapshot()->status.capturing; });
             };
             const auto pause_capture = [&]() {
                 session.profiler().pause();
                 const auto control_deadline = Clock::now() + options.timeout;
                 return wait_until(
-                    control_deadline, [&] { session.update(); }, [&] { return !session.snapshot()->status.capturing; });
+                    control_deadline,
+                    cancellation_probe,
+                    [&] { session.update(); },
+                    [&] { return !session.snapshot()->status.capturing; });
             };
 
             if (!clear_capture()) {
@@ -217,6 +243,7 @@ namespace termin::profiler_app {
                 deadline = Clock::now() + options.timeout;
                 if (!wait_until(
                         deadline,
+                        cancellation_probe,
                         [&] { session.update(); },
                         [&] { return session.snapshot()->frames.size() >= options.warmup_frame_count; })) {
                     return fail(CliExitCode::Capture, "warm-up timed out");
@@ -235,6 +262,7 @@ namespace termin::profiler_app {
             deadline = Clock::now() + options.timeout;
             if (!wait_until(
                     deadline,
+                    cancellation_probe,
                     [&] { session.update(); },
                     [&] { return session.snapshot()->frames.size() >= options.frame_count; })) {
                 return fail(CliExitCode::Capture,
@@ -252,6 +280,7 @@ namespace termin::profiler_app {
                 const auto gpu_deadline = Clock::now() + options.gpu_tail_timeout;
                 wait_until(
                     gpu_deadline,
+                    cancellation_probe,
                     [&] { session.update(); },
                     [&] { return all_gpu_resolved(*session.snapshot(), frame_ids); });
             }
@@ -259,6 +288,7 @@ namespace termin::profiler_app {
                 return fail(CliExitCode::Capture, "pause capture control was not acknowledged");
             }
             captured_snapshot = session.snapshot();
+            throw_if_cancelled(cancellation_probe);
             std::vector<FrameProfilerFrame> frames;
             frames.reserve(frame_ids.size());
             for (const std::int64_t frame_number : frame_ids) {
@@ -416,15 +446,19 @@ namespace termin::profiler_app {
         return result;
     }
 
-    int run_cli(const CliOptions& options, ProcessRunner runner) {
-        switch (options.command) {
-        case CliCommand::Help:
-            std::cout << cli_usage();
-            return static_cast<int>(CliExitCode::Success);
-        case CliCommand::Devices:
-            return run_devices(options, std::move(runner));
-        case CliCommand::CaptureQuest:
-            return run_capture_quest(options, std::move(runner));
+    int run_cli(const CliOptions& options, ProcessRunner runner, CliCancellationProbe cancellation_probe) {
+        try {
+            switch (options.command) {
+            case CliCommand::Help:
+                std::cout << cli_usage();
+                return static_cast<int>(CliExitCode::Success);
+            case CliCommand::Devices:
+                return run_devices(options, std::move(runner), cancellation_probe);
+            case CliCommand::CaptureQuest:
+                return run_capture_quest(options, std::move(runner), cancellation_probe);
+            }
+        } catch (const CliInterrupted&) {
+            return fail(CliExitCode::Interrupted, "interrupted; owned resources were closed");
         }
         return fail(CliExitCode::Runtime, "invalid command state");
     }
