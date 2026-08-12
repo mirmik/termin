@@ -17,7 +17,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 - Новый пакет по умолчанию использует одинаковые repo path и distribution name
   в стиле `termin-*`; исключения требуют явного обоснования в таблице ниже.
 - Public import namespace выбирается по domain API. Он не обязан совпадать с
-  distribution name: короткие legacy API (`tcbase`, `tmesh`, `tgfx`, `tcgui`,
+  distribution name: короткие legacy API (`tcbase`, `tmesh`, `tgfx`,
   `tcplot`) остаются допустимыми исключениями.
 - Component spec packages (`*_component_specs`, `*_render_specs`) являются частью
   owning distribution и не должны становиться отдельными internal dependencies.
@@ -57,9 +57,8 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-inspect` | `termin-inspect` | `termin.inspect` | Inspection metadata API. |
 | `termin-materials` | `termin-materials` | `termin.materials` | Material runtime API. |
 | `termin-shader-runtime` | `termin-shader-runtime` | `termin.shader_tools`, `termin.shader_runtime` | Shared shader tool resolution and source-project shader runtime helpers. |
-| `termin-gui` | `tcgui` | `tcgui` | Legacy short distribution/import name. |
 | `termin-window` | `termin-window` | `termin.window` | Framework-neutral native window infrastructure. |
-| `termin-gui-native` | `termin-gui-native` | `termin.gui_native` | Native retained UI document prototype. |
+| `termin-gui-native` | `termin-gui-native` | `termin.gui_native` | Canonical native retained UI toolkit. |
 | `termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
 | `termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
 | `termin-prefab` | `termin-prefab` | `termin.prefab` | Namespace package. |

@@ -1,8 +1,7 @@
 # Архитектура редактора
 
 Редактор имеет один production frontend: `termin-gui-native`. Старые Qt/PyQt и
-tcgui frontend-проекции удалены. Библиотека `termin-gui` остаётся отдельным
-toolkit для non-editor consumers и не входит в editor application payload.
+tcgui frontend-проекции и legacy toolkit удалены из репозитория и SDK.
 
 Cross-module ownership между application host, `EditorSession` и `EngineCore`
 зафиксирован в

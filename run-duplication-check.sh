@@ -43,7 +43,6 @@ DEFAULT_TARGETS=(
     termin-build-tools
     termin-base
     termin-openxr
-    termin-gui
     termin-csharp
     termin-modules
     termin-materials

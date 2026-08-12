@@ -239,20 +239,17 @@ raw renderer или другим содержимым. Целевой контр
 
 ## UI And Tools
 
-### termin-gui / tcgui
+### termin-gui-native
 
-Source of truth: [termin-gui docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui/docs/index.md)
+Source of truth: [termin-gui-native README](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui-native/README.md)
 
-Отвечает за retained widget tree, layout, input routing, dialogs, canvas/viewport widgets и Python UI API.
+`termin-gui-native` — единственный поддерживаемый retained UI toolkit Termin.
+Он владеет C ABI/C++ document и widget core, layout, input routing, dialogs,
+canvas/viewport widgets и Python-проекцией тех же native handles. Удалённый
+Python toolkit `termin-gui`/`tcgui` не является compatibility dependency.
 
-Целевая C++-миграция должна использовать явный storage/document ownership с handle-based references; см. [UI storage and plot annotations](architecture/2026-07-07-ui-storage-and-plot-annotations.md).
-
-Рендеринг виджетов должен использовать facade из [termin-graphics](#termin-graphics), а не дублировать низкоуровневые GPU primitives.
-
-`termin-gui-native` — каноническое C ABI/C++ ядро native UI document и
-production UI редактора и scene UI. Python bindings являются проекцией тех же
-native handles и widget types. Legacy `termin-gui`/`tcgui` остаётся отдельной
-библиотекой только для ещё не мигрированных consumers.
+Рендеринг виджетов использует facade из [termin-graphics](#termin-graphics),
+а не дублирует низкоуровневые GPU primitives.
 
 Native widget/document core не владеет OS windows, `WindowedGraphicsSession`,
 application loop или main/secondary policy. Необязательный leaf adapter может
@@ -265,14 +262,16 @@ UI нет. Headless composition использует document/rendering primitiv
 
 Source of truth: [tcplot docs](https://github.com/mirmik/termin-monorepo/blob/master/tcplot/docs/index.md)
 
-Plotting library поверх tgfx/tcgui. Переиспользует GPU abstractions из
+Toolkit-neutral plotting library поверх tgfx. Переиспользует GPU abstractions из
 [termin-graphics](#termin-graphics), scene-neutral framegraph/execution из
 `termin_render_core` и host/window infrastructure из
 [termin-display](#termin-display), не заводя собственный низкоуровневый GPU
 слой. `PlotScene3DRenderItemSource` публикует retained 3D identities в общий
 render core без зависимости на `termin_scene` или `termin_lighting`.
 
-Маркеры, подписи, callouts, legends и интерактивные handles графиков должны жить как retained plot annotation model внутри `tcplot`, а не как виджеты `termin-gui`; см. [UI storage and plot annotations](architecture/2026-07-07-ui-storage-and-plot-annotations.md).
+Маркеры, подписи, callouts, legends и интерактивные handles графиков живут как
+retained plot annotation model внутри `tcplot`, а не в UI toolkit; см.
+[UI storage and plot annotations](architecture/2026-07-07-ui-storage-and-plot-annotations.md).
 
 Целевая C#-композиция chart описана в
 [C# Retained Chart Composition](architecture/2026-07-30-csharp-retained-chart-composition.md).
@@ -345,7 +344,9 @@ must stay independent from both stacks.
 
 Source of truth: [termin-input docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-input/docs/index.md)
 
-Input abstraction. UI event routing остается в [termin-gui](#termin-gui), platform windowing остается в [termin-display](#termin-display).
+Input abstraction. UI event routing принадлежит
+[termin-gui-native](#termin-gui-native), platform windowing —
+[termin-display](#termin-display).
 
 ### termin-engine
 
@@ -472,10 +473,10 @@ Host-derived bundle pipeline также удалён в #681: проверенн
 Linux/Windows relocated-SDK smoke. Граница зафиксирована в
 [протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
 
-Native UI является единственным поддерживаемым UI редактора и scene UI; старые
-tcgui и Qt/PyQt frontend-проекции, Python `UIComponent` и Python
-`UIWidgetPass` удалены. Сам `termin-gui` остаётся библиотекой для CSG, tcplot и
-nodegraph consumers.
+Native UI является единственным поддерживаемым UI редактора, scene UI, CSG,
+nodegraph и внешних toolkit consumers. Старые tcgui и Qt/PyQt
+frontend-проекции, Python `UIComponent`, Python `UIWidgetPass` и пакет
+`termin-gui` удалены.
 
 Application-level code не должен протекать вниз в graphics/render/scene. Старые app-level compatibility reexports для доменных API разбираются в пользу canonical imports из owning packages; новые re-export слои в `termin-app` добавлять не следует.
 

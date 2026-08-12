@@ -25,7 +25,7 @@ setup(
         "termin-glb",
         "termin-materials",
         "termin-shader-runtime",
-        "tcgui",
+        "termin-gui-native",
         "packaging",
     ],
     zip_safe=False,

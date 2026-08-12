@@ -18,7 +18,7 @@ External Python projects should install Termin packages from the wheelhouse with
 
 ```bash
 TERMIN_SDK=/path/to/termin/sdk \
-python -m pip install --find-links /path/to/termin/sdk/wheels tcgui termin-display
+python -m pip install --find-links /path/to/termin/sdk/wheels termin-gui-native termin-display
 ```
 
 `pip` will resolve the Termin dependency chain from `sdk/wheels`. Non-Termin

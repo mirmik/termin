@@ -27,7 +27,6 @@ setup(
         "termin-physics",
         "termin-scene",
         "termin-voxels",
-        "tcgui",
         "tmesh",
         "numpy",
     ],

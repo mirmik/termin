@@ -103,8 +103,7 @@ import importlib
 import json
 
 modules = [
-    "tcgui.widgets.renderer",
-    "tcgui.widgets.ui",
+    "termin.gui_native",
     "termin.editor_core.resource_manager",
     "termin.default_assets.resource_manager",
     "termin.project_build.desktop_build",

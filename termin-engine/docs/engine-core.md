@@ -48,7 +48,7 @@
 - проверка, надо ли продолжать цикл;
 - shutdown.
 
-Это позволяет SDL, tcgui, Qt-like hosts, tests и external embedding использовать одну и ту же форму runtime loop.
+Это позволяет SDL, native UI, Qt-like hosts, tests и external embedding использовать одну и ту же форму runtime loop.
 
 ## Завершение runtime
 

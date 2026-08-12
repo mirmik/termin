@@ -17,8 +17,8 @@
 - [termin-mesh](termin-mesh/docs/index.md) - canonical mesh/resource data layer.
 - [termin-render](docs/modules.md#termin-render) - render framework поверх canonical engine resources.
 - [termin-display](termin-display/docs/index.md) - windows/display/platform integration.
-- [termin-gui](termin-gui/docs/index.md) - tcgui widgets, layout, dialogs, canvas.
-- [tcplot](docs/modules.md#tcplot) - plotting поверх tgfx/tcgui.
+- [termin-gui-native](termin-gui-native/README.md) - native retained UI, layout, dialogs and canvas/viewport widgets.
+- [tcplot](docs/modules.md#tcplot) - toolkit-neutral plotting core with optional native UI widgets.
 - [termin-scene](termin-scene/docs/index.md) - scene/ECS ownership, handles, lifecycle.
 - [termin-prefab](termin-prefab/docs/index.md) - prefab runtime, asset integration, overrides.
 - [termin-glb](termin-glb/docs/index.md) - GLB/glTF importer, asset integration, runtime instantiation.

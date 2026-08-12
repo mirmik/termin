@@ -128,10 +128,6 @@ class UIRuntimePlugin:
             )
 
 
-class UIAssetPlugin(UIImportPlugin, UIRuntimePlugin):
-    """Compatibility combined UI plugin."""
-
-
 def create_import_plugin() -> UIImportPlugin:
     return UIImportPlugin()
 
@@ -146,8 +142,3 @@ def register_ui_import_plugin(registry: "AssetTypeRegistry") -> None:
 
 def register_ui_runtime_plugin(registry: "AssetTypeRegistry") -> None:
     registry.register_runtime(UIRuntimePlugin())
-
-
-def register_ui_asset_plugin(registry: "AssetTypeRegistry") -> None:
-    register_ui_import_plugin(registry)
-    register_ui_runtime_plugin(registry)

@@ -92,7 +92,6 @@ def test_legacy_app_build_entrypoints_do_not_shadow_sdk_manifest() -> None:
     assert "termin-physics-fem" not in cpp_cmake
     assert "TERMIN_SDK_PYTHON_PACKAGE_DIRS" not in cpp_cmake
     assert "../termin-assets/termin_assets" not in cpp_cmake
-    assert "../termin-gui/python/tcgui" not in cpp_cmake
     assert "../termin-nodegraph/python/tcnodegraph" not in cpp_cmake
 
 
@@ -492,6 +491,15 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     ).exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "tcbase" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "image" / "__init__.py").exists()
+    assert (
+        dist_dir
+        / "python"
+        / "Lib"
+        / "site-packages"
+        / "termin"
+        / "gui_native"
+        / "__init__.py"
+    ).exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin_build").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "optional_extra").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "physics_fem").exists()
@@ -818,8 +826,6 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         output_dir=project / "dist" / "package",
         shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
-
-    assert not list(result.package_dir.rglob("termin-tcgui-ui-engine*"))
 
     fsq_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-fsq.vert.slang"

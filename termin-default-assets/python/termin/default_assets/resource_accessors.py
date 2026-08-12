@@ -10,7 +10,6 @@ from termin_assets import AssetCreationPlugin
 from termin.default_assets.handle_accessors import HandleAccessors
 
 if TYPE_CHECKING:
-    from termin.default_assets.ui.handle import UIHandle
     from termin.materials import TcMaterial
     from termin.mesh import TcMesh
     from termin.navmesh._navmesh_native import TcNavMesh
@@ -97,14 +96,6 @@ class DefaultResourceAccessorsMixin:
                 iter_items=lambda: self._runtime_handle_items("ui"),
                 create_item=lambda: self._create_external_asset("ui"),
             )
-        if kind == "ui_handle":
-            return HandleAccessors(
-                list_names=self.list_ui_names,
-                get_by_name=self._get_ui_handle,
-                find_name=self._find_ui_handle_name,
-                find_uuid=self._find_ui_uuid_by_name,
-                iter_items=lambda: self._runtime_handle_items("ui"),
-            )
         if kind == "tc_mesh":
             return HandleAccessors(
                 list_names=self._list_tc_mesh_names,
@@ -113,6 +104,10 @@ class DefaultResourceAccessorsMixin:
                 find_uuid=self._find_tc_mesh_uuid_by_name,
                 iter_items=lambda: self._runtime_handle_items("mesh"),
             )
+        # Native UI documents deliberately do not expose the generic legacy
+        # ``ui_handle`` selector. Their canonical selector is ``ui_document``.
+        if kind == "ui_handle":
+            return None
         if kind.endswith("_handle"):
             type_id = kind[:-7]
             plugin = self.asset_type_plugins.get_import(type_id)
@@ -232,22 +227,6 @@ class DefaultResourceAccessorsMixin:
             return self.find_texture_name(handle)
         return None
 
-    def _get_ui_handle(self, name: str) -> Optional["UIHandle"]:
-        """Get UIHandle by name."""
-        from termin.default_assets.ui.handle import UIHandle
-
-        return UIHandle.from_name(name)
-
-    def _find_ui_handle_name(self, handle: Any) -> Optional[str]:
-        """Find name for a UIHandle."""
-        from termin.default_assets.ui.handle import UIHandle
-
-        if isinstance(handle, UIHandle):
-            asset = handle.get_asset()
-            if asset is not None:
-                return asset.name
-        return None
-
     def _get_ui_document(self, name: str):
         """Get a native UI document asset handle by project name."""
         asset = self._ui_registry.get_asset(name)
@@ -318,7 +297,7 @@ class DefaultResourceAccessorsMixin:
 
     def _find_ui_uuid_by_name(self, name: str) -> Optional[str]:
         """Find UUID for UI by name."""
-        asset = self._ui_assets.get(name)
+        asset = self._ui_registry.get_asset(name)
         return asset.uuid if asset else None
 
     def _find_tc_mesh_uuid_by_name(self, name: str) -> Optional[str]:

@@ -221,7 +221,6 @@ dist/<app>/
     python3.14t/
       site-packages/
         termin/
-        tcgui/
         tgfx/
         ...
   package/

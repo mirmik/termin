@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from termin.default_assets.render.pipeline_asset import PipelineAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.default_assets.render.texture_asset import TextureAsset
+    from termin.default_assets.ui.document_asset import UiDocumentSourceAsset
     from termin.default_assets.voxels.asset import VoxelGridAsset
     from termin.glb.asset import GLBAsset
     from termin.materials import ShaderMultyPhaseProgramm
@@ -641,7 +642,8 @@ class DefaultAssetResourceMixin:
         self._audio_clip_registry.unregister(name)
 
     # --------- UI Layouts ---------
-    def get_ui_asset(self, name: str):
+    def get_ui_source_asset(self, name: str) -> Optional["UiDocumentSourceAsset"]:
+        """Return project metadata for a native UI document by name."""
         return self._ui_registry.get_asset(name)
 
     def get_ui_document(self, name: str):
@@ -652,7 +654,8 @@ class DefaultAssetResourceMixin:
     def list_ui_names(self) -> list[str]:
         return self._ui_registry.list_names()
 
-    def get_ui_asset_by_uuid(self, uuid: str):
+    def get_ui_source_asset_by_uuid(self, uuid: str) -> Optional["UiDocumentSourceAsset"]:
+        """Return project metadata for a native UI document by UUID."""
         return self._ui_registry.get_asset_by_uuid(uuid)
 
     def unregister_ui(self, name: str) -> None:

@@ -46,8 +46,8 @@ Current adapters:
 - `termin.default_assets.ui`: `.uiscript` project-file indexing and
   transactional reload backed by native `UiDocumentAsset` recipes. The
   `UiDocumentSourceAsset` Python object stores only project metadata; parsing,
-  instances and widget trees remain native. `UIAsset`/`UIHandle` are legacy
-  compatibility types scheduled for removal after the packaged-runtime gate.
+  instances and widget trees remain native. Runtime selectors use the
+  `ui_document` kind and return native `UiDocumentAsset` handles.
 
 Compatibility paths:
 
