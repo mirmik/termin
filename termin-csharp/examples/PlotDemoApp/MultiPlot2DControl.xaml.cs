@@ -117,7 +117,8 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         CompositionTarget.Rendering += OnRender;
         _renderingSubscribed = true;
 
-        Unloaded += (_, _) => Dispose();
+        Unloaded += OnUnloaded;
+        SizeChanged += OnSizeChanged;
 
         RenderHost.FramebufferMouseDown  += OnFramebufferMouseDown;
         RenderHost.FramebufferMouseMove  += OnFramebufferMouseMove;
@@ -191,7 +192,6 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
             _view.set_scroll_offset((float)ScrollOffset);
             UpdateMaxScroll();
         }
-        SizeChanged += (_, _) => UpdateMaxScroll();
         _initialized = true;
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
@@ -300,16 +300,35 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         }
         e.Handled = true;
     }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateMaxScroll();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        Dispose();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
+        Dispatcher.VerifyAccess();
         _disposed = true;
 
+        Unloaded -= OnUnloaded;
+        SizeChanged -= OnSizeChanged;
         if (_renderingSubscribed)
         {
             CompositionTarget.Rendering -= OnRender;
             _renderingSubscribed = false;
         }
+
+        RenderHost.FramebufferMouseDown  -= OnFramebufferMouseDown;
+        RenderHost.FramebufferMouseMove  -= OnFramebufferMouseMove;
+        RenderHost.FramebufferMouseUp    -= OnFramebufferMouseUp;
+        RenderHost.FramebufferMouseWheel -= OnFramebufferMouseWheel;
 
         RenderHost.ReleaseNativeResources();
 
@@ -323,10 +342,7 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         }
 
         _initialized = false;
-        GC.SuppressFinalize(this);
     }
-
-    ~MultiPlot2DControl() { Dispose(); }
 
     // Recompute max scroll from the current native total_virtual_height
     // and the control's actual on-screen height. Called on resize and
