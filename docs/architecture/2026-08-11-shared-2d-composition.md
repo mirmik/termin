@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted target architecture. The common affine values, `DrawList2D`,
-`SceneView` and widget portals exist; consolidation behind one composition
-evaluator and reusable projection bridge is planned in Kanboard #1519.
+Accepted architecture under implementation. The common affine values,
+`DrawList2D` and the value-level `CompositionEvaluator2D` now exist;
+`SceneView`, widget portals and the two semantic trees still need consolidation
+behind that evaluator and a reusable projection bridge under Kanboard #1519.
 
 The decision rationale is recorded in the
 [architecture council protocol](../architecture-council/2026-08-11-shared-2d-composition-boundary.md).
@@ -44,8 +45,8 @@ values at composition boundaries.
 
 ### `termin-graphics`
 
-Owns paths, paints, draw commands, `DrawList2D` and the planned non-owning 2D
-composition evaluator. The evaluator operates on values and scoped effective
+Owns paths, paints, draw commands, `DrawList2D` and the non-owning 2D
+`CompositionEvaluator2D`. The evaluator operates on values and scoped effective
 state:
 
 - accumulated affine and fallible inverse;
@@ -175,7 +176,7 @@ silently approximated by stretched bounds.
 
 Kanboard #1519 is the implementation umbrella:
 
-- #1520 — common `termin-graphics` composition evaluator;
+- #1520 — common `termin-graphics` composition evaluator (implemented);
 - #1521 — visual-scene traversal migration;
 - #1522 — GUI render/lowering migration;
 - #1523 — GUI bounds and pointer-mapping migration;
