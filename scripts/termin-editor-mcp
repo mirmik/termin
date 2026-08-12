@@ -16,12 +16,13 @@ from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "termin-app"))
+sys.path.insert(0, str(REPOSITORY_ROOT / "termin-mcp"))
 
 from termin.editor_core.mcp_contract import editor_mcp_tool_schemas  # noqa: E402
-from termin.editor_core.mcp_session import default_editor_mcp_registry_dir  # noqa: E402
+from termin.mcp.session import sdk_session_registry_dir  # noqa: E402
 
 
-DEFAULT_REGISTRY_DIR = default_editor_mcp_registry_dir(sdk_root=REPOSITORY_ROOT / "sdk")
+DEFAULT_REGISTRY_DIR = sdk_session_registry_dir("editor", sdk_root=REPOSITORY_ROOT / "sdk")
 SUPPORTED_PROTOCOL_VERSIONS = (
     "2025-11-25",
     "2025-06-18",
