@@ -321,17 +321,21 @@ def write_shader(
     source_ext = source_extension_for_language(shader.language)
     shared_stage_source = (
         shader.language == "slang"
+        and shader.vertex_source != ""
         and shader.geometry_source == ""
         and shader.vertex_source == shader.fragment_source
     )
+    vertex_source_path: Path | None = None
     if shared_stage_source:
         vertex_source_path = vulkan_dir / f"{shader.uuid}.{source_ext}"
         fragment_source_path = vertex_source_path
     else:
-        vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{source_ext}"
+        if shader.vertex_source != "":
+            vertex_source_path = vulkan_dir / f"{shader.uuid}.vert.{source_ext}"
         fragment_source_path = vulkan_dir / f"{shader.uuid}.frag.{source_ext}"
-    vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
-    if fragment_source_path != vertex_source_path:
+    if vertex_source_path is not None:
+        vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
+    if vertex_source_path is None or fragment_source_path != vertex_source_path:
         fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
     fragment_compile_source_path = fragment_source_path
     if compile_artifacts and shader.surface_interface_source:
@@ -382,18 +386,19 @@ def write_shader(
                     if path is not None
                 )
             )
-            compile_shader_stage(
-                compiler,
-                shader.language,
-                target,
-                "vertex",
-                vertex_source_path,
-                target_dir / artifact_filename(shader.uuid, target, "vertex", "vert"),
-                f"{shader.name or shader.uuid}:vertex",
-                shader.vertex_entry,
-                program_source_paths,
-                fxc,
-            )
+            if vertex_source_path is not None:
+                compile_shader_stage(
+                    compiler,
+                    shader.language,
+                    target,
+                    "vertex",
+                    vertex_source_path,
+                    target_dir / artifact_filename(shader.uuid, target, "vertex", "vert"),
+                    f"{shader.name or shader.uuid}:vertex",
+                    shader.vertex_entry,
+                    program_source_paths,
+                    fxc,
+                )
             compile_shader_stage(
                 compiler,
                 shader.language,
@@ -424,28 +429,39 @@ def write_shader(
         "uuid": shader.uuid,
         "name": shader.name or shader.uuid,
         "language": shader.language,
-        "vertex_source_path": (
-            f"shaders/vulkan/{shader.uuid}.{source_ext}"
-            if shared_stage_source
-            else f"shaders/vulkan/{shader.uuid}.vert.{source_ext}"
-        ),
         "fragment_source_path": (
             f"shaders/vulkan/{shader.uuid}.{source_ext}"
             if shared_stage_source
             else f"shaders/vulkan/{shader.uuid}.frag.{source_ext}"
         ),
-        "vertex_entry": shader.vertex_entry,
         "fragment_entry": shader.fragment_entry,
         "source_path": shader.source_path,
         "features": int(shader.features),
         "artifact_role": shader.artifact_role,
         "source_identity": shader.source_identity,
     }
+    if vertex_source_path is not None:
+        shader_spec["vertex_source_path"] = (
+            f"shaders/vulkan/{shader.uuid}.{source_ext}"
+            if shared_stage_source
+            else f"shaders/vulkan/{shader.uuid}.vert.{source_ext}"
+        )
+        shader_spec["vertex_entry"] = shader.vertex_entry
     if compile_artifacts:
         shader_spec["artifacts"] = {
             target: {
-                "vertex": artifact_path_text(shader.uuid, target, "vertex", "vert"),
-                "fragment": artifact_path_text(shader.uuid, target, "fragment", "frag"),
+                **(
+                    {
+                        "vertex": artifact_path_text(
+                            shader.uuid, target, "vertex", "vert"
+                        )
+                    }
+                    if vertex_source_path is not None
+                    else {}
+                ),
+                "fragment": artifact_path_text(
+                    shader.uuid, target, "fragment", "frag"
+                ),
             }
             for target in targets
         }

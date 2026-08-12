@@ -1272,7 +1272,11 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
 
 
 @full_runtime_package_exporter
-def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_path: Path) -> None:
+@pytest.mark.parametrize("use_standard_pbr", [False, True])
+def test_export_runtime_package_collects_pass_aware_line_shader_usages(
+    tmp_path: Path,
+    use_standard_pbr: bool,
+) -> None:
     from termin.bootstrap import bootstrap_player
     from termin.geombase import Vec3
     from termin.render_components import LineRenderer
@@ -1294,6 +1298,13 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
             LineRenderer(points=[Vec3(0, 0, 0), Vec3(1, 0, 0)])
         )
         scene_data = scene.serialize()
+        if use_standard_pbr:
+            scene_data["entities"][0]["components"][0]["data"]["material"] = {
+                "uuid": "00000000-0001-0000-0001-000000000001",
+                "name": "CookTorrancePBR",
+                "type": "uuid",
+                "kind": "tc_material",
+            }
         scene_data["uuid"] = "scene-uuid"
         scene_data["render_mount"] = {
             "render_target_configs": [
@@ -1330,19 +1341,54 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
         )
     }
     line_pipeline_variant = "DefaultLineShader_MaterialPipeline_world_tube_line_color"
-    assert set(shader_specs) == {"DefaultLineShader", line_pipeline_variant}
-    assert shader_specs[line_pipeline_variant]["artifact_role"] == "pipeline_variant"
+    if use_standard_pbr:
+        surface_producers = {
+            name: spec
+            for name, spec in shader_specs.items()
+            if spec["artifact_role"] == "surface_producer"
+        }
+        assert set(surface_producers) == {"CookTorrancePBR/opaque"}
+        surface_producer_spec = surface_producers["CookTorrancePBR/opaque"]
+        surface_contract = surface_producer_spec["surface_contract"]
+        assert surface_contract["id"] == "termin.surface.standard-pbr"
+        assert surface_contract["version"] == 1
+        assert surface_contract["interface_source_identity"]
+        assert "artifacts" not in surface_producer_spec
+
+        line_variants = {
+            name: spec
+            for name, spec in shader_specs.items()
+            if name.endswith("_MaterialPipeline_world_tube_line_color")
+        }
+        assert len(line_variants) == 1
+        line_pipeline_variant, line_variant_spec = next(iter(line_variants.items()))
+        assert line_variant_spec["artifact_role"] == "pipeline_variant"
+        assert "surface_contract" not in line_variant_spec
+        fragment_source_path = result.package_dir / line_variant_spec[
+            "fragment_source_path"
+        ]
+        fragment_source = fragment_source_path.read_text(encoding="utf-8")
+        assert "struct TerminStandardSurfaceV1" in fragment_source
+        assert "evaluate_standard_surface" in fragment_source
+        assert "Termin pass consumer" in fragment_source
+    else:
+        assert set(shader_specs) == {"DefaultLineShader", line_pipeline_variant}
+        assert shader_specs[line_pipeline_variant]["artifact_role"] == "pipeline_variant"
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     requirements = manifest["pipeline_shader_requirements"]
     assert len(requirements) == 1
     assert requirements[0]["pipeline"] == "LinePipeline"
     assert requirements[0]["pipeline_uuid"] == pipeline_uuid
-    assert {
+    requirement_names = {
         variant["name"] for variant in requirements[0]["variants"]
-    } == {
-        "DefaultLineShader",
-        line_pipeline_variant,
     }
+    if use_standard_pbr:
+        assert requirement_names == {line_pipeline_variant}
+    else:
+        assert requirement_names == {
+            "DefaultLineShader",
+            line_pipeline_variant,
+        }
     assert all(
         variant["source_identity"].startswith("sha256:")
         for variant in requirements[0]["variants"]

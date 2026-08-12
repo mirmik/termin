@@ -592,7 +592,12 @@ def _validate_shader_resource(
             )
             continue
 
-        _validate_required_shader_artifact_stages(resource_path, target_context, target_artifacts, diagnostics)
+        _validate_shader_artifact_stages(
+            target_context,
+            shader_spec,
+            target_artifacts,
+            diagnostics,
+        )
 
         for stage_name, artifact_path in target_artifacts.items():
             stage_context = f"{target_context}.{stage_name}"
@@ -1069,19 +1074,36 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
     }
 
 
-def _validate_required_shader_artifact_stages(
-    resource_path: str,
+def _validate_shader_artifact_stages(
     target_context: str,
+    shader_spec: dict[str, Any],
     target_artifacts: dict[str, Any],
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> None:
-    for required_stage in ("vertex", "fragment"):
+    source_fields = {
+        "vertex": "vertex_source_path",
+        "fragment": "fragment_source_path",
+        "geometry": "geometry_source_path",
+    }
+    for required_stage, source_field in source_fields.items():
+        if source_field not in shader_spec:
+            continue
         if required_stage not in target_artifacts:
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     "error",
                     target_context,
                     f"Runtime shader artifact target must contain '{required_stage}' stage",
+                )
+            )
+    for stage_name in target_artifacts:
+        source_field = source_fields.get(stage_name)
+        if source_field is not None and source_field not in shader_spec:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"{target_context}.{stage_name}",
+                    f"Runtime shader artifact stage '{stage_name}' has no corresponding '{source_field}'",
                 )
             )
 
@@ -1122,7 +1144,7 @@ def _validate_shader_stage_sources(
     for field_name in ("vertex_source_path", "fragment_source_path", "geometry_source_path"):
         value = shader_spec.get(field_name)
         if value is None:
-            if field_name in ("vertex_source_path", "fragment_source_path"):
+            if field_name == "fragment_source_path":
                 diagnostics.append(
                     RuntimePackageExportDiagnostic(
                         "error",
