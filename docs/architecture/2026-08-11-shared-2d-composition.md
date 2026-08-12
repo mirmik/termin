@@ -147,6 +147,19 @@ layer.
 `termin-visual-scene` contains no Widget knowledge and has no reverse
 dependency on `termin-gui-native`.
 
+When projections are present, `SceneView` asks visual-scene for balanced item
+paint layers in canonical tree order. The bridge inserts the document-owned
+widget subtree immediately after its source item's own paint slot and before
+that item's ordered children. The final UI lowering therefore receives one
+linear stream in which scene layers and widget commands are already
+interleaved; the bridge does not flatten item `z_order` into a second global
+portal sort.
+
+Hit testing traverses the same layers in reverse. A portal is tested at its
+source paint slot, children remain above their parent's portal, and a hittable
+graphic layer above the source prevents a lower portal from winning. Document
+overlays remain a separate top-level stacking context above roots.
+
 Projection policies explicitly define:
 
 - source bounds and supported transform grade;

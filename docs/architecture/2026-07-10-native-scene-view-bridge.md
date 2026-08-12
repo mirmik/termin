@@ -36,9 +36,12 @@ facade and does not know which concrete item classes it contains.
 
 ## Rendering and invalidation
 
-`SceneView::paint` prepends its camera transform and asks `TcVisualScene` to
-append the live tree to a `DrawList2DBuilder`. The resulting canonical draw
-list is recorded in the UI draw list and executed by `UiDrawListRenderer`.
+Without portals, `SceneView::paint` prepends its camera transform and asks
+`TcVisualScene` to append the live tree to a `DrawList2DBuilder`. With portals,
+the scene emits balanced per-item draw layers in the same canonical traversal;
+the GUI-facing bridge inserts each widget at its source item's own paint slot.
+The resulting interleaved stream is recorded in the UI draw list and executed
+by `UiDrawListRenderer`.
 Exact affine transforms, geometric clips, opacity and stable scene ordering
 therefore remain visual-scene behavior.
 
@@ -50,7 +53,9 @@ portal association invalidates the view automatically.
 ## Interaction
 
 The view converts pointer positions to world coordinates and forwards the raw
-event to an optional callback. If a domain handles pointer down, the view
+event to an optional callback. Portal hit testing follows the reverse of the
+same scene paint-layer traversal, so graphic items above a portal source win
+and the source portal wins over the source item's own hit shape. If a domain handles pointer down, the view
 captures the pointer until up or cancel; it does not hit-test, select,
 classify or move items itself. Middle-button pan and anchored wheel zoom are
 viewport policies and remain in the widget.
@@ -75,6 +80,8 @@ associates one `GraphicItemHandle` with one `tc_widget_handle`.
 During layout, a portal widget receives the logical world bounds of its item.
 The view applies camera translation and uniform zoom through the widget
 subtree-transform contract, so paint and input use the same mapping. Portal
-widgets paint above scene primitives in stable visual order and remain clipped
-by the `SceneView` bounds. The planned reusable projection bridge preserves
-this behavior and keeps concrete-item knowledge out of the view.
+widgets paint at their source item's stable tree-local visual position and
+remain clipped by the `SceneView` bounds. Ordered children are above a portal
+attached to their parent, while later or higher-z siblings are above the
+entire earlier sibling slot. The reusable projection bridge preserves this
+behavior and keeps concrete-item knowledge out of the view.
