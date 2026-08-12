@@ -21,6 +21,18 @@ TERMIN_SDK=/path/to/termin/sdk \
 python -m pip install --find-links /path/to/termin/sdk/wheels termin-gui-native termin-display
 ```
 
+The minimal native cgltf importer is available independently of the editor
+asset stack:
+
+```bash
+TERMIN_SDK=/path/to/termin/sdk \
+python -m pip install --find-links /path/to/termin/sdk/wheels termin-glb-native
+```
+
+It provides `termin.glb.native.NativeGLBDocument` and `build_mesh`; install the
+optional `termin-glb` distribution when `GLBAsset`, resource publication, or
+scene instantiation is required.
+
 `pip` will resolve the Termin dependency chain from `sdk/wheels`. Non-Termin
 dependencies such as `numpy`, `PyYAML`, and `nanobind` are still normal Python
 dependencies and can come from PyPI or another package source. Runtime image

@@ -131,8 +131,14 @@ adapter over a lower-level domain package.
 
 Source of truth: [termin-glb docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-glb/docs/index.md)
 
-Owns GLB/glTF parsing, `GLBAsset`, GLB import/runtime plugin entry points,
-runtime scene instantiation, and extraction helpers. GLB is a multi-domain
+The `termin-glb-native` distribution owns the minimal `termin.glb.native`
+cgltf document and `build_mesh` API. It depends only on the native mesh/runtime
+binding layer and can be installed without the asset system, default assets, or
+legacy GUI packages.
+
+The optional high-level `termin-glb` distribution owns Python GLB/glTF parsing,
+`GLBAsset`, GLB import/runtime plugin entry points, runtime scene instantiation,
+and extraction helpers. GLB is a multi-domain
 importer: it may create mesh, texture/material, skeleton, animation, and scene
 hierarchy data, so it belongs in an explicit importer package rather than in
 `termin-mesh` or `termin-default-assets`.
