@@ -73,6 +73,13 @@ dot(point_on_b_world - point_on_a_world, normal_world) == signed_gap
 инвариантен к общему жёсткому преобразованию сцены. Максимальное число точек и
 допуски задаются через `ContactPatchReductionConfig`.
 
+Нормаль патча валидируется редуктором: она должна быть конечной и ненулевой.
+Результат редукции имеет тип `std::optional`; `std::nullopt` означает ошибку
+контракта, а не корректный пустой manifold. `CollisionWorld` не публикует такой
+патч, пишет ошибку в лог и сохраняет структурированный
+`CollisionDiagnosticCode::InvalidContactNormal` в `diagnostics()` до следующего
+вызова `detect_contacts()`.
+
 ## Raycast
 
 ```cpp

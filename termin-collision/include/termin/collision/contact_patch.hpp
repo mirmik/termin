@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -80,16 +81,20 @@ namespace termin::collision {
     /**
      * Selects a deterministic, spatially representative subset of candidates.
      *
+     * normal_world must be finite and non-zero. Invalid normals are rejected
+     * with std::nullopt before candidate processing; CollisionWorld records and
+     * logs that failure instead of publishing an empty contact manifold.
+     *
      * Selection starts with the deepest point, then maximizes distance,
      * triangle area and finally distance from the already selected set in the
      * contact plane. The result is independent of candidate input order.
      */
-    TERMIN_COLLISION_API std::vector<ContactCandidate>
+    TERMIN_COLLISION_API std::optional<std::vector<ContactCandidate>>
     reduce_contact_candidates(std::span<const ContactCandidate> candidates,
                               const Vec3& normal_world,
                               const ContactPatchReductionConfig& config = {});
 
-    TERMIN_COLLISION_API ContactPatch reduce_contact_patch(const ContactPatch& patch,
-                                                           const ContactPatchReductionConfig& config = {});
+    TERMIN_COLLISION_API std::optional<ContactPatch>
+    reduce_contact_patch(const ContactPatch& patch, const ContactPatchReductionConfig& config = {});
 
 } // namespace termin::collision
