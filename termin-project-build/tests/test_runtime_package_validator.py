@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from termin.project_build import runtime_package_resource_validator
 from termin.project_build.runtime_package_validator import validate_runtime_package
 
 
@@ -161,7 +162,13 @@ def _write_builtin_shader_contract(package_dir: Path) -> None:
     ).write_text("// runtime source\n", encoding="utf-8")
 
 
-def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
+def _pipeline_template_payload(
+    *,
+    binary_version: int = 4,
+    descriptor_version: int = 4,
+    dependency_pass_index: int = 0,
+    target_color_content: int = 1,
+) -> bytes:
     payload = bytearray(b"TPLT")
 
     def u32(value: int) -> None:
@@ -178,8 +185,8 @@ def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
         u32(len(encoded))
         payload.extend(encoded)
 
-    u32(3)  # binary version
-    u32(3)  # descriptor version
+    u32(binary_version)
+    u32(descriptor_version)
     u32(1)  # single-view execution model
     text("Compiled Pipeline")
     u32(1)  # passes
@@ -207,9 +214,52 @@ def _pipeline_template_payload(*, dependency_pass_index: int = 0) -> bytes:
     u32(2)
     text("main")
     text("final-color")
+    u32(target_color_content)
     i32(0)
     i32(0)
     return bytes(payload)
+
+
+def test_pipeline_template_decoder_accepts_complete_v4_target_layout() -> None:
+    decoded = runtime_package_resource_validator._decode_pipeline_template(
+        _pipeline_template_payload(target_color_content=2)
+    )
+
+    assert decoded["binary_version"] == 4
+    assert decoded["descriptor_version"] == 4
+    assert decoded["targets"] == [
+        {
+            "viewport_name": "main",
+            "export_name": "final-color",
+            "color_content": 2,
+            "width": 0,
+            "height": 0,
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (_pipeline_template_payload(binary_version=5), "unsupported binary version 5"),
+        (
+            _pipeline_template_payload(descriptor_version=5),
+            "unsupported descriptor version 5",
+        ),
+        (
+            _pipeline_template_payload(target_color_content=3),
+            "target 0 has invalid color content 3",
+        ),
+        (_pipeline_template_payload()[:-1], "descriptor is truncated"),
+        (_pipeline_template_payload() + b"\x00", "descriptor contains trailing data"),
+    ],
+)
+def test_pipeline_template_decoder_strictly_rejects_invalid_v4_payloads(
+    payload: bytes,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        runtime_package_resource_validator._decode_pipeline_template(payload)
 
 
 def test_validate_runtime_package_accepts_valid_package(tmp_path: Path) -> None:

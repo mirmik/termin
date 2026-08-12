@@ -869,9 +869,9 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         raise ValueError("descriptor magic must be TPLT")
     binary_version = u32()
     descriptor_version = u32()
-    if binary_version != 3:
+    if binary_version != 4:
         raise ValueError(f"unsupported binary version {binary_version}")
-    if descriptor_version != 3:
+    if descriptor_version != 4:
         raise ValueError(f"unsupported descriptor version {descriptor_version}")
     execution_model = u32()
     if execution_model not in (1, 2):
@@ -974,11 +974,19 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         )
 
     targets: list[dict[str, Any]] = []
-    for _ in range(target_count):
+    for index in range(target_count):
+        viewport_name = text()
+        export_name = text()
+        color_content = u32()
+        if color_content not in (0, 1, 2):
+            raise ValueError(
+                f"target {index} has invalid color content {color_content}"
+            )
         targets.append(
             {
-                "viewport_name": text(),
-                "export_name": text(),
+                "viewport_name": viewport_name,
+                "export_name": export_name,
+                "color_content": color_content,
                 "width": i32(),
                 "height": i32(),
             }
