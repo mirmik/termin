@@ -17,6 +17,8 @@ from termin.project_build.runtime_package.models import ShaderSpec
 from termin.project_build.runtime_package.materials import _shader_source_identity
 from termin.project_build.runtime_package.shaders import (
     ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID,
+    artifact_path_text,
+    normalize_shader_targets,
     write_shader,
 )
 from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
@@ -672,6 +674,21 @@ def test_synthetic_surface_pass_variant_compiles_all_targets(tmp_path: Path) -> 
         )
         assert layout["version"] == 3
         assert layout["target"] == "webgpu"
+
+
+def test_constrained_gl_shader_targets_have_distinct_package_paths() -> None:
+    assert normalize_shader_targets(["OpenGL330", "webgl2"]) == (
+        "opengl330",
+        "webgl2",
+    )
+    assert (
+        artifact_path_text("shader-uuid", "opengl330", "vertex", "vert")
+        == "shaders/opengl330/shader-uuid.vert.glsl"
+    )
+    assert (
+        artifact_path_text("shader-uuid", "webgl2", "fragment", "frag")
+        == "shaders/webgl2/shader-uuid.frag.glsl"
+    )
 
 
 @full_runtime_package_exporter

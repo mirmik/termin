@@ -1,12 +1,12 @@
 # Built-in Slang → WGSL audit
 
-Generated: 2026-08-02
+Generated: 2026-08-12
 
 ## Result
 
 The pinned matrix is **PASSED**: 93/93 Slang stages passed Slang WGSL generation, independent Naga parsing, and binding-contract checks.
 
-Catalog coverage: 54/54 identities. 1 non-Slang program source is classified separately.
+Catalog coverage: 55/55 identities. 1 non-Slang program source is classified separately.
 
 Reproduce from the repository root:
 
@@ -25,7 +25,7 @@ Toolchain: Slang 2026.5.2, Naga CLI 30.0.0.
 - Textures and samplers remain separate WGSL bindings; no combined-sampler compatibility layer is assumed.
 - This is an offline source gate. Browser device limits and render-pipeline creation belong to the WebGPU runtime smoke gate.
 
-Observed across passing stages: 81 uniform-buffer declarations, 19 texture declarations, 19 sampler declarations, and 52 stages using matrices.
+Observed across passing stages: 83 uniform-buffer declarations, 22 texture declarations, 22 sampler declarations, and 52 stages using matrices.
 All reflected resources are currently placed in bind group 0; the largest binding index is 4. That matches the current single-set backend contract while preserving semantic Termin scopes in sidecar reflection.
 
 ## Catalog classification
@@ -38,6 +38,7 @@ All reflected resources are currently placed in bind group 0; the largest bindin
 | `termin-engine-debug-triangle` | slang | vertex, fragment | passed |
 | `termin-engine-present-blit` | slang | vertex, fragment | passed |
 | `termin-engine-immediate` | slang | vertex, fragment | passed |
+| `termin-engine-point-cloud` | slang | vertex, fragment | passed |
 | `termin-engine-tcplot-3d` | slang | vertex, fragment | passed |
 | `termin-engine-tcplot-2d-line` | slang | vertex, fragment | passed |
 | `termin-engine-tcplot-2d-styled-line` | slang | vertex, fragment | passed |
@@ -57,9 +58,6 @@ All reflected resources are currently placed in bind group 0; the largest bindin
 | `termin-engine-world-line-join` | slang | vertex, fragment | passed |
 | `termin-engine-world-line-round-join` | slang | vertex, fragment | passed |
 | `termin-engine-world-line-lit` | slang | fragment | passed |
-| `termin-engine-world-tube-line` | slang | vertex, fragment | passed |
-| `termin-engine-world-tube-line-cap` | slang | vertex, fragment | passed |
-| `termin-engine-world-tube-line-lit` | slang | fragment | passed |
 | `termin-engine-line-default` | slang | vertex, fragment | passed |
 | `termin-engine-navmesh-debug` | slang | vertex, fragment | passed |
 | `termin-engine-off-mesh-link-debug` | slang | vertex, fragment | passed |
@@ -86,6 +84,9 @@ All reflected resources are currently placed in bind group 0; the largest bindin
 | `termin-engine-bloom-upsample` | slang | fragment | passed |
 | `termin-engine-bloom-composite` | slang | fragment | passed |
 | `termin-engine-tonemap` | slang | fragment | passed |
+| `termin-engine-output-transform` | slang | fragment | passed |
+| `termin-engine-multiview-tonemap` | slang | fragment | passed |
+| `termin-engine-multiview-output-transform` | slang | fragment | passed |
 
 ## Blockers and exclusions
 

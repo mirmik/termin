@@ -47,9 +47,13 @@ API слое быть не должно — только внутри backend-а
 
 - **Vulkan** — нативное поведение: viewport `(y, height)` без
   отрицательной высоты, Z нормирован в `[0, 1]`. Никаких `VK_EXT_depth_clip_control`.
-- **OpenGL** — вызывает `glClipControl(GL_UPPER_LEFT, GL_ZERO_TO_ONE)`
-  один раз при создании устройства. После этого vertex output интерпретируется
-  точно как в Vulkan.
+- **Modern OpenGL** — вызывает `glClipControl(GL_UPPER_LEFT, GL_ZERO_TO_ONE)`
+  при создании устройства и в начале render pass. После этого vertex output
+  интерпретируется точно как в Vulkan.
+- **OpenGL 3.3 / WebGL2** — не имеют обязательного `glClipControl`.
+  `termin_to_native_clip(...)` на единой shader-boundary делает
+  `y = -y` и `z = 2z - w`, переводя Termin clip в native GL
+  `Y+ up, Z ∈ [-1, 1]`. Матрицы, материалы и scene code не меняются.
 - **Direct3D 11** — native viewport mapping противоположен Vulkan по Y
   (`clip_y = +1` попадает в верх viewport). Поэтому engine/camera matrices
   и CPU-side frame uniforms остаются в TerminClip, а vertex shaders выполняют
@@ -135,9 +139,10 @@ API-контракт выглядел одинаково с Vulkan, `OpenGLRende
    превращается в `texture(s, vec2(uv.x, 1.0 - uv.y))`. Для прочих
    семплеров (sampler3D, samplerCube) — pass-through.
 
-Для rendered RT на OpenGL: при rendering с `glClipControl(GL_UPPER_LEFT)`
-«визуальный верх» оказывается в memory row `h-1` — и sampling-шейдерная
-инверсия попадает прямиком туда. Симметрия с uploaded путём полная.
+Для rendered RT на OpenGL «визуальный верх» оказывается в memory row `h-1`:
+на modern tier это задаёт `GL_UPPER_LEFT`, а constrained tier получает тот же
+результат shader-side Y-flip-ом. Sampling-шейдерная инверсия попадает прямиком
+туда. Симметрия с uploaded путём полная.
 
 Как следствие: никакой `backend == "opengl"` проверки в юзер-коде. Если
 где-то появляется такой branch — это регрессия, её место — внутри
@@ -169,12 +174,15 @@ Backends мапят эту энум в нативные константы **н�
   native). Канонический projection/viewport path в итоге требует прямой
   mapping: `FrontFace::CCW → VK_FRONT_FACE_COUNTER_CLOCKWISE`,
   `FrontFace::CW → VK_FRONT_FACE_CLOCKWISE`.
-- **OpenGL** с `glClipControl(GL_UPPER_LEFT)` — Khronos спец говорит,
+- **Modern OpenGL** с `glClipControl(GL_UPPER_LEFT)` — Khronos спец говорит,
   что эта опция «reverses the interpretation of clockwise and counter-
   clockwise polygons», т.е. `glFrontFace(GL_CW)` ведёт себя как
   `glFrontFace(GL_CCW)` без UPPER_LEFT и наоборот. В итоге прямой
   mapping должен компенсировать эту инверсию:
   `FrontFace::CCW → GL_CW`, `FrontFace::CW → GL_CCW`.
+- **OpenGL 3.3 / WebGL2** — shader-boundary Y-flip возвращает native clip
+  к `Y+ up`, а lower-left rasterization не инвертирует front-face rule.
+  Mapping прямой: `FrontFace::CCW → GL_CCW`, `FrontFace::CW → GL_CW`.
 - **Direct3D 11** — получает final vertex position уже адаптированным под
   native D3D11 viewport mapping через `termin_to_native_clip`. Этот conversion
   переворачивает Y на границе shader output, поэтому native winding, который
@@ -182,9 +190,9 @@ Backends мапят эту энум в нативные константы **н�
   Поэтому `FrontFace::CCW` мапится в `FrontCounterClockwise = TRUE`, а
   `FrontFace::CW` — в `FrontCounterClockwise = FALSE`.
 
-Net effect: Vulkan и Direct3D 11 используют прямое логическое значение,
-а OpenGL инвертирует native enum из-за `GL_UPPER_LEFT`. Эти различия не
-выходят за backend boundary.
+Net effect: Vulkan, Direct3D 11 и constrained GL используют прямое логическое
+значение, а modern OpenGL инвертирует native enum из-за `GL_UPPER_LEFT`.
+Эти различия не выходят за backend boundary.
 
 ## 5. Projection matrices (scene cameras)
 

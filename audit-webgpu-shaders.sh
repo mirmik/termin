@@ -26,13 +26,18 @@ PY
 }
 
 NAGA_VERSION="$(read_lock naga_cli.version)"
+SLANG_VERSION="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["version"])' "$SCRIPT_DIR/build-system/slang-toolchain-lock.json")"
 TOOLCHAIN_ROOT="${TERMIN_WEB_SHADER_TOOLCHAIN_DIR:-$SCRIPT_DIR/build/toolchains}"
 
 if [[ "$SETUP" -eq 1 ]]; then
     "$SCRIPT_DIR/setup-web-shader-toolchain.sh"
 fi
 
-SLANGC_PATH="$("$SCRIPT_DIR/setup-slang-toolchain.sh" --require-installed --print-path)"
+SLANGC_PATH="${TERMIN_SLANGC:-$TOOLCHAIN_ROOT/slang-$SLANG_VERSION/bin/slangc}"
+if [[ ! -x "$SLANGC_PATH" ]]; then
+    echo "ERROR: pinned Slang compiler is missing; run $0 --setup" >&2
+    exit 1
+fi
 
 exec python3 "$SCRIPT_DIR/scripts/audit_webgpu_shaders.py" \
     --slangc "$SLANGC_PATH" \

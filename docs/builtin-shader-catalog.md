@@ -98,6 +98,21 @@ shaders/webgpu/<uuid>.frag.wgsl
 shaders/webgpu/<uuid>.comp.wgsl
 ```
 
+The runtime also reserves separate target identities for constrained GL-family
+artifacts:
+
+```text
+shaders/opengl330/<uuid>.<stage>.glsl
+shaders/webgl2/<uuid>.<stage>.glsl
+```
+
+These directories are intentionally distinct from modern OpenGL. Their
+generation is enabled only when the corresponding compiler targets are part of
+the build profile. `termin_shaderc` accepts `--target opengl330` and `--target
+webgl2`; both go through Slang SPIR-V and the pinned SPIRV-Cross translator, so
+the output is a genuine target dialect rather than a rewritten GLSL version
+directive.
+
 GLSL built-ins currently generate Vulkan SPIR-V only. Slang built-ins generate
 Vulkan SPIR-V and OpenGL GLSL by default; WebGPU WGSL is an explicit offline
 artifact target.
