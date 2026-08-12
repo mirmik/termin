@@ -23,7 +23,6 @@ class UiDocumentSourceAsset(Asset):
         uuid: str | None = None,
     ) -> None:
         super().__init__(name=name, source_path=source_path, uuid=uuid)
-        self._native_asset = None
 
     @property
     def canonical_resource(self):
@@ -38,11 +37,6 @@ class UiDocumentSourceAsset(Asset):
         if not self._loaded and not self.ensure_loaded():
             return None
         return self.canonical_resource
-
-    @property
-    def native_asset(self):
-        """Compatibility-friendly explicit name for the canonical resource."""
-        return self.resource
 
     def _read_source(self) -> str:
         if self._source_path is None:
@@ -98,14 +92,12 @@ class UiDocumentSourceAsset(Asset):
                 )
                 return False
 
-        self._native_asset = native_asset
         self._loaded = True
         return True
 
     def remove_native(self) -> bool:
         """Remove the corresponding native registry entry."""
         native_asset = self.canonical_resource
-        self._native_asset = None
         self._loaded = False
         return native_asset is None or bool(native_asset.remove())
 

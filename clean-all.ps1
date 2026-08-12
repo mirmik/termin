@@ -28,7 +28,6 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoots = @(
     (Join-Path $Root "termin-base"),
     (Join-Path $Root "termin-graphics"),
-    (Join-Path $Root "termin-gui"),
     (Join-Path $Root "termin-nodegraph"),
     (Join-Path $Root "termin-app")
 )
@@ -45,8 +44,6 @@ $explicitDirs = @(
     "termin-graphics\dist",
     "termin-graphics\install",
     "termin-graphics\install_win",
-    "termin-gui\build",
-    "termin-gui\dist",
     "termin-nodegraph\build",
     "termin-nodegraph\dist",
     "termin-app\cpp\build"

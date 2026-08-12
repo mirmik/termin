@@ -174,6 +174,7 @@ def test_default_resource_manager_exposes_handle_accessor_contracts() -> None:
     assert isinstance(manager.get_handle_accessors("tc_texture"), HandleAccessors)
     assert isinstance(manager.get_handle_accessors("texture_handle"), HandleAccessors)
     assert isinstance(manager.get_handle_accessors("ui_document"), HandleAccessors)
+    assert manager.get_handle_accessors("ui_handle") is None
 
 
 def test_ui_document_accessors_expose_native_handle_and_uuid(tmp_path) -> None:
@@ -209,6 +210,13 @@ root:
     assert isinstance(handle, UiDocumentAsset)
     assert handle.valid
     assert handle.uuid == "native-ui-hud"
+    source_asset = manager.get_ui_source_asset("hud")
+    assert source_asset is not None
+    assert source_asset.resource.uuid == handle.uuid
+    assert source_asset.resource.handle.index == handle.handle.index
+    assert source_asset.resource.handle.generation == handle.handle.generation
+    assert manager.get_ui_source_asset_by_uuid("native-ui-hud") is source_asset
+    assert manager.get_ui_document("hud").uuid == handle.uuid
     assert manager.get_handle_by_uuid("ui_document", "native-ui-hud").valid
 
     manager.clear_runtime_state()

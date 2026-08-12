@@ -118,7 +118,14 @@ def write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-voxels": ({"termin/voxels/__init__.py": "VALUE = 'voxels seed'\n"}, []),
         "termin-components-voxels": ({"termin/voxel_components/__init__.py": "VALUE = 'voxel components seed'\n"}, []),
         "termin-components-physics": ({"termin/physics_components/__init__.py": "VALUE = 'physics components seed'\n"}, []),
-        "termin-components-ui": ({"termin/ui_components/__init__.py": "VALUE = 'ui components seed'\n"}, []),
+        "termin-components-ui": (
+            {"termin/ui_components/__init__.py": "VALUE = 'ui components seed'\n"},
+            ["termin-gui-native"],
+        ),
+        "termin-gui-native": (
+            {"termin/gui_native/__init__.py": "VALUE = 'native ui dependency'\n"},
+            [],
+        ),
         "termin-materials": ({"termin/materials/__init__.py": "VALUE = 'materials seed'\n"}, []),
         "termin-shader-runtime": (
             {
@@ -154,7 +161,6 @@ def write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-lighting": ({"termin/lighting/__init__.py": "VALUE = 'lighting seed'\n"}, []),
         "tmesh": ({"tmesh/__init__.py": "VALUE = 'tmesh seed'\n"}, []),
         "tgfx": ({"tgfx/__init__.py": "VALUE = 'tgfx seed'\n"}, []),
-        "tcgui": ({"tcgui/__init__.py": "VALUE = 'tcgui seed'\n"}, []),
         "numpy": ({"numpy/__init__.py": "VALUE = 'numpy seed'\n"}, []),
         "termin-image": ({"termin/image/__init__.py": "VALUE = 'image seed'\n"}, []),
         "scipy": ({"scipy/__init__.py": "VALUE = 'scipy dependency'\n"}, []),

@@ -22,10 +22,6 @@ class FakeResourceManager:
         if uuid is not None:
             self.by_uuid[(type_id, uuid)] = asset
 
-    def get_ui_asset_by_uuid(self, uuid: str):
-        return self.by_uuid.get(("ui", uuid))
-
-
 def _source(text: str = "Hello") -> str:
     return f"""uiscript: 2
 root:
@@ -118,3 +114,19 @@ def test_ui_plugin_factories_use_canonical_classes() -> None:
     from termin.default_assets.ui.asset_plugin import UIImportPlugin
 
     assert type(create_import_plugin()) is UIImportPlugin
+
+
+def test_ui_package_exports_only_native_document_adapters() -> None:
+    import termin.default_assets.ui as ui_assets
+
+    assert ui_assets.__all__ == [
+        "UiDocumentSourceAsset",
+        "UIImportPlugin",
+        "UIRuntimePlugin",
+        "create_import_plugin",
+        "create_runtime_plugin",
+        "register_ui_import_plugin",
+        "register_ui_runtime_plugin",
+    ]
+    assert "UIAsset" not in vars(ui_assets)
+    assert "UIHandle" not in vars(ui_assets)

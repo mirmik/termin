@@ -263,8 +263,9 @@ class EditorCameraManager:
         scene_ref = self._scene
 
         # Before the native viewport projection existed, this controller lived
-        # on the tcgui-only ``editor_ui`` child. Its state is frontend-neutral,
-        # so migrate those persisted fields onto the camera component owner.
+        # on the removed frontend's ``editor_ui`` child. Its state is
+        # frontend-neutral, so migrate those persisted fields onto the camera
+        # component owner.
         legacy_overlay_components = data.get("editor_ui", [])
         if not isinstance(legacy_overlay_components, list):
             log.error(

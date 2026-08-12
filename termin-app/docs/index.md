@@ -3,7 +3,7 @@
 `termin-app` — основной application/editor слой монорепозитория Termin. Здесь живут редактор, project tooling и интеграция engine/domain-модулей в пользовательское приложение.
 
 Native UI является единственным frontend редактора. Старые tcgui и Qt/PyQt
-проекции удалены; библиотека `termin-gui` остаётся для non-editor consumers.
+проекции и legacy toolkit удалены.
 
 ## Актуальные документы
 

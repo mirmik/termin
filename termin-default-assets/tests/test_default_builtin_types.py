@@ -14,7 +14,7 @@ def test_default_builtin_components_exclude_experimental_physics_fem() -> None:
     )
 
 
-def test_default_assets_package_does_not_require_physics_fem() -> None:
+def _default_assets_install_requirements() -> set[str]:
     setup_path = Path(__file__).resolve().parents[1] / "setup.py"
     tree = ast.parse(setup_path.read_text(encoding="utf-8"), filename=str(setup_path))
     setup_call = next(
@@ -29,10 +29,20 @@ def test_default_assets_package_does_not_require_physics_fem() -> None:
         for keyword in setup_call.keywords
         if keyword.arg == "install_requires"
     )
-    requirements = {
+    return {
         item.value
         for item in install_requires.elts
         if isinstance(item, ast.Constant) and isinstance(item.value, str)
     }
 
+
+def test_default_assets_package_does_not_require_physics_fem() -> None:
+    requirements = _default_assets_install_requirements()
+
     assert "termin-physics-fem" not in requirements
+
+
+def test_default_assets_package_does_not_require_legacy_tcgui() -> None:
+    requirements = _default_assets_install_requirements()
+
+    assert "tcgui" not in requirements

@@ -14,7 +14,7 @@
 
 ## Правила ссылок
 
-- Используем обычные Markdown-ссылки: `[termin-gui](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui/docs/index.md)`.
+- Используем обычные Markdown-ссылки: `[termin-gui-native](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui-native/README.md)`.
 - Obsidian понимает такие ссылки и строит graph/backlinks без wiki-синтаксиса.
 - Wiki-ссылки `[[...]]` допустимы только в личных черновиках, которые не являются source of truth.
 - Если документ описывает модуль, он должен ссылаться на [Module Map](modules.md) и на соседние модули, от которых зависит.

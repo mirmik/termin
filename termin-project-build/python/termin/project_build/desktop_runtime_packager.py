@@ -60,7 +60,6 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-lighting",
     "tmesh",
     "tgfx",
-    "tcgui",
     "numpy",
 )
 

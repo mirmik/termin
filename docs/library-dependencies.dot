@@ -118,12 +118,12 @@ digraph termin_dependencies {
 		color="#999999";
 		fontname="DejaVu Sans";
 		fontsize=12;
-		"tcplot";
-		"termin-gui";
+		"tcplot-gui-native";
+		"termin-gui-native";
 		"termin-nodegraph";
 	}
 
-	"tcplot-gui-native";
+	"tcplot";
 	"termin-android";
 	"termin-audio";
 	"termin-bootstrap";
@@ -138,7 +138,6 @@ digraph termin_dependencies {
 	"termin-framegraph-remote-client";
 	"termin-framegraph-remote-target";
 	"termin-glb";
-	"termin-gui-native";
 	"termin-image";
 	"termin-materials";
 	"termin-mcp";
@@ -162,7 +161,8 @@ digraph termin_dependencies {
 	"termin-web-core";
 	"termin-window";
 
-	"tcplot" -> "termin-gui";
+	"tcplot" -> "termin-graphics";
+	"tcplot-gui-native" -> "tcplot";
 	"termin-android" -> "termin-framegraph-remote-target";
 	"termin-android" -> "termin-profiler-remote";
 	"termin-android" -> "termin-runtime";
@@ -220,8 +220,7 @@ digraph termin_dependencies {
 	"termin-components-ui" -> "termin-gui-native";
 	"termin-components-voxels" -> "termin-navmesh";
 	"termin-components-voxels" -> "termin-voxels";
-	"termin-csg" -> "termin-gui";
-	"termin-csharp" -> "tcplot";
+	"termin-csg" -> "termin-shader-runtime";
 	"termin-csharp" -> "termin-bootstrap";
 	"termin-csharp" -> "termin-engine";
 	"termin-default-assets" -> "termin-components-physics";
@@ -245,7 +244,6 @@ digraph termin_dependencies {
 	"termin-glb" -> "termin-graphics";
 	"termin-glb" -> "termin-scene";
 	"termin-graphics" -> "termin-mesh";
-	"termin-gui" -> "termin-graphics";
 	"termin-gui-native" -> "termin-visual-scene";
 	"termin-image" -> "termin-nanobind-sdk";
 	"termin-input" -> "termin-scene";
@@ -258,10 +256,10 @@ digraph termin_dependencies {
 	"termin-mesh" -> "termin-base";
 	"termin-modules" -> "termin-base";
 	"termin-modules" -> "termin-python-host";
-	"termin-navmesh" -> "termin-assets";
 	"termin-navmesh" -> "termin-components-mesh";
 	"termin-navmesh" -> "termin-render";
 	"termin-navmesh" -> "termin-voxels";
+	"termin-nodegraph" -> "termin-base";
 	"termin-openxr" -> "termin-profiler-remote";
 	"termin-openxr" -> "termin-runtime";
 	"termin-pga" -> "termin-base";
@@ -275,14 +273,12 @@ digraph termin_dependencies {
 	"termin-player" -> "termin-profiler-remote";
 	"termin-player" -> "termin-project-modules";
 	"termin-player" -> "termin-runtime";
-	"termin-player" -> "termin-shader-runtime";
 	"termin-player" -> "termin-stdlib";
 	"termin-prefab" -> "termin-assets";
 	"termin-prefab" -> "termin-scene";
 	"termin-profiler" -> "termin-frame-profiler";
 	"termin-profiler-remote" -> "termin-base";
 	"termin-project" -> "termin-base";
-	"termin-project-build" -> "termin-gui";
 	"termin-project-build" -> "termin-project";
 	"termin-project-build" -> "termin-shader-runtime";
 	"termin-project-build" -> "termin-stdlib";

@@ -60,7 +60,6 @@ PYTHON_PKG_TO_DIR = {
     "tcbase": "termin-base",
     "tgfx": "termin-graphics",
     "tmesh": "termin-mesh",
-    "tcgui": "termin-gui",
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "tcplot": "tcplot",
@@ -106,7 +105,6 @@ PYTHON_IMPORT_TO_DIR = {
     "tcbase": "termin-base",
     "tgfx": "termin-graphics",
     "tmesh": "termin-mesh",
-    "tcgui": "termin-gui",
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "termin_nanobind": "termin-nanobind-sdk",
@@ -598,7 +596,7 @@ def main():
 
     # Node groups (rendered as subgraph clusters with border)
     GROUPS = {
-        "UI": ["termin-gui", "termin-nodegraph", "tcplot"],
+        "UI": ["termin-gui-native", "termin-nodegraph", "tcplot-gui-native"],
         "Application": ["termin-app"],
         "Namespace": ["termin"],
         "Native Interop": ["termin-csharp"],

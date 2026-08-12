@@ -142,10 +142,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
     def _audio_clip_assets(self) -> dict[str, "AudioClipAsset"]:
         return self._audio_clip_registry.unique_assets_by_name
 
-    @property
-    def _ui_assets(self):
-        return self._ui_registry.unique_assets_by_name
-
     @classmethod
     def instance(cls) -> "DefaultResourceManagerBase":
         if cls._instance is None:
