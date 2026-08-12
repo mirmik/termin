@@ -34,7 +34,7 @@ from termin.project_build.toolchains import create_local_toolchain_context
 
 
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
-SUPPORTED_SHADER_TARGETS = ("vulkan", "opengl", "d3d11")
+SUPPORTED_SHADER_TARGETS = ("vulkan", "opengl", "opengl330", "webgl2", "d3d11", "webgpu")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

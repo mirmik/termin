@@ -18,6 +18,7 @@ from termin.project_build.runtime_package_resource_validator import (
 )
 
 
+SUPPORTED_RUNTIME_BACKENDS = frozenset({"vulkan", "opengl", "opengl330", "webgl2", "d3d11", "webgpu"})
 RUNTIME_PACKAGE_SCHEMA_VERSION = 2
 
 
@@ -817,7 +818,7 @@ def _validate_builtin_shader_contract(
             )
         for backend, stages in artifacts.items():
             backend_context = f"{shader_context}.artifacts.{backend}"
-            if backend not in {"vulkan", "opengl", "d3d11"}:
+            if backend not in SUPPORTED_RUNTIME_BACKENDS:
                 diagnostics.append(
                     RuntimePackageExportDiagnostic(
                         "error",
@@ -895,7 +896,7 @@ def _manifest_required_backends(manifest: dict[str, Any]) -> list[str] | None:
         return None
     backends = requirements.get("backends")
     if not isinstance(backends, list) or not all(
-        isinstance(backend, str) and backend in {"vulkan", "opengl", "d3d11"}
+        isinstance(backend, str) and backend in SUPPORTED_RUNTIME_BACKENDS
         for backend in backends
     ):
         return None
@@ -983,12 +984,20 @@ def _validate_runtime_required_catalog_sources(
 
 
 def _builtin_shader_artifact_path(uuid_value: str, backend: str, stage: str) -> str:
-    stage_suffix = {
-        "vulkan": {"vertex": "vert", "fragment": "frag", "geometry": "geom"},
-        "opengl": {"vertex": "vert", "fragment": "frag", "geometry": "geom"},
-        "d3d11": {"vertex": "vs", "fragment": "ps", "geometry": "gs"},
-    }[backend][stage]
-    extension = {"vulkan": "spv", "opengl": "glsl", "d3d11": "cso"}[backend]
+    common_stage_suffixes = {"vertex": "vert", "fragment": "frag", "geometry": "geom"}
+    stage_suffix = (
+        {"vertex": "vs", "fragment": "ps", "geometry": "gs"}[stage]
+        if backend == "d3d11"
+        else common_stage_suffixes[stage]
+    )
+    extension = {
+        "vulkan": "spv",
+        "opengl": "glsl",
+        "opengl330": "glsl",
+        "webgl2": "glsl",
+        "d3d11": "cso",
+        "webgpu": "wgsl",
+    }[backend]
     return f"shaders/{backend}/{uuid_value}.{stage_suffix}.{extension}"
 
 
@@ -1019,7 +1028,7 @@ def _validate_pipeline_shader_requirements(
         if isinstance(required_backends, list)
         and all(
             isinstance(item, str)
-            and item in {"vulkan", "opengl", "d3d11"}
+            and item in SUPPORTED_RUNTIME_BACKENDS
             for item in required_backends
         )
         else []
@@ -1160,12 +1169,12 @@ def _validate_required_backends(
 ) -> None:
     required_backends: list[str] = []
     for index, backend_name in enumerate(backends):
-        if not isinstance(backend_name, str) or backend_name not in {"vulkan", "opengl", "d3d11"}:
+        if not isinstance(backend_name, str) or backend_name not in SUPPORTED_RUNTIME_BACKENDS:
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     "error",
                     f"manifest.json:target_requirements.backends[{index}]",
-                    "Runtime package backend must be one of: vulkan, opengl, d3d11",
+                    "Runtime package backend must be one of: vulkan, opengl, opengl330, webgl2, d3d11, webgpu",
                 )
             )
             continue

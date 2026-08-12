@@ -36,13 +36,18 @@ assert.deepEqual(terminWebEnvironment({
     isSecureContext: true,
     crossOriginIsolated: false,
     navigator: {gpu: {}},
-}), {secureContext: true, webGpu: true, crossOriginIsolated: false});
+}), {secureContext: true, webGpu: true, webGl2: false, crossOriginIsolated: false});
 assert.throws(
     () => assertTerminWebEnvironment({isSecureContext: false, navigator: {gpu: {}}}),
-    /secure context/);
+    /WebGL 2, or WebGPU/);
 assert.throws(
     () => assertTerminWebEnvironment({isSecureContext: true, navigator: {}}),
-    /WebGPU support/);
+    /WebGL 2, or WebGPU/);
+assert.equal(assertTerminWebEnvironment({
+    isSecureContext: false,
+    navigator: {},
+    WebGL2RenderingContext: class {},
+}).webGl2, true);
 
 assert.equal(inputModifiers({shiftKey: true, ctrlKey: true, altKey: false, metaKey: true}), 11);
 assert.equal(terminKeyCode({key: "w"}), 87);

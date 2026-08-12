@@ -35,7 +35,7 @@ def validate_frame(metrics: dict) -> None:
     failed = [name for name, predicate in expected.items() if not predicate(*probes[name])]
     if failed or metrics["quantized_colors"] < 7:
         raise RuntimeError(
-            f"VisualScene2D WebGPU pixel probes failed: failed={failed} metrics={metrics}"
+            f"VisualScene2D WebGL2 pixel probes failed: failed={failed} metrics={metrics}"
         )
 
 
@@ -48,7 +48,7 @@ def main() -> int:
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    page_url = f"http://127.0.0.1:{server.server_port}/visual-scene.html"
+    page_url = f"http://127.0.0.1:{server.server_port}/visual-scene.html?backend=auto"
     debug_port = available_port()
     browser = None
     devtools = None
@@ -59,10 +59,9 @@ def main() -> int:
                 [
                     find_browser(),
                     "--headless",
-                    "--enable-unsafe-webgpu",
-                    "--enable-features=Vulkan",
-                    "--enable-dawn-features=allow_unsafe_apis",
-                    "--use-angle=swiftshader",
+                    "--use-gl=angle",
+                    "--use-angle=swiftshader-webgl",
+                    "--enable-unsafe-swiftshader",
                     "--no-sandbox",
                     "--remote-allow-origins=*",
                     "--window-size=960,700",
@@ -86,6 +85,8 @@ def main() -> int:
                 ) from error
             time.sleep(0.25)
             state = wait_for_visual_scene_example(devtools)
+            if state.get("backend") != "webgl2":
+                raise RuntimeError(f"expected WebGL2 fallback, got state={state}")
             screenshot = devtools.call("Page.captureScreenshot", {
                 "format": "png",
                 "clip": {"x": 0, "y": 0, "width": 960, "height": 600, "scale": 1},
@@ -109,8 +110,72 @@ def main() -> int:
                 raise RuntimeError(
                     f"{error}; state={state}; console={console_diagnostics(devtools)}"
                 ) from error
+            devtools.call("Runtime.evaluate", {
+                "expression": "globalThis.__terminVisualSceneExample.host.start(); true",
+                "returnByValue": True,
+            })
+            runtime_state = None
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline:
+                value = devtools.call("Runtime.evaluate", {
+                    "expression": "JSON.stringify({state:globalThis.__terminVisualSceneExample.host.state,frames:globalThis.__terminVisualSceneExample.host.frameCount(),backend:globalThis.__terminVisualSceneExample.host.graphicsBackend,error:globalThis.__terminVisualSceneExample.host.error})",
+                    "returnByValue": True,
+                }).get("result", {}).get("value", "")
+                runtime_state = json.loads(value) if value else None
+                if runtime_state and runtime_state["state"] == "running" and runtime_state["frames"] >= 2:
+                    break
+                if runtime_state and runtime_state["state"] == "error":
+                    raise RuntimeError(f"WebGL2 packaged runtime failed: {runtime_state}")
+                time.sleep(0.05)
+            else:
+                raise RuntimeError(f"WebGL2 packaged runtime did not render: {runtime_state}")
+            time.sleep(0.2)
+            runtime_screenshot = devtools.call("Page.captureScreenshot", {
+                "format": "png",
+                "clip": {"x": 0, "y": 0, "width": 960, "height": 600, "scale": 1},
+                "captureBeyondViewport": False,
+            })
+            runtime_metrics = analyze_png(base64.b64decode(runtime_screenshot["data"]))
+            if runtime_metrics["bright_pixels"] < 100 or runtime_metrics["quantized_colors"] < 3:
+                raise RuntimeError(
+                    "WebGL2 packaged 3D runtime produced no visible frame: "
+                    f"state={runtime_state} metrics={runtime_metrics}; "
+                    f"console={console_diagnostics(devtools)}"
+                )
+            resized = devtools.call("Runtime.evaluate", {
+                "expression": """
+                    (() => {
+                        const canvas = document.querySelector('#termin-canvas');
+                        const before = globalThis.__terminVisualSceneExample.host.frameCount();
+                        const ok = globalThis.__terminVisualSceneExample.core.module
+                            ._termin_web_host_resize(800, 450);
+                        return JSON.stringify({ok, width: canvas.width, height: canvas.height, before});
+                    })()
+                """,
+                "returnByValue": True,
+            }).get("result", {}).get("value", "")
+            resize_state = json.loads(resized) if resized else None
+            if not resize_state or resize_state["ok"] != 1 or \
+                    resize_state["width"] != 800 or resize_state["height"] != 450:
+                raise RuntimeError(
+                    f"WebGL2 packaged runtime resize failed: {resize_state}; "
+                    f"console={console_diagnostics(devtools)}"
+                )
+            resize_deadline = time.monotonic() + 3.0
+            while time.monotonic() < resize_deadline:
+                frames = devtools.call("Runtime.evaluate", {
+                    "expression": "globalThis.__terminVisualSceneExample.host.frameCount()",
+                    "returnByValue": True,
+                }).get("result", {}).get("value", 0)
+                if frames > resize_state["before"]:
+                    break
+                time.sleep(0.05)
+            else:
+                raise RuntimeError(f"WebGL2 runtime stopped rendering after resize: {resize_state}")
             print("TERMIN_WEB_VISUAL_SCENE_SMOKE_PASSED")
             print(json.dumps(metrics, sort_keys=True))
+            print("TERMIN_WEBGL2_PACKAGED_RUNTIME_SMOKE_PASSED")
+            print(json.dumps(runtime_metrics, sort_keys=True))
     finally:
         if devtools is not None:
             devtools.close()

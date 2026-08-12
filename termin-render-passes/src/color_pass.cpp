@@ -812,6 +812,8 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         // MAX_SHADOW_MAPS = 16 (from lighting_upload.hpp) — hardcoded here
         // so the struct layout can be static_asserted at compile time.
         constexpr size_t SHADOW_UBO_MAX = MAX_SHADOW_MAPS;
+        const size_t active_shadow_budget =
+            std::min<size_t>(SHADOW_UBO_MAX, device.capabilities().max_shadow_maps);
         struct ShadowBlockStd140 {
             int u_shadow_map_count; // 4
             int _pad0[3];           // 12
@@ -830,7 +832,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
 
         ShadowBlockStd140 sb{};
         {
-            int sm_count = static_cast<int>(std::min(data.shadow_maps.size(), static_cast<size_t>(SHADOW_UBO_MAX)));
+            int sm_count = static_cast<int>(std::min(data.shadow_maps.size(), active_shadow_budget));
             sb.u_shadow_map_count = sm_count;
             for (int i = 0; i < sm_count; ++i) {
                 const ShadowMapArrayEntry& e = data.shadow_maps[i];
@@ -1060,7 +1062,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         material_resources.lighting_ubo = lighting_ubo_tgfx2;
         material_resources.shadow_maps = shadow_tex2s.data();
         material_resources.shadow_map_count =
-            static_cast<uint32_t>(std::min<size_t>(shadow_tex2s.size(), MAX_SHADOW_MAPS));
+            static_cast<uint32_t>(std::min(shadow_tex2s.size(), active_shadow_budget));
         material_resources.material_texture_sources = ctx.material_texture_sources;
 
         std::vector<RenderItemNamedTextureBinding> extra_texture_bindings;

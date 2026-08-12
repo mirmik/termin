@@ -16,7 +16,6 @@
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/render_context.hpp>
-#include <tgfx2/webgpu/webgpu_render_device.hpp>
 
 namespace termin::web {
     namespace {
@@ -185,8 +184,9 @@ namespace termin::web {
 
     } // namespace
 
-    bool render_visual_scene_example(tgfx::WebGpuRenderDevice& device,
+    bool render_visual_scene_example(tgfx::IRenderDevice& device,
                                      tgfx::GraphicsHost& graphics_host,
+                                     tgfx::TextureHandle presentation_texture,
                                      std::uint32_t width,
                                      std::uint32_t height,
                                      std::string& error) {
@@ -203,12 +203,11 @@ namespace termin::web {
                 throw std::runtime_error("graphics host already has an active frame");
             }
 
-            const tgfx::TextureHandle surface = device.acquire_surface_texture();
             const termin::LinearColor clear{0.012f, 0.025f, 0.055f, 1.0f};
             tgfx::Canvas2DRenderer canvas;
             DrawResources resources;
             context.begin_frame();
-            context.begin_pass(surface, {}, &clear, 1.0f, false);
+            context.begin_pass(presentation_texture, {}, &clear, 1.0f, false);
             canvas.begin(context, static_cast<int>(width), static_cast<int>(height));
             const bool executed = canvas.execute(list, resources);
             canvas.end();

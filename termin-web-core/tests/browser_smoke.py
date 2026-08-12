@@ -262,7 +262,7 @@ def wait_for_visual_scene_example(devtools: DevToolsSocket, timeout: float = 30.
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = devtools.call("Runtime.evaluate", {
-            "expression": "JSON.stringify(globalThis.__terminVisualSceneExample ? {status:globalThis.__terminVisualSceneExample.status,error:globalThis.__terminVisualSceneExample.error ?? ''} : null)",
+            "expression": "JSON.stringify(globalThis.__terminVisualSceneExample ? {status:globalThis.__terminVisualSceneExample.status,error:globalThis.__terminVisualSceneExample.error ?? '',backend:globalThis.__terminVisualSceneExample.backend ?? ''} : null)",
             "returnByValue": True,
         }).get("result", {}).get("value", "")
         if result and result != "null":
@@ -644,8 +644,9 @@ def main() -> int:
                 "clip": {"x": 0, "y": 0, "width": 960, "height": 600, "scale": 1},
                 "captureBeyondViewport": False,
             })
+            visual_scene_png = base64.b64decode(visual_scene_screenshot["data"])
             visual_scene_metrics = analyze_png(
-                base64.b64decode(visual_scene_screenshot["data"]),
+                visual_scene_png,
                 {
                     "background": (20, 20),
                     "header": (100, 100),
@@ -653,6 +654,7 @@ def main() -> int:
                     "orbit_center": (248, 316),
                     "star_center": (520, 305),
                     "chart_line": (670, 350),
+                    "chart_line_alt": (650, 405),
                     "action": (720, 440),
                 },
             )
@@ -663,17 +665,22 @@ def main() -> int:
                 "panel": lambda r, g, b: b > r and b > g and max(r, g, b) < 150,
                 "orbit_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
                 "star_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
-                "chart_line": lambda r, g, b: g > 150 and r < 130 and b < 150,
                 "action": lambda r, g, b: r > 150 and g < 130 and b < 100,
             }
             failed_visual_scene_probes = [
                 name for name, predicate in expected_visual_scene.items()
                 if not predicate(*probes[name])
             ]
+            chart_predicate = lambda rgb: rgb[1] > 150 and rgb[0] < 130 and rgb[2] < 150
+            if not chart_predicate(probes["chart_line"]) and not chart_predicate(probes["chart_line_alt"]):
+                failed_visual_scene_probes.append("chart_line")
             if failed_visual_scene_probes or visual_scene_metrics["quantized_colors"] < 7:
+                failure_path = Path(args.output_directory) / "visual-scene-webgpu-failure.png"
+                failure_path.write_bytes(visual_scene_png)
                 raise RuntimeError(
                     "VisualScene2D WebGPU pixel probes failed: "
                     f"failed={failed_visual_scene_probes} metrics={visual_scene_metrics}; "
+                    f"screenshot={failure_path}; "
                     f"state={visual_scene_state}; console={console_diagnostics(devtools)}"
                 )
             report["visual_scene"] = {

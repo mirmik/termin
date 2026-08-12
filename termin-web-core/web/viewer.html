@@ -38,7 +38,7 @@
     <b>Правая кнопка + движение</b> — панорама<br>
     <b>Колесо</b> — масштаб · <b>касание</b> — orbit/pinch
 </div>
-<div id="loading" class="panel">Загрузка package и WebGPU…</div>
+<div id="loading" class="panel">Загрузка package и выбор WebGPU / WebGL2…</div>
 <div id="error" class="panel" role="alert"></div>
 <script type="module">
 import {createTerminCore} from "./termin-web-core.mjs?v=20260807-packageblob1";
@@ -60,12 +60,6 @@ function fail(error) {
 }
 
 try {
-    if (!globalThis.isSecureContext) {
-        throw new Error("WebGPU требует HTTPS или localhost (secure context).");
-    }
-    if (!navigator.gpu) {
-        throw new Error("Этот браузер не предоставляет WebGPU adapter.");
-    }
     const core = await createTerminCore();
     const input = createTerminWebInputAdapter(core, {canvas}).attach();
     const host = createTerminWebHost(core, {
@@ -80,6 +74,7 @@ try {
     });
     globalThis.__terminViewer = {core, host, input};
     await host.load("./fixtures/render-package/");
+    status.textContent = `ready · ${host.graphicsBackend}`;
     input.setEnabled(true);
     canvas.focus({preventScroll: true});
     loading.dataset.hidden = "true";

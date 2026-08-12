@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Termin VisualScene2D · WebGPU</title>
+<title>Termin VisualScene2D · WebGPU / WebGL2</title>
 <style>
     :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -17,7 +17,7 @@
 <body>
 <main>
     <canvas id="termin-canvas" width="960" height="600" aria-label="Termin retained VisualScene2D example"></canvas>
-    <p id="status">Загрузка WebGPU…</p>
+    <p id="status">Выбор WebGPU / WebGL2…</p>
 </main>
 <script type="module">
 import {createTerminCore} from "./termin-web-core.mjs?v=20260807-packageblob1";
@@ -29,11 +29,14 @@ let host = null;
 globalThis.__terminVisualSceneExample = {status: "loading", error: ""};
 try {
     core = await createTerminCore();
-    host = createTerminWebHost(core, {logger: console});
+    const requestedBackend = new URL(location.href).searchParams.get("backend") ?? "auto";
+    host = createTerminWebHost(core, {logger: console, graphicsBackend: requestedBackend});
     await host.load("./fixtures/render-package/", {autoStart: false});
     core.renderVisualSceneExample();
-    globalThis.__terminVisualSceneExample = {status: "ready", core, host, error: ""};
-    status.innerHTML = "Retained <code>TcVisualScene</code> → <code>DrawList2D</code> → <code>Canvas2DRenderer</code> → WebGPU";
+    globalThis.__terminVisualSceneExample = {
+        status: "ready", core, host, backend: host.graphicsBackend, error: ""
+    };
+    status.innerHTML = `Retained <code>TcVisualScene</code> → <code>DrawList2D</code> → <code>Canvas2DRenderer</code> → ${host.graphicsBackend}`;
 } catch (error) {
     const diagnostics = [];
     if (host?.error) diagnostics.push(host.error);

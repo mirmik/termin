@@ -16,7 +16,7 @@ SUPPORTED_CONFIGURATIONS = ("dev", "debug", "release")
 SUPPORTED_RESOURCE_POLICIES = ("dev_smoke", "strict")
 SUPPORTED_DESKTOP_OSES = ("linux", "windows")
 SUPPORTED_DESKTOP_ARCHITECTURES = ("x86_64",)
-SUPPORTED_DESKTOP_BACKENDS = ("vulkan", "opengl", "d3d11")
+SUPPORTED_DESKTOP_BACKENDS = ("vulkan", "opengl", "opengl330", "d3d11")
 SUPPORTED_ANDROID_ABIS = ("arm64-v8a", "x86_64")
 SUPPORTED_DESKTOP_PYTHON_POLICIES = ("minimal_strict", "sdk_broad_copy")
 

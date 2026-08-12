@@ -7,22 +7,26 @@ export const TerminWebHostState = Object.freeze({
     Error: "error",
 });
 
+export const TerminWebGraphicsBackend = Object.freeze({
+    Auto: "auto",
+    WebGPU: "webgpu",
+    WebGL2: "webgl2",
+});
+
 export function terminWebEnvironment(scope = globalThis) {
     return Object.freeze({
         secureContext: scope.isSecureContext === true,
         webGpu: Boolean(scope.navigator?.gpu),
+        webGl2: Boolean(scope.WebGL2RenderingContext),
         crossOriginIsolated: scope.crossOriginIsolated === true,
     });
 }
 
 export function assertTerminWebEnvironment(scope = globalThis) {
     const environment = terminWebEnvironment(scope);
-    if (!environment.secureContext) {
+    if (!environment.webGl2 && !(environment.secureContext && environment.webGpu)) {
         throw new Error(
-            "Termin Web requires a secure context (HTTPS or loopback localhost)");
-    }
-    if (!environment.webGpu) {
-        throw new Error("Termin Web requires a browser with WebGPU support");
+            "Termin Web requires WebGL 2, or WebGPU in a secure context (HTTPS or loopback localhost)");
     }
     return environment;
 }
@@ -61,6 +65,8 @@ export class TerminWebHost {
         this.onFrame = options.onFrame ?? null;
         this.logger = options.logger ?? globalThis.console;
         this.headless = options.headless ?? false;
+        this.requestedGraphicsBackend = options.graphicsBackend ?? TerminWebGraphicsBackend.Auto;
+        this.graphicsBackend = "";
         this.fetch = options.fetch ?? globalThis.fetch?.bind(globalThis);
         this.requestFrame = options.requestAnimationFrame ??
             globalThis.requestAnimationFrame?.bind(globalThis);
@@ -122,6 +128,7 @@ export class TerminWebHost {
             averageFrameMs: 0,
             maxFrameMs: 0,
             measuredFrames: 0,
+            graphicsBackend: "",
         };
         try {
             const supplied = new URL(packageUrl, globalThis.location?.href ?? import.meta.url);
@@ -180,17 +187,43 @@ export class TerminWebHost {
     }
 
     async initializeGraphics(timeoutMs = 5000) {
-        assertTerminWebEnvironment(globalThis);
+        const environment = assertTerminWebEnvironment(globalThis);
         const canvas = globalThis.document?.querySelector?.("#termin-canvas");
         if (!canvas) throw new Error("TerminWebHost requires #termin-canvas");
+        let requested = this.requestedGraphicsBackend;
+        if (!Object.values(TerminWebGraphicsBackend).includes(requested)) {
+            throw new Error(`unknown Termin Web graphics backend '${requested}'`);
+        }
+        if (requested === TerminWebGraphicsBackend.Auto ||
+                requested === TerminWebGraphicsBackend.WebGPU) {
+            let adapter = null;
+            if (environment.secureContext && environment.webGpu) {
+                try {
+                    adapter = await globalThis.navigator.gpu.requestAdapter();
+                } catch (error) {
+                    this.logger?.warn?.("Termin WebGPU adapter preflight failed", error);
+                }
+            }
+            if (adapter) {
+                requested = TerminWebGraphicsBackend.WebGPU;
+            } else if (requested === TerminWebGraphicsBackend.WebGPU) {
+                throw new Error("WebGPU adapter request failed (requestAdapter returned null)");
+            } else {
+                requested = TerminWebGraphicsBackend.WebGL2;
+            }
+        }
+        if (requested === TerminWebGraphicsBackend.WebGL2 && !environment.webGl2) {
+            throw new Error("WebGL 2 is not available in this browser");
+        }
+        const nativeBackend = requested === TerminWebGraphicsBackend.WebGPU ? 1 : 2;
         const initial = this.module._termin_web_host_graphics_start(
-            Number(canvas.width), Number(canvas.height));
+            Number(canvas.width), Number(canvas.height), nativeBackend);
         this.graphicsStarted = initial > 0;
         const deadline = performance.now() + timeoutMs;
         let status = initial;
         while (status === 1) {
             if (performance.now() >= deadline) {
-                throw new Error("WebGPU player initialization timed out");
+                throw new Error(`${requested} player initialization timed out`);
             }
             await new Promise((resolve) => setTimeout(resolve, 10));
             status = this.module._termin_web_host_graphics_status();
@@ -198,8 +231,14 @@ export class TerminWebHost {
         if (status !== 2) {
             const message = this.module.UTF8ToString(
                 this.module._termin_web_host_graphics_error());
-            throw new Error(message || "WebGPU player initialization failed");
+            throw new Error(message || `${requested} player initialization failed`);
         }
+        this.graphicsBackend = this.module._termin_web_host_graphics_backend() === 1
+            ? TerminWebGraphicsBackend.WebGPU
+            : TerminWebGraphicsBackend.WebGL2;
+        this.metrics.graphicsBackend = this.graphicsBackend;
+        if (this.statusElement) this.statusElement.dataset.graphicsBackend = this.graphicsBackend;
+        this.logger?.info?.(`TerminWebHost selected ${this.graphicsBackend}`);
     }
 
     start() {
@@ -225,6 +264,15 @@ export class TerminWebHost {
             : Math.min(Math.max((timestamp - this.lastTimestamp) / 1000, 0), 1);
         this.lastTimestamp = timestamp;
         try {
+            if (this.graphicsStarted) {
+                const graphicsStatus = this.module._termin_web_host_graphics_status();
+                if (graphicsStatus !== 2) {
+                    const graphicsError = this.module.UTF8ToString(
+                        this.module._termin_web_host_graphics_error());
+                    throw new Error(
+                        graphicsError || `${this.graphicsBackend} graphics device was lost`);
+                }
+            }
             const frameStartedAt = performance.now();
             const previousFrameCount = this.lastObservedFrameCount;
             const nativeFrameCount = this.headless
@@ -318,6 +366,7 @@ export class TerminWebHost {
         }
         this.nativeLoaded = false;
         this.graphicsStarted = false;
+        this.graphicsBackend = "";
         this.packageBlobUrl = "";
         if (this.state !== TerminWebHostState.Idle) {
             this.setState(TerminWebHostState.Idle);

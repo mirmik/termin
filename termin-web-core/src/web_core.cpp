@@ -11,6 +11,7 @@
 
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
+#include <emscripten/html5_webgl.h>
 
 #include <core/tc_component.h>
 #include <core/tc_scene.h>
@@ -29,6 +30,7 @@
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx2/i_render_device.hpp>
+#include <tgfx2/opengl/opengl_render_device.hpp>
 #include <tgfx2/webgpu/webgpu_render_device.hpp>
 
 extern "C" {
@@ -42,6 +44,26 @@ extern "C" {
 #include "web_render_shaders.hpp"
 
 namespace {
+
+    enum class WebGraphicsBackend : int {
+        None = 0,
+        WebGPU = 1,
+        WebGL2 = 2,
+    };
+
+    struct WebGL2Context {
+        EMSCRIPTEN_WEBGL_CONTEXT_HANDLE handle = 0;
+
+        ~WebGL2Context() {
+            if (handle > 0) {
+                emscripten_webgl_destroy_context(handle);
+            }
+        }
+
+        bool make_current() const {
+            return handle > 0 && emscripten_webgl_make_context_current(handle) == EMSCRIPTEN_RESULT_SUCCESS;
+        }
+    };
 
     struct WebVertex {
         float position[2];
@@ -66,8 +88,12 @@ namespace {
     std::string web_render_error;
 
     struct WebPlayerState {
+        std::unique_ptr<WebGL2Context> webgl2_context;
         std::unique_ptr<tgfx::GraphicsHost> graphics_host;
-        tgfx::WebGpuRenderDevice* device = nullptr;
+        tgfx::IRenderDevice* device = nullptr;
+        tgfx::WebGpuRenderDevice* webgpu_device = nullptr;
+        tgfx::OpenGLRenderDevice* webgl2_device = nullptr;
+        WebGraphicsBackend backend = WebGraphicsBackend::None;
         std::unique_ptr<termin::EngineCore> engine;
         termin::runtime::RuntimePackageLoadResult package;
         std::vector<std::string> registered_scene_names;
@@ -139,6 +165,9 @@ namespace {
         }
         web_player->owned_displays.clear();
         if (web_player->graphics_host) {
+            if (web_player->webgl2_context && !web_player->webgl2_context->make_current()) {
+                tc_log_error("TerminWebHost unload: failed to make WebGL2 context current");
+            }
             tc_log_info("TerminWebHost unload: closing GraphicsHost");
             web_player->graphics_host->close();
             web_player->graphics_host.reset();
@@ -151,7 +180,7 @@ namespace {
 
     tc_display_handle create_web_player_display(const std::string& requested_name) {
         if (!web_player || !web_player->device) {
-            tc_log_error("TerminWebHost: display requested without WebGPU device");
+            tc_log_error("TerminWebHost: display requested without a graphics device");
             return TC_DISPLAY_HANDLE_INVALID;
         }
         const std::string name = requested_name.empty() ? "Main" : requested_name;
@@ -177,13 +206,27 @@ namespace {
             tc_log_error("TerminWebHost: rendered display output is invalid");
             return false;
         }
-        tgfx::TextureHandle canvas = web_player->device->acquire_surface_texture();
-        std::unique_ptr<tgfx::ICommandList> commands = web_player->device->create_command_list();
-        commands->begin();
-        commands->copy_texture(tgfx::TextureHandle{output_texture_id}, canvas);
-        commands->end();
-        web_player->device->submit(*commands);
-        web_player->device->present();
+        if (web_player->backend == WebGraphicsBackend::WebGPU) {
+            tgfx::TextureHandle canvas = web_player->webgpu_device->acquire_surface_texture();
+            const termin::Bounds2i extent{
+                0, 0, static_cast<int>(web_player->width), static_cast<int>(web_player->height)};
+            web_player->webgpu_device->blit_to_texture(
+                canvas, tgfx::TextureHandle{output_texture_id}, extent, extent);
+            web_player->device->present();
+        } else if (web_player->backend == WebGraphicsBackend::WebGL2) {
+            if (!web_player->webgl2_context->make_current()) {
+                tc_log_error("TerminWebHost: failed to make WebGL2 context current for presentation");
+                return false;
+            }
+            web_player->webgl2_device->present_to_default_framebuffer(
+                tgfx::TextureHandle{output_texture_id},
+                static_cast<int>(web_player->width),
+                static_cast<int>(web_player->height));
+            web_player->device->present();
+        } else {
+            tc_log_error("TerminWebHost: no browser graphics backend selected");
+            return false;
+        }
         return true;
     }
 
@@ -678,8 +721,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_tick(double delta_seconds) {
         return 0;
     }
     try {
-        if (web_player->device && web_player->device->has_device_error()) {
-            web_player_graphics_error = web_player->device->device_error_message();
+        if (web_player->webgpu_device && web_player->webgpu_device->has_device_error()) {
+            web_player_graphics_error = web_player->webgpu_device->device_error_message();
             web_player_graphics_status = -4;
             throw std::runtime_error(web_player_graphics_error.empty() ? "WebGPU device lost"
                                                                        : web_player_graphics_error);
@@ -752,7 +795,13 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint3
     if (web_player->width == width && web_player->height == height)
         return 1;
     try {
-        web_player->device->configure_surface(width, height);
+        if (web_player->webgpu_device) {
+            web_player->webgpu_device->configure_surface(width, height);
+        } else if (emscripten_set_canvas_element_size(
+                       "#termin-canvas", static_cast<int>(width), static_cast<int>(height)) !=
+                   EMSCRIPTEN_RESULT_SUCCESS) {
+            throw std::runtime_error("failed to resize the WebGL2 canvas drawing buffer");
+        }
         if (!tc_display_resize(web_player->presentation_display, static_cast<int>(width), static_cast<int>(height))) {
             throw std::runtime_error("offscreen display rejected browser resize");
         }
@@ -814,24 +863,54 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_focus_lost() {
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_visual_scene_render() {
     if (!web_player || web_player_graphics_status != 2 || !web_player->device || !web_player->graphics_host) {
-        web_visual_scene_error = "WebGPU player is not initialized";
+        web_visual_scene_error = "browser graphics player is not initialized";
         tc_log_error("TerminWebVisualScene: %s", web_visual_scene_error.c_str());
         return 0;
     }
-    return termin::web::render_visual_scene_example(*web_player->device,
-                                                    *web_player->graphics_host,
-                                                    web_player->width,
-                                                    web_player->height,
-                                                    web_visual_scene_error)
-               ? 1
-               : 0;
+    tgfx::TextureHandle presentation_texture;
+    bool owns_presentation_texture = false;
+    if (web_player->backend == WebGraphicsBackend::WebGPU) {
+        presentation_texture = web_player->webgpu_device->acquire_surface_texture();
+    } else if (web_player->backend == WebGraphicsBackend::WebGL2) {
+        if (!web_player->webgl2_context->make_current()) {
+            web_visual_scene_error = "failed to make WebGL2 context current";
+            tc_log_error("TerminWebVisualScene: %s", web_visual_scene_error.c_str());
+            return 0;
+        }
+        tgfx::TextureDesc presentation_desc;
+        presentation_desc.width = web_player->width;
+        presentation_desc.height = web_player->height;
+        presentation_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        presentation_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+        presentation_texture = web_player->device->create_texture(presentation_desc);
+        owns_presentation_texture = true;
+    }
+    const bool rendered = termin::web::render_visual_scene_example(*web_player->device,
+                                                                   *web_player->graphics_host,
+                                                                   presentation_texture,
+                                                                   web_player->width,
+                                                                   web_player->height,
+                                                                   web_visual_scene_error);
+    if (rendered && web_player->backend == WebGraphicsBackend::WebGL2) {
+        web_player->webgl2_device->present_to_default_framebuffer(
+            presentation_texture,
+            static_cast<int>(web_player->width),
+            static_cast<int>(web_player->height));
+        web_player->device->present();
+    }
+    if (owns_presentation_texture) {
+        web_player->device->destroy(presentation_texture);
+    }
+    return rendered ? 1 : 0;
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_visual_scene_error() {
     return web_visual_scene_error.c_str();
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t width, uint32_t height) {
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t width,
+                                                                    uint32_t height,
+                                                                    int requested_backend) {
     if (web_player_graphics_status != 0)
         return web_player_graphics_status;
     if (width == 0 || height == 0) {
@@ -842,6 +921,52 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t widt
     web_player = std::make_unique<WebPlayerState>();
     web_player->width = width;
     web_player->height = height;
+
+    if (requested_backend == static_cast<int>(WebGraphicsBackend::WebGL2)) {
+        try {
+            auto context = std::make_unique<WebGL2Context>();
+            EmscriptenWebGLContextAttributes attributes;
+            emscripten_webgl_init_context_attributes(&attributes);
+            attributes.alpha = EM_TRUE;
+            attributes.depth = EM_TRUE;
+            attributes.stencil = EM_TRUE;
+            attributes.antialias = EM_FALSE;
+            attributes.majorVersion = 2;
+            attributes.minorVersion = 0;
+            attributes.enableExtensionsByDefault = EM_TRUE;
+            context->handle = emscripten_webgl_create_context("#termin-canvas", &attributes);
+            if (context->handle <= 0) {
+                throw std::runtime_error("browser refused to create a WebGL 2 context");
+            }
+            if (!context->make_current()) {
+                throw std::runtime_error("failed to make the WebGL 2 context current");
+            }
+            auto device = std::make_unique<tgfx::OpenGLRenderDevice>(
+                tgfx::OpenGLDeviceCreateInfo{tgfx::GlFeatureTier::WebGL2});
+            web_player->device = device.get();
+            web_player->webgl2_device = device.get();
+            web_player->backend = WebGraphicsBackend::WebGL2;
+            web_player->webgl2_context = std::move(context);
+            web_player->graphics_host = tgfx::GraphicsHost::adopt_application_device(std::move(device));
+            web_player_graphics_status = 2;
+            tc_log_info("TerminWebHost graphics initialized: backend=webgl2 target=webgl2");
+            return web_player_graphics_status;
+        } catch (const std::exception& exception) {
+            web_player_graphics_error = exception.what();
+            web_player_graphics_status = -3;
+            tc_log_error("TerminWebHost WebGL2 initialization failed: %s", web_player_graphics_error.c_str());
+            web_player.reset();
+            return web_player_graphics_status;
+        }
+    }
+    if (requested_backend != static_cast<int>(WebGraphicsBackend::WebGPU)) {
+        web_player_graphics_error = "unsupported browser graphics backend request";
+        web_player_graphics_status = -1;
+        web_player.reset();
+        tc_log_error("TerminWebHost: %s", web_player_graphics_error.c_str());
+        return web_player_graphics_status;
+    }
+
     web_player_graphics_status = 1;
     tgfx::WebGpuDeviceRequest request;
     request.canvas_selector = "#termin-canvas";
@@ -857,8 +982,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t widt
             }
             try {
                 web_player->device = device.get();
+                web_player->webgpu_device = device.get();
+                web_player->backend = WebGraphicsBackend::WebGPU;
                 web_player->graphics_host = tgfx::GraphicsHost::adopt_application_device(std::move(device));
                 web_player_graphics_status = 2;
+                tc_log_info("TerminWebHost graphics initialized: backend=webgpu target=webgpu");
             } catch (const std::exception& exception) {
                 web_player_graphics_error = exception.what();
                 web_player_graphics_status = -3;
@@ -869,11 +997,21 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t widt
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_status() {
-    if (web_player && web_player->device && web_player->device->has_device_error()) {
-        web_player_graphics_error = web_player->device->device_error_message();
+    if (web_player && web_player->webgpu_device && web_player->webgpu_device->has_device_error()) {
+        web_player_graphics_error = web_player->webgpu_device->device_error_message();
         web_player_graphics_status = -4;
     }
+    if (web_player && web_player->webgl2_context &&
+        emscripten_is_webgl_context_lost(web_player->webgl2_context->handle)) {
+        web_player_graphics_error = "WebGL2 context lost";
+        web_player_graphics_status = -4;
+        tc_log_error("TerminWebHost: %s", web_player_graphics_error.c_str());
+    }
     return web_player_graphics_status;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_backend() {
+    return web_player ? static_cast<int>(web_player->backend) : 0;
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_graphics_error() {

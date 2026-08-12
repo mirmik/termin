@@ -36,7 +36,7 @@ DEFAULT_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
 
 SUPPORTED_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
     "glsl": ("vulkan",),
-    "slang": ("vulkan", "opengl", "d3d11", "webgpu"),
+    "slang": ("vulkan", "opengl", "opengl330", "webgl2", "d3d11", "webgpu"),
     "hlsl": ("d3d11",),
 }
 
@@ -76,7 +76,7 @@ def normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str,
         text = str(target).strip().lower()
         if text == "":
             raise ValueError("Runtime package shader target must be a non-empty string")
-        if text not in {"vulkan", "opengl", "d3d11", "webgpu"}:
+        if text not in {"vulkan", "opengl", "opengl330", "webgl2", "d3d11", "webgpu"}:
             raise ValueError(f"Unsupported runtime package shader target: {target}")
         if text not in normalized:
             normalized.append(text)
@@ -113,7 +113,7 @@ def shader_targets_for_language(
 def artifact_extension_for_target(target: str) -> str:
     if target == "vulkan":
         return "spv"
-    if target == "opengl":
+    if target in {"opengl", "opengl330", "webgl2"}:
         return "glsl"
     if target == "d3d11":
         return "cso"
