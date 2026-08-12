@@ -1233,9 +1233,17 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
         {
             "name": "graph_pipeline",
             "nodes": [
+                {"type": "RenderTargetInput", "node_type": "render_target_input"},
                 {"type": "PipelineOutput", "node_type": "pipeline_output"},
             ],
-            "connections": [],
+            "connections": [
+                {
+                    "from_node": 0,
+                    "from_socket": "color",
+                    "to_node": 1,
+                    "to_socket": "color",
+                }
+            ],
         },
     )
     _write_json(project / "VrPipeline.pipeline.meta", {"uuid": pipeline_uuid})
@@ -1250,7 +1258,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
     pipeline_path = result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline-template"
     assert pipeline_path.exists()
     pipeline_data = pipeline_path.read_bytes()
-    assert pipeline_data.startswith(b"TPLT\x03\x00\x00\x00")
+    assert pipeline_data.startswith(b"TPLT\x04\x00\x00\x00")
     assert b'"nodes"' not in pipeline_data
     assert b'"connections"' not in pipeline_data
 
@@ -1594,9 +1602,17 @@ def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) 
         {
             "name": "graph_pipeline",
             "nodes": [
+                {"type": "RenderTargetInput", "node_type": "render_target_input"},
                 {"type": "PipelineOutput", "node_type": "pipeline_output"},
             ],
-            "connections": [],
+            "connections": [
+                {
+                    "from_node": 0,
+                    "from_socket": "color",
+                    "to_node": 1,
+                    "to_socket": "color",
+                }
+            ],
         },
     )
     (project / "VrPipeline.pipeline.meta").write_text("{", encoding="utf-8")
