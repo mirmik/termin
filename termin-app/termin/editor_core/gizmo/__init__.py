@@ -9,7 +9,7 @@ Provides a framework for interactive 3D widgets (gizmos) that:
 Core classes:
 - Gizmo: Base class for all gizmos
 - GizmoCollider: Collider geometry + drag constraint
-- GizmoManager: Manages all gizmos, handles raycast and events
+- GizmoVisualItem3D: retained overlay adapter owns picking and pointer routing
 - TransformGizmo: Standard translate/rotate gizmo
 """
 
@@ -17,8 +17,6 @@ Core classes:
 from termin.editor._editor_native import (
     Gizmo,
     GizmoCollider,
-    GizmoHit,
-    GizmoManager,
     TransformGizmo,
     TransformElement,
 )
@@ -42,9 +40,6 @@ __all__ = [
     # Base (from C++)
     "Gizmo",
     "GizmoCollider",
-    "GizmoHit",
-    # Manager (from C++)
-    "GizmoManager",
     # Transform (from C++)
     "TransformGizmo",
     "TransformElement",

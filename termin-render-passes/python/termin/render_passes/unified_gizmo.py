@@ -1,4 +1,4 @@
-"""UnifiedGizmoPass - renders debug gizmo draw sources."""
+"""UnifiedGizmoPass - renders a retained overlay draw source."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from termin.render_framework import ExecuteContext
 
 
-class GizmoDrawSource(Protocol):
-    """Object capable of submitting gizmo geometry to ImmediateRenderer."""
+class OverlayDrawSource(Protocol):
+    """Object capable of submitting retained overlay geometry."""
 
     def render(self, renderer: ImmediateRenderer, ctx2: Any, view: Any, proj: Any) -> None:
         ...
@@ -22,7 +22,7 @@ class GizmoDrawSource(Protocol):
 
 class UnifiedGizmoPass(PythonFramePass):
     """
-    Framegraph pass that renders all gizmos via a draw source.
+    Framegraph pass that renders one retained overlay draw source.
 
     Gizmos are rendered on top of the scene: the pass clears its depth
     attachment before rendering, then uses it for depth between gizmo elements.
@@ -41,14 +41,14 @@ class UnifiedGizmoPass(PythonFramePass):
 
     def __init__(
         self,
-        gizmo_manager: GizmoDrawSource | Callable[[], GizmoDrawSource | None] | None = None,
+        draw_source: OverlayDrawSource | Callable[[], OverlayDrawSource | None] | None = None,
         before_render: Callable[["ExecuteContext"], None] | None = None,
         input_res: str = "color",
         output_res: str = "color",
         pass_name: str = "UnifiedGizmoPass",
     ):
         super().__init__(pass_name=pass_name)
-        self._gizmo_manager_source = gizmo_manager
+        self._draw_source = draw_source
         self._before_render = before_render
         self.input_res = input_res
         self.output_res = output_res
@@ -59,12 +59,12 @@ class UnifiedGizmoPass(PythonFramePass):
     def compute_writes(self) -> Set[str]:
         return {self.output_res}
 
-    def _get_gizmo_manager(self) -> GizmoDrawSource | None:
-        if self._gizmo_manager_source is None:
+    def _get_draw_source(self) -> OverlayDrawSource | None:
+        if self._draw_source is None:
             return None
-        if callable(self._gizmo_manager_source):
-            return self._gizmo_manager_source()
-        return self._gizmo_manager_source
+        if callable(self._draw_source):
+            return self._draw_source()
+        return self._draw_source
 
     def get_inplace_aliases(self) -> List[Tuple[str, str]]:
         return [(self.input_res, self.output_res)]
@@ -78,7 +78,7 @@ class UnifiedGizmoPass(PythonFramePass):
                 log.error("[UnifiedGizmoPass] ctx.ctx2 is None — UnifiedGizmoPass is tgfx2-only")
                 return
 
-            manager = self._get_gizmo_manager()
+            draw_source = self._get_draw_source()
             renderer = ImmediateRenderer.instance()
 
             px, py, pw, ph = ctx.render_rect
@@ -114,9 +114,9 @@ class UnifiedGizmoPass(PythonFramePass):
             try:
                 if self._before_render is not None:
                     self._before_render(ctx)
-                if manager is not None and renderer is not None:
-                    with profiler.section("GizmoRender"):
-                        manager.render(renderer, ctx2, view, proj)
+                if draw_source is not None and renderer is not None:
+                    with profiler.section("OverlayRender"):
+                        draw_source.render(renderer, ctx2, view, proj)
 
                 if renderer is not None:
                     renderer.flush_depth(

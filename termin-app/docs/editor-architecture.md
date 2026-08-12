@@ -101,21 +101,27 @@ miss сохраняет прежний путь component extensions, selection 
 
 Visual items публикуют renderer-neutral draw packets. Editor render stage знает
 только протокол `termin.editor.overlay-drawable.v1` и вызывает указанный в нём
-renderer adapter; concrete item types в host не проверяются. На время миграции
-старый `GizmoManager` рисуется в том же pass перед retained overlay и временно
-обслуживает только ещё не перенесённые gizmo (сейчас camera frustum debug).
+renderer adapter; concrete item types в host не проверяются. Camera frustum,
+transform handles и component handles являются обычными retained items этой
+сцены; параллельного списка, render callback или raycast coordinator для них нет.
 
 `GizmoVisualItem3D` является переходным adapter-ом для старой gizmo geometry:
 collider id становится стабильным `part`, drag constraint исполняется внешним
 controller-ом через target pointer events, а item остаётся presentation-only с
 точки зрения `VisualScene3D`. `ComponentEditorVisualRegistry` возвращает generic
-owned overlay contributions и больше не регистрирует component handles в
-`GizmoManager`. В частности, endpoint handles `OffMeshLink` используют этот
-путь; сама линия/стрелка link-а остаётся world `Drawable` в `tc_scene`.
-Основной `TransformGizmo` также является постоянным overlay item и не
-регистрируется в `GizmoManager`. Смена target или уничтожение overlay отменяют
-его активный capture: стартовая global pose восстанавливается без создания
-undo-команды.
+owned overlay contributions. В частности, endpoint handles `OffMeshLink`
+используют этот путь; сама линия/стрелка link-а остаётся world `Drawable` в
+`tc_scene`. Основной `TransformGizmo` также является постоянным overlay item.
+Смена target или уничтожение overlay отменяют его активный capture: стартовая
+global pose восстанавливается без создания undo-команды.
+
+Контракт расширения один: интерактивный editor-only объект предоставляет
+`NativeVisualItem3D` с `paint`/`hit_test` и регистрирует target pointer handler в
+`SceneInteraction3D`; renderer-specific часть передаётся только packet-ом
+`termin.editor.overlay-drawable.v1`. Обычная world geometry и surface-driven
+diagnostics остаются `tc_scene` drawables, entity selection остаётся в ID picking,
+а массовая debug geometry идёт через `DebugGeometryPass`. Их не следует
+проецировать в overlay лишь ради общей отрисовки.
 
 Controller или transform target не должен хранить raw component pointer.
 OffMeshLink endpoint адресует компонент через owner `Entity` и стабильный

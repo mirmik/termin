@@ -1,16 +1,13 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
-#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/trampoline.h>
 
 #include "termin/editor/gizmo.hpp"
-#include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
 #include "termin/render/solid_primitive_renderer.hpp"
 #include <termin/entity/entity.hpp>
-#include <termin/geom/mat44.hpp>
 #include <tgfx2/immediate_renderer.hpp>
 #include <tgfx2/render_context.hpp>
 
@@ -19,18 +16,6 @@ namespace nb = nanobind;
 namespace termin {
 
     namespace {
-
-        Mat44f mat44_to_mat44f(const Mat44& src) {
-            Mat44f mat;
-            for (int i = 0; i < 16; ++i) {
-                mat.data[i] = static_cast<float>(src.data[i]);
-            }
-            return mat;
-        }
-
-        Vec3f vec3_to_vec3f(const Vec3& v) {
-            return Vec3f{static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z)};
-        }
 
         // Trampoline class for Gizmo to allow Python subclassing
         class PyGizmo : public Gizmo {
@@ -116,66 +101,8 @@ namespace termin {
             .def("on_hover_exit", &Gizmo::on_hover_exit)
             .def("on_release", &Gizmo::on_release);
 
-        // GizmoHit
-        nb::class_<GizmoHit>(m, "GizmoHit")
-            .def_ro("gizmo", &GizmoHit::gizmo)
-            .def_ro("collider", &GizmoHit::collider)
-            .def_ro("t", &GizmoHit::t);
-
         // GizmoCollider
         nb::class_<GizmoCollider>(m, "GizmoCollider").def_ro("id", &GizmoCollider::id);
-
-        // GizmoManager
-        nb::class_<GizmoManager>(m, "GizmoManager")
-            .def(nb::init<>())
-            .def("is_dragging", &GizmoManager::is_dragging)
-            .def("add_gizmo", &GizmoManager::add_gizmo, nb::arg("gizmo"))
-            .def("remove_gizmo", &GizmoManager::remove_gizmo, nb::arg("gizmo"))
-            .def("clear", &GizmoManager::clear)
-            .def(
-                "render",
-                [](GizmoManager& self,
-                   ImmediateRenderer* renderer,
-                   tgfx::RenderContext2* ctx2,
-                   const Mat44f& view,
-                   const Mat44f& proj) { self.render(renderer, ctx2, view, proj); },
-                nb::arg("renderer"),
-                nb::arg("ctx2"),
-                nb::arg("view"),
-                nb::arg("proj"))
-            .def(
-                "render",
-                [](GizmoManager& self,
-                   ImmediateRenderer* renderer,
-                   tgfx::RenderContext2* ctx2,
-                   const Mat44& view,
-                   const Mat44& proj) { self.render(renderer, ctx2, mat44_to_mat44f(view), mat44_to_mat44f(proj)); },
-                nb::arg("renderer"),
-                nb::arg("ctx2"),
-                nb::arg("view"),
-                nb::arg("proj"))
-            .def(
-                "raycast",
-                [](GizmoManager& self, const Vec3& ray_origin, const Vec3& ray_dir) {
-                    return self.raycast(vec3_to_vec3f(ray_origin), vec3_to_vec3f(ray_dir));
-                },
-                nb::arg("ray_origin"),
-                nb::arg("ray_dir"))
-            .def(
-                "on_mouse_move",
-                [](GizmoManager& self, const Vec3& ray_origin, const Vec3& ray_dir) {
-                    return self.on_mouse_move(vec3_to_vec3f(ray_origin), vec3_to_vec3f(ray_dir));
-                },
-                nb::arg("ray_origin"),
-                nb::arg("ray_dir"))
-            .def(
-                "on_mouse_down",
-                [](GizmoManager& self, const Vec3& ray_origin, const Vec3& ray_dir) {
-                    return self.on_mouse_down(vec3_to_vec3f(ray_origin), vec3_to_vec3f(ray_dir));
-                },
-                nb::arg("ray_origin"),
-                nb::arg("ray_dir"))
-            .def("on_mouse_up", &GizmoManager::on_mouse_up);
 
         // TransformGizmo
         nb::class_<TransformGizmo, Gizmo>(m, "TransformGizmo")

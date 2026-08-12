@@ -31,7 +31,7 @@ def make_editor_pipeline() -> RenderPipeline:
         World2DPass,
     )
 
-    def get_gizmo_manager():
+    def get_overlay_draw_source():
         sys = EditorInteractionSystem.instance()
         return sys if sys else None
 
@@ -140,7 +140,7 @@ def make_editor_pipeline() -> RenderPipeline:
     )
 
     gizmo_pass = UnifiedGizmoPass(
-        gizmo_manager=get_gizmo_manager,
+        draw_source=get_overlay_draw_source,
         before_render=prepare_gizmo_context,
         input_res="color_immediate_depth",
         output_res="color",

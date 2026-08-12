@@ -109,8 +109,7 @@ namespace termin {
     // Constructor / Destructor
     // ============================================================================
 
-    EditorInteractionSystem::EditorInteractionSystem()
-        : _camera_frustum_debug_gizmo(this) {
+    EditorInteractionSystem::EditorInteractionSystem() {
         g_editor_interaction_instance = this;
 
         // Setup transform gizmo
@@ -133,7 +132,10 @@ namespace termin {
             _transform_gizmo_visual = *transform_visual_handle;
             transform_visual_controller->bind_controller(_overlay_scene.interaction());
         }
-        gizmo_manager.add_gizmo(&_camera_frustum_debug_gizmo);
+        const auto camera_frustum_visual =
+            _overlay_scene.scene().adopt(std::make_unique<CameraFrustumOverlayItem3D>(this));
+        if (!camera_frustum_visual)
+            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] failed to adopt the camera frustum overlay item");
 
         tc_log(TC_LOG_INFO, "[EditorInteractionSystem] Created");
     }
@@ -141,7 +143,6 @@ namespace termin {
     EditorInteractionSystem::~EditorInteractionSystem() {
         _clear_component_visual_gizmos();
         _destroy_transform_gizmo_visual();
-        gizmo_manager.remove_gizmo(&_camera_frustum_debug_gizmo);
 
         if (g_editor_interaction_instance == this) {
             g_editor_interaction_instance = nullptr;
@@ -183,7 +184,6 @@ namespace termin {
 
     void EditorInteractionSystem::set_camera_frustums_visible(bool visible) {
         _camera_frustums_visible = visible;
-        _camera_frustum_debug_gizmo.visible = visible;
         _request_update();
     }
 
@@ -291,9 +291,6 @@ namespace termin {
             }
             if (action == TC_INPUT_RELEASE) {
                 _pending_release = {Vec2f{x, y}, vp, display, true};
-                if (gizmo_manager.is_dragging()) {
-                    gizmo_manager.on_mouse_up();
-                }
             }
         }
 
@@ -312,14 +309,6 @@ namespace termin {
         }
 
         _pending_hover = {Vec2f{x, y}, vp, display, true};
-
-        // Forward to gizmo manager for drag updates
-        if (gizmo_manager.is_dragging() && tc_viewport_handle_valid(vp)) {
-            Vec3f origin, direction;
-            if (_screen_to_ray(Vec2f{x, y}, vp, display, origin, direction)) {
-                gizmo_manager.on_mouse_move(origin, direction);
-            }
-        }
 
         _request_update();
     }
@@ -425,7 +414,6 @@ namespace termin {
                                                    tgfx::RenderContext2* render_context,
                                                    const Mat44f& view,
                                                    const Mat44f& projection) {
-        gizmo_manager.render(renderer, render_context, view, projection);
         const int width = render_context ? render_context->viewport_width() : 0;
         const int height = render_context ? render_context->viewport_height() : 0;
         if (_overlay_scene.scene().size() > 0 &&
@@ -447,31 +435,14 @@ namespace termin {
         _press_x = screen.x;
         _press_y = screen.y;
         _has_press = true;
-        _gizmo_handled_press = false;
-
         if (!tc_viewport_handle_valid(vp))
             return;
-
-        Vec3f origin, direction;
-        if (_screen_to_ray(screen, vp, display, origin, direction)) {
-            bool handled = gizmo_manager.on_mouse_down(origin, direction);
-            if (handled) {
-                _gizmo_handled_press = true;
-            }
-        }
     }
 
     void EditorInteractionSystem::_process_pending_release() {
         Vec2f screen = _pending_release.screen;
         tc_viewport_handle vp = _pending_release.vp;
         tc_display_handle display = _pending_release.display;
-
-        // If gizmo handled the press, skip selection
-        if (_gizmo_handled_press) {
-            _gizmo_handled_press = false;
-            _has_press = false;
-            return;
-        }
 
         if (!_has_press) {
             return;
@@ -515,14 +486,6 @@ namespace termin {
 
         if (!tc_viewport_handle_valid(vp))
             return;
-
-        // Update gizmo hover state (raycast-based)
-        if (!gizmo_manager.is_dragging()) {
-            Vec3f origin, direction;
-            if (_screen_to_ray(screen, vp, display, origin, direction)) {
-                gizmo_manager.on_mouse_move(origin, direction);
-            }
-        }
 
         // Pick entity for hover highlight
         if (_async_hover_pick.valid) {

@@ -144,10 +144,6 @@ namespace termin {
                 [](EditorInteractionSystem& s) -> SelectionManager& { return s.selection; },
                 nb::rv_policy::reference_internal)
             .def_prop_ro(
-                "gizmo_manager",
-                [](EditorInteractionSystem& s) -> GizmoManager& { return s.gizmo_manager; },
-                nb::rv_policy::reference_internal)
-            .def_prop_ro(
                 "transform_gizmo",
                 [](EditorInteractionSystem& s) -> TransformGizmo* { return s.transform_gizmo(); },
                 nb::rv_policy::reference_internal)

@@ -5,7 +5,7 @@ Architecture:
 - Gizmo: декларативный объект, умеет рисовать себя и объявлять colliders
 - GizmoCollider: геометрия + constraint для picking/drag
 - DragConstraint: как проецировать движение мыши при drag
-- GizmoManager: управляет всеми гизмо, raycast, вычисляет drag
+- Retained VisualScene3D item/controller владеет picking и drag routing
 """
 
 from __future__ import annotations

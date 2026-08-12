@@ -15,7 +15,6 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/editor/component_editor_visual.cpp
     termin/editor/editor_snap.cpp
     termin/editor/editor_overlay_scene3d.cpp
-    termin/editor/gizmo_manager.cpp
     termin/editor/gizmo_visual_item3d.cpp
     termin/editor/gizmo_types.cpp
     termin/editor/transform_gizmo.cpp

@@ -1,9 +1,12 @@
 #pragma once
 
-#include "termin/editor/gizmo.hpp"
+#include "termin/editor/editor_overlay_scene3d.hpp"
 
 #include <array>
+#include <optional>
 #include <string>
+
+#include <termin_visual_scene/native_visual_item3d.hpp>
 
 extern "C" {
 #include "core/tc_camera_capability.h"
@@ -21,15 +24,19 @@ namespace termin {
                                         CameraFrustumCorners& out,
                                         std::string* error = nullptr);
 
-    class CameraFrustumDebugGizmo final : public Gizmo {
+    class CameraFrustumOverlayItem3D final : public visual::NativeVisualItem3D,
+                                             public EditorOverlayDrawable3D {
     private:
         EditorInteractionSystem* _system = nullptr;
 
     public:
-        explicit CameraFrustumDebugGizmo(EditorInteractionSystem* system);
+        explicit CameraFrustumOverlayItem3D(EditorInteractionSystem* system);
 
-        void draw(ImmediateRenderer* renderer) override;
-        std::vector<GizmoCollider> get_colliders() override;
+        std::optional<visual::VisualBounds3D> local_bounds() const override;
+        std::optional<visual::HitCandidate3D>
+        hit_test(const visual::HitTestContext3D& context) const override;
+        bool paint(visual::GraphicItemPaintContext3D& context) const override;
+        bool draw(const EditorOverlayDrawContext3D& context) const override;
     };
 
 } // namespace termin
