@@ -681,6 +681,47 @@ def test_synthetic_surface_pass_variant_compiles_all_targets(tmp_path: Path) -> 
         assert layout["target"] == "webgpu"
 
 
+def test_fragment_only_pipeline_variant_compiles_only_fragment_stage(
+    tmp_path: Path,
+) -> None:
+    shader = ShaderSpec(
+        uuid="shv_fragment_only",
+        name="FragmentOnlyLineVariant",
+        source_path="runtime-registry",
+        vertex_source="",
+        fragment_source='[shader("fragment")] void fragment_main() {}',
+        language="slang",
+        fragment_entry="fragment_main",
+        source_identity="sha256:fragment-only",
+        artifact_role="pipeline_variant",
+        register_in_runtime=False,
+    )
+    resources: list[dict[str, str]] = []
+    package = tmp_path / "package"
+
+    spec = write_shader(
+        package,
+        resources,
+        [],
+        shader,
+        _write_fake_shader_compiler(tmp_path),
+        ("vulkan", "opengl", "d3d11", "webgpu"),
+    )
+
+    assert "vertex_source_path" not in spec
+    assert "vertex_entry" not in spec
+    assert all(
+        set(artifacts) == {"fragment"}
+        for artifacts in spec["artifacts"].values()
+    )
+    assert not list((package / "shaders").rglob("shv_fragment_only.vert.*"))
+    assert all(
+        (package / artifact["fragment"]).is_file()
+        for artifact in spec["artifacts"].values()
+    )
+    assert resources == []
+
+
 def test_constrained_gl_shader_targets_have_distinct_package_paths() -> None:
     assert normalize_shader_targets(["OpenGL330", "webgl2"]) == (
         "opengl330",

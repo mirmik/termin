@@ -660,6 +660,104 @@ def test_validate_runtime_package_accepts_shader_artifacts(tmp_path: Path) -> No
     assert validate_runtime_package(package_dir) == []
 
 
+def test_validate_runtime_package_accepts_fragment_only_shader_artifacts(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    shader_path = package_dir / "shaders" / "shader-uuid.shader.json"
+    shader_spec = json.loads(shader_path.read_text(encoding="utf-8"))
+    del shader_spec["vertex_source_path"]
+    for artifacts in shader_spec["artifacts"].values():
+        del artifacts["vertex"]
+    _write_json(shader_path, shader_spec)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(),
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                }
+            ],
+        },
+    )
+
+    assert validate_runtime_package(package_dir) == []
+
+
+def test_validate_runtime_package_rejects_artifact_without_stage_source(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    shader_path = package_dir / "shaders" / "shader-uuid.shader.json"
+    shader_spec = json.loads(shader_path.read_text(encoding="utf-8"))
+    del shader_spec["vertex_source_path"]
+    _write_json(shader_path, shader_spec)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(),
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                }
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.path
+        == "shaders/shader-uuid.shader.json:artifacts.vulkan.vertex"
+        and "has no corresponding 'vertex_source_path'" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_validate_runtime_package_rejects_stage_source_without_artifact(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_shader_resource(package_dir)
+    shader_path = package_dir / "shaders" / "shader-uuid.shader.json"
+    shader_spec = json.loads(shader_path.read_text(encoding="utf-8"))
+    for artifacts in shader_spec["artifacts"].values():
+        del artifacts["vertex"]
+    _write_json(shader_path, shader_spec)
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            **_scene_manifest(),
+            "resources": [
+                {
+                    "type": "shader",
+                    "uuid": "shader-uuid",
+                    "path": "shaders/shader-uuid.shader.json",
+                }
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert {
+        diagnostic.path
+        for diagnostic in diagnostics
+        if diagnostic.message
+        == "Runtime shader artifact target must contain 'vertex' stage"
+    } == {
+        "shaders/shader-uuid.shader.json:artifacts.vulkan",
+        "shaders/shader-uuid.shader.json:artifacts.opengl",
+    }
+
+
 def test_validate_runtime_package_rejects_shader_without_explicit_language(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
     _write_shader_resource(package_dir)

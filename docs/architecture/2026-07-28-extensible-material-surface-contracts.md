@@ -405,8 +405,10 @@ compiler and artifact paths need only:
 - avoid compiling an evaluator-only producer as a GPU entry.
 
 The existing usage collector already walks pipeline passes and render items.
-It should enumerate final variants only; producer handles are dependencies, not
-standalone GPU artifacts.
+It enumerates final variants together with their producer dependencies. The
+exporter packages those producers as metadata-only shader resources, while only
+the final variants enter `pipeline_shader_requirements` as executable GPU
+artifacts.
 
 Runtime packages make this distinction explicit. Authoring shaders with a
 surface producer use `artifact_role: surface_producer`: their evaluator and
@@ -416,6 +418,9 @@ Executable pass results retain normal backend artifacts. The manifest's
 `pipeline_shader_requirements` table binds every collected result to its scene
 and pipeline, including the composed-source identity; package validation checks
 that each required spec, backend and stage exists before the runtime starts.
+Stage maps describe the sources that actually exist: a fragment-only utility
+has no synthetic vertex source or artifact, and validation rejects any mismatch
+between declared stage sources and backend artifacts.
 
 ## Standard PBR surface v1
 

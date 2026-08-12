@@ -450,20 +450,11 @@ def _record_pipeline_shader_usages(
     for shader in collected_shaders:
         spec = _shader_to_spec(shader)
         if spec.artifact_role == "surface_producer":
-            producer = spec.surface_producer or {}
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    level="error",
-                    path=scene_path,
-                    message=(
-                        f"Pipeline '{pipeline_name}' returned evaluator-only surface "
-                        f"producer '{spec.name}' for contract "
-                        f"'{producer.get('contract_id', '<unknown>')}@"
-                        f"{producer.get('contract_version', '<unknown>')}' instead of "
-                        "an executable pass variant"
-                    ),
-                )
-            )
+            # The task planner reports the material's evaluator as a dependency
+            # alongside the executable pass variant assembled from it.  Package
+            # the evaluator metadata and source closure, but do not advertise it
+            # as an executable pipeline requirement.
+            shaders[spec.uuid] = spec
             continue
         shaders[spec.uuid] = spec
         variants.append(
