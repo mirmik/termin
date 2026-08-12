@@ -41,6 +41,27 @@ namespace {
         return rig;
     }
 
+    PointerEvent make_pointer_event(tc_viewport_handle viewport,
+                                    uint64_t pointer_id,
+                                    int phase,
+                                    double x,
+                                    double y,
+                                    double dx = 0.0,
+                                    double dy = 0.0) {
+        return PointerEvent(tc_pointer_event_init_info{
+            .viewport = viewport,
+            .pointer_id = pointer_id,
+            .device = TC_POINTER_DEVICE_TOUCH,
+            .phase = phase,
+            .x = x,
+            .y = y,
+            .dx = dx,
+            .dy = dy,
+            .pressure = 1.0f,
+            .source = TC_INPUT_SOURCE_RUNTIME,
+        });
+    }
+
 } // namespace
 
 TEST_CASE("OrbitCameraController only handles events from viewports rendered by its camera") {
@@ -131,23 +152,23 @@ TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch")
     tc_viewport_set_render_target(viewport, render_target);
 
     const termin::Vec3 initial_position = rig.entity.transform().global_position();
-    PointerEvent first_down(viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 20.0, 20.0);
+    PointerEvent first_down = make_pointer_event(viewport, 1, TC_POINTER_DOWN, 20.0, 20.0);
     rig.controller->on_pointer(&first_down);
-    PointerEvent first_move(viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE, 40.0, 20.0, 20.0, 0.0);
+    PointerEvent first_move = make_pointer_event(viewport, 1, TC_POINTER_MOVE, 40.0, 20.0, 20.0, 0.0);
     rig.controller->on_pointer(&first_move);
     const termin::Vec3 orbited_position = rig.entity.transform().global_position();
     CHECK(std::abs(orbited_position.x - initial_position.x) > 1e-6 ||
           std::abs(orbited_position.y - initial_position.y) > 1e-6);
 
-    PointerEvent second_down(viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 140.0, 20.0);
+    PointerEvent second_down = make_pointer_event(viewport, 2, TC_POINTER_DOWN, 140.0, 20.0);
     rig.controller->on_pointer(&second_down);
     const double radius_before_pinch = rig.controller->radius;
-    PointerEvent second_move(viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE, 160.0, 20.0, 20.0, 0.0);
+    PointerEvent second_move = make_pointer_event(viewport, 2, TC_POINTER_MOVE, 160.0, 20.0, 20.0, 0.0);
     rig.controller->on_pointer(&second_move);
     CHECK(rig.controller->radius < radius_before_pinch);
 
-    PointerEvent first_cancel(viewport, 1, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL, 40.0, 20.0);
-    PointerEvent second_cancel(viewport, 2, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL, 160.0, 20.0);
+    PointerEvent first_cancel = make_pointer_event(viewport, 1, TC_POINTER_CANCEL, 40.0, 20.0);
+    PointerEvent second_cancel = make_pointer_event(viewport, 2, TC_POINTER_CANCEL, 160.0, 20.0);
     rig.controller->on_pointer(&first_cancel);
     rig.controller->on_pointer(&second_cancel);
 
