@@ -22,7 +22,7 @@ public partial class Plot2DControl : UserControl, IDisposable
         CompositionTarget.Rendering += OnRender;
         _renderingSubscribed = true;
 
-        Unloaded += (_, _) => Dispose();
+        Unloaded += OnUnloaded;
 
         RenderHost.FramebufferMouseDown  += OnFramebufferMouseDown;
         RenderHost.FramebufferMouseMove  += OnFramebufferMouseMove;
@@ -143,16 +143,29 @@ public partial class Plot2DControl : UserControl, IDisposable
         _view.on_mouse_wheel(e.X, e.Y, e.Delta > 0 ? 1f : -1f);
         e.Handled = true;
     }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        Dispose();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
+        Dispatcher.VerifyAccess();
         _disposed = true;
 
+        Unloaded -= OnUnloaded;
         if (_renderingSubscribed)
         {
             CompositionTarget.Rendering -= OnRender;
             _renderingSubscribed = false;
         }
+
+        RenderHost.FramebufferMouseDown  -= OnFramebufferMouseDown;
+        RenderHost.FramebufferMouseMove  -= OnFramebufferMouseMove;
+        RenderHost.FramebufferMouseUp    -= OnFramebufferMouseUp;
+        RenderHost.FramebufferMouseWheel -= OnFramebufferMouseWheel;
 
         RenderHost.ReleaseNativeResources();
 
@@ -165,8 +178,5 @@ public partial class Plot2DControl : UserControl, IDisposable
             _hostLeaseHeld = false;
         }
         _initialized = false;
-        GC.SuppressFinalize(this);
     }
-
-    ~Plot2DControl() { Dispose(); }
 }
