@@ -81,6 +81,15 @@ NB_MODULE(_collision_native, m) {
         .value("Naive", BroadPhaseMode::Naive)
         .export_values();
 
+    nb::enum_<CollisionDiagnosticCode>(m, "CollisionDiagnosticCode")
+        .value("InvalidContactNormal", CollisionDiagnosticCode::InvalidContactNormal);
+
+    nb::class_<CollisionDiagnostic>(m, "CollisionDiagnostic")
+        .def_ro("code", &CollisionDiagnostic::code)
+        .def_ro("collider_a", &CollisionDiagnostic::collider_a)
+        .def_ro("collider_b", &CollisionDiagnostic::collider_b)
+        .def_ro("normal_world", &CollisionDiagnostic::normal_world);
+
     // ==================== BVH ====================
 
     nb::class_<BVH>(m, "BVH")
@@ -144,6 +153,7 @@ NB_MODULE(_collision_native, m) {
         .def("set_broad_phase_mode", &CollisionWorld::set_broad_phase_mode, nb::arg("mode"))
         .def("broad_phase_mode", &CollisionWorld::broad_phase_mode)
         .def("detect_contacts", &CollisionWorld::detect_contacts)
+        .def_prop_ro("diagnostics", &CollisionWorld::diagnostics)
         .def("query_aabb", &CollisionWorld::query_aabb, nb::arg("aabb"))
         .def(
             "raycast", [](const CollisionWorld& world, const Ray3& ray) { return world.raycast(ray); }, nb::arg("ray"))

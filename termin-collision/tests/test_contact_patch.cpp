@@ -3,10 +3,12 @@
 #include "termin/collision/collision_world.hpp"
 #include "termin/collision/contact_patch.hpp"
 #include "termin/geom/general_pose3.hpp"
+#include <tcbase/tc_log.h>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 using guard::Approx;
@@ -41,14 +43,100 @@ namespace {
         CHECK_EQ(actual.z, Approx(expected.z).epsilon(tolerance));
     }
 
+    class InvalidNormalCollider final : public termin::colliders::Collider {
+    public:
+        explicit InvalidNormalCollider(const Vec3& normal)
+            : normal_(normal) {}
+
+        termin::colliders::ColliderType type() const override {
+            return termin::colliders::ColliderType::Sphere;
+        }
+
+        termin::colliders::RayHit closest_to_ray(const termin::Ray3&) const override {
+            return {};
+        }
+
+        termin::colliders::ColliderHit closest_to_collider(const termin::colliders::Collider&) const override {
+            return {Vec3::zero(), Vec3::zero(), normal_, -1.0};
+        }
+
+        Vec3 center() const override {
+            return Vec3::zero();
+        }
+
+        termin::AABB aabb() const override {
+            return {Vec3{-1.0, -1.0, -1.0}, Vec3{1.0, 1.0, 1.0}};
+        }
+
+        termin::colliders::ColliderHit closest_to_box_impl(const BoxCollider&) const override {
+            return {Vec3::zero(), Vec3::zero(), normal_, -1.0};
+        }
+
+        termin::colliders::ColliderHit closest_to_sphere_impl(
+            const termin::colliders::SphereCollider&) const override {
+            return {Vec3::zero(), Vec3::zero(), normal_, -1.0};
+        }
+
+        termin::colliders::ColliderHit closest_to_capsule_impl(
+            const termin::colliders::CapsuleCollider&) const override {
+            return {Vec3::zero(), Vec3::zero(), normal_, -1.0};
+        }
+
+    private:
+        Vec3 normal_;
+    };
+
 } // namespace
 
 TEST_CASE("Contact patch reducer preserves one point") {
     const std::array points{candidate(1.0, 2.0, -0.1, 7)};
     const auto reduced = reduce_contact_candidates(points, Vec3::unit_z());
 
-    CHECK_EQ(reduced.size(), 1u);
-    CHECK_EQ(reduced[0].features.feature_a, 7u);
+    REQUIRE(reduced.has_value());
+    CHECK_EQ(reduced->size(), 1u);
+    CHECK_EQ((*reduced)[0].features.feature_a, 7u);
+}
+
+TEST_CASE("Contact patch reducer rejects zero and non-finite normals") {
+    const std::array points{
+        candidate(-1.0, -1.0, -0.1, 0),
+        candidate(1.0, -1.0, -0.2, 1),
+        candidate(1.0, 1.0, -0.3, 2),
+        candidate(-1.0, 1.0, -0.4, 3),
+        candidate(0.0, 0.0, -0.5, 4),
+    };
+    const double infinity = std::numeric_limits<double>::infinity();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+
+    CHECK_FALSE(reduce_contact_candidates(points, Vec3::zero()).has_value());
+    CHECK_FALSE(reduce_contact_candidates(points, Vec3{infinity, 0.0, 0.0}).has_value());
+    CHECK_FALSE(reduce_contact_candidates(points, Vec3{0.0, nan, 0.0}).has_value());
+}
+
+TEST_CASE("CollisionWorld reports and logs an invalid narrow-phase normal") {
+    CollisionWorld world;
+    world.set_broad_phase_mode(BroadPhaseMode::Naive);
+    InvalidNormalCollider collider_a(Vec3::zero());
+    InvalidNormalCollider collider_b(Vec3::zero());
+    world.add(&collider_a);
+    world.add(&collider_b);
+
+    CHECK(tc_log_capture_start(4));
+    const auto patches = world.detect_contacts();
+    tc_log_record records[4]{};
+    uint64_t dropped = 0;
+    const std::size_t record_count = tc_log_capture_drain(records, 4, &dropped);
+    tc_log_capture_stop();
+
+    CHECK(patches.empty());
+    REQUIRE_EQ(world.diagnostics().size(), 1u);
+    CHECK(world.diagnostics()[0].code == CollisionDiagnosticCode::InvalidContactNormal);
+    CHECK(world.diagnostics()[0].collider_a == &collider_a);
+    CHECK(world.diagnostics()[0].collider_b == &collider_b);
+    CHECK_EQ(record_count, 1u);
+    CHECK_EQ(dropped, 0u);
+    CHECK(records[0].level == TC_LOG_ERROR);
+    CHECK(std::string(records[0].message).find("rejected contact pair with invalid normal") != std::string::npos);
 }
 
 TEST_CASE("Contact patch reducer is permutation invariant") {
@@ -65,8 +153,10 @@ TEST_CASE("Contact patch reducer is permutation invariant") {
     std::reverse(points.begin(), points.end());
     const auto reverse = reduce_contact_candidates(points, Vec3::unit_z());
 
-    CHECK(feature_ids(forward) == feature_ids(reverse));
-    CHECK_EQ(forward.front().features.feature_a, 4u);
+    REQUIRE(forward.has_value());
+    REQUIRE(reverse.has_value());
+    CHECK(feature_ids(*forward) == feature_ids(*reverse));
+    CHECK_EQ(forward->front().features.feature_a, 4u);
 }
 
 TEST_CASE("Contact patch reducer handles line-like candidates") {
@@ -77,8 +167,9 @@ TEST_CASE("Contact patch reducer handles line-like candidates") {
 
     const auto reduced = reduce_contact_candidates(points, Vec3::unit_z());
 
-    CHECK_EQ(reduced.size(), 4u);
-    const auto ids = feature_ids(reduced);
+    REQUIRE(reduced.has_value());
+    CHECK_EQ(reduced->size(), 4u);
+    const auto ids = feature_ids(*reduced);
     CHECK(std::find(ids.begin(), ids.end(), 0u) != ids.end());
     CHECK(std::find(ids.begin(), ids.end(), 6u) != ids.end());
 }
@@ -97,9 +188,11 @@ TEST_CASE("Contact patch reducer handles a near-degenerate patch") {
     std::reverse(points.begin(), points.end());
     const auto reverse = reduce_contact_candidates(points, Vec3::unit_z(), config);
 
-    CHECK_EQ(forward.size(), 3u);
-    CHECK(feature_ids(forward) == feature_ids(reverse));
-    CHECK_EQ(forward.front().features.feature_a, 0u);
+    REQUIRE(forward.has_value());
+    REQUIRE(reverse.has_value());
+    CHECK_EQ(forward->size(), 3u);
+    CHECK(feature_ids(*forward) == feature_ids(*reverse));
+    CHECK_EQ(forward->front().features.feature_a, 0u);
 }
 
 TEST_CASE("Contact patch reducer removes duplicate candidates") {
@@ -113,8 +206,9 @@ TEST_CASE("Contact patch reducer removes duplicate candidates") {
     config.max_points = 8;
     const auto reduced = reduce_contact_candidates(points, Vec3::unit_z(), config);
 
-    CHECK_EQ(reduced.size(), 2u);
-    CHECK_EQ(reduced[0].features.feature_a, 3u);
+    REQUIRE(reduced.has_value());
+    CHECK_EQ(reduced->size(), 2u);
+    CHECK_EQ((*reduced)[0].features.feature_a, 3u);
 }
 
 TEST_CASE("Contact patch reducer covers a planar patch") {
@@ -128,10 +222,11 @@ TEST_CASE("Contact patch reducer covers a planar patch") {
     };
 
     const auto reduced = reduce_contact_candidates(points, Vec3::unit_z());
-    const auto ids = feature_ids(reduced);
+    REQUIRE(reduced.has_value());
+    const auto ids = feature_ids(*reduced);
 
-    CHECK_EQ(reduced.size(), 4u);
-    CHECK_EQ(reduced.front().features.feature_a, 4u);
+    CHECK_EQ(reduced->size(), 4u);
+    CHECK_EQ(reduced->front().features.feature_a, 4u);
     int corner_count = 0;
     for (uint32_t id = 0; id < 4; ++id) {
         corner_count += std::find(ids.begin(), ids.end(), id) != ids.end() ? 1 : 0;
@@ -160,13 +255,16 @@ TEST_CASE("Contact patch reduction is rigid-transform invariant") {
     const auto reduced_original = reduce_contact_candidates(original, Vec3::unit_z());
     const auto reduced_transformed = reduce_contact_candidates(transformed, rotation.rotate(Vec3::unit_z()));
 
-    CHECK(feature_ids(reduced_original) == feature_ids(reduced_transformed));
-    for (std::size_t i = 0; i < reduced_original.size(); ++i) {
-        check_vec_near(reduced_transformed[i].point_on_a_world,
-                       rotation.rotate(reduced_original[i].point_on_a_world) + translation);
-        check_vec_near(reduced_transformed[i].point_on_b_world,
-                       rotation.rotate(reduced_original[i].point_on_b_world) + translation);
-        CHECK_EQ(reduced_transformed[i].signed_gap, Approx(reduced_original[i].signed_gap).epsilon(1e-12));
+    REQUIRE(reduced_original.has_value());
+    REQUIRE(reduced_transformed.has_value());
+    CHECK(feature_ids(*reduced_original) == feature_ids(*reduced_transformed));
+    for (std::size_t i = 0; i < reduced_original->size(); ++i) {
+        check_vec_near((*reduced_transformed)[i].point_on_a_world,
+                       rotation.rotate((*reduced_original)[i].point_on_a_world) + translation);
+        check_vec_near((*reduced_transformed)[i].point_on_b_world,
+                       rotation.rotate((*reduced_original)[i].point_on_b_world) + translation);
+        CHECK_EQ((*reduced_transformed)[i].signed_gap,
+                 Approx((*reduced_original)[i].signed_gap).epsilon(1e-12));
     }
 }
 

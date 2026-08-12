@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <tcbase/tc_log.h>
 
 namespace termin::collision {
 
@@ -58,6 +59,7 @@ namespace termin::collision {
     }
 
     std::vector<ContactPatch> CollisionWorld::detect_contacts() {
+        diagnostics_.clear();
         std::vector<ContactPatch> patches;
         if (broad_phase_mode_ == BroadPhaseMode::Naive) {
             for (size_t i = 0; i < colliders_.size(); ++i) {
@@ -72,6 +74,10 @@ namespace termin::collision {
             bvh_.query_all_pairs([&](Collider* a, Collider* b) { test_contact_pair(a, b, patches); });
         }
         return patches;
+    }
+
+    const std::vector<CollisionDiagnostic>& CollisionWorld::diagnostics() const {
+        return diagnostics_;
     }
 
     void CollisionWorld::test_contact_pair(Collider* a, Collider* b, std::vector<ContactPatch>& patches) {
@@ -91,7 +97,19 @@ namespace termin::collision {
             point.signed_gap = hit.distance;
             patch.points.push_back(point);
         }
-        patches.push_back(reduce_contact_patch(patch));
+        std::optional<ContactPatch> reduced = reduce_contact_patch(patch);
+        if (!reduced) {
+            diagnostics_.push_back({CollisionDiagnosticCode::InvalidContactNormal, a, b, hit.normal});
+            tc_log_error("[CollisionWorld] rejected contact pair with invalid normal "
+                         "(%g, %g, %g); collider_a=%p collider_b=%p",
+                         hit.normal.x,
+                         hit.normal.y,
+                         hit.normal.z,
+                         static_cast<void*>(a),
+                         static_cast<void*>(b));
+            return;
+        }
+        patches.push_back(std::move(*reduced));
     }
 
     double CollisionWorld::ClipPlane::signed_distance(const Vec3& p) const {

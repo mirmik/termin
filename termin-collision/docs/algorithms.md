@@ -120,3 +120,14 @@ Raycast для примитивов:
 - **Box**: Slab method в локальных координатах
 - **Sphere**: Квадратное уравнение луч-сфера
 - **Capsule**: Пересечение с цилиндром + полусферами
+# Contact patch reduction
+
+`reduce_contact_candidates` validates `normal_world` before deduplication or
+selection. The normal must be finite and have non-zero length; invalid input is
+returned as `std::nullopt`, distinct from a valid patch with no points. The
+reducer normalizes valid normals internally and never substitutes a world axis.
+
+`CollisionWorld::detect_contacts` is the integration boundary for this
+contract. It omits a patch rejected by the reducer, records an
+`InvalidContactNormal` entry in `CollisionWorld::diagnostics()`, and emits an
+error log naming the collider pair and invalid value.

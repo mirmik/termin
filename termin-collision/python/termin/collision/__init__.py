@@ -35,6 +35,8 @@ from ._collision_native import (
     RayHit,
     ColliderPair,
     BroadPhaseMode,
+    CollisionDiagnostic,
+    CollisionDiagnosticCode,
     BVH,
     CollisionWorld,
 )
@@ -46,6 +48,8 @@ __all__ = [
     'RayHit',
     'ColliderPair',
     'BroadPhaseMode',
+    'CollisionDiagnostic',
+    'CollisionDiagnosticCode',
     'BVH',
     'CollisionWorld',
 ]

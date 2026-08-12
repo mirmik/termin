@@ -78,11 +78,17 @@ namespace termin::collision {
         return (uint64_t(a) * 2654435761) ^ uint64_t(b);
     }
 
-    std::vector<ContactCandidate> reduce_contact_candidates(std::span<const ContactCandidate> candidates,
-                                                            const Vec3& normal_world,
-                                                            const ContactPatchReductionConfig& config) {
+    std::optional<std::vector<ContactCandidate>>
+    reduce_contact_candidates(std::span<const ContactCandidate> candidates,
+                              const Vec3& normal_world,
+                              const ContactPatchReductionConfig& config) {
+        const double normal_length_squared = normal_world.dot(normal_world);
+        if (!std::isfinite(normal_world.x) || !std::isfinite(normal_world.y) || !std::isfinite(normal_world.z) ||
+            !std::isfinite(normal_length_squared) || normal_length_squared <= 1e-24) {
+            return std::nullopt;
+        }
         if (config.max_points == 0 || candidates.empty()) {
-            return {};
+            return std::vector<ContactCandidate>{};
         }
 
         std::vector<ContactCandidate> unique(candidates.begin(), candidates.end());
@@ -105,13 +111,7 @@ namespace termin::collision {
             return deduplicated;
         }
 
-        Vec3 normal = normal_world;
-        const double normal_length = normal.norm();
-        if (normal_length > 1e-12) {
-            normal /= normal_length;
-        } else {
-            normal = Vec3::unit_z();
-        }
+        const Vec3 normal = normal_world / std::sqrt(normal_length_squared);
 
         std::vector<Vec3> positions;
         positions.reserve(deduplicated.size());
@@ -148,9 +148,15 @@ namespace termin::collision {
         return reduced;
     }
 
-    ContactPatch reduce_contact_patch(const ContactPatch& patch, const ContactPatchReductionConfig& config) {
+    std::optional<ContactPatch> reduce_contact_patch(const ContactPatch& patch,
+                                                     const ContactPatchReductionConfig& config) {
         ContactPatch result = patch;
-        result.points = reduce_contact_candidates(patch.points, patch.normal_world, config);
+        std::optional<std::vector<ContactCandidate>> points =
+            reduce_contact_candidates(patch.points, patch.normal_world, config);
+        if (!points) {
+            return std::nullopt;
+        }
+        result.points = std::move(*points);
         return result;
     }
 

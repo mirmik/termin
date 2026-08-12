@@ -25,12 +25,24 @@ namespace termin {
             Naive = 1,
         };
 
+        enum class CollisionDiagnosticCode {
+            InvalidContactNormal,
+        };
+
+        struct CollisionDiagnostic {
+            CollisionDiagnosticCode code = CollisionDiagnosticCode::InvalidContactNormal;
+            Collider* collider_a = nullptr;
+            Collider* collider_b = nullptr;
+            Vec3 normal_world = Vec3::zero();
+        };
+
         class TERMIN_COLLISION_API CollisionWorld {
         private:
             BVH bvh_;
             BroadPhaseMode broad_phase_mode_ = BroadPhaseMode::BVH;
             tc_scene_handle scene_ = TC_SCENE_HANDLE_INVALID;
             std::vector<Collider*> colliders_;
+            std::vector<CollisionDiagnostic> diagnostics_;
 
         public:
             CollisionWorld() = default;
@@ -46,6 +58,7 @@ namespace termin {
             void set_broad_phase_mode(BroadPhaseMode mode);
             BroadPhaseMode broad_phase_mode() const;
             std::vector<ContactPatch> detect_contacts();
+            const std::vector<CollisionDiagnostic>& diagnostics() const;
 
         private:
             void test_contact_pair(Collider* a, Collider* b, std::vector<ContactPatch>& patches);
