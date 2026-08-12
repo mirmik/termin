@@ -12,8 +12,14 @@ CLEAN=0
 NO_PARALLEL=0
 TERMIN_CSHARP_ENABLE_OPENGL=""
 BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
+PROFILE="full"
 
 for arg in "$@"; do
+    if [[ "$arg" == --profile=* ]]; then
+        PROFILE="${arg#--profile=}"
+        continue
+    fi
+
     case "$arg" in
         --debug|-d)    BUILD_TYPE="Debug" ;;
         --clean|-c)    CLEAN=1 ;;
@@ -26,6 +32,7 @@ for arg in "$@"; do
         --no-sdl|--sdl) ;;
         --no-opengl) TERMIN_CSHARP_ENABLE_OPENGL="OFF" ;;
         --opengl) TERMIN_CSHARP_ENABLE_OPENGL="ON" ;;
+        --plot-d3d11) PROFILE="plot-d3d11" ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -46,6 +53,8 @@ for arg in "$@"; do
             echo "  --sdl             Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-opengl       Build C# bindings without legacy OpenGL entrypoints"
             echo "  --opengl          Build C# bindings with legacy OpenGL entrypoints"
+            echo "  --profile=PROFILE C# SDK profile: full or plot-d3d11"
+            echo "  --plot-d3d11      Alias for --profile=plot-d3d11"
             echo "                    Linux builds Termin.Native only; Termin.Wpf is Windows-only"
             echo "  --help, -h        Show this help"
             exit 0
@@ -56,6 +65,17 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+case "$PROFILE" in
+    full|plot-d3d11) ;;
+    *)
+        echo "Unsupported C# SDK profile: $PROFILE. Expected 'full' or 'plot-d3d11'." >&2
+        exit 1
+        ;;
+esac
+if [[ "$PROFILE" == "plot-d3d11" && -z "$TERMIN_CSHARP_ENABLE_OPENGL" ]]; then
+    TERMIN_CSHARP_ENABLE_OPENGL="OFF"
+fi
 
 if [[ $NO_PARALLEL -eq 1 ]]; then
     BUILD_JOBS=1
@@ -73,7 +93,7 @@ fi
 
 echo ""
 echo "========================================"
-echo "  Building termin-csharp ($BUILD_TYPE)"
+echo "  Building termin-csharp ($BUILD_TYPE, profile=$PROFILE)"
 echo "========================================"
 echo ""
 
@@ -95,6 +115,7 @@ cmake_args=(
     -DTERMIN_CSHARP_BUILD_WPF=OFF
     -DTERMIN_CSHARP_BUILD_TESTS=ON
     -DTERMIN_CSHARP_SDK_SHARE_DIR="$SDK_PREFIX/share/termin"
+    -DTERMIN_CSHARP_PROFILE="$PROFILE"
 )
 if [[ -n "$TERMIN_CSHARP_ENABLE_OPENGL" ]]; then
     cmake_args+=("-DTERMIN_CSHARP_ENABLE_OPENGL=$TERMIN_CSHARP_ENABLE_OPENGL")
