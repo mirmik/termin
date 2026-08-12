@@ -7,6 +7,7 @@
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 #include "termin/editor/camera_frustum_debug_gizmo.hpp"
+#include "termin/editor/editor_overlay_scene3d.hpp"
 #include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/selection_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
@@ -59,10 +60,19 @@ namespace termin {
         SelectionManager selection;
         GizmoManager gizmo_manager;
 
+        EditorOverlayScene3D& overlay_scene() noexcept {
+            return _overlay_scene;
+        }
+        const EditorOverlayScene3D& overlay_scene() const noexcept {
+            return _overlay_scene;
+        }
+
     private:
+        EditorOverlayScene3D _overlay_scene;
         TransformGizmo _transform_gizmo;
+        visual::VisualItem3DHandle _transform_gizmo_visual = tc_visual_item3d_handle_invalid();
         CameraFrustumDebugGizmo _camera_frustum_debug_gizmo;
-        std::vector<std::unique_ptr<Gizmo>> _component_visual_gizmos;
+        std::vector<visual::VisualItem3DHandle> _component_visual_items;
 
         // Click/drag detection
         float _press_x = 0.0f;
@@ -146,6 +156,10 @@ namespace termin {
 
         // Post-render processing - call once per frame after rendering
         void after_render();
+        void render_overlays(ImmediateRenderer* renderer,
+                             tgfx::RenderContext2* render_context,
+                             const Mat44f& view,
+                             const Mat44f& projection);
         bool
         handle_key_event(const KeyEvent& event, Vec2f cursor, tc_viewport_handle viewport, tc_display_handle display);
 
@@ -166,6 +180,11 @@ namespace termin {
         void _process_pending_hover();
         bool _dispatch_entity_click(Vec2f screen, const SurfacePickResult& pick);
         bool _dispatch_viewport_pointer(const ViewportPointerEvent& event);
+        bool _route_overlay_pointer(visual::PointerEventKind3D kind,
+                                    Vec2f screen,
+                                    int button,
+                                    tc_viewport_handle viewport,
+                                    tc_display_handle display);
         bool _start_async_entity_pick(Vec2f screen, tc_viewport_handle vp, tc_display_handle display);
         bool _start_async_surface_pick(Vec2f screen, tc_viewport_handle vp, tc_display_handle display);
         void _poll_async_hover_pick();
@@ -173,6 +192,7 @@ namespace termin {
         void _handle_double_click(Vec2f screen, tc_viewport_handle vp, tc_display_handle display);
         void _rebuild_component_visual_gizmos(Entity entity);
         void _clear_component_visual_gizmos();
+        void _destroy_transform_gizmo_visual();
         bool _snap_transform_gizmo_target(Vec2f cursor, tc_viewport_handle viewport, tc_display_handle display);
 
         bool _window_to_fbo_coords(Vec2f screen, tc_viewport_handle vp, tc_display_handle display, Vec2i& fbo);

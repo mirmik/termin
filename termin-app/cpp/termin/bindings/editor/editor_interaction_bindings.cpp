@@ -184,7 +184,7 @@ namespace termin {
                         view_f.data[i] = static_cast<float>(view.data[i]);
                         proj_f.data[i] = static_cast<float>(proj.data[i]);
                     }
-                    s.gizmo_manager.render(renderer, ctx2, view_f, proj_f);
+                    s.render_overlays(renderer, ctx2, view_f, proj_f);
                 },
                 nb::arg("renderer"),
                 nb::arg("ctx2"),

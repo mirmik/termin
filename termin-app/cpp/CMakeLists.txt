@@ -337,7 +337,9 @@ if(BUILD_TESTS)
         termin/editor/remote_frame_graph_debugger_source.cpp
         termin/editor/selection_manager.cpp
         termin/editor/editor_snap.cpp
+        termin/editor/editor_overlay_scene3d.cpp
         termin/editor/gizmo_manager.cpp
+        termin/editor/gizmo_visual_item3d.cpp
         termin/editor/gizmo_types.cpp
         termin/editor/camera_frustum_math.cpp
         termin/editor/transform_gizmo.cpp
@@ -354,6 +356,12 @@ if(BUILD_TESTS)
         tests/tests_frame_profiler_controller.cpp
         tests/tests_shader_parser_std140.cpp
     )
+    if(TERMIN_HAS_RECAST)
+        target_sources(termin_tests PRIVATE
+            termin/navmesh/off_mesh_link_editor_visual.cpp
+        )
+        target_compile_definitions(termin_tests PRIVATE TERMIN_HAS_RECAST)
+    endif()
     target_include_directories(termin_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
@@ -371,6 +379,7 @@ if(BUILD_TESTS)
         termin_framegraph_remote_client::termin_framegraph_remote_client
         termin_framegraph_remote_target::termin_framegraph_remote_target
         termin_gui_native::termin_gui_native
+        termin_visual_scene::termin_visual_scene
         termin_components_render::termin_components_render
         termin_components_collision::termin_components_collision
         termin_components_kinematic::termin_components_kinematic
@@ -382,6 +391,9 @@ if(BUILD_TESTS)
         tgfx::termin_graphics2
         ${CMAKE_DL_LIBS}
     )
+    if(TERMIN_HAS_RECAST)
+        target_link_libraries(termin_tests PRIVATE termin_navmesh::termin_navmesh_components)
+    endif()
     target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     add_test(NAME termin_tests COMMAND $<TARGET_FILE:termin_tests>)
 

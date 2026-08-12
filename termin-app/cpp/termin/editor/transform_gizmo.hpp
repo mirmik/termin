@@ -131,6 +131,9 @@ namespace termin {
 
         // Undo support - pose at drag start
         GeneralPose3 _drag_start_pose;
+        Vec3 _drag_start_global_position{0.0, 0.0, 0.0};
+        Quat _drag_start_global_orientation{};
+        bool _drag_active = false;
 
         // Screen scale (adjusted based on camera distance)
         float _screen_scale = 1.0f;
@@ -216,6 +219,7 @@ namespace termin {
         void on_click(int collider_id, const Vec3f* hit_position) override;
         void on_drag(int collider_id, const Vec3f& position, const Vec3f& delta) override;
         void on_release(int collider_id) override;
+        void on_cancel(int collider_id) override;
 
     private:
         bool _has_target() const;
@@ -232,6 +236,7 @@ namespace termin {
 
         void _apply_translation(const Vec3f& projected_position);
         void _apply_rotation(TransformElement element, const Vec3f& plane_hit);
+        void _reset_drag_state();
 
         static bool _is_translate_element(TransformElement e);
         static bool _is_plane_element(TransformElement e);

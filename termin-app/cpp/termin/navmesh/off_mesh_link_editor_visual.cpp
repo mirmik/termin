@@ -1,10 +1,12 @@
 #include "termin/editor/component_editor_visual.hpp"
 #include "termin/editor/editor_snap.hpp"
+#include "termin/editor/gizmo_visual_item3d.hpp"
 #include "termin/navmesh/detour_pathfinding_world_component.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
 #include <tgfx2/immediate_renderer.hpp>
 
 #include <memory>
+#include <string>
 
 namespace termin {
 
@@ -27,22 +29,62 @@ namespace termin {
             return tc_vec3{value.x, value.y, value.z};
         }
 
+        class OffMeshLinkRef {
+        public:
+            OffMeshLinkRef() = default;
+
+            OffMeshLinkRef(Entity entity, OffMeshLinkComponent& component)
+                : _entity(entity) {
+                const char* source_id = tc_component_ensure_source_id(component.c_component());
+                if (source_id)
+                    _source_id = source_id;
+                if (_source_id.empty())
+                    tc_log(TC_LOG_ERROR, "[OffMeshLinkEditorVisual] component has no stable source id");
+            }
+
+            OffMeshLinkComponent* resolve() const {
+                if (!_entity.valid() || _source_id.empty())
+                    return nullptr;
+                for (std::size_t index = 0; index < _entity.component_count(); ++index) {
+                    tc_component* component = _entity.component_at(index);
+                    const char* source_id = tc_component_get_source_id(component);
+                    if (!source_id || _source_id != source_id)
+                        continue;
+                    return dynamic_cast<OffMeshLinkComponent*>(CxxComponent::from_tc(component));
+                }
+                return nullptr;
+            }
+
+            Entity entity() const {
+                return resolve() ? _entity : Entity();
+            }
+
+        private:
+            Entity _entity;
+            std::string _source_id;
+        };
+
         class OffMeshLinkEndpointTarget : public TransformGizmoTarget {
         private:
-            OffMeshLinkComponent* _component = nullptr;
+            OffMeshLinkRef _component;
             int _endpoint = OFF_MESH_LINK_ENDPOINT_START;
 
         public:
-            OffMeshLinkEndpointTarget(OffMeshLinkComponent* component, int endpoint)
-                : _component(component),
+            OffMeshLinkEndpointTarget(OffMeshLinkRef component, int endpoint)
+                : _component(std::move(component)),
                   _endpoint(endpoint) {}
 
             bool valid() const override {
-                return _component && _component->entity().valid();
+                return _component.resolve() != nullptr;
             }
 
             Vec3 global_position() const override {
-                return _endpoint == OFF_MESH_LINK_ENDPOINT_START ? _component->start_world() : _component->end_world();
+                OffMeshLinkComponent* component = _component.resolve();
+                if (!component) {
+                    tc_log(TC_LOG_ERROR, "[OffMeshLinkEditorVisual] cannot read endpoint: target is invalid");
+                    return {};
+                }
+                return _endpoint == OFF_MESH_LINK_ENDPOINT_START ? component->start_world() : component->end_world();
             }
 
             Quat global_orientation() const override {
@@ -63,19 +105,22 @@ namespace termin {
                     return;
                 }
 
-                Entity ent = _component->entity();
+                OffMeshLinkComponent* component = _component.resolve();
+                if (!component)
+                    return;
+                Entity ent = component->entity();
                 Vec3 local = ent.transform().transform_point_inverse(position);
                 if (_endpoint == OFF_MESH_LINK_ENDPOINT_START) {
-                    _component->start_local = to_tc_vec3(local);
+                    component->start_local = to_tc_vec3(local);
                 } else {
-                    _component->end_local = to_tc_vec3(local);
+                    component->end_local = to_tc_vec3(local);
                 }
             }
 
             void set_global_orientation(const Quat&) override {}
 
             Entity entity() const override {
-                return _component ? _component->entity() : Entity();
+                return _component.entity();
             }
 
             bool supports_rotation() const override {
@@ -133,23 +178,24 @@ namespace termin {
 
         class OffMeshLinkEndpointGizmo : public Gizmo {
         private:
-            OffMeshLinkComponent* _component = nullptr;
+            OffMeshLinkRef _component;
             ComponentEditorVisualContext _context;
             int _hovered_endpoint = 0;
 
         public:
-            explicit OffMeshLinkEndpointGizmo(OffMeshLinkComponent* component,
+            explicit OffMeshLinkEndpointGizmo(OffMeshLinkRef component,
                                               const ComponentEditorVisualContext& context)
-                : _component(component),
+                : _component(std::move(component)),
                   _context(context) {}
 
             void draw_transparent(ImmediateRenderer* renderer) override {
-                if (!_component || !_component->enabled || !renderer) {
+                OffMeshLinkComponent* component = _component.resolve();
+                if (!component || !component->enabled || !renderer) {
                     return;
                 }
 
-                Vec3 start = _component->start_world();
-                Vec3 end = _component->end_world();
+                Vec3 start = component->start_world();
+                Vec3 end = component->end_world();
                 SrgbColor start_color = _hovered_endpoint == OFF_MESH_LINK_ENDPOINT_START
                                              ? SrgbColor{1.0f, 0.95f, 0.2f, 1.0f}
                                              : SrgbColor{1.0f, 0.45f, 0.1f, 0.85f};
@@ -163,12 +209,13 @@ namespace termin {
 
             std::vector<GizmoCollider> get_colliders() override {
                 std::vector<GizmoCollider> result;
-                if (!_component || !_component->enabled) {
+                OffMeshLinkComponent* component = _component.resolve();
+                if (!component || !component->enabled) {
                     return result;
                 }
 
-                Vec3f start = to_vec3f(_component->start_world());
-                Vec3f end = to_vec3f(_component->end_world());
+                Vec3f start = to_vec3f(component->start_world());
+                Vec3f end = to_vec3f(component->end_world());
                 result.push_back(GizmoCollider{
                     OFF_MESH_LINK_ENDPOINT_START,
                     SphereGeometry{start, 0.22f},
@@ -211,18 +258,25 @@ namespace termin {
 
         class OffMeshLinkEditorVisualProvider : public ComponentEditorVisualProvider {
         public:
-            void collect_gizmos(Entity entity,
-                                tc_component* component,
-                                const ComponentEditorVisualContext& context,
-                                std::vector<std::unique_ptr<Gizmo>>& out_gizmos) override {
-                (void)entity;
+            void collect_overlay_items(Entity entity,
+                                       tc_component* component,
+                                       const ComponentEditorVisualContext& context,
+                                       std::vector<ComponentEditorVisualContribution>& out_items) override {
                 CxxComponent* cxx = CxxComponent::from_tc(component);
                 OffMeshLinkComponent* link = dynamic_cast<OffMeshLinkComponent*>(cxx);
                 if (!link) {
                     return;
                 }
 
-                out_gizmos.push_back(std::make_unique<OffMeshLinkEndpointGizmo>(link, context));
+                auto item = std::make_unique<GizmoVisualItem3D>(
+                    std::make_unique<OffMeshLinkEndpointGizmo>(OffMeshLinkRef(entity, *link), context));
+                auto* adapter = item.get();
+                out_items.push_back(ComponentEditorVisualContribution{
+                    std::move(item),
+                    [adapter](visual::SceneInteraction3D& interaction, visual::VisualItem3DHandle) {
+                        adapter->bind_controller(interaction);
+                    },
+                });
             }
         };
 

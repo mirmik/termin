@@ -14,7 +14,9 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/editor/camera_frustum_math.cpp
     termin/editor/component_editor_visual.cpp
     termin/editor/editor_snap.cpp
+    termin/editor/editor_overlay_scene3d.cpp
     termin/editor/gizmo_manager.cpp
+    termin/editor/gizmo_visual_item3d.cpp
     termin/editor/gizmo_types.cpp
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
@@ -51,6 +53,7 @@ target_link_libraries(_editor_native PRIVATE
     termin_profiler_remote::termin_profiler_remote
     termin_framegraph_remote_client::termin_framegraph_remote_client
     termin_gui_native::termin_gui_native
+    termin_visual_scene::termin_visual_scene
     termin_render_passes::termin_render_passes
     tgfx::termin_graphics
     tgfx::termin_graphics2

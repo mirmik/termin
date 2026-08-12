@@ -56,6 +56,7 @@ namespace termin {
         virtual void on_click(int collider_id, const Vec3f* hit_position) {}
         virtual void on_drag(int collider_id, const Vec3f& position, const Vec3f& delta) {}
         virtual void on_release(int collider_id) {}
+        virtual void on_cancel(int collider_id) {}
     };
 
 } // namespace termin

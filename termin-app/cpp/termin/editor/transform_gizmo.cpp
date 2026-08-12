@@ -118,6 +118,8 @@ namespace termin {
     }
 
     void TransformGizmo::set_target(std::shared_ptr<TransformGizmoTarget> target) {
+        if (_active_element)
+            on_cancel(static_cast<int>(*_active_element));
         _target = std::move(target);
         visible = _has_target();
         if (_has_target()) {
@@ -126,6 +128,8 @@ namespace termin {
     }
 
     void TransformGizmo::clear_target() {
+        if (_active_element)
+            on_cancel(static_cast<int>(*_active_element));
         _target.reset();
         visible = false;
     }
@@ -446,6 +450,9 @@ namespace termin {
         // Save start pose for undo. TransformEditCommand expects local pose.
         if (_has_target()) {
             _drag_start_pose = _target->local_pose_for_undo();
+            _drag_start_global_position = _target->global_position();
+            _drag_start_global_orientation = _target->global_orientation();
+            _drag_active = true;
         }
 
         Vec3f origin = _get_position();
@@ -520,11 +527,28 @@ namespace termin {
 
     void TransformGizmo::on_release(int collider_id) {
         // Call drag end handler for undo support
-        if (on_drag_end && _has_target() && _target->supports_transform_undo()) {
+        if (_drag_active && on_drag_end && _has_target() && _target->supports_transform_undo()) {
             GeneralPose3 end_pose = _target->local_pose_for_undo();
             on_drag_end(_drag_start_pose, end_pose);
         }
 
+        _reset_drag_state();
+    }
+
+    void TransformGizmo::on_cancel(int collider_id) {
+        if (_drag_active && _has_target()) {
+            _target->set_global_position(_drag_start_global_position);
+            if (_target->supports_rotation())
+                _target->set_global_orientation(_drag_start_global_orientation);
+            _update_position();
+            if (on_transform_changed)
+                on_transform_changed();
+        }
+        _reset_drag_state();
+    }
+
+    void TransformGizmo::_reset_drag_state() {
+        _drag_active = false;
         _active_element = std::nullopt;
         _has_grab_offset = false;
         _has_rot_vec0 = false;
