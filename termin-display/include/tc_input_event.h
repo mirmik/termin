@@ -192,6 +192,19 @@ typedef struct tc_scroll_event_init_info {
     uint32_t source;
 } tc_scroll_event_init_info;
 
+typedef struct tc_pointer_event_init_info {
+    tc_viewport_handle viewport;
+    uint64_t pointer_id;
+    int device;
+    int phase;
+    double x;
+    double y;
+    double dx;
+    double dy;
+    float pressure;
+    uint32_t source;
+} tc_pointer_event_init_info;
+
 // ============================================================================
 // Initialization helpers
 // ============================================================================
@@ -268,27 +281,17 @@ tc_key_event_init(tc_key_event* e, tc_viewport_handle viewport, int key, int sca
     tc_key_event_init_source(e, viewport, key, scancode, action, mods, TC_INPUT_SOURCE_RUNTIME);
 }
 
-static inline void tc_pointer_event_init_source(tc_pointer_event* e,
-                                                tc_viewport_handle viewport,
-                                                uint64_t pointer_id,
-                                                int device,
-                                                int phase,
-                                                double x,
-                                                double y,
-                                                double dx,
-                                                double dy,
-                                                float pressure,
-                                                uint32_t source) {
-    e->viewport = viewport;
-    e->pointer_id = pointer_id;
-    e->device = device;
-    e->phase = phase;
-    e->x = x;
-    e->y = y;
-    e->dx = dx;
-    e->dy = dy;
-    e->pressure = pressure;
-    e->source = source;
+static inline void tc_pointer_event_init(tc_pointer_event* e, const tc_pointer_event_init_info* info) {
+    e->viewport = info->viewport;
+    e->pointer_id = info->pointer_id;
+    e->device = info->device;
+    e->phase = info->phase;
+    e->x = info->x;
+    e->y = info->y;
+    e->dx = info->dx;
+    e->dy = info->dy;
+    e->pressure = info->pressure;
+    e->source = info->source;
     e->platform_services = NULL;
     e->handled = false;
 }
@@ -307,20 +310,6 @@ tc_input_focus_event_init_source(tc_input_focus_event* e, tc_viewport_handle vie
     e->viewport = viewport;
     e->source = source;
     e->platform_services = NULL;
-}
-
-static inline void tc_pointer_event_init(tc_pointer_event* e,
-                                         tc_viewport_handle viewport,
-                                         uint64_t pointer_id,
-                                         int device,
-                                         int phase,
-                                         double x,
-                                         double y,
-                                         double dx,
-                                         double dy,
-                                         float pressure) {
-    tc_pointer_event_init_source(
-        e, viewport, pointer_id, device, phase, x, y, dx, dy, pressure, TC_INPUT_SOURCE_RUNTIME);
 }
 
 #ifdef __cplusplus
