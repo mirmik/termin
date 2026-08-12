@@ -1,5 +1,5 @@
 // editor_interaction_system.hpp - Singleton editor interaction coordinator
-// Owns selection state, gizmo manager. Receives events from
+// Owns selection state and the retained editor overlay. Receives events from
 // EditorViewportInputManager.
 #pragma once
 
@@ -8,7 +8,6 @@
 #include "render/tc_viewport.h"
 #include "termin/editor/camera_frustum_debug_gizmo.hpp"
 #include "termin/editor/editor_overlay_scene3d.hpp"
-#include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/selection_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
 #include "termin/input/input_events.hpp"
@@ -58,7 +57,6 @@ namespace termin {
     public:
         // Shared state
         SelectionManager selection;
-        GizmoManager gizmo_manager;
 
         EditorOverlayScene3D& overlay_scene() noexcept {
             return _overlay_scene;
@@ -71,14 +69,12 @@ namespace termin {
         EditorOverlayScene3D _overlay_scene;
         TransformGizmo _transform_gizmo;
         visual::VisualItem3DHandle _transform_gizmo_visual = tc_visual_item3d_handle_invalid();
-        CameraFrustumDebugGizmo _camera_frustum_debug_gizmo;
         std::vector<visual::VisualItem3DHandle> _component_visual_items;
 
         // Click/drag detection
         float _press_x = 0.0f;
         float _press_y = 0.0f;
         bool _has_press = false;
-        bool _gizmo_handled_press = false;
         float _click_threshold = 5.0f;
 
         // Pending events (processed after render when ID buffer is ready)

@@ -110,9 +110,7 @@ namespace {
 
 TEST_CASE("EditorInteractionSystem ignores release without scene press") {
     termin::EditorInteractionSystem interaction;
-    CHECK_EQ(interaction.overlay_scene().scene().size(), 1);
-    CHECK_EQ(interaction.gizmo_manager._gizmos.size(), 1);
-    CHECK(interaction.gizmo_manager._gizmos.front() != interaction.transform_gizmo());
+    CHECK_EQ(interaction.overlay_scene().scene().size(), 2);
     int click_callbacks = 0;
     interaction.on_entity_click = [&](auto&&...) -> bool {
         click_callbacks += 1;
@@ -189,7 +187,7 @@ TEST_CASE("TransformGizmo drag is captured and cancelled by the editor overlay")
     tc_entity_free(target.handle());
 }
 
-TEST_CASE("Gizmo visual item routes stable collider parts outside GizmoManager") {
+TEST_CASE("Gizmo visual item routes stable collider parts through retained interaction") {
     termin::EditorOverlayScene3D overlay;
     auto state = std::make_shared<RecordingGizmoState>();
     auto item = std::make_unique<termin::GizmoVisualItem3D>(std::make_unique<RecordingGizmo>(state));
