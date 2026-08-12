@@ -194,8 +194,19 @@ vim_on_pointer(tc_input_manager* self, uint64_t pointer_id, int device, int phas
     }
 
     tc_pointer_event event;
-    tc_pointer_event_init_source(
-        &event, m->viewport, pointer_id, device, phase, x, y, dx, dy, pressure, TC_INPUT_SOURCE_RUNTIME);
+    const tc_pointer_event_init_info info = {
+        .viewport = m->viewport,
+        .pointer_id = pointer_id,
+        .device = device,
+        .phase = phase,
+        .x = x,
+        .y = y,
+        .dx = dx,
+        .dy = dy,
+        .pressure = pressure,
+        .source = TC_INPUT_SOURCE_RUNTIME,
+    };
+    tc_pointer_event_init(&event, &info);
     event.platform_services = vim_platform_services(m);
 
     dispatch_to_internal_entities(m->viewport, dispatch_pointer_cb, &event);

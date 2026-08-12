@@ -247,17 +247,19 @@ TEST_CASE("UIComponent handles viewport-local pointer streams and focus teardown
     };
 
     tc_pointer_event down;
-    tc_pointer_event_init_source(&down,
-                                 TC_VIEWPORT_HANDLE_INVALID,
-                                 17,
-                                 TC_POINTER_DEVICE_TOUCH,
-                                 TC_POINTER_DOWN,
-                                 x * 2.0,
-                                 y * 2.0,
-                                 0.0,
-                                 0.0,
-                                 1.0f,
-                                 TC_INPUT_SOURCE_RUNTIME);
+    const tc_pointer_event_init_info down_info = {
+        .viewport = TC_VIEWPORT_HANDLE_INVALID,
+        .pointer_id = 17,
+        .device = TC_POINTER_DEVICE_TOUCH,
+        .phase = TC_POINTER_DOWN,
+        .x = x * 2.0,
+        .y = y * 2.0,
+        .dx = 0.0,
+        .dy = 0.0,
+        .pressure = 1.0f,
+        .source = TC_INPUT_SOURCE_RUNTIME,
+    };
+    tc_pointer_event_init(&down, &down_info);
     down.platform_services = &services;
     tc_component_on_pointer(component.tc_component_ptr(), &down);
     REQUIRE(down.handled);
@@ -266,33 +268,20 @@ TEST_CASE("UIComponent handles viewport-local pointer streams and focus teardown
     CHECK_FALSE(tc_widget_handle_is_invalid(document.pointer_capture()));
 
     tc_pointer_event secondary;
-    tc_pointer_event_init_source(&secondary,
-                                 TC_VIEWPORT_HANDLE_INVALID,
-                                 18,
-                                 TC_POINTER_DEVICE_TOUCH,
-                                 TC_POINTER_MOVE,
-                                 x * 2.0,
-                                 y * 2.0,
-                                 0.0,
-                                 0.0,
-                                 1.0f,
-                                 TC_INPUT_SOURCE_RUNTIME);
+    tc_pointer_event_init_info secondary_info = down_info;
+    secondary_info.pointer_id = 18;
+    secondary_info.phase = TC_POINTER_MOVE;
+    tc_pointer_event_init(&secondary, &secondary_info);
     secondary.platform_services = &services;
     tc_component_on_pointer(component.tc_component_ptr(), &secondary);
     CHECK_FALSE(secondary.handled);
 
     tc_pointer_event primary_move;
-    tc_pointer_event_init_source(&primary_move,
-                                 TC_VIEWPORT_HANDLE_INVALID,
-                                 17,
-                                 TC_POINTER_DEVICE_TOUCH,
-                                 TC_POINTER_MOVE,
-                                 500.0,
-                                 500.0,
-                                 0.0,
-                                 0.0,
-                                 1.0f,
-                                 TC_INPUT_SOURCE_RUNTIME);
+    tc_pointer_event_init_info primary_move_info = down_info;
+    primary_move_info.phase = TC_POINTER_MOVE;
+    primary_move_info.x = 500.0;
+    primary_move_info.y = 500.0;
+    tc_pointer_event_init(&primary_move, &primary_move_info);
     primary_move.platform_services = &services;
     tc_component_on_pointer(component.tc_component_ptr(), &primary_move);
     CHECK(primary_move.handled);

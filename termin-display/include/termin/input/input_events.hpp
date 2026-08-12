@@ -229,18 +229,8 @@ namespace termin {
             handled = false;
         }
 
-        PointerEvent(tc_viewport_handle viewport_,
-                     uint64_t pointer_id_,
-                     int device_,
-                     int phase_,
-                     double x_,
-                     double y_,
-                     double dx_ = 0.0,
-                     double dy_ = 0.0,
-                     float pressure_ = 0.0f,
-                     uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
-            tc_pointer_event_init_source(
-                this, viewport_, pointer_id_, device_, phase_, x_, y_, dx_, dy_, pressure_, source_);
+        explicit PointerEvent(const tc_pointer_event_init_info& info) {
+            tc_pointer_event_init(this, &info);
         }
 
         explicit PointerEvent(const tc_pointer_event& e) {

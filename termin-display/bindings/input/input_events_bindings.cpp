@@ -28,32 +28,6 @@ namespace termin {
 
         nb::class_<PointerEvent>(m, "PointerEvent", "Device-neutral pointer event.")
             .def(nb::init<>())
-            .def(
-                "__init__",
-                [](PointerEvent* self,
-                   const TcViewport& viewport,
-                   uint64_t pointer_id,
-                   int device,
-                   int phase,
-                   double x,
-                   double y,
-                   double dx,
-                   double dy,
-                   float pressure,
-                   uint32_t source) {
-                    new (self)
-                        PointerEvent(viewport.handle(), pointer_id, device, phase, x, y, dx, dy, pressure, source);
-                },
-                nb::arg("viewport"),
-                nb::arg("pointer_id"),
-                nb::arg("device"),
-                nb::arg("phase"),
-                nb::arg("x"),
-                nb::arg("y"),
-                nb::arg("dx") = 0.0,
-                nb::arg("dy") = 0.0,
-                nb::arg("pressure") = 0.0f,
-                nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME))
             .def_prop_rw(
                 "viewport",
                 [](const PointerEvent& self) { return TcViewport::from_handle(self.viewport); },
