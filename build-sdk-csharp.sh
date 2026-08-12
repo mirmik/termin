@@ -105,6 +105,14 @@ if [[ $CLEAN -eq 1 ]]; then
 fi
 mkdir -p "$build_dir"
 
+# SWIG does not remove wrapper files for declarations that disappeared from
+# the interface.  The managed project includes Generated/*.cs, so every
+# canonical build must start from an empty generated-file set to keep the
+# wrappers and the newly generated terminPINVOKE declarations in lockstep.
+generated_dir="$SCRIPT_DIR/termin-csharp/Termin.Native/Generated"
+mkdir -p "$generated_dir"
+find "$generated_dir" -maxdepth 1 -type f -delete
+
 cmake_args=(
     -S .
     -B "$build_dir"
