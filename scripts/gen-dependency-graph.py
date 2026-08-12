@@ -116,6 +116,8 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.project_modules": "termin-project-modules",
     "termin.project": "termin-project",
     "termin.stdlib": "termin-stdlib",
+    "termin.glb.native": "termin-glb-native",
+    "termin.glb._glb_native": "termin-glb-native",
     "termin.glb": "termin-glb",
     "termin.player": "termin-player",
     "termin.mcp": "termin-mcp",

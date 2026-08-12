@@ -90,7 +90,8 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-skeleton` | `termin-skeleton` | `termin.skeleton`, `termin.skeleton_components`, `termin_skeleton_component_specs` | Skeleton runtime and components. |
 | `termin-animation` | `termin-animation` | `termin.animation`, `termin.animation_components`, `termin_animation_component_specs` | Animation runtime and components. |
 | `termin-bootstrap` | `termin-bootstrap` | `termin.bootstrap` | Bootstrap/runtime startup helpers. |
-| `termin-glb` | `termin-glb` | `termin.glb` | GLB importer. |
+| `termin-glb-native` | `termin-glb-native` | `termin.glb.native` | Minimal native cgltf document and mesh importer. |
+| `termin-glb` | `termin-glb` | `termin.glb` | High-level GLB asset, plugin, and scene importer layer. |
 | `termin-project` | `termin-project` | `termin.project` | Project settings and creation helpers. |
 | `termin-project-modules` | `termin-project-modules` | `termin.project_modules` | Source project module runtime and warmup helpers. |
 | `termin-project-build` | `termin-project-build` | `termin.project_build` | Project build and runtime package export pipeline. |
