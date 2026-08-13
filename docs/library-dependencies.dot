@@ -138,6 +138,7 @@ digraph termin_dependencies {
 	"termin-framegraph-remote-client";
 	"termin-framegraph-remote-target";
 	"termin-glb";
+	"termin-glb-native";
 	"termin-image";
 	"termin-materials";
 	"termin-mcp";
@@ -220,6 +221,7 @@ digraph termin_dependencies {
 	"termin-components-ui" -> "termin-gui-native";
 	"termin-components-voxels" -> "termin-navmesh";
 	"termin-components-voxels" -> "termin-voxels";
+	"termin-csg" -> "termin-graphics";
 	"termin-csg" -> "termin-shader-runtime";
 	"termin-csharp" -> "termin-bootstrap";
 	"termin-csharp" -> "termin-engine";
@@ -243,6 +245,7 @@ digraph termin_dependencies {
 	"termin-glb" -> "termin-assets";
 	"termin-glb" -> "termin-graphics";
 	"termin-glb" -> "termin-scene";
+	"termin-glb-native" -> "termin-mesh";
 	"termin-graphics" -> "termin-mesh";
 	"termin-gui-native" -> "termin-visual-scene";
 	"termin-image" -> "termin-nanobind-sdk";
@@ -251,11 +254,11 @@ digraph termin_dependencies {
 	"termin-lighting" -> "termin-scene";
 	"termin-materials" -> "termin-graphics";
 	"termin-materials" -> "termin-inspect";
-	"termin-mcp" -> "termin-assets";
 	"termin-mcp" -> "termin-scene";
 	"termin-mesh" -> "termin-base";
 	"termin-modules" -> "termin-base";
 	"termin-modules" -> "termin-python-host";
+	"termin-navmesh" -> "termin-assets";
 	"termin-navmesh" -> "termin-components-mesh";
 	"termin-navmesh" -> "termin-render";
 	"termin-navmesh" -> "termin-voxels";
@@ -294,8 +297,7 @@ digraph termin_dependencies {
 	"termin-runtime" -> "termin-engine";
 	"termin-runtime" -> "termin-image";
 	"termin-scene" -> "termin-inspect";
-	"termin-shader-runtime" -> "termin-assets";
-	"termin-shader-runtime" -> "termin-graphics";
+	"termin-shader-runtime" -> "termin-base";
 	"termin-skeleton" -> "termin-assets";
 	"termin-skeleton" -> "termin-scene";
 	"termin-visual-scene" -> "termin-inspect";

@@ -92,6 +92,7 @@ def test_player_python_executor_exposes_runtime_context(tmp_path: Path) -> None:
         display="display-object",
         viewport="viewport-object",
         camera="camera-object",
+        resource_manager="resource-manager-object",
         project_path=tmp_path,
         scene_name="package/scene.json",
         delta_time=0.25,
@@ -104,6 +105,7 @@ def test_player_python_executor_exposes_runtime_context(tmp_path: Path) -> None:
         "print(surface)\n"
         "print(project_path.name)\n"
         "print(delta_time)\n"
+        "print(rm)\n"
         "request_quit(3)\n"
     )
 
@@ -113,6 +115,7 @@ def test_player_python_executor_exposes_runtime_context(tmp_path: Path) -> None:
         "display-object",
         tmp_path.name,
         "0.25",
+        "resource-manager-object",
     ]
     assert quit_codes == [3]
 

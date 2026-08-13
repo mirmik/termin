@@ -39,6 +39,8 @@ class PlayerPythonExecutor(PythonScriptExecutor):
             "display": runtime.display,
             "viewport": runtime.viewport,
             "camera": runtime.camera,
+            "rm": runtime.resource_manager,
+            "resource_manager": runtime.resource_manager,
             "project_path": runtime.project_path,
             "scene_name": runtime.scene_name,
             "delta_time": runtime.delta_time,

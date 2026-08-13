@@ -192,6 +192,10 @@ class PlayerRuntime:
         return self._viewport
 
     @property
+    def resource_manager(self):
+        return self._resource_manager
+
+    @property
     def rendering_manager(self):
         if self._engine is None:
             raise RuntimeError("PlayerRuntime has no initialized EngineCore")
