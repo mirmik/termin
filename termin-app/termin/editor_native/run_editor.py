@@ -1863,6 +1863,8 @@ def _compose_native_editor(
                 "shell": shell,
                 "scene": current_scene(),
                 "current_scene": current_scene(),
+                "rm": resource_manager,
+                "resource_manager": resource_manager,
                 "selected_entity": selected_entity,
                 "scene_edit": scene_edit,
                 "scene_hierarchy_controller": scene_hierarchy_controller,
