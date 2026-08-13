@@ -335,6 +335,7 @@ def main() -> int:
             "failed to create shader",
             "output transform failed",
             "malformed UI draw-list batch",
+            "UI document has no text measurement service",
         )
         present = [marker for marker in forbidden_markers if marker in log_text]
         if present:
