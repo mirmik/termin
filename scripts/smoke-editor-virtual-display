@@ -290,6 +290,19 @@ def main() -> int:
             )
             if not _png_has_visible_pixel(frame_path):
                 raise SmokeError(f"Editor frame capture is completely black: {frame_path}")
+            window_path = temp_dir / "editor-window.png"
+            _require_success(
+                _run_helper(
+                    sdk_python,
+                    helper,
+                    session_file,
+                    ["screenshot", "--path", str(window_path)],
+                    timeout=30.0,
+                ),
+                "MCP editor window capture",
+            )
+            if not _png_has_visible_pixel(window_path):
+                raise SmokeError(f"Editor window capture is completely black: {window_path}")
             _require_success(
                 _run_helper(
                     sdk_python,
@@ -321,6 +334,7 @@ def main() -> int:
             "termin_shaderc failed",
             "failed to create shader",
             "output transform failed",
+            "malformed UI draw-list batch",
         )
         present = [marker for marker in forbidden_markers if marker in log_text]
         if present:
