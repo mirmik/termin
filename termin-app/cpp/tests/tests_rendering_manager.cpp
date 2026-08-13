@@ -763,7 +763,9 @@ TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered 
         "resource_type": "multiview_fbo",
         "format": "rgba16f",
         "samples": 4,
-        "array_layers": 2
+        "array_layers": 2,
+        "has_color": true,
+        "has_depth": false
       }
     }
   ],
@@ -791,8 +793,17 @@ TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered 
         CHECK(spec.resource_type == "multiview_fbo");
         CHECK(spec.samples == 4);
         CHECK(spec.array_layers == 2);
+        REQUIRE(spec.has_color.has_value());
+        CHECK(*spec.has_color);
+        REQUIRE(spec.has_depth.has_value());
+        CHECK_FALSE(*spec.has_depth);
     }
     CHECK(found);
+    REQUIRE(pipeline_template->resource_count == 1u);
+    CHECK((pipeline_template->resources[0].flags & TC_PIPELINE_RESOURCE_COLOR_PRESENT) != 0);
+    CHECK((pipeline_template->resources[0].flags & TC_PIPELINE_RESOURCE_COLOR_ENABLED) != 0);
+    CHECK((pipeline_template->resources[0].flags & TC_PIPELINE_RESOURCE_DEPTH_PRESENT) != 0);
+    CHECK((pipeline_template->resources[0].flags & TC_PIPELINE_RESOURCE_DEPTH_ENABLED) == 0);
 
     pipeline->destroy();
     delete pipeline;
