@@ -949,6 +949,13 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
             raise ValueError(f"resource '{resource_name}' has zero samples")
         if array_layers == 0:
             raise ValueError(f"resource '{resource_name}' has zero array layers")
+        attachment_flags = 0x0F
+        if flags & ~attachment_flags:
+            raise ValueError(f"resource '{resource_name}' has unknown flags 0x{flags:x}")
+        if flags & 0x02 and not flags & 0x01:
+            raise ValueError(f"resource '{resource_name}' enables color without declaring it")
+        if flags & 0x08 and not flags & 0x04:
+            raise ValueError(f"resource '{resource_name}' enables depth without declaring it")
         resource_names.add(resource_name)
         resources.append(
             {
