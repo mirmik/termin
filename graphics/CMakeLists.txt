@@ -13,6 +13,16 @@ if(TERMIN_PLATFORM_WEB)
         "Build tgfx2 C/C++ tests" FORCE)
     set(TERMIN_BUILD_WINDOW_TESTS OFF CACHE BOOL
         "Build tests that require a windowing system" FORCE)
+    set(TERMIN_IMAGE_BUILD_SHARED OFF CACHE BOOL
+        "Build termin-image as a shared library" FORCE)
+    set(TERMIN_MESH_BUILD_SHARED OFF CACHE BOOL
+        "Build termin-mesh as a shared library" FORCE)
+    set(TERMIN_SKELETON_BUILD_SHARED OFF CACHE BOOL
+        "Build termin-skeleton as a shared library" FORCE)
+    set(TERMIN_MATERIALS_BUILD_SHARED OFF CACHE BOOL
+        "Build termin-materials as a shared library" FORCE)
+    set(TERMIN_RENDER_CORE_BUILD_SHARED OFF CACHE BOOL
+        "Build termin-render-core as a shared library" FORCE)
 elseif(TERMIN_PLATFORM_ANDROID)
     set(TERMIN_ENABLE_OPENGL OFF CACHE BOOL
         "Enable desktop OpenGL-dependent graphics/render targets" FORCE)

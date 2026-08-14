@@ -357,10 +357,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Slang setup failed" }
           "TERMIN_SLANGC=$slangc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build C++ SDK dependencies
-        shell: pwsh
-        run: task build:cpp -- --no-vulkan --no-opengl --no-sdl
-
       - name: Run repository-controlled C++ tests
         shell: pwsh
         run: task test:cpp -- --no-vulkan --no-opengl --no-sdl
@@ -395,6 +391,9 @@ jobs:
 
       - name: Install Linux build dependencies
         uses: ./.github/actions/setup-linux-build
+
+      - name: Setup Slang compiler
+        uses: ./.github/actions/setup-slang
 
       - uses: actions/download-artifact@v5
         with:

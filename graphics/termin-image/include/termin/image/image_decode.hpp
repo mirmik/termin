@@ -5,7 +5,9 @@
 #include <string>
 #include <vector>
 
-#if defined(_WIN32) && defined(TERMIN_IMAGE_EXPORTS)
+#if defined(TERMIN_IMAGE_STATIC)
+#define TERMIN_IMAGE_API
+#elif defined(_WIN32) && defined(TERMIN_IMAGE_EXPORTS)
 #define TERMIN_IMAGE_API __declspec(dllexport)
 #elif defined(_WIN32)
 #define TERMIN_IMAGE_API __declspec(dllimport)
