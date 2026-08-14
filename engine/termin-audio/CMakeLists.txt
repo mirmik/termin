@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build termin-audio Python bindings" OFF)
-option(TERMIN_AUDIO_BUILD_TESTS "Build termin-audio native tests" ${TERMIN_BUILD_TESTS})
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -119,7 +118,7 @@ if(TERMIN_BUILD_PYTHON)
     termin_set_rpath_python(_audio_native)
 endif()
 
-if(TERMIN_AUDIO_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
     add_executable(termin_audio_runtime_test tests/test_audio_runtime.cpp)
     target_include_directories(termin_audio_runtime_test PRIVATE

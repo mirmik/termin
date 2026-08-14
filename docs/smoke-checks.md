@@ -57,7 +57,7 @@ after successful readback:
 ```bash
 cmake -S termin-gui-native -B build/termin-gui-native-examples \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/sdk" \
-  -DTERMIN_GUI_NATIVE_BUILD_TESTS=OFF -DTERMIN_GUI_NATIVE_BUILD_EXAMPLES=ON
+  -DTERMIN_BUILD_TESTS=OFF -DTERMIN_GUI_NATIVE_BUILD_EXAMPLES=ON
 cmake --build build/termin-gui-native-examples -j
 TERMIN_GUI_NATIVE_SCREENSHOT=/tmp/termin-gui-native-showcase.ppm \
   build/termin-gui-native-examples/termin_gui_native_showcase

@@ -74,7 +74,7 @@ set_target_properties(_editor_native PROPERTIES
 )
 # ============== Tests module ==============
 
-if(BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     nanobind_add_module(_cpp_tests NB_SHARED
         tests/tests_binding.cpp
         tests/tests_general_pose3.cpp

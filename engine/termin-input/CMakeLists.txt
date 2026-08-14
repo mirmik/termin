@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python-related input bridge code" OFF)
-option(TERMIN_INPUT_BUILD_TESTS "Build termin-input tests" ${TERMIN_BUILD_TESTS})
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -88,7 +87,7 @@ if(TERMIN_BUILD_PYTHON)
     )
 endif()
 
-if(TERMIN_INPUT_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_input_capability_test tests/test_input_capability.c)

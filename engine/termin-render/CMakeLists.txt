@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TERMIN_RENDER_BUILD_SHARED "Build shared library" ON)
-option(TERMIN_RENDER_BUILD_TESTS "Build tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-render" OFF)
 
 if(COMMAND termin_require_package)
@@ -125,7 +124,7 @@ else()
     target_compile_options(termin_render PRIVATE -Wall -Wextra)
 endif()
 
-if(TERMIN_RENDER_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_render_drawable_test tests/test_drawable_capability.c)

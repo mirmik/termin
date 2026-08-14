@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python binding _lighting_native" OFF)
-option(TERMIN_LIGHTING_BUILD_TESTS "Build termin-lighting tests" ${TERMIN_BUILD_TESTS})
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -63,7 +62,7 @@ endif()
             FILES_MATCHING PATTERN "*.py")
 endif()
 
-if(TERMIN_LIGHTING_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_lighting_light_test tests/test_light.cpp)

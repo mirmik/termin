@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(TERMIN_GUI_NATIVE_BUILD_TESTS "Build termin-gui-native tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_GUI_NATIVE_BUILD_EXAMPLES "Build termin-gui-native examples" ${TERMIN_ENABLE_SDL})
 option(TERMIN_BUILD_PYTHON "Build termin-gui-native Python bindings" OFF)
 option(TERMIN_GUI_NATIVE_BUILD_WINDOW_INTEGRATION
@@ -282,7 +281,7 @@ else()
     target_compile_options(termin_gui_native PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-if(TERMIN_GUI_NATIVE_BUILD_TESTS OR TERMIN_GUI_NATIVE_BUILD_EXAMPLES)
+if(TERMIN_BUILD_TESTS OR TERMIN_GUI_NATIVE_BUILD_EXAMPLES)
     add_library(termin_gui_native_visual_scene_example_support STATIC
         examples/visual_scene_composition.cpp
     )
@@ -296,7 +295,7 @@ if(TERMIN_GUI_NATIVE_BUILD_TESTS OR TERMIN_GUI_NATIVE_BUILD_EXAMPLES)
     )
 endif()
 
-if(TERMIN_GUI_NATIVE_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     function(termin_gui_native_add_test target)

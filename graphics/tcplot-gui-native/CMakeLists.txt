@@ -4,8 +4,6 @@ project(tcplot_gui_native VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(TCPLOT_GUI_NATIVE_BUILD_TESTS
-    "Build tcplot-gui-native tests when built standalone" OFF)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_gui_native termin_gui_native::termin_gui_native)
@@ -47,7 +45,7 @@ if(COMMAND termin_set_rpath_lib)
     termin_set_rpath_lib(tcplot_gui_native)
 endif()
 
-if(TERMIN_BUILD_TESTS OR TCPLOT_GUI_NATIVE_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     add_executable(tcplot_gui_native_plot2d_test tests/test_plot2d.cpp)
     target_link_libraries(tcplot_gui_native_plot2d_test PRIVATE
         tcplot_gui_native

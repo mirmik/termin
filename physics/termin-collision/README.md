@@ -46,7 +46,7 @@ cmake --build build -j$(nproc)
 
 С тестами:
 ```bash
-cmake -S . -B build -DTERMIN_COLLISION_BUILD_TESTS=ON
+cmake -S . -B build -DTERMIN_BUILD_TESTS=ON
 cmake --build build -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```

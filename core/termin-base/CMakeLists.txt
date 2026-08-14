@@ -5,7 +5,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-option(TERMIN_BASE_BUILD_TESTS "Build termin-base tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_BASE_BUILD_SHARED "Build termin-base as a shared library" ON)
 
 # termin_base library (tc_log + trent + settings + tc_value_trent)
@@ -64,7 +63,7 @@ if(TERMIN_BUILD_PYTHON)
     add_subdirectory(python)
 endif()
 
-if(TERMIN_BASE_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_base_value_test tests/test_tc_value.c)
