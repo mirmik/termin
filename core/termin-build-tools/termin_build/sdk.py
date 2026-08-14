@@ -1505,8 +1505,7 @@ def install_pip_packages(
             mode = " (regular; package has no editable sources)"
         else:
             mode = ""
-        print("")
-        print("========================================")
+        print("\n========================================")
         print(f"  Installing {package.path}{mode}")
         print("========================================")
         print("")
