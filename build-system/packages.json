@@ -83,10 +83,6 @@
       ]
     },
     {
-      "path": "graphics/termin-graphics-mcp",
-      "distribution": "termin-graphics-mcp"
-    },
-    {
       "path": "graphics/termin-visual-scene",
       "distribution": "termin-visual-scene",
       "native_extensions": [
@@ -175,6 +171,10 @@
     {
       "path": "core/termin-mcp",
       "distribution": "termin-mcp"
+    },
+    {
+      "path": "graphics/termin-graphics-mcp",
+      "distribution": "termin-graphics-mcp"
     },
     {
       "path": "engine/termin-prefab",
@@ -315,16 +315,6 @@
       ]
     },
     {
-      "path": "engine/termin-components/termin-components-render",
-      "distribution": "termin-components-render",
-      "native_extensions": [
-        {
-          "extension": "termin.render_components._components_render_native",
-          "target": "_components_render_native"
-        }
-      ]
-    },
-    {
       "path": "physics/termin-navmesh",
       "distribution": "termin-navmesh",
       "features": [
@@ -339,10 +329,6 @@
           ]
         }
       ]
-    },
-    {
-      "path": "engine/termin-components/termin-components-voxels",
-      "distribution": "termin-components-voxels"
     },
     {
       "path": "engine/termin-components/termin-components-foliage",
@@ -361,16 +347,6 @@
         {
           "extension": "termin.ui_components._ui_components_native",
           "target": "_ui_components_native"
-        }
-      ]
-    },
-    {
-      "path": "engine/termin-render-passes",
-      "distribution": "termin-render-passes",
-      "native_extensions": [
-        {
-          "extension": "termin.render_passes._render_passes_native",
-          "target": "_render_passes_native"
         }
       ]
     },
@@ -413,10 +389,6 @@
       ]
     },
     {
-      "path": "engine/termin-default-assets",
-      "distribution": "termin-default-assets"
-    },
-    {
       "path": "engine/termin-stdlib",
       "distribution": "termin-stdlib"
     },
@@ -451,6 +423,30 @@
       ]
     },
     {
+      "path": "engine/termin-components/termin-components-render",
+      "distribution": "termin-components-render",
+      "native_extensions": [
+        {
+          "extension": "termin.render_components._components_render_native",
+          "target": "_components_render_native"
+        }
+      ]
+    },
+    {
+      "path": "engine/termin-components/termin-components-voxels",
+      "distribution": "termin-components-voxels"
+    },
+    {
+      "path": "engine/termin-render-passes",
+      "distribution": "termin-render-passes",
+      "native_extensions": [
+        {
+          "extension": "termin.render_passes._render_passes_native",
+          "target": "_render_passes_native"
+        }
+      ]
+    },
+    {
       "path": "graphics/termin-animation",
       "distribution": "termin-animation",
       "native_extensions": [
@@ -469,6 +465,10 @@
           "target": "_components_animation_native"
         }
       ]
+    },
+    {
+      "path": "engine/termin-default-assets",
+      "distribution": "termin-default-assets"
     },
     {
       "path": "engine/termin-bootstrap",

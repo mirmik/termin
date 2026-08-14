@@ -203,20 +203,26 @@ class DevToolsSocket:
             self.socket.close()
 
 
-def wait_for_page(debug_port: int, page_url: str, timeout: float = 10.0) -> dict:
+def wait_for_page(debug_port: int, page_url: str, timeout: float = 30.0) -> dict:
     deadline = time.monotonic() + timeout
     endpoint = f"http://127.0.0.1:{debug_port}/json"
+    observed_urls = set()
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(endpoint, timeout=1) as response:
                 targets = json.load(response)
             for target in targets:
+                if target.get("type") == "page" and target.get("url"):
+                    observed_urls.add(target["url"])
                 if target.get("type") == "page" and target.get("url") == page_url:
                     return target
         except (OSError, ValueError):
             pass
         time.sleep(0.05)
-    raise RuntimeError("Chrome DevTools did not expose the smoke page")
+    raise RuntimeError(
+        "Chrome DevTools did not expose the smoke page within "
+        f"{timeout:.1f}s; observed page targets: {sorted(observed_urls)}"
+    )
 
 
 def wait_for_result(devtools: DevToolsSocket, timeout: float = 30.0) -> str:
