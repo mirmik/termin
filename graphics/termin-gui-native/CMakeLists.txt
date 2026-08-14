@@ -360,6 +360,9 @@ if(TERMIN_GUI_NATIVE_BUILD_TESTS)
     termin_gui_native_add_test(termin_gui_native_adaptive_layout_matrix_test
         tests/test_adaptive_layout_matrix.cpp
     )
+    target_compile_definitions(termin_gui_native_adaptive_layout_matrix_test PRIVATE
+        TERMIN_GUI_NATIVE_ADAPTIVE_LAYOUT_FIXTURE="${CMAKE_SOURCE_DIR}/test-projects/android-render-showcase/UI/native_runtime_hud.uiscript"
+    )
     termin_gui_native_add_test(termin_gui_native_ui_document_asset_test
         tests/test_ui_document_asset.cpp
     )

@@ -42,9 +42,13 @@ namespace termin {
         }
 
         uint64_t fnv1a_append(const char* text, uint64_t hash) {
-            const unsigned char* p = reinterpret_cast<const unsigned char*>(text ? text : "");
-            while (*p) {
-                hash ^= static_cast<uint64_t>(*p++);
+            if (!text) {
+                return hash;
+            }
+            const size_t length = std::strlen(text);
+            for (size_t index = 0; index < length; ++index) {
+                const unsigned char byte = static_cast<unsigned char>(text[index]);
+                hash ^= static_cast<uint64_t>(byte);
                 hash *= 0x100000001b3ULL;
             }
             return hash;

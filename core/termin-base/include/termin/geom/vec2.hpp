@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <tcbase/tc_types.h>
@@ -21,10 +22,12 @@ namespace termin {
               y(y) {}
 
         int& operator[](int i) {
-            return (&x)[i];
+            assert(i >= 0 && i < 2);
+            return i == 0 ? x : y;
         }
         int operator[](int i) const {
-            return (&x)[i];
+            assert(i >= 0 && i < 2);
+            return i == 0 ? x : y;
         }
 
         Vec2i operator+(const Vec2i& v) const {

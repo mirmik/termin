@@ -76,7 +76,7 @@ namespace tgfx {
         bool fail_batch_(const char* message) noexcept;
 
         DrawList2DBuilder* builder_ = nullptr;
-        tgfx2_composition_state2d root_state_ = tgfx2_composition_state2d_identity();
+        tgfx2_composition_state2d root_state_{};
         std::vector<tgfx2_composition_state2d> states_;
         std::vector<Frame> frames_;
         std::vector<EvaluatedClip> clips_;

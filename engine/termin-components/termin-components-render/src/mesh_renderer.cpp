@@ -425,12 +425,19 @@ namespace termin {
             tc_value_dict_set(
                 &v, "kind", tc_value_string(uniform.type == TC_UNIFORM_SRGB_COLOR ? "SrgbColor" : "LinearColor"));
             tc_value components = tc_value_list_new();
-            const float* color =
-                uniform.type == TC_UNIFORM_SRGB_COLOR ? &uniform.data.srgb_color.r : &uniform.data.linear_color.r;
-            tc_value_list_push(&components, tc_value_float(color[0]));
-            tc_value_list_push(&components, tc_value_float(color[1]));
-            tc_value_list_push(&components, tc_value_float(color[2]));
-            tc_value_list_push(&components, tc_value_float(color[3]));
+            if (uniform.type == TC_UNIFORM_SRGB_COLOR) {
+                const tc_srgb_color color = uniform.data.srgb_color;
+                tc_value_list_push(&components, tc_value_float(color.r));
+                tc_value_list_push(&components, tc_value_float(color.g));
+                tc_value_list_push(&components, tc_value_float(color.b));
+                tc_value_list_push(&components, tc_value_float(color.a));
+            } else {
+                const tc_linear_color color = uniform.data.linear_color;
+                tc_value_list_push(&components, tc_value_float(color.r));
+                tc_value_list_push(&components, tc_value_float(color.g));
+                tc_value_list_push(&components, tc_value_float(color.b));
+                tc_value_list_push(&components, tc_value_float(color.a));
+            }
             tc_value_dict_set(&v, "value", components);
             return v;
         }

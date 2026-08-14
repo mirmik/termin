@@ -31,8 +31,8 @@ typedef struct tgfx2_composition_state2d {
     bool invertible;
 } tgfx2_composition_state2d;
 
-TGFX2_API tgfx2_composition_layer2d tgfx2_composition_layer2d_identity(void);
-TGFX2_API tgfx2_composition_state2d tgfx2_composition_state2d_identity(void);
+TGFX2_API void tgfx2_composition_layer2d_identity(tgfx2_composition_layer2d* out_layer);
+TGFX2_API void tgfx2_composition_state2d_identity(tgfx2_composition_state2d* out_state);
 
 // Transactional: on failure, out_state is left unchanged and an error is
 // logged. Singular transforms are valid placements but produce

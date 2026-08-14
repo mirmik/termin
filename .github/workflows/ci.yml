@@ -178,7 +178,7 @@ jobs:
           echo "TERMIN_WEB_BROWSER=$browser" >> "$GITHUB_ENV"
 
       - name: Build and run Chromium Web Runtime gate
-        run: task build:web -- --browser-smoke
+        run: xvfb-run -a task build:web -- --browser-smoke
 
       - name: Upload Web Runtime gate report
         uses: actions/upload-artifact@v5
@@ -215,7 +215,7 @@ jobs:
 
       - name: Build D3D11 SDK
         shell: pwsh
-        run: task build -- --no-vulkan --no-opengl --no-sdl
+        run: task build -- --no-vulkan --no-opengl
 
       - name: Validate D3D11 bound resource path
         shell: pwsh
@@ -320,9 +320,9 @@ jobs:
         with:
           name: ctest-execution-manifest
           path: |
-            build/Release-tests/ctest-selection.json
-            build/Release-tests/ctest-execution-manifest.json
-            build/Release-tests/ctest-results.xml
+            build/Release/ctest-selection.json
+            build/Release/ctest-execution-manifest.json
+            build/Release/ctest-results.xml
           retention-days: 7
 
   test-cpp-windows:
@@ -366,9 +366,9 @@ jobs:
         with:
           name: ctest-execution-manifest-windows
           path: |
-            build/Release-tests/ctest-selection.json
-            build/Release-tests/ctest-execution-manifest.json
-            build/Release-tests/ctest-results.xml
+            build/Release/ctest-selection.json
+            build/Release/ctest-execution-manifest.json
+            build/Release/ctest-results.xml
           retention-days: 7
 
   # ── 3. Build nanobind SDK + Python bindings ────────────────────

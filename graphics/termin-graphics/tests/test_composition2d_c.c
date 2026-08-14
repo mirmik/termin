@@ -12,8 +12,10 @@ static bool near(float left, float right) {
 }
 
 int main(void) {
-    tgfx2_composition_state2d root = tgfx2_composition_state2d_identity();
-    tgfx2_composition_layer2d layer = tgfx2_composition_layer2d_identity();
+    tgfx2_composition_state2d root;
+    tgfx2_composition_layer2d layer;
+    tgfx2_composition_state2d_identity(&root);
+    tgfx2_composition_layer2d_identity(&layer);
     layer.transform = tc_affine2f_mul(tc_affine2f_translation(10.0f, -4.0f), tc_affine2f_scaling(2.0f, 3.0f));
     layer.opacity = 0.5f;
 

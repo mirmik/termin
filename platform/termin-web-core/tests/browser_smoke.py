@@ -415,10 +415,11 @@ def main() -> int:
             browser = subprocess.Popen(
                 [
                     find_browser(),
-                    "--headless",
                     "--disable-background-timer-throttling",
                     "--disable-backgrounding-occluded-windows",
                     "--disable-renderer-backgrounding",
+                    "--no-first-run",
+                    "--disable-default-apps",
                     "--enable-unsafe-webgpu",
                     "--use-webgpu-adapter=swiftshader",
                     "--enable-dawn-features=allow_unsafe_apis",

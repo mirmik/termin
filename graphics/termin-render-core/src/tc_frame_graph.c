@@ -334,12 +334,21 @@ static bool topological_sort(tc_frame_graph* fg) {
     }
     size_t qn_head = 0, qn_tail = 0;
     size_t qi_head = 0, qi_tail = 0;
+    bool queue_overflow = false;
 
     for (size_t i = 0; i < fg->node_count; i++) {
         if (in_degree[i] == 0) {
             if (fg->nodes[i].is_inplace) {
+                if (qi_tail >= fg->node_count) {
+                    queue_overflow = true;
+                    goto cleanup;
+                }
                 queue_inplace[qi_tail++] = (int)i;
             } else {
+                if (qn_tail >= fg->node_count) {
+                    queue_overflow = true;
+                    goto cleanup;
+                }
                 queue_normal[qn_tail++] = (int)i;
             }
         }
@@ -362,17 +371,32 @@ static bool topological_sort(tc_frame_graph* fg) {
 
             if (in_degree[dep_idx] == 0) {
                 if (fg->nodes[dep_idx].is_inplace) {
+                    if (qi_tail >= fg->node_count) {
+                        queue_overflow = true;
+                        goto cleanup;
+                    }
                     queue_inplace[qi_tail++] = dep_idx;
                 } else {
+                    if (qn_tail >= fg->node_count) {
+                        queue_overflow = true;
+                        goto cleanup;
+                    }
                     queue_normal[qn_tail++] = dep_idx;
                 }
             }
         }
     }
 
+cleanup:
     free(in_degree);
     free(queue_normal);
     free(queue_inplace);
+
+    if (queue_overflow) {
+        snprintf(fg->error_message, sizeof(fg->error_message), "Frame graph topological queue overflow");
+        fg->error = TC_FG_ERROR_LIMIT;
+        return false;
+    }
 
     if (fg->schedule_count != fg->node_count) {
         snprintf(fg->error_message, sizeof(fg->error_message), "Dependency cycle detected in frame graph");

@@ -208,6 +208,11 @@ if(TERMIN_BUILD_TESTS)
         COMMAND termin_visual_scene3d_items_test)
 
     if(TARGET termin_visual_scene_draggable_example)
+        if(TARGET termin_shaderc)
+            add_dependencies(
+                termin_visual_scene_draggable_example
+                termin_shaderc)
+        endif()
         add_test(NAME termin_visual_scene_draggable_example_smoke
             COMMAND termin_visual_scene_draggable_example --headless-smoke)
         add_test(NAME termin_visual_scene_draggable_example_shader_smoke
@@ -223,6 +228,12 @@ if(TERMIN_BUILD_TESTS)
                 SKIP_RETURN_CODE 77
                 SKIP_REGULAR_EXPRESSION
                     "Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found")
+        if(TARGET termin_shaderc)
+            set_property(
+                TEST termin_visual_scene_draggable_example_shader_smoke
+                APPEND PROPERTY ENVIRONMENT
+                    "TERMIN_SHADERC=$<TARGET_FILE:termin_shaderc>")
+        endif()
         set_tests_properties(
             termin_visual_scene_draggable_example_missing_shader_smoke
             PROPERTIES
