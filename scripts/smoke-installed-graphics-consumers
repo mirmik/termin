@@ -83,7 +83,9 @@ def _verify_manifests(sdk_root: Path) -> None:
     try:
         product = json.loads((sdk_root / "sdk-product.json").read_text())
         artifacts = json.loads((sdk_root / "termin-artifacts.json").read_text())
-        runtime = json.loads((sdk_root / "python-runtime.json").read_text())
+        runtime = json.loads(
+            (sdk_root / "python-runtime-manifest.json").read_text()
+        )
     except (OSError, json.JSONDecodeError) as error:
         raise SmokeError(f"installed SDK manifests are invalid: {error}") from error
     if product.get("profile_id") != "graphics":

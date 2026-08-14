@@ -44,6 +44,18 @@
     ],
     "source_classifications": [
       {
+        "path": "core/termin-inspect/tests/test_python_inspect.cpp",
+        "profiles": [
+          "pr",
+          "linux-full",
+          "windows-d3d11"
+        ],
+        "capabilities": [
+          "python-bindings"
+        ],
+        "reason": "Compiled only when the termin-inspect Python bridge is enabled."
+      },
+      {
         "path": "editor/termin-app/cpp/tests/tests_binding.cpp",
         "profiles": [
           "pr",
@@ -54,6 +66,18 @@
           "python-bindings"
         ],
         "reason": "Compiled by termin_tests only when the C++ Python bindings are enabled."
+      },
+      {
+        "path": "graphics/termin-window/tests/test_opengl33_tier.cpp",
+        "profiles": [
+          "linux-full",
+          "windows-d3d11"
+        ],
+        "capabilities": [
+          "window",
+          "opengl"
+        ],
+        "reason": "Requires SDL window integration and an OpenGL 3.3 presentation path."
       },
       {
         "path": "graphics/termin-window/tests/test_backend_window_triangle.cpp",

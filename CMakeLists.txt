@@ -47,6 +47,12 @@ if(TERMIN_PLATFORM_WEB)
             "TERMIN_PLATFORM_WEB requires the Emscripten toolchain. "
             "Configure it through 'task build:web -- ...'.")
     endif()
+    # The Web runtime is one statically linked Wasm module.  Newer CMake
+    # versions otherwise permit Emscripten side modules for explicit SHARED
+    # targets, leaving transitive engine DLL dependencies unresolved when the
+    # final module is linked.
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+    set_property(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS FALSE)
     set(TERMIN_BUILD_PYTHON OFF CACHE BOOL "Build Python/nanobind bindings" FORCE)
     set(TERMIN_BUILD_TESTS OFF CACHE BOOL "Build C/C++ tests" FORCE)
     set(TERMIN_BUILD_EDITOR_MINIMAL OFF CACHE BOOL "Build minimal editor executable" FORCE)
