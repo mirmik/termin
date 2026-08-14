@@ -241,21 +241,49 @@ def wait_for_result(devtools: DevToolsSocket, timeout: float = 30.0) -> str:
     )
 
 
-def wait_for_viewer(devtools: DevToolsSocket, timeout: float = 30.0) -> dict:
+def wait_for_viewer(
+    devtools: DevToolsSocket,
+    timeout: float = 30.0,
+    *,
+    expected_url: str | None = None,
+) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = devtools.call("Runtime.evaluate", {
-            "expression": "JSON.stringify({state:globalThis.__terminViewer?.host?.state ?? '',error:document.querySelector('#error')?.textContent ?? '',frames:globalThis.__terminViewer?.host?.frameCount?.() ?? 0,hostMetrics:globalThis.__terminViewer?.host?.metrics ?? null,inputMetrics:globalThis.__terminViewer?.input?.metrics ?? null})",
+            "expression": "JSON.stringify({url:location.href,state:globalThis.__terminViewer?.host?.state ?? '',hostError:globalThis.__terminViewer?.host?.error ?? '',errorPanel:document.querySelector('#error')?.textContent ?? '',frames:globalThis.__terminViewer?.host?.frameCount?.() ?? 0,hostMetrics:globalThis.__terminViewer?.host?.metrics ?? null,inputMetrics:globalThis.__terminViewer?.input?.metrics ?? null})",
             "returnByValue": True,
         }).get("result", {}).get("value", "")
         if result:
             state = json.loads(result)
+            if expected_url is not None and state["url"] != expected_url:
+                time.sleep(0.05)
+                continue
             if state["state"] == "running" and state["frames"] >= 2:
                 return state
             if state["state"] == "error":
                 raise RuntimeError(f"viewer entered error state: {state}")
         time.sleep(0.05)
     raise RuntimeError("viewer did not reach running state")
+
+
+def navigate_to_viewer(
+    devtools: DevToolsSocket,
+    viewer_url: str,
+    *,
+    attempts: int = 2,
+) -> dict:
+    failures = []
+    for attempt in range(1, attempts + 1):
+        attempt_url = f"{viewer_url}?gate_attempt={attempt}"
+        devtools.call("Page.navigate", {"url": attempt_url})
+        try:
+            return wait_for_viewer(devtools, expected_url=attempt_url)
+        except RuntimeError as error:
+            failures.append(str(error))
+    raise RuntimeError(
+        f"viewer failed after {attempts} isolated page loads: {failures}; "
+        f"console={console_diagnostics(devtools)}"
+    )
 
 
 def wait_for_visual_scene_example(devtools: DevToolsSocket, timeout: float = 30.0) -> dict:
@@ -597,8 +625,7 @@ def main() -> int:
             }
 
             viewer_url = f"http://127.0.0.1:{server.server_port}/viewer.html"
-            devtools.call("Page.navigate", {"url": viewer_url})
-            wait_for_viewer(devtools)
+            navigate_to_viewer(devtools, viewer_url)
             devtools.call("Runtime.evaluate", {
                 "expression": "document.querySelectorAll('.panel').forEach((element) => { element.style.visibility = 'hidden'; }); true",
                 "returnByValue": True,
