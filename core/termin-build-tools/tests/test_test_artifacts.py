@@ -112,6 +112,7 @@ def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
     assert workflow.count(
         "uses: ./.github/actions/prepare-sdk-package-python"
     ) == 3
+    assert "PYTHON_BIN: ${{ github.workspace }}/sdk/bin/termin_python" in workflow
     assert "python -m pip install setuptools==83.0.0 wheel==0.47.0" not in workflow
 
 

@@ -417,7 +417,7 @@
       "distribution": "termin-components-skeleton",
       "native_extensions": [
         {
-          "extension": "termin.skeleton._components_skeleton_native",
+          "extension": "termin.skeleton_components._components_skeleton_native",
           "target": "_components_skeleton_native"
         }
       ]
@@ -461,7 +461,7 @@
       "distribution": "termin-components-animation",
       "native_extensions": [
         {
-          "extension": "termin.animation._components_animation_native",
+          "extension": "termin.animation_components._components_animation_native",
           "target": "_components_animation_native"
         }
       ]
@@ -483,6 +483,7 @@
     {
       "path": "graphics/termin-glb-native",
       "distribution": "termin-glb-native",
+      "editable": false,
       "native_extensions": [
         {
           "extension": "termin.glb._glb_native",

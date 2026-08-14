@@ -43,6 +43,7 @@ class PackageEntry:
     features: tuple[str, ...]
     native_extensions: tuple[NativeExtension, ...]
     source: str = "repository"
+    editable: bool = True
 
 
 def repo_root_from(start: Path) -> Path:
@@ -64,6 +65,11 @@ def load_manifest(repo_root: Path) -> list[PackageEntry]:
 
     packages = []
     for raw_package in data["packages"]:
+        editable = raw_package.get("editable", True)
+        if not isinstance(editable, bool):
+            raise ValueError(
+                f"{raw_package.get('path', '<unknown>')}: editable must be a boolean"
+            )
         native_extensions = []
         for raw_extension in raw_package.get("native_extensions", []):
             native_extensions.append(
@@ -79,6 +85,7 @@ def load_manifest(repo_root: Path) -> list[PackageEntry]:
                 path=raw_package["path"],
                 distribution=raw_package["distribution"],
                 source=raw_package.get("source", "repository"),
+                editable=editable,
                 features=tuple(raw_package.get("features", [])),
                 native_extensions=tuple(native_extensions),
             )

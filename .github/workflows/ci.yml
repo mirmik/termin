@@ -478,6 +478,7 @@ jobs:
         env:
           TERMIN_SDK: ${{ github.workspace }}/sdk
           TERMIN_SHADERC: ${{ github.workspace }}/sdk/bin/termin_shaderc
+          PYTHON_BIN: ${{ github.workspace }}/sdk/bin/termin_python
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
         run: |
           if [[ ! -x "$TERMIN_SHADERC" ]]; then
