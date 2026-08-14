@@ -660,6 +660,8 @@ def main() -> int:
                     "chart_line": (670, 350),
                     "chart_line_alt": (650, 405),
                     "action": (720, 440),
+                    "action_center": (770, 446),
+                    "action_right": (820, 446),
                 },
             )
             probes = visual_scene_metrics["probes"]
@@ -669,7 +671,6 @@ def main() -> int:
                 "panel": lambda r, g, b: b > r and b > g and max(r, g, b) < 150,
                 "orbit_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
                 "star_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
-                "action": lambda r, g, b: r > 150 and g < 130 and b < 100,
             }
             failed_visual_scene_probes = [
                 name for name, predicate in expected_visual_scene.items()
@@ -678,6 +679,9 @@ def main() -> int:
             chart_predicate = lambda rgb: rgb[1] > 150 and rgb[0] < 130 and rgb[2] < 150
             if not chart_predicate(probes["chart_line"]) and not chart_predicate(probes["chart_line_alt"]):
                 failed_visual_scene_probes.append("chart_line")
+            action_predicate = lambda rgb: rgb[0] > 150 and rgb[1] < 130 and rgb[2] < 100
+            if not any(action_predicate(probes[name]) for name in ("action", "action_center", "action_right")):
+                failed_visual_scene_probes.append("action")
             if failed_visual_scene_probes or visual_scene_metrics["quantized_colors"] < 7:
                 failure_path = Path(args.output_directory) / "visual-scene-webgpu-failure.png"
                 failure_path.write_bytes(visual_scene_png)

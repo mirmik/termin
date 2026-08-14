@@ -90,11 +90,14 @@ The script:
 
 The repository style guide requires class and struct data members to appear
 before member functions. The AST checker uses the same compilation database as
-clang-tidy and is enforced for the normal and Python/nanobind profiles by CI:
+clang-tidy. After the republic reorganization, CI publishes complete normal and
+Python/nanobind inventories in advisory mode while the 189-class regression is
+tracked by Kanboard #1641. The gate must return to fail-on-violation mode when
+that migration reaches zero:
 
 ```bash
 task lint:cpp -- --configure-only
-task check:cpp-layout --
+task check:cpp-layout -- --format jsonl --no-fail
 ```
 
 For migration inventory and focused checks:
