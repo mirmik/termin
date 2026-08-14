@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TERMIN_SCENE_BUILD_SHARED "Build shared library" ON)
-option(TERMIN_SCENE_BUILD_TESTS "Build tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_BUILD_PYTHON "Build Python bindings (_scene_native)" OFF)
 
 # Dependencies
@@ -209,7 +208,7 @@ install(FILES
     DESTINATION lib/cmake/termin_scene
 )
 
-if(TERMIN_SCENE_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_scene_data_structures_test tests/test_data_structures.c)

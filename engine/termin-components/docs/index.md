@@ -20,4 +20,5 @@
 - [termin-components-tween](../termin-components-tween/docs/index.md)
 - [termin-components-voxels](../termin-components-voxels/docs/index.md)
 
-These packages are built as SDK modules through `modules.conf`.
+These packages are composed by the repository-level CMake graph and built
+through the root `Taskfile.yml` entry points.

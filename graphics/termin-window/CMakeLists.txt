@@ -7,13 +7,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_WINDOW_BUILD_SHARED "Build termin-window as a shared library" ON)
 option(USE_SYSTEM_SDL2 "Use native SDL2 library" ${TERMIN_ENABLE_SDL})
-option(TERMIN_WINDOW_BUILD_TESTS "Build termin-window tests" ${TERMIN_BUILD_TESTS})
-option(TERMIN_WINDOW_BUILD_WINDOW_TESTS "Build live termin-window smoke tests" ${TERMIN_BUILD_WINDOW_TESTS})
-option(TERMIN_WINDOW_BUILD_D3D11_WINDOW_TEST
-       "Build the termin-window D3D11 presentation smoke test"
-       ${TERMIN_WINDOW_BUILD_WINDOW_TESTS})
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-window" OFF)
-if(TERMIN_WINDOW_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     include(CTest)
 endif()
 
@@ -143,7 +138,7 @@ if(TERMIN_BUILD_PYTHON AND TERMIN_WINDOW_HAS_SDL)
             FILES_MATCHING PATTERN "*.py")
 endif()
 
-if(TERMIN_WINDOW_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     add_executable(termin_window_public_contract
         tests/test_public_contract.cpp)
     target_link_libraries(termin_window_public_contract PRIVATE termin_window)
@@ -160,7 +155,7 @@ if(TERMIN_WINDOW_BUILD_TESTS)
 
 endif()
 
-if(TERMIN_WINDOW_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL)
+if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL)
     add_executable(termin_window_manager_live
         tests/test_window_manager_live.cpp)
     target_link_libraries(termin_window_manager_live PRIVATE termin_window)
@@ -182,7 +177,7 @@ if(TERMIN_WINDOW_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL)
     endif()
 endif()
 
-if(TERMIN_WINDOW_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL)
+if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL)
     add_executable(termin_window_backend_triangle
         tests/test_backend_window_triangle.cpp)
     target_link_libraries(termin_window_backend_triangle
@@ -220,8 +215,8 @@ if(TERMIN_WINDOW_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL)
 
 endif()
 
-if(TERMIN_WINDOW_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL
-   AND TERMIN_WINDOW_BUILD_WINDOW_TESTS)
+if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL
+   AND TERMIN_BUILD_WINDOW_TESTS)
 
     add_test(NAME termin_window_opengl33_tier
         COMMAND termin_window_opengl33_tier)
@@ -333,8 +328,8 @@ if(TERMIN_WINDOW_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL
     endif()
 endif()
 
-if(TERMIN_WINDOW_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL
-   AND TGFX2_ENABLE_D3D11 AND TERMIN_WINDOW_BUILD_D3D11_WINDOW_TEST)
+if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL
+   AND TGFX2_ENABLE_D3D11 AND TERMIN_BUILD_WINDOW_TESTS)
     add_executable(termin_window_backend_d3d11_present
         tests/test_backend_window_d3d11_present.cpp)
     target_link_libraries(termin_window_backend_d3d11_present

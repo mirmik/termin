@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
-option(TERMIN_MODULES_BUILD_TESTS "Build termin-modules tests" ${TERMIN_BUILD_TESTS})
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -179,7 +178,7 @@ install(FILES
 )
 
 # ── Tests ──
-if(TERMIN_MODULES_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_library(termin_modules_shadow_test_dependency SHARED
