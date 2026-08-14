@@ -1,6 +1,6 @@
 # SDK Python Wheelhouse
 
-`./build-sdk.sh` exports Termin Python wheels into:
+`task build --` exports Termin Python wheels into:
 
 ```text
 sdk/wheels/
@@ -39,6 +39,6 @@ dependencies and can come from PyPI or another package source. Runtime image
 decoding is provided by `termin-image` backed by native codec libraries instead
 of Pillow.
 
-For local development from source, `./install-pip-packages.sh` remains the
-host-environment install path. It uses the same package list as
-`./build-sdk-wheels.sh` and therefore installs library distributions only.
+For local development from source, use `task install:packages`. It uses the
+same package list as `task build:wheels --` and therefore installs library
+distributions only.

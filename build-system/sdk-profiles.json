@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "default_profile": "full",
+  "profiles": [
+    {
+      "id": "full",
+      "artifact_kind": "standalone",
+      "python_packages": null,
+      "product_manifest": null,
+      "application_payloads": null,
+      "runtime_lock": "build-system/python-runtime-lock.txt",
+      "sdk_prefix": "sdk",
+      "build_directory_suffix": "",
+      "csharp_profile": "full",
+      "wheel_subset": [
+        "tcbase-*.whl",
+        "tgfx-*.whl",
+        "termin_gui_native-*.whl",
+        "termin_display-*.whl"
+      ],
+      "embedded_python_hosts": ["termin_player"],
+      "launcher_import_roots": ["tcbase", "termin.engine", "termin.tween"],
+      "native_import_roots": [
+        "termin.engine",
+        "termin.player",
+        "termin.player.headless"
+      ],
+      "forbidden_artifacts_from_product": false
+    },
+    {
+      "id": "core",
+      "artifact_kind": "standalone",
+      "python_packages": [
+        "core/termin-build-tools",
+        "core/termin-nanobind-sdk",
+        "core/termin-base",
+        "core/termin-dispatch",
+        "core/termin-inspect",
+        "core/termin-mcp"
+      ],
+      "product_manifest": null,
+      "application_payloads": [],
+      "runtime_lock": "build-system/python-runtime-lock.txt",
+      "sdk_prefix": "sdk-core",
+      "build_directory_suffix": "core",
+      "csharp_profile": null,
+      "wheel_subset": [
+        "tcbase-*.whl",
+        "termin_dispatch-*.whl",
+        "termin_inspect-*.whl",
+        "termin_mcp-*.whl"
+      ],
+      "embedded_python_hosts": [],
+      "launcher_import_roots": [
+        "tcbase",
+        "termin.dispatch",
+        "termin.inspect",
+        "termin.mcp"
+      ],
+      "native_import_roots": [
+        "tcbase",
+        "termin.dispatch",
+        "termin.inspect",
+        "termin.mcp"
+      ],
+      "forbidden_artifacts_from_product": false
+    },
+    {
+      "id": "graphics",
+      "artifact_kind": "standalone",
+      "python_packages": [
+        "core/termin-build-tools",
+        "core/termin-nanobind-sdk",
+        "core/termin-base",
+        "core/termin-dispatch",
+        "core/termin-inspect",
+        "core/termin-mcp",
+        "graphics/termin-image",
+        "graphics/termin-tween",
+        "graphics/termin-mesh",
+        "graphics/termin-graphics",
+        "graphics/termin-graphics-mcp",
+        "graphics/termin-visual-scene",
+        "graphics/termin-materials",
+        "graphics/termin-shader-runtime",
+        "graphics/termin-window",
+        "graphics/termin-gui-native",
+        "graphics/termin-skeleton",
+        "graphics/termin-animation",
+        "graphics/termin-glb-native",
+        "graphics/termin-glb",
+        "graphics/termin-nodegraph",
+        "graphics/tcplot",
+        "graphics/tcplot-gui-native"
+      ],
+      "product_manifest": null,
+      "application_payloads": [],
+      "runtime_lock": "build-system/python-runtime-lock.txt",
+      "sdk_prefix": "sdk-graphics",
+      "build_directory_suffix": "graphics",
+      "csharp_profile": "plot-d3d11",
+      "wheel_subset": [
+        "tcbase-*.whl",
+        "tgfx-*.whl",
+        "termin_gui_native-*.whl"
+      ],
+      "embedded_python_hosts": [],
+      "launcher_import_roots": [
+        "tcbase",
+        "tcplot",
+        "termin.visual_scene",
+        "termin.tween"
+      ],
+      "native_import_roots": [
+        "tcplot",
+        "termin.visual_scene",
+        "termin.gui_native"
+      ],
+      "forbidden_artifacts_from_product": false
+    }
+  ]
+}

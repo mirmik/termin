@@ -6,6 +6,8 @@
 
 ## 2026-08
 
+- [Termin Graphics repository extraction](2026-08-13-termin-graphics-repository-extraction.md)
+- [Termin Core repository extraction](2026-08-13-termin-core-repository-extraction.md)
 - [Native widget subtree transforms and scalable SceneView portals](2026-08-11-native-widget-subtree-transforms.md)
 - [Retained Chart3D migration](2026-08-06-retained-chart3d-migration-plan.md)
 - [Open retained chart composer](2026-08-06-open-retained-chart-composer-plan.md)

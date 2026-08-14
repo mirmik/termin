@@ -126,7 +126,7 @@ streaming example uses this mode for both coordinated scenes and 2x MSAA.
 The SDK build path is handled by `build-sdk-csharp.sh` / `build-sdk-csharp.ps1`. For WPF plot consumers such as Alliance, use the plot-only D3D11 profile:
 
 ```powershell
-.\build-sdk-csharp.ps1 --plot-d3d11 --no-sdl --no-vulkan --no-opengl
+task build:csharp -- --plot-d3d11 --no-sdl --no-vulkan --no-opengl
 ```
 
 That profile generates only the tcplot C# bridge plus `Termin.Wpf`, copies the minimal native runtime (`termin.dll`, `tcplot.dll`, `termin_visual_scene.dll`, `termin_base.dll`, `termin_mesh.dll`, `termin_graphics*.dll`), and packages only D3D11 shader artifacts required by plots. The default `full` profile keeps the broader scene/render/component bindings for development.
@@ -149,7 +149,7 @@ complete layer/index/generation identity.
 WPF scene hosts use the full D3D11-only SDK:
 
 ```powershell
-.\build-sdk.ps1 --no-sdl --no-vulkan --no-opengl
+task build -- --no-sdl --no-vulkan --no-opengl
 ```
 
 Create a `D3D11OffscreenDisplay` after acquiring `Tgfx2Host`, bind its

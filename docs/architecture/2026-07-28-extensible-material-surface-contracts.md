@@ -693,7 +693,7 @@ The implementation is not complete until all of the following exist:
 - a deferred shadow smoke;
 - a pipeline test proving `Default` and `DeferredPrototype` coexist;
 - a project-owned custom surface field compiled without engine modification;
-- `./build-sdk.sh` and `./run-tests.sh`.
+- `task build` and `task test`.
 
 ## Consequences
 

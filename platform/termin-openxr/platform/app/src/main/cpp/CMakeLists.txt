@@ -1,0 +1,66 @@
+cmake_minimum_required(VERSION 3.22)
+project(termin_openxr_smoke_jni LANGUAGES C CXX)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(NOT DEFINED TERMIN_ANDROID_SDK_ROOT)
+    message(FATAL_ERROR "TERMIN_ANDROID_SDK_ROOT is required")
+endif()
+
+if(NOT DEFINED TERMIN_ANDROID_ABI)
+    set(TERMIN_ANDROID_ABI "${ANDROID_ABI}")
+endif()
+
+set(TERMIN_ANDROID_SDK_PREFIX "${TERMIN_ANDROID_SDK_ROOT}/${TERMIN_ANDROID_ABI}")
+if(NOT EXISTS "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_openxr/termin_openxrConfig.cmake")
+    message(FATAL_ERROR
+        "termin_openxrConfig.cmake not found under ${TERMIN_ANDROID_SDK_PREFIX}. "
+        "Run task build:android first or pass -DTERMIN_ANDROID_SDK_ROOT.")
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH "${TERMIN_ANDROID_SDK_PREFIX}")
+file(GLOB TERMIN_ANDROID_CMAKE_PACKAGE_DIRS
+    LIST_DIRECTORIES true
+    "${TERMIN_ANDROID_SDK_PREFIX}/lib/cmake/termin_*"
+)
+foreach(TERMIN_ANDROID_CMAKE_PACKAGE_DIR IN LISTS TERMIN_ANDROID_CMAKE_PACKAGE_DIRS)
+    get_filename_component(TERMIN_ANDROID_CMAKE_PACKAGE "${TERMIN_ANDROID_CMAKE_PACKAGE_DIR}" NAME)
+    set("${TERMIN_ANDROID_CMAKE_PACKAGE}_DIR" "${TERMIN_ANDROID_CMAKE_PACKAGE_DIR}")
+endforeach()
+
+find_package(termin_scene REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_mesh REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_components_mesh REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_inspect REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_graphics REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_materials REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_components_render REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_render REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_render_passes REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_engine REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_runtime REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_collision REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_package(termin_openxr REQUIRED CONFIG NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+
+set(TERMIN_OPENXR_LOADER "${TERMIN_ANDROID_SDK_PREFIX}/lib/libopenxr_loader.so")
+if(NOT EXISTS "${TERMIN_OPENXR_LOADER}")
+    message(FATAL_ERROR
+        "OpenXR loader not found at ${TERMIN_OPENXR_LOADER}. "
+        "Rebuild the canonical Android SDK before configuring a Quest application.")
+endif()
+
+find_library(ANDROID_LOG_LIB log REQUIRED)
+
+find_library(ANDROID_NATIVE_LIB android REQUIRED)
+
+add_library(termin_openxr_native_activity SHARED termin_openxr_native_activity.cpp)
+target_link_libraries(termin_openxr_native_activity
+    PRIVATE
+        termin_openxr::termin_openxr
+        ${ANDROID_LOG_LIB}
+        ${ANDROID_NATIVE_LIB}
+)
+target_compile_options(termin_openxr_native_activity PRIVATE -Wall -Wextra)

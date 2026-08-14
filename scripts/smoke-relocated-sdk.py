@@ -7,7 +7,7 @@ import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "termin-build-tools"))
+sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
 
 from termin_build.relocated_sdk_smoke import main  # noqa: E402
 

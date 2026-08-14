@@ -160,6 +160,16 @@ Source of truth: [termin-graphics docs](https://github.com/mirmik/termin-monorep
 остаётся render-policy слоем над `termin-graphics` и с #1364 физически живёт в
 `termin_render_core`, а не в GPU substrate.
 
+### termin-graphics-mcp
+
+Source of truth: `termin-graphics-mcp/`.
+
+Graphics-owned MCP adapters for backend-neutral surface/texture readback and
+PNG screenshot production. The package extends the Core-owned `termin-mcp`
+transport but owns all dependencies on `tgfx`, `termin-image` and NumPy.
+Editor and player select their domain surfaces; this package performs only the
+graphics operation.
+
 ### termin-visual-scene
 
 Source of truth: [termin-visual-scene docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-visual-scene/docs/index.md)

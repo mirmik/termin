@@ -211,7 +211,7 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-gui/python/tcgui/widgets/color_dialog.py` | color picker textures | keep ndarray |
 | `termin-gui/python/tcgui/widgets/icon_theme.py` | icon pixel buffers | keep ndarray |
 | `termin-gui/python/tcgui/widgets/renderer.py` | UI render buffers | keep ndarray plus Mat44 |
-| `termin-mcp/termin/mcp/screenshot.py` | framebuffer readback buffer | keep ndarray |
+| `termin-graphics-mcp/termin/graphics/mcp/screenshot.py` | framebuffer readback buffer | keep ndarray |
 | `termin-mesh/python/tmesh/primitives.py` | primitive mesh generation | keep mesh arrays |
 | `termin-mesh/tests/python/test_tmesh_api.py` | mesh API fixtures | tests only |
 | `termin-navmesh/python/termin/navmesh/agent_component.py` | path waypoint vectors | Vec3 candidate |

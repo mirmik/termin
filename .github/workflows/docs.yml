@@ -10,8 +10,9 @@ on:
       - 'build-system/python-docs-lock.txt'
       - 'build-system/modules.json'
       - 'build-system/packages.json'
-      - 'build-docs.sh'
-      - 'setup-docs-env.sh'
+      - 'Taskfile.yml'
+      - 'scripts/build/docs.sh'
+      - 'scripts/build/setup-docs-env.sh'
       - 'termin-build-tools/termin_build/repository_control.py'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
@@ -37,7 +38,7 @@ jobs:
           python-version: "3.14"
 
       - name: Build manifest-driven documentation
-        run: ./build-docs.sh
+        run: task docs:build --
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

@@ -38,4 +38,4 @@ Enter Play mode and leave the scene running for at least 30 seconds. Expected:
 
 Headless coverage is part of
 `termin_components_physics_fem_component_test` and runs through
-`./run-tests.sh`.
+`task test --`.

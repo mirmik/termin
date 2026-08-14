@@ -1,0 +1,224 @@
+cmake_minimum_required(VERSION 3.16)
+project(termin_components_render LANGUAGES C CXX)
+
+option(TERMIN_COMPONENTS_RENDER_CORE_ONLY
+    "Build the portable camera/light/static-mesh component slice"
+    ${TERMIN_PLATFORM_WEB})
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(TERMIN_BUILD_PYTHON "Build Python bindings for render components" OFF)
+
+if(COMMAND termin_require_package)
+    termin_require_package(termin_base tcbase::termin_base)
+else()
+    find_package(termin_base REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_mesh tmesh::termin_mesh)
+else()
+    find_package(termin_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
+else()
+    find_package(termin_graphics REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_inspect termin_inspect::termin_inspect)
+else()
+    find_package(termin_inspect REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_scene termin_scene::termin_scene)
+else()
+    find_package(termin_scene REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_input termin_input::termin_input)
+else()
+    find_package(termin_input REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_render termin_render::termin_render)
+else()
+    find_package(termin_render REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_materials termin_materials::termin_materials)
+else()
+    find_package(termin_materials REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_display termin_display::termin_display)
+else()
+    find_package(termin_display REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+else()
+    find_package(termin_components_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_skeleton termin_components_skeleton::termin_components_skeleton)
+else()
+    find_package(termin_components_skeleton REQUIRED)
+endif()
+
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
+
+termin_add_module(
+    NAME termin_components_render
+    NAMESPACE termin_components_render::
+    SOURCES
+        src/components_bootstrap.cpp
+        src/camera_component.cpp
+        src/orbit_camera_controller.cpp
+        src/geometry_pass_base.cpp
+        src/light_component.cpp
+        src/xr_origin_component.cpp
+        src/xr_thumbstick_locomotion_component.cpp
+        src/xr_interaction_components.cpp
+        src/line_renderer.cpp
+        src/sprite_asset.cpp
+        src/sprite_renderer_2d.cpp
+        src/mesh_renderer.cpp
+        src/skinned_mesh_renderer.cpp
+        src/shader_skinning.cpp
+        src/world_text_component.cpp
+        src/material_pass.cpp
+        src/depth_pass.cpp
+        src/normal_pass.cpp
+    PUBLIC_DEPS
+        tcbase::termin_base
+        tmesh::termin_mesh
+        tgfx::termin_graphics
+        tgfx::termin_graphics2
+        termin_inspect::termin_inspect
+        termin_scene::termin_scene
+        termin_input::termin_input
+        termin_render::termin_render
+        termin_materials::termin_materials
+        termin_display::termin_display
+        termin_components_mesh::termin_components_mesh
+        termin_components_skeleton::termin_components_skeleton
+    FIND_DEPS
+        termin_base
+        termin_mesh
+        termin_graphics
+        termin_inspect
+        termin_scene
+        termin_input
+        termin_render
+        termin_materials
+        termin_display
+        termin_components_mesh
+        termin_components_skeleton
+    INSTALL_HEADERS
+        termin
+)
+
+if(TERMIN_COMPONENTS_RENDER_CORE_ONLY)
+    set_property(TARGET termin_components_render PROPERTY SOURCES
+        src/components_bootstrap_core.cpp
+        src/camera_component.cpp
+        src/orbit_camera_controller.cpp
+        src/light_component.cpp
+        src/mesh_renderer.cpp
+    )
+    target_compile_definitions(termin_components_render
+        PUBLIC TERMIN_COMPONENTS_RENDER_CORE_ONLY)
+endif()
+
+if(MSVC)
+    target_compile_options(termin_components_render PRIVATE /wd4251 /wd4275)
+endif()
+
+if(TERMIN_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_components_render_line_renderer_contract_test
+        tests/test_line_renderer_contract.cpp
+    )
+    target_include_directories(termin_components_render_line_renderer_contract_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_components_render_line_renderer_contract_test PRIVATE
+        termin_components_render
+    )
+    add_test(
+        NAME termin_components_render_line_renderer_contract_test
+        COMMAND termin_components_render_line_renderer_contract_test
+    )
+    add_executable(termin_components_render_sprite_renderer_2d_test
+        tests/test_sprite_renderer_2d.cpp
+    )
+    target_include_directories(termin_components_render_sprite_renderer_2d_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_components_render_sprite_renderer_2d_test PRIVATE
+        termin_components_render
+    )
+    add_test(
+        NAME termin_components_render_sprite_renderer_2d_test
+        COMMAND termin_components_render_sprite_renderer_2d_test
+    )
+    add_executable(termin_components_render_xr_interaction_test
+        tests/test_xr_interaction.cpp
+    )
+    target_include_directories(termin_components_render_xr_interaction_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_components_render_xr_interaction_test PRIVATE
+        termin_components_render
+    )
+    add_test(
+        NAME termin_components_render_xr_interaction_test
+        COMMAND termin_components_render_xr_interaction_test
+    )
+    set_target_properties(
+        termin_components_render_line_renderer_contract_test
+        termin_components_render_sprite_renderer_2d_test
+        termin_components_render_xr_interaction_test
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
+if(TERMIN_BUILD_PYTHON)
+    if(NOT Python_EXECUTABLE)
+        if(WIN32)
+            set(Python_EXECUTABLE "python")
+        else()
+            set(Python_EXECUTABLE "python3")
+        endif()
+    endif()
+
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+
+    nanobind_add_module(_components_render_native NB_SHARED
+        components/render_components_bindings.cpp
+        components/orbit_camera_bindings.cpp
+    )
+    target_link_libraries(_components_render_native PRIVATE termin_components_render)
+
+    if(TERMIN_COMPONENTS_RENDER_PYTHON_PREFIX)
+        set(_py_dest ${TERMIN_COMPONENTS_RENDER_PYTHON_PREFIX}/render_components)
+    else()
+        set(_py_dest lib/python/termin/render_components)
+    endif()
+    install(TARGETS _components_render_native DESTINATION ${_py_dest})
+    install(FILES
+        python/termin/render_components/__init__.py
+        python/termin/render_components/camera.py
+        python/termin/render_components/line_renderer.py
+        python/termin/render_components/material_pass.py
+        python/termin/render_components/skinned_mesh_renderer.py
+        python/termin/render_components/skybox_renderer.py
+        python/termin/render_components/skeleton_controller.py
+        DESTINATION ${_py_dest}
+    )
+endif()
+
+termin_label_tests_in_directory("termin-components-render")

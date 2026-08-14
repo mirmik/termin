@@ -26,7 +26,7 @@ if (-not $pythonCommand) {
 }
 
 $oldPythonPath = $env:PYTHONPATH
-$buildToolsPath = Join-Path $RepoRoot "termin-build-tools"
+$buildToolsPath = Join-Path $RepoRoot "core/termin-build-tools"
 $separator = [System.IO.Path]::PathSeparator
 if ($oldPythonPath) {
     $env:PYTHONPATH = "$buildToolsPath$separator$oldPythonPath"

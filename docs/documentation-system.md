@@ -24,7 +24,7 @@
 Запускайте документационный портал той же командой, что использует CI:
 
 ```bash
-./build-docs.sh
+task docs:build
 ```
 
 Команда создаёт disposable environment в `build/python-envs/docs` из exact

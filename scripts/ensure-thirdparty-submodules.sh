@@ -20,5 +20,5 @@ if [[ -z "$PY_EXEC" ]]; then
     exit 1
 fi
 
-PYTHONPATH="$REPO_ROOT/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
+PYTHONPATH="$REPO_ROOT/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
     "$PY_EXEC" -m termin_build.sdk --repo-root "$REPO_ROOT" ensure-submodules "$@"

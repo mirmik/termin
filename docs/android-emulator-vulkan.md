@@ -5,7 +5,7 @@ The Android Render Showcase has an `android-emulator-debug` profile for the
 Emulator's SwiftShader backend:
 
 ```bash
-./build-sdk-android.sh --abi x86_64 --ndk "$ANDROID_HOME/ndk/27.2.12479018"
+task build:android -- --abi x86_64 --ndk "$ANDROID_HOME/ndk/27.2.12479018"
 ./sdk/bin/termin_builder build android-emulator-debug \
     --project test-projects/android-render-showcase
 

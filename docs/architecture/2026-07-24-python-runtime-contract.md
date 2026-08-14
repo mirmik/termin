@@ -61,8 +61,8 @@ free-threaded interpreter with today's sequential engine contract.
 
 The supported gate consists of:
 
-1. `./build-sdk.sh`;
-2. `./run-tests.sh`;
+1. `task build`;
+2. `task test`;
 3. installed launcher/editor/player/headless and module-reload smokes;
 4. the free-threaded import-graph gate;
 5. Windows build/test smoke before a runtime release is declared complete.

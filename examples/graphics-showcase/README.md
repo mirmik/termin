@@ -5,7 +5,7 @@ profile. It deliberately uses the installed SDK as a product: run it with the
 bundled isolated Python and do not add the repository to `PYTHONPATH`.
 
 ```bash
-./build-sdk.sh --profile graphics --no-sdl
+task build -- --profile graphics --no-sdl
 sdk/bin/termin_python -I examples/graphics-showcase/main.py \
   --headless \
   --output /tmp/termin-graphics-showcase.png \
@@ -37,6 +37,7 @@ with its name and makes the process fail.
 | `tcplot_helix` | Double helix and deterministic 3D scatter |
 | `tcplot_surface` | Sinc surface, Viridis colorbar, wireframe and z scaling |
 | `visual_scene_gallery` | Retained shapes, hierarchy, transforms, opacity, z-order and hit regions |
+| `animated_skinned_glb` | Loaded GLB mesh, two-joint skeleton and sampled animation pose |
 | `visual_scene_nodegraph` | Visual-scene primitives, nodegraph model and projection |
 | `visual_scene3d_widget` | Retained 3D items, camera provider, orbit fallback and item actions in `SceneView3D` |
 | `plot_nodegraph_composition` | Plot2D and Plot3D embedded as node-body widgets |
@@ -59,7 +60,7 @@ imported by the mandatory headless gate. An SDL-enabled graphics SDK also has
 an interactive frontend for the integration section:
 
 ```bash
-./build-sdk.sh --profile graphics --sdl
+task build -- --profile graphics --sdl
 sdk/bin/termin_python -I examples/graphics-showcase/main.py --windowed
 ```
 
@@ -71,7 +72,7 @@ window lifetime.
 On Windows, build the D3D11-only product and run the same Python entry point:
 
 ```powershell
-.\build-sdk.ps1 --profile graphics --no-sdl --no-vulkan --no-opengl
+task build -- --profile graphics --no-sdl --no-vulkan --no-opengl
 .\sdk\bin\termin_python.exe -I .\examples\graphics-showcase\main.py `
   --headless --output $env:TEMP\termin-graphics-showcase.png `
   --report $env:TEMP\termin-graphics-showcase.json

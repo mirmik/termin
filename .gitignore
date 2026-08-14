@@ -1,11 +1,16 @@
 # ── Build directories ────────────────────────────────────────────
 **/build/
+!scripts/build/
+!scripts/build/**
 **/build_*/
 **/build-py/
 build-superbuild/
 **/install/
+!scripts/install/
+!scripts/install/**
 **/install_win/
 **/sdk/
+/sdk-core/
 
 # ── CMake generated files ───────────────────────────────────────
 CMakeCache.txt
@@ -153,3 +158,5 @@ tmp
 # Generated Termin Data
 .termin
 test-projects/**/stdlib
+
+sdk-graphics

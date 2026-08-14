@@ -32,11 +32,11 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 
 - `python -m termin_build.package_manifest --repo-root . --check` проверяет
   manifest, порядок пакетов и native extension declarations.
-- `termin-base/tests/python/test_python_package_install_order.py` проверяет
-  topological install order, совпадение manifest distribution names с metadata и
-  отсутствие неизвестных internal distribution names в `install_requires`.
-- тот же тест проверяет, что таблица ниже содержит все manifest
-  `source path / distribution` пары в актуальном порядке.
+- Core-owned package order and metadata are verified in the `termin-core`
+  repository. Termin's gate checks repository-owned packages and the external
+  Core identities needed for installed-SDK composition.
+- documentation inventory checks that the table below contains every manifest
+  `package identity / distribution` pair in current order.
 
 ## Inventory
 
@@ -61,6 +61,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-gui-native` | `termin-gui-native` | `termin.gui_native` | Canonical native retained UI toolkit. |
 | `termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
 | `termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
+| `termin-graphics-mcp` | `termin-graphics-mcp` | `termin.graphics.mcp` | Graphics-owned MCP capture/readback adapters. |
 | `termin-prefab` | `termin-prefab` | `termin.prefab` | Namespace package. |
 | `termin-display` | `termin-display` | `termin.display`, `termin.viewport` | Display/windowing API. |
 | `termin-csg` | `termin-csg` | `termin.csg` | CSG API. |

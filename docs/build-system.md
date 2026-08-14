@@ -2,11 +2,28 @@
 
 ## Обзор
 
-Проект — монорепозиторий из множества C/C++ библиотек с Python-биндингами. Каждая библиотека остаётся отдельным CMake-проектом со своим `CMakeLists.txt`, но основной SDK workflow собирается через корневой CMake-граф с `add_subdirectory()`.
+Проект содержит множество C/C++ библиотек с Python-биндингами. Каждая
+domain-библиотека остаётся отдельным CMake-проектом со своим `CMakeLists.txt`,
+но основной SDK workflow собирается через корневой CMake-граф. Профили
+`graphics` и `full` больше не добавляют Core через `add_subdirectory()`: они
+требуют установленный `termin-core` SDK и находят его пакеты только через
+`find_package(... CONFIG REQUIRED)`.
 
-Публичная точка входа для полной сборки — `./build-sdk.sh`. Скрипты стадий (`build-sdk-cpp.sh`, `build-sdk-bindings.sh`) конфигурируют один и тот же root build directory (`build/Release` для Release) и устанавливают результат в общую SDK-директорию (`./sdk/`). Это позволяет CMake параллелить независимые цели в рамках одного графа, а standalone-сборки отдельных модулей по-прежнему могут использовать установленные CMake package configs из `sdk/`.
+Публичная точка входа для полной сборки — `task build --`. Для desktop
+`graphics`/`full` ей обязательно передаётся `--core-sdk` с абсолютным путём.
+`native_build_id` читается из `termin-artifacts.json`; необязательный
+`--core-build-id` используется только для явной проверки ожидаемой identity. Скрипты стадий
+конфигурируют один root build directory и устанавливают domain-результат поверх
+предварительно скопированного Core только после проверки отсутствия коллизий.
+Итоговый `sdk-inputs.json` фиксирует происхождение Core-пакетов.
 
-Сборка через `./build-sdk.sh` проходит в четыре стадии:
+Android и Web также потребляют только установленные platform Core SDK. Такой
+SDK имеет отдельный `termin-core-platform.json`; конфигурация сверяет точные
+`native_build_id`, target system, architecture, Android API и версию
+toolchain. Core-исходников в этом репозитории больше нет; все целевые графы
+потребляют их CMake-пакеты и Python distributions из проверенного артефакта.
+
+Сборка через `task build --` проходит в четыре стадии:
 1. **C/C++ библиотеки + Python bindings** — shared libraries, заголовки, CMake config, nanobind-модули и Python-исходники
 2. **C# bindings** — на Windows включены по умолчанию, на Linux включаются флагом `--csharp` и требуют SWIG и `dotnet`; Linux-сборка содержит только `Termin.Native`, без WPF
 3. **Bundled Python site-packages** — установка Python-пакетов в bundled runtime SDK
@@ -77,7 +94,7 @@ TERMIN_PYTHON_TOOLCHAIN_OFFLINE=1 \
 Типичная сборка SDK:
 
 ```bash
-./build-sdk.sh --sdl
+task build -- --sdl
 ```
 
 First-party wheels собираются ровно один раз за полный проход. Результат
@@ -89,7 +106,7 @@ First-party wheels собираются ровно один раз за полн
 Чтобы дополнительно собрать cross-platform C# bindings на Linux:
 
 ```bash
-./build-sdk.sh --sdl --csharp
+task build -- --sdl --csharp
 ```
 
 Для SDK, содержащего графическое ядро, visual scene, native widgets и 2D/3D
@@ -98,7 +115,7 @@ charts без engine runtime, используется профиль `graphics`
 legacy OpenGL выключены:
 
 ```powershell
-.\build-sdk.ps1 --profile graphics --no-sdl --no-vulkan --no-opengl
+task build -- --profile graphics --no-sdl --no-vulkan --no-opengl
 ```
 
 Профиль включает `termin-graphics2`, поэтому 3D chart, text3D и
@@ -114,8 +131,8 @@ Standalone native stages принимают тот же профиль в фор
 `--profile=graphics`:
 
 ```bash
-./build-sdk-cpp.sh --profile=graphics --no-sdl --no-vulkan --no-opengl
-./build-sdk-bindings.sh --profile=graphics --no-sdl --no-vulkan --no-opengl
+task build:cpp -- --profile=graphics --no-sdl --no-vulkan --no-opengl
+task build:bindings -- --profile=graphics --no-sdl --no-vulkan --no-opengl
 ```
 
 `Termin.Wpf` собирается только Windows-скриптом и multitarget-ится под `netcoreapp3.1` и `net8.0-windows`. Управляемые сборки в SDK раскладываются по `sdk/csharp/lib/<tfm>/`; плоские `sdk/csharp/lib/*.dll` оставлены для старых потребителей и содержат `netcoreapp3.1`-вариант `Termin.Wpf`. Linux `build-sdk-csharp.sh` намеренно пакует только cross-platform `Termin.Native` и native runtime `.so`.
@@ -123,13 +140,13 @@ Standalone native stages принимают тот же профиль в фор
 Только C/C++ стадия:
 
 ```bash
-./build-sdk-cpp.sh --sdl
+task build:cpp -- --sdl
 ```
 
 Только Python/nanobind bindings:
 
 ```bash
-./build-sdk-bindings.sh --sdl
+task build:bindings -- --sdl
 ```
 
 Прямой CMake-вариант:
@@ -165,18 +182,18 @@ Root CMake-граф поддерживает несколько ускорите
 Примеры:
 
 ```bash
-BUILD_JOBS=8 ./build-sdk-cpp.sh --sdl
-BUILD_DIR=build/Release-ninja ./build-sdk-cpp.sh --sdl --ninja
-BUILD_DIR=build/Release-unity ./build-sdk-cpp.sh --sdl --unity
-BUILD_DIR=build/Release-no-pch ./build-sdk-cpp.sh --sdl --no-pch
+BUILD_JOBS=8 task build:cpp -- --sdl
+BUILD_DIR=build/Release-ninja task build:cpp -- --sdl --ninja
+BUILD_DIR=build/Release-unity task build:cpp -- --sdl --unity
+BUILD_DIR=build/Release-no-pch task build:cpp -- --sdl --no-pch
 ```
 
 PowerShell SDK-скрипты на Windows используют тот же root CMake graph:
 
 ```powershell
-$env:BUILD_JOBS=8; .\build-sdk-cpp.ps1 --sdl
-$env:BUILD_DIR="build\Release-unity"; .\build-sdk-cpp.ps1 --sdl --unity
-$env:BUILD_DIR="build\Release-no-pch"; .\build-sdk-cpp.ps1 --sdl --no-pch
+$env:BUILD_JOBS=8; task build:cpp -- --sdl
+$env:BUILD_DIR="build\Release-unity"; task build:cpp -- --sdl --unity
+$env:BUILD_DIR="build\Release-no-pch"; task build:cpp -- --sdl --no-pch
 ```
 
 На Windows PowerShell-скрипты по умолчанию не выбирают Ninja автоматически и оставляют CMake default generator (обычно Visual Studio/MSVC). Ninja можно включить явно через `$env:TERMIN_CMAKE_GENERATOR="Ninja"`, но тогда CMake возьмёт компилятор из окружения/PATH; старый LLVM `clang-cl` может быть несовместим с текущим MSVC STL.
@@ -309,7 +326,7 @@ TERMIN_PYTHON_RUNTIME_OFFLINE=1 \
 Developer/test environment не является вторым runtime venv. Команда
 
 ```bash
-./setup-sdk-python-env.sh
+task test:python:setup --
 ```
 
 создаёт disposable слой `build/python-envs/test`: pinned Ruff и прочие
@@ -325,34 +342,34 @@ Test-only `site-packages` также является exact производны
 одинаковую runtime identity. При изменении lock, ABI или состава установленного
 каталога окружение собирается в чистом staging-каталоге и заменяется только
 после успешной установки; удалённые зависимости не остаются затенять SDK.
-`run-tests-python.*` проверяет этот manifest до запуска pytest и при устаревшем
-окружении требует явно повторить `setup-sdk-python-env.*`.
-Верхнеуровневый `run-tests.*` сам вызывает `setup-sdk-python-env.*` перед
+Задача `task test:python` проверяет этот manifest до запуска pytest и при
+устаревшем окружении требует явно повторить `task test:python:setup`.
+Верхнеуровневая `task test` сама вызывает `task test:python:setup` перед
 Python-фазой: после новой SDK-сборки он обновляет fingerprint overlay, не
 переустанавливая неизменившийся test-only слой. Прямой вызов
-`run-tests-python.*` остаётся строгим и только сообщает каноническую команду
+`task test:python` остаётся строгим и только сообщает каноническую команду
 восстановления.
 
 Прямые режимы запуска:
 
 ```bash
 # Разработка и тесты из checkout поверх SDK runtime
-./run-python.sh -m pytest
+task run:python -- -m pytest
 
 # Произвольный скрипт из checkout с тем же SDK + overlay
-./run-python.sh path/to/script.py
+task run:python -- path/to/script.py
 
 # Проверка только установленного SDK, без checkout overlay
 sdk/bin/termin_python -c "import tcbase, termin.engine"
 ```
 
-На Windows первым двум командам соответствует `.\run-python.ps1`.
+На Windows первые две команды также выполняются через `task run:python`.
 `TERMIN_SDK`, `PYTHON_BIN` и `TERMIN_PYTHON_OVERLAY` позволяют launcher-скрипту
 использовать нестандартное расположение SDK или manifest.
 
 Старые `setup-test-venv.*` и корневой `.venv` workflow удалены. Новый workflow
 не копирует `.so`/`.pyd` в source tree и не требует `--force` после пересборки
-bindings; обычный вызов `setup-sdk-python-env.*` сам определяет, нужно ли
+bindings; обычный вызов `task test:python:setup` сам определяет, нужно ли
 пересобрать test-only слой или достаточно перегенерировать overlay.
 
 ### Mutable CI SDK release
@@ -379,7 +396,7 @@ Diffusion Editor с точными полями `asset`, `asset_checksum`, `wind
 Vulkan/OpenGL: `--no-vulkan --no-opengl`. Профиль `--no-sdl` остаётся только
 для C#-ориентированных локальных сборок и непригоден для native player.
 
-Локальный Linux publisher `./publish-sdk-ci-release.sh` использует тот же
+Локальный Linux publisher `task ci:publish-sdk` использует тот же
 упаковщик и больше не имеет отдельного legacy `py310` контракта.
 
 ---
@@ -514,7 +531,7 @@ manifest native extensions, затем editor/launcher/engine/player/headless
 о загрузке extension без free-threaded opt-in является ошибкой; диагностика
 называет первый импорт и фактические version/SOABI/Py_GIL_DISABLED.
 
-Тот же gate входит в центральные `./run-tests.sh` и `run-tests.ps1`. Отдельно
+Тот же gate входит в центральные `task test --` и `task test` на Windows. Отдельно
 его можно запустить без полной SDK verification:
 
 ```bash
@@ -644,7 +661,7 @@ Android-пути намеренно разделены:
 | Gradle | `GRADLE_BIN` | `Build/gradle` |
 | ADB | `ADB` | `Build/adb`, затем `<androidHome>/platform-tools/adb` |
 
-`build-sdk-android.sh` выбирает NDK
+`task build:android` выбирает NDK
 в порядке `--ndk`, `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, затем
 `Build/androidNdkRoot` из этого файла. Сохранение не меняет project-owned
 файлы. Build Profiles немедленно пересчитывает capabilities, а `termin build`
@@ -652,6 +669,18 @@ Android-пути намеренно разделены:
 Standalone Android/Quest APK wrappers используют ту же последовательность и
 принимают явные `--android-home`, `--ndk-root`, `--java-home`, `--gradle` и
 другие overrides. Запуск через `GRADLE_BIN=...` для обычной работы не требуется.
+
+Cross-сборка самого SDK требует установленный Android Core того же ABI/API:
+
+```bash
+task build:android -- \
+  --ndk /absolute/path/to/android-ndk \
+  --core-sdk /absolute/path/to/core-sdk/android/arm64-v8a
+```
+
+Скрипт не имеет source fallback. При установке проверенный Core tree копируется
+в результирующий Android SDK, после чего поверх него устанавливается
+domain-слой.
 
 Канонический `inspect_profile_capabilities()` возвращает тот же stable-code
 report для CLI и editor consumers. `capability.*.missing` означает отсутствие
@@ -849,11 +878,11 @@ copy для диагностики, профиль должен явно ука�
 C/C++ тесты собираются через root CMake graph:
 
 ```bash
-bash run-tests-cpp.sh
+task test:cpp
 ```
 
 По умолчанию runner использует тот же `build/<BuildType>`, что и
-`build-sdk.sh`/`build-sdk.ps1`. После включения тестов CMake planner разрешает
+`task build`. После включения тестов CMake planner разрешает
 выбранные CTest registrations в точные executable targets и проверяет их
 принадлежность capability-aware целям `termin_native_tests` или
 `termin_native_tests_with_window`. Эти цели исключают Python-binding tests из
@@ -883,7 +912,7 @@ Window tests настроены так, чтобы пропускаться в h
 Центральная точка проверки репозитория:
 
 ```bash
-./run-tests.sh
+task test --
 ```
 
 По умолчанию это рабочий набор: C/C++ tests без window tests, Python tests без
@@ -891,11 +920,11 @@ Window tests настроены так, чтобы пропускаться в h
 явно:
 
 ```bash
-./run-tests.sh --full
+task test -- --full
 ```
 
-Python suite roots больше не перечисляются в `run-tests-python.sh` и
-`run-tests-python.ps1`. Их source of truth — `build-system/test-suites.json`.
+Python suite roots больше не перечисляются в публичной задаче `task test:python`.
+Их source of truth — `build-system/test-suites.json`.
 Локальные runners вызывают `termin_build.repository_control`: профиль `pr`
 применяет pytest-выражение `not full`, а `linux-full` и `windows-d3d11`
 снимают этот фильтр на соответствующей платформе. Каждая suite запускается
@@ -981,7 +1010,7 @@ checkout и сравнивает с fingerprints executor results. CTest adapter
 registration-level JUnit outcomes в suite-level `termin-test-execution`, сохраняя
 исходные registrations и причины skip/failure в `details`.
 
-Focused-вызов `run-tests-python.* <pytest-target ...>` остаётся прямым pytest
+Focused-вызов `task test:python -- <pytest-target ...>` остаётся прямым pytest
 запуском и не меняет repository inventory.
 
 Полный набор дополнительно запускает editor-process smoke tests:
@@ -1007,7 +1036,7 @@ project- и XDG-cache, ждёт штатного завершения редак
 Для полного прогона без editor MCP стадии:
 
 ```bash
-./run-tests.sh --full --no-editor-smoke
+task test -- --full --no-editor-smoke
 ```
 
 Повторяемая матрица targeted smoke-checks для render/shader/backend/runtime
@@ -1049,17 +1078,23 @@ Python, editor и launcher targets, чтобы платформенные зав
 
 Точная версия Emscripten закреплена в
 `build-system/emscripten-version.txt`. В чистом checkout toolchain
-устанавливается, артефакт собирается и Node smoke запускается одной командой:
+устанавливается, артефакт собирается и Node smoke запускается одной командой.
+Web требует два явных входа: desktop Core для native
+`termin_shaderc` и wasm32 Core для браузерного графа:
 
 ```bash
-./build-web-core.sh --setup
+task build:web -- --setup \
+  --core-sdk /absolute/path/to/core-sdk/web/wasm32 \
+  --host-core-sdk /absolute/path/to/core-sdk/host
 ```
 
-Повторные сборки используют `build/toolchains/emsdk` и `build/web-core`. Для
-дополнительного прогона в настоящем браузере нужен Chromium-family browser:
+Повторные сборки используют `build/toolchains/emsdk` и `build/web-core`. Пути
+можно передать через `TERMIN_WEB_CORE_SDK` и `TERMIN_HOST_CORE_SDK`; переменные
+с build ID остаются необязательной проверкой ожидаемой identity. Для дополнительного прогона в настоящем браузере
+нужен Chromium-family browser:
 
 ```bash
-./build-web-core.sh --browser-smoke
+task build:web -- --browser-smoke
 ```
 
 Этот запуск является обязательным Chromium gate и сохраняет machine-readable
@@ -1163,7 +1198,7 @@ Web shader gate использует общий закреплённый Slang t
 shaders проверяется одной командой:
 
 ```bash
-./audit-webgpu-shaders.sh --setup
+task check:webgpu-shaders -- --setup
 ```
 
 Web-аудит устанавливает Slang и Naga в игнорируемый репозиторием
@@ -1226,13 +1261,13 @@ sidecar contract version 3 и только затем принимает WGSL п
 Общий Slang toolchain можно установить независимо от Web-аудита:
 
 ```bash
-./setup-slang-toolchain.sh
+task toolchain:slang
 ```
 
 На Windows используется эквивалентная команда:
 
 ```powershell
-.\setup-slang-toolchain.ps1
+task toolchain:slang
 ```
 
 Скрипт проверяет checksum и версию закреплённого официального архива,
@@ -1254,7 +1289,7 @@ Source-project editor проверяет `slangc` до загрузки прое
 
 CLI также принимают явные `--slangc` / `TERMIN_SLANGC` и
 `--wgsl-validator` / `TERMIN_WGSL_VALIDATOR`; fallback в runtime-компиляцию не
-предусмотрен. После `./audit-webgpu-shaders.sh --setup` полный built-in набор
+предусмотрен. После `task check:webgpu-shaders -- --setup` полный built-in набор
 можно сгенерировать напрямую, подставив путь из настройки:
 
 ```bash

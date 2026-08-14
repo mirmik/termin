@@ -286,7 +286,7 @@ The direction is complete when:
 
 ## Verification direction
 
-- Linux `./build-sdk.sh` and `./run-tests.sh`;
+- Linux `task build` and `task test`;
 - focused native item lifetime, projection, rendering and performance tests;
 - C# handle, wrong-type, stale-wrapper and teardown tests;
 - Windows D3D11 WPF single- and multi-panel visual/interaction smoke;

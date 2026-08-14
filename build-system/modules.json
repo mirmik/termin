@@ -5,104 +5,156 @@
   "application_python_payload_manifest": "build-system/application-python-payloads.json",
   "modules": [
     {
+      "id": "termin-python-host",
+      "path": "core/termin-python-host",
+      "kinds": ["cmake", "runtime"]
+    },
+    {
+      "id": "termin-render-core",
+      "path": "graphics/termin-render-core",
+      "kinds": ["native-library", "documentation"]
+    },
+    {
+      "id": "graphics-showcase",
+      "path": "examples/graphics-showcase",
+      "kinds": [
+        "application",
+        "documentation"
+      ]
+    },
+    {
       "id": "termin-android",
-      "path": "termin-android",
-      "kinds": ["cmake", "platform"]
+      "path": "platform/termin-android",
+      "kinds": [
+        "cmake",
+        "platform"
+      ]
     },
     {
       "id": "termin-app",
-      "path": "termin-app",
-      "kinds": ["application", "cmake", "documentation"]
+      "path": "editor/termin-app",
+      "kinds": [
+        "application",
+        "cmake",
+        "documentation"
+      ]
     },
     {
       "id": "termin-cli",
-      "path": "termin-cli",
-      "kinds": ["cmake", "tooling"]
+      "path": "editor/termin-cli",
+      "kinds": [
+        "cmake",
+        "tooling"
+      ]
     },
     {
       "id": "termin-components",
-      "path": "termin-components",
-      "kinds": ["documentation", "group"]
-    },
-    {
-      "id": "termin-components-animation",
-      "path": "termin-components/termin-components-animation",
-      "kinds": ["cmake"]
+      "path": "engine/termin-components",
+      "kinds": [
+        "documentation",
+        "group"
+      ]
     },
     {
       "id": "termin-components-collision",
-      "path": "termin-components/termin-components-collision",
-      "kinds": ["cmake"]
+      "path": "engine/termin-components/termin-components-collision",
+      "kinds": [
+        "cmake"
+      ]
     },
     {
       "id": "termin-components-physics-fem",
-      "path": "termin-components/termin-components-physics-fem",
-      "kinds": ["cmake"]
+      "path": "engine/termin-components/termin-components-physics-fem",
+      "kinds": [
+        "cmake"
+      ]
     },
     {
       "id": "termin-components-physics-fem-ui",
-      "path": "termin-components/termin-components-physics-fem-ui",
-      "kinds": ["cmake"]
-    },
-    {
-      "id": "termin-components-skeleton",
-      "path": "termin-components/termin-components-skeleton",
-      "kinds": ["cmake"]
+      "path": "engine/termin-components/termin-components-physics-fem-ui",
+      "kinds": [
+        "cmake"
+      ]
     },
     {
       "id": "termin-csharp",
       "path": "termin-csharp",
-      "kinds": ["cmake", "bindings"]
+      "kinds": [
+        "cmake",
+        "bindings"
+      ]
     },
     {
       "id": "termin-openxr",
-      "path": "termin-openxr",
-      "kinds": ["cmake", "platform"]
+      "path": "platform/termin-openxr",
+      "kinds": [
+        "cmake",
+        "platform"
+      ]
     },
     {
       "id": "termin-physics-qopt",
-      "path": "termin-physics-qopt",
-      "kinds": ["cmake", "documentation"]
+      "path": "physics/termin-physics-qopt",
+      "kinds": [
+        "cmake",
+        "documentation"
+      ]
     },
     {
       "id": "termin-framegraph-remote",
-      "path": "termin-framegraph-remote",
-      "kinds": ["cmake", "documentation"]
+      "path": "engine/termin-framegraph-remote",
+      "kinds": [
+        "cmake",
+        "documentation"
+      ]
     },
     {
       "id": "termin-framegraph-remote-target",
-      "path": "termin-framegraph-remote-target",
-      "kinds": ["cmake", "documentation"]
+      "path": "engine/termin-framegraph-remote-target",
+      "kinds": [
+        "cmake",
+        "documentation"
+      ]
     },
     {
       "id": "termin-framegraph-remote-client",
-      "path": "termin-framegraph-remote-client",
-      "kinds": ["cmake", "documentation"]
+      "path": "engine/termin-framegraph-remote-client",
+      "kinds": [
+        "cmake",
+        "documentation"
+      ]
     },
     {
       "id": "termin-frame-profiler",
-      "path": "termin-frame-profiler",
-      "kinds": ["cmake"]
+      "path": "engine/termin-frame-profiler",
+      "kinds": [
+        "cmake"
+      ]
     },
     {
       "id": "termin-profiler",
-      "path": "termin-profiler",
-      "kinds": ["application", "cmake", "documentation"]
+      "path": "engine/termin-profiler",
+      "kinds": [
+        "application",
+        "cmake",
+        "documentation"
+      ]
     },
     {
       "id": "termin-profiler-remote",
-      "path": "termin-profiler-remote",
-      "kinds": ["cmake", "documentation"]
-    },
-    {
-      "id": "termin-python-host",
-      "path": "termin-python-host",
-      "kinds": ["cmake", "runtime"]
+      "path": "engine/termin-profiler-remote",
+      "kinds": [
+        "cmake",
+        "documentation"
+      ]
     },
     {
       "id": "termin-runtime",
-      "path": "termin-runtime",
-      "kinds": ["cmake", "runtime"]
+      "path": "engine/termin-runtime",
+      "kinds": [
+        "cmake",
+        "runtime"
+      ]
     }
   ]
 }

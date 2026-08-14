@@ -3,7 +3,7 @@
   "payloads": [
     {
       "name": "termin-desktop",
-      "source_root": "termin-app/termin",
+      "source_root": "editor/termin-app/termin",
       "destination_root": "termin",
       "paths": [
         "__init__.py",

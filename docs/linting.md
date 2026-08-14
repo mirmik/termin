@@ -6,13 +6,13 @@ coverage once the baseline is stable.
 
 ## Current State
 
-- Python uses Ruff through `./run-lint-python.sh`; the default
-  `./run-tests-python.sh` and central `./run-tests.sh` flows run it before
+- Python uses Ruff through `task lint:python --`; the default
+  `task test:python --` and central `task test --` flows run it before
   pytest.
 - The Python baseline is defect-oriented and documented in
   `docs/python-linting.md`; full Bugbear `B` and full Pyflakes `F` are enabled.
 - CI runs Python lint as a separate job before the heavier build jobs.
-- C/C++ uses clang-tidy through `./run-lint-cpp.sh`; the default baseline runs
+- C/C++ uses clang-tidy through `task lint:cpp --`; the default baseline runs
   in PR CI.
 
 ## Python Next Steps
@@ -38,21 +38,21 @@ Defer until the defect-oriented baseline is clean:
 Run the current opt-in baseline with:
 
 ```bash
-./run-lint-cpp.sh
+task lint:cpp --
 ```
 
 Focused checks can pass repository-relative path filters:
 
 ```bash
-./run-lint-cpp.sh termin-render termin-graphics
+task lint:cpp -- termin-render termin-graphics
 ```
 
 Python/nanobind binding translation units are opt-in because they require the
 Python binding build graph:
 
 ```bash
-./run-lint-cpp.sh --python-bindings
-./run-lint-cpp.sh --python-bindings termin-render/python
+task lint:cpp -- --python-bindings
+task lint:cpp -- --python-bindings termin-render/python
 ```
 
 The script:
@@ -93,17 +93,17 @@ before member functions. The AST checker uses the same compilation database as
 clang-tidy and is enforced for the normal and Python/nanobind profiles by CI:
 
 ```bash
-./run-lint-cpp.sh --configure-only
-./run-cpp-class-layout-check.sh
+task lint:cpp -- --configure-only
+task check:cpp-layout --
 ```
 
 For migration inventory and focused checks:
 
 ```bash
-./run-cpp-class-layout-check.sh --format jsonl --no-fail
-./run-cpp-class-layout-check.sh --path termin-render
-./run-cpp-class-layout-check.sh --python-bindings --no-fail
-./run-cpp-class-layout-check.sh --self-test
+task check:cpp-layout -- --format jsonl --no-fail
+task check:cpp-layout -- --path termin-render
+task check:cpp-layout -- --python-bindings --no-fail
+task check:cpp-layout -- --self-test
 ```
 
 The isolated checker build requires Clang LibTooling development headers. On
@@ -112,14 +112,14 @@ Ubuntu with LLVM 18, install `libclang-18-dev` and `llvm-18-dev`. See
 
 Useful options:
 
-- `./run-lint-cpp.sh --configure-only` to generate `compile_commands.json`
+- `task lint:cpp -- --configure-only` to generate `compile_commands.json`
   without running clang-tidy.
-- `./run-lint-cpp.sh --checks 'CHECKS'` to test broader local rule sets.
-- `./run-lint-cpp.sh --warnings-as-errors ''` to run an exploratory audit
+- `task lint:cpp -- --checks 'CHECKS'` to test broader local rule sets.
+- `task lint:cpp -- --warnings-as-errors ''` to run an exploratory audit
   without failing on warnings.
-- `CLANG_TIDY_CONFIG='{...}' ./run-lint-cpp.sh` to override clang-tidy check
+- `CLANG_TIDY_CONFIG='{...}' task lint:cpp --` to override clang-tidy check
   options, including the default parameter-count threshold.
-- `CLANG_TIDY_BIN=/path/to/clang-tidy ./run-lint-cpp.sh` when multiple LLVM
+- `CLANG_TIDY_BIN=/path/to/clang-tidy task lint:cpp --` when multiple LLVM
   versions are installed.
 
 Recommended next `clang-tidy` additions after the baseline is understood:
@@ -144,7 +144,7 @@ Possible later additions:
 Keep each lint stage separately callable and separately gated:
 
 - Python lint is already cheap enough for every PR.
-- C/C++ lint runs in PR CI through the default `./run-lint-cpp.sh` baseline.
+- C/C++ lint runs in PR CI through the default `task lint:cpp --` baseline.
 - Source file length policy is declared in
   `build-system/repository-policies.json` and enforced by
   `python3 -m termin_build.repository_control --repo-root . check`. The legacy

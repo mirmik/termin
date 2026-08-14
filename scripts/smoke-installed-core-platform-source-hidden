@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+platform=""
+core_sdk=""
+core_build_id=""
+host_core_sdk=""
+host_core_build_id=""
+ndk_root=""
+
+while (($#)); do
+    case "$1" in
+        --platform) platform="$2"; shift 2 ;;
+        --core-sdk) core_sdk="$2"; shift 2 ;;
+        --core-build-id) core_build_id="$2"; shift 2 ;;
+        --host-core-sdk) host_core_sdk="$2"; shift 2 ;;
+        --host-core-build-id) host_core_build_id="$2"; shift 2 ;;
+        --ndk) ndk_root="$2"; shift 2 ;;
+        *) echo "ERROR: unsupported argument: $1" >&2; exit 2 ;;
+    esac
+done
+
+if [[ "$platform" != android && "$platform" != web ]]; then
+    echo "ERROR: --platform must be android or web" >&2
+    exit 2
+fi
+if [[ -z "$core_sdk" ]]; then
+    echo "ERROR: --core-sdk is required" >&2
+    exit 2
+fi
+core_sdk="$(cd "$core_sdk" && pwd)"
+if [[ "$platform" == android && -z "$ndk_root" ]]; then
+    echo "ERROR: Android source-hidden smoke requires --ndk" >&2
+    exit 2
+fi
+if [[ "$platform" == web ]]; then
+    if [[ -z "$host_core_sdk" ]]; then
+        echo "ERROR: Web source-hidden smoke requires host Core SDK" >&2
+        exit 2
+    fi
+    host_core_sdk="$(cd "$host_core_sdk" && pwd)"
+    slang_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$repo_root/build-system/slang-toolchain-lock.json")"
+    naga_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["naga_cli"]["version"])' "$repo_root/build-system/web-shader-toolchain-lock.json")"
+    export TERMIN_EMSDK_DIR="${TERMIN_EMSDK_DIR:-$repo_root/build/toolchains/emsdk}"
+    export TERMIN_SLANGC="${TERMIN_SLANGC:-$repo_root/build/toolchains/slang-$slang_version/bin/slangc}"
+    export TERMIN_WGSL_VALIDATOR="${TERMIN_WGSL_VALIDATOR:-$repo_root/build/toolchains/naga-$naga_version/bin/naga}"
+fi
+
+temporary_root="$(mktemp -d "$repo_root/../.termin-platform-source-hidden.XXXXXXXX")"
+trap 'rm -rf -- "$temporary_root"' EXIT
+source_root="$temporary_root/source"
+mkdir -p "$source_root"
+cp -al "$repo_root/." "$source_root/"
+rm -rf -- \
+    "$source_root/.git" \
+    "$source_root/build" \
+    "$source_root/sdk"
+
+for directory in \
+    termin-base termin-dispatch termin-inspect termin-mcp \
+    termin-nanobind-sdk termin-python-host; do
+    if [[ -e "$source_root/$directory" ]]; then
+        echo "ERROR: Core source directory must not exist in Termin: $directory" >&2
+        exit 1
+    fi
+done
+
+if [[ "$platform" == android ]]; then
+    core_args=(--core-sdk "$core_sdk")
+    if [[ -n "$core_build_id" ]]; then
+        core_args+=(--core-build-id "$core_build_id")
+    fi
+    "$source_root/scripts/build/android.sh" \
+        --ndk "$ndk_root" \
+        "${core_args[@]}" \
+        --build-dir "$source_root/build/android-source-hidden" \
+        --prefix "$source_root/sdk/android/arm64-v8a"
+else
+    core_args=(--core-sdk "$core_sdk" --host-core-sdk "$host_core_sdk")
+    if [[ -n "$core_build_id" ]]; then
+        core_args+=(--core-build-id "$core_build_id")
+    fi
+    if [[ -n "$host_core_build_id" ]]; then
+        core_args+=(--host-core-build-id "$host_core_build_id")
+    fi
+    "$source_root/build-web-core.sh" \
+        "${core_args[@]}" \
+        --build-dir "$source_root/build/web-source-hidden"
+fi
+
+echo "Installed Core source-hidden $platform build passed"
