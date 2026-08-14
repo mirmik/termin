@@ -6,18 +6,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python bindings" OFF)
+option(TERMIN_IMAGE_BUILD_SHARED "Build termin-image as a shared library" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 include(TerminImageCodecs)
 termin_configure_image_codecs()
 
-add_library(termin_image SHARED
-    src/image_decode.cpp
-)
+if(TERMIN_IMAGE_BUILD_SHARED)
+    add_library(termin_image SHARED src/image_decode.cpp)
+    target_compile_definitions(termin_image PRIVATE TERMIN_IMAGE_EXPORTS)
+else()
+    add_library(termin_image STATIC src/image_decode.cpp)
+    target_compile_definitions(termin_image PUBLIC TERMIN_IMAGE_STATIC)
+endif()
 add_library(termin_image::termin_image ALIAS termin_image)
 
-target_compile_definitions(termin_image PRIVATE TERMIN_IMAGE_EXPORTS)
 target_include_directories(termin_image PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
     $<INSTALL_INTERFACE:include>

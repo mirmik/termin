@@ -1,3 +1,7 @@
+if(POLICY CMP0207)
+    cmake_policy(SET CMP0207 NEW)
+endif()
+
 foreach(_required IN ITEMS ROOT_BINARY RUNTIME_DIR SDK_BIN_DIR)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
         message(FATAL_ERROR "CopyWindowsRuntimeClosure.cmake requires ${_required}")
@@ -16,6 +20,8 @@ file(GET_RUNTIME_DEPENDENCIES
         "^AzureAttestNormal\\.dll$"
         "^HvsiFileTrust\\.dll$"
         "^PdmUtilities\\.dll$"
+        "^WTDSENSOR\\.dll$"
+        "^wtdccm\\.dll$"
         "^wpaxholder\\.dll$"
     POST_EXCLUDE_REGEXES
         "[/\\\\]Windows[/\\\\]System32[/\\\\]"
@@ -27,6 +33,8 @@ set(_allowed_unresolved_windows_components
     azureattestnormal.dll
     hvsifiletrust.dll
     pdmutilities.dll
+    wtdsensor.dll
+    wtdccm.dll
     wpaxholder.dll
 )
 set(_unexpected_unresolved_dependencies)

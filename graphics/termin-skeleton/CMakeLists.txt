@@ -9,6 +9,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python bindings (_skeleton_native)" OFF)
 option(TERMIN_SKELETON_BUILD_TESTS "Build termin-skeleton tests" ${TERMIN_BUILD_TESTS})
+option(TERMIN_SKELETON_BUILD_SHARED "Build termin-skeleton as a shared library" ON)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -18,15 +19,19 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 
-add_library(termin_skeleton SHARED
+set(TERMIN_SKELETON_SOURCES
     src/termin_skeleton_version.cpp
     src/skeleton_data.cpp
     src/skeleton_instance.cpp
-    src/tc_skeleton_registry.c
-)
+    src/tc_skeleton_registry.c)
+if(TERMIN_SKELETON_BUILD_SHARED)
+    add_library(termin_skeleton SHARED ${TERMIN_SKELETON_SOURCES})
+    target_compile_definitions(termin_skeleton PRIVATE TERMIN_SKELETON_EXPORTS TC_EXPORTS)
+else()
+    add_library(termin_skeleton STATIC ${TERMIN_SKELETON_SOURCES})
+    target_compile_definitions(termin_skeleton PUBLIC TERMIN_SKELETON_STATIC)
+endif()
 add_library(termin_skeleton::termin_skeleton ALIAS termin_skeleton)
-
-target_compile_definitions(termin_skeleton PRIVATE TERMIN_SKELETON_EXPORTS TC_EXPORTS)
 
 if(MSVC)
     target_compile_options(termin_skeleton PRIVATE /wd4251 /wd4275)
