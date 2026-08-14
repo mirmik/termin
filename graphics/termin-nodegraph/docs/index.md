@@ -4,7 +4,7 @@
 
 Связанные документы:
 
-- [Module Map](../../docs/modules.md#termin-nodegraph)
+- [Module Map](../../../docs/modules.md#termin-nodegraph)
 - [README](../README.md)
 - [termin-gui-native](../../termin-gui-native/README.md)
 

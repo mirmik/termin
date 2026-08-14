@@ -17,7 +17,7 @@ Entity instantiation and serialized-scene repair for Termin consumers.
 
 ## Native importer migration
 
-The accepted [Native cgltf Importer decision](../../docs/architecture-council/2026-08-09-native-cgltf-importer.md)
+The accepted [Native cgltf Importer decision](../../../docs/architecture-council/2026-08-09-native-cgltf-importer.md)
 defines the migration of the heavy GLB data path to a pinned cgltf backend.
 The runtime asset contract remains sequential: native parsing and CPU resource
 preparation are followed by deterministic publication into declared embedded

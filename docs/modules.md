@@ -1,14 +1,23 @@
-# Module Map
+# Module Capability Map
 
-Карта модулей фиксирует архитектурные границы. Это не замена локальным документам в `<module>/docs/`, а индекс ownership: что где должно находиться и куда переносить код при расползании ответственности.
+Эта карта группирует packages по возможностям и фиксирует их локальные
+контракты. Она не является реестром физического ownership: один semantic
+раздел может содержать packages из нескольких districts. Канонический владелец
+определяется [картой районов](districts/index.md) и
+`build-system/districts.json`.
+
+Локальные документы в `<district>/<package>/docs/` остаются source of truth для
+API и lifecycle. Эта страница отвечает на вопрос «с какими механизмами связан
+модуль», а district guide — «кто имеет право им владеть».
 
 Связанные документы:
 
 - [Documentation System](documentation-system.md)
+- [Districts and ownership](districts/index.md)
 - [Library Dependencies](library-dependencies.md)
 - [Build System](build-system.md)
 
-## Core Foundations
+## Foundations, Data And Infrastructure
 
 ### termin-nanobind-sdk
 
@@ -96,7 +105,7 @@ Source of truth: [termin-mesh docs](https://github.com/mirmik/termin/blob/master
 
 Canonical mesh/data layer. `tc_mesh` относится к ядру данных движка, а не к legacy-слою.
 
-Код, который адаптирует mesh к конкретному renderer/device, должен жить выше: например в [termin-graphics](#termin-graphics) как adapter к tgfx2 или в [termin-render](#termin-render), если он зависит от render framework.
+Код, который адаптирует mesh к конкретному renderer/device, должен жить выше: например в [termin-graphics](#termin-graphics--tgfx) как adapter к tgfx2 или в [termin-render](#termin-render), если он зависит от render framework.
 
 ### termin-assets
 
@@ -136,16 +145,18 @@ cgltf document and `build_mesh` API. It depends only on the native mesh/runtime
 binding layer and can be installed without the asset system, default assets, or
 legacy GUI packages.
 
-The optional high-level `termin-glb` distribution owns Python GLB/glTF parsing,
-`GLBAsset`, GLB import/runtime plugin entry points, runtime scene instantiation,
-and extraction helpers. GLB is a multi-domain
-importer: it may create mesh, texture/material, skeleton, animation, and scene
-hierarchy data, so it belongs in an explicit importer package rather than in
-`termin-mesh` or `termin-default-assets`.
+The high-level `termin-glb` distribution owns portable Python GLB/glTF parsing,
+scene data, loading and extraction helpers. It may publish mesh,
+texture/material, skeleton and animation data without acquiring the Engine
+asset runtime or ECS.
+
+`editor/termin-glb-adapters` owns `GLBAsset`, resource plugins, Entity
+instantiation and serialized-scene repair for Termin projects. These adapters
+must not leak back into the portable Graphics package.
 
 Editor drag/drop, inspectors, and project-browser commands stay in
-`termin-app`; they should call `termin.glb.*` APIs instead of owning importer
-logic.
+`termin-app`; they call the explicit GLB adapter surface instead of owning
+portable decoding logic.
 
 ## Graphics And Rendering
 
@@ -197,7 +208,7 @@ path через `TcSceneRenderItemSource` заранее публикует snap
 
 Здесь должны оставаться части, которые знают про frame graph, pass interfaces, engine views, render scene mount config (`ViewportConfig`, `RenderTargetConfig`, scene pipeline templates), render-state accessors и legacy render-state/mount migration helpers. Python bindings для `ViewportConfig` и `RenderTargetConfig` также принадлежат `termin.render`. Glue, который напрямую вызывает `termin-engine` `RenderingManager`, пока не относится к `termin-render`, чтобы не создавать обратную зависимость.
 
-Кандидаты на вынос в [termin-graphics](#termin-graphics):
+Кандидаты на вынос в [termin-graphics](#termin-graphics--tgfx):
 
 - generic fullscreen texture presentation;
 - generic `tc_texture` / `tc_mesh` to tgfx2 adapters, если они не знают о frame graph/pass contracts;
@@ -264,7 +275,7 @@ Source of truth: [termin-gui-native README](https://github.com/mirmik/termin/blo
 canvas/viewport widgets и Python-проекцией тех же native handles. Удалённый
 Python toolkit `termin-gui`/`tcgui` не является compatibility dependency.
 
-Рендеринг виджетов использует facade из [termin-graphics](#termin-graphics),
+Рендеринг виджетов использует facade из [termin-graphics](#termin-graphics--tgfx),
 а не дублирует низкоуровневые GPU primitives.
 
 Native widget/document core не владеет OS windows, `WindowedGraphicsSession`,
@@ -279,7 +290,7 @@ UI нет. Headless composition использует document/rendering primitiv
 Source of truth: [tcplot docs](https://github.com/mirmik/termin/blob/master/graphics/tcplot/docs/index.md)
 
 Toolkit-neutral plotting library поверх tgfx. Переиспользует GPU abstractions из
-[termin-graphics](#termin-graphics), scene-neutral framegraph/execution из
+[termin-graphics](#termin-graphics--tgfx), scene-neutral framegraph/execution из
 `termin_render_core` и host/window infrastructure из
 [termin-display](#termin-display), не заводя собственный низкоуровневый GPU
 слой. `PlotScene3DRenderItemSource` публикует retained 3D identities в общий
@@ -310,7 +321,7 @@ Source of truth: [termin-nodegraph docs](https://github.com/mirmik/termin/blob/m
 
 Python node graph UI/tools. Должен зависеть от public UI/graphics APIs, а не от внутренних деталей render backend.
 
-## Engine Domains
+## Runtime Domains
 
 ### termin-scene
 
@@ -442,7 +453,7 @@ Source of truth: [termin-csharp docs](https://github.com/mirmik/termin/blob/mast
 
 C# bindings/runtime packaging for Termin native libraries.
 
-## Application Layer
+## Tooling And Application Layer
 
 ### termin-shader-runtime
 
