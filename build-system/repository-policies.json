@@ -13,6 +13,43 @@
       "termin-csharp/Termin.Native/Generated",
       "termin-thirdparty",
       "thirdparty"
+    ],
+    "baselines": [
+      {
+        "path": "core/termin-build-tools/termin_build/sdk.py",
+        "max_lines": 2414,
+        "reason": "Pre-existing orchestration debt tracked by #1640"
+      },
+      {
+        "path": "graphics/termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp",
+        "max_lines": 2301,
+        "reason": "Pre-existing Vulkan backend debt tracked by #1640"
+      },
+      {
+        "path": "graphics/termin-graphics/tests/python/test_termin_shaderc_cli.py",
+        "max_lines": 2265,
+        "reason": "Pre-existing shader CLI test debt tracked by #1640"
+      },
+      {
+        "path": "editor/termin-project-build/tests/test_desktop_runtime_packager.py",
+        "max_lines": 2082,
+        "reason": "Pre-existing desktop packager test debt tracked by #1640"
+      },
+      {
+        "path": "core/termin-build-tools/tests/test_sdk_orchestrator.py",
+        "max_lines": 2077,
+        "reason": "Pre-existing SDK orchestrator test debt tracked by #1640"
+      },
+      {
+        "path": "engine/termin-runtime/src/runtime_package.cpp",
+        "max_lines": 2063,
+        "reason": "Pre-existing runtime package debt tracked by #1640"
+      },
+      {
+        "path": "editor/termin-app/termin/editor_native/run_editor.py",
+        "max_lines": 2024,
+        "reason": "Pre-existing editor startup debt tracked by #1640"
+      }
     ]
   }
 }

@@ -17,6 +17,10 @@ jobs:
   package-linux:
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -29,7 +33,7 @@ jobs:
 
       - name: Package and re-verify Linux SDK
         env:
-          PYTHONPATH: ${{ github.workspace }}/termin-build-tools
+          PYTHONPATH: ${{ github.workspace }}/core/termin-build-tools
         run: |
           sdk/bin/termin_python -m termin_build.sdk_release package \
             --sdk-prefix sdk \
@@ -51,6 +55,10 @@ jobs:
   package-windows:
     runs-on: windows-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -62,7 +70,7 @@ jobs:
       - name: Package and re-verify Windows SDK
         shell: pwsh
         env:
-          PYTHONPATH: ${{ github.workspace }}\termin-build-tools
+          PYTHONPATH: ${{ github.workspace }}\core\termin-build-tools
         run: |
           .\sdk\bin\termin_python.exe -m termin_build.sdk_release package `
             --sdk-prefix sdk `

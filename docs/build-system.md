@@ -4,24 +4,21 @@
 
 Проект содержит множество C/C++ библиотек с Python-биндингами. Каждая
 domain-библиотека остаётся отдельным CMake-проектом со своим `CMakeLists.txt`,
-но основной SDK workflow собирается через корневой CMake-граф. Профили
-`graphics` и `full` больше не добавляют Core через `add_subdirectory()`: они
-требуют установленный `termin-core` SDK и находят его пакеты только через
-`find_package(... CONFIG REQUIRED)`.
+но SDK собирается единым корневым CMake-графом. Корневые `core/`, `graphics/`,
+`physics/`, `engine/`, `editor/` и `platform/` задают владение пакетами, а не
+самостоятельные build roots.
 
-Публичная точка входа для полной сборки — `task build --`. Для desktop
-`graphics`/`full` ей обязательно передаётся `--core-sdk` с абсолютным путём.
-`native_build_id` читается из `termin-artifacts.json`; необязательный
-`--core-build-id` используется только для явной проверки ожидаемой identity. Скрипты стадий
-конфигурируют один root build directory и устанавливают domain-результат поверх
-предварительно скопированного Core только после проверки отсутствия коллизий.
-Итоговый `sdk-inputs.json` фиксирует происхождение Core-пакетов.
+Публичная точка входа — корневой `Taskfile.yml`: полная сборка выполняется
+`task build`, Core SDK — `task build:core`, Graphics SDK —
+`task build:graphics`. Профили выбирают замкнутое множество пакетов из одного
+checkout и устанавливают его в `sdk/`; внешний Core SDK и `--core-sdk` для
+обычной монорепозиторной сборки не требуются.
 
-Android и Web также потребляют только установленные platform Core SDK. Такой
-SDK имеет отдельный `termin-core-platform.json`; конфигурация сверяет точные
-`native_build_id`, target system, architecture, Android API и версию
-toolchain. Core-исходников в этом репозитории больше нет; все целевые графы
-потребляют их CMake-пакеты и Python distributions из проверенного артефакта.
+Android и Web строятся тем же root orchestration через `task build:android` и
+`task build:web`. Опции installed Core SDK остаются внутренней возможностью
+platform-рецептов для проверки или будущей композиции артефактов, но не
+являются входом штатного CI. `native_build_id` и platform manifest продолжают
+фиксировать ABI, target system, architecture, Android API и toolchain.
 
 Сборка через `task build --` проходит в четыре стадии:
 1. **C/C++ библиотеки + Python bindings** — shared libraries, заголовки, CMake config, nanobind-модули и Python-исходники
@@ -74,7 +71,7 @@ packages объявляют `Requires-Python >=3.14`, а standalone editor build
 Toolchain можно подготовить отдельно:
 
 ```bash
-PYTHONPATH=termin-build-tools \
+PYTHONPATH=core/termin-build-tools \
   python3 -m termin_build.sdk --repo-root . prepare-python-toolchain
 ```
 
@@ -82,7 +79,7 @@ PYTHONPATH=termin-build-tools \
 
 ```bash
 TERMIN_PYTHON_TOOLCHAIN_OFFLINE=1 \
-  PYTHONPATH=termin-build-tools \
+  PYTHONPATH=core/termin-build-tools \
   python3 -m termin_build.sdk --repo-root . prepare-python-toolchain
 ```
 
@@ -319,7 +316,7 @@ imports и `--termin-python-layout-smoke` через bundled `termin_editor` и
 
 ```bash
 TERMIN_PYTHON_RUNTIME_OFFLINE=1 \
-  PYTHONPATH=termin-build-tools \
+  PYTHONPATH=core/termin-build-tools \
   python -m termin_build.sdk --repo-root . install-python
 ```
 
@@ -944,7 +941,7 @@ classifications, а не suite-level metadata.
 Проверка manifests и orphan-test gate не требует запуска самих тестов:
 
 ```bash
-PYTHONPATH=termin-build-tools \
+PYTHONPATH=core/termin-build-tools \
 python3 -m termin_build.repository_control --repo-root . check
 ```
 
@@ -954,7 +951,7 @@ SDK, venv и third-party roots исключены явно в manifest. План
 до исполнения:
 
 ```bash
-PYTHONPATH=termin-build-tools \
+PYTHONPATH=core/termin-build-tools \
 python3 -m termin_build.repository_control --repo-root . \
 plan pr --platform linux --json
 ```

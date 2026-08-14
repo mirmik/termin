@@ -6,7 +6,7 @@
 
 ## Current Notes
 
-- [Core SDK and domain repository boundary](2026-08-13-core-domain-repositories.md) - целевая схема независимых `termin-core`, `termin-graphics`, `termin-physics` и `termin-engine`, installed-SDK границы, ownership Python runtime и детерминированная композиция пакетов.
+- [Republic monorepo](2026-08-14-republic-monorepo.md) - принятая схема единого репозитория с корневыми `core`, `graphics`, `physics`, `engine`, `editor` и `platform`, общим build orchestration и независимыми SDK-профилями.
 - [Shared 2D composition](2026-08-11-shared-2d-composition.md) - отдельные Widget и GraphicItem semantic trees поверх общего affine/clip/bounds evaluation и канонического `DrawList2D`, с невладеющими handle-based projections между ними.
 - [Articulation3D as a chain of moving frames](2026-08-04-articulation3d-moving-frame-chain.md) - `Articulation3D` как unit-only дерево подвижных выходных фреймов без runtime-разделения на joint/link, включая инерцию, контакты и границу scene authoring.
 - [Canonical naming](2026-03-15-canonical-naming.md) - канонические Python namespace'ы и правила импортов.
@@ -32,5 +32,6 @@
 
 ## Historical Notes
 
+- [Core SDK and domain repository boundary](2026-08-13-core-domain-repositories.md) - отменённый эксперимент с независимыми domain-репозиториями; сохранён как анализ пакетных границ.
 - [Native GUI application host](2026-07-23-native-gui-application-host.md) - историческая промежуточная ownership-модель, удалённая после перехода на framework-neutral window adapter.
 - [Native GUI windowed and headless host](2026-07-23-native-gui-windowed-headless-host.md) - промежуточное выделение presentation/input/offscreen mechanics через общий host; механика сохраняется, ownership-модель заменена.
