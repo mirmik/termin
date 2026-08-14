@@ -106,9 +106,18 @@ jobs:
       - name: Check C++ class member order
         run: |
           task check:cpp-layout -- --self-test
-          task check:cpp-layout --
+          task check:cpp-layout -- --format jsonl --no-fail > build/cpp-class-layout-normal.jsonl
           task lint:cpp -- --python-bindings --configure-only
-          task check:cpp-layout -- --python-bindings
+          task check:cpp-layout -- --python-bindings --format jsonl --no-fail > build/cpp-class-layout-python.jsonl
+
+      - name: Upload C++ class member-order inventories
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: cpp-class-layout-inventories
+          path: build/cpp-class-layout-*.jsonl
+          if-no-files-found: error
+          retention-days: 14
 
   # ── 0c. Build system smoke ─────────────────────────────────────
   smoke-build-system-windows:

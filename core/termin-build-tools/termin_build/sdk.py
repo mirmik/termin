@@ -2267,12 +2267,13 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
-        return install_python_packages(
+        result = install_python_packages(
             repo_root=repo_root,
             sdk_prefix=sdk_prefix,
             build_dir=build_dir,
             python_executable=python_executable,
         )
+        return result if result != 0 else _publish_runtime_wheelhouse(repo_root, sdk_prefix)
     if args.command == "prepare-build-python-runtime":
         sdk_prefix = args.sdk_prefix
         if sdk_prefix is None:

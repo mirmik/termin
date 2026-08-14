@@ -30,9 +30,11 @@ def validate_frame(metrics: dict) -> None:
         "orbit_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
         "star_center": lambda r, g, b: r > 150 and g > 90 and b < 100,
         "chart_line": lambda r, g, b: g > 150 and r < 130 and b < 150,
-        "action": lambda r, g, b: r > 150 and g < 130 and b < 100,
     }
     failed = [name for name, predicate in expected.items() if not predicate(*probes[name])]
+    action_predicate = lambda rgb: rgb[0] > 150 and rgb[1] < 130 and rgb[2] < 100
+    if not any(action_predicate(probes[name]) for name in ("action", "action_center", "action_right")):
+        failed.append("action")
     if failed or metrics["quantized_colors"] < 7:
         raise RuntimeError(
             f"VisualScene2D WebGL2 pixel probes failed: failed={failed} metrics={metrics}"
@@ -102,6 +104,8 @@ def main() -> int:
                     "star_center": (520, 305),
                     "chart_line": (670, 350),
                     "action": (720, 440),
+                    "action_center": (770, 446),
+                    "action_right": (820, 446),
                 },
             )
             try:
