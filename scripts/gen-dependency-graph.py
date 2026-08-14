@@ -162,34 +162,42 @@ PYTHON_IMPORT_TO_DIR = {
     "termin": "termin",
 }
 
-# Directories to scan for CMakeLists.txt
-CMAKE_DIRS = []
-for name in os.listdir(ROOT):
-    path = os.path.join(ROOT, name)
-    if not os.path.isdir(path):
+# Repository packages are owned by republics, while the root CMake graph owns
+# orchestration.  Keep this discovery list explicit so generated architecture
+# documentation cannot silently regress to the retired flat layout.
+REPUBLICS = ("core", "graphics", "engine", "editor", "physics")
+PACKAGE_DIRS = {}
+for republic in REPUBLICS:
+    republic_path = os.path.join(ROOT, republic)
+    if not os.path.isdir(republic_path):
         continue
-    if name.startswith("termin-") and name != "termin-nanobind-sdk":
-        cmake = os.path.join(path, "CMakeLists.txt")
-        if os.path.exists(cmake):
-            CMAKE_DIRS.append((name, cmake))
-    # termin-components subdirectories
-    if name == "termin-components":
-        for sub in os.listdir(path):
-            subpath = os.path.join(path, sub)
-            cmake = os.path.join(subpath, "CMakeLists.txt")
-            if os.path.isdir(subpath) and os.path.exists(cmake):
-                CMAKE_DIRS.append((sub, cmake))
+    for current_root, directory_names, _file_names in os.walk(republic_path):
+        directory_names[:] = [
+            name for name in directory_names
+            if name not in {"build", "install", "sdk", ".git", "__pycache__"}
+        ]
+        package_name = os.path.basename(current_root)
+        if package_name.startswith("termin-") or package_name.startswith("tcplot"):
+            PACKAGE_DIRS.setdefault(package_name, current_root)
+
+CMAKE_DIRS = []
+for package_name, package_path in sorted(PACKAGE_DIRS.items()):
+    cmake = os.path.join(package_path, "CMakeLists.txt")
+    if os.path.exists(cmake) and package_name != "termin-nanobind-sdk":
+        CMAKE_DIRS.append((package_name, cmake))
 
 # Main native/core bundle exported as the CMake package `termin`.
 # It is an implementation detail of termin-app on this high-level diagram.
-termin_native_cmake = os.path.join(ROOT, "termin-app", "cpp", "CMakeLists.txt")
+termin_native_cmake = os.path.join(ROOT, "editor", "termin-app", "cpp", "CMakeLists.txt")
 if os.path.exists(termin_native_cmake):
     CMAKE_DIRS.append(("termin-app", termin_native_cmake))
 
 # Pure-Python packages (no CMakeLists.txt) — will be scanned via import analysis.
 PYTHON_ONLY_DIRS = {
-    "termin-shader-runtime": os.path.join(ROOT, "termin-shader-runtime", "termin"),
-    "termin-stdlib": os.path.join(ROOT, "termin-stdlib", "python", "termin"),
+    "termin-shader-runtime": os.path.join(
+        ROOT, "graphics", "termin-shader-runtime", "termin"
+    ),
+    "termin-stdlib": os.path.join(ROOT, "engine", "termin-stdlib", "python", "termin"),
 }
 
 # Dependencies that are structural but not reliably visible from setup.py or
@@ -221,9 +229,7 @@ def resolve_cmake_dependency(name):
         return explicit
 
     candidate = name.replace("_", "-")
-    if os.path.isdir(os.path.join(ROOT, candidate)):
-        return candidate
-    if os.path.isdir(os.path.join(ROOT, "termin-components", candidate)):
+    if candidate in PACKAGE_DIRS:
         return candidate
     return None
 

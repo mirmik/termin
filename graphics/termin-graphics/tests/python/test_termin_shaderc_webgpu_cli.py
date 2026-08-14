@@ -164,7 +164,7 @@ def test_webgpu_target_removes_artifacts_when_validation_fails(tmp_path: Path) -
 
 
 def _pinned_webgpu_tools() -> tuple[Path, Path]:
-    root = Path(__file__).resolve().parents[3]
+    root = Path(__file__).resolve().parents[4]
     web_lock = json.loads(
         (root / "build-system/web-shader-toolchain-lock.json").read_text(
             encoding="utf-8"
@@ -180,8 +180,8 @@ def _pinned_webgpu_tools() -> tuple[Path, Path]:
 
 
 def test_builtin_catalog_compiles_to_validated_webgpu_artifacts(tmp_path: Path) -> None:
-    root = Path(__file__).resolve().parents[3]
-    source_root = root / "termin-graphics/resources/builtin_shaders"
+    root = Path(__file__).resolve().parents[4]
+    source_root = root / "graphics/termin-graphics/resources/builtin_shaders"
     catalog = json.loads(
         (source_root / "engine-shader-catalog.json").read_text(encoding="utf-8")
     )

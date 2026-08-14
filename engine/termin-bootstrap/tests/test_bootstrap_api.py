@@ -1,10 +1,11 @@
+import os
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
 
 
-_OVERLAY = Path(__file__).resolve().parents[2] / "build/python-envs/test/overlay.json"
+_OVERLAY = Path(os.environ["TERMIN_PYTHON_OVERLAY"])
 _LIFECYCLE_SCENARIOS = Path(__file__).with_name("bootstrap_lifecycle_scenarios.py")
 
 

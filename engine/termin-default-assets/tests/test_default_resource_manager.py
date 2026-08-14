@@ -9,7 +9,8 @@ def test_default_resource_manager_owns_default_runtime_registries() -> None:
     manager = DefaultResourceManager()
 
     assert "prefab" in manager._runtime_asset_registries
-    assert "glb" in manager._runtime_asset_registries
+    assert "glb" not in manager._runtime_asset_registries
+    assert manager.asset_type_plugins.get_runtime("glb") is not None
     assert "animation_clip" in manager._runtime_asset_registries
     assert "skeleton" in manager._runtime_asset_registries
     assert "pipeline" in manager._runtime_asset_registries

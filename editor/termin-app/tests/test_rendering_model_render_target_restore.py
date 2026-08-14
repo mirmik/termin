@@ -18,7 +18,8 @@ _SPEC.loader.exec_module(_MODULE)
 RenderingModel = _MODULE.RenderingModel
 
 _RT_CONFIG_PATH = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
+    / "engine"
     / "termin-render"
     / "python"
     / "termin"

@@ -1,17 +1,11 @@
+import os
 import subprocess
 import sys
 import textwrap
-from pathlib import Path
 
 
 def test_default_scene_mesh_and_material_refs_survive_editor_roundtrip() -> None:
-    overlay_manifest = (
-        Path(__file__).resolve().parents[2]
-        / "build"
-        / "python-envs"
-        / "test"
-        / "overlay.json"
-    )
+    overlay_manifest = os.environ["TERMIN_PYTHON_OVERLAY"]
     result = subprocess.run(
         [
             sys.executable,

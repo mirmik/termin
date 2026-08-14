@@ -3,20 +3,51 @@ import json
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
+REPUBLIC_NAMES = ("core", "graphics", "engine", "editor", "physics", "platform")
+PACKAGE_REPUBLIC = {
+    "termin-animation": "graphics",
+    "termin-app": "editor",
+    "termin-base": "core",
+    "termin-collision": "physics",
+    "termin-components": "engine",
+    "termin-default-assets": "engine",
+    "termin-engine": "engine",
+    "termin-glb": "graphics",
+    "termin-inspect": "core",
+    "termin-materials": "graphics",
+    "termin-navmesh": "physics",
+    "termin-project": "editor",
+    "termin-project-build": "editor",
+    "termin-render": "engine",
+}
 
 
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def _package_roots() -> list[Path]:
+    return [
+        path
+        for republic_name in REPUBLIC_NAMES
+        for path in (REPO_ROOT / republic_name).iterdir()
+        if path.is_dir() and path.name.startswith("termin-")
+    ]
+
+
+def _owned_path(package_relative_path: str) -> Path:
+    package_name = package_relative_path.split("/", 1)[0]
+    return REPO_ROOT / PACKAGE_REPUBLIC[package_name] / package_relative_path
+
+
 def test_android_runtime_uses_rendering_manager_topology() -> None:
-    bootstrap = _read_text(REPO_ROOT / "termin-android/src/bootstrap.cpp")
+    bootstrap = _read_text(REPO_ROOT / "platform/termin-android/src/bootstrap.cpp")
     activity = _read_text(
         REPO_ROOT
-        / "termin-android/platform/app/src/main/java/org/termin/android/TerminActivity.java"
+        / "platform/termin-android/platform/app/src/main/java/org/termin/android/TerminActivity.java"
     )
-    scene = json.loads(_read_text(REPO_ROOT / "termin-android/assets/scene.json"))
+    scene = json.loads(_read_text(REPO_ROOT / "platform/termin-android/assets/scene.json"))
 
     required_bootstrap_fragments = (
         "create_offscreen_display(",
@@ -59,8 +90,8 @@ def test_android_runtime_uses_rendering_manager_topology() -> None:
 
 def test_editor_camera_mode_controller_has_no_frontend_dependency() -> None:
     sources = (
-        REPO_ROOT / "termin-app/termin/editor_core/editor_camera.py",
-        REPO_ROOT / "termin-app/termin/editor_core/editor_camera_ui_controller.py",
+        REPO_ROOT / "editor/termin-app/termin/editor_core/editor_camera.py",
+        REPO_ROOT / "editor/termin-app/termin/editor_core/editor_camera_ui_controller.py",
     )
     forbidden_modules = ("tcgui", "termin.gui_native")
     forbidden_names = ("UIComponent", "EditorInteractionSystem")
@@ -101,11 +132,7 @@ def test_runtime_types_have_no_incremental_publication_api() -> None:
         "ComponentRegistrar<",
         "register_python_fields\"",
     )
-    source_roots = [
-        path
-        for path in REPO_ROOT.iterdir()
-        if path.is_dir() and path.name.startswith("termin-")
-    ]
+    source_roots = _package_roots()
     suffixes = {".h", ".hpp", ".c", ".cc", ".cpp", ".cxx", ".py", ".cs"}
     offenders: list[str] = []
     for root in source_roots:
@@ -125,12 +152,12 @@ def test_runtime_types_have_no_incremental_publication_api() -> None:
 
 def test_scene_owns_component_ref_and_entity_binding_helpers() -> None:
     scene_component_ref_binding = (
-        REPO_ROOT / "termin-scene/include/termin/bindings/tc_component_ref_bindings.hpp"
+        REPO_ROOT / "engine/termin-scene/include/termin/bindings/tc_component_ref_bindings.hpp"
     )
-    scene_entity_helpers = REPO_ROOT / "termin-scene/include/termin/bindings/entity_helpers.hpp"
+    scene_entity_helpers = REPO_ROOT / "engine/termin-scene/include/termin/bindings/entity_helpers.hpp"
     app_duplicate_paths = [
-        REPO_ROOT / "termin-app/cpp/termin/entity/tc_component_ref.hpp",
-        REPO_ROOT / "termin-app/cpp/termin/bindings/entity/entity_helpers.hpp",
+        REPO_ROOT / "editor/termin-app/cpp/termin/entity/tc_component_ref.hpp",
+        REPO_ROOT / "editor/termin-app/cpp/termin/bindings/entity/entity_helpers.hpp",
     ]
 
     assert scene_component_ref_binding.is_file()
@@ -146,9 +173,9 @@ def test_no_app_private_entity_helper_includes_remain() -> None:
         "#include <termin/bindings/entity/entity_helpers.hpp>",
     )
     source_roots = [
-        REPO_ROOT / "termin-app/cpp",
-        REPO_ROOT / "termin-scene",
-        *sorted(REPO_ROOT.glob("termin-components/*")),
+        REPO_ROOT / "editor/termin-app/cpp",
+        REPO_ROOT / "engine/termin-scene",
+        *sorted(REPO_ROOT.glob("engine/termin-components/*")),
     ]
 
     offenders: list[str] = []
@@ -174,7 +201,8 @@ def test_platform_cmake_does_not_include_app_private_sources() -> None:
     )
     cmake_paths = [
         path
-        for path in REPO_ROOT.glob("termin-*/**/*")
+        for root in _package_roots()
+        for path in root.rglob("*")
         if path.name == "CMakeLists.txt" or path.suffix == ".cmake"
     ]
     cmake_paths = [
@@ -194,17 +222,17 @@ def test_platform_cmake_does_not_include_app_private_sources() -> None:
 
 
 def test_voxels_own_voxel_grid_native_headers() -> None:
-    canonical_header = REPO_ROOT / "termin-voxels/termin/voxels/voxel_grid_handle.hpp"
-    app_compat_header = REPO_ROOT / "termin-app/cpp/termin/assets/voxel_grid_handle.hpp"
+    canonical_header = REPO_ROOT / "engine/termin-voxels/termin/voxels/voxel_grid_handle.hpp"
+    app_compat_header = REPO_ROOT / "editor/termin-app/cpp/termin/assets/voxel_grid_handle.hpp"
     forbidden_includes = (
         '#include "termin/assets/voxel_grid_handle.hpp"',
         "#include <termin/assets/voxel_grid_handle.hpp>",
     )
     source_roots = [
-        REPO_ROOT / "termin-app/cpp",
-        REPO_ROOT / "termin-voxels",
-        *sorted(REPO_ROOT.glob("termin-components/*")),
-        REPO_ROOT / "termin-bootstrap",
+        REPO_ROOT / "editor/termin-app/cpp",
+        REPO_ROOT / "engine/termin-voxels",
+        *sorted(REPO_ROOT.glob("engine/termin-components/*")),
+        REPO_ROOT / "engine/termin-bootstrap",
     ]
 
     assert canonical_header.is_file()
@@ -226,16 +254,16 @@ def test_voxels_own_voxel_grid_native_headers() -> None:
 
 
 def test_app_cxx_tree_contains_only_editor_private_native_sources() -> None:
-    app_cpp_root = REPO_ROOT / "termin-app/cpp/termin"
+    app_cpp_root = REPO_ROOT / "editor/termin-app/cpp/termin"
     canonical_paths = [
-        REPO_ROOT / "termin-base/python/bindings/geom/geom_module.cpp",
-        REPO_ROOT / "termin-scene/include/termin/entity/cmp_ref.hpp",
-        REPO_ROOT / "termin-scene/include/termin/bindings/entity_bindings.hpp",
-        REPO_ROOT / "termin-scene/include/termin/bindings/tc_value_helpers.hpp",
-        REPO_ROOT / "termin-scene/include/termin/soa/soa_type.hpp",
-        REPO_ROOT / "termin-inspect/include/termin/inspect/tc_kind.hpp",
-        REPO_ROOT / "termin-inspect/include/termin/inspect/tc_kind_cpp_ext.hpp",
-        REPO_ROOT / "termin-graphics/include/tgfx/tgfx_material_handle.hpp",
+        REPO_ROOT / "core/termin-base/python/bindings/geom/geom_module.cpp",
+        REPO_ROOT / "engine/termin-scene/include/termin/entity/cmp_ref.hpp",
+        REPO_ROOT / "engine/termin-scene/include/termin/bindings/entity_bindings.hpp",
+        REPO_ROOT / "engine/termin-scene/include/termin/bindings/tc_value_helpers.hpp",
+        REPO_ROOT / "engine/termin-scene/include/termin/soa/soa_type.hpp",
+        REPO_ROOT / "core/termin-inspect/include/termin/inspect/tc_kind.hpp",
+        REPO_ROOT / "core/termin-inspect/include/termin/inspect/tc_kind_cpp_ext.hpp",
+        REPO_ROOT / "graphics/termin-graphics/include/tgfx/tgfx_material_handle.hpp",
     ]
     removed_app_paths = [
         app_cpp_root / "bindings/entity/entity_bindings.hpp",
@@ -276,8 +304,8 @@ def test_app_cxx_tree_contains_only_editor_private_native_sources() -> None:
 
 
 def test_sdk_cli_entrypoints_are_outside_app_cxx_package() -> None:
-    app_cpp_app = REPO_ROOT / "termin-app/cpp/app"
-    cli_root = REPO_ROOT / "termin-cli"
+    app_cpp_app = REPO_ROOT / "editor/termin-app/cpp/app"
+    cli_root = REPO_ROOT / "editor/termin-cli"
     cli_sources = [
         cli_root / "src/termin.cpp",
         cli_root / "src/termin_builder.cpp",
@@ -299,7 +327,7 @@ def test_sdk_cli_entrypoints_are_outside_app_cxx_package() -> None:
     assert [path for path in cli_sources if not path.is_file()] == []
     assert [path for path in removed_app_paths if path.exists()] == []
 
-    app_cmake = _read_text(REPO_ROOT / "termin-app/cpp/CMakeLists.txt")
+    app_cmake = _read_text(REPO_ROOT / "editor/termin-app/cpp/CMakeLists.txt")
     forbidden_fragments = (
         "add_executable(termin\n",
         "add_executable(termin_builder",
@@ -312,24 +340,24 @@ def test_sdk_cli_entrypoints_are_outside_app_cxx_package() -> None:
 
 
 def test_app_scene_rendering_facade_is_removed() -> None:
-    app_facade = REPO_ROOT / "termin-app/termin/scene_rendering.py"
+    app_facade = REPO_ROOT / "editor/termin-app/termin/scene_rendering.py"
 
     assert not app_facade.exists()
 
 
 def test_app_default_preloaders_compat_layer_is_removed() -> None:
-    app_facade = REPO_ROOT / "termin-app/termin/editor_core/default_preloaders.py"
+    app_facade = REPO_ROOT / "editor/termin-app/termin/editor_core/default_preloaders.py"
 
     assert not app_facade.exists()
 
 
 def test_app_scene_cache_is_removed() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/cache").exists()
+    assert not (REPO_ROOT / "editor/termin-app/termin/cache").exists()
 
     offenders: list[str] = []
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-navmesh/python/termin",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "physics/termin-navmesh/python/termin",
     ]
     forbidden_fragments = (
         "termin.cache",
@@ -348,19 +376,19 @@ def test_app_scene_cache_is_removed() -> None:
 
 
 def test_project_helpers_are_outside_app_package() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/project").exists()
-    assert not (REPO_ROOT / "termin-app/termin/project_build").exists()
-    assert (REPO_ROOT / "termin-project/python/termin/project").is_dir()
-    assert (REPO_ROOT / "termin-project-build/python/termin/project_build").is_dir()
+    assert not (REPO_ROOT / "editor/termin-app/termin/project").exists()
+    assert not (REPO_ROOT / "editor/termin-app/termin/project_build").exists()
+    assert (REPO_ROOT / "editor/termin-project/python/termin/project").is_dir()
+    assert (REPO_ROOT / "editor/termin-project-build/python/termin/project_build").is_dir()
 
 
 def test_project_creation_and_default_scene_are_outside_app_package() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/default_scene.py").exists()
-    assert (REPO_ROOT / "termin-project/python/termin/project/creation.py").is_file()
+    assert not (REPO_ROOT / "editor/termin-app/termin/default_scene.py").exists()
+    assert (REPO_ROOT / "editor/termin-project/python/termin/project/creation.py").is_file()
 
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-app/tests",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "editor/termin-app/tests",
     ]
     forbidden_fragments = (
         "termin.default_scene",
@@ -381,14 +409,14 @@ def test_project_creation_and_default_scene_are_outside_app_package() -> None:
 
 
 def test_serialization_kind_facade_is_removed_from_app_package() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/serialization/__init__.py").exists()
-    assert not (REPO_ROOT / "termin-app/termin/serialization/kind.py").exists()
-    assert (REPO_ROOT / "termin-inspect/python/termin/inspect/kind.py").is_file()
+    assert not (REPO_ROOT / "editor/termin-app/termin/serialization/__init__.py").exists()
+    assert not (REPO_ROOT / "editor/termin-app/termin/serialization/kind.py").exists()
+    assert (REPO_ROOT / "core/termin-inspect/python/termin/inspect/kind.py").is_file()
 
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-app/tests",
-        REPO_ROOT / "termin-bootstrap",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "editor/termin-app/tests",
+        REPO_ROOT / "engine/termin-bootstrap",
     ]
     forbidden_fragments = (
         "termin.serialization",
@@ -409,14 +437,14 @@ def test_serialization_kind_facade_is_removed_from_app_package() -> None:
 
 
 def test_top_level_app_utility_facades_are_removed() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/util.py").exists()
-    assert not (REPO_ROOT / "termin-app/termin/core").exists()
-    assert not (REPO_ROOT / "termin-app/termin/log.py").exists()
-    assert (REPO_ROOT / "termin-base/python/termin/geombase/quaternion.py").is_file()
+    assert not (REPO_ROOT / "editor/termin-app/termin/util.py").exists()
+    assert not (REPO_ROOT / "editor/termin-app/termin/core").exists()
+    assert not (REPO_ROOT / "editor/termin-app/termin/log.py").exists()
+    assert (REPO_ROOT / "core/termin-base/python/termin/geombase/quaternion.py").is_file()
 
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-app/tests",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "editor/termin-app/tests",
     ]
     forbidden_fragments = (
         "termin.util",
@@ -441,13 +469,16 @@ def test_top_level_app_utility_facades_are_removed() -> None:
 
 
 def test_glb_scene_animation_repair_is_outside_app_package() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/scene_animation_repair.py").exists()
-    assert (REPO_ROOT / "termin-glb/python/termin/glb/scene_animation_repair.py").is_file()
+    assert not (REPO_ROOT / "editor/termin-app/termin/scene_animation_repair.py").exists()
+    assert (
+        REPO_ROOT
+        / "editor/termin-glb-adapters/python/termin/glb_adapters/scene_animation_repair.py"
+    ).is_file()
 
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-player/termin",
-        REPO_ROOT / "termin-project-build/python/termin",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "editor/termin-player/termin",
+        REPO_ROOT / "editor/termin-project-build/python/termin",
     ]
     forbidden_fragments = (
         "termin.scene_animation_repair",
@@ -467,8 +498,8 @@ def test_glb_scene_animation_repair_is_outside_app_package() -> None:
 
 def test_glb_package_does_not_import_editor_core() -> None:
     source_roots = [
-        REPO_ROOT / "termin-glb/python",
-        REPO_ROOT / "termin-glb/tests",
+        REPO_ROOT / "graphics/termin-glb/python",
+        REPO_ROOT / "graphics/termin-glb/tests",
     ]
     forbidden_fragments = (
         "termin.editor_core",
@@ -488,11 +519,11 @@ def test_glb_package_does_not_import_editor_core() -> None:
 
 def test_domain_package_tests_do_not_import_editor_private_modules() -> None:
     source_roots = [
-        path
-        for path in REPO_ROOT.glob("termin-*/tests")
-        if path.relative_to(REPO_ROOT).parts[0] != "termin-app"
+        path / "tests"
+        for path in _package_roots()
+        if path != REPO_ROOT / "editor/termin-app" and (path / "tests").is_dir()
     ]
-    source_roots.extend(sorted(REPO_ROOT.glob("termin-components/*/tests")))
+    source_roots.extend(sorted(REPO_ROOT.glob("engine/termin-components/*/tests")))
     forbidden_fragments = (
         "termin.editor_core",
         "termin.launcher",
@@ -510,9 +541,9 @@ def test_domain_package_tests_do_not_import_editor_private_modules() -> None:
 
 
 def test_framegraph_automation_service_is_toolkit_neutral() -> None:
-    canonical = REPO_ROOT / "termin-app/termin/editor_core/framegraph_debugger_service.py"
-    python_model = REPO_ROOT / "termin-app/termin/editor_core/framegraph_debugger_model.py"
-    native_debugger = REPO_ROOT / "termin-engine/include/termin/render/frame_graph_debugger.hpp"
+    canonical = REPO_ROOT / "editor/termin-app/termin/editor_core/framegraph_debugger_service.py"
+    python_model = REPO_ROOT / "editor/termin-app/termin/editor_core/framegraph_debugger_model.py"
+    native_debugger = REPO_ROOT / "engine/termin-engine/include/termin/render/frame_graph_debugger.hpp"
 
     assert not python_model.exists()
     assert canonical.is_file()
@@ -524,7 +555,7 @@ def test_framegraph_automation_service_is_toolkit_neutral() -> None:
 
 
 def test_launcher_controller_is_toolkit_neutral() -> None:
-    controller = REPO_ROOT / "termin-app/termin/launcher/controller.py"
+    controller = REPO_ROOT / "editor/termin-app/termin/launcher/controller.py"
 
     assert controller.is_file()
     source = _read_text(controller)
@@ -552,20 +583,20 @@ def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
         "undo_history_model.py",
     )
     for filename in shared_models:
-        source = _read_text(REPO_ROOT / "termin-app/termin/editor_core" / filename)
+        source = _read_text(REPO_ROOT / "editor/termin-app/termin/editor_core" / filename)
         assert "tcgui" not in source
         assert "editor_native" not in source
 
     frontend_sources = (
-        "termin-app/termin/editor_native/about_dialog.py",
-        "termin-app/termin/editor_native/python_console.py",
-        "termin-app/termin/editor_native/project_settings_dialog.py",
-        "termin-app/termin/editor_native/navigation_settings_dialogs.py",
-        "termin-app/termin/editor_native/settings_dialog.py",
-        "termin-app/termin/editor_native/diagnostic_dialogs.py",
-        "termin-app/termin/editor_native/scene_settings_dialogs.py",
-        "termin-app/termin/editor_native/scene_manager_dialog.py",
-        "termin-app/termin/editor_native/spacemouse_settings_dialog.py",
+        "editor/termin-app/termin/editor_native/about_dialog.py",
+        "editor/termin-app/termin/editor_native/python_console.py",
+        "editor/termin-app/termin/editor_native/project_settings_dialog.py",
+        "editor/termin-app/termin/editor_native/navigation_settings_dialogs.py",
+        "editor/termin-app/termin/editor_native/settings_dialog.py",
+        "editor/termin-app/termin/editor_native/diagnostic_dialogs.py",
+        "editor/termin-app/termin/editor_native/scene_settings_dialogs.py",
+        "editor/termin-app/termin/editor_native/scene_manager_dialog.py",
+        "editor/termin-app/termin/editor_native/spacemouse_settings_dialog.py",
     )
     for path in frontend_sources:
         assert "termin.editor_core" in _read_text(REPO_ROOT / path)
@@ -600,9 +631,6 @@ def test_domain_python_tests_are_outside_app_tests_package() -> None:
             "termin-components/termin-components-kinematic/tests/test_general_transform3.py"
         ),
         "termin-app/tests/test_gltf_loader.py": "termin-glb/tests/test_glb_loader.py",
-        "termin-app/tests/test_inspect_singleton_topology.py": (
-            "termin-inspect/tests/test_inspect_singleton_topology.py"
-        ),
         "termin-app/tests/test_material_asset_texture_persistence.py": (
             "termin-default-assets/tests/test_material_asset_texture_persistence.py"
         ),
@@ -666,11 +694,11 @@ def test_domain_python_tests_are_outside_app_tests_package() -> None:
 
     missing_targets = [
         target for target in moved_tests.values()
-        if not (REPO_ROOT / target).is_file()
+        if not _owned_path(target).is_file()
     ]
     remaining_sources = [
         source for source in moved_tests
-        if (REPO_ROOT / source).exists()
+        if _owned_path(source).exists()
     ]
 
     assert missing_targets == []
@@ -678,15 +706,15 @@ def test_domain_python_tests_are_outside_app_tests_package() -> None:
 
 
 def test_project_modules_runtime_is_outside_app_package() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/modules").exists()
-    assert not (REPO_ROOT / "termin-app/termin/module_warmup.py").exists()
-    assert (REPO_ROOT / "termin-project-modules/python/termin/project_modules/runtime.py").is_file()
-    assert (REPO_ROOT / "termin-project-modules/python/termin/project_modules/warmup.py").is_file()
+    assert not (REPO_ROOT / "editor/termin-app/termin/modules").exists()
+    assert not (REPO_ROOT / "editor/termin-app/termin/module_warmup.py").exists()
+    assert (REPO_ROOT / "editor/termin-project-modules/python/termin/project_modules/runtime.py").is_file()
+    assert (REPO_ROOT / "editor/termin-project-modules/python/termin/project_modules/warmup.py").is_file()
 
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-player/termin",
-        REPO_ROOT / "termin-app/cpp/app",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "editor/termin-player/termin",
+        REPO_ROOT / "editor/termin-app/cpp/app",
     ]
     forbidden_fragments = (
         "termin.modules.runtime",
@@ -709,13 +737,13 @@ def test_project_modules_runtime_is_outside_app_package() -> None:
 
 
 def test_stdlib_resources_are_outside_app_package() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/resources/stdlib").exists()
-    assert (REPO_ROOT / "termin-stdlib/python/termin/stdlib/resources").is_dir()
+    assert not (REPO_ROOT / "editor/termin-app/termin/resources/stdlib").exists()
+    assert (REPO_ROOT / "engine/termin-stdlib/python/termin/stdlib/resources").is_dir()
 
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-app/cpp/app",
-        REPO_ROOT / "termin-app/tests",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "editor/termin-app/cpp/app",
+        REPO_ROOT / "editor/termin-app/tests",
     ]
     forbidden_fragments = (
         'Path(termin.__path__[0]) / "resources" / "stdlib"',
@@ -739,12 +767,12 @@ def test_stdlib_resources_are_outside_app_package() -> None:
 
 
 def test_legacy_project_builder_and_build_json_player_path_are_removed() -> None:
-    assert not (REPO_ROOT / "termin-app/termin/project_builder").exists()
+    assert not (REPO_ROOT / "editor/termin-app/termin/project_builder").exists()
 
     source_roots = [
-        REPO_ROOT / "termin-app/termin",
-        REPO_ROOT / "termin-player/termin",
-        REPO_ROOT / "termin-app/cpp/app",
+        REPO_ROOT / "editor/termin-app/termin",
+        REPO_ROOT / "editor/termin-player/termin",
+        REPO_ROOT / "editor/termin-app/cpp/app",
     ]
     forbidden_fragments = (
         "termin.project_builder",
@@ -767,11 +795,7 @@ def test_legacy_project_builder_and_build_json_player_path_are_removed() -> None
 
 
 def test_python_compatibility_reexport_modules_stay_removed() -> None:
-    source_roots = [
-        root
-        for root in [*REPO_ROOT.glob("termin-*"), REPO_ROOT / "tcplot"]
-        if root.is_dir()
-    ]
+    source_roots = [*_package_roots(), REPO_ROOT / "graphics/tcplot"]
 
     offenders: list[str] = []
     for root in source_roots:

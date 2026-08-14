@@ -14,7 +14,7 @@ from termin.glb_adapters.instantiator import instantiate_glb
 from termin.default_assets.resource_manager import DefaultResourceManager
 
 
-_FIXTURES = Path(__file__).parents[2] / "termin-thirdparty" / "cgltf" / "fuzz" / "data"
+_FIXTURES = Path(__file__).parents[3] / "termin-thirdparty" / "cgltf" / "fuzz" / "data"
 
 
 def _write_glb(path: Path, document: dict, binary: bytes) -> Path:

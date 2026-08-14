@@ -76,6 +76,7 @@ echo "TERMIN_SDK: $TERMIN_SDK"
 
 PYTHON_BIN="${PYTHON_BIN:-$TERMIN_SDK/bin/termin_python}"
 OVERLAY_MANIFEST="${TERMIN_PYTHON_OVERLAY:-$SCRIPT_DIR/build/python-envs/test/overlay.json}"
+export TERMIN_PYTHON_OVERLAY="$OVERLAY_MANIFEST"
 BUILD_TOOLS_ROOT="$SCRIPT_DIR/core/termin-build-tools"
 TOOLS_REQUIREMENTS="$SCRIPT_DIR/build-system/python-test-requirements.txt"
 if [[ ! -x "$PYTHON_BIN" ]]; then

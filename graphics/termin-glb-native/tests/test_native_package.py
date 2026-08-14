@@ -7,7 +7,7 @@ from termin.glb.native import NativeGLBDocument
 
 
 _BOX_GLB = (
-    Path(__file__).parents[2]
+    Path(__file__).parents[3]
     / "termin-thirdparty"
     / "cgltf"
     / "fuzz"

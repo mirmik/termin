@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 AUDIT_TOOL = REPO_ROOT / "tools" / "import_side_effects_audit.py"
 
 

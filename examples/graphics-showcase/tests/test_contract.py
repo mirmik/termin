@@ -15,11 +15,11 @@ def _python_sources() -> list[Path]:
 
 def _graphics_profile_example_sources() -> list[Path]:
     roots = (
-        REPO_ROOT / "termin-graphics" / "examples",
-        REPO_ROOT / "termin-gui-native" / "examples",
-        REPO_ROOT / "termin-nodegraph" / "examples",
-        REPO_ROOT / "tcplot" / "examples",
-        REPO_ROOT / "tcplot-gui-native" / "examples",
+        REPO_ROOT / "graphics" / "termin-graphics" / "examples",
+        REPO_ROOT / "graphics" / "termin-gui-native" / "examples",
+        REPO_ROOT / "graphics" / "termin-nodegraph" / "examples",
+        REPO_ROOT / "graphics" / "tcplot" / "examples",
+        REPO_ROOT / "graphics" / "tcplot-gui-native" / "examples",
     )
     return sorted(
         path
@@ -253,7 +253,7 @@ def test_graphics_profile_examples_do_not_depend_on_full_or_pysdl_hosts() -> Non
 
 
 def test_restored_tcplot_example_entry_points_are_complete() -> None:
-    examples = REPO_ROOT / "tcplot" / "examples"
+    examples = REPO_ROOT / "graphics" / "tcplot" / "examples"
     expected = {
         "demo_sin.py",
         "demo_scatter.py",
@@ -264,7 +264,12 @@ def test_restored_tcplot_example_entry_points_are_complete() -> None:
     }
     assert {path.name for path in examples.glob("demo_*.py")} == expected
     gallery = (
-        REPO_ROOT / "tcplot-gui-native" / "python" / "tcplot_gui_native" / "gallery.py"
+        REPO_ROOT
+        / "graphics"
+        / "tcplot-gui-native"
+        / "python"
+        / "tcplot_gui_native"
+        / "gallery.py"
     ).read_text(encoding="utf-8")
     for builder in (
         "sine_plot",

@@ -10,19 +10,19 @@ POSIX_HELPER_ONLY = pytest.mark.skipif(
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 ACTIVITY = (
     REPO_ROOT
-    / "termin-android/platform/app/src/main/java/org/termin/android/TerminActivity.java"
+    / "platform/termin-android/platform/app/src/main/java/org/termin/android/TerminActivity.java"
 )
-BOOTSTRAP = REPO_ROOT / "termin-android/src/bootstrap.cpp"
-MANIFEST = REPO_ROOT / "termin-android/platform/app/src/main/AndroidManifest.xml"
+BOOTSTRAP = REPO_ROOT / "platform/termin-android/src/bootstrap.cpp"
+MANIFEST = REPO_ROOT / "platform/termin-android/platform/app/src/main/AndroidManifest.xml"
 OPENXR_MANIFEST = (
-    REPO_ROOT / "termin-openxr/platform/app/src/main/AndroidManifest.xml"
+    REPO_ROOT / "platform/termin-openxr/platform/app/src/main/AndroidManifest.xml"
 )
 OPENXR_NATIVE_ACTIVITY = (
     REPO_ROOT
-    / "termin-openxr/platform/app/src/main/cpp/termin_openxr_native_activity.cpp"
+    / "platform/termin-openxr/platform/app/src/main/cpp/termin_openxr_native_activity.cpp"
 )
 
 

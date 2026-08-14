@@ -87,7 +87,7 @@ def test_every_registered_texture_extension_decodes_through_asset_path(
     fixture_path: str,
     expected_format: str,
 ) -> None:
-    source = Path(__file__).resolve().parents[2] / fixture_path
+    source = Path(__file__).resolve().parents[3] / fixture_path
     recorder = _DecodedTextureRecorder(source.with_suffix(extension))
 
     decoded_format, source_hint = TextureAsset._parse_content(

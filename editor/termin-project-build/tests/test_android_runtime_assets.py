@@ -8,7 +8,7 @@ import termin.project_build.android_runtime_assets as android_runtime_assets
 
 
 def _bundled_smoke_assets() -> Path:
-    return Path(__file__).parents[2] / "termin-android" / "assets"
+    return Path(__file__).parents[3] / "platform" / "termin-android" / "assets"
 
 
 def _fake_builtin_contract(package_dir: Path) -> dict[str, object]:
