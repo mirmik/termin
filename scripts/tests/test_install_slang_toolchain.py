@@ -78,3 +78,25 @@ def test_zip_path_escape_is_rejected(tmp_path: Path) -> None:
         assert "outside its root" in str(error)
     else:
         raise AssertionError("path traversal archive was accepted")
+
+
+def test_windows_install_publish_retries_transient_file_lock(monkeypatch) -> None:
+    class LockedStaging:
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        def replace(self, destination: Path) -> None:
+            del destination
+            self.attempts += 1
+            if self.attempts < 3:
+                raise PermissionError("scanner still holds slangc.exe")
+
+    staging = LockedStaging()
+    delays = []
+    monkeypatch.setattr(installer.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(installer.time, "sleep", delays.append)
+
+    installer.replace_install_directory(staging, Path("slang-test-version"))
+
+    assert staging.attempts == 3
+    assert delays == [0.25, 0.5]
