@@ -1,7 +1,9 @@
-site_name: termin
+site_name: Termin Editor
 site_description: 3D-движок — ECS, физика, рендеринг, анимация, навигация
-repo_url: https://github.com/mirmik/termin-monorepo
-repo_name: mirmik/termin-monorepo
+site_url: https://mirmik.github.io/termin/termin-app/
+repo_url: https://github.com/mirmik/termin
+repo_name: mirmik/termin
+edit_uri: edit/master/editor/termin-app/docs/
 docs_dir: docs
 theme:
   name: material
@@ -20,6 +22,8 @@ nav:
   - Главная: index.md
   - Быстрый старт: getting-started.md
   - Концепции: concepts.md
+  - Termin CLI: termin-cli.md
+  - Project build manifest: project-build-manifest.md
   - API:
     - Обзор: api/index.md
     - C API: api/c-api.md

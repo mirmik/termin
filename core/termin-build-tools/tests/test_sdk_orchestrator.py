@@ -558,7 +558,7 @@ def test_native_test_configuration_does_not_mutate_render_product_target():
     repo_root = sdk.repo_root_from(Path(__file__))
     render_cmake = (repo_root / "engine/termin-render/CMakeLists.txt").read_text(encoding="utf-8")
     test_guard = re.search(
-        r"if\(\s*TERMIN_RENDER_BUILD_TESTS\b[^)]*\)",
+        r"if\(\s*TERMIN_BUILD_TESTS\b[^)]*\)",
         render_cmake,
     )
     assert test_guard is not None

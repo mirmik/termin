@@ -7,13 +7,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TI_BUILD_SHARED "Build shared library" ON)
-option(TI_BUILD_TESTS "Build tests" ${TERMIN_BUILD_TESTS})
 option(TI_BUILD_CPP "Build C++ inspect/kind core runtime" ON)
 option(TERMIN_BUILD_PYTHON "Build Python/nanobind inspect bridge" OFF)
-option(TI_BUILD_PYTHON_TESTS "Build C++ tests for the Python inspect bridge" ${TERMIN_BUILD_PYTHON})
 
 set(TI_BUILD_PYTHON_BRIDGE OFF)
-if(TERMIN_BUILD_PYTHON OR (TI_BUILD_TESTS AND TI_BUILD_PYTHON_TESTS))
+if(TERMIN_BUILD_PYTHON)
     set(TI_BUILD_PYTHON_BRIDGE ON)
 endif()
 
@@ -176,7 +174,7 @@ if(TERMIN_BUILD_PYTHON AND nanobind_FOUND)
     )
 endif()
 
-if(TI_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
     add_executable(termin_inspect_c_test tests/test_main.c)
     target_include_directories(termin_inspect_c_test PRIVATE

@@ -261,32 +261,19 @@ if [[ "$CTEST_REGEX" == "^()$" ]]; then
     exit 1
 fi
 
-CTEST_TARGETS_FILE="$BUILD_DIR/ctest-build-targets.txt"
-if ! "${CTEST_PLAN_COMMAND[@]}" --build-targets > "$CTEST_TARGETS_FILE"; then
-    echo "ERROR: CTest build target resolution failed" >&2
+if ! CTEST_BUILD_AGGREGATE="$("${CTEST_PLAN_COMMAND[@]}" --build-aggregate)"; then
+    echo "ERROR: CTest build aggregate resolution failed" >&2
     exit 1
 fi
-mapfile -t CTEST_BUILD_TARGETS < "$CTEST_TARGETS_FILE"
-if [[ "${#CTEST_BUILD_TARGETS[@]}" -eq 0 ]]; then
-    echo "ERROR: CTest planner resolved no CMake build targets" >&2
+if [[ -z "$CTEST_BUILD_AGGREGATE" ]]; then
+    echo "ERROR: CTest planner resolved no CMake build aggregate" >&2
     exit 1
 fi
-echo "Building ${#CTEST_BUILD_TARGETS[@]} selected CTest target(s)"
+echo "Building selected CTest graph: $CTEST_BUILD_AGGREGATE"
 if ! cmake --build "$BUILD_DIR" \
-    --target "${CTEST_BUILD_TARGETS[@]}" \
+    --target "$CTEST_BUILD_AGGREGATE" \
     --parallel "$BUILD_JOBS"; then
     echo "ERROR: C++ test build failed" >&2
-    exit 1
-fi
-
-# Python shader tests must consume the artifact produced by this exact CMake
-# graph/configuration.  Build the producer target explicitly: the aggregate
-# native-test target is allowed to contain no dependency on termin_shaderc,
-# and merely checking bin/termin_shaderc would therefore accept a stale file.
-if ! cmake --build "$BUILD_DIR" \
-    --target termin_shaderc \
-    --parallel "$BUILD_JOBS"; then
-    echo "ERROR: termin_shaderc build failed; refusing to run Python tests" >&2
     exit 1
 fi
 

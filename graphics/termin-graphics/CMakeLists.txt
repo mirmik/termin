@@ -622,9 +622,7 @@ if(TERMIN_BUILD_PYTHON)
 endif()
 
 # --- Tests ---
-option(TERMIN_GRAPHICS_BUILD_TESTS "Build termin-graphics tests" ${TERMIN_BUILD_TESTS})
-
-if(TERMIN_GRAPHICS_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(tgfx_tests
@@ -660,27 +658,7 @@ if(TERMIN_GRAPHICS_BUILD_TESTS)
 endif()
 
 # --- tgfx2 tests ---
-set(_TGFX2_BUILD_TESTS_DEFAULT OFF)
 if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
-    set(_TGFX2_BUILD_TESTS_DEFAULT ON)
-endif()
-
-set(_TGFX2_BUILD_WINDOW_TESTS_DEFAULT OFF)
-if(_TGFX2_BUILD_TESTS_DEFAULT AND TERMIN_BUILD_WINDOW_TESTS)
-    set(_TGFX2_BUILD_WINDOW_TESTS_DEFAULT ON)
-endif()
-
-option(BUILD_TGFX2_TESTS
-    "Build tgfx2 smoke tests"
-    ${_TGFX2_BUILD_TESTS_DEFAULT})
-option(BUILD_TGFX2_WINDOW_TESTS
-    "Build tgfx2 tests that create windows/GL contexts"
-    ${_TGFX2_BUILD_WINDOW_TESTS_DEFAULT})
-option(BUILD_TGFX2_D3D11_WINDOW_TEST
-    "Build tgfx2 D3D11 SDL/DXGI window smoke test"
-    ${_TGFX2_BUILD_WINDOW_TESTS_DEFAULT})
-
-if(BUILD_TGFX2_TESTS)
     enable_testing()
     set(TGFX2_WINDOW_SKIP_RE
         "GLFW init failed|Failed to init GLFW|Window creation failed|Failed to create GLFW window|No available video device|Vulkan support is either not configured in SDL")
@@ -753,7 +731,7 @@ if(BUILD_TGFX2_TESTS)
     add_test(NAME tgfx2_sdf_test COMMAND tgfx2_sdf_test)
     set_tests_properties(tgfx2_sdf_test PROPERTIES TIMEOUT 10)
 
-    if(BUILD_TGFX2_WINDOW_TESTS)
+    if(TERMIN_BUILD_WINDOW_TESTS)
         find_package(glfw3 CONFIG QUIET)
         if(TARGET glfw)
             set(TERMIN_TGFX2_GLFW_AVAILABLE TRUE CACHE INTERNAL
@@ -830,7 +808,7 @@ if(BUILD_TGFX2_TESTS)
         termin_add_test_labels(tgfx2_presentation_geometry_test)
     endif()
 
-    if(TGFX2_ENABLE_OPENGL AND BUILD_TGFX2_WINDOW_TESTS)
+    if(TGFX2_ENABLE_OPENGL AND TERMIN_BUILD_WINDOW_TESTS)
         set(SDL2_OPENGL_SMOKE_FOUND FALSE)
         find_path(SDL2_OPENGL_SMOKE_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL2)
         find_library(SDL2_OPENGL_SMOKE_LIBRARY SDL2)
@@ -1047,7 +1025,7 @@ if(BUILD_TGFX2_TESTS)
             tgfx2_output_transform_pixel_smoke "termin:capability:vulkan")
     endif()
 
-    if(TGFX2_ENABLE_VULKAN AND BUILD_TGFX2_WINDOW_TESTS)
+    if(TGFX2_ENABLE_VULKAN AND TERMIN_BUILD_WINDOW_TESTS)
         # On-screen Vulkan smoke test. SDL2 lookup: Ubuntu's SDL2
         # ships `sdl2-config.cmake` (lowercase, non-standard) so we
         # skip find_package and go straight to find_path/find_library.
@@ -1113,7 +1091,7 @@ if(BUILD_TGFX2_TESTS)
         endif()
         termin_add_test_labels(tgfx2_d3d11_smoke "termin:capability:d3d11")
 
-        if(BUILD_TGFX2_D3D11_WINDOW_TEST)
+        if(TERMIN_BUILD_WINDOW_TESTS)
             set(SDL2_SMOKE_FOUND FALSE)
             find_path(SDL2_SMOKE_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL2)
             find_library(SDL2_SMOKE_LIBRARY SDL2)

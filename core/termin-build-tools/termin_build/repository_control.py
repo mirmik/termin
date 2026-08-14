@@ -17,6 +17,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from .ctest_planning import (
+    ctest_discovery_command as _ctest_discovery_command,
+    ctest_labels as _ctest_labels,
+    load_configured_native_sources as _load_configured_native_sources,
+    resolve_ctest_build_aggregate as resolve_ctest_build_aggregate,
+    resolve_ctest_build_targets as resolve_ctest_build_targets,
+)
 from .execution_manifest import (
     TestExecutionContractError,
     build_execution_manifest,
@@ -41,6 +48,7 @@ from .pytest_orchestration import (
     write_pytest_duration_cache as _write_pytest_duration_cache,
 )
 from .repository_control_cli import build_parser as _build_argument_parser
+from .repository_control_errors import ManifestError as ManifestError
 from .source_size_policy import (
     SourceSizePolicyError,
     find_long_files,
@@ -70,10 +78,6 @@ SUPPORTED_EXECUTORS = frozenset(
     {"pytest", "ctest", "process-smoke", "device", "manual"}
 )
 SUPPORTED_PLATFORMS = frozenset({"linux", "windows", "macos", "android", "quest"})
-
-
-class ManifestError(ValueError):
-    """Raised when repository control-plane metadata is invalid."""
 
 
 @dataclass(frozen=True)
@@ -628,21 +632,6 @@ def _native_owners(test_path: str, suites: Iterable[SuiteEntry]) -> list[str]:
         if suite.executor == "ctest"
         and any(_is_within(path, Path(root)) for root in suite.roots)
     )
-
-
-def _ctest_labels(raw_test: object) -> tuple[str, ...]:
-    if not isinstance(raw_test, dict):
-        return ()
-    properties = raw_test.get("properties")
-    if not isinstance(properties, list):
-        return ()
-    for property_entry in properties:
-        if not isinstance(property_entry, dict) or property_entry.get("name") != "LABELS":
-            continue
-        value = property_entry.get("value")
-        if isinstance(value, list) and all(isinstance(label, str) for label in value):
-            return tuple(value)
-    return ()
 
 
 def validate_ctest_inventory(
@@ -1321,186 +1310,6 @@ def _cmd_plan(
     return 0
 
 
-def _ctest_discovery_command(build_dir: Path, config: str | None) -> list[str]:
-    command = ["ctest", "--test-dir", str(build_dir)]
-    if config:
-        command.extend(("-C", config))
-    command.append("--show-only=json-v1")
-    return command
-
-
-def _load_configured_native_sources(build_dir: Path) -> list[dict[str, str]]:
-    compile_commands_path = build_dir / "compile_commands.json"
-    if compile_commands_path.exists():
-        try:
-            value = json.loads(compile_commands_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise ManifestError(
-                f"invalid compile commands in {compile_commands_path}: {exc}"
-            ) from exc
-        if not isinstance(value, list):
-            raise ManifestError(f"compile commands root must be an array: {compile_commands_path}")
-        return value
-
-    reply_dir, codemodel = _cmake_file_api_codemodel(build_dir)
-    try:
-        source_root = Path(codemodel["paths"]["source"])
-        sources: set[str] = set()
-        for configuration in codemodel["configurations"]:
-            for target_ref in configuration.get("targets", []):
-                target = json.loads(
-                    (reply_dir / target_ref["jsonFile"]).read_text(encoding="utf-8")
-                )
-                for source_entry in target.get("sources", []):
-                    source_path = source_entry.get("path")
-                    if not isinstance(source_path, str):
-                        continue
-                    path = Path(source_path)
-                    sources.add(str(path if path.is_absolute() else source_root / path))
-    except (KeyError, OSError, TypeError, json.JSONDecodeError) as exc:
-        raise ManifestError(f"invalid CMake file-api codemodel in {reply_dir}: {exc}") from exc
-    return [{"file": source} for source in sorted(sources)]
-
-
-def _cmake_file_api_codemodel(build_dir: Path) -> tuple[Path, dict[str, object]]:
-    reply_dir = build_dir / ".cmake" / "api" / "v1" / "reply"
-    indexes = sorted(reply_dir.glob("index-*.json"))
-    if not indexes:
-        raise ManifestError(
-            "CMake file-api codemodel is missing; request codemodel-v2 before "
-            f"configuring {build_dir}"
-        )
-    try:
-        index = json.loads(indexes[-1].read_text(encoding="utf-8"))
-        codemodel_ref = index["reply"]["codemodel-v2"]
-        codemodel = json.loads(
-            (reply_dir / codemodel_ref["jsonFile"]).read_text(encoding="utf-8")
-        )
-    except (KeyError, OSError, TypeError, json.JSONDecodeError) as exc:
-        raise ManifestError(
-            f"invalid CMake file-api codemodel in {reply_dir}: {exc}"
-        ) from exc
-    if not isinstance(codemodel, dict):
-        raise ManifestError(f"invalid CMake file-api codemodel in {reply_dir}")
-    return reply_dir, codemodel
-
-
-def _configured_executable_targets(
-    build_dir: Path, config: str | None
-) -> dict[str, str]:
-    reply_dir, codemodel = _cmake_file_api_codemodel(build_dir)
-    configurations = codemodel.get("configurations")
-    if not isinstance(configurations, list):
-        raise ManifestError(
-            f"CMake file-api codemodel has no configurations: {reply_dir}"
-        )
-    selected_configurations = [
-        entry
-        for entry in configurations
-        if isinstance(entry, dict)
-        and (config is None or entry.get("name") == config)
-    ]
-    if not selected_configurations:
-        raise ManifestError(
-            f"CMake file-api codemodel has no {config!r} configuration: {reply_dir}"
-        )
-
-    targets: dict[str, str] = {}
-    try:
-        for configuration in selected_configurations:
-            for target_ref in configuration.get("targets", []):
-                target = json.loads(
-                    (reply_dir / target_ref["jsonFile"]).read_text(encoding="utf-8")
-                )
-                if target.get("type") != "EXECUTABLE":
-                    continue
-                target_name = target.get("name")
-                if not isinstance(target_name, str):
-                    continue
-                for artifact in target.get("artifacts", []):
-                    artifact_path = artifact.get("path")
-                    if not isinstance(artifact_path, str):
-                        continue
-                    absolute_path = Path(artifact_path)
-                    if not absolute_path.is_absolute():
-                        absolute_path = build_dir / absolute_path
-                    targets[os.path.normcase(os.path.abspath(absolute_path))] = (
-                        target_name
-                    )
-    except (KeyError, OSError, TypeError, json.JSONDecodeError) as exc:
-        raise ManifestError(
-            f"invalid CMake executable target in {reply_dir}: {exc}"
-        ) from exc
-    return targets
-
-
-def resolve_ctest_build_targets(
-    build_dir: Path,
-    ctest_payload: object,
-    execution_plan: dict[str, object],
-    config: str | None,
-) -> tuple[str, ...]:
-    if not isinstance(ctest_payload, dict) or not isinstance(
-        ctest_payload.get("tests"), list
-    ):
-        raise ManifestError("CTest JSON must contain a tests array")
-    selected = execution_plan.get("selected")
-    if not isinstance(selected, list):
-        raise ManifestError("CTest execution plan has no selected test list")
-
-    registrations = {
-        raw_test["name"]: raw_test
-        for raw_test in ctest_payload["tests"]
-        if isinstance(raw_test, dict) and isinstance(raw_test.get("name"), str)
-    }
-    executable_targets = _configured_executable_targets(build_dir, config)
-    configured_target_names = set(executable_targets.values())
-    build_targets = set()
-    for entry in selected:
-        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
-            raise ManifestError("CTest execution plan contains an invalid test")
-        name = entry["name"]
-        registration = registrations.get(name)
-        labels = _ctest_labels(registration)
-        target_labels = [
-            label.removeprefix("termin:build-target:")
-            for label in labels
-            if label.startswith("termin:build-target:")
-        ]
-        if len(target_labels) > 1:
-            raise ManifestError(
-                f"CTest test {name} has multiple termin:build-target labels"
-            )
-        if target_labels:
-            target = target_labels[0]
-            if target not in configured_target_names:
-                raise ManifestError(
-                    f"CTest test {name} names unknown CMake build target: {target}"
-                )
-            build_targets.add(target)
-            continue
-
-        command = registration.get("command") if registration else None
-        if (
-            not isinstance(command, list)
-            or not command
-            or not isinstance(command[0], str)
-        ):
-            raise ManifestError(
-                f"CTest test {name} has no termin:build-target label or "
-                "executable command"
-            )
-        command_path = os.path.normcase(os.path.abspath(command[0]))
-        target = executable_targets.get(command_path)
-        if target is None:
-            raise ManifestError(
-                f"CTest test {name} executable is not a configured CMake target: "
-                f"{command[0]}"
-            )
-        build_targets.add(target)
-    return tuple(sorted(build_targets))
-
-
 def _cmd_check_ctest(
     repo_root: Path,
     build_dir: Path,
@@ -1546,6 +1355,7 @@ def _cmd_ctest_plan(
     json_output: bool,
     regex_output: bool,
     build_targets_output: bool,
+    build_aggregate_output: bool,
     config: str | None = None,
 ) -> int:
     catalog = _load_valid_catalog(repo_root)
@@ -1577,6 +1387,8 @@ def _cmd_ctest_plan(
             build_dir, payload, plan, config
         ):
             print(target)
+    elif build_aggregate_output:
+        print(resolve_ctest_build_aggregate(build_dir, payload, plan, config))
     elif json_output:
         _print_json(plan)
     else:
@@ -1946,6 +1758,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.json_output,
                 args.regex_output,
                 args.build_targets_output,
+                args.build_aggregate_output,
                 args.config,
             )
         if args.command == "report-ctest":

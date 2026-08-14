@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from termin_build.artifact_resolution import (
     ArtifactResolutionError,
+    resolve_sdk_shader_compiler,
     resolve_shader_compiler,
 )
 
@@ -13,9 +15,7 @@ from termin_build.artifact_resolution import (
 def _write_cache(build_dir: Path, *, multi_config: bool) -> None:
     build_dir.mkdir(parents=True)
     configuration_types = (
-        "CMAKE_CONFIGURATION_TYPES:STRING=Debug;Release\n"
-        if multi_config
-        else "CMAKE_BUILD_TYPE:STRING=Release\n"
+        "CMAKE_CONFIGURATION_TYPES:STRING=Debug;Release\n" if multi_config else "CMAKE_BUILD_TYPE:STRING=Release\n"
     )
     (build_dir / "CMakeCache.txt").write_text(
         configuration_types,
@@ -63,6 +63,51 @@ def test_resolver_does_not_fall_back_to_unrelated_layout(
         resolve_shader_compiler(build_dir, "Release", "windows")
 
 
+def _write_sdk_capabilities(sdk_root: Path, tool_path: str) -> None:
+    sdk_root.mkdir(parents=True)
+    (sdk_root / "termin-sdk-capabilities.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "sdk_version": "",
+                "platforms": {},
+                "tools": {"termin_shaderc": tool_path},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_resolve_shader_compiler_from_installed_sdk(tmp_path: Path) -> None:
+    sdk_root = tmp_path / "sdk"
+    _write_sdk_capabilities(sdk_root, "bin/termin_shaderc")
+    compiler = sdk_root / "bin" / "termin_shaderc"
+    compiler.parent.mkdir()
+    compiler.touch()
+
+    assert resolve_sdk_shader_compiler(sdk_root, "linux") == compiler
+
+
+def test_sdk_shader_compiler_must_be_declared_inside_sdk(tmp_path: Path) -> None:
+    sdk_root = tmp_path / "sdk"
+    _write_sdk_capabilities(sdk_root, "../termin_shaderc")
+    (tmp_path / "termin_shaderc").touch()
+
+    with pytest.raises(ArtifactResolutionError, match="escapes the SDK root"):
+        resolve_sdk_shader_compiler(sdk_root, "linux")
+
+
+def test_sdk_shader_compiler_rejects_platform_mismatch(tmp_path: Path) -> None:
+    sdk_root = tmp_path / "sdk"
+    _write_sdk_capabilities(sdk_root, "bin/termin_shaderc")
+    compiler = sdk_root / "bin" / "termin_shaderc"
+    compiler.parent.mkdir()
+    compiler.touch()
+
+    with pytest.raises(ArtifactResolutionError, match="wrong executable name"):
+        resolve_sdk_shader_compiler(sdk_root, "windows")
+
+
 def test_test_runners_have_no_legacy_release_tests_fallback() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     runner_paths = (
@@ -80,22 +125,25 @@ def test_test_runners_have_no_legacy_release_tests_fallback() -> None:
     assert "Release-tests" not in ci_workflow
     assert ci_workflow.count("build/Release/ctest-execution-manifest.json") == 2
 
-    assert "termin_build.artifact_resolution" in runner_paths[0].read_text(
-        encoding="utf-8"
-    )
-    assert "termin_build.artifact_resolution" in runner_paths[1].read_text(
-        encoding="utf-8"
-    )
+
+def test_python_runners_resolve_shader_compiler_from_sdk() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    for suffix in ("sh", "ps1"):
+        central = (repo_root / "scripts/test" / f"all.{suffix}").read_text(encoding="utf-8")
+        python = (repo_root / "scripts/test" / f"python.{suffix}").read_text(encoding="utf-8")
+
+        assert "sdk-shader-compiler" in python
+        assert "TERMIN_SHADERC remains an explicit override" in python
+        assert "sdk-shader-compiler" not in central
+        assert "TERMIN_SHADERC=" not in central
 
 
 def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    action = (repo_root / ".github/actions/resolve-sdk-python/action.yml").read_text(
+    action = (repo_root / ".github/actions/resolve-sdk-python/action.yml").read_text(encoding="utf-8")
+    package_python_action = (repo_root / ".github/actions/prepare-sdk-package-python/action.yml").read_text(
         encoding="utf-8"
     )
-    package_python_action = (
-        repo_root / ".github/actions/prepare-sdk-package-python/action.yml"
-    ).read_text(encoding="utf-8")
     workflow = (repo_root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert '"$GITHUB_WORKSPACE/sdk/bin/termin_python" -I' in action
@@ -109,9 +157,7 @@ def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
     assert "prepare-python-toolchain" in package_python_action
     assert "build/python-runtime/build-env/bin/python" in package_python_action
     assert "PYTHON_BIN=$package_python" in package_python_action
-    assert workflow.count(
-        "uses: ./.github/actions/prepare-sdk-package-python"
-    ) == 3
+    assert workflow.count("uses: ./.github/actions/prepare-sdk-package-python") == 3
     assert "PYTHON_BIN: ${{ github.workspace }}/sdk/bin/termin_python" in workflow
     assert "cd editor/termin-app" not in workflow
     assert "editor/termin-app/install" not in workflow
@@ -126,9 +172,7 @@ def test_central_runners_propagate_window_capability_to_python_planner() -> None
     repo_root = Path(__file__).resolve().parents[3]
     for suffix in ("sh", "ps1"):
         central = (repo_root / "scripts/test" / f"all.{suffix}").read_text(encoding="utf-8")
-        python = (repo_root / "scripts/test" / f"python.{suffix}").read_text(
-            encoding="utf-8"
-        )
+        python = (repo_root / "scripts/test" / f"python.{suffix}").read_text(encoding="utf-8")
 
         assert "TERMIN_TEST_CAPABILITIES" in central
         assert "--no-sdl" in central
@@ -136,37 +180,33 @@ def test_central_runners_propagate_window_capability_to_python_planner() -> None
         assert "--capability" in python
 
 
-def test_cpp_runners_build_shader_compiler_before_python_resolution() -> None:
+def test_cpp_runners_build_shader_compiler_for_native_tests() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    root_cmake = (repo_root / "CMakeLists.txt").read_text(encoding="utf-8")
+
+    # Native shader CTests use the compiler from their active CMake graph.
+    # The aggregate dependency prevents them from consuming a stale executable;
+    # Python tests independently use the installed SDK tool.
+    assert "add_dependencies(termin_native_tests termin_shaderc)" in root_cmake
+    assert "add_dependencies(termin_native_tests_with_window termin_shaderc)" in root_cmake
+
+
+def test_cpp_runners_build_exact_planner_selected_aggregate() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     linux_runner = (repo_root / "scripts/test/cpp.sh").read_text(encoding="utf-8")
     windows_runner = (repo_root / "scripts/test/cpp.ps1").read_text(encoding="utf-8")
 
-    # Resolving an existing path is not a freshness guarantee.  Both central
-    # C++ runners must explicitly build the producer target in the active
-    # graph before the central test launchers resolve TERMIN_SHADERC.
-    assert linux_runner.count("--target termin_shaderc") == 1
-    assert '$NativeBuildTargets += "termin_shaderc"' in windows_runner
-
-
-def test_cpp_runners_build_exact_planner_selected_targets() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
-    linux_runner = (repo_root / "scripts/test/cpp.sh").read_text(encoding="utf-8")
-    windows_runner = (repo_root / "scripts/test/cpp.ps1").read_text(encoding="utf-8")
-
-    assert '--target "${CTEST_BUILD_TARGETS[@]}"' in linux_runner
-    assert "$NativeBuildTargets = @($CtestBuildTargets)" in windows_runner
-    assert "-Target $NativeBuildTargets" in windows_runner
-    assert "termin_native_tests_with_window" not in linux_runner
-    assert "termin_native_tests_with_window" not in windows_runner
+    assert "--build-aggregate" in linux_runner
+    assert '--target "$CTEST_BUILD_AGGREGATE"' in linux_runner
+    assert "--build-aggregate" in windows_runner
+    assert "-Target @($CtestBuildAggregate)" in windows_runner
 
 
 def test_windows_cmake_helper_builds_multiple_targets_as_one_solution_graph() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    helper = (repo_root / "scripts" / "Invoke-CMakeBuild.ps1").read_text(
-        encoding="utf-8"
-    )
+    helper = (repo_root / "scripts" / "Invoke-CMakeBuild.ps1").read_text(encoding="utf-8")
 
-    assert '$Target.Count -gt 1' in helper
-    assert '"/t:$($Target -join \';\')"' in helper
+    assert "$Target.Count -gt 1" in helper
+    assert "\"/t:$($Target -join ';')\"" in helper
     assert "Get-TerminVisualStudioSolution" in helper
     assert "& $msbuildPath @msbuildArgs" in helper

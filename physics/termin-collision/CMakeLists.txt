@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(TERMIN_COLLISION_BUILD_TESTS "Build termin-collision tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_BUILD_PYTHON "Build Python bindings (_colliders_native, _collision_native)" OFF)
 
 # Dependencies (current valid contract for migration phase)
@@ -114,7 +113,7 @@ if(TERMIN_BUILD_PYTHON)
 endif()
 
 
-if(TERMIN_COLLISION_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_collision_tests

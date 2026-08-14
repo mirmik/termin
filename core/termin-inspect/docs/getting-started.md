@@ -16,7 +16,7 @@ cmake --install build
 ```bash
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
-  -DTI_BUILD_TESTS=ON \
+  -DTERMIN_BUILD_TESTS=ON \
   -DTERMIN_BUILD_PYTHON=ON \
   -DCMAKE_PREFIX_PATH=/opt/termin
 
@@ -29,7 +29,7 @@ ctest --test-dir build --output-on-failure
 ```bash
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
-  -DTI_BUILD_TESTS=ON \
+  -DTERMIN_BUILD_TESTS=ON \
   -DTERMIN_BUILD_PYTHON=OFF \
   -DCMAKE_PREFIX_PATH=/opt/termin
 ```
@@ -38,7 +38,7 @@ cmake -S . -B build \
 
 | Опция | По умолчанию | Описание |
 |-------|-------------|----------|
-| `DTI_BUILD_TESTS` | `OFF` | Собирать тесты |
+| `TERMIN_BUILD_TESTS` | `OFF` | Собирать тесты |
 | `TERMIN_BUILD_PYTHON` | `OFF` | Собирать Python bridge (требует nanobind) |
 
 ## Что проверяют тесты

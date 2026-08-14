@@ -85,11 +85,15 @@ termin editor .
 
 ## Документация
 
+- [GitHub Pages](https://mirmik.github.io/termin/) — собранный пользовательский
+  и инженерный портал.
 - [Первые шаги](docs/getting-started.md) — собрать SDK, посмотреть showcase и
   создать первый проект.
 - [Документация Termin](docs/index.md) — пользовательские и инженерные маршруты
   чтения.
-- [Termin CLI](termin-app/docs/termin-cli.md) — команды проекта, build profiles
+- [Районы Termin](docs/districts/index.md) — ownership, направление
+  зависимостей и самостоятельные guides Core и Graphics.
+- [Termin CLI](editor/termin-app/docs/termin-cli.md) — команды проекта, build profiles
   и запуск собранного приложения.
 - [Система сборки](docs/build-system.md) — профили SDK, toolchain и устройство
   артефактов.

@@ -4,9 +4,9 @@
 
 Связанные документы:
 
-- [Module Map](../../docs/modules.md#termin-animation)
+- [Module Map](../../../docs/modules.md#termin-animation)
 - [termin-skeleton](../../termin-skeleton/docs/index.md)
-- [canonical naming](../../docs/architecture/2026-03-15-canonical-naming.md)
+- [canonical naming](../../../docs/architecture/2026-03-15-canonical-naming.md)
 
 ## Основные области
 

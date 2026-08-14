@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TERMIN_RENDER_CORE_BUILD_SHARED "Build the render core as a shared library" ON)
-option(TERMIN_RENDER_CORE_BUILD_TESTS "Build render-core tests" ${TERMIN_BUILD_TESTS})
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -111,7 +110,7 @@ else()
     target_compile_options(termin_render_core PRIVATE -Wall -Wextra)
 endif()
 
-if(TERMIN_RENDER_CORE_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     function(termin_render_core_add_test name source)

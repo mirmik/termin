@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TERMIN_RENDER_PASSES_BUILD_SHARED "Build shared library" ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-render-passes" OFF)
-option(TERMIN_RENDER_PASSES_BUILD_TESTS "Build termin-render-passes tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_RENDER_PASSES_CORE_ONLY
     "Build the portable color/resolve/present pass slice"
     ${TERMIN_PLATFORM_WEB})
@@ -236,7 +235,7 @@ if(TERMIN_BUILD_PYTHON)
     )
 endif()
 
-if(TERMIN_RENDER_PASSES_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_render_passes_shadow_resource_contract_test

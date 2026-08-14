@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(TERMIN_PHYSICS_BUILD_TESTS "Build termin-physics tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_BUILD_PYTHON "Build Python bindings (_physics_native)" OFF)
 
 if(COMMAND termin_require_package)
@@ -81,7 +80,7 @@ if(TERMIN_BUILD_PYTHON)
     endif()
 endif()
 
-if(TERMIN_PHYSICS_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
     add_executable(termin_physics_tests
         tests/main.cpp

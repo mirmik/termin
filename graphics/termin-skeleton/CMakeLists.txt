@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python bindings (_skeleton_native)" OFF)
-option(TERMIN_SKELETON_BUILD_TESTS "Build termin-skeleton tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_SKELETON_BUILD_SHARED "Build termin-skeleton as a shared library" ON)
 
 if(COMMAND termin_require_package)
@@ -37,7 +36,7 @@ if(MSVC)
     target_compile_options(termin_skeleton PRIVATE /wd4251 /wd4275)
 endif()
 
-if(TERMIN_SKELETON_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_skeleton_data_test tests/test_skeleton_data.cpp)

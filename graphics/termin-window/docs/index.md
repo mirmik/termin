@@ -46,7 +46,7 @@ publishes stable generational handles, ordered per-window event batches and
 deterministic close order. Application code owns the mapping from those
 handles to UI-framework or raw-rendering content, render scheduling,
 main/secondary roles and exit policy. See
-[Framework-Neutral Window Management](../../docs/architecture/2026-07-23-framework-neutral-window-management.md).
+[Framework-Neutral Window Management](../../../docs/architecture/2026-07-23-framework-neutral-window-management.md).
 
 The concrete `termin::SDLBackendWindow` remains available as an escape hatch
 for integrations that need an SDL native handle. Applications link through:

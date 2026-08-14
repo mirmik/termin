@@ -1,0 +1,277 @@
+:root {
+  --termin-display-font: "Iowan Old Style", "Palatino Linotype", Palatino,
+    "Book Antiqua", Georgia, serif;
+  --termin-body-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --termin-core-accent: #ad4125;
+  --termin-graphics-accent: #247a8a;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #f5f0e6;
+  --md-primary-fg-color--light: #faf7f0;
+  --md-primary-fg-color--dark: #e9e1d3;
+  --md-accent-fg-color: #ad4125;
+  --md-default-fg-color: #292724;
+  --md-default-fg-color--light: #66615a;
+  --md-default-fg-color--lighter: #918a80;
+  --md-default-fg-color--lightest: #d8d0c3;
+  --md-default-bg-color: #f5f0e6;
+  --md-code-fg-color: #332f2b;
+  --md-code-bg-color: #e9e1d3;
+  --md-typeset-a-color: #a43c22;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 25;
+  --md-primary-fg-color: #191b1e;
+  --md-primary-fg-color--light: #25282c;
+  --md-primary-fg-color--dark: #111315;
+  --md-accent-fg-color: #ff8a64;
+  --md-default-fg-color: hsla(38, 26%, 92%, 0.96);
+  --md-default-fg-color--light: hsla(38, 18%, 82%, 0.72);
+  --md-default-fg-color--lighter: hsla(38, 14%, 76%, 0.42);
+  --md-default-fg-color--lightest: hsla(38, 12%, 70%, 0.14);
+  --md-default-bg-color: #191b1e;
+  --md-code-fg-color: #eee8dd;
+  --md-code-bg-color: #25282c;
+  --md-typeset-a-color: #ff9a76;
+}
+
+body {
+  font-family: var(--termin-body-font);
+}
+
+.md-header {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  box-shadow: none;
+  color: var(--md-default-fg-color);
+}
+
+.md-header__title {
+  font-weight: 720;
+  letter-spacing: -0.015em;
+}
+
+[data-md-color-scheme="default"] .md-header {
+  background: rgba(245, 240, 230, 0.96);
+}
+
+[data-md-color-scheme="slate"] .md-header {
+  background: rgba(25, 27, 30, 0.96);
+}
+
+.md-header .md-search__form {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  background: var(--md-code-bg-color);
+}
+
+.md-header .md-search__input::placeholder {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-header .md-search__icon,
+.md-header .md-header__button,
+.md-header .md-source {
+  color: var(--md-default-fg-color);
+}
+
+.md-main {
+  background:
+    radial-gradient(
+      circle at 52% 0%,
+      color-mix(in srgb, var(--md-accent-fg-color) 5%, transparent),
+      transparent 31rem
+    ),
+    var(--md-default-bg-color);
+}
+
+.md-grid {
+  max-width: 72rem;
+}
+
+.md-content__inner {
+  max-width: 47rem;
+  padding-bottom: 4rem;
+}
+
+.md-typeset {
+  font-size: 0.79rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--md-default-fg-color);
+  font-family: var(--termin-display-font);
+}
+
+.md-typeset h1 {
+  margin: 0 0 1.2rem;
+  font-size: clamp(2rem, 4vw, 2.7rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.03;
+}
+
+.md-typeset h2 {
+  margin-top: 2.5em;
+  padding-top: 0.48em;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  font-size: 1.42rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h3 {
+  font-size: 1.18rem;
+  font-weight: 650;
+}
+
+.termin-kicker {
+  margin-bottom: 0.6rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.67rem;
+  font-weight: 760;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.termin-lead {
+  max-width: 44rem;
+  margin: 1.5rem 0 2.25rem;
+  padding: 1.2rem 1.4rem 1.3rem 1.55rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-left: 0.25rem solid var(--md-accent-fg-color);
+  border-radius: 0.2rem;
+  background: color-mix(
+    in srgb,
+    var(--md-code-bg-color) 72%,
+    var(--md-default-bg-color)
+  );
+  font-family: var(--termin-display-font);
+  font-size: 1.08rem;
+  line-height: 1.56;
+}
+
+.termin-lead p {
+  margin: 0;
+}
+
+.termin-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.9rem;
+  margin: 1.35rem 0 2rem;
+}
+
+.termin-card {
+  padding: 1rem 1.1rem 1.05rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-top: 0.2rem solid var(--md-accent-fg-color);
+  border-radius: 0.25rem;
+  background: color-mix(
+    in srgb,
+    var(--md-code-bg-color) 48%,
+    var(--md-default-bg-color)
+  );
+}
+
+.termin-card--core {
+  border-top-color: var(--termin-core-accent);
+}
+
+.termin-card--graphics {
+  border-top-color: var(--termin-graphics-accent);
+}
+
+.termin-card h3 {
+  margin: 0 0 0.45rem;
+}
+
+.termin-card p:last-child {
+  margin-bottom: 0;
+}
+
+.termin-contract {
+  margin: 1.2rem 0;
+  padding: 0.9rem 1rem;
+  border-left: 0.2rem solid var(--md-accent-fg-color);
+  background: color-mix(
+    in srgb,
+    var(--md-code-bg-color) 52%,
+    var(--md-default-bg-color)
+  );
+}
+
+.termin-status {
+  display: inline-block;
+  margin: 0 0.35rem 0.35rem 0;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 10rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.md-typeset a {
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--md-typeset-a-color) 45%,
+    transparent
+  );
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.16em;
+}
+
+.md-typeset a:hover {
+  text-decoration-line: underline;
+  text-decoration-color: currentColor;
+}
+
+.md-typeset code {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+}
+
+.md-typeset pre > code {
+  border: 0;
+}
+
+.md-typeset blockquote {
+  color: var(--md-default-fg-color--light);
+  border-left-color: var(--md-accent-fg-color);
+}
+
+.md-typeset table:not([class]) {
+  border-color: var(--md-default-fg-color--lightest);
+  background: color-mix(
+    in srgb,
+    var(--md-code-bg-color) 42%,
+    var(--md-default-bg-color)
+  );
+}
+
+.md-nav__link--active {
+  font-weight: 680;
+}
+
+.md-footer-meta {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  background: var(--md-default-bg-color);
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-typeset {
+    font-size: 0.77rem;
+  }
+
+  .termin-lead {
+    padding: 1rem 1rem 1.1rem 1.15rem;
+    font-size: 1rem;
+  }
+}

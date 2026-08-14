@@ -4,8 +4,8 @@
 
 Связанные документы:
 
-- [Module Map](../../docs/modules.md#termin-skeleton)
-- [canonical naming](../../docs/architecture/2026-03-15-canonical-naming.md)
+- [Module Map](../../../docs/modules.md#termin-skeleton)
+- [canonical naming](../../../docs/architecture/2026-03-15-canonical-naming.md)
 
 ## Основные области
 

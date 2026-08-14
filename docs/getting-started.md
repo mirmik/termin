@@ -146,7 +146,7 @@ termin run PROFILE --project .
 `desktop-physics-showcase` и `android-render-showcase`.
 
 Подробный контракт профилей и поддерживаемые цели описаны в
-[документации Termin CLI](https://github.com/mirmik/termin/blob/master/termin-app/docs/termin-cli.md).
+[документации Termin CLI](https://github.com/mirmik/termin/blob/master/editor/termin-app/docs/termin-cli.md).
 
 ## Если что-то не работает
 
@@ -169,6 +169,6 @@ termin run PROFILE --project .
 
 - [Основные возможности и маршруты документации](index.md)
 - [Тестовые проекты](https://github.com/mirmik/termin/tree/master/test-projects)
-- [Termin CLI и build profiles](https://github.com/mirmik/termin/blob/master/termin-app/docs/termin-cli.md)
-- [Архитектура редактора](https://github.com/mirmik/termin/blob/master/termin-app/docs/editor-architecture.md)
+- [Termin CLI и build profiles](https://github.com/mirmik/termin/blob/master/editor/termin-app/docs/termin-cli.md)
+- [Архитектура редактора](https://github.com/mirmik/termin/blob/master/editor/termin-app/docs/editor-architecture.md)
 - [Карта модулей](modules.md)

@@ -1,7 +1,8 @@
 site_name: termin-inspect
 site_description: Inspect/Kind library documentation for Termin
-repo_url: https://github.com/mirmik/termin-inspect
-repo_name: mirmik/termin-inspect
+repo_url: https://github.com/mirmik/termin
+repo_name: mirmik/termin
+edit_uri: edit/master/core/termin-inspect/docs/
 theme:
   name: material
   language: ru

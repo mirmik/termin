@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TERMIN_ENGINE_BUILD_SHARED "Build shared library" ON)
-option(TERMIN_ENGINE_BUILD_TESTS "Build termin-engine tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-engine" OFF)
 option(TERMIN_ENGINE_CORE_RENDER_PIPELINE
     "Use the portable color/resolve/present default pipeline"
@@ -201,7 +200,7 @@ install(FILES
     DESTINATION lib/cmake/termin_engine
 )
 
-if(TERMIN_ENGINE_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_library(termin_engine_cpp_hot_reload_test_module SHARED

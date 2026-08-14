@@ -529,6 +529,26 @@ def test_ctest_build_targets_are_resolved_from_cmake_file_api(
         tmp_path, ctest_payload, execution_plan, "Release"
     ) == ("shared_test_target",)
 
+    aggregate_manifest = tmp_path / "ctest-build-aggregates.txt"
+    aggregate_manifest.write_text(
+        "schema=1\ntermin_selected_tests\tshared_test_target\n",
+        encoding="utf-8",
+    )
+    assert repository_control.resolve_ctest_build_aggregate(
+        tmp_path, ctest_payload, execution_plan, "Release"
+    ) == "termin_selected_tests"
+
+    aggregate_manifest.write_text(
+        "schema=1\n"
+        "termin_selected_tests\tshared_test_target\n"
+        "termin_selected_tests\tunselected_test_target\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(repository_control.ManifestError, match="exactly matches"):
+        repository_control.resolve_ctest_build_aggregate(
+            tmp_path, ctest_payload, execution_plan, "Release"
+        )
+
 
 def test_ctest_plan_reports_capability_exclusion_reason(tmp_path: Path) -> None:
     repo = _repository(tmp_path)

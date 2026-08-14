@@ -5,7 +5,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-option(TERMIN_RUNTIME_BUILD_TESTS "Build termin-runtime tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_RUNTIME_MINIMAL_ONLY
     "Build the core package-v2 loader without desktop resource domains"
     OFF)
@@ -157,7 +156,7 @@ if(EMSCRIPTEN)
     target_compile_options(termin_runtime PRIVATE -fexceptions)
 endif()
 
-if(TERMIN_RUNTIME_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
+if(TERMIN_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
     enable_testing()
 
     add_executable(termin_runtime_package_loader_test

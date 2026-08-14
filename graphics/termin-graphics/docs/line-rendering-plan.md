@@ -153,7 +153,7 @@ view-independent world-space tube. Он делегирует geometry streams в
 material pipeline. `ScreenSpaceLineRenderer` и `WorldSpaceLineRenderer`
 остаются low-level unlit debug/overlay utilities и не становятся режимами
 scene component. Решение зафиксировано в
-[`Canonical LineRenderer Contract`](../../docs/architecture-council/2026-08-07-line-renderer-contract.md).
+[`Canonical LineRenderer Contract`](../../../docs/architecture-council/2026-08-07-line-renderer-contract.md).
 
 ## 10. Cleanup
 

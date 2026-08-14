@@ -1,34 +1,38 @@
 # Termin Docs
 
-Главный вход в документацию репозитория для Obsidian и обычного Markdown.
+Короткий вход в документацию репозитория для Obsidian, обычного Markdown и тех
+случаев, когда браузер ещё не открыт, а вопрос уже вооружён.
 
-## Маршруты
+## Главные маршруты
 
-- [Documentation System](docs/documentation-system.md) - правила, по которым поддерживается документация.
-- [Module Map](docs/modules.md) - карта модулей, границы ответственности и ссылки на локальные docs.
-- [Architecture Index](docs/index.md) - существующий верхнеуровневый индекс.
-- [Architecture Notes](docs/architecture/index.md) - cross-module архитектурные заметки.
-- [Library Dependencies](docs/library-dependencies.md) - граф зависимостей модулей.
+- [Портал документации](docs/index.md) — верхнеуровневый вход в GitHub Pages.
+- [Карта районов](docs/districts/index.md) — кто за что отвечает и где проходят
+  границы архитектурной санитарной зоны.
+- [Core](docs/districts/core/index.md) — базовые типы, диспетчеризация, инспекция,
+  Python-host, MCP и инструменты сборки.
+- [Graphics](docs/districts/graphics/index.md) — данные изображения и геометрии,
+  GPU-контракты, рендер, окна, UI, графы и plotting без Engine и редактора.
 
-## Живые области
+## Инженерные карты
 
-- [termin-graphics](termin-graphics/docs/index.md) - tgfx/tgfx2, GPU runtime, render-device abstraction.
-- [termin-base](termin-base/docs/index.md) - base types, logging, settings, geometry, low-level utilities.
-- [termin-mesh](termin-mesh/docs/index.md) - canonical mesh/resource data layer.
-- [termin-render](docs/modules.md#termin-render) - render framework поверх canonical engine resources.
-- [termin-display](termin-display/docs/index.md) - windows/display/platform integration.
-- [termin-gui-native](termin-gui-native/README.md) - native retained UI, layout, dialogs and canvas/viewport widgets.
-- [tcplot](docs/modules.md#tcplot) - toolkit-neutral plotting core with optional native UI widgets.
-- [termin-scene](termin-scene/docs/index.md) - scene/ECS ownership, handles, lifecycle.
-- [termin-prefab](termin-prefab/docs/index.md) - prefab runtime, asset integration, overrides.
-- [termin-glb](termin-glb/docs/index.md) - GLB/glTF importer, asset integration, runtime instantiation.
-- [termin-inspect](termin-inspect/docs/index.md) - inspect/kind/field metadata.
-- [termin-collision](termin-collision/docs/index.md) - collision world, colliders, algorithms.
-- [termin-modules](termin-modules/docs/index.md) - module descriptors, lifecycle, callbacks.
-- [termin-components](termin-components/docs/index.md) - component packages.
+- [Система документации](docs/documentation-system.md) — где живёт источник истины
+  и как материал попадает в Pages.
+- [Система сборки](docs/build-system.md) — профили, SDK-префиксы и package graph.
+- [Карта возможностей модулей](docs/modules.md) — семантический срез библиотек;
+  это не карта владения.
+- [Архитектурные заметки](docs/architecture/index.md) — решения, границы и долги,
+  которые ещё способны укусить.
+- [Граф библиотечных зависимостей](docs/library-dependencies.md) — машинная анатомия
+  без обезболивающего.
 
-## Рабочие заметки
+## Специализированные сайты
 
-- [Repository Control Plane Audit](docs/analysis/2026-07-09-repository-control-plane-audit.md) - полнота Python test discovery, CI gates и публикации документации.
-- [Plans](docs/plans/index.md) - временные планы и миграционные заметки.
-- [Architecture TODO](docs/architecture/2026-03-16-architecture-todo.md) - открытые архитектурные вопросы.
+- [Editor](editor/termin-app/docs/index.md) — приложение редактора, CLI и его
+  архитектурные контракты.
+- [Collision](physics/termin-collision/docs/index.md) — столкновения и запросы.
+- [Scene](engine/termin-scene/docs/index.md) — ECS, handles и lifecycle.
+- [Modules](engine/termin-modules/docs/index.md) — дескрипторы и жизненный цикл
+  модулей.
+
+Временные миграционные документы лежат в [планах](docs/plans/index.md). Они могут
+быть полезны как история болезни, но не должны подменять текущие контракты.

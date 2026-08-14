@@ -65,11 +65,6 @@ foreach ($arg in $args) {
 
 $Failures = New-Object System.Collections.Generic.List[string]
 $TestBuildType = if ($CppArgs.Contains("--debug") -or $CppArgs.Contains("-d")) { "Debug" } else { "Release" }
-$TestBuildDir = if ($env:BUILD_DIR) {
-    $env:BUILD_DIR
-} else {
-    Join-Path (Join-Path $ScriptDir "build") $TestBuildType
-}
 
 if ($ProcessSmokeOnly -and $ProcessSmokeDisabled) {
     throw "--process-smoke-only cannot be combined with --no-process-smoke"
@@ -91,43 +86,6 @@ if (-not $ProcessSmokeOnly) {
         $PythonArgs = @()
         if ($Full) {
             $PythonArgs += "--full"
-        }
-
-        $ArtifactPython = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $ArtifactPython) {
-            $ArtifactPython = Get-Command python3 -ErrorAction SilentlyContinue
-        }
-        if (-not $ArtifactPython) {
-            throw "System Python is required to resolve test artifacts."
-        }
-
-        $OldPythonPath = $env:PYTHONPATH
-        $BuildToolsPath = Join-Path $ScriptDir "core/termin-build-tools"
-        $env:PYTHONPATH = if ($OldPythonPath) {
-            "$BuildToolsPath$([IO.Path]::PathSeparator)$OldPythonPath"
-        } else {
-            $BuildToolsPath
-        }
-        try {
-            $ResolvedShaderCompiler = & $ArtifactPython.Path -m termin_build.artifact_resolution `
-                shader-compiler `
-                --build-dir $TestBuildDir `
-                --configuration $TestBuildType `
-                --platform windows
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to resolve termin_shaderc from the active CMake build graph."
-            }
-        } finally {
-            if ($null -eq $OldPythonPath) {
-                Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
-            } else {
-                $env:PYTHONPATH = $OldPythonPath
-            }
-        }
-
-        $env:TERMIN_SHADERC = ($ResolvedShaderCompiler | Out-String).Trim()
-        if (-not $env:TERMIN_SHADERC) {
-            throw "Artifact resolver returned an empty termin_shaderc path."
         }
 
         & (Join-Path $ScriptDir "scripts\test\setup-python-env.ps1")

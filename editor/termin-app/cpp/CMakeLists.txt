@@ -309,9 +309,7 @@ if(BUILD_LAUNCHER)
 endif()
 
 # ============== Tests ==============
-option(TERMIN_APP_BUILD_TESTS "Build termin-app C++ tests" ${TERMIN_BUILD_TESTS})
-
-if(TERMIN_APP_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     if(COMMAND termin_require_package)

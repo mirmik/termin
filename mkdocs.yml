@@ -1,25 +1,68 @@
 site_name: Termin
 site_description: 3D-движок и редактор для интерактивных приложений и физического моделирования
+site_url: https://mirmik.github.io/termin/
 repo_url: https://github.com/mirmik/termin
 repo_name: mirmik/termin
+edit_uri: edit/master/docs/
 docs_dir: docs
 theme:
   name: material
   language: ru
+  icon:
+    logo: material/city-variant-outline
   features:
     - navigation.sections
+    - navigation.indexes
     - navigation.top
+    - navigation.footer
+    - content.code.copy
     - search.suggest
     - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Переключить на тёмную сторону
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Вернуться к дневному свету
 markdown_extensions:
   - admonition
-  - codehilite
+  - md_in_html
   - toc:
       permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
   - attr_list
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+extra_css:
+  - stylesheets/extra.css
 nav:
   - Главная: index.md
   - Первые шаги: getting-started.md
+  - Районы Termin:
+      - Карта районов: districts/index.md
+      - Core — нулевой этаж:
+          - Вход: districts/core/index.md
+          - Первый спуск: districts/core/getting-started.md
+          - Инженерные службы: districts/core/toolbox.md
+          - Контракт SDK: districts/core/sdk.md
+          - Пограничная служба: districts/core/boundaries.md
+          - Сборка и проверка: districts/core/build-and-test.md
+      - Graphics — машинное отделение:
+          - Вход: districts/graphics/index.md
+          - Первый кадр: districts/graphics/getting-started.md
+          - Карта механизмов: districts/graphics/toolbox.md
+          - Рендер без сцены: districts/graphics/rendering.md
+          - Шейдеры и backend-ы: districts/graphics/shaders-and-backends.md
+          - Контракт SDK: districts/graphics/sdk.md
+          - Санитарный кордон: districts/graphics/boundaries.md
   - Разработка:
       - Система сборки: build-system.md
       - Smoke-проверки: smoke-checks.md
@@ -32,3 +75,4 @@ nav:
       - Обзор: architecture/index.md
       - Планы и миграции: plans/index.md
       - Architecture Council: architecture-council/index.md
+copyright: Termin — город сложных машин, документация к которым обязана оставаться живой.
