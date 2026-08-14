@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PROFILES = load_sdk_profiles(REPO_ROOT)
 
 
-def test_core_sdk_profile_is_projected_from_product_manifest() -> None:
+def test_core_sdk_profile_is_projected_from_republic_packages() -> None:
     packages = select_python_packages(
         PROFILES.profile("core"),
         load_manifest(REPO_ROOT),
@@ -23,12 +23,12 @@ def test_core_sdk_profile_is_projected_from_product_manifest() -> None:
     )
 
     assert [str(package.path) for package in packages] == [
-        "termin-build-tools",
-        "termin-nanobind-sdk",
-        "termin-base",
-        "termin-dispatch",
-        "termin-inspect",
-        "termin-mcp",
+        "core/termin-build-tools",
+        "core/termin-nanobind-sdk",
+        "core/termin-base",
+        "core/termin-dispatch",
+        "core/termin-inspect",
+        "core/termin-mcp",
     ]
 
 
@@ -45,8 +45,8 @@ def test_core_sdk_profile_owns_minimal_runtime_and_verification_recipe() -> None
     profile = PROFILES.profile("core")
 
     assert profile.artifact_kind == "standalone"
-    assert profile.runtime_lock.as_posix() == "build-system/python-runtime-core-lock.txt"
-    assert profile.sdk_prefix == "sdk"
+    assert profile.runtime_lock.as_posix() == "build-system/python-runtime-lock.txt"
+    assert profile.sdk_prefix == "sdk-core"
     assert profile.csharp_profile is None
     assert profile.embedded_python_hosts == ()
     assert profile.launcher_import_roots == (

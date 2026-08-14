@@ -125,8 +125,8 @@ def test_prepare_rejects_installer_with_different_abi(
     current = python_test_environment.RuntimeIdentity.current()
     mismatched = python_test_environment.RuntimeIdentity(
         python_abi=PythonAbiIdentity(
-            version="3.10",
-            soabi="cpython-310-x86_64-linux-gnu",
+            version="9.9",
+            soabi="cpython-99-test-mismatch",
             free_threaded=False,
             py_gil_disabled=False,
         ),

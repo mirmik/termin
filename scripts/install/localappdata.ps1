@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$ScriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 $SdkDir = Join-Path $ScriptDir "sdk"
 $InstallPrefix = Join-Path $env:LOCALAPPDATA "termin-sdk"
 

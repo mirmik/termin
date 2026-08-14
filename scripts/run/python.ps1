@@ -2,7 +2,7 @@
 # Run bundled SDK Python with the checkout source overlay.
 
 $ErrorActionPreference = "Stop"
-$ScriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 
 if ($args.Count -eq 1 -and ($args[0] -eq "--help" -or $args[0] -eq "-h")) {
     Write-Host "Usage: .\scripts\run\python.ps1 [python arguments ...]"

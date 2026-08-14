@@ -11,13 +11,9 @@ EMSDK_DIR="$("$SCRIPT_DIR/scripts/build/setup-web-toolchain.sh" --print-path)"
 BUILD_DIR="${TERMIN_WEB_BUILD_DIR:-$SCRIPT_DIR/build/web-core}"
 HOST_BUILD_DIR="${TERMIN_WEB_HOST_BUILD_DIR:-$BUILD_DIR-host-tools}"
 RUN_BROWSER_SMOKE=0
-TARGET_CORE_SDK="${TERMIN_WEB_CORE_SDK:-${TERMIN_CORE_SDK:-}}"
-TARGET_CORE_BUILD_ID="${TERMIN_WEB_CORE_BUILD_ID:-${TERMIN_CORE_BUILD_ID:-}}"
-HOST_CORE_SDK="${TERMIN_HOST_CORE_SDK:-}"
-HOST_CORE_BUILD_ID="${TERMIN_HOST_CORE_BUILD_ID:-}"
 
 usage() {
-    echo "Usage: $0 [--setup] [--browser-smoke] [--build-dir PATH] [CORE INPUTS]"
+    echo "Usage: $0 [--setup] [--browser-smoke] [--build-dir PATH]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -39,10 +35,6 @@ while [[ $# -gt 0 ]]; do
             BUILD_DIR="$2"
             shift 2
             ;;
-        --core-sdk) TARGET_CORE_SDK="$2"; shift 2 ;;
-        --core-build-id) TARGET_CORE_BUILD_ID="$2"; shift 2 ;;
-        --host-core-sdk) HOST_CORE_SDK="$2"; shift 2 ;;
-        --host-core-build-id) HOST_CORE_BUILD_ID="$2"; shift 2 ;;
         --help|-h)
             usage
             exit 0
@@ -54,34 +46,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-if [[ -z "$TARGET_CORE_SDK" ]]; then
-    echo "ERROR: --core-sdk is required for Web Core" >&2
-    exit 1
-fi
-if [[ -z "$HOST_CORE_SDK" ]]; then
-    echo "ERROR: --host-core-sdk is required for host shader tools" >&2
-    exit 1
-fi
-TARGET_CORE_SDK="$(cd "$TARGET_CORE_SDK" && pwd)"
-HOST_CORE_SDK="$(cd "$HOST_CORE_SDK" && pwd)"
-TARGET_CORE_MANIFEST="$TARGET_CORE_SDK/termin-core-platform.json"
-if [[ ! -f "$TARGET_CORE_MANIFEST" ]]; then
-    echo "ERROR: Web Core platform manifest is missing: $TARGET_CORE_MANIFEST" >&2
-    exit 1
-fi
-HOST_CORE_MANIFEST="$HOST_CORE_SDK/termin-artifacts.json"
-if [[ ! -f "$HOST_CORE_MANIFEST" ]]; then
-    echo "ERROR: host Core artifact manifest is missing: $HOST_CORE_MANIFEST" >&2
-    exit 1
-fi
-if [[ -z "$TARGET_CORE_BUILD_ID" ]]; then
-    TARGET_CORE_BUILD_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["native_build_id"])' "$TARGET_CORE_MANIFEST")"
-fi
-if [[ -z "$HOST_CORE_BUILD_ID" ]]; then
-    HOST_CORE_BUILD_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["native_build_id"])' "$HOST_CORE_MANIFEST")"
-fi
-TARGET_CORE_TOOLCHAIN_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["target"]["toolchain_version"])' "$TARGET_CORE_MANIFEST")"
 
 emcmake="$EMSDK_DIR/upstream/emscripten/emcmake"
 emcc="$EMSDK_DIR/upstream/emscripten/emcc"
@@ -135,9 +99,7 @@ cmake -S "$SCRIPT_DIR" -B "$HOST_BUILD_DIR" -G "Unix Makefiles" \
     -DTERMIN_BUILD_PYTHON=OFF \
     -DTERMIN_BUILD_TESTS=OFF \
     -DTERMIN_BUILD_TGFX2_TESTS=OFF \
-    -DTERMIN_BUILD_WINDOW_TESTS=OFF \
-    -DTERMIN_CORE_SDK="$HOST_CORE_SDK" \
-    -DTERMIN_CORE_BUILD_ID="$HOST_CORE_BUILD_ID"
+    -DTERMIN_BUILD_WINDOW_TESTS=OFF
 cmake --build "$HOST_BUILD_DIR" --target termin_shaderc
 HOST_SHADERC="$HOST_BUILD_DIR/bin/termin_shaderc"
 if [[ ! -x "$HOST_SHADERC" ]]; then
@@ -145,21 +107,17 @@ if [[ ! -x "$HOST_SHADERC" ]]; then
     exit 1
 fi
 
-# Host tools link against the immutable desktop Core SDK, which is deliberately
-# outside their build tree. Keep that runtime input explicit while CMake custom
+# Keep libraries produced by the native host graph visible while CMake custom
 # commands execute termin_shaderc during the cross build.
 if [[ "$(uname -s)" == Darwin ]]; then
-    export DYLD_LIBRARY_PATH="$HOST_CORE_SDK/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+    export DYLD_LIBRARY_PATH="$HOST_BUILD_DIR/bin:$HOST_BUILD_DIR/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 else
-    export LD_LIBRARY_PATH="$HOST_CORE_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$HOST_BUILD_DIR/bin:$HOST_BUILD_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
 "$emcmake" cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" -G "Unix Makefiles" \
     -DCMAKE_BUILD_TYPE=Release \
     -DTERMIN_PLATFORM_WEB=ON \
-    -DTERMIN_CORE_SDK="$TARGET_CORE_SDK" \
-    -DTERMIN_CORE_BUILD_ID="$TARGET_CORE_BUILD_ID" \
-    -DTERMIN_CORE_TOOLCHAIN_VERSION="$TARGET_CORE_TOOLCHAIN_VERSION" \
     -DTERMIN_WEB_HOST_SHADERC="$HOST_SHADERC" \
     -DTERMIN_WEB_HOST_SLANGC="$HOST_SLANGC" \
     -DTERMIN_WEB_HOST_WGSL_VALIDATOR="$HOST_WGSL_VALIDATOR"

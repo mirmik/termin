@@ -291,7 +291,7 @@ static bool build_properties(const tc_shader_program_payload_desc* desc, tc_shad
                 free(properties);
                 return false;
             }
-            strcpy(output->label, input->label);
+            memcpy(output->label, input->label, strlen(input->label) + 1);
         }
         if (input->default_value) {
             output->default_value = *input->default_value;
@@ -302,7 +302,7 @@ static bool build_properties(const tc_shader_program_payload_desc* desc, tc_shad
                 free(properties);
                 return false;
             }
-            strcpy(output->default_text, input->default_text);
+            memcpy(output->default_text, input->default_text, strlen(input->default_text) + 1);
             output->has_default = 1;
         }
         output->range_min = input->range_min;

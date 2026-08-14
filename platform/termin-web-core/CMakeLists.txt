@@ -109,18 +109,18 @@ if(TGFX2_ENABLE_WEBGL2)
     set(TERMIN_WEBGL2_FIXTURE_STAMP
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/render-package/.webgl2-artifacts.stamp")
     file(GLOB_RECURSE TERMIN_WEB_BUILTIN_SHADER_FILES CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/../termin-graphics/resources/builtin_shaders/*")
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../graphics/termin-graphics/resources/builtin_shaders/*")
     add_custom_command(OUTPUT "${TERMIN_WEBGL2_FIXTURE_STAMP}"
         COMMAND "${TERMIN_HOST_PYTHON}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_webgl2_fixture.py"
             --python "${TERMIN_HOST_PYTHON}"
             --builtin-script
-                "${CMAKE_CURRENT_SOURCE_DIR}/../termin-graphics/cmake/compile_builtin_shader_artifacts.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/../../graphics/termin-graphics/cmake/compile_builtin_shader_artifacts.py"
             --shaderc "${TERMIN_WEB_HOST_SHADERC}"
             --slangc "${TERMIN_WEB_HOST_SLANGC}"
             --wgsl-validator "${TERMIN_WEB_HOST_WGSL_VALIDATOR}"
             --builtin-source
-                "${CMAKE_CURRENT_SOURCE_DIR}/../termin-graphics/resources/builtin_shaders"
+                "${CMAKE_CURRENT_SOURCE_DIR}/../../graphics/termin-graphics/resources/builtin_shaders"
             --fixture "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/render-package"
         COMMAND "${CMAKE_COMMAND}" -E touch "${TERMIN_WEBGL2_FIXTURE_STAMP}"
         DEPENDS
@@ -138,7 +138,7 @@ if(TGFX2_ENABLE_WEBGL2)
 endif()
 
 set(TERMIN_PACKAGE_BLOB_SCRIPT
-    "${CMAKE_CURRENT_SOURCE_DIR}/../termin-project-build/python/termin/project_build/runtime_package_blob.py")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../editor/termin-project-build/python/termin/project_build/runtime_package_blob.py")
 set(TERMIN_WEB_FIXTURE_PACKAGES)
 foreach(TERMIN_WEB_FIXTURE
         core-package

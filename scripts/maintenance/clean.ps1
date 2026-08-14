@@ -24,7 +24,7 @@ if ($Help) {
     exit 0
 }
 
-$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$Root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 $ProjectRoots = @(
     (Join-Path $Root "termin-graphics"),
     (Join-Path $Root "termin-nodegraph"),

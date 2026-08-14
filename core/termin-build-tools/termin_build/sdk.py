@@ -103,7 +103,7 @@ LEGACY_SOURCE_NATIVE_ARTIFACTS = {
     # termin-app used to own the monolithic termin._native binding. Editable
     # installs import from the source tree, so stale local artifacts must be
     # removed after the binding was split into package-owned modules.
-    "termin-app": ("termin/_native",),
+    "editor/termin-app": ("termin/_native",),
 }
 
 
@@ -285,8 +285,6 @@ def _stage_script(repo_root: Path, basename: str) -> list[str]:
     script_name = basename.removeprefix("build-sdk-")
     suffix = ".ps1" if _is_windows() else ".sh"
     script = repo_root / "scripts" / "build" / f"{script_name}{suffix}"
-    if not script.is_file():
-        raise RuntimeError(f"SDK stage script does not exist: {script}")
     if _is_windows():
         return [
             _powershell_executable(),
@@ -1375,7 +1373,7 @@ def _print_install_failure_summary(
     editable: bool,
 ) -> None:
     print(
-        f"ERROR: pip install failed for {package.path} "
+        f"ERROR: pip install failed for {package.distribution} "
         f"({package_index}/{package_count}); Python package sync stopped.",
         file=sys.stderr,
     )
@@ -1810,7 +1808,11 @@ def _run_sdk_build_impl(
     print("  Stage 1/4: C/C++ libraries + Python bindings")
     print("========================================")
     print("")
-    command = _stage_script(repo_root, "build-sdk-bindings") + stage_args
+    command = (
+        _stage_script(repo_root, "build-sdk-bindings")
+        + [f"--profile={profile.name}"]
+        + stage_args
+    )
     if dry_run:
         print("+ " + " ".join(command))
     else:

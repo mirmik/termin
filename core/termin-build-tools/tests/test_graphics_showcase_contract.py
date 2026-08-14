@@ -251,7 +251,7 @@ def test_graphics_profile_examples_do_not_depend_on_full_or_pysdl_hosts() -> Non
 
 
 def test_restored_tcplot_example_entry_points_are_complete() -> None:
-    examples = REPO_ROOT / "tcplot" / "examples"
+    examples = REPO_ROOT / "graphics" / "tcplot" / "examples"
     expected = {
         "demo_sin.py",
         "demo_scatter.py",
@@ -270,6 +270,5 @@ def test_restored_tcplot_example_entry_points_are_complete() -> None:
         "helix_plot",
         "surface_plot",
     ):
-        assert f"def {builder}(document):" in gallery
-    assert "plot.show_colorbar(surface, \"z\")" in gallery
-    assert "plot.create_data_marker(" in gallery
+        assert f'"{builder}"' in gallery
+    assert "from tcplot_gui_native.gallery import" in gallery

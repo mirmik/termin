@@ -187,8 +187,9 @@ namespace termin::gui_native {
                                                        sdk_root / "bin" / "termin_shaderc",
                                                        "termin_shaderc")
                                               .string();
+            const char* configured_slangc = std::getenv("TERMIN_SLANGC");
             if (config.slang_compiler_path.empty() &&
-                (!std::getenv("TERMIN_SLANGC") || std::getenv("TERMIN_SLANGC")[0] == '\0') &&
+                (!configured_slangc || configured_slangc[0] == '\0') &&
                 !is_file(executable_path(sdk_root / "bin" / "slangc"))) {
                 config.slang_compiler_path = find_on_path("slangc").string();
             }

@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$ScriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 
 $pythonCommand = $null
 if ($env:PYTHON_BIN) {

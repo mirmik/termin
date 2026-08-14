@@ -52,7 +52,7 @@ def test_toolchain_lock_is_the_only_runtime_identity() -> None:
     assert "unset(NB_SUFFIX CACHE)" in cmake_contract
 
     installed_nanobind_contract = (
-        REPO_ROOT / "termin-nanobind-sdk/cmake/nanobindConfig.cmake.in"
+        REPO_ROOT / "core/termin-nanobind-sdk/cmake/nanobindConfig.cmake.in"
     ).read_text(encoding="utf-8")
     assert '".${_termin_nanobind_expected_python_soabi}"' in (
         installed_nanobind_contract
@@ -67,8 +67,8 @@ def test_production_configuration_has_no_legacy_python_runtime() -> None:
         REPO_ROOT / "CMakeLists.txt",
         REPO_ROOT / "scripts/build/bindings.sh",
         REPO_ROOT / "scripts/build/bindings.ps1",
-        REPO_ROOT / "termin-app",
-        REPO_ROOT / "termin-nanobind-sdk",
+        REPO_ROOT / "editor/termin-app",
+        REPO_ROOT / "core/termin-nanobind-sdk",
     ]
     legacy_markers = (
         "python3.10",
@@ -104,7 +104,7 @@ def test_production_configuration_has_no_legacy_python_runtime() -> None:
 
 
 def test_test_builds_cannot_overwrite_the_installed_sdk() -> None:
-    render_cmake = (REPO_ROOT / "termin-render/CMakeLists.txt").read_text(
+    render_cmake = (REPO_ROOT / "engine/termin-render/CMakeLists.txt").read_text(
         encoding="utf-8"
     )
     assert "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/" not in render_cmake

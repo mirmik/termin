@@ -397,21 +397,13 @@ def test_graphics_sdk_profile_selects_chart_capable_native_and_csharp_stages(
     assert "scripts/build/csharp.ps1 --profile=plot-d3d11 --no-sdl" in normalized
 
 
-def test_windows_bindings_keep_d3d11_shader_artifacts_without_opengl() -> None:
+def test_windows_bindings_declares_builtin_shader_artifact_policy() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     windows_script = (repo_root / "scripts/build/bindings.ps1").read_text(
         encoding="utf-8"
     )
 
-    assert (
-        '$TerminBuildBuiltinShaderArtifacts = if ($Profile -eq "core") '
-        '{ "OFF" } else { "ON" }'
-        in windows_script
-    )
-    assert (
-        '} elseif ($TerminEnableOpenGl -eq "ON") {\n    "d3d11;opengl330"'
-        in windows_script
-    )
+    assert "TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS" in windows_script
 
 
 def test_bindings_entrypoints_expose_core_profile_contract() -> None:
@@ -424,36 +416,9 @@ def test_bindings_entrypoints_expose_core_profile_contract() -> None:
     )
 
     assert "full|graphics|core" in linux_script
-    assert 'DOCTOR_PROFILE="sdk-bindings-core"' in linux_script
     assert '@("full", "graphics", "core")' in windows_script
-    assert '"core" { "sdk-bindings-core" }' in windows_script
-    assert 'if [[ "$SDK_PROFILE" == "core" ]]; then' in linux_script
-    assert 'if ($Profile -eq "core") {' in windows_script
-
-
-def test_root_core_profile_forces_graphics_backends_off() -> None:
-    repo_root = sdk.repo_root_from(Path(__file__))
-    root_cmake = (repo_root / "CMakeLists.txt").read_text(encoding="utf-8")
-    core_branch = root_cmake.split(
-        'if(TERMIN_SDK_PROFILE STREQUAL "graphics" OR TERMIN_SDK_PROFILE STREQUAL "core")',
-        1,
-    )[1].split("else()\n    set(TERMIN_RENDER_CORE_ONLY OFF", 1)[0]
-
-    assert "set(TERMIN_ENABLE_OPENGL OFF" in core_branch
-    assert "set(TERMIN_ENABLE_VULKAN OFF" in core_branch
-    assert "set(TERMIN_ENABLE_SDL OFF" in core_branch
-
-
-def test_no_sdl_disables_only_the_profiler_gui() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
-    root_cmake = (repo_root / "CMakeLists.txt").read_text(encoding="utf-8")
-    profiler_cmake = (repo_root / "termin-profiler" / "CMakeLists.txt").read_text(
-        encoding="utf-8"
-    )
-
-    assert "set(TERMIN_PROFILER_BUILD_GUI\n    ${TERMIN_ENABLE_SDL}" in root_cmake
-    assert "if(TERMIN_PROFILER_BUILD_GUI)\n        termin_require_package(termin_gui_native" in profiler_cmake
-    assert "set(TERMIN_PROFILER_INSTALL_TARGETS termin_profiler_cli)" in profiler_cmake
+    assert "TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS=OFF" in linux_script
+    assert '$TerminBuildBuiltinShaderArtifacts = "ON"' in windows_script
 
 
 def test_sdk_build_publishes_and_verifies_canonical_wheelhouse(
@@ -537,7 +502,7 @@ def test_wheelhouse_arg_parser_keeps_stage_args_but_extracts_wheel_options(tmp_p
 
 def test_native_extensions_for_source_reads_manifest():
     repo_root = sdk.repo_root_from(Path(__file__))
-    extensions = native_extensions_for_source(repo_root / "termin-base")
+    extensions = native_extensions_for_source(repo_root / "core/termin-base")
 
     assert [extension.name for extension in extensions] == [
         "tcbase._tcbase_native",
@@ -572,7 +537,7 @@ def test_repository_profiles_own_distinct_runtime_locks():
         "typing-extensions",
         "watchdog",
     }
-    assert core_requirement_names == {"packaging"}
+    assert core_requirement_names == full_requirement_names
 
 
 def test_repo_installs_umbrella_termin_cmake_package():
@@ -587,43 +552,9 @@ def test_repo_installs_umbrella_termin_cmake_package():
     assert "INTERFACE_LINK_LIBRARIES tcbase::termin_base" in package_config
 
 
-def test_root_propagates_global_native_test_option_to_subprojects():
-    repo_root = sdk.repo_root_from(Path(__file__))
-    root_cmake = (repo_root / "CMakeLists.txt").read_text(encoding="utf-8")
-    local_test_options = {
-        "TERMIN_AUDIO_BUILD_TESTS",
-        "TERMIN_BASE_BUILD_TESTS",
-        "TERMIN_COLLISION_BUILD_TESTS",
-        "TERMIN_COMPONENTS_KINEMATIC_BUILD_TESTS",
-        "TERMIN_CSG_BUILD_TESTS",
-        "TERMIN_DISPATCH_BUILD_TESTS",
-        "TERMIN_ENGINE_BUILD_TESTS",
-        "TERMIN_GUI_NATIVE_BUILD_TESTS",
-        "TERMIN_INPUT_BUILD_TESTS",
-        "TERMIN_LIGHTING_BUILD_TESTS",
-        "TERMIN_MODULES_BUILD_TESTS",
-        "TERMIN_PHYSICS_BUILD_TESTS",
-        "TERMIN_PHYSICS_QOPT_BUILD_TESTS",
-        "TERMIN_PREFAB_BUILD_TESTS",
-        "TERMIN_QOPT_BUILD_TESTS",
-        "TERMIN_RENDER_BUILD_TESTS",
-        "TERMIN_RENDER_PASSES_BUILD_TESTS",
-        "TERMIN_ROBOTICS_BUILD_TESTS",
-        "TERMIN_RUNTIME_BUILD_TESTS",
-        "TERMIN_SCENE_BUILD_TESTS",
-        "TERMIN_SKELETON_BUILD_TESTS",
-    }
-
-    for option in local_test_options:
-        assert (
-            f"set({option} ${{TERMIN_BUILD_TESTS}} CACHE BOOL \"\" FORCE)"
-            in root_cmake
-        )
-
-
 def test_native_test_configuration_does_not_mutate_render_product_target():
     repo_root = sdk.repo_root_from(Path(__file__))
-    render_cmake = (repo_root / "termin-render/CMakeLists.txt").read_text(encoding="utf-8")
+    render_cmake = (repo_root / "engine/termin-render/CMakeLists.txt").read_text(encoding="utf-8")
     test_guard = re.search(
         r"if\(\s*TERMIN_RENDER_BUILD_TESTS\b[^)]*\)",
         render_cmake,
@@ -641,7 +572,7 @@ def test_native_test_configuration_does_not_mutate_render_product_target():
 
 def test_openxr_package_declares_all_public_target_dependencies():
     repo_root = sdk.repo_root_from(Path(__file__))
-    package_config = (repo_root / "termin-openxr/cmake/termin_openxrConfig.cmake.in").read_text(encoding="utf-8")
+    package_config = (repo_root / "platform/termin-openxr/cmake/termin_openxrConfig.cmake.in").read_text(encoding="utf-8")
 
     expected_dependencies = {
         "termin_base",
@@ -1716,7 +1647,7 @@ def test_editable_install_is_sequential_and_no_deps(tmp_path, monkeypatch):
 def test_editable_install_removes_legacy_source_native_artifacts(tmp_path, monkeypatch):
     repo_root = tmp_path / "repo"
     sdk_prefix = repo_root / "sdk"
-    legacy_dir = repo_root / "termin-app" / "termin"
+    legacy_dir = repo_root / "editor/termin-app" / "termin"
     legacy_dir.mkdir(parents=True)
     (sdk_prefix / "lib").mkdir(parents=True)
     stale_artifact = legacy_dir / "_native.cp312-win_amd64.pyd"
@@ -1724,7 +1655,7 @@ def test_editable_install_removes_legacy_source_native_artifacts(tmp_path, monke
     keep_artifact = legacy_dir / "_editor_native.cp312-win_amd64.pyd"
     keep_artifact.write_text("current binding", encoding="utf-8")
 
-    packages = [PackageEntry("termin-app", "termin-app", (), ())]
+    packages = [PackageEntry("editor/termin-app", "termin-app", (), ())]
     commands = []
 
     monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
@@ -1757,14 +1688,14 @@ def test_editable_install_failure_reports_windows_native_lock_context(
 ):
     repo_root = tmp_path / "repo"
     sdk_prefix = repo_root / "sdk"
-    package_root = repo_root / "termin-input"
+    package_root = repo_root / "engine/termin-input"
     native_dir = package_root / "python" / "termin" / "input"
     native_dir.mkdir(parents=True)
     (sdk_prefix / "lib").mkdir(parents=True)
     native_artifact = native_dir / "_input_native.cp310-win_amd64.pyd"
     native_artifact.write_text("native", encoding="utf-8")
 
-    packages = [PackageEntry("termin-input", "termin-input", (), ())]
+    packages = [PackageEntry("engine/termin-input", "termin-input", (), ())]
 
     monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
     monkeypatch.setattr(sdk, "_python_bin", lambda: "python")

@@ -41,6 +41,18 @@ def _run_script(
     environment_variable: str = "ANDROID_NDK_HOME",
     explicit_ndk: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    core_sdk = tmp_path / "core-sdk"
+    core_sdk.mkdir(exist_ok=True)
+    (core_sdk / "termin-core-platform.json").write_text(
+        json.dumps(
+            {
+                "native_build_id": "test-core",
+                "target": {"toolchain_version": "test-toolchain"},
+                "artifacts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
     config_home = tmp_path / "config"
     settings = config_home / "termin/settings.json"
     settings.parent.mkdir(parents=True, exist_ok=True)
@@ -62,6 +74,8 @@ def _run_script(
         str(tmp_path / "build"),
         "--prefix",
         str(tmp_path / "sdk"),
+        "--core-sdk",
+        str(core_sdk),
     ]
     if explicit_ndk is not None:
         command.extend(("--ndk", str(explicit_ndk)))

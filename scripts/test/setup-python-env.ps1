@@ -2,7 +2,7 @@
 # Create checkout-local test tooling and a source overlay over bundled SDK Python.
 
 $ErrorActionPreference = "Stop"
-$ScriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 . (Join-Path $ScriptDir "scripts\Normalize-WindowsSdkPermissions.ps1")
 $Force = $false
 
