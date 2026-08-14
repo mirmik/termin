@@ -203,7 +203,7 @@ $cmakeArgs += @(
     "-DTERMIN_ENABLE_OPENGL=$TerminEnableOpenGl",
     "-DTERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS=$TerminBuildBuiltinShaderArtifacts",
     "-DTERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS=$TerminBuiltinShaderArtifactTargets",
-    "-DTERMIN_BUILD_EDITOR_MINIMAL=$(if ($Profile -eq 'full') { 'ON' } else { 'OFF' })",
+    "-DTERMIN_BUILD_EDITOR_MINIMAL=OFF",
     "-DTERMIN_BUILD_LAUNCHER=$(if ($Profile -eq 'full') { 'ON' } else { 'OFF' })"
 )
 
