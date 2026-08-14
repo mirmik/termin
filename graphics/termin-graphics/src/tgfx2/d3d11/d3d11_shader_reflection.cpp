@@ -236,7 +236,8 @@ namespace tgfx::d3d11_internal {
                        reflected_inputs.size());
         for (size_t i = 0; i < input_elements.size(); ++i) {
             const D3D11_INPUT_ELEMENT_DESC& element = input_elements[i];
-            tc::Log::error("  layout[%zu]: semantic=%s%u format=%u slot=%u offset=%u class=%u step=%u",
+            tc::Log::error("  layout[%zu]: semantic_name=%s semantic_index=%u format=%u slot=%u offset=%u class=%u "
+                           "step=%u",
                            i,
                            element.SemanticName ? element.SemanticName : "<null>",
                            element.SemanticIndex,
@@ -247,8 +248,10 @@ namespace tgfx::d3d11_internal {
                            element.InstanceDataStepRate);
         }
         for (size_t i = 0; i < reflected_inputs.size(); ++i) {
-            tc::Log::error(
-                "  vs_input[%zu]: semantic=%s%u", i, reflected_inputs[i].name.c_str(), reflected_inputs[i].index);
+            tc::Log::error("  vs_input[%zu]: semantic_name=%s semantic_index=%u",
+                           i,
+                           reflected_inputs[i].name.c_str(),
+                           reflected_inputs[i].index);
         }
     }
 
