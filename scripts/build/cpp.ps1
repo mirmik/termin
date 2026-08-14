@@ -184,6 +184,13 @@ $cmakeArgs = @()
 if ($CmakeGeneratorName -and -not (Test-Path (Join-Path $BuildDir "CMakeCache.txt"))) {
     $cmakeArgs += @("-G", $CmakeGeneratorName)
 }
+$PythonForCMake = if ($env:PYTHON_BIN) {
+    $env:PYTHON_BIN
+} elseif ($env:PYTHON_EXECUTABLE) {
+    $env:PYTHON_EXECUTABLE
+} else {
+    (Get-Command python).Source
+}
 
 $cmakeArgs += @(
     "-S", $ScriptDir,
@@ -192,6 +199,7 @@ $cmakeArgs += @(
     "-DCMAKE_INSTALL_PREFIX=$SdkPrefix",
     "-DCMAKE_PREFIX_PATH=$SdkPrefix",
     "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF",
+    "-DPython_EXECUTABLE=$PythonForCMake",
     "-DTERMIN_USE_CCACHE=$TerminUseCcache",
     "-DTERMIN_ENABLE_UNITY_BUILD=$TerminEnableUnityBuild",
     "-DTERMIN_ENABLE_PCH=$TerminEnablePch",
