@@ -24,6 +24,7 @@ if (-not $pythonCommand) {
 }
 
 $orchestratorArgs = @($args)
+$dryRun = $orchestratorArgs -contains "--dry-run"
 $sdkProfile = "full"
 for ($index = 0; $index -lt $orchestratorArgs.Count; $index++) {
     $arg = $orchestratorArgs[$index]
@@ -43,6 +44,9 @@ if ($oldPythonPath) {
 & $pythonCommand.Source -m termin_build.sdk --repo-root $ScriptDir build @orchestratorArgs
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
+}
+if ($dryRun) {
+    exit 0
 }
 
 $sdkPrefix = if ($env:SDK_PREFIX) {
