@@ -4,7 +4,9 @@ import importlib
 
 
 def test_components_animation_native_via_canonical_path():
-    module = importlib.import_module("termin.animation._components_animation_native")
+    module = importlib.import_module(
+        "termin.animation_components._components_animation_native"
+    )
     assert module.AnimationPlayer is not None
 
 

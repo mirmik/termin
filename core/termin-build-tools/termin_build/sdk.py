@@ -1494,11 +1494,17 @@ def install_pip_packages(
         return _run(pip_args, cwd=repo_root, env=env)
 
     print("Install mode: current pip environment (sequential pip install)")
-    editable_flag = ["-e"] if editable else []
     nodeps_flag = ["--no-deps"] if editable or force else []
     package_count = len(packages)
     for package_index, package in enumerate(packages, start=1):
-        mode = " (editable)" if editable else ""
+        package_editable = editable and package.editable
+        editable_flag = ["-e"] if package_editable else []
+        if package_editable:
+            mode = " (editable)"
+        elif editable:
+            mode = " (regular; package has no editable sources)"
+        else:
+            mode = ""
         print("")
         print("========================================")
         print(f"  Installing {package.path}{mode}")
@@ -1523,7 +1529,7 @@ def install_pip_packages(
                 package_index=package_index,
                 package_count=package_count,
                 repo_root=repo_root,
-                editable=editable,
+                editable=package_editable,
             )
             return result
 

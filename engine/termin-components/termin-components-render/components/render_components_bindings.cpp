@@ -205,7 +205,7 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("termin.materials._materials_native");
     nb::module_::import_("termin.render._render_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
-    nb::module_::import_("termin.skeleton._components_skeleton_native");
+    nb::module_::import_("termin.skeleton_components._components_skeleton_native");
     nb::module_::import_("termin.display._display_native");
     nb::module_::import_("termin.viewport._viewport_native");
     nb::module_::import_("tcbase._tcbase_native");
