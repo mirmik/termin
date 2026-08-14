@@ -318,6 +318,9 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
     target_link_libraries(termin_render_passes_builtin_shader_sources_test PRIVATE
         termin_render_passes
     )
+    target_compile_definitions(termin_render_passes_builtin_shader_sources_test PRIVATE
+        TERMIN_RENDER_PASSES_REPOSITORY_ROOT="${CMAKE_SOURCE_DIR}"
+    )
     set_target_properties(termin_render_passes_builtin_shader_sources_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )

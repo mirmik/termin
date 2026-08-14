@@ -92,6 +92,28 @@ def write_installed_sdk_product(
     return output
 
 
+def write_profiled_sdk_product(
+    repo_root: Path,
+    sdk_prefix: Path,
+    profile: SdkProfile,
+) -> Path:
+    """Write installed-product metadata, including declared product boundaries."""
+    forbidden_artifact_markers: tuple[str, ...] = ()
+    if profile.forbidden_artifacts_from_product:
+        if profile.product_manifest_id is None:
+            raise SdkProfileError(
+                "SDK profile requests product boundary verification without a product manifest"
+            )
+        forbidden_artifact_markers = load_product_manifest(
+            repo_root, profile.product_manifest_id
+        ).forbidden_artifact_markers
+    return write_installed_sdk_product(
+        sdk_prefix,
+        profile,
+        forbidden_artifact_markers=forbidden_artifact_markers,
+    )
+
+
 def load_installed_sdk_product(sdk_prefix: Path) -> InstalledSdkProduct:
     path = sdk_prefix / INSTALLED_SDK_PRODUCT_NAME
     try:

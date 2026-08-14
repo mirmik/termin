@@ -25,8 +25,8 @@ namespace termin::visual {
         void set_tint(termin::SrgbColor tint);
         void set_sampling(tgfx::DrawTextureSampling2D sampling);
 
-        std::optional<termin::Bounds2f> local_bounds() const;
-        bool hit_test(termin::Vec2f point, float tolerance) const;
+        std::optional<termin::Bounds2f> local_bounds() const override;
+        bool hit_test(termin::Vec2f point, float tolerance) const override;
         bool paint(GraphicItemPaintContext2D& context) const override;
 
     private:

@@ -73,14 +73,14 @@ from .sdk_composition import (
     compose_installed_sdk,
     load_installed_sdk_input,
 )
-from .product_manifest import load_product_manifest
 from .sdk_profiles import (
     SdkProfile,
+    SdkProfileError,
     load_installed_sdk_product,
     load_sdk_profiles,
     select_application_payloads,
     select_python_packages,
-    write_installed_sdk_product,
+    write_profiled_sdk_product,
 )
 from .wheelhouse import (
     WheelhouseError,
@@ -1845,18 +1845,6 @@ def _run_sdk_build_impl(
     print("  Stage 3/4: Populate bundled Python site-packages")
     print("========================================")
     print("")
-    forbidden_artifact_markers: tuple[str, ...] = ()
-    if profile.forbidden_artifacts_from_product:
-        if profile.product_manifest_id is None:
-            print(
-                "ERROR: SDK profile requests product boundary verification "
-                "without a product manifest",
-                file=sys.stderr,
-            )
-            return 1
-        forbidden_artifact_markers = load_product_manifest(
-            repo_root, profile.product_manifest_id
-        ).forbidden_artifact_markers
     if dry_run:
         print("+ write installed SDK product verification manifest")
         print(
@@ -1864,11 +1852,11 @@ def _run_sdk_build_impl(
             f"{_bundled_site_packages_hint(sdk_prefix)}"
         )
     else:
-        write_installed_sdk_product(
-            sdk_prefix,
-            profile,
-            forbidden_artifact_markers=forbidden_artifact_markers,
-        )
+        try:
+            write_profiled_sdk_product(repo_root, sdk_prefix, profile)
+        except (OSError, RuntimeError, SdkProfileError) as error:
+            print(f"ERROR: failed to write SDK product manifest: {error}", file=sys.stderr)
+            return 1
         result = install_python_packages(
             repo_root,
             sdk_prefix,
@@ -2262,14 +2250,20 @@ def main(argv: list[str] | None = None) -> int:
         sdk_prefix = _sdk_prefix(repo_root)
         try:
             python_executable = prepare_pinned_python_build_environment(repo_root)
+            write_profiled_sdk_product(
+                repo_root,
+                sdk_prefix,
+                _active_sdk_profile(repo_root),
+            )
         except (
             PythonAbiError,
             PythonToolchainError,
             OSError,
             RuntimeError,
+            SdkProfileError,
         ) as error:
             print(
-                f"ERROR: failed to prepare pinned Python toolchain: {error}",
+                f"ERROR: failed to prepare SDK Python installation: {error}",
                 file=sys.stderr,
             )
             return 1

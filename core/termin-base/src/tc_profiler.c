@@ -656,9 +656,16 @@ static int compare_doubles(const void* left, const void* right) {
 static double percentile_sorted(const double* values, int count, double quantile) {
     if (!values || count <= 0)
         return 0.0;
+    if (quantile <= 0.0)
+        return values[0];
+    if (quantile >= 1.0)
+        return values[count - 1];
     const double position = (double)(count - 1) * quantile;
-    const int lower = (int)position;
-    const int upper = lower + 1 < count ? lower + 1 : lower;
+    size_t lower = (size_t)position;
+    const size_t last = (size_t)count - 1;
+    if (lower > last)
+        lower = last;
+    const size_t upper = lower < last ? lower + 1 : lower;
     const double fraction = position - (double)lower;
     return values[lower] * (1.0 - fraction) + values[upper] * fraction;
 }

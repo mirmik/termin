@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <tcbase/tc_types.h>
 #include <type_traits>
@@ -54,10 +55,12 @@ namespace termin {
               z(z) {}
 
         int& operator[](int i) {
-            return (&x)[i];
+            assert(i >= 0 && i < 3);
+            return i == 0 ? x : (i == 1 ? y : z);
         }
         int operator[](int i) const {
-            return (&x)[i];
+            assert(i >= 0 && i < 3);
+            return i == 0 ? x : (i == 1 ? y : z);
         }
 
         Vec3i operator+(const Vec3i& v) const {

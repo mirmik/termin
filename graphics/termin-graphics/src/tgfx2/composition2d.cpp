@@ -31,12 +31,20 @@ namespace {
 
 extern "C" {
 
-    tgfx2_composition_layer2d tgfx2_composition_layer2d_identity(void) {
-        return {tc_affine2f_identity(), 1.0f, true};
+    void tgfx2_composition_layer2d_identity(tgfx2_composition_layer2d* out_layer) {
+        if (!out_layer) {
+            tc_log_error("[Composition2D] identity layer output is null");
+            return;
+        }
+        *out_layer = {tc_affine2f_identity(), 1.0f, true};
     }
 
-    tgfx2_composition_state2d tgfx2_composition_state2d_identity(void) {
-        return {tc_affine2f_identity(), tc_affine2f_identity(), 1.0f, true, true};
+    void tgfx2_composition_state2d_identity(tgfx2_composition_state2d* out_state) {
+        if (!out_state) {
+            tc_log_error("[Composition2D] identity state output is null");
+            return;
+        }
+        *out_state = {tc_affine2f_identity(), tc_affine2f_identity(), 1.0f, true, true};
     }
 
     bool tgfx2_composition_state2d_push(const tgfx2_composition_state2d* parent,
@@ -146,7 +154,7 @@ namespace tgfx {
     void CompositionEvaluator2D::reset_state_() noexcept {
         builder_ = nullptr;
         states_.clear();
-        root_state_ = tgfx2_composition_state2d_identity();
+        tgfx2_composition_state2d_identity(&root_state_);
         frames_.clear();
         clips_.clear();
         active_ = false;

@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 #ifdef __cplusplus
+#include <cassert>
 #include <cmath>
 #include <limits>
 
@@ -25,10 +26,12 @@ struct tc_vec2 {
           y(y) {}
 
     double& operator[](int i) {
-        return (&x)[i];
+        assert(i >= 0 && i < 2);
+        return i == 0 ? x : y;
     }
     double operator[](int i) const {
-        return (&x)[i];
+        assert(i >= 0 && i < 2);
+        return i == 0 ? x : y;
     }
 
     tc_vec2 operator+(const tc_vec2& v) const {
@@ -124,10 +127,12 @@ struct tc_vec2f {
           y(static_cast<float>(v.y)) {}
 
     float& operator[](int i) {
-        return (&x)[i];
+        assert(i >= 0 && i < 2);
+        return i == 0 ? x : y;
     }
     float operator[](int i) const {
-        return (&x)[i];
+        assert(i >= 0 && i < 2);
+        return i == 0 ? x : y;
     }
 
     tc_vec2f operator+(const tc_vec2f& v) const {
@@ -282,10 +287,12 @@ struct tc_vec3 {
           z(z) {}
 
     double& operator[](int i) {
-        return (&x)[i];
+        assert(i >= 0 && i < 3);
+        return i == 0 ? x : (i == 1 ? y : z);
     }
     double operator[](int i) const {
-        return (&x)[i];
+        assert(i >= 0 && i < 3);
+        return i == 0 ? x : (i == 1 ? y : z);
     }
 
     tc_vec3 operator+(const tc_vec3& v) const {
@@ -589,10 +596,12 @@ struct tc_vec3f {
           z(static_cast<float>(v.z)) {}
 
     float& operator[](int i) {
-        return (&x)[i];
+        assert(i >= 0 && i < 3);
+        return i == 0 ? x : (i == 1 ? y : z);
     }
     float operator[](int i) const {
-        return (&x)[i];
+        assert(i >= 0 && i < 3);
+        return i == 0 ? x : (i == 1 ? y : z);
     }
 
     tc_vec3f operator+(const tc_vec3f& v) const {

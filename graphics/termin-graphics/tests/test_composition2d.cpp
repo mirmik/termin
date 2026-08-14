@@ -29,7 +29,8 @@ namespace {
         static_assert(std::is_standard_layout_v<tgfx2_composition_layer2d>);
         static_assert(std::is_standard_layout_v<tgfx2_composition_state2d>);
 
-        const auto root = tgfx2_composition_state2d_identity();
+        tgfx2_composition_state2d root{};
+        tgfx2_composition_state2d_identity(&root);
         const tgfx2_composition_layer2d parent{
             termin::Affine2f::translation(10.0f, 20.0f) * termin::Affine2f::rotation(0.5f), 0.5f, true};
         tgfx2_composition_state2d parent_state{};
@@ -61,7 +62,8 @@ namespace {
     }
 
     void test_singular_and_non_finite_mapping() {
-        const auto root = tgfx2_composition_state2d_identity();
+        tgfx2_composition_state2d root{};
+        tgfx2_composition_state2d_identity(&root);
         const tgfx2_composition_layer2d singular{termin::Affine2f::scaling(0.0f, 2.0f), 1.0f, true};
         tgfx2_composition_state2d state{};
         assert(tgfx2_composition_state2d_push(&root, &singular, &state));

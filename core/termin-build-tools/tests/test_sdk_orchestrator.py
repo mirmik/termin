@@ -14,6 +14,7 @@ from termin_build import (
     sdk,
     sdk_bundled_python,
     sdk_python_layout,
+    sdk_profiles,
     sdk_runtime_metadata,
     sdk_verification,
 )
@@ -22,7 +23,6 @@ from termin_build.setup_helpers import native_extensions_for_source
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-
 
 @pytest.fixture(autouse=True)
 def _repository_profiles_for_mechanism_tests(monkeypatch):
@@ -98,7 +98,7 @@ def _write_empty_artifact_manifest(sdk_prefix: Path) -> None:
         encoding="utf-8",
     )
     profiles = sdk.load_sdk_profiles(REPO_ROOT)
-    sdk.write_installed_sdk_product(
+    sdk_profiles.write_installed_sdk_product(
         sdk_prefix,
         profiles.profile(profiles.default_profile),
     )

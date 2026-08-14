@@ -76,6 +76,10 @@ def test_test_runners_have_no_legacy_release_tests_fallback() -> None:
         source = runner_path.read_text(encoding="utf-8")
         assert "Release-tests" not in source
 
+    ci_workflow = (repo_root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "Release-tests" not in ci_workflow
+    assert ci_workflow.count("build/Release/ctest-execution-manifest.json") == 2
+
     assert "termin_build.artifact_resolution" in runner_paths[0].read_text(
         encoding="utf-8"
     )

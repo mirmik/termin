@@ -38,7 +38,7 @@ namespace {
     }
 
     std::filesystem::path repo_root_from_test_file() {
-        return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+        return TERMIN_RENDER_PASSES_REPOSITORY_ROOT;
     }
 
     std::string read_text(const std::filesystem::path& path) {
@@ -74,7 +74,8 @@ namespace {
 
 TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {
     const std::string source =
-        read_text(repo_root_from_test_file() / "termin-graphics/resources/builtin_shaders/termin_shadows.slang");
+        read_text(repo_root_from_test_file() /
+                  "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
 
     CHECK(source.find("float4 u_light_space_matrix[MAX_SHADOW_MAPS * 4]") != std::string::npos);
     CHECK(source.find("float4x4 u_light_space_matrix[MAX_SHADOW_MAPS]") == std::string::npos);
@@ -83,7 +84,8 @@ TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {
 
 TEST_CASE("shadow helper keeps filtering methods and cascade blending in Slang") {
     const std::string source =
-        read_text(repo_root_from_test_file() / "termin-graphics/resources/builtin_shaders/termin_shadows.slang");
+        read_text(repo_root_from_test_file() /
+                  "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
 
     CHECK(source.find("SHADOW_METHOD_HARD") != std::string::npos);
     CHECK(source.find("POISSON_SAMPLE_COUNT = 16") != std::string::npos);
@@ -705,7 +707,8 @@ TEST_CASE("built-in skybox shader is explicit Slang material shader") {
 
 TEST_CASE("stdlib normal debug material shaders use standard material fragment semantics") {
     const std::filesystem::path shader_root =
-        repo_root_from_test_file() / "termin-stdlib" / "python" / "termin" / "stdlib" / "resources" / "shaders";
+        repo_root_from_test_file() / "engine" / "termin-stdlib" / "python" / "termin" / "stdlib" /
+        "resources" / "shaders";
 
     const std::string normal_color = read_text(shader_root / "SlangNormalColor.shader");
     CHECK(normal_color.find("world_pos : TEXCOORD0") != std::string::npos);
@@ -741,7 +744,7 @@ TEST_CASE("built-in slang shader catalog registers explicit stage entry points")
 
 TEST_CASE("shared modular skinned transform owns the bone resource") {
     const std::filesystem::path shader_root =
-        repo_root_from_test_file() / "termin-graphics" / "resources" / "builtin_shaders";
+        repo_root_from_test_file() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders";
     const std::string source = read_text(shader_root / "termin_vertex_transform.slang");
 
     CHECK(source.find("import termin_prelude;") != std::string::npos);
@@ -753,7 +756,7 @@ TEST_CASE("shared modular skinned transform owns the bone resource") {
 
 TEST_CASE("modular foliage shadow transform owns instance placement resources") {
     const std::filesystem::path shader_root =
-        repo_root_from_test_file() / "termin-graphics" / "resources" / "builtin_shaders";
+        repo_root_from_test_file() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders";
     const std::string source = read_text(shader_root / "termin_shadow_foliage_transform.slang");
 
     CHECK(source.find("import termin_prelude;") != std::string::npos);
@@ -765,7 +768,7 @@ TEST_CASE("modular foliage shadow transform owns instance placement resources") 
 
 TEST_CASE("modular foliage material transform owns instance placement resources") {
     const std::filesystem::path shader_root =
-        repo_root_from_test_file() / "termin-graphics" / "resources" / "builtin_shaders";
+        repo_root_from_test_file() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders";
     const std::string source = read_text(shader_root / "termin_foliage_material_transform.slang");
 
     CHECK(source.find("ConstantBuffer<FoliagePushData> foliage_draw;") != std::string::npos);
@@ -776,7 +779,7 @@ TEST_CASE("modular foliage material transform owns instance placement resources"
 
 TEST_CASE("world tube transform module produces view-independent world semantics") {
     const std::filesystem::path shader_root =
-        repo_root_from_test_file() / "termin-graphics" / "resources" / "builtin_shaders";
+        repo_root_from_test_file() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders";
     const std::string tube_transform = read_text(shader_root / "termin_world_tube_line_transform.slang");
 
     CHECK(tube_transform.find("TerminWorldVertex termin_world_tube_vertex") != std::string::npos);

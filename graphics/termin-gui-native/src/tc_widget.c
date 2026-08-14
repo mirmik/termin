@@ -479,7 +479,8 @@ tc_ui_uniform_transform tc_ui_internal_widget_accumulated_transform(const tc_wid
 
 static tgfx2_composition_layer2d widget_composition_layer(const tc_widget* widget) {
     const tc_ui_uniform_transform transform = tc_widget_subtree_transform(widget);
-    tgfx2_composition_layer2d layer = tgfx2_composition_layer2d_identity();
+    tgfx2_composition_layer2d layer;
+    tgfx2_composition_layer2d_identity(&layer);
     layer.transform = uniform_transform_affine(transform);
     return layer;
 }
@@ -492,7 +493,7 @@ bool tc_ui_internal_widget_composition_state(const tc_widget* widget, tgfx2_comp
         return false;
     }
     if (!widget) {
-        *out_state = tgfx2_composition_state2d_identity();
+        tgfx2_composition_state2d_identity(out_state);
         return true;
     }
     if (!tc_ui_internal_widget_composition_state(widget->parent, &parent_state)) {
@@ -509,12 +510,13 @@ bool tc_ui_internal_widget_composition_state(const tc_widget* widget, tgfx2_comp
 bool tc_ui_internal_widget_map_point_from_parent(const tc_widget* widget,
                                                  tc_ui_point parent_point,
                                                  tc_ui_point* out_widget_point) {
-    tgfx2_composition_state2d state = tgfx2_composition_state2d_identity();
+    tgfx2_composition_state2d state;
     tgfx2_composition_layer2d layer;
     tc_vec2f local;
     if (!widget || !out_widget_point) {
         return false;
     }
+    tgfx2_composition_state2d_identity(&state);
     layer = widget_composition_layer(widget);
     if (!tgfx2_composition_state2d_push(&state, &layer, &state) ||
         !tgfx2_composition_state2d_map_point_from_world(

@@ -21,7 +21,6 @@ namespace termin::gui_native {
         template <typename T, typename... Args> T& make(Args&&... args) {
             static_assert(std::is_base_of_v<Widget, T>, "T must derive from Widget");
             auto widget = std::make_unique<T>(std::forward<Args>(args)...);
-            T& ref = *widget;
             tc_widget_handle handle = tc_widget_handle_invalid();
             if constexpr (NativeWidgetRuntimeType<T>::name) {
                 if (!register_builtin_widget_types()) {
@@ -42,7 +41,13 @@ namespace termin::gui_native {
             if (tc_widget_handle_is_invalid(handle)) {
                 throw std::runtime_error("failed to adopt native UI widget");
             }
-            return ref;
+            tc_widget* adopted = tc_ui_document_resolve_widget(document_.get(), handle);
+            T* adopted_body =
+                adopted && adopted->body ? dynamic_cast<T*>(static_cast<Widget*>(adopted->body)) : nullptr;
+            if (!adopted_body) {
+                throw std::runtime_error("adopted native UI widget has an invalid body");
+            }
+            return *adopted_body;
         }
         template <typename T, typename... Args> T& make_root(Args&&... args) {
             T& widget = make<T>(std::forward<Args>(args)...);

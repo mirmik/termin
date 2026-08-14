@@ -14,8 +14,8 @@ namespace termin::visual {
         void set_key(std::string key);
         void set_local_bounds(termin::Bounds2f bounds);
 
-        std::optional<termin::Bounds2f> local_bounds() const;
-        bool hit_test(termin::Vec2f point, float tolerance) const;
+        std::optional<termin::Bounds2f> local_bounds() const override;
+        bool hit_test(termin::Vec2f point, float tolerance) const override;
         bool paint(GraphicItemPaintContext2D& context) const override;
 
     private:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cmath>
 
 namespace termin {
@@ -23,10 +24,12 @@ namespace termin {
               w(w) {}
 
         double& operator[](int i) {
-            return (&x)[i];
+            assert(i >= 0 && i < 4);
+            return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
         }
         double operator[](int i) const {
-            return (&x)[i];
+            assert(i >= 0 && i < 4);
+            return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
         }
 
         Vec4 operator+(const Vec4& v) const {
@@ -142,10 +145,12 @@ namespace termin {
               w(static_cast<float>(v.w)) {}
 
         float& operator[](int i) {
-            return (&x)[i];
+            assert(i >= 0 && i < 4);
+            return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
         }
         float operator[](int i) const {
-            return (&x)[i];
+            assert(i >= 0 && i < 4);
+            return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
         }
 
         Vec4f operator+(const Vec4f& v) const {
@@ -260,10 +265,12 @@ namespace termin {
               w(w) {}
 
         int& operator[](int i) {
-            return (&x)[i];
+            assert(i >= 0 && i < 4);
+            return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
         }
         int operator[](int i) const {
-            return (&x)[i];
+            assert(i >= 0 && i < 4);
+            return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
         }
 
         Vec4i operator+(const Vec4i& v) const {

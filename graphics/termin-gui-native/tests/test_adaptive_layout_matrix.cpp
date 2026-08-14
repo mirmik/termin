@@ -151,11 +151,8 @@ namespace {
 } // namespace
 
 int main() {
-    const std::string showcase_path = std::string(TERMIN_GUI_NATIVE_SOURCE_DIR) +
-                                      "/../test-projects/android-render-showcase/"
-                                      "UI/native_runtime_hud.uiscript";
     UiScriptLoader loader;
-    LoadedUiScript loaded = loader.load(showcase_path);
+    LoadedUiScript loaded = loader.load(TERMIN_GUI_NATIVE_ADAPTIVE_LAYOUT_FIXTURE);
     termin_gui_native_test::install_test_text_measurer(loaded.document());
 
     tc_widget* hud_widget = widget(loaded, "hud");
