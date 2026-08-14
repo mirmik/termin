@@ -23,6 +23,8 @@ _PYPROJECT_REQUIRES_PYTHON_RE = re.compile(
     r'^\s*requires-python\s*=\s*"(?P<value>[^"]+)"',
     re.MULTILINE,
 )
+_DISTRIBUTION_NORMALIZE_RE = re.compile(r"[-_.]+")
+_REQUIREMENT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*")
 CANONICAL_REQUIRES_PYTHON = ">=3.14"
 
 
@@ -164,6 +166,70 @@ def setup_extensions(package_dir: Path, package: PackageEntry | None = None) -> 
     return extensions
 
 
+def setup_install_requires(package_dir: Path) -> set[str]:
+    setup_py = package_dir / "setup.py"
+    if not setup_py.is_file():
+        return set()
+    tree = ast.parse(setup_py.read_text(encoding="utf-8"), filename=str(setup_py))
+    dependencies = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (
+            isinstance(func, ast.Name) and func.id == "setup"
+            or isinstance(func, ast.Attribute) and func.attr == "setup"
+        ):
+            continue
+        for keyword in node.keywords:
+            if keyword.arg != "install_requires":
+                continue
+            if not isinstance(keyword.value, (ast.List, ast.Tuple)):
+                raise ValueError(
+                    f"{setup_py}: install_requires must be a literal list or tuple"
+                )
+            for element in keyword.value.elts:
+                if not (
+                    isinstance(element, ast.Constant)
+                    and isinstance(element.value, str)
+                ):
+                    raise ValueError(
+                        f"{setup_py}: install_requires entries must be strings"
+                    )
+                match = _REQUIREMENT_NAME_RE.match(element.value)
+                if match is None:
+                    raise ValueError(
+                        f"{setup_py}: invalid install requirement {element.value!r}"
+                    )
+                dependencies.add(
+                    _DISTRIBUTION_NORMALIZE_RE.sub("-", match.group()).lower()
+                )
+    return dependencies
+
+
+def local_dependency_order_errors(
+    repo_root: Path,
+    packages: list[PackageEntry],
+) -> list[str]:
+    positions = {
+        _DISTRIBUTION_NORMALIZE_RE.sub("-", package.distribution).lower(): index
+        for index, package in enumerate(packages)
+    }
+    errors = []
+    for index, package in enumerate(packages):
+        if package.source != "repository":
+            continue
+        dependencies = setup_install_requires(repo_root / package.path)
+        for dependency in sorted(dependencies):
+            dependency_index = positions.get(dependency)
+            if dependency_index is not None and dependency_index >= index:
+                errors.append(
+                    f"{package.path}: local dependency {dependency!r} must appear "
+                    "earlier in build-system/packages.json"
+                )
+    return errors
+
+
 def package_requires_python(package_dir: Path) -> str | None:
     setup_py = package_dir / "setup.py"
     if setup_py.is_file():
@@ -202,6 +268,11 @@ def validate(repo_root: Path) -> list[str]:
     duplicates = sorted({path for path in paths if paths.count(path) > 1})
     for path in duplicates:
         errors.append(f"duplicate package path in manifest: {path}")
+
+    try:
+        errors.extend(local_dependency_order_errors(repo_root, packages))
+    except (OSError, SyntaxError, ValueError) as error:
+        errors.append(str(error))
 
     try:
         shell_paths = read_shell_package_list(repo_root)
