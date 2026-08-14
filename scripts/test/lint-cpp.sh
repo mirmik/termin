@@ -213,13 +213,13 @@ if [[ $CLEAN -eq 1 ]]; then
 fi
 
 if [[ $NO_CONFIGURE -eq 0 ]]; then
-    PY_EXEC="$(command -v python3 || command -v python || true)"
-    if [[ -z "$PY_EXEC" ]]; then
-        echo "ERROR: python3 not found; cannot run build doctor" >&2
+    PYTHON_FOR_CMAKE="${PYTHON_BIN:-${PYTHON_EXECUTABLE:-$(command -v python3 || command -v python || true)}}"
+    if [[ -z "$PYTHON_FOR_CMAKE" || ! -x "$PYTHON_FOR_CMAKE" ]]; then
+        echo "ERROR: canonical Python not found; cannot configure C++ lint" >&2
         exit 1
     fi
     if ! PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
-        "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" doctor \
+        "$PYTHON_FOR_CMAKE" -m termin_build.sdk --repo-root "$SCRIPT_DIR" doctor \
         --profile sdk-cpp \
         --vulkan "$TERMIN_ENABLE_VULKAN" \
         --init-submodules; then
@@ -238,6 +238,7 @@ if [[ $NO_CONFIGURE -eq 0 ]]; then
         -DCMAKE_PREFIX_PATH="$SDK_PREFIX" \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
+        -DPython_EXECUTABLE="$PYTHON_FOR_CMAKE" \
         -DTERMIN_USE_CCACHE="$TERMIN_USE_CCACHE" \
         -DTERMIN_ENABLE_UNITY_BUILD=OFF \
         -DTERMIN_ENABLE_PCH=OFF \

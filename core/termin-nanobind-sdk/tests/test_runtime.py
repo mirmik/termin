@@ -30,6 +30,22 @@ def test_logical_nanobind_name_requires_free_threaded_runtime(monkeypatch) -> No
         runtime._abi_runtime_library_name("nanobind")
 
 
+def test_find_library_prefers_elf_soname_over_flattened_linker_name(tmp_path) -> None:
+    linker_name = tmp_path / "libtermin_graphics2.so"
+    soname = tmp_path / "libtermin_graphics2.so.0"
+    linker_name.write_bytes(b"independent artifact copy")
+    soname.write_bytes(b"runtime SONAME copy")
+
+    assert runtime._find_library("termin_graphics2", [tmp_path]) == soname
+
+
+def test_find_library_falls_back_to_unversioned_shared_library(tmp_path) -> None:
+    library = tmp_path / "libnanobind-ft.so"
+    library.write_bytes(b"unversioned runtime")
+
+    assert runtime._find_library("nanobind-ft", [tmp_path]) == library
+
+
 def test_windows_dll_directory_handles_are_retained_idempotently_and_can_close(tmp_path, monkeypatch) -> None:
     local_dir = tmp_path / "package" / "lib"
     sdk_bin = tmp_path / "sdk" / "bin"
