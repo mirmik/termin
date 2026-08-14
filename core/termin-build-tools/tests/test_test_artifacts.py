@@ -88,6 +88,23 @@ def test_test_runners_have_no_legacy_release_tests_fallback() -> None:
     )
 
 
+def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    action = (repo_root / ".github/actions/resolve-sdk-python/action.yml").read_text(
+        encoding="utf-8"
+    )
+    workflow = (repo_root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert '"$GITHUB_WORKSPACE/sdk/bin/termin_python" -I' in action
+    assert "PYTHONPATH=" not in action
+    permission_then_resolve = """      - name: Restore SDK executable permissions
+        run: chmod +x sdk/bin/*
+
+      - name: Resolve SDK Python layout
+        uses: ./.github/actions/resolve-sdk-python"""
+    assert workflow.count(permission_then_resolve) == 3
+
+
 def test_central_runners_propagate_window_capability_to_python_planner() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     for suffix in ("sh", "ps1"):
