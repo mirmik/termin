@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -51,6 +52,33 @@ def test_internal_cross_platform_launchers_are_paired() -> None:
     for directory, stem in expected_pairs:
         assert (REPO_ROOT / "scripts" / directory / f"{stem}.sh").is_file()
         assert (REPO_ROOT / "scripts" / directory / f"{stem}.ps1").is_file()
+
+
+def test_native_test_graph_has_no_cached_derived_toggles() -> None:
+    """Keep repeated configure independent from the previous product mode."""
+    allowed_test_options = {
+        "TERMIN_BUILD_TESTS",
+        "TERMIN_BUILD_TGFX2_TESTS",
+        "TERMIN_BUILD_WINDOW_TESTS",
+        # C# tests use a separate dotnet build and are not part of CTest.
+        "TERMIN_CSHARP_BUILD_TESTS",
+    }
+    option_pattern = re.compile(r"option\(\s*([A-Za-z0-9_]*TEST[A-Za-z0-9_]*)")
+    discovered: dict[str, list[str]] = {}
+
+    for cmake_path in sorted(REPO_ROOT.rglob("CMakeLists.txt")):
+        relative_path = cmake_path.relative_to(REPO_ROOT)
+        if relative_path.parts[0] in {"build", "sdk", "termin-thirdparty"}:
+            continue
+        for option_name in option_pattern.findall(cmake_path.read_text(encoding="utf-8")):
+            discovered.setdefault(option_name, []).append(relative_path.as_posix())
+
+    unexpected = {
+        option_name: paths
+        for option_name, paths in discovered.items()
+        if option_name not in allowed_test_options
+    }
+    assert unexpected == {}
 
 
 def test_web_toolchain_uses_a_shared_versioned_cache() -> None:

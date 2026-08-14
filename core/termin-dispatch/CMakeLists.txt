@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python bindings" OFF)
-option(TERMIN_DISPATCH_BUILD_TESTS "Build termin-dispatch tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_DISPATCH_BUILD_SHARED "Build termin-dispatch as a shared library" ON)
 
 if(COMMAND termin_require_package)
@@ -66,7 +65,7 @@ if(TERMIN_BUILD_PYTHON)
     )
 endif()
 
-if(TERMIN_DISPATCH_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
 
     add_executable(termin_dispatch_c_test tests/test_dispatcher_c.c)

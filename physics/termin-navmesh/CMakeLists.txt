@@ -8,13 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings" OFF)
 option(TERMIN_NAVMESH_BUILD_RECAST "Build Recast-backed navmesh components and Python bindings" ON)
-option(TERMIN_NAVMESH_BUILD_TESTS "Build termin-navmesh C/C++ tests" ${TERMIN_BUILD_TESTS})
-
-if(DEFINED TERMIN_BUILD_TESTS)
-    set(TERMIN_NAVMESH_EFFECTIVE_BUILD_TESTS ${TERMIN_BUILD_TESTS})
-else()
-    set(TERMIN_NAVMESH_EFFECTIVE_BUILD_TESTS ${TERMIN_NAVMESH_BUILD_TESTS})
-endif()
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -187,7 +180,7 @@ if(TERMIN_HAS_RECAST)
         install(TARGETS _navmesh_native DESTINATION lib/python/termin/navmesh)
     endif()
 
-    if(TERMIN_NAVMESH_EFFECTIVE_BUILD_TESTS)
+    if(TERMIN_BUILD_TESTS)
         enable_testing()
         add_executable(termin_navmesh_bake_visitor_registry_test
             tests/test_navmesh_bake_visitor_registry.cpp

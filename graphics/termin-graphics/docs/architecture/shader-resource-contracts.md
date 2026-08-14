@@ -104,7 +104,7 @@ The current `shadow_maps` kind means an array of independent texture bindings;
 it is not one physical 2D array texture. The cross-backend target replaces it
 with a renderer-owned layered resource and one sampled depth-array view, as
 specified by the
-[backend-neutral layered shadow pool](../../../docs/architecture/2026-08-04-layered-shadow-pool.md).
+[backend-neutral layered shadow pool](../../../../docs/architecture/2026-08-04-layered-shadow-pool.md).
 
 Adding a new well-known ABI resource requires updating this table, documenting
 the payload layout, adding validation/tests, and deciding whether it belongs to
@@ -336,9 +336,9 @@ Do not add a new global numeric binding assignment as part of this flow.
 
 - [Pipeline Layout Architecture](pipeline-layout.md) describes the current
   backend pipeline-layout data flow.
-- [GPU pipeline layout](../../../docs/gpu-pipeline-layout.md) records CPU-side
+- [GPU pipeline layout](../../../../docs/gpu-pipeline-layout.md) records CPU-side
   uniform layouts and vertex input details.
-- [Slang scope-first binding migration](../../../docs/plans/2026-06-11-slang-scope-first-binding.md)
+- [Slang scope-first binding migration](../../../../docs/plans/2026-06-11-slang-scope-first-binding.md)
   is the migration plan that led to this contract.
-- [Material Pipeline Slang migration](../../../docs/plans/2026-06-12-material-pipeline-slang-plan.md)
+- [Material Pipeline Slang migration](../../../../docs/plans/2026-06-12-material-pipeline-slang-plan.md)
   describes material/pass/vertex-transform convergence.

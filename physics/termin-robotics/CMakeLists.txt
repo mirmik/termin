@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(TERMIN_ROBOTICS_BUILD_TESTS "Build termin-robotics native tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_ROBOTICS_BUILD_PYTHON "Build termin-robotics Python bindings" ${TERMIN_BUILD_PYTHON})
 
 if(COMMAND termin_require_package)
@@ -47,7 +46,7 @@ else()
     termin_set_rpath_lib(termin_robotics)
 endif()
 
-if(TERMIN_ROBOTICS_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
     add_executable(termin_robotics_articulation3d_test
         tests/test_articulation3d.cpp

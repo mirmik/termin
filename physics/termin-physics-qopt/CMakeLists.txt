@@ -5,8 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(TERMIN_PHYSICS_QOPT_BUILD_TESTS
-    "Build termin-physics-qopt native tests" ${TERMIN_BUILD_TESTS})
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -56,7 +54,7 @@ else()
     termin_set_rpath_lib(termin_physics_qopt)
 endif()
 
-if(TERMIN_PHYSICS_QOPT_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
     find_package(Python COMPONENTS Interpreter REQUIRED)
 

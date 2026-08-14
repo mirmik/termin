@@ -18,7 +18,7 @@
 ```bash
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
-  -DTI_BUILD_TESTS=ON \
+  -DTERMIN_BUILD_TESTS=ON \
   -DTERMIN_BUILD_PYTHON=ON \
   -DCMAKE_PREFIX_PATH=/path/to/termin-base/install
 

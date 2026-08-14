@@ -5,8 +5,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(TERMIN_BUILD_PYTHON "Build Python binding for kinematic components" OFF)
-option(TERMIN_COMPONENTS_KINEMATIC_BUILD_TESTS
-    "Build termin-components-kinematic native tests" ${TERMIN_BUILD_TESTS})
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -50,7 +48,7 @@ if(MSVC)
     target_compile_options(termin_components_kinematic PRIVATE /wd4251 /wd4275)
 endif()
 
-if(TERMIN_COMPONENTS_KINEMATIC_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     add_executable(termin_components_kinematic_articulation_component_test
         tests/test_articulation_component.cpp)
     target_include_directories(

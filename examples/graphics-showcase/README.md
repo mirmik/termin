@@ -5,19 +5,23 @@ profile. It deliberately uses the installed SDK as a product: run it with the
 bundled isolated Python and do not add the repository to `PYTHONPATH`.
 
 ```bash
-task build -- --profile graphics --no-sdl
-sdk/bin/termin_python -I examples/graphics-showcase/main.py \
+task build:graphics -- --no-sdl
+sdk-graphics/bin/termin_python -I examples/graphics-showcase/main.py \
   --headless \
   --output /tmp/termin-graphics-showcase.png \
   --report /tmp/termin-graphics-showcase.json
 ```
 
-After building the SDK, the repository gate performs the same run with poisoned
-ambient Python paths and validates the profile boundary, report and artifact:
+The central repository test gate performs the same run with poisoned ambient
+Python paths and validates the profile boundary, report and artifact:
 
 ```bash
-scripts/smoke-graphics-showcase
+task test
 ```
+
+The gate currently delegates this focused check to
+`scripts/smoke-graphics-showcase`; that path is an implementation detail, not
+a second public command interface.
 
 The headless path is the required contract and works without `termin-window`,
 SDL, `termin-display`, engine runtime, editor, or PySDL2. It uses
@@ -60,8 +64,8 @@ imported by the mandatory headless gate. An SDL-enabled graphics SDK also has
 an interactive frontend for the integration section:
 
 ```bash
-task build -- --profile graphics --sdl
-sdk/bin/termin_python -I examples/graphics-showcase/main.py --windowed
+task build:graphics -- --sdl
+sdk-graphics/bin/termin_python -I examples/graphics-showcase/main.py --windowed
 ```
 
 The frontend opens on an overview and exposes every registry section as a tab;
@@ -72,8 +76,8 @@ window lifetime.
 On Windows, build the D3D11-only product and run the same Python entry point:
 
 ```powershell
-task build -- --profile graphics --no-sdl --no-vulkan --no-opengl
-.\sdk\bin\termin_python.exe -I .\examples\graphics-showcase\main.py `
+task build:graphics -- --no-sdl --no-vulkan --no-opengl
+.\sdk-graphics\bin\termin_python.exe -I .\examples\graphics-showcase\main.py `
   --headless --output $env:TEMP\termin-graphics-showcase.png `
   --report $env:TEMP\termin-graphics-showcase.json
 ```

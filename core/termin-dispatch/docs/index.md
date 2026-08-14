@@ -12,9 +12,9 @@ Termin-приложения не подключают его автоматич�
 
 Связанные документы:
 
-- [Language-neutral deferred dispatcher](../../docs/architecture/2026-07-24-language-neutral-deferred-dispatcher.md)
-- [No owner-thread restrictions](../../docs/architecture/2026-07-24-no-owner-thread-restrictions.md)
-- [Module Map](../../docs/modules.md#termin-dispatch)
+- [Language-neutral deferred dispatcher](../../../docs/architecture/2026-07-24-language-neutral-deferred-dispatcher.md)
+- [No owner-thread restrictions](../../../docs/architecture/2026-07-24-no-owner-thread-restrictions.md)
+- [Module Map](../../../docs/modules.md#termin-dispatch)
 
 ## C ABI
 

@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(TERMIN_CSG_BUILD_TESTS "Build termin-csg tests" ${TERMIN_BUILD_TESTS})
 option(TERMIN_CSG_BUILD_EXAMPLES "Build termin-csg examples" OFF)
 option(TERMIN_BUILD_PYTHON "Build termin-csg Python bindings" OFF)
 
@@ -76,7 +75,7 @@ set_target_properties(termin_csg PROPERTIES
 target_compile_definitions(termin_csg PRIVATE TERMIN_CSG_EXPORTS)
 termin_set_rpath_lib(termin_csg)
 
-if(TERMIN_CSG_BUILD_TESTS)
+if(TERMIN_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()

@@ -2,17 +2,26 @@
 
 ## Обзор
 
-Проект содержит множество C/C++ библиотек с Python-биндингами. Каждая
-domain-библиотека остаётся отдельным CMake-проектом со своим `CMakeLists.txt`,
-но SDK собирается единым корневым CMake-графом. Корневые `core/`, `graphics/`,
+Проект содержит множество C/C++ libraries и Python distributions. Каждый
+package владеет своими targets и локальным `CMakeLists.txt`, но не объявляет
+второй самостоятельный проект: SDK собирается единым корневым CMake-графом.
+Корневые `core/`, `graphics/`,
 `physics/`, `engine/`, `editor/` и `platform/` задают владение пакетами, а не
 самостоятельные build roots.
 
 Публичная точка входа — корневой `Taskfile.yml`: полная сборка выполняется
 `task build`, Core SDK — `task build:core`, Graphics SDK —
 `task build:graphics`. Профили выбирают замкнутое множество пакетов из одного
-checkout и устанавливают его в `sdk/`; внешний Core SDK и `--core-sdk` для
-обычной монорепозиторной сборки не требуются.
+checkout. Установочные prefixes различаются намеренно:
+
+| Профиль | Команда | Prefix |
+|---|---|---|
+| `core` | `task build:core` | `sdk-core/` |
+| `graphics` | `task build:graphics` | `sdk-graphics/` |
+| `full` | `task build` | `sdk/` |
+
+Внешний Core SDK и `--core-sdk` для обычной монорепозиторной сборки не
+требуются.
 
 Android и Web строятся тем же root orchestration через `task build:android` и
 `task build:web`. Опции installed Core SDK остаются внутренней возможностью
@@ -24,10 +33,12 @@ platform-рецептов для проверки или будущей комп
 1. **C/C++ библиотеки + Python bindings** — shared libraries, заголовки, CMake config, nanobind-модули и Python-исходники
 2. **C# bindings** — на Windows включены по умолчанию, на Linux включаются флагом `--csharp` и требуют SWIG и `dotnet`; Linux-сборка содержит только `Termin.Native`, без WPF
 3. **Bundled Python site-packages** — установка Python-пакетов в bundled runtime SDK
-4. **SDK Python wheelhouse** — атомарная публикация в `sdk/wheels` того же
+4. **SDK Python wheelhouse** — атомарная публикация в `<sdk-prefix>/wheels` того же
    проверенного набора wheels, из которого Stage 3 установила bundled runtime
 
-Внутри root build зависимости между модулями выражены CMake targets. Для standalone-сборок модулей остаётся путь через `find_package()` и `CMAKE_PREFIX_PATH=sdk/`.
+Внутри root build зависимости между модулями выражены CMake targets. Внешние
+consumers используют `find_package()` и передают выбранный `sdk/`, `sdk-core/`
+или `sdk-graphics/` через `CMAKE_PREFIX_PATH`.
 
 ### Канонический Python toolchain
 
@@ -53,9 +64,9 @@ free-threaded marker `t` в SOABI и изначально выключенный
 Root CMake build дополнительно требует ABI 3.14t и останавливается, если ему
 передан обычный cp314 либо старый Python.
 
-Установленный SDK содержит development artifacts того же ABI: заголовки в
-`sdk/include/python3.14t`, а на Windows — точную import library
-`sdk/lib/python314t.lib`. Поэтому standalone CMake-модули могут требовать
+Установленный prefix содержит development artifacts того же ABI: заголовки в
+`<sdk-prefix>/include/python3.14t`, а на Windows — точную import library
+`<sdk-prefix>/lib/python314t.lib`. Поэтому standalone CMake-модули могут требовать
 компоненты FindPython `Development`, `Development.Module` и
 `Development.Embed`, не подмешивая host Python.
 
@@ -97,7 +108,7 @@ task build -- --sdl
 First-party wheels собираются ровно один раз за полный проход. Результат
 снабжается manifest с `native_build_id`, Python ABI и SHA-256 каждого wheel,
 устанавливается в bundled runtime, а затем без повторного PEP 517 build
-публикуется в `sdk/wheels`. Финальная проверка отвергает отсутствующий,
+публикуется в `<sdk-prefix>/wheels`. Финальная проверка отвергает отсутствующий,
 устаревший, повреждённый или смешанный набор.
 
 Чтобы дополнительно собрать cross-platform C# bindings на Linux:
@@ -106,20 +117,22 @@ First-party wheels собираются ровно один раз за полн
 task build -- --sdl --csharp
 ```
 
-Для SDK, содержащего графическое ядро, visual scene, native widgets и 2D/3D
-charts без engine runtime, используется профиль `graphics`. Backend-флаги
+Для SDK, содержащего Core, графическое ядро, visual scene, native widgets,
+portable GLB/skeleton/animation и 2D/3D charts без engine runtime, используется
+профиль `graphics`. Backend-флаги
 ортогональны профилю; Windows D3D11 остаётся доступен, когда SDL, Vulkan и
 legacy OpenGL выключены:
 
 ```powershell
-task build -- --profile graphics --no-sdl --no-vulkan --no-opengl
+task build:graphics -- --no-sdl --no-vulkan --no-opengl
 ```
 
-Профиль включает `termin-graphics2`, поэтому 3D chart, text3D и
-backend-neutral 3D rendering сохраняются. Native-граф также собирает
-scene-neutral `termin-render` в `core-only` режиме, но его Python distribution
-в профиль не входит. Профиль исключает engine scene/render pipeline, physics,
-CSG, navmesh, animation, audio, editor/player/launcher и их Python-пакеты. На
+Профиль включает современный tgfx2 target `tgfx::termin_graphics2` и
+scene-neutral package `termin-render-core`. Последний предоставляет C/C++
+framegraph и render execution без Python distribution и без engine scene
+adapter. Профиль исключает engine scene/components/render adapters, physics,
+CSG, navmesh, audio, editor/player/launcher и их Python packages; portable
+`termin-skeleton`, `termin-animation` и `termin-glb` в него входят. На
 Windows оркестратор автоматически выбирает существующий C#
 профиль `plot-d3d11`, который генерирует API только для
 `tcplot`/`Termin.Wpf` и копирует требуемые D3D11 shader artifacts.
@@ -220,6 +233,9 @@ Script-level `--pch` applies to selected C++ targets with broad STL-heavy includ
 
 ## Структура SDK
 
+Ниже показан layout полного профиля в `sdk/`. `sdk-core/` и `sdk-graphics/`
+имеют тот же установленный контракт, но другую package closure.
+
 ```
 sdk/
 ├── bin/            # Исполняемые файлы, включая termin_python; DLL на Windows
@@ -229,14 +245,14 @@ sdk/
 │       # Python-пакеты (native-модули + .py исходники) на Linux
 ├── include/        # C/C++ заголовки
 └── python/Lib/site-packages/
-    # Python-пакеты на Windows; Windows stdlib живёт в sdk/python/Lib/
+    # Python-пакеты на Windows; Windows stdlib живёт в <sdk-prefix>/python/Lib/
 ```
 
 ### Артефактные manifests
 
 Native Python artifacts имеют два разных schema-v3 контракта:
 
-- `sdk/termin-artifacts.json` — поставляемый relocatable SDK manifest. Поле
+- `<sdk-prefix>/termin-artifacts.json` — поставляемый relocatable SDK manifest. Поле
   `path` всегда относительно корня SDK; entry фиксирует kind, extension,
   target, SHA-256 и bundled/external runtime dependencies. Top-level
   `python_abi` однозначно задаёт `version`, `soabi`, `free_threaded` и
@@ -250,7 +266,7 @@ Native Python artifacts имеют два разных schema-v3 контрак�
 транзитивно bundled shared libraries, а не из mtimes. Этот ID становится PEP
 440 suffix `+sdk<id>` и без пересчёта
 используется runtime wheels, `python-runtime-manifest.json` и public
-`sdk/wheels`. Повторный wheel-stage сохраняет ID, пока native payload не
+`<sdk-prefix>/wheels`. Повторный wheel-stage сохраняет ID, пока native payload не
 изменился. Финальная SDK verification сопоставляет версии и байты native
 payloads во всех трёх представлениях и отвергает stale или смешанный wheelhouse.
 
@@ -264,7 +280,7 @@ hash завершают сборку с ошибкой. Поэтому пере�
 
 ### Bundled Python и тестовый контур
 
-`sdk/bin/termin_python` — SDK-relative isolated launcher. Он игнорирует
+`<sdk-prefix>/bin/termin_python` — SDK-relative isolated launcher. Он игнорирует
 `PYTHONHOME`, `PYTHONPATH` и user site-packages, использует bundled stdlib и
 site-packages, а `--termin-info` печатает диагностический JSON с SDK root,
 Python ABI и активными путями.
@@ -880,11 +896,12 @@ task test:cpp
 
 По умолчанию runner использует тот же `build/<BuildType>`, что и
 `task build`. После включения тестов CMake planner разрешает
-выбранные CTest registrations в точные executable targets и проверяет их
-принадлежность capability-aware целям `termin_native_tests` или
-`termin_native_tests_with_window`. Эти цели исключают Python-binding tests из
-нативного прогона и собирают зарегистрированные тесты с их зависимостями одним
-вызовом backend build system.
+выбранные CTest registrations в точные executable targets и сверяет весь набор
+с CMake-generated манифестом capability-aware целей `termin_native_tests` или
+`termin_native_tests_with_window`. При несовпадении составов runner падает до
+сборки. Эти цели исключают Python-binding tests из нативного прогона и собирают
+зарегистрированные тесты с их зависимостями одним графом backend build system,
+не обходя общие зависимости заново для каждого тестового executable.
 Уже собранные библиотеки ядра и third-party переиспользуются инкрементально;
 отдельный полный `build/Release-tests` для обычного прогона не создаётся.
 `BUILD_DIR` по-прежнему позволяет явно выбрать изолированный граф для

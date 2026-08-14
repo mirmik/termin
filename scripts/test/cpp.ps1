@@ -326,24 +326,20 @@ if ($CtestRegex -eq "^()$") {
     exit 1
 }
 
-$CtestBuildTargets = @(& $PythonExe @RepositoryControl @CtestPlanArgs --build-targets)
+$CtestBuildAggregate = (& $PythonExe @RepositoryControl @CtestPlanArgs --build-aggregate | Out-String).Trim()
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "CTest build target resolution failed"
+    Write-Error "CTest build aggregate resolution failed"
     exit 1
 }
-if ($CtestBuildTargets.Count -eq 0) {
-    Write-Error "CTest planner resolved no CMake build targets"
+if (-not $CtestBuildAggregate) {
+    Write-Error "CTest planner resolved no CMake build aggregate"
     exit 1
 }
-Write-Host "Building $($CtestBuildTargets.Count) selected CTest target(s)"
-$NativeBuildTargets = @($CtestBuildTargets)
-if ($NativeBuildTargets -notcontains "termin_shaderc") {
-    $NativeBuildTargets += "termin_shaderc"
-}
+Write-Host "Building selected CTest graph: $CtestBuildAggregate"
 Invoke-TerminCMakeBuild `
     -BuildDir $BuildDir `
     -BuildType $BuildType `
-    -Target $NativeBuildTargets `
+    -Target @($CtestBuildAggregate) `
     -BuildJobs $BuildJobs
 
 $CtestJunitPath = Join-Path $BuildDir "ctest-results.xml"
