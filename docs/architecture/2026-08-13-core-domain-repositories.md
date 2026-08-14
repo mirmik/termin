@@ -7,7 +7,7 @@ Status: superseded on 2026-08-14 by the
 as historical analysis of package boundaries; its separate-repository and
 installed-SDK source-consumption decisions are no longer active.
 
-Implementation plan:
+Historical implementation plans (not active work):
 
 - [Termin Core repository extraction plan](../plans/2026-08-13-termin-core-repository-extraction.md)
 - [Termin Graphics repository extraction plan](../plans/2026-08-13-termin-graphics-repository-extraction.md)
@@ -16,11 +16,14 @@ Earlier analysis:
 
 - [Repository and SDK split](../analysis/2026-08-07-repository-and-sdk-split.md)
 
-The earlier analysis remains useful as an inventory, but its single
-`termin-platform` ownership model is superseded by this decision. In particular,
-the common foundation and Python runtime do not belong to the graphics domain.
+The analysis below remains useful as an inventory of semantic package
+boundaries. All statements about physical repositories, installed-Core source
+consumption, subtree imports and cross-repository release composition are
+superseded. In the accepted design, Core and Graphics are republics in one
+source tree and the root build produces their independently distributable SDK
+profiles.
 
-## Decision
+## Superseded decision
 
 Termin is moving from one source repository towards a small shared Core SDK and
 independent domain repositories:

@@ -56,3 +56,48 @@ def test_rejects_unsafe_exclude_root(tmp_path: Path) -> None:
         match="exclude root must be repository-relative",
     ):
         source_size_policy.load_source_size_policy(tmp_path)
+
+
+def test_exact_baseline_allows_existing_size_but_rejects_growth(
+    tmp_path: Path,
+) -> None:
+    _write_policy(tmp_path)
+    source = tmp_path / "module" / "large.py"
+    source.parent.mkdir()
+    source.write_text("one\ntwo\nthree\n", encoding="utf-8")
+    path = tmp_path / source_size_policy.POLICY_MANIFEST
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["source_size"]["baselines"] = [
+        {
+            "path": "module/large.py",
+            "max_lines": 3,
+            "reason": "Tracked decomposition debt",
+        }
+    ]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    policy = source_size_policy.load_source_size_policy(tmp_path)
+    assert source_size_policy.find_long_files(tmp_path, policy) == ()
+
+    source.write_text("one\ntwo\nthree\nfour\n", encoding="utf-8")
+    assert source_size_policy.find_long_files(tmp_path, policy) == (
+        ("module/large.py", 4),
+    )
+
+
+def test_rejects_stale_source_size_baseline(tmp_path: Path) -> None:
+    _write_policy(tmp_path)
+    source = tmp_path / "small.py"
+    source.write_text("one\ntwo\n", encoding="utf-8")
+    path = tmp_path / source_size_policy.POLICY_MANIFEST
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["source_size"]["baselines"] = [
+        {"path": "small.py", "max_lines": 3, "reason": "No longer needed"}
+    ]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(
+        source_size_policy.SourceSizePolicyError,
+        match="source-size baseline.*is stale|baselines\\[0\\] is stale",
+    ):
+        source_size_policy.load_source_size_policy(tmp_path)

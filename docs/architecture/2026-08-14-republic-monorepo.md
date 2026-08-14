@@ -71,10 +71,9 @@ self-building.
 
 The root `Taskfile.yml` is the only public entry point. Republics do not have
 Taskfiles and do not build themselves. Root tasks select package closures and
-SDK profiles through the shared build frontend.
-
-Legacy root scripts remain supported only while the full editor build is being
-routed through Task. They are not a second architectural command surface.
+SDK profiles through the shared build frontend. Scripts below `scripts/` are
+private implementation details of those tasks; the former root wrapper scripts
+are removed rather than retained as a second command surface.
 
 The root CMake graph owns repository-wide capabilities and profile selection.
 Each mature republic may own the package composition and ordering of its
@@ -95,11 +94,11 @@ copy of render-core sources or package metadata.
 
 ## Migration policy
 
-The former `termin-core` and `termin-graphics` repositories are imported as history-preserving
-subtrees, but only their package sources remain under `core/` and `graphics/`.
-Their repository-local Taskfiles, scripts, build-system copies, CI and
-third-party roots are discarded after import. Relevant SDK contracts are
-ported into the single root build system.
+The short-lived `termin-core` and `termin-graphics` extraction experiment is
+not part of the canonical repository history. The monorepo history records a
+direct move from root-level packages into republic-owned paths. Only package
+sources and reusable product contracts survived the experiment; duplicated
+Taskfiles, scripts, build systems, CI and third-party roots did not.
 
 `termin-thirdparty/` is the sole vendor root shared by all republics. Old
 root-level package copies are removed as soon as their authoritative republic
@@ -107,5 +106,5 @@ copy is in place. Compatibility symlinks and source-path fallbacks are
 intentionally not introduced. A broken undeclared path should fail during
 migration instead of becoming permanent ambiguity.
 
-The former repositories become read-only historical mirrors after the
-monorepo profiles and CI are green.
+The former repositories are historical experiments, not release inputs. CI
+must build every profile from this checkout and must not fetch either repository.

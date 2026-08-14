@@ -14,85 +14,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  core-sdk-linux:
+  sdk-profiles-linux:
+    name: sdk-profile-${{ matrix.profile }}-linux
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [core, graphics]
     steps:
-      - uses: actions/checkout@v5
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
         with:
-          repository: mirmik/termin-core
-          ref: d860ca231693ed0b1eaa52e0a6121c15c9e0966b
-          submodules: recursive
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-      - name: Build installed Core SDK input
-        run: task build --
-      - uses: actions/upload-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: sdk/
-          retention-days: 1
-
-  core-sdk-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          repository: mirmik/termin-core
-          ref: d860ca231693ed0b1eaa52e0a6121c15c9e0966b
-          submodules: recursive
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-      - name: Build installed Core SDK input
-        shell: pwsh
-        run: task build --
-      - uses: actions/upload-artifact@v5
-        with:
-          name: core-sdk-windows
-          path: sdk/
-          retention-days: 1
-
-  core-sdk-android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          repository: mirmik/termin-core
-          ref: d860ca231693ed0b1eaa52e0a6121c15c9e0966b
-      - name: Build installed Android Core SDK input
-        run: task build:android -- --ndk "$ANDROID_NDK_LATEST_HOME"
-      - uses: actions/upload-artifact@v5
-        with:
-          name: core-sdk-android-arm64-v8a
-          path: sdk-platform/android/arm64-v8a/
-          retention-days: 1
-
-  core-sdk-web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          repository: mirmik/termin-core
-          ref: d860ca231693ed0b1eaa52e0a6121c15c9e0966b
-      - name: Cache pinned Emscripten toolchain
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/termin/toolchains/emscripten
-          key: core-emsdk-${{ runner.os }}-${{ hashFiles('build-system/emscripten-version.txt') }}
-      - name: Build installed Web Core SDK input
-        run: task build:web -- --setup
-      - uses: actions/upload-artifact@v5
-        with:
-          name: core-sdk-web-wasm32
-          path: sdk-platform/web/wasm32/
-          retention-days: 1
-
-  # ── 0. Python lint ─────────────────────────────────────────────
-  core-consumer-source-hidden-linux:
-    needs: core-sdk-linux
-    runs-on: ubuntu-latest
-    steps:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -102,108 +35,25 @@ jobs:
       - name: Install Linux build dependencies
         uses: ./.github/actions/setup-linux-build
       - name: Setup Slang compiler
+        if: matrix.profile == 'graphics'
         uses: ./.github/actions/setup-slang
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: core-sdk/
-      - name: Build graphics with Core sources absent
-        run: |
-          scripts/smoke-installed-core-source-hidden \
-            --profile graphics \
-            --core-sdk "${{ github.workspace }}/core-sdk"
-      - name: Build and prove the standalone Graphics SDK
-        run: |
-          task build -- \
-            --profile graphics \
-            --core-sdk "${{ github.workspace }}/core-sdk"
-          scripts/smoke-installed-graphics-consumers \
-            --sdk-root "${{ github.workspace }}/sdk" \
-            --slangc "$TERMIN_SLANGC"
+      - name: Build SDK profile
+        run: task build -- --profile "${{ matrix.profile }}"
+      - name: Verify installed Core consumers
+        if: matrix.profile == 'core'
+        run: sdk-core/bin/termin_python -I scripts/smoke-installed-core-consumers --sdk-root sdk-core
+      - name: Verify installed Graphics consumers
+        if: matrix.profile == 'graphics'
+        run: scripts/smoke-installed-graphics-consumers --sdk-root sdk-graphics --slangc "$TERMIN_SLANGC"
 
-  core-consumer-source-hidden-windows:
-    needs: core-sdk-windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-windows
-          path: core-sdk/
-      - name: Build graphics with Core sources absent
-        shell: pwsh
-        run: |
-          $coreSdk = (Resolve-Path core-sdk).Path
-          foreach ($directory in @(
-            "termin-base", "termin-dispatch", "termin-inspect", "termin-mcp",
-            "termin-nanobind-sdk", "termin-python-host"
-          )) {
-            if (Test-Path $directory) {
-              throw "Core source directory must not exist in Termin: $directory"
-            }
-          }
-          New-Item -ItemType Directory -Force sdk | Out-Null
-          Copy-Item core-sdk\* sdk\ -Recurse -Force
-          $env:TERMIN_CORE_SDK = $coreSdk
-          task build:bindings -- --profile=graphics --no-vulkan --no-opengl --no-sdl
-
-  core-consumer-source-hidden-android:
-    needs: core-sdk-android
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-android-arm64-v8a
-          path: core-sdk-android/
-      - name: Build Android with Core sources absent
-        run: |
-          scripts/smoke-installed-core-platform-source-hidden \
-            --platform android \
-            --ndk "$ANDROID_NDK_LATEST_HOME" \
-            --core-sdk "${{ github.workspace }}/core-sdk-android"
-
-  core-consumer-source-hidden-web:
-    needs: [core-sdk-linux, core-sdk-web]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: core-sdk-host/
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-web-wasm32
-          path: core-sdk-web/
-      - name: Cache pinned Emscripten toolchain
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/termin/toolchains/emscripten
-          key: emsdk-${{ runner.os }}-${{ hashFiles('build-system/emscripten-version.txt') }}
-      - name: Setup Web toolchains
-        run: |
-          task toolchain:web --
-          task toolchain:web-shaders --
-      - name: Build Web with Core sources absent
-        run: |
-          scripts/smoke-installed-core-platform-source-hidden \
-            --platform web \
-            --core-sdk "${{ github.workspace }}/core-sdk-web" \
-            --host-core-sdk "${{ github.workspace }}/core-sdk-host"
-
+  # ── 0. Python lint ─────────────────────────────────────────────
   lint-python:
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
 
       - name: Setup Python
@@ -214,14 +64,20 @@ jobs:
       - name: Install Ruff
         run: pip install ruff
 
+      - name: Validate republic ownership
+        run: task ownership
+
       - name: Run Python lint
         run: task lint:python -- --no-venv
 
   # ── 0a. C/C++ lint ─────────────────────────────────────────────
   lint-cpp:
-    needs: core-sdk-linux
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -233,7 +89,7 @@ jobs:
 
       - name: Prepare canonical Python build environment
         env:
-          PYTHONPATH: ${{ github.workspace }}/termin-build-tools
+          PYTHONPATH: ${{ github.workspace }}/core/termin-build-tools
         run: |
           python -m termin_build.sdk --repo-root . prepare-python-toolchain
           echo "PYTHON_BIN=${{ github.workspace }}/build/python-runtime/build-env/bin/python" >> "$GITHUB_ENV"
@@ -243,21 +99,6 @@ jobs:
         uses: ./.github/actions/setup-linux-build
         with:
           extra-packages: clang-tidy libclang-18-dev llvm-18-dev
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: core-sdk/
-
-      - name: Select installed Core SDK input
-        run: |
-          echo "TERMIN_CORE_SDK=${{ github.workspace }}/core-sdk" >> "$GITHUB_ENV"
-          python - <<'PY' >> "$GITHUB_ENV"
-          import json
-          from pathlib import Path
-          manifest = json.loads(Path("core-sdk/termin-artifacts.json").read_text())
-          print(f"TERMIN_CORE_BUILD_ID={manifest['native_build_id']}")
-          PY
 
       - name: Run C/C++ lint
         run: task lint:cpp --
@@ -273,6 +114,10 @@ jobs:
   smoke-build-system-windows:
     runs-on: windows-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
 
       - name: Setup Python
@@ -286,24 +131,27 @@ jobs:
       - name: Validate package manifest
         shell: pwsh
         run: |
-          $env:PYTHONPATH = "$pwd\termin-build-tools"
+          $env:PYTHONPATH = "$pwd\core\termin-build-tools"
           python -m termin_build.package_manifest --repo-root . --check
 
       - name: Run build-tools tests
         shell: pwsh
         run: |
-          $env:PYTHONPATH = "$pwd\termin-build-tools"
-          python -m pytest termin-build-tools/tests/ -v
+          $env:PYTHONPATH = "$pwd\core\termin-build-tools"
+          python -m pytest core/termin-build-tools/tests/ -v
 
-      - name: Smoke build-sdk.ps1 wrapper
+      - name: Smoke Task build frontend
         shell: pwsh
-        run: task build -- --no-wheels --no-parallel --dry-run
+        run: task build -- --dry-run
 
   # ── 0e. Chromium Web Runtime gate ──────────────────────────────
   web-runtime-chromium:
-    needs: [core-sdk-linux, core-sdk-web]
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -314,20 +162,10 @@ jobs:
           path: ~/.cache/termin/toolchains/emscripten
           key: emsdk-${{ runner.os }}-${{ hashFiles('build-system/emscripten-version.txt') }}
 
-      - name: Setup pinned Emscripten toolchain
+      - name: Setup Web toolchains
         run: |
           task toolchain:web --
           task toolchain:web-shaders --
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: core-sdk-host/
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-web-wasm32
-          path: core-sdk-web/
 
       - name: Resolve Chromium executable
         run: |
@@ -339,14 +177,7 @@ jobs:
           echo "TERMIN_WEB_BROWSER=$browser" >> "$GITHUB_ENV"
 
       - name: Build and run Chromium Web Runtime gate
-        run: |
-          host_build_id="$(python -c 'import json; print(json.load(open("core-sdk-host/termin-artifacts.json"))["native_build_id"])')"
-          web_build_id="$(python -c 'import json; print(json.load(open("core-sdk-web/termin-core-platform.json"))["native_build_id"])')"
-          task build:web -- --browser-smoke \
-            --core-sdk "${{ github.workspace }}/core-sdk-web" \
-            --core-build-id "$web_build_id" \
-            --host-core-sdk "${{ github.workspace }}/core-sdk-host" \
-            --host-core-build-id "$host_build_id"
+        run: task build:web -- --browser-smoke
 
       - name: Upload Web Runtime gate report
         uses: actions/upload-artifact@v5
@@ -359,9 +190,12 @@ jobs:
 
   # ── 0d. D3D11 tgfx2 smoke ─────────────────────────────────────
   tgfx2-d3d11-bound-windows:
-    needs: core-sdk-windows
     runs-on: windows-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -370,19 +204,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-windows
-          path: core-sdk/
-
-      - name: Select installed Core SDK input
-        shell: pwsh
-        run: |
-          $manifest = Get-Content core-sdk/termin-artifacts.json | ConvertFrom-Json
-          "TERMIN_CORE_SDK=$pwd\core-sdk" | Out-File $env:GITHUB_ENV -Append
-          "TERMIN_CORE_BUILD_ID=$($manifest.native_build_id)" | Out-File $env:GITHUB_ENV -Append
-          "$pwd\core-sdk\bin" | Out-File $env:GITHUB_PATH -Append
 
       - name: Validate D3D11 bound resource path
         shell: pwsh
@@ -401,9 +222,12 @@ jobs:
 
   # ── 1. Build C++ libraries ───────────────────────────────────────
   build-cpp-libs:
-    needs: core-sdk-linux
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -416,23 +240,6 @@ jobs:
       - name: Install Linux build dependencies
         uses: ./.github/actions/setup-linux-build
 
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: core-sdk/
-
-      - name: Seed and select installed Core SDK input
-        run: |
-          mkdir -p sdk
-          cp -a core-sdk/. sdk/
-          echo "TERMIN_CORE_SDK=${{ github.workspace }}/core-sdk" >> "$GITHUB_ENV"
-          python - <<'PY' >> "$GITHUB_ENV"
-          import json
-          from pathlib import Path
-          manifest = json.loads(Path("core-sdk/termin-artifacts.json").read_text())
-          print(f"TERMIN_CORE_BUILD_ID={manifest['native_build_id']}")
-          PY
-
       - name: Build
         run: task build:cpp --
 
@@ -444,9 +251,13 @@ jobs:
 
   # ── 2. Test C++ libraries ────────────────────────────────────────
   test-cpp-libs:
-    needs: [build-cpp-libs, core-sdk-linux]
+    needs: build-cpp-libs
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -461,21 +272,6 @@ jobs:
         with:
           name: sdk-cpp
           path: sdk/
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: core-sdk/
-
-      - name: Select installed Core SDK input
-        run: |
-          echo "TERMIN_CORE_SDK=${{ github.workspace }}/core-sdk" >> "$GITHUB_ENV"
-          python - <<'PY' >> "$GITHUB_ENV"
-          import json
-          from pathlib import Path
-          manifest = json.loads(Path("core-sdk/termin-artifacts.json").read_text())
-          print(f"TERMIN_CORE_BUILD_ID={manifest['native_build_id']}")
-          PY
 
       - name: Restore SDK executable permissions
         run: chmod +x sdk/bin/*
@@ -494,9 +290,12 @@ jobs:
           retention-days: 7
 
   test-cpp-windows:
-    needs: core-sdk-windows
     runs-on: windows-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -505,21 +304,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-windows
-          path: core-sdk/
-
-      - name: Seed and select installed Core SDK input
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force sdk | Out-Null
-          Copy-Item core-sdk\* sdk\ -Recurse -Force
-          $manifest = Get-Content core-sdk/termin-artifacts.json | ConvertFrom-Json
-          "TERMIN_CORE_SDK=$pwd\core-sdk" | Out-File $env:GITHUB_ENV -Append
-          "TERMIN_CORE_BUILD_ID=$($manifest.native_build_id)" | Out-File $env:GITHUB_ENV -Append
-          "$pwd\core-sdk\bin" | Out-File $env:GITHUB_PATH -Append
 
       - name: Build C++ SDK dependencies
         shell: pwsh
@@ -541,9 +325,13 @@ jobs:
 
   # ── 3. Build nanobind SDK + Python bindings ────────────────────
   build-bindings:
-    needs: [build-cpp-libs, core-sdk-linux]
+    needs: build-cpp-libs
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -561,27 +349,12 @@ jobs:
           name: sdk-cpp
           path: sdk/
 
-      - uses: actions/download-artifact@v5
-        with:
-          name: core-sdk-linux
-          path: core-sdk/
-
-      - name: Select installed Core SDK input
-        run: |
-          echo "TERMIN_CORE_SDK=${{ github.workspace }}/core-sdk" >> "$GITHUB_ENV"
-          python - <<'PY' >> "$GITHUB_ENV"
-          import json
-          from pathlib import Path
-          manifest = json.loads(Path("core-sdk/termin-artifacts.json").read_text())
-          print(f"TERMIN_CORE_BUILD_ID={manifest['native_build_id']}")
-          PY
-
       - name: Restore SDK executable permissions
         run: chmod +x sdk/bin/*
 
       - name: Prepare canonical Python build environment
         env:
-          PYTHONPATH: ${{ github.workspace }}/termin-build-tools
+          PYTHONPATH: ${{ github.workspace }}/core/termin-build-tools
         run: |
           python -m termin_build.sdk --repo-root . prepare-python-toolchain
           echo "PYTHON_BIN=${{ github.workspace }}/build/python-runtime/build-env/bin/python" >> "$GITHUB_ENV"
@@ -592,7 +365,7 @@ jobs:
 
       - name: Populate and verify bundled Python runtime
         env:
-          PYTHONPATH: ${{ github.workspace }}/termin-build-tools
+          PYTHONPATH: ${{ github.workspace }}/core/termin-build-tools
         run: |
           "$PYTHON_BIN" -m termin_build.sdk --repo-root . install-python
           "$PYTHON_BIN" -m termin_build.sdk --repo-root . verify-sdk
@@ -608,6 +381,10 @@ jobs:
     needs: build-bindings
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
 
       - name: Setup Python
@@ -660,6 +437,10 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ always() && needs.test-cpp-libs.result == 'success' && needs.test-pip-packages.result == 'success' }}
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
 
       - name: Setup Python
@@ -679,7 +460,7 @@ jobs:
 
       - name: Verify PR inventory coverage
         env:
-          PYTHONPATH: ${{ github.workspace }}/termin-build-tools
+          PYTHONPATH: ${{ github.workspace }}/core/termin-build-tools
         run: |
           mkdir -p build/ci-results
           python -m termin_build.repository_control --repo-root . check
@@ -695,6 +476,10 @@ jobs:
     needs: build-bindings
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -727,13 +512,13 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
         run: |
-          cd termin-app
+          cd editor/termin-app
           SDK_PREFIX=${{ github.workspace }}/sdk CMAKE_PREFIX_PATH=${{ github.workspace }}/sdk ./build.sh
 
       - name: Verify relocated installed Python layout
         run: |
           bundle_root="$RUNNER_TEMP/termin-installed"
-          cp -a termin-app/install "$bundle_root"
+          cp -a editor/termin-app/install "$bundle_root"
           site_packages="$(find "$bundle_root/lib" -mindepth 2 -maxdepth 3 -type d -path '*/python*/site-packages' -print -quit)"
           test -n "$site_packages"
           test ! -e "$bundle_root/lib/python"
@@ -783,6 +568,10 @@ jobs:
     needs: test-termin
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
       - uses: actions/checkout@v5
         with:
           submodules: recursive
@@ -822,7 +611,7 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
         run: |
-          cd termin-app
+          cd editor/termin-app
           SDK_PREFIX=${{ github.workspace }}/sdk CMAKE_PREFIX_PATH=${{ github.workspace }}/sdk ./build.sh
 
       - name: Build termin-csharp

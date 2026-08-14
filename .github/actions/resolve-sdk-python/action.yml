@@ -8,7 +8,7 @@ runs:
       shell: bash
       run: |
         sdk_site_packages="$(
-          PYTHONPATH="$GITHUB_WORKSPACE/termin-build-tools" \
+          PYTHONPATH="$GITHUB_WORKSPACE/core/termin-build-tools" \
             python -m termin_build.sdk --repo-root "$GITHUB_WORKSPACE" \
             resolve-python-layout --sdk-prefix "$GITHUB_WORKSPACE/sdk" \
             --require-native-bindings

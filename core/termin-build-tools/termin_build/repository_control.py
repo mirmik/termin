@@ -1263,7 +1263,7 @@ def _cmd_check(repo_root: Path) -> int:
     if long_files:
         details = "\n".join(
             f"source-size policy violation: {path}: {lines} lines "
-            f"(limit {source_size_policy.threshold - 1})"
+            f"(limit {source_size_policy.line_limit(path)})"
             for path, lines in long_files
         )
         raise ManifestError(details)

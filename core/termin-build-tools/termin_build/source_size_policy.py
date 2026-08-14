@@ -18,10 +18,24 @@ class SourceSizePolicyError(ValueError):
 
 
 @dataclass(frozen=True)
+class SourceSizeBaseline:
+    path: str
+    max_lines: int
+    reason: str
+
+
+@dataclass(frozen=True)
 class SourceSizePolicy:
     threshold: int
     extensions: tuple[str, ...]
     exclude_roots: tuple[str, ...]
+    baselines: tuple[SourceSizeBaseline, ...] = ()
+
+    def line_limit(self, path: str) -> int:
+        for baseline in self.baselines:
+            if baseline.path == path:
+                return baseline.max_lines
+        return self.threshold - 1
 
 
 def _string_tuple(raw: object, context: str) -> tuple[str, ...]:
@@ -60,7 +74,58 @@ def load_source_size_policy(repo_root: Path) -> SourceSizePolicy:
             raise SourceSizePolicyError(
                 f"{path}: exclude root must be repository-relative: {root}"
             )
-    return SourceSizePolicy(threshold, extensions, exclude_roots)
+    raw_baselines = raw.get("baselines", [])
+    if not isinstance(raw_baselines, list):
+        raise SourceSizePolicyError(f"{path}: baselines must be a list")
+    baselines = []
+    baseline_paths = set()
+    for index, entry in enumerate(raw_baselines):
+        context = f"{path}: baselines[{index}]"
+        if not isinstance(entry, dict):
+            raise SourceSizePolicyError(f"{context} must be an object")
+        baseline_path = entry.get("path")
+        max_lines = entry.get("max_lines")
+        reason = entry.get("reason")
+        if not isinstance(baseline_path, str) or not baseline_path:
+            raise SourceSizePolicyError(f"{context}.path must be a non-empty string")
+        candidate = Path(baseline_path)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise SourceSizePolicyError(
+                f"{context}.path must be repository-relative: {baseline_path}"
+            )
+        normalized_path = candidate.as_posix()
+        if normalized_path in baseline_paths:
+            raise SourceSizePolicyError(
+                f"{path}: duplicate source-size baseline: {normalized_path}"
+            )
+        if candidate.suffix.lower() not in extensions:
+            raise SourceSizePolicyError(
+                f"{context}.path extension is not covered by source-size policy"
+            )
+        if (
+            not isinstance(max_lines, int)
+            or isinstance(max_lines, bool)
+            or max_lines < threshold
+        ):
+            raise SourceSizePolicyError(
+                f"{context}.max_lines must be an integer >= {threshold}"
+            )
+        if not isinstance(reason, str) or not reason.strip():
+            raise SourceSizePolicyError(f"{context}.reason must be a non-empty string")
+        baseline_file = repo_root / candidate
+        if not baseline_file.is_file():
+            raise SourceSizePolicyError(
+                f"{context}.path does not exist: {normalized_path}"
+            )
+        with baseline_file.open("rb") as stream:
+            current_lines = sum(1 for _ in stream)
+        if current_lines < threshold:
+            raise SourceSizePolicyError(
+                f"{context} is stale: {normalized_path} has {current_lines} lines"
+            )
+        baseline_paths.add(normalized_path)
+        baselines.append(SourceSizeBaseline(normalized_path, max_lines, reason.strip()))
+    return SourceSizePolicy(threshold, extensions, exclude_roots, tuple(baselines))
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -97,8 +162,9 @@ def find_long_files(
                     line_count = sum(1 for _ in stream)
             except (PermissionError, IsADirectoryError):
                 continue
-            if line_count >= policy.threshold:
-                results.append((path.relative_to(repo_root).as_posix(), line_count))
+            relative_path = path.relative_to(repo_root).as_posix()
+            if line_count > policy.line_limit(relative_path):
+                results.append((relative_path, line_count))
     return tuple(sorted(results, key=lambda entry: (-entry[1], entry[0])))
 
 
@@ -117,13 +183,17 @@ def main(argv: list[str] | None = None) -> int:
             if args.threshold <= 0:
                 raise SourceSizePolicyError("threshold override must be positive")
             policy = SourceSizePolicy(
-                args.threshold, policy.extensions, policy.exclude_roots
+                args.threshold,
+                policy.extensions,
+                policy.exclude_roots,
+                policy.baselines,
             )
         if args.exclude:
             policy = SourceSizePolicy(
                 policy.threshold,
                 policy.extensions,
                 (*policy.exclude_roots, *args.exclude),
+                policy.baselines,
             )
         if args.extension:
             extensions = tuple(
@@ -131,7 +201,10 @@ def main(argv: list[str] | None = None) -> int:
                 for value in args.extension
             )
             policy = SourceSizePolicy(
-                policy.threshold, extensions, policy.exclude_roots
+                policy.threshold,
+                extensions,
+                policy.exclude_roots,
+                policy.baselines,
             )
         results = find_long_files(repo_root, policy)
     except SourceSizePolicyError as exc:

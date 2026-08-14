@@ -32,9 +32,9 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 
 - `python -m termin_build.package_manifest --repo-root . --check` проверяет
   manifest, порядок пакетов и native extension declarations.
-- Core-owned package order and metadata are verified in the `termin-core`
-  repository. Termin's gate checks repository-owned packages and the external
-  Core identities needed for installed-SDK composition.
+- Package order, distribution metadata and republic ownership are verified in
+  this repository. Product profiles select closures from the same canonical
+  manifest; no external Core repository participates in validation.
 - documentation inventory checks that the table below contains every manifest
   `package identity / distribution` pair in current order.
 
@@ -42,61 +42,61 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 
 | Source path | Distribution | Public import namespaces | Notes |
 |-------------|--------------|--------------------------|-------|
-| `termin-build-tools` | `termin-build-tools` | `termin_build` | Build-time helpers. |
-| `termin-nanobind-sdk` | `termin-nanobind` | `termin_nanobind` | Distribution keeps historical short SDK name. |
-| `termin-base` | `tcbase` | `tcbase`, `termin.geombase` | Legacy short distribution/import name. |
-| `termin-dispatch` | `termin-dispatch` | `termin.dispatch` | Caller-driven language-neutral deferred dispatcher. |
-| `termin-image` | `termin-image` | `termin.image` | Native image codecs for texture/tooling paths. |
-| `termin-assets` | `termin-assets` | `termin_assets` | Asset runtime contracts. |
-| `termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
-| `termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
-| `termin-mesh` | `tmesh` | `tmesh` | Legacy short distribution/import name. |
-| `termin-graphics` | `tgfx` | `tgfx` | Legacy short distribution/import name. |
-| `termin-visual-scene` | `termin-visual-scene` | `termin.visual_scene` | Retained 2D visual identity and interaction. |
-| `termin-voxels` | `termin-voxels` | `termin.voxels` | Voxel core API. |
-| `termin-inspect` | `termin-inspect` | `termin.inspect` | Inspection metadata API. |
-| `termin-materials` | `termin-materials` | `termin.materials` | Material runtime API. |
-| `termin-shader-runtime` | `termin-shader-runtime` | `termin.shader_tools`, `termin.shader_runtime` | Shared shader tool resolution and source-project shader runtime helpers. |
-| `termin-window` | `termin-window` | `termin.window` | Framework-neutral native window infrastructure. |
-| `termin-gui-native` | `termin-gui-native` | `termin.gui_native` | Canonical native retained UI toolkit. |
-| `termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
-| `termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
-| `termin-graphics-mcp` | `termin-graphics-mcp` | `termin.graphics.mcp` | Graphics-owned MCP capture/readback adapters. |
-| `termin-prefab` | `termin-prefab` | `termin.prefab` | Namespace package. |
-| `termin-display` | `termin-display` | `termin.display`, `termin.viewport` | Display/windowing API. |
-| `termin-csg` | `termin-csg` | `termin.csg` | CSG API. |
-| `termin-modules` | `termin-modules` | `termin_modules` | Module runtime API. |
-| `termin-robotics` | `termin-robotics` | `termin.robotics` | Articulation models and control algorithms. |
-| `termin-components/termin-components-kinematic` | `termin-components-kinematic` | `termin.kinematic`, `termin_kinematic_component_specs` | Kinematic components. |
-| `termin-lighting` | `termin-lighting` | `termin.lighting` | Lighting API. |
-| `termin-components/termin-components-mesh` | `termin-components-mesh` | `termin.mesh`, `termin_mesh_component_specs` | Scene mesh components. |
-| `termin-components/termin-components-tween` | `termin-components-tween` | `termin_tween_component_specs` | Tween component specs. |
-| `termin-input` | `termin-input` | `termin.input` | Input API. |
-| `termin-collision` | `termin-collision` | `termin.colliders`, `termin.collision`, `termin_collision_component_specs` | Collision runtime and components. |
-| `termin-render` | `termin-render` | `termin.render`, `termin.render_framework`, `termin_render_framework_specs` | Render framework. |
-| `termin-components/termin-components-render` | `termin-components-render` | `termin.render_components`, `termin_render_component_specs` | Render components. |
-| `termin-navmesh` | `termin-navmesh` | `termin.navmesh`, `termin_navmesh_component_specs` | Navmesh runtime and components. |
-| `termin-components/termin-components-voxels` | `termin-components-voxels` | `termin_voxel_components`, `termin_voxel_component_specs` | Voxel components. |
-| `termin-components/termin-components-foliage` | `termin-components-foliage` | `termin.foliage` | Foliage components. |
-| `termin-components/termin-components-ui` | `termin-components-ui` | `termin.ui_components`, `termin_ui_component_specs` | UI components. |
-| `termin-render-passes` | `termin-render-passes` | `termin.render_passes`, `termin_render_pass_specs` | Concrete render passes. |
-| `termin-qopt` | `termin-qopt` | `termin.fem`, `termin.linalg`, `termin.robot` | Reference/research Python APIs; current solver and 3D runtime are native C++. |
-| `termin-physics-fem` | `termin-physics-fem` | `termin.physics_fem` | Reference-only Python projection; current scene integration is native C++. |
-| `termin-pga` | `termin-pga` | `termin.ga201`, `termin.geomalgo` | Geometric algebra APIs. |
-| `termin-physics` | `termin-physics` | `termin.physics` | Rigid-body physics API. |
-| `termin-components/termin-components-physics` | `termin-components-physics` | `termin_physics_component_specs` | Physics component specs. |
-| `termin-default-assets` | `termin-default-assets` | `termin.default_assets` | Default asset adapters. |
-| `termin-stdlib` | `termin-stdlib` | `termin.stdlib` | Standard library resources and sync helpers. |
-| `termin-engine` | `termin-engine` | `termin.engine` | Engine integration API. |
-| `termin-skeleton` | `termin-skeleton` | `termin.skeleton`, `termin.skeleton_components`, `termin_skeleton_component_specs` | Skeleton runtime and components. |
-| `termin-animation` | `termin-animation` | `termin.animation`, `termin.animation_components`, `termin_animation_component_specs` | Animation runtime and components. |
-| `termin-bootstrap` | `termin-bootstrap` | `termin.bootstrap` | Bootstrap/runtime startup helpers. |
-| `termin-glb-native` | `termin-glb-native` | `termin.glb.native` | Minimal native cgltf document and mesh importer. |
-| `termin-glb` | `termin-glb` | `termin.glb` | High-level GLB asset, plugin, and scene importer layer. |
-| `termin-project` | `termin-project` | `termin.project` | Project settings and creation helpers. |
-| `termin-project-modules` | `termin-project-modules` | `termin.project_modules` | Source project module runtime and warmup helpers. |
-| `termin-project-build` | `termin-project-build` | `termin.project_build` | Project build and runtime package export pipeline. |
-| `termin-player` | `termin-player` | `termin.player` | Standalone/source/headless player runtime. |
-| `termin-nodegraph` | `termin-nodegraph` | `tcnodegraph` | Public import keeps historical short namespace. |
-| `tcplot` | `tcplot` | `tcplot` | Legacy short distribution/import name. |
-| `tcplot-gui-native` | `tcplot-gui-native` | `tcplot_gui_native` | Optional native UI adapters for tcplot widgets. |
+| `core/termin-build-tools` | `termin-build-tools` | `termin_build` | Build-time helpers. |
+| `core/termin-nanobind-sdk` | `termin-nanobind` | `termin_nanobind` | Distribution keeps historical short SDK name. |
+| `core/termin-base` | `tcbase` | `tcbase`, `termin.geombase` | Legacy short distribution/import name. |
+| `core/termin-dispatch` | `termin-dispatch` | `termin.dispatch` | Caller-driven language-neutral deferred dispatcher. |
+| `graphics/termin-image` | `termin-image` | `termin.image` | Native image codecs for texture/tooling paths. |
+| `engine/termin-assets` | `termin-assets` | `termin_assets` | Asset runtime contracts. |
+| `graphics/termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
+| `engine/termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
+| `graphics/termin-mesh` | `tmesh` | `tmesh` | Legacy short distribution/import name. |
+| `graphics/termin-graphics` | `tgfx` | `tgfx` | Legacy short distribution/import name. |
+| `graphics/termin-visual-scene` | `termin-visual-scene` | `termin.visual_scene` | Retained 2D visual identity and interaction. |
+| `engine/termin-voxels` | `termin-voxels` | `termin.voxels` | Voxel core API. |
+| `core/termin-inspect` | `termin-inspect` | `termin.inspect` | Inspection metadata API. |
+| `graphics/termin-materials` | `termin-materials` | `termin.materials` | Material runtime API. |
+| `graphics/termin-shader-runtime` | `termin-shader-runtime` | `termin.shader_tools`, `termin.shader_runtime` | Shared shader tool resolution and source-project shader runtime helpers. |
+| `graphics/termin-window` | `termin-window` | `termin.window` | Framework-neutral native window infrastructure. |
+| `graphics/termin-gui-native` | `termin-gui-native` | `termin.gui_native` | Canonical native retained UI toolkit. |
+| `engine/termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
+| `core/termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
+| `graphics/termin-graphics-mcp` | `termin-graphics-mcp` | `termin.graphics.mcp` | Graphics-owned MCP capture/readback adapters. |
+| `engine/termin-prefab` | `termin-prefab` | `termin.prefab` | Namespace package. |
+| `engine/termin-display` | `termin-display` | `termin.display`, `termin.viewport` | Display/windowing API. |
+| `engine/termin-csg` | `termin-csg` | `termin.csg` | CSG API. |
+| `engine/termin-modules` | `termin-modules` | `termin_modules` | Module runtime API. |
+| `physics/termin-robotics` | `termin-robotics` | `termin.robotics` | Articulation models and control algorithms. |
+| `engine/termin-components/termin-components-kinematic` | `termin-components-kinematic` | `termin.kinematic`, `termin_kinematic_component_specs` | Kinematic components. |
+| `engine/termin-lighting` | `termin-lighting` | `termin.lighting` | Lighting API. |
+| `engine/termin-components/termin-components-mesh` | `termin-components-mesh` | `termin.mesh`, `termin_mesh_component_specs` | Scene mesh components. |
+| `engine/termin-components/termin-components-tween` | `termin-components-tween` | `termin_tween_component_specs` | Tween component specs. |
+| `engine/termin-input` | `termin-input` | `termin.input` | Input API. |
+| `physics/termin-collision` | `termin-collision` | `termin.colliders`, `termin.collision`, `termin_collision_component_specs` | Collision runtime and components. |
+| `engine/termin-render` | `termin-render` | `termin.render`, `termin.render_framework`, `termin_render_framework_specs` | Render framework. |
+| `engine/termin-components/termin-components-render` | `termin-components-render` | `termin.render_components`, `termin_render_component_specs` | Render components. |
+| `physics/termin-navmesh` | `termin-navmesh` | `termin.navmesh`, `termin_navmesh_component_specs` | Navmesh runtime and components. |
+| `engine/termin-components/termin-components-voxels` | `termin-components-voxels` | `termin_voxel_components`, `termin_voxel_component_specs` | Voxel components. |
+| `engine/termin-components/termin-components-foliage` | `termin-components-foliage` | `termin.foliage` | Foliage components. |
+| `engine/termin-components/termin-components-ui` | `termin-components-ui` | `termin.ui_components`, `termin_ui_component_specs` | UI components. |
+| `engine/termin-render-passes` | `termin-render-passes` | `termin.render_passes`, `termin_render_pass_specs` | Concrete render passes. |
+| `physics/termin-qopt` | `termin-qopt` | `termin.fem`, `termin.linalg`, `termin.robot` | Reference/research Python APIs; current solver and 3D runtime are native C++. |
+| `physics/termin-physics-fem` | `termin-physics-fem` | `termin.physics_fem` | Reference-only Python projection; current scene integration is native C++. |
+| `physics/termin-pga` | `termin-pga` | `termin.ga201`, `termin.geomalgo` | Geometric algebra APIs. |
+| `physics/termin-physics` | `termin-physics` | `termin.physics` | Rigid-body physics API. |
+| `engine/termin-components/termin-components-physics` | `termin-components-physics` | `termin_physics_component_specs` | Physics component specs. |
+| `engine/termin-default-assets` | `termin-default-assets` | `termin.default_assets` | Default asset adapters. |
+| `engine/termin-stdlib` | `termin-stdlib` | `termin.stdlib` | Standard library resources and sync helpers. |
+| `engine/termin-engine` | `termin-engine` | `termin.engine` | Engine integration API. |
+| `graphics/termin-skeleton` | `termin-skeleton` | `termin.skeleton`, `termin.skeleton_components`, `termin_skeleton_component_specs` | Skeleton runtime and components. |
+| `graphics/termin-animation` | `termin-animation` | `termin.animation`, `termin.animation_components`, `termin_animation_component_specs` | Animation runtime and components. |
+| `engine/termin-bootstrap` | `termin-bootstrap` | `termin.bootstrap` | Bootstrap/runtime startup helpers. |
+| `graphics/termin-glb-native` | `termin-glb-native` | `termin.glb.native` | Minimal native cgltf document and mesh importer. |
+| `graphics/termin-glb` | `termin-glb` | `termin.glb` | High-level GLB asset, plugin, and scene importer layer. |
+| `editor/termin-project` | `termin-project` | `termin.project` | Project settings and creation helpers. |
+| `editor/termin-project-modules` | `termin-project-modules` | `termin.project_modules` | Source project module runtime and warmup helpers. |
+| `editor/termin-project-build` | `termin-project-build` | `termin.project_build` | Project build and runtime package export pipeline. |
+| `editor/termin-player` | `termin-player` | `termin.player` | Standalone/source/headless player runtime. |
+| `graphics/termin-nodegraph` | `termin-nodegraph` | `tcnodegraph` | Public import keeps historical short namespace. |
+| `graphics/tcplot` | `tcplot` | `tcplot` | Legacy short distribution/import name. |
+| `graphics/tcplot-gui-native` | `tcplot-gui-native` | `tcplot_gui_native` | Optional native UI adapters for tcplot widgets. |

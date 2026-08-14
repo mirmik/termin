@@ -12,7 +12,7 @@
 
 ### termin-nanobind-sdk
 
-Source of truth: [termin-nanobind-sdk docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-nanobind-sdk/docs/index.md)
+Source of truth: [termin-nanobind-sdk docs](https://github.com/mirmik/termin/blob/master/core/termin-nanobind-sdk/docs/index.md)
 
 Отвечает за общую nanobind-инфраструктуру Python bindings: runtime preload, build helpers, упаковку native extension modules.
 
@@ -20,13 +20,13 @@ Source of truth: [termin-nanobind-sdk docs](https://github.com/mirmik/termin-mon
 
 ### termin-build-tools
 
-Source of truth: [termin-build-tools docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-build-tools/docs/index.md)
+Source of truth: [termin-build-tools docs](https://github.com/mirmik/termin/blob/master/core/termin-build-tools/docs/index.md)
 
 Build-time helpers для Python packages с CMake/nanobind extensions.
 
 ### termin-base / tcbase
 
-Source of truth: [termin-base docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-base/docs/index.md)
+Source of truth: [termin-base docs](https://github.com/mirmik/termin/blob/master/core/termin-base/docs/index.md)
 
 Базовые типы и инфраструктура, на которую могут опираться остальные модули.
 
@@ -34,7 +34,7 @@ Source of truth: [termin-base docs](https://github.com/mirmik/termin-monorepo/bl
 
 ### termin-dispatch
 
-Source of truth: [termin-dispatch docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-dispatch/docs/index.md)
+Source of truth: [termin-dispatch docs](https://github.com/mirmik/termin/blob/master/core/termin-dispatch/docs/index.md)
 
 Optional language-neutral deferred-execution primitive для application
 composition. Канонический C ABI, C++ wrapper и Python binding используют одну
@@ -61,7 +61,7 @@ security policy принадлежат конкретному host. `termin-runt
 
 ### termin-framegraph-remote
 
-Source of truth: [termin-framegraph-remote docs](https://github.com/mirmik/termin/blob/master/termin-framegraph-remote/docs/index.md)
+Source of truth: [termin-framegraph-remote docs](https://github.com/mirmik/termin/blob/master/engine/termin-framegraph-remote/docs/index.md)
 
 Опциональный нативный versioned contract сетевого Framegraph Debugger. Модуль
 описывает topology revisions, session-scoped target/pass identity, команды
@@ -71,7 +71,7 @@ target/client services подключаются отдельными слоям�
 
 ### termin-framegraph-remote-target
 
-Source of truth: [remote Framegraph target service](https://github.com/mirmik/termin/blob/master/termin-framegraph-remote-target/docs/index.md)
+Source of truth: [remote Framegraph target service](https://github.com/mirmik/termin/blob/master/engine/termin-framegraph-remote-target/docs/index.md)
 
 Опциональный native target-side слой над `termin-framegraph-remote` и
 `termin-engine`. Сетевой поток владеет loopback TCP transport и handshake, а
@@ -83,7 +83,7 @@ topology/status сообщений. Process-scoped host может держат�
 
 ### termin-framegraph-remote-client
 
-Source of truth: [remote Framegraph client](https://github.com/mirmik/termin/blob/master/termin-framegraph-remote-client/docs/index.md)
+Source of truth: [remote Framegraph client](https://github.com/mirmik/termin/blob/master/engine/termin-framegraph-remote-client/docs/index.md)
 
 Опциональный desktop transport над `termin-framegraph-remote`, не зависящий от
 editor, Python, engine или GPU. Network thread обслуживает loopback TCP,
@@ -92,7 +92,7 @@ handshake и reconnect, а bounded SPSC очередь принимает sessio
 
 ### termin-mesh / tmesh
 
-Source of truth: [termin-mesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md)
+Source of truth: [termin-mesh docs](https://github.com/mirmik/termin/blob/master/graphics/termin-mesh/docs/index.md)
 
 Canonical mesh/data layer. `tc_mesh` относится к ядру данных движка, а не к legacy-слою.
 
@@ -108,7 +108,7 @@ not own domain-specific asset classes.
 
 ### termin-default-assets
 
-Source of truth: [termin-default-assets docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-default-assets/docs/index.md)
+Source of truth: [termin-default-assets docs](https://github.com/mirmik/termin/blob/master/engine/termin-default-assets/docs/index.md)
 
 Default asset adapters that connect `termin-assets` to domain packages without
 making those domain packages depend on the asset runtime. Standard mesh,
@@ -117,7 +117,7 @@ packages stay focused on runtime/data APIs.
 
 ### termin-prefab
 
-Source of truth: [termin-prefab docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-prefab/docs/index.md)
+Source of truth: [termin-prefab docs](https://github.com/mirmik/termin/blob/master/engine/termin-prefab/docs/index.md)
 
 Owns prefab runtime and `.prefab` asset integration: native `PrefabDocument`,
 `PrefabInstantiator`, `PrefabInstanceState` and the versioned tagged
@@ -129,7 +129,7 @@ adapter over a lower-level domain package.
 
 ### termin-glb
 
-Source of truth: [termin-glb docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-glb/docs/index.md)
+Source of truth: [termin-glb docs](https://github.com/mirmik/termin/blob/master/graphics/termin-glb/docs/index.md)
 
 The `termin-glb-native` distribution owns the minimal `termin.glb.native`
 cgltf document and `build_mesh` API. It depends only on the native mesh/runtime
@@ -151,7 +151,7 @@ logic.
 
 ### termin-graphics / tgfx
 
-Source of truth: [termin-graphics docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-graphics/docs/index.md)
+Source of truth: [termin-graphics docs](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/docs/index.md)
 
 Отвечает за backend-neutral GPU API, tgfx2 context/device/runtime, render targets, texture pools, canvas renderer facade и низкоуровневые GPU utilities. Это канонический GPU substrate для render framework; использование `tgfx`/`tgfx2` типов в render-facing API само по себе не является нарушением границы.
 
@@ -172,7 +172,7 @@ graphics operation.
 
 ### termin-visual-scene
 
-Source of truth: [termin-visual-scene docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-visual-scene/docs/index.md)
+Source of truth: [termin-visual-scene docs](https://github.com/mirmik/termin/blob/master/graphics/termin-visual-scene/docs/index.md)
 
 Отвечает за retained 2D visual identity, generation-checked item handles,
 topology, transforms, hit preparation и pointer interaction. Модуль зависит от
@@ -182,7 +182,7 @@ topology, transforms, hit preparation и pointer interaction. Модуль за�
 
 ### termin-render
 
-Source of truth: [termin-render docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md)
+Source of truth: [termin-render docs](https://github.com/mirmik/termin/blob/master/engine/termin-render/docs/index.md)
 
 Render framework разделён на два физических target. `termin_render_core`
 владеет render engine, runtime frame graph/pipeline, generic resources,
@@ -205,7 +205,7 @@ path через `TcSceneRenderItemSource` заранее публикует snap
 
 ### termin-render-passes
 
-Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-render-passes/docs/index.md)
+Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin/blob/master/engine/termin-render-passes/docs/index.md)
 
 Отвечает за concrete render pass implementations поверх `termin-render`, `termin-graphics`, `termin-materials`, render components и debug/editor pass integrations.
 
@@ -228,7 +228,7 @@ helpers, shader skinning injection, material UBO apply helper и Python API
 
 ### termin-display
 
-Source of truth: [termin-display docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-display/docs/index.md)
+Source of truth: [termin-display docs](https://github.com/mirmik/termin/blob/master/engine/termin-display/docs/index.md)
 
 Отвечает за logical displays, viewport layout, display-level input routing и
 backend-neutral offscreen output surfaces. Целевой `tc_render_surface` является
@@ -238,7 +238,7 @@ presentation и OpenGL context operations в этот контракт не вх
 
 ### termin-window
 
-Source of truth: [termin-window docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-window/docs/index.md)
+Source of truth: [termin-window docs](https://github.com/mirmik/termin/blob/master/graphics/termin-window/docs/index.md)
 
 Lightweight boundary для native windows, portable window events и физической
 презентации tgfx texture. Concrete implementation `SDLBackendWindow` живёт
@@ -257,7 +257,7 @@ raw renderer или другим содержимым. Целевой контр
 
 ### termin-gui-native
 
-Source of truth: [termin-gui-native README](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui-native/README.md)
+Source of truth: [termin-gui-native README](https://github.com/mirmik/termin/blob/master/graphics/termin-gui-native/README.md)
 
 `termin-gui-native` — единственный поддерживаемый retained UI toolkit Termin.
 Он владеет C ABI/C++ document и widget core, layout, input routing, dialogs,
@@ -276,7 +276,7 @@ UI нет. Headless composition использует document/rendering primitiv
 
 ### tcplot
 
-Source of truth: [tcplot docs](https://github.com/mirmik/termin-monorepo/blob/master/tcplot/docs/index.md)
+Source of truth: [tcplot docs](https://github.com/mirmik/termin/blob/master/graphics/tcplot/docs/index.md)
 
 Toolkit-neutral plotting library поверх tgfx. Переиспользует GPU abstractions из
 [termin-graphics](#termin-graphics), scene-neutral framegraph/execution из
@@ -306,7 +306,7 @@ Plot-domain data, projection, ticks и оптимизированные series i
 
 ### termin-nodegraph
 
-Source of truth: [termin-nodegraph docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-nodegraph/docs/index.md)
+Source of truth: [termin-nodegraph docs](https://github.com/mirmik/termin/blob/master/graphics/termin-nodegraph/docs/index.md)
 
 Python node graph UI/tools. Должен зависеть от public UI/graphics APIs, а не от внутренних деталей render backend.
 
@@ -314,7 +314,7 @@ Python node graph UI/tools. Должен зависеть от public UI/graphic
 
 ### termin-scene
 
-Source of truth: [termin-scene docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-scene/docs/index.md)
+Source of truth: [termin-scene docs](https://github.com/mirmik/termin/blob/master/engine/termin-scene/docs/index.md)
 
 Отвечает за scene/ECS ownership, handles, lifecycle и component storage.
 
@@ -322,7 +322,7 @@ Renderer/UI integration описывается на уровне render/componen
 
 ### termin-inspect
 
-Source of truth: [termin-inspect docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-inspect/docs/index.md)
+Source of truth: [termin-inspect docs](https://github.com/mirmik/termin/blob/master/core/termin-inspect/docs/index.md)
 
 Отвечает за kind/type metadata, inspection dispatch, field metadata, Python bridge.
 
@@ -330,25 +330,25 @@ Source of truth: [termin-inspect docs](https://github.com/mirmik/termin-monorepo
 
 ### termin-modules
 
-Source of truth: [termin-modules docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-modules/docs/index.md)
+Source of truth: [termin-modules docs](https://github.com/mirmik/termin/blob/master/engine/termin-modules/docs/index.md)
 
 Отвечает за descriptors, lifecycle, callbacks и plugin/module loading contracts.
 
 ### termin-collision
 
-Source of truth: [termin-collision docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-collision/docs/index.md)
+Source of truth: [termin-collision docs](https://github.com/mirmik/termin/blob/master/physics/termin-collision/docs/index.md)
 
 Отвечает за collision world, colliders, algorithms и C/Python API коллизий.
 
 ### termin-physics
 
-Source of truth: [termin-physics docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics/docs/index.md)
+Source of truth: [termin-physics docs](https://github.com/mirmik/termin/blob/master/physics/termin-physics/docs/index.md)
 
-C++ rigid-body physics layer. Collision primitives должны оставаться в [termin-collision](#termin-collision), если они не требуют physics simulation state. Contribution-based FEM scene integration живёт в [termin-physics-fem](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md), not in `termin.physics`.
+C++ rigid-body physics layer. Collision primitives должны оставаться в [termin-collision](#termin-collision), если они не требуют physics simulation state. Contribution-based FEM scene integration живёт в [termin-physics-fem](https://github.com/mirmik/termin/blob/master/physics/termin-physics-fem/docs/index.md), not in `termin.physics`.
 
 ### termin-physics-fem
 
-Source of truth: [termin-physics-fem docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md)
+Source of truth: [termin-physics-fem docs](https://github.com/mirmik/termin/blob/master/physics/termin-physics-fem/docs/index.md)
 
 Native scene integration over the contribution-based `termin-qopt` dynamics
 API. Runtime components link the C++ solver/model and do not require NumPy or a
@@ -358,7 +358,7 @@ must stay independent from both stacks.
 
 ### termin-input
 
-Source of truth: [termin-input docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-input/docs/index.md)
+Source of truth: [termin-input docs](https://github.com/mirmik/termin/blob/master/engine/termin-input/docs/index.md)
 
 Input abstraction. UI event routing принадлежит
 [termin-gui-native](#termin-gui-native), platform windowing —
@@ -366,7 +366,7 @@ Input abstraction. UI event routing принадлежит
 
 ### termin-engine
 
-Source of truth: [termin-engine docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-engine/docs/index.md)
+Source of truth: [termin-engine docs](https://github.com/mirmik/termin/blob/master/engine/termin-engine/docs/index.md)
 
 Engine-level orchestration поверх scene/render/input/domain modules. Владеет runtime managers, scene render lifecycle helpers, builtin scene extension registration включая collision runtime, и интеграцией project modules с live scenes (`TermModulesIntegration`).
 
@@ -375,32 +375,32 @@ ECS-типы (`Entity`, `Component`, `ComponentRegistry`, `TcScene`) импор�
 
 ### termin-lighting
 
-Source of truth: [termin-lighting docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-lighting/docs/index.md)
+Source of truth: [termin-lighting docs](https://github.com/mirmik/termin/blob/master/engine/termin-lighting/docs/index.md)
 
 Lighting primitives and lighting-domain Python bindings.
 
 ### termin-skeleton
 
-Source of truth: [termin-skeleton docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-skeleton/docs/index.md)
+Source of truth: [termin-skeleton docs](https://github.com/mirmik/termin/blob/master/graphics/termin-skeleton/docs/index.md)
 
 Skeleton-domain API and bindings.
 
 ### termin-animation
 
-Source of truth: [termin-animation docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-animation/docs/index.md)
+Source of truth: [termin-animation docs](https://github.com/mirmik/termin/blob/master/graphics/termin-animation/docs/index.md)
 
 Animation-domain API and bindings.
 
 ### termin-navmesh
 
-Source of truth: [termin-navmesh docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-navmesh/docs/index.md)
+Source of truth: [termin-navmesh docs](https://github.com/mirmik/termin/blob/master/physics/termin-navmesh/docs/index.md)
 
 NavMesh C registry, Recast/Detour-backed scene components, `_navmesh_native`
 bindings, and navigation utilities.
 
 ### termin-tween
 
-Source of truth: [termin-tween docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-tween/docs/index.md)
+Source of truth: [termin-tween docs](https://github.com/mirmik/termin/blob/master/graphics/termin-tween/docs/index.md)
 
 Чистое ядро твининга: easing-функции, tween-классы и `TweenManager`.
 
@@ -409,7 +409,7 @@ Scene-компонент живёт выше, в [termin-components-tween](#comp
 
 ### termin-voxels
 
-Source of truth: [termin-voxels docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-voxels/docs/index.md)
+Source of truth: [termin-voxels docs](https://github.com/mirmik/termin/blob/master/engine/termin-voxels/docs/index.md)
 
 Voxel grid runtime API, persistence, mesh voxelization helpers and
 `termin.voxels._voxels_native`.
@@ -419,26 +419,26 @@ the native CMake target is owned and built by `termin-voxels`.
 
 ## Component Libraries
 
-Source of truth: [termin-components docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/docs/index.md)
+Source of truth: [termin-components docs](https://github.com/mirmik/termin/blob/master/engine/termin-components/docs/index.md)
 
 Component packages attach domain behavior/data to scene/entity objects:
 
-- [termin-components-collision](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-collision/docs/index.md)
-- [termin-components-render](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-render/docs/index.md)
-- [termin-components-mesh](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-mesh/docs/index.md)
-- [termin-components-kinematic](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-kinematic/docs/index.md)
-- [termin-components-physics](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-physics/docs/index.md)
-- [termin-components-skeleton](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-skeleton/docs/index.md)
-- [termin-components-animation](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-animation/docs/index.md)
-- [termin-components-tween](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-tween/docs/index.md)
-- [termin-components-ui](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-ui/docs/index.md)
-- [termin-components-voxels](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/termin-components-voxels/docs/index.md)
+- [termin-components-collision](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-collision/docs/index.md)
+- [termin-components-render](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-render/docs/index.md)
+- [termin-components-mesh](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-mesh/docs/index.md)
+- [termin-components-kinematic](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-kinematic/docs/index.md)
+- [termin-components-physics](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-physics/docs/index.md)
+- [termin-components-skeleton](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-skeleton/docs/index.md)
+- [termin-components-animation](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-animation/docs/index.md)
+- [termin-components-tween](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-tween/docs/index.md)
+- [termin-components-ui](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-ui/docs/index.md)
+- [termin-components-voxels](https://github.com/mirmik/termin/blob/master/engine/termin-components/termin-components-voxels/docs/index.md)
 
 ## Language Bindings
 
 ### termin-csharp
 
-Source of truth: [termin-csharp docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-csharp/docs/index.md)
+Source of truth: [termin-csharp docs](https://github.com/mirmik/termin/blob/master/termin-csharp/docs/index.md)
 
 C# bindings/runtime packaging for Termin native libraries.
 
@@ -475,7 +475,7 @@ to the owning package entrypoints.
 
 ### termin-app
 
-Source of truth: [termin-app docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-app/docs/index.md), [editor architecture](https://github.com/mirmik/termin-monorepo/blob/master/termin-app/docs/editor-architecture.md), [flat viewport target model](https://github.com/mirmik/termin-monorepo/blob/master/termin-app/docs/rendering-flat-viewport-target-model.md).
+Source of truth: [termin-app docs](https://github.com/mirmik/termin/blob/master/editor/termin-app/docs/index.md), [editor architecture](https://github.com/mirmik/termin/blob/master/editor/termin-app/docs/editor-architecture.md), [flat viewport target model](https://github.com/mirmik/termin/blob/master/editor/termin-app/docs/rendering-flat-viewport-target-model.md).
 
 Основное приложение/редактор. Архитектурно это C++ executable product и
 application composition root, а не independently installable Python library.
