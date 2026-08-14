@@ -3,9 +3,9 @@ from pathlib import Path
 
 
 DEFAULT_ASSET_PLUGIN_SETUP_FILES = (
-    "termin-default-assets/setup.py",
-    "termin-glb/setup.py",
-    "termin-prefab/setup.py",
+    "engine/termin-default-assets/setup.py",
+    "editor/termin-glb-adapters/setup.py",
+    "engine/termin-prefab/setup.py",
 )
 
 EXPECTED_PLUGIN_TYPES = {
@@ -46,7 +46,7 @@ EXPECTED_IMPORT_EXTENSIONS = {
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[3]
 
 
 def _setup_entry_points(setup_path: Path) -> dict[str, dict[str, str]]:
@@ -96,11 +96,11 @@ def _module_source_path(module_name: str) -> Path:
     rel_module_path = Path(*module_name.split(".")).with_suffix(".py")
     root = _repo_root()
     if module_name.startswith("termin.default_assets."):
-        return root / "termin-default-assets/python" / rel_module_path
-    if module_name.startswith("termin.glb."):
-        return root / "termin-glb/python" / rel_module_path
+        return root / "engine/termin-default-assets/python" / rel_module_path
+    if module_name.startswith("termin.glb_adapters."):
+        return root / "editor/termin-glb-adapters/python" / rel_module_path
     if module_name.startswith("termin.prefab."):
-        return root / "termin-prefab/python" / rel_module_path
+        return root / "engine/termin-prefab/python" / rel_module_path
     raise AssertionError(f"Unhandled default asset plugin module: {module_name}")
 
 

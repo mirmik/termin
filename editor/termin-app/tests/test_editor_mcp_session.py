@@ -12,7 +12,7 @@ from termin.editor_core.mcp_session import (
 from termin.mcp.session import new_sdk_session_file, sdk_session_registry_dir
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 HELPER = REPOSITORY_ROOT / "scripts" / "termin-editor-mcp"
 
 

@@ -113,6 +113,10 @@ def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
         "uses: ./.github/actions/prepare-sdk-package-python"
     ) == 3
     assert "PYTHON_BIN: ${{ github.workspace }}/sdk/bin/termin_python" in workflow
+    assert "cd editor/termin-app" not in workflow
+    assert "editor/termin-app/install" not in workflow
+    python_runner = (repo_root / "scripts/test/python.sh").read_text(encoding="utf-8")
+    assert 'export TERMIN_PYTHON_OVERLAY="$OVERLAY_MANIFEST"' in python_runner
     assert "python -m pip install setuptools==83.0.0 wheel==0.47.0" not in workflow
 
 

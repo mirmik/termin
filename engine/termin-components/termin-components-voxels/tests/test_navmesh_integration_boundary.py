@@ -6,9 +6,11 @@ import numpy as np
 from termin.navmesh.ribbon_geometry import build_line_ribbon
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-VOXEL_COMPONENTS_ROOT = REPO_ROOT / "termin-components" / "termin-components-voxels"
-NAVMESH_ROOT = REPO_ROOT / "termin-navmesh"
+REPO_ROOT = Path(__file__).resolve().parents[4]
+VOXEL_COMPONENTS_ROOT = (
+    REPO_ROOT / "engine" / "termin-components" / "termin-components-voxels"
+)
+NAVMESH_ROOT = REPO_ROOT / "physics" / "termin-navmesh"
 
 
 def _install_requires(package_root: Path) -> set[str]:

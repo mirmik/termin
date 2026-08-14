@@ -55,14 +55,14 @@ class CMakeDependencyParserTests(unittest.TestCase):
 
     def test_current_modules_keep_their_native_dependencies(self):
         expected = {
-            "termin-modules": {"termin-base"},
-            "termin-physics": {"termin-base", "termin-collision"},
+            "termin-modules": ("engine", {"termin-base"}),
+            "termin-physics": ("physics", {"termin-base", "termin-collision"}),
         }
 
-        for module, dependencies in expected.items():
+        for module, (republic, dependencies) in expected.items():
             with self.subTest(module=module):
                 actual = GRAPH.parse_cmake_deps(
-                    str(Path(GRAPH.ROOT) / module / "CMakeLists.txt")
+                    str(Path(GRAPH.ROOT) / republic / module / "CMakeLists.txt")
                 )
                 self.assertTrue(dependencies <= actual)
 

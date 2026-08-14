@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 
 
-_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 _SKIP_PARTS = {
     ".agents",
     ".codex",
@@ -18,9 +18,21 @@ _SKIP_PARTS = {
 }
 _TEXT_SUFFIXES = {".c", ".cc", ".cpp", ".cs", ".h", ".hpp", ".py", ".pyi"}
 _OWNED_ROOTS = (
-    "termin-app", "termin-base", "termin-components", "termin-csharp", "termin-engine", "termin-graphics", "termin-gui",
-    "termin-gui-native", "termin-materials", "termin-mesh", "termin-navmesh", "termin-render", "termin-render-passes",
-    "termin-visual-scene", "termin-web-core", "tcplot",
+    "editor/termin-app",
+    "core/termin-base",
+    "engine/termin-components",
+    "termin-csharp",
+    "engine/termin-engine",
+    "graphics/termin-graphics",
+    "graphics/termin-gui-native",
+    "graphics/termin-materials",
+    "graphics/termin-mesh",
+    "physics/termin-navmesh",
+    "engine/termin-render",
+    "engine/termin-render-passes",
+    "graphics/termin-visual-scene",
+    "platform/termin-web-core",
+    "graphics/tcplot",
 )
 _LEGACY_COLOR4 = re.compile(r"\b" + "Color" + r"4f?\b|\bVisual" + "Color" + r"4f\b")
 _LEGACY_UI_COLOR = re.compile(r"\btc_ui_color\b")
@@ -55,9 +67,18 @@ def test_first_party_sources_do_not_use_legacy_color4_types():
 def test_first_party_sources_do_not_use_legacy_ui_color_type():
     findings = [
         str(path.relative_to(_REPOSITORY_ROOT))
-        for path in _source_files("termin-app", "termin-components", "termin-engine", "termin-graphics",
-                                  "termin-gui-native", "termin-materials", "termin-render", "termin-render-passes",
-                                  "termin-visual-scene", "termin-web-core")
+        for path in _source_files(
+            "editor/termin-app",
+            "engine/termin-components",
+            "engine/termin-engine",
+            "graphics/termin-graphics",
+            "graphics/termin-gui-native",
+            "graphics/termin-materials",
+            "engine/termin-render",
+            "engine/termin-render-passes",
+            "graphics/termin-visual-scene",
+            "platform/termin-web-core",
+        )
         if path != Path(__file__) and _LEGACY_UI_COLOR.search(path.read_text(encoding="utf-8"))
     ]
     assert findings == [], "legacy tc_ui_color boundaries remain: " + ", ".join(findings)
@@ -74,9 +95,9 @@ def test_first_party_sources_do_not_declare_ambiguous_color_types():
 
 
 def test_legacy_shader_color_is_confined_to_rejection_fixture():
-    fixture = _REPOSITORY_ROOT / "termin-materials/tests/test_shader_parser.py"
+    fixture = _REPOSITORY_ROOT / "graphics/termin-materials/tests/test_shader_parser.py"
     findings = []
-    for path in _source_files("termin-materials", "termin-web-core"):
+    for path in _source_files("graphics/termin-materials", "platform/termin-web-core"):
         if path == fixture:
             continue
         if _LEGACY_SHADER_COLOR_PROPERTY.search(path.read_text(encoding="utf-8")):
@@ -86,7 +107,9 @@ def test_legacy_shader_color_is_confined_to_rejection_fixture():
 
 def test_material_callers_use_typed_color_setters():
     findings = []
-    for path in _source_files("termin-materials/python", "termin-materials/src"):
+    for path in _source_files(
+        "graphics/termin-materials/python", "graphics/termin-materials/src"
+    ):
         if _MATERIAL_LEGACY_SET_COLOR.search(path.read_text(encoding="utf-8")):
             findings.append(str(path.relative_to(_REPOSITORY_ROOT)))
     assert findings == [], (
@@ -96,14 +119,22 @@ def test_material_callers_use_typed_color_setters():
 
 
 def test_material_apis_have_no_legacy_color_scaffold():
-    handle = _REPOSITORY_ROOT / "termin-graphics/include/tgfx/tgfx_material_handle.hpp"
+    handle = (
+        _REPOSITORY_ROOT
+        / "graphics/termin-graphics/include/tgfx/tgfx_material_handle.hpp"
+    )
     text = handle.read_text(encoding="utf-8")
     assert "set_uniform_srgb_color" in text
     assert "set_uniform_linear_color" in text
     assert re.search(r"\bvoid\s+set_color\s*\(", text) is None
 
     findings = []
-    for path in _source_files("termin-components", "termin-csharp", "termin-graphics", "termin-materials"):
+    for path in _source_files(
+        "engine/termin-components",
+        "termin-csharp",
+        "graphics/termin-graphics",
+        "graphics/termin-materials",
+    ):
         if _LEGACY_MATERIAL_COLOR_API.search(path.read_text(encoding="utf-8")):
             findings.append(str(path.relative_to(_REPOSITORY_ROOT)))
     assert findings == [], "ambiguous C material color APIs remain: " + ", ".join(findings)

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -11,7 +12,7 @@ from termin.prefab.asset_plugin import create_import_plugin, create_runtime_plug
 from termin_assets import AssetContext, PreLoadResult
 
 
-_OVERLAY = Path(__file__).resolve().parents[2] / "build/python-envs/test/overlay.json"
+_OVERLAY = Path(os.environ["TERMIN_PYTHON_OVERLAY"])
 
 
 class FakeResourceManager:

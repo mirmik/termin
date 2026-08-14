@@ -490,7 +490,9 @@ def test_validate_runtime_package_reports_missing_builtin_shader_runtime_source(
 
 
 def test_validate_runtime_package_accepts_bundled_android_smoke_assets() -> None:
-    package_dir = Path(__file__).parents[2] / "termin-android" / "assets"
+    package_dir = (
+        Path(__file__).parents[3] / "platform" / "termin-android" / "assets"
+    )
 
     assert validate_runtime_package(package_dir) == []
 

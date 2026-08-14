@@ -398,8 +398,11 @@ def test_ui_document_asset_diagnostics_include_source_identity():
 
 
 def test_editor_camera_uiscript_is_in_the_supported_v2_dialect():
-    root = Path(__file__).resolve().parents[3]
-    script = root / "termin-stdlib/python/termin/stdlib/resources/uiscript/editor_camera_ui.uiscript"
+    root = Path(__file__).resolve().parents[4]
+    script = (
+        root
+        / "engine/termin-stdlib/python/termin/stdlib/resources/uiscript/editor_camera_ui.uiscript"
+    )
     description = UiScriptLoader().parser.parse(script.read_text(encoding="utf-8"))
     assert description.root.name == "editor_camera_root"
     assert {child.name for child in description.root.children} == {

@@ -131,7 +131,7 @@ def test_graphics_showcase_tabbed_frontend_builds_and_renders_every_page() -> No
                 composition.graphics,
             )
             tabs, contents = _build_tabbed_showcase(application)
-            assert tabs.page_count == 13
+            assert tabs.page_count == 14
             assert [tabs.page_title(index) for index in range(tabs.page_count)] == [
                 "Overview",
                 "Native UI",
@@ -143,6 +143,7 @@ def test_graphics_showcase_tabbed_frontend_builds_and_renders_every_page() -> No
                 "3D Helix",
                 "3D Surface",
                 "Visual Scene",
+                "Animated GLB",
                 "Nodegraph",
                 "SceneView3D",
                 "Composition",

@@ -82,9 +82,9 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
 
 
 def test_legacy_app_build_entrypoints_do_not_shadow_sdk_manifest() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    app_root = repo_root / "termin-app"
-    cpp_cmake = (repo_root / "termin-app" / "cpp" / "CMakeLists.txt").read_text(encoding="utf-8")
+    repo_root = Path(__file__).resolve().parents[3]
+    app_root = repo_root / "editor" / "termin-app"
+    cpp_cmake = (app_root / "cpp" / "CMakeLists.txt").read_text(encoding="utf-8")
 
     assert not (app_root / "CMakeLists.txt").exists()
     assert not (app_root / "build.sh").exists()
@@ -96,8 +96,8 @@ def test_legacy_app_build_entrypoints_do_not_shadow_sdk_manifest() -> None:
 
 
 def test_linux_player_launcher_declares_relocatable_sdk_and_bundle_runpath() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    player_cmake = (repo_root / "termin-player" / "CMakeLists.txt").read_text(
+    repo_root = Path(__file__).resolve().parents[3]
+    player_cmake = (repo_root / "editor/termin-player/CMakeLists.txt").read_text(
         encoding="utf-8"
     )
     rpath_cmake = (repo_root / "cmake" / "TerminRpath.cmake").read_text(

@@ -455,6 +455,9 @@ jobs:
       - name: Install Linux build dependencies
         uses: ./.github/actions/setup-linux-build
 
+      - name: Setup Slang compiler
+        uses: ./.github/actions/setup-slang
+
       - uses: actions/download-artifact@v5
         with:
           name: sdk-full
@@ -575,37 +578,6 @@ jobs:
           TERMIN_BINDINGS_DIR: ${{ env.SDK_SITE_PACKAGES }}
         run: task install:packages -- --editable
 
-      - name: Build termin bundle
-        env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
-        run: |
-          cd editor/termin-app
-          SDK_PREFIX=${{ github.workspace }}/sdk CMAKE_PREFIX_PATH=${{ github.workspace }}/sdk ./build.sh
-
-      - name: Verify relocated installed Python layout
-        run: |
-          bundle_root="$RUNNER_TEMP/termin-installed"
-          cp -a editor/termin-app/install "$bundle_root"
-          site_packages="$(find "$bundle_root/lib" -mindepth 2 -maxdepth 3 -type d -path '*/python*/site-packages' -print -quit)"
-          test -n "$site_packages"
-          test ! -e "$bundle_root/lib/python"
-          env -u PYTHONPATH -u PYTHONHOME -u PYTHONUSERBASE \
-            LD_LIBRARY_PATH="$bundle_root/lib" \
-            "$bundle_root/bin/termin_launcher" --termin-python-layout-smoke > "$RUNNER_TEMP/termin-python-layout.json"
-          python3 - "$RUNNER_TEMP/termin-python-layout.json" "$site_packages" <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          report = pathlib.Path(sys.argv[1])
-          expected = pathlib.Path(sys.argv[2]).resolve()
-          payload = json.loads(report.read_text(encoding="utf-8").splitlines()[-1])
-          for module, location in payload.items():
-              resolved = pathlib.Path(location).resolve()
-              if not resolved.is_relative_to(expected):
-                  raise SystemExit(f"{module} imported outside canonical site-packages: {resolved}")
-          PY
-
       - name: Run tests
         env:
           TERMIN_SDK: ${{ github.workspace }}/sdk
@@ -676,13 +648,6 @@ jobs:
         env:
           TERMIN_BINDINGS_DIR: ${{ env.SDK_SITE_PACKAGES }}
         run: task install:packages --
-
-      - name: Build termin
-        env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/sdk/lib
-        run: |
-          cd editor/termin-app
-          SDK_PREFIX=${{ github.workspace }}/sdk CMAKE_PREFIX_PATH=${{ github.workspace }}/sdk ./build.sh
 
       - name: Build termin-csharp
         run: |

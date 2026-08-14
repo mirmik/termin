@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def test_import_termin_inspect_without_ld_library_path() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     sdk_root = repo_root / "sdk"
     if not (sdk_root / "lib").is_dir():
         raise AssertionError(f"test requires built SDK lib directory: {sdk_root / 'lib'}")
