@@ -102,11 +102,19 @@ echo "Overlay: $OVERLAY_MANIFEST"
 SDK_PREFIX="${SDK_PREFIX:-$TERMIN_SDK}"
 export LD_LIBRARY_PATH="${SDK_PREFIX}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-# Shader compiler tests must exercise the executable selected by the top-level
-# runner from the current C++ test graph.
+# Python tests exercise the compiler installed in the same verified SDK as the
+# bundled Python runtime.  TERMIN_SHADERC remains an explicit override.
 if [[ -z "${TERMIN_SHADERC:-}" ]]; then
-    echo "ERROR: TERMIN_SHADERC is not set. Run ./scripts/test/all.sh or set it to the compiler produced by the current C++ test graph." >&2
-    exit 1
+    ARTIFACT_RESOLUTION_BOOTSTRAP='import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.artifact_resolution import main; raise SystemExit(main())'
+    if ! TERMIN_SHADERC="$(
+        "$PYTHON_BIN" -c "$ARTIFACT_RESOLUTION_BOOTSTRAP" "$BUILD_TOOLS_ROOT" \
+            sdk-shader-compiler \
+            --sdk-root "$SDK_PREFIX" \
+            --platform linux
+    )"; then
+        echo "ERROR: failed to resolve termin_shaderc from the active SDK." >&2
+        exit 1
+    fi
 fi
 if [[ ! -x "$TERMIN_SHADERC" ]]; then
     echo "ERROR: TERMIN_SHADERC is not executable: $TERMIN_SHADERC" >&2

@@ -117,10 +117,18 @@ if ($pathEntries.Count -gt 0) {
     $env:PATH = ($pathEntries -join [IO.Path]::PathSeparator) + [IO.Path]::PathSeparator + $env:PATH
 }
 
-# Shader compiler tests must exercise the executable produced by the current
-# C++ test graph, never a potentially stale SDK copy.
+# Python tests exercise the compiler installed in the same verified SDK as the
+# bundled Python runtime. TERMIN_SHADERC remains an explicit override.
 if (-not $env:TERMIN_SHADERC) {
-    throw "TERMIN_SHADERC is not set. Run 'task test' so it can select the compiler from the active CMake graph, or set TERMIN_SHADERC explicitly."
+    $ArtifactResolutionBootstrap = "import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.artifact_resolution import main; raise SystemExit(main())"
+    $ResolvedShaderCompiler = & $PythonBin -c $ArtifactResolutionBootstrap $BuildToolsRoot `
+        sdk-shader-compiler `
+        --sdk-root $SdkPrefix `
+        --platform windows
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to resolve termin_shaderc from the active SDK."
+    }
+    $env:TERMIN_SHADERC = ($ResolvedShaderCompiler | Out-String).Trim()
 }
 if (-not (Test-Path $env:TERMIN_SHADERC -PathType Leaf)) {
     throw "TERMIN_SHADERC does not point to a file: $env:TERMIN_SHADERC"

@@ -1501,6 +1501,72 @@ def resolve_ctest_build_targets(
     return tuple(sorted(build_targets))
 
 
+def _configured_ctest_build_aggregates(
+    build_dir: Path,
+) -> dict[str, frozenset[str]]:
+    manifest = build_dir / "ctest-build-aggregates.txt"
+    try:
+        lines = manifest.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ManifestError(
+            f"cannot read configured CTest aggregate manifest {manifest}: {exc}"
+        ) from exc
+    if not lines or lines[0] != "schema=1":
+        raise ManifestError(f"invalid CTest aggregate manifest header in {manifest}")
+
+    aggregates: dict[str, set[str]] = {}
+    for line_number, line in enumerate(lines[1:], start=2):
+        fields = line.split("\t")
+        if len(fields) != 2 or not all(fields):
+            raise ManifestError(
+                f"invalid CTest aggregate manifest entry at {manifest}:{line_number}"
+            )
+        aggregate, target = fields
+        aggregates.setdefault(aggregate, set()).add(target)
+    if not aggregates:
+        raise ManifestError(f"CTest aggregate manifest is empty: {manifest}")
+    return {
+        aggregate: frozenset(targets)
+        for aggregate, targets in aggregates.items()
+    }
+
+
+def resolve_ctest_build_aggregate(
+    build_dir: Path,
+    ctest_payload: object,
+    execution_plan: dict[str, object],
+    config: str | None,
+) -> str:
+    selected_targets = frozenset(
+        resolve_ctest_build_targets(build_dir, ctest_payload, execution_plan, config)
+    )
+    aggregates = _configured_ctest_build_aggregates(build_dir)
+    matches = sorted(
+        aggregate
+        for aggregate, targets in aggregates.items()
+        if targets == selected_targets
+    )
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ManifestError(
+            "multiple CTest build aggregates match the selected plan: "
+            + ", ".join(matches)
+        )
+
+    diagnostics = []
+    for aggregate, targets in sorted(aggregates.items()):
+        missing = sorted(selected_targets - targets)
+        unexpected = sorted(targets - selected_targets)
+        diagnostics.append(
+            f"{aggregate}: missing={missing[:5]!r}, unexpected={unexpected[:5]!r}"
+        )
+    raise ManifestError(
+        "no configured CTest build aggregate exactly matches the selected plan; "
+        + "; ".join(diagnostics)
+    )
+
+
 def _cmd_check_ctest(
     repo_root: Path,
     build_dir: Path,
@@ -1546,6 +1612,7 @@ def _cmd_ctest_plan(
     json_output: bool,
     regex_output: bool,
     build_targets_output: bool,
+    build_aggregate_output: bool,
     config: str | None = None,
 ) -> int:
     catalog = _load_valid_catalog(repo_root)
@@ -1577,6 +1644,8 @@ def _cmd_ctest_plan(
             build_dir, payload, plan, config
         ):
             print(target)
+    elif build_aggregate_output:
+        print(resolve_ctest_build_aggregate(build_dir, payload, plan, config))
     elif json_output:
         _print_json(plan)
     else:
@@ -1946,6 +2015,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.json_output,
                 args.regex_output,
                 args.build_targets_output,
+                args.build_aggregate_output,
                 args.config,
             )
         if args.command == "report-ctest":
