@@ -466,6 +466,9 @@ jobs:
       - name: Resolve SDK Python layout
         uses: ./.github/actions/resolve-sdk-python
 
+      - name: Install Python package build frontend
+        run: python -m pip install setuptools==83.0.0 wheel==0.47.0
+
       - name: Install pip packages
         env:
           TERMIN_BINDINGS_DIR: ${{ env.SDK_SITE_PACKAGES }}
@@ -562,6 +565,9 @@ jobs:
 
       - name: Resolve SDK Python layout
         uses: ./.github/actions/resolve-sdk-python
+
+      - name: Install Python package build frontend
+        run: python -m pip install setuptools==83.0.0 wheel==0.47.0
 
       - name: Install pip packages
         env:
@@ -661,6 +667,9 @@ jobs:
 
       - name: Resolve SDK Python layout
         uses: ./.github/actions/resolve-sdk-python
+
+      - name: Install Python package build frontend
+        run: python -m pip install setuptools==83.0.0 wheel==0.47.0
 
       - name: Install pip packages
         env:
