@@ -47,9 +47,13 @@ function Get-TerminVisualStudioSolution {
         [string]$BuildDir
     )
 
-    $solutions = @(Get-ChildItem -LiteralPath $BuildDir -File -Filter "*.sln")
+    # Visual Studio 2026/CMake 4.4 emits the XML-based .slnx format by
+    # default; older generators emit .sln.  MSBuild accepts both.
+    $solutions = @(Get-ChildItem -LiteralPath $BuildDir -File | Where-Object {
+        $_.Extension -in @(".sln", ".slnx")
+    })
     if ($solutions.Count -ne 1) {
-        throw "Expected exactly one Visual Studio solution in $BuildDir, found $($solutions.Count)"
+        throw "Expected exactly one Visual Studio .sln or .slnx in $BuildDir, found $($solutions.Count)"
     }
     return $solutions[0].FullName
 }
