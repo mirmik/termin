@@ -210,7 +210,7 @@ def markdown_report(report: dict[str, Any]) -> str:
         "Reproduce from the repository root:",
         "",
         "```bash",
-        "./audit-webgpu-shaders.sh --setup",
+        "task check:webgpu-shaders -- --setup",
         "```",
         "",
         "Toolchain: Slang " + report["toolchain"]["slang"] + ", Naga CLI " + report["toolchain"]["naga"] + ".",

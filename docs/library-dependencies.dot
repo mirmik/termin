@@ -139,6 +139,7 @@ digraph termin_dependencies {
 	"termin-framegraph-remote-target";
 	"termin-glb";
 	"termin-glb-native";
+	"termin-graphics-mcp";
 	"termin-image";
 	"termin-materials";
 	"termin-mcp";
@@ -247,6 +248,8 @@ digraph termin_dependencies {
 	"termin-glb" -> "termin-scene";
 	"termin-glb-native" -> "termin-mesh";
 	"termin-graphics" -> "termin-mesh";
+	"termin-graphics-mcp" -> "termin-graphics";
+	"termin-graphics-mcp" -> "termin-mcp";
 	"termin-gui-native" -> "termin-visual-scene";
 	"termin-image" -> "termin-nanobind-sdk";
 	"termin-input" -> "termin-scene";
@@ -254,7 +257,7 @@ digraph termin_dependencies {
 	"termin-lighting" -> "termin-scene";
 	"termin-materials" -> "termin-graphics";
 	"termin-materials" -> "termin-inspect";
-	"termin-mcp" -> "termin-scene";
+	"termin-mcp" -> "termin-base";
 	"termin-mesh" -> "termin-base";
 	"termin-modules" -> "termin-base";
 	"termin-modules" -> "termin-python-host";

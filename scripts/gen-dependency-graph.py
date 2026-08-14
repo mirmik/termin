@@ -188,7 +188,6 @@ if os.path.exists(termin_native_cmake):
 
 # Pure-Python packages (no CMakeLists.txt) — will be scanned via import analysis.
 PYTHON_ONLY_DIRS = {
-    "termin-mcp": os.path.join(ROOT, "termin-mcp", "termin"),
     "termin-shader-runtime": os.path.join(ROOT, "termin-shader-runtime", "termin"),
     "termin-stdlib": os.path.join(ROOT, "termin-stdlib", "python", "termin"),
 }
@@ -199,7 +198,6 @@ PYTHON_ONLY_DIRS = {
 MANUAL_DEPS = {
     "termin-app": {"termin"},
     "termin-player": {"termin"},
-    "termin-mcp": {"termin"},
     "termin-shader-runtime": {"termin"},
     "termin-stdlib": {"termin"},
     # "termin-entity": {"termin"},  # удалён, мигрирован в termin-app

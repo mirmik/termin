@@ -20,7 +20,7 @@ npm install --global jscpd
 Useful focused runs:
 
 ```bash
-./run-duplication-check.sh termin-app termin-base
+./run-duplication-check.sh termin-app termin-scene
 ./run-duplication-check.sh --output /tmp/jscpd-termin-app termin-app
 ./run-duplication-check.sh --min-lines 12 --min-tokens 120
 ./run-duplication-check.sh --silent --reporters json,html

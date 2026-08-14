@@ -16,10 +16,28 @@ from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "termin-app"))
-sys.path.insert(0, str(REPOSITORY_ROOT / "termin-mcp"))
+
+try:
+    from termin.mcp.session import sdk_session_registry_dir
+except ModuleNotFoundError:
+    sdk_python = REPOSITORY_ROOT / "sdk" / "bin" / "termin_python"
+    if os.name == "nt":
+        sdk_python = sdk_python.with_suffix(".exe")
+    if not sdk_python.is_file():
+        raise RuntimeError(
+            "termin.mcp is unavailable and the SDK Python launcher is missing; "
+            "build the SDK with an installed Core dependency first"
+        ) from None
+    if Path(sys.executable).resolve() == sdk_python.resolve():
+        raise RuntimeError(
+            "termin.mcp is missing from the installed SDK Python runtime"
+        ) from None
+    os.execv(
+        str(sdk_python),
+        [str(sdk_python), str(Path(__file__).resolve()), *sys.argv[1:]],
+    )
 
 from termin.editor_core.mcp_contract import editor_mcp_tool_schemas  # noqa: E402
-from termin.mcp.session import sdk_session_registry_dir  # noqa: E402
 
 
 DEFAULT_REGISTRY_DIR = sdk_session_registry_dir("editor", sdk_root=REPOSITORY_ROOT / "sdk")

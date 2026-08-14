@@ -13,23 +13,32 @@ WebGPU. Отсутствие WebGPU в конкретной конфигурац
 
 ## Запуск
 
+Сначала задаются два Core SDK input и их точные identity:
+
+```bash
+export TERMIN_WEB_CORE_SDK=/absolute/path/to/core-sdk/web/wasm32
+export TERMIN_WEB_CORE_BUILD_ID=<web-native_build_id>
+export TERMIN_HOST_CORE_SDK=/absolute/path/to/core-sdk/host
+export TERMIN_HOST_CORE_BUILD_ID=<host-native_build_id>
+```
+
 Первый запуск устанавливает закреплённый Emscripten toolchain, собирает Wasm,
 исполняет Node lifecycle smoke и полный Chromium gate:
 
 ```bash
-./build-web-core.sh --setup --browser-smoke
+task build:web -- --setup --browser-smoke
 ```
 
 При уже установленном toolchain достаточно:
 
 ```bash
-./build-web-core.sh --browser-smoke
+task build:web -- --browser-smoke
 ```
 
 Если браузер не находится в `PATH`, executable задаётся явно:
 
 ```bash
-TERMIN_WEB_BROWSER=/path/to/chrome ./build-web-core.sh --browser-smoke
+TERMIN_WEB_BROWSER=/path/to/chrome task build:web -- --browser-smoke
 ```
 
 Gate поднимает временный HTTP server только на loopback, запускает отдельный

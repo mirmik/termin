@@ -221,7 +221,7 @@ def main() -> int:
     sdk_python = sdk / "bin" / "termin_python"
     termin = sdk / "bin" / "termin"
     if not sdk_python.is_file() or not termin.is_file():
-        raise SmokeError("installed SDK is missing; run ./build-sdk.sh")
+        raise SmokeError("installed SDK is missing; run 'task build'")
 
     with tempfile.TemporaryDirectory(prefix="termin-native-player-mcp-smoke-") as raw_temp:
         temp_root = Path(raw_temp)

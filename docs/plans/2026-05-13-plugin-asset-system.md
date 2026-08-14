@@ -89,9 +89,11 @@ Status 2026-06-17: `NavMeshHandle` was consolidated around the native
 `termin_assets.ResourceHandle` resource-manager factory instead of relying on
 the old `termin.assets.resource_handle` import side effect.
 
-Status 2026-06-17: `AnimationClipAsset` and `SkeletonAsset` were moved to
-`termin-animation` and `termin-skeleton` as `termin.animation.asset` and
-`termin.skeleton.asset`. The old app modules were removed on 2026-06-19.
+Status 2026-08-13: `AnimationClipAsset` and `SkeletonAsset` live in the
+Termin-owned `termin-default-assets` adapter package as
+`termin.default_assets.animation.asset` and
+`termin.default_assets.skeleton.asset`. The portable animation and skeleton
+packages no longer depend on `termin-assets`.
 These asset families still do not have standalone file plugins; GLB import
 continues to create their child assets through the shared `ResourceManager`.
 
@@ -303,9 +305,9 @@ packages to depend on `termin-assets`.
 
 - `termin-mesh`: `tmesh`, mesh resource containers and mesh bindings.
 - `termin-render`: render runtime, render bindings, shader/material/pipeline domain logic.
-- `termin-animation`: `AnimationClipAsset`; add `AnimationClipAssetPlugin` only
+- `termin-default-assets`: `AnimationClipAsset`; add `AnimationClipAssetPlugin` only
   when a standalone animation file pipeline exists.
-- `termin-skeleton`: `SkeletonAsset`; add `SkeletonAssetPlugin` only when a
+- `termin-default-assets`: `SkeletonAsset`; add `SkeletonAssetPlugin` only when a
   standalone skeleton file pipeline exists.
 - `termin-navmesh`: navmesh runtime/data.
 - `termin-audio`: `AudioEngine`, `AudioClip`, audio scene components.

@@ -14,13 +14,13 @@ orchestration. Сам SDK использует закреплённый CPython 
 Из корня репозитория на Linux выполните:
 
 ```bash
-./build-sdk.sh
+task build
 ```
 
 На Windows:
 
 ```powershell
-.\build-sdk.ps1
+task build
 ```
 
 Первая сборка загружает закреплённый Python toolchain и runtime-зависимости,
@@ -60,7 +60,7 @@ Play Mode работает с отдельным runtime-состоянием. �
 Запустить графический launcher можно командой:
 
 ```bash
-./run-termin.sh
+task run
 ```
 
 В launcher выберите **New Project**, укажите имя и родительскую директорию.
@@ -161,7 +161,7 @@ termin run PROFILE --project .
   ```
 
 - После изменения C++/Python bindings полностью пересоберите SDK через
-  `./build-sdk.sh`.
+  `task build`.
 - Для диагностики build workflow обратитесь к
   [документации системы сборки](build-system.md).
 

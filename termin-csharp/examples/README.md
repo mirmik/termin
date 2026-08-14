@@ -75,7 +75,7 @@ Build the native/C# SDK for the supported WPF scene profile and run its
 deterministic presentation smoke:
 
 ```powershell
-.\build-sdk.ps1 --no-sdl --no-vulkan --no-opengl
+task build -- --no-sdl --no-vulkan --no-opengl
 dotnet run --project termin-csharp/examples/SceneApp/SceneApp.csproj -- --smoke
 ```
 

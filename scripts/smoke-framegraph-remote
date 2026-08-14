@@ -13,7 +13,7 @@ if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 0 || port > 65535 )); then
 fi
 if [[ ! -x "$target" || ! -x "$client" ]]; then
     echo "Remote framegraph smoke binaries are missing under $build_dir/bin" >&2
-    echo "Run ./run-tests.sh once to configure and build the test SDK consumers." >&2
+    echo "Run 'task test' once to configure and build the test SDK consumers." >&2
     exit 1
 fi
 

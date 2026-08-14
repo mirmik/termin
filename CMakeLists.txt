@@ -1,8 +1,6 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.19)
 project(termin_monorepo VERSION 0.1.0 LANGUAGES C CXX)
-
 include(CMakePackageConfigHelpers)
-
 option(TERMIN_BUILD_MONOREPO "Build Termin as one CMake target graph" ON)
 option(TERMIN_PLATFORM_ANDROID "Build Termin native runtime for Android" OFF)
 option(TERMIN_PLATFORM_WEB "Build the portable Termin WebAssembly core" OFF)
@@ -20,28 +18,23 @@ option(TERMIN_USE_CCACHE "Use ccache as C/C++ compiler launcher when available" 
 option(TERMIN_ENABLE_UNITY_BUILD "Enable CMake unity build for faster clean builds" OFF)
 option(TERMIN_ENABLE_PCH "Enable precompiled headers for selected C++ targets" ON)
 set(TERMIN_SDK_PROFILE "full" CACHE STRING
-    "SDK target graph profile: full or graphics")
-set_property(CACHE TERMIN_SDK_PROFILE PROPERTY STRINGS full graphics)
+    "SDK target graph profile: full, graphics, or core")
+set_property(CACHE TERMIN_SDK_PROFILE PROPERTY STRINGS full graphics core)
 
 if(NOT TERMIN_SDK_PROFILE STREQUAL "full"
-   AND NOT TERMIN_SDK_PROFILE STREQUAL "graphics")
+   AND NOT TERMIN_SDK_PROFILE STREQUAL "graphics"
+   AND NOT TERMIN_SDK_PROFILE STREQUAL "core")
     message(FATAL_ERROR
         "Unsupported TERMIN_SDK_PROFILE='${TERMIN_SDK_PROFILE}'. "
-        "Expected one of: full, graphics")
+        "Expected one of: full, graphics, core")
 endif()
 
-if(TERMIN_SDK_PROFILE STREQUAL "graphics")
+if(TERMIN_SDK_PROFILE STREQUAL "graphics"
+   OR TERMIN_SDK_PROFILE STREQUAL "core")
     if(TERMIN_PLATFORM_ANDROID OR TERMIN_PLATFORM_WEB)
         message(FATAL_ERROR
-            "TERMIN_SDK_PROFILE=graphics is a desktop SDK profile")
+            "TERMIN_SDK_PROFILE=${TERMIN_SDK_PROFILE} is a desktop SDK profile")
     endif()
-    set(TERMIN_VISUAL_SCENE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(TERMIN_GUI_NATIVE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(TERMIN_RENDER_CORE_ONLY ON CACHE BOOL "" FORCE)
-    message(STATUS
-        "Termin: graphics SDK profile enabled (widgets, visual scene, 2D/3D charts)")
-else()
-    set(TERMIN_RENDER_CORE_ONLY OFF CACHE BOOL "" FORCE)
 endif()
 
 if(TERMIN_PLATFORM_ANDROID AND TERMIN_PLATFORM_WEB)
@@ -52,15 +45,10 @@ if(TERMIN_PLATFORM_WEB)
     if(NOT EMSCRIPTEN)
         message(FATAL_ERROR
             "TERMIN_PLATFORM_WEB requires the Emscripten toolchain. "
-            "Configure it through ./build-web-core.sh.")
+            "Configure it through 'task build:web -- ...'.")
     endif()
-    set(TERMIN_ENABLE_OPENGL OFF CACHE BOOL "Enable desktop OpenGL-dependent graphics/render targets" FORCE)
     set(TERMIN_BUILD_PYTHON OFF CACHE BOOL "Build Python/nanobind bindings" FORCE)
     set(TERMIN_BUILD_TESTS OFF CACHE BOOL "Build C/C++ tests" FORCE)
-    set(TERMIN_BUILD_TGFX2_TESTS OFF CACHE BOOL "Build tgfx2 C/C++ tests" FORCE)
-    set(TERMIN_BUILD_WINDOW_TESTS OFF CACHE BOOL "Build tests that require a windowing system" FORCE)
-    set(TERMIN_ENABLE_VULKAN OFF CACHE BOOL "Enable Vulkan support" FORCE)
-    set(TERMIN_ENABLE_SDL OFF CACHE BOOL "Enable SDL support" FORCE)
     set(TERMIN_BUILD_EDITOR_MINIMAL OFF CACHE BOOL "Build minimal editor executable" FORCE)
     set(TERMIN_BUILD_LAUNCHER OFF CACHE BOOL "Build launcher executable" FORCE)
     set(TERMIN_ENABLE_PCH OFF CACHE BOOL "Enable precompiled headers for selected targets" FORCE)
@@ -68,27 +56,14 @@ if(TERMIN_PLATFORM_WEB)
     set(TERMIN_MESH_BUILD_SHARED OFF CACHE BOOL "Build termin-mesh as a shared library" FORCE)
     set(TI_BUILD_SHARED OFF CACHE BOOL "Build termin-inspect as a shared library" FORCE)
     set(TERMIN_SCENE_BUILD_SHARED OFF CACHE BOOL "Build termin-scene as a shared library" FORCE)
-    set(TERMIN_VISUAL_SCENE_BUILD_EXAMPLES OFF CACHE BOOL "Build termin-visual-scene examples" FORCE)
     message(STATUS "Termin: WebAssembly core profile enabled")
 elseif(TERMIN_PLATFORM_ANDROID)
-    set(TERMIN_ENABLE_OPENGL OFF CACHE BOOL "Enable desktop OpenGL-dependent graphics/render targets" FORCE)
     set(TERMIN_BUILD_PYTHON OFF CACHE BOOL "Build Python/nanobind bindings" FORCE)
     set(TERMIN_BUILD_TESTS OFF CACHE BOOL "Build C/C++ tests" FORCE)
-    set(TERMIN_BUILD_TGFX2_TESTS OFF CACHE BOOL "Build tgfx2 C/C++ tests" FORCE)
-    set(TERMIN_BUILD_WINDOW_TESTS OFF CACHE BOOL "Build tests that require a windowing system" FORCE)
-    set(TERMIN_ENABLE_VULKAN ON CACHE BOOL "Enable Vulkan support" FORCE)
-    set(TERMIN_ENABLE_SDL OFF CACHE BOOL "Enable SDL support" FORCE)
     set(TERMIN_BUILD_EDITOR_MINIMAL OFF CACHE BOOL "Build minimal editor executable" FORCE)
     set(TERMIN_BUILD_LAUNCHER OFF CACHE BOOL "Build launcher executable" FORCE)
     set(TERMIN_ENABLE_PCH OFF CACHE BOOL "Enable precompiled headers for selected C++ targets" FORCE)
     message(STATUS "Termin: Android native render profile enabled")
-endif()
-
-if(NOT TERMIN_ENABLE_OPENGL)
-    message(STATUS "Termin: desktop OpenGL backend disabled")
-endif()
-if(TERMIN_ENABLE_WEBGL2)
-    message(STATUS "Termin: WebGL 2 constrained-GL backend enabled")
 endif()
 
 if(TERMIN_USE_CCACHE AND NOT MSVC)
@@ -138,6 +113,22 @@ if(TERMIN_ENABLE_PCH)
     message(STATUS "Termin: precompiled headers enabled for selected targets")
 endif()
 
+configure_package_config_file(
+    cmake/terminConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/termin
+)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
+    DESTINATION lib/cmake/termin
+)
+
 if(TERMIN_BUILD_TESTS)
     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/termin-thirdparty/guard/guard_c.h"
        OR NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/termin-thirdparty/guard/guard_main.h")
@@ -164,231 +155,100 @@ include(TerminDependencies)
 if(TERMIN_BUILD_PYTHON)
     include(TerminPython)
     termin_require_canonical_python(Interpreter Development)
-
-    execute_process(
-        COMMAND "${Python_EXECUTABLE}" -c "import nanobind, pathlib; print(pathlib.Path(nanobind.__file__).resolve().parent / 'cmake')"
-        OUTPUT_VARIABLE TERMIN_NANOBIND_CMAKE_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE TERMIN_NANOBIND_CMAKE_RESULT
-    )
-    if(NOT TERMIN_NANOBIND_CMAKE_RESULT EQUAL 0 OR NOT EXISTS "${TERMIN_NANOBIND_CMAKE_DIR}/nanobind-config.cmake")
-        message(FATAL_ERROR "nanobind Python package was not found for ${Python_EXECUTABLE}. Install nanobind before configuring with TERMIN_BUILD_PYTHON=ON.")
-    endif()
-    file(TO_CMAKE_PATH "${TERMIN_NANOBIND_CMAKE_DIR}" TERMIN_NANOBIND_CMAKE_DIR)
-    set(nanobind_DIR "${TERMIN_NANOBIND_CMAKE_DIR}" CACHE PATH "nanobind CMake package directory" FORCE)
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
-set(TERMIN_EFFECTIVE_BUILD_TGFX2_TESTS OFF)
-if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
-    set(TERMIN_EFFECTIVE_BUILD_TGFX2_TESTS ON)
-endif()
+add_subdirectory(core)
 
-set(TERMIN_EFFECTIVE_BUILD_DISPLAY_TESTS OFF)
-set(TERMIN_EFFECTIVE_BUILD_DISPLAY_WINDOW_TESTS OFF)
-if(TERMIN_BUILD_TESTS)
-    set(TERMIN_EFFECTIVE_BUILD_DISPLAY_TESTS ON)
-    if(TERMIN_BUILD_WINDOW_TESTS AND TERMIN_ENABLE_SDL)
-        set(TERMIN_EFFECTIVE_BUILD_DISPLAY_WINDOW_TESTS ON)
-    endif()
-endif()
-
-set(TERMIN_BASE_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_AUDIO_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_DISPATCH_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_MODULES_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_CSG_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_CSG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(BUILD_TGFX2_TESTS ${TERMIN_EFFECTIVE_BUILD_TGFX2_TESTS} CACHE BOOL "" FORCE)
-set(BUILD_TGFX2_WINDOW_TESTS ${TERMIN_BUILD_WINDOW_TESTS} CACHE BOOL "" FORCE)
-set(BUILD_TGFX2_D3D11_WINDOW_TEST ${TERMIN_BUILD_WINDOW_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_DISPLAY_BUILD_TESTS ${TERMIN_EFFECTIVE_BUILD_DISPLAY_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_WINDOW_BUILD_TESTS ${TERMIN_EFFECTIVE_BUILD_DISPLAY_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_WINDOW_BUILD_WINDOW_TESTS ${TERMIN_EFFECTIVE_BUILD_DISPLAY_WINDOW_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_INPUT_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_GUI_NATIVE_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_GUI_NATIVE_BUILD_WINDOW_INTEGRATION
-    ${TERMIN_ENABLE_SDL} CACHE BOOL "" FORCE)
-set(TERMIN_GUI_NATIVE_BUILD_EXAMPLES
-    ${TERMIN_ENABLE_SDL} CACHE BOOL "" FORCE)
-set(TERMIN_PROFILER_BUILD_GUI
-    ${TERMIN_ENABLE_SDL} CACHE BOOL "" FORCE)
-set(TI_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TI_BUILD_PYTHON_TESTS ${TERMIN_BUILD_PYTHON} CACHE BOOL "" FORCE)
-set(TERMIN_SCENE_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_ENGINE_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_LIGHTING_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_PREFAB_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_RENDER_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_RENDER_PASSES_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_RUNTIME_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_SKELETON_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_COLLISION_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_PHYSICS_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_QOPT_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_ROBOTICS_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_ROBOTICS_BUILD_PYTHON ${TERMIN_BUILD_PYTHON} CACHE BOOL "" FORCE)
-set(TERMIN_COMPONENTS_KINEMATIC_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TERMIN_PHYSICS_QOPT_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-set(TC_BUILD_TESTS ${TERMIN_BUILD_TESTS} CACHE BOOL "" FORCE)
-
-# The graphics SDK only needs the isolated Python launcher.  Keep this cache
-# entry deterministic because all SDK profiles may reuse the same build tree.
-# In particular, a graphics configure must not suppress the full CLI toolset
-# during a later full SDK configure.
-if(TERMIN_SDK_PROFILE STREQUAL "graphics")
-    set(_termin_cli_python_only ON)
-else()
-    set(_termin_cli_python_only OFF)
-endif()
-set(TERMIN_CLI_PYTHON_ONLY ${_termin_cli_python_only} CACHE BOOL
-    "Build only the isolated SDK Python launcher" FORCE)
-unset(_termin_cli_python_only)
-
-set(BUILD_EDITOR_MINIMAL ${TERMIN_BUILD_EDITOR_MINIMAL} CACHE BOOL "" FORCE)
-set(BUILD_LAUNCHER ${TERMIN_BUILD_LAUNCHER} CACHE BOOL "" FORCE)
-set(TGFX2_ENABLE_VULKAN ${TERMIN_ENABLE_VULKAN} CACHE BOOL "" FORCE)
-set(TGFX2_ENABLE_OPENGL ${TERMIN_ENABLE_OPENGL} CACHE BOOL "" FORCE)
-set(TGFX2_ENABLE_WEBGL2 ${TERMIN_ENABLE_WEBGL2} CACHE BOOL "" FORCE)
-set(TGFX2_ENABLE_WEBGPU ${TERMIN_PLATFORM_WEB} CACHE BOOL "" FORCE)
-set(USE_SYSTEM_SDL2 ${TERMIN_ENABLE_SDL} CACHE BOOL "" FORCE)
-set(TERMIN_BOOTSTRAP_MINIMAL_ONLY OFF CACHE BOOL "" FORCE)
-set(TERMIN_RUNTIME_MINIMAL_ONLY OFF CACHE BOOL "" FORCE)
-set(TERMIN_BOOTSTRAP_RENDER_ONLY ${TERMIN_PLATFORM_WEB} CACHE BOOL "" FORCE)
-set(TERMIN_RUNTIME_RENDER_ONLY ${TERMIN_PLATFORM_WEB} CACHE BOOL "" FORCE)
-set(TERMIN_RENDER_PASSES_CORE_ONLY ${TERMIN_PLATFORM_WEB} CACHE BOOL "" FORCE)
-set(TERMIN_ENGINE_CORE_RENDER_PIPELINE ${TERMIN_PLATFORM_WEB} CACHE BOOL "" FORCE)
-set(TERMIN_COMPONENTS_RENDER_CORE_ONLY ${TERMIN_PLATFORM_WEB} CACHE BOOL "" FORCE)
-
+# Core configures its own bindings inside core/'s CMake directory scope. The
+# canonical profile is included once more here so its nanobind_add_module()
+# contract is also visible to bindings owned by later republics.
 if(TERMIN_BUILD_PYTHON)
-    add_subdirectory(termin-nanobind-sdk)
-    set(TERMIN_NANOBIND_RUNTIME_TARGET "nanobind-ft")
-    include(termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake)
-    add_subdirectory(termin-python-host)
+    include(core/termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake)
 endif()
 
-add_subdirectory(termin-base)
-
-if(TERMIN_SDK_PROFILE STREQUAL "graphics")
-    add_subdirectory(termin-dispatch)
-    add_subdirectory(termin-image)
-    add_subdirectory(termin-mesh)
-    add_subdirectory(termin-inspect)
-    add_subdirectory(termin-graphics)
-    add_subdirectory(termin-materials)
-    add_subdirectory(termin-render)
-    if(TERMIN_ENABLE_SDL)
-        add_subdirectory(termin-window)
-    endif()
-    add_subdirectory(termin-visual-scene)
-    add_subdirectory(termin-gui-native)
-    add_subdirectory(termin-nodegraph)
-    add_subdirectory(tcplot)
-    add_subdirectory(tcplot-gui-native)
-    add_subdirectory(termin-cli)
-elseif(TERMIN_PLATFORM_WEB)
-    add_subdirectory(termin-inspect)
-    add_subdirectory(termin-image)
-    add_subdirectory(termin-modules)
-    add_subdirectory(termin-mesh)
-    add_subdirectory(termin-scene)
-    add_subdirectory(termin-input)
-    add_subdirectory(termin-collision)
-    add_subdirectory(termin-skeleton)
-    add_subdirectory(termin-components/termin-components-mesh)
-    add_subdirectory(termin-graphics)
-    add_subdirectory(termin-visual-scene)
-    add_subdirectory(termin-lighting)
-    add_subdirectory(termin-materials)
-    add_subdirectory(termin-render)
-    add_subdirectory(termin-components/termin-components-skeleton)
-    add_subdirectory(termin-display)
-    add_subdirectory(termin-components/termin-components-render)
-    add_subdirectory(termin-render-passes)
-    add_subdirectory(termin-engine)
-    add_subdirectory(termin-bootstrap)
-    add_subdirectory(termin-runtime)
-    add_subdirectory(termin-web-core)
+if(TERMIN_SDK_PROFILE STREQUAL "core")
+    message(STATUS "Termin: Core SDK profile enabled")
 else()
-add_subdirectory(termin-profiler-remote)
-add_subdirectory(termin-framegraph-remote)
-add_subdirectory(termin-dispatch)
-add_subdirectory(termin-image)
-add_subdirectory(termin-audio)
-add_subdirectory(termin-modules)
-add_subdirectory(termin-mesh)
-add_subdirectory(termin-glb)
-add_subdirectory(termin-csg)
-add_subdirectory(termin-inspect)
-add_subdirectory(termin-voxels)
-add_subdirectory(termin-scene)
-add_subdirectory(termin-prefab)
-add_subdirectory(termin-lighting)
-add_subdirectory(termin-input)
-add_subdirectory(termin-collision)
-add_subdirectory(termin-qopt)
-add_subdirectory(termin-robotics)
-add_subdirectory(termin-physics-qopt)
-add_subdirectory(termin-physics)
-add_subdirectory(termin-skeleton)
-add_subdirectory(termin-components/termin-components-mesh)
-add_subdirectory(termin-components/termin-components-kinematic)
+    add_subdirectory(graphics)
 
-add_subdirectory(termin-graphics)
-add_subdirectory(termin-window)
-add_subdirectory(termin-visual-scene)
-add_subdirectory(termin-materials)
-add_subdirectory(termin-render)
-add_subdirectory(termin-components/termin-components-collision)
-add_subdirectory(termin-components/termin-components-physics)
-add_subdirectory(termin-components/termin-components-physics-fem)
-add_subdirectory(termin-components/termin-components-skeleton)
-add_subdirectory(termin-display)
-add_subdirectory(termin-gui-native)
-if(NOT TERMIN_PLATFORM_ANDROID)
-    add_subdirectory(termin-nodegraph)
-    add_subdirectory(tcplot)
-    add_subdirectory(tcplot-gui-native)
+    if(TERMIN_SDK_PROFILE STREQUAL "graphics")
+        # Core + Graphics is the complete target graph for this SDK profile.
+    elseif(TERMIN_PLATFORM_WEB)
+        add_subdirectory(engine/termin-modules)
+        add_subdirectory(engine/termin-scene)
+        add_subdirectory(engine/termin-input)
+        add_subdirectory(physics/termin-collision)
+        add_subdirectory(engine/termin-components/termin-components-mesh)
+        add_subdirectory(engine/termin-lighting)
+        add_subdirectory(engine/termin-render)
+        add_subdirectory(engine/termin-components/termin-components-skeleton)
+        add_subdirectory(engine/termin-display)
+        add_subdirectory(engine/termin-components/termin-components-render)
+        add_subdirectory(engine/termin-render-passes)
+        add_subdirectory(engine/termin-engine)
+        add_subdirectory(engine/termin-bootstrap)
+        add_subdirectory(engine/termin-runtime)
+        add_subdirectory(platform/termin-web-core)
+    else()
+        add_subdirectory(engine/termin-profiler-remote)
+        add_subdirectory(engine/termin-framegraph-remote)
+        add_subdirectory(engine/termin-audio)
+        add_subdirectory(engine/termin-modules)
+        add_subdirectory(engine/termin-csg)
+        add_subdirectory(engine/termin-voxels)
+        add_subdirectory(engine/termin-scene)
+        add_subdirectory(engine/termin-prefab)
+        add_subdirectory(engine/termin-lighting)
+        add_subdirectory(engine/termin-input)
+        add_subdirectory(physics/termin-collision)
+        add_subdirectory(physics/termin-qopt)
+        add_subdirectory(physics/termin-robotics)
+        add_subdirectory(physics/termin-physics-qopt)
+        add_subdirectory(physics/termin-physics)
+        add_subdirectory(engine/termin-components/termin-components-mesh)
+        add_subdirectory(engine/termin-components/termin-components-kinematic)
+
+        add_subdirectory(engine/termin-render)
+        add_subdirectory(engine/termin-components/termin-components-collision)
+        add_subdirectory(engine/termin-components/termin-components-physics)
+        add_subdirectory(engine/termin-components/termin-components-physics-fem)
+        add_subdirectory(engine/termin-components/termin-components-skeleton)
+        add_subdirectory(engine/termin-display)
+        add_subdirectory(engine/termin-components/termin-components-ui)
+        add_subdirectory(engine/termin-components/termin-components-physics-fem-ui)
+        add_subdirectory(engine/termin-components/termin-components-render)
+        add_subdirectory(physics/termin-navmesh)
+        add_subdirectory(engine/termin-components/termin-components-foliage)
+        add_subdirectory(engine/termin-render-passes)
+        add_subdirectory(engine/termin-engine)
+        add_subdirectory(engine/termin-frame-profiler)
+        add_subdirectory(engine/termin-framegraph-remote-target)
+        add_subdirectory(engine/termin-framegraph-remote-client)
+
+        if(NOT TERMIN_PLATFORM_ANDROID)
+            add_subdirectory(engine/termin-profiler)
+            add_subdirectory(engine/termin-components/termin-components-animation)
+        endif()
+
+        add_subdirectory(engine/termin-bootstrap)
+        add_subdirectory(engine/termin-runtime)
+
+        if(TERMIN_PLATFORM_ANDROID)
+            add_subdirectory(platform/termin-openxr)
+            add_subdirectory(platform/termin-android)
+        endif()
+
+        if(NOT TERMIN_PLATFORM_ANDROID)
+            add_subdirectory(editor/termin-player)
+            add_subdirectory(editor/termin-cli)
+            add_subdirectory(editor/termin-app/cpp)
+        endif()
+    endif()
 endif()
-add_subdirectory(termin-components/termin-components-ui)
-add_subdirectory(termin-components/termin-components-physics-fem-ui)
-add_subdirectory(termin-components/termin-components-render)
-add_subdirectory(termin-navmesh)
-add_subdirectory(termin-components/termin-components-foliage)
-add_subdirectory(termin-render-passes)
-add_subdirectory(termin-engine)
-add_subdirectory(termin-frame-profiler)
-add_subdirectory(termin-framegraph-remote-target)
-add_subdirectory(termin-framegraph-remote-client)
-
-if(NOT TERMIN_PLATFORM_ANDROID)
-    add_subdirectory(termin-profiler)
-    add_subdirectory(termin-animation)
-endif()
-
-if(NOT TERMIN_PLATFORM_ANDROID)
-    add_subdirectory(termin-components/termin-components-animation)
-endif()
-
-add_subdirectory(termin-bootstrap)
-add_subdirectory(termin-runtime)
-
-if(TERMIN_PLATFORM_ANDROID)
-    add_subdirectory(termin-openxr)
-    add_subdirectory(termin-android)
-endif()
-
-if(NOT TERMIN_PLATFORM_ANDROID)
-    add_subdirectory(termin-player)
-    add_subdirectory(termin-cli)
-    add_subdirectory(termin-app/cpp)
-endif()
-endif()
-
 if(TERMIN_BUILD_TESTS)
     foreach(_termin_aggregate IN ITEMS
             TERMIN_NATIVE_TEST_TARGETS
@@ -417,22 +277,3 @@ if(TERMIN_BUILD_TESTS)
         ${TERMIN_NATIVE_TEST_TARGETS_WITH_WINDOW}
     )
 endif()
-
-configure_package_config_file(
-    ${CMAKE_CURRENT_LIST_DIR}/cmake/terminConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake
-    INSTALL_DESTINATION lib/cmake/termin
-)
-
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-install(
-    FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake
-    DESTINATION lib/cmake/termin
-)

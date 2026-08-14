@@ -54,4 +54,4 @@ The same five-second stance and the first `0.25 m` of servo-off collapse are
 covered by `termin_components_physics_fem_component_test`. A separate
 fifty-second acceptance reproduces the scene's high, asymmetrically tilted drop
 and verifies that contact solving keeps advancing. The collapse must
-complete within three seconds; all three cases are run by `./run-tests.sh`.
+complete within three seconds; all three cases are run by `task test --`.

@@ -9,7 +9,7 @@ named platform scenarios. The automated reference is the real
 Run the matrix through the repository entry point:
 
 ```bash
-./run-tests.sh
+task test --
 ```
 
 The relevant CTest registrations are:

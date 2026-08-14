@@ -21,19 +21,19 @@ sudo apt-get install libclang-18-dev llvm-18-dev
 Generate the compilation database when needed:
 
 ```bash
-./run-lint-cpp.sh --configure-only
+task lint:cpp -- --configure-only
 ```
 
 Run the checker:
 
 ```bash
-./run-cpp-class-layout-check.sh
+task check:cpp-layout
 ```
 
 Limit diagnostics to selected repository paths:
 
 ```bash
-./run-cpp-class-layout-check.sh --path termin-render --path termin-graphics
+task check:cpp-layout -- --path termin-render --path termin-graphics
 ```
 
 `--path` filters declarations in the report, not translation units in the
@@ -44,14 +44,14 @@ not missed.
 Generate a JSONL migration inventory without failing on violations:
 
 ```bash
-./run-cpp-class-layout-check.sh --format jsonl --no-fail
+task check:cpp-layout -- --format jsonl --no-fail
 ```
 
 Check the separate Python/nanobind compilation profile with:
 
 ```bash
-./run-lint-cpp.sh --python-bindings --configure-only
-./run-cpp-class-layout-check.sh --python-bindings --no-fail
+task lint:cpp -- --python-bindings --configure-only
+task check:cpp-layout -- --python-bindings --no-fail
 ```
 
 The runner builds the isolated tool in `build/cpp-class-layout-checker`. Set
@@ -62,5 +62,5 @@ analysis jobs by default; override this with `CPP_CLASS_LAYOUT_JOBS`.
 Run the fixture tests with:
 
 ```bash
-./run-cpp-class-layout-check.sh --self-test
+task check:cpp-layout -- --self-test
 ```

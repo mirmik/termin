@@ -37,19 +37,19 @@ Termin — активно развивающийся 3D-движок и реда
 На Linux выполните:
 
 ```bash
-./build-sdk.sh
+task build
 ```
 
 На Windows используйте соответствующий PowerShell-скрипт:
 
 ```powershell
-.\build-sdk.ps1
+task build
 ```
 
 После сборки можно запустить launcher:
 
 ```bash
-./run-termin.sh
+task run
 ```
 
 Или сразу открыть готовую физическую сцену:
@@ -101,12 +101,17 @@ termin editor .
 
 Полная сборка и тесты запускаются через единые точки входа:
 
+The root `Taskfile.yml` is the sole public command interface. Scripts under
+`scripts/` are implementation details and should be reached through `task`:
+
 ```bash
-./build-sdk.sh
-./run-tests.sh
-./build-docs.sh
+task build
+task test
+task docs:build
 ```
+
+Pass task-specific options after `--`, for example `task build -- --no-wheels`.
 
 Python редактора и bundled-библиотеки исполняются через
 `sdk/bin/termin_python`. Для тестового source overlay используется
-`./setup-sdk-python-env.sh`; root virtual environment проекту не требуется.
+`task test:python:setup`; root virtual environment проекту не требуется.

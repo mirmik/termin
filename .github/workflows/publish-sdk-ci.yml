@@ -25,7 +25,7 @@ jobs:
         uses: ./.github/actions/setup-linux-build
 
       - name: Build canonical Linux SDK
-        run: ./build-sdk.sh
+        run: task build --
 
       - name: Package and re-verify Linux SDK
         env:
@@ -57,7 +57,7 @@ jobs:
 
       - name: Build canonical Windows D3D11 SDK
         shell: pwsh
-        run: .\build-sdk.ps1 --no-vulkan --no-opengl
+        run: task build -- --no-vulkan --no-opengl
 
       - name: Package and re-verify Windows SDK
         shell: pwsh

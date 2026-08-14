@@ -6,20 +6,20 @@ Python linting is provided by Ruff and configured at the repository root in
 Run it with:
 
 ```bash
-./run-lint-python.sh
+task lint:python --
 ```
 
-The default `./run-tests-python.sh` flow also runs the repo-wide Ruff check
+The default `task test:python --` flow also runs the repo-wide Ruff check
 after pytest. Explicit pytest-target runs skip the repo-wide lint pass so
 focused test commands stay focused.
 
 Specific paths can be checked during focused work:
 
 ```bash
-./run-lint-python.sh termin-csg termin-app/tests
+task lint:python -- termin-csg termin-app/tests
 ```
 
-`./setup-sdk-python-env.sh` installs Ruff into the checkout-local
+`task test:python:setup --` installs Ruff into the checkout-local
 `build/python-envs/test` tools layer. Ruff is launched by the isolated SDK
 Python with the same source overlay as pytest. Use `--system-python` only for an
 explicit diagnostic run outside that environment; `--no-venv` remains a

@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "republics": [
+    {
+      "id": "core",
+      "root": "core",
+      "packages": [
+        "termin-build-tools",
+        "termin-nanobind-sdk",
+        "termin-base",
+        "termin-dispatch",
+        "termin-inspect",
+        "termin-python-host",
+        "termin-mcp"
+      ]
+    },
+    {
+      "id": "graphics",
+      "root": "graphics",
+      "packages": [
+        "termin-image",
+        "termin-tween",
+        "termin-mesh",
+        "termin-graphics",
+        "termin-graphics-mcp",
+        "termin-visual-scene",
+        "termin-materials",
+        "termin-shader-runtime",
+        "termin-render-core",
+        "termin-window",
+        "termin-gui-native",
+        "termin-nodegraph",
+        "tcplot",
+        "tcplot-gui-native",
+        "termin-skeleton",
+        "termin-animation",
+        "termin-glb-native",
+        "termin-glb"
+      ]
+    },
+    {
+      "id": "physics",
+      "root": "physics",
+      "packages": [
+        "termin-collision",
+        "termin-qopt",
+        "termin-pga",
+        "termin-physics",
+        "termin-physics-fem",
+        "termin-physics-qopt",
+        "termin-robotics",
+        "termin-navmesh"
+      ]
+    },
+    {
+      "id": "engine",
+      "root": "engine",
+      "packages": [
+        "termin-assets",
+        "termin-audio",
+        "termin-bootstrap",
+        "termin-components/termin-components-animation",
+        "termin-components/termin-components-collision",
+        "termin-components/termin-components-foliage",
+        "termin-components/termin-components-kinematic",
+        "termin-components/termin-components-mesh",
+        "termin-components/termin-components-physics",
+        "termin-components/termin-components-physics-fem",
+        "termin-components/termin-components-physics-fem-ui",
+        "termin-components/termin-components-render",
+        "termin-components/termin-components-skeleton",
+        "termin-components/termin-components-tween",
+        "termin-components/termin-components-ui",
+        "termin-components/termin-components-voxels",
+        "termin-csg",
+        "termin-default-assets",
+        "termin-display",
+        "termin-engine",
+        "termin-frame-profiler",
+        "termin-framegraph-remote",
+        "termin-framegraph-remote-client",
+        "termin-framegraph-remote-target",
+        "termin-input",
+        "termin-lighting",
+        "termin-modules",
+        "termin-prefab",
+        "termin-profiler",
+        "termin-profiler-remote",
+        "termin-render",
+        "termin-render-passes",
+        "termin-runtime",
+        "termin-scene",
+        "termin-stdlib",
+        "termin-voxels"
+      ]
+    },
+    {
+      "id": "editor",
+      "root": "editor",
+      "packages": [
+        "termin-app",
+        "termin-cli",
+        "termin-glb-adapters",
+        "termin-player",
+        "termin-project",
+        "termin-project-build",
+        "termin-project-modules"
+      ]
+    },
+    {
+      "id": "platform",
+      "root": "platform",
+      "packages": [
+        "termin-android",
+        "termin-openxr",
+        "termin-web-core"
+      ]
+    }
+  ],
+  "shared_roots": [
+    "build-system",
+    "cmake",
+    "docs",
+    "examples",
+    "scripts",
+    "termin-csharp",
+    "termin-thirdparty",
+    "test-projects",
+    "tests",
+    "tools"
+  ]
+}

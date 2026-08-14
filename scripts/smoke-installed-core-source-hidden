@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+core_sdk="${TERMIN_CORE_SDK:-}"
+core_build_id="${TERMIN_CORE_BUILD_ID:-}"
+profile="graphics"
+
+while (($#)); do
+    case "$1" in
+        --core-sdk)
+            core_sdk="$2"
+            shift 2
+            ;;
+        --core-build-id)
+            core_build_id="$2"
+            shift 2
+            ;;
+        --profile)
+            profile="$2"
+            shift 2
+            ;;
+        *)
+            echo "ERROR: unsupported argument: $1" >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [[ -z "$core_sdk" ]]; then
+    echo "ERROR: --core-sdk is required" >&2
+    exit 2
+fi
+core_sdk="$(cd "$core_sdk" && pwd)"
+case "$profile" in
+    graphics|full) ;;
+    *)
+        echo "ERROR: --profile must be graphics or full" >&2
+        exit 2
+        ;;
+esac
+
+build_python="$repo_root/build/python-runtime/build-env/bin/python"
+if [[ ! -x "$build_python" ]]; then
+    PYTHONPATH="$repo_root/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
+        python3 -m termin_build.sdk --repo-root "$repo_root" \
+            prepare-python-toolchain
+fi
+if [[ ! -x "$build_python" ]]; then
+    echo "ERROR: pinned Python build environment is missing: $build_python" >&2
+    exit 1
+fi
+
+temporary_root="$(mktemp -d "$repo_root/../.termin-source-hidden.XXXXXXXX")"
+trap 'rm -rf -- "$temporary_root"' EXIT
+source_root="$temporary_root/source"
+mkdir -p "$source_root"
+cp -al "$repo_root/." "$source_root/"
+
+rm -rf -- \
+    "$source_root/.git" \
+    "$source_root/build" \
+    "$source_root/sdk"
+
+for directory in \
+    termin-base termin-dispatch termin-inspect termin-mcp \
+    termin-nanobind-sdk termin-python-host; do
+    if [[ -e "$source_root/$directory" ]]; then
+        echo "ERROR: Core source directory must not exist in Termin: $directory" >&2
+        exit 1
+    fi
+done
+
+mkdir -p "$source_root/sdk"
+cp -a "$core_sdk/." "$source_root/sdk/"
+
+echo "Building $profile with Core source directories absent"
+SDK_PREFIX="$source_root/sdk" \
+BUILD_DIR="$source_root/build/Release-$profile-source-hidden" \
+TERMIN_CORE_SDK="$core_sdk" \
+TERMIN_CORE_BUILD_ID="$core_build_id" \
+PYTHON_BIN="$build_python" \
+PYTHON_EXECUTABLE="$build_python" \
+    "$source_root/build-sdk-bindings.sh" \
+        "--profile=$profile" \
+        --no-vulkan \
+        --no-opengl
+
+echo "Installed Core source-hidden $profile build passed"

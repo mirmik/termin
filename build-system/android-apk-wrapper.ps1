@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 
 $TerminRoot = Split-Path -Parent $PSScriptRoot
 $IsQuest = $Product -eq "quest-openxr"
-$PlatformDir = Join-Path $TerminRoot $(if ($IsQuest) { "termin-openxr\platform" } else { "termin-android\platform" })
+$PlatformDir = Join-Path $TerminRoot $(if ($IsQuest) { "platform\termin-openxr\platform" } else { "platform\termin-android\platform" })
 $GradleBuildRoot = Join-Path $TerminRoot $(if ($IsQuest) { "build\android-gradle-openxr" } else { "build\android-gradle" })
 $HostPython = if ($env:TERMIN_HOST_PYTHON) {
     $env:TERMIN_HOST_PYTHON
@@ -45,12 +45,12 @@ $AssetsDir = if ($IsQuest) {
     if ($env:TERMIN_OPENXR_ASSETS_DIR) {
         $env:TERMIN_OPENXR_ASSETS_DIR
     } else {
-        Join-Path $TerminRoot "termin-android\assets"
+        Join-Path $TerminRoot "platform\termin-android\assets"
     }
 } elseif ($env:TERMIN_ANDROID_ASSETS_DIR) {
     $env:TERMIN_ANDROID_ASSETS_DIR
 } else {
-    Join-Path $TerminRoot "termin-android\assets"
+    Join-Path $TerminRoot "platform\termin-android\assets"
 }
 $ApplicationId = if ($env:TERMIN_ANDROID_APPLICATION_ID) {
     $env:TERMIN_ANDROID_APPLICATION_ID

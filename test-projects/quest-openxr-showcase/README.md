@@ -65,8 +65,8 @@ slice. The Android build owns and installs `libopenxr_loader.so`; the Quest APK
 does not compile a private second loader.
 
 ```bash
-./build-sdk.sh
-./build-sdk-android.sh --abi arm64-v8a --platform android-26
+task build --
+task build:android -- --abi arm64-v8a --platform android-26
 ```
 
 The local toolchain also needs Android SDK/NDK 27.2.12479018, Gradle 8.x and

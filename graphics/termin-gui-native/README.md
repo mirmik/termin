@@ -1,0 +1,422 @@
+# termin-gui-native
+
+Canonical native retained UI document and widget toolkit for Termin.
+
+The maintained cross-package executable example is the
+[`graphics` profile showcase](../examples/graphics-showcase/README.md). It runs
+the Python-built control tree, Plot2D/Plot3D and nodegraph composition through
+the installed SDK without an engine-level display dependency. Package-local
+window examples remain focused tutorials for SDL-enabled builds.
+
+The maintained public C++/Python widget and signal inventory is
+[`docs/python-widget-parity.md`](docs/python-widget-parity.md). Python factories
+return typed wrappers; common widget state is available through `.widget`.
+The standard pointer, focus, keyboard and visual-state contract is maintained
+in [`docs/input-conformance.md`](docs/input-conformance.md).
+Presentation density, font scaling, safe insets and logical root bounds use the
+explicit per-document contract in
+[`docs/presentation-metrics.md`](docs/presentation-metrics.md).
+
+Declarative native documents use the deliberately limited, versioned
+[`uiscript: 2` dialect](docs/uiscript-v2.md). The native loader parses and
+validates the product-local recipe before materializing it into a
+`tc_ui_document`; it does not import or emulate `tcgui`.
+
+The installed widget/document and rendering targets have no native-window
+dependency:
+
+```cmake
+find_package(termin_gui_native CONFIG REQUIRED COMPONENTS offscreen)
+target_link_libraries(tool PRIVATE termin_gui_native::offscreen)
+```
+
+```cpp
+termin::gui_native::OffscreenGuiCompositionConfig config;
+config.width = 640;
+config.height = 480;
+termin::gui_native::OffscreenGuiComposition composition(config);
+composition.render_frame();
+std::vector<float> rgba = composition.read_frame_rgba_float();
+```
+
+`NativeDocumentPainter` is the presentation-neutral GPU primitive: it sorts
+borrowed documents by priority and stable identity, lays them out, builds one
+draw list and renders it into an already-open caller-owned pass. It has no
+framegraph, attachment, frame-lifecycle or presentation policy.
+Native C++ widgets that also implement `RenderPreparedWidget` are discovered
+after layout and prepared before that UI pass begins. This is the explicit hook
+for widgets that produce textures with the caller's active `RenderContext2`;
+their device resources are released when the widget leaves the submitted tree
+or when the painter shuts down. The hook also covers widgets attached through
+`SceneView` portals because portal reconciliation happens during layout.
+`DocumentRenderer` wraps that primitive for standalone composition roots.
+`OffscreenGuiComposition` owns an isolated `GraphicsHost`, a
+`tc_ui_document`, that renderer, a thread-safe normalized input queue, in-memory
+clipboard/cursor/text-input services and a resizable texture sink. It owns no
+application loop, `BackendWindow`, `WindowManager` or emulated display.
+Published frames have a generation, texture and captured extent; synchronous
+RGBA-float readback is explicit.
+
+Windowed applications explicitly opt into the optional adapter:
+
+```cmake
+find_package(termin_gui_native CONFIG REQUIRED COMPONENTS window_adapter)
+target_link_libraries(app PRIVATE termin_gui_native::window_adapter)
+```
+
+`GuiWindowAdapter` borrows one application-owned `BackendWindow`,
+`GraphicsHost` and `tc_ui_document` through a `TcDocument` handle. The
+application supplies a per-window event
+batch from `termin::WindowManager`; the adapter translates pointer/key/text
+input and explicitly renders/presents when asked. Adapter teardown releases
+only UI resources and cannot close the window, manager or graphics session.
+Window roles, scheduling and process-exit policy stay in the application.
+
+For application-owned global commands, both composition roots expose
+`set_unhandled_key_handler`. The handler is called synchronously only after a
+non-repeating key-down was ignored by the focused-widget route and document
+modal/overlay routing. It receives the normalized key and modifiers and returns
+whether it consumed the event. This permits an application to connect (for
+example) `MenuBar::dispatch_shortcut` without giving the toolkit ownership of
+the application's command policy. Replacing or clearing the handler releases
+the previous callback; it is also cleared when the renderer closes.
+
+Python exposes the new composition as `OffscreenGuiComposition`, including
+`push_key()`, `push_text()`, `push_pointer_move()`, `resize()` and an owning
+`numpy.float32[height, width, 4]` result from `read_frame_rgba_float()`.
+`DynamicTextureLease` binds directly to the shared `DocumentRenderer`.
+Window integrations import the separate `termin.gui_native.window` module;
+the core offscreen Python module does not load `termin-window` or SDL.
+
+The current foundation includes:
+
+- [`SceneView3D`](docs/scene-view3d.md) embeds a borrowed item-oriented
+  `VisualScene3D` with widget-owned offscreen rendering, world-ray input and an
+  optional camera-controller fallback;
+
+- `tc_ui_document` is implemented in C and adopts widget objects while owning
+  handle slots and generations;
+- C++ and Python expose the same copyable, non-owning `TcDocument` handle
+  value. The handle has no destructor-driven lifetime behavior; composition
+  roots create and destroy the registry object explicitly with
+  `tc_ui_document_create`/`tc_ui_document_destroy`;
+- the C implementation keeps its single private document state in
+  `tc_ui_document_internal.h`. Lifecycle, slot ownership, roots and services
+  live in `tc_ui_document.c`; common `tc_widget` state and canonical-tree
+  mutation live in `tc_widget.c`; paint composition, overlays, hit testing,
+  focus and input routing live in `tc_ui_interaction.c`. These translation
+  units share no public state and internal helper symbols remain hidden from
+  the shared-library ABI;
+- `tc_widget` is an intrusive C ABI header embedded into concrete widgets;
+- common bounds, size constraints, visibility/enabled/input flags and the
+  canonical parent/ordered-children tree live directly in `tc_widget`;
+- stable id, display name and debug name can be set through common C APIs and
+  are copied into `tc_widget`-owned storage. C++, Python and restore paths use
+  that single storage instead of keeping language-specific identity strings;
+- each `tc_widget` stores a semantic style role and one masked override by
+  value. An override may opt into canonical-tree inheritance; there is no
+  parallel style record or language-specific style cache;
+- `tc_ui_document` owns its `tc_ui_theme` by value and exposes a monotonic
+  revision. Replacing the theme invalidates layout, paint and state for every
+  live widget;
+- computed styles resolve role base, interaction layers, inherited ancestor
+  overrides and the local override in that order. Hover, press, focus and
+  effective disabled state come from the document; checked state is supplied
+  by widgets such as `Checkbox`;
+- canonical tree links use stable `tc_widget*` pointers inside a document while
+  handles remain the external reference format;
+- widget implementations keep their own handle references;
+- plain destroy deletes only the requested widget;
+- recursive destroy is an explicit API and walks the canonical widget tree;
+- owned adoption is atomic: `tc_ui_document_adopt_widget` requires the
+  creator-provided deleter in the adoption call;
+- borrowed/static widgets use the separate
+  `tc_ui_document_attach_borrowed_widget` API and never carry a deleter;
+- multilingual widget factories are registered as lifecycle-managed facets in
+  the common `tc_runtime_type_registry`, rather than in a parallel UI-only
+  registry. Each factory declares its ABI, implementation language, owner and
+  parent type, and each result declares owned-with-deleter or borrowed-without-
+  deleter semantics explicitly;
+- factory-created widgets link their runtime type identity to the common
+  instance registry. Unregistering a type first recursively destroys all live
+  instances across documents, invalidates their generation handles, and only
+  then releases the factory userdata;
+- owner hot reload has an explicit invalidation policy through
+  `tc_widget_registry_unregister_owner`/`unregister_widget_owner`. All matching
+  types are unloaded across documents before replacement factories are
+  registered. Recursive topology wins over module ownership: unloading a parent
+  also invalidates descendants owned by another module, while their factories
+  remain registered and can create fresh generation handles;
+- widget factory ABI carries optional paired serialize/deserialize hooks. Its
+  callable, state hooks and userdata are wrapped by the common
+  `tc_runtime_owned_factory` lifecycle, so failed publication and module unload
+  cannot leave callbacks pointing at released userdata;
+- `tc_ui_document_capture_snapshot` produces an owned, language-neutral C
+  snapshot of widget identity/metadata, slot-order records, canonical child and
+  root ordering, geometry, flags, overlays and interaction handles. Copied
+  strings and arrays remain valid after the live document changes; the C++
+  `DocumentSnapshot` wrapper owns cleanup;
+- roots are explicit paint entry points, not an implicit ownership tree.
+- the C++ widget layer keeps one public header per concrete class and, where
+  behavior is not inline, a matching implementation file
+  (`button.hpp`/`button.cpp`, `grid_layout.hpp`/`grid_layout.cpp`, and so on).
+  `termin/gui_native/widgets.hpp` is the compatibility umbrella for consumers
+  that want the complete widget set;
+- `tc_ui_document_layout_roots` and the input dispatch APIs exercise layout
+  and event routing without making ownership implicit;
+- pointer, key and text input route from target to root over a snapshot of
+  generation handles. A callback may destroy or reparent route members; stale
+  handles are skipped without dereferencing freed language bodies;
+- hover changes emit direct `Enter`/`Leave` notifications, while ordinary
+  pointer events bubble until `Handled`. Pointer down records the handling
+  widget as pressed, and capture overrides pressed routing until release;
+- button events carry a host-supplied `click_count` through SDL, the common C
+  input manager/event ABI and Python. Collection widgets activate on count 2;
+  no widget or editor subsystem owns a timing clock for double-click detection;
+- focus changes emit an explicit vtable callback. Unhandled `Tab` and
+  `Shift+Tab` cycle over effectively visible/enabled focusable widgets in
+  canonical depth-first order;
+- capture replacement, subtree hide/disable/detach/destruction, modal opening
+  and host focus/capture loss clear document pointer state before delivering
+  one direct `TC_UI_POINTER_CANCEL` to each former pressed/captured owner.
+  Clearing before the callback makes destruction and reparenting safe and
+  prevents a later pointer-up from completing the canceled gesture. Normal
+  owner-initiated release after pointer-up does not emit cancellation;
+- ordered overlays are non-owning presentation entries over the same canonical
+  widgets. They paint after roots and win hit testing from top to bottom;
+- overlay flags provide modal barriers, outside-click dismissal and
+  pointer-transparent tooltip behavior. Dismissal has an explicit reason and
+  crosses the C++/Python vtable like other lifecycle notifications;
+- tooltip delay/scheduling belongs to the host. `tc_ui_tooltip_rect` is a pure
+  helper for offset placement and viewport clamping;
+- widget `paint` writes backend-neutral commands into `tc_ui_draw_list` through
+  `tc_ui_paint_context`; commands cover rect/rounded rect, circle/arc,
+  line/polyline, texture, text and nested clips. No GPU renderer is required
+  for command unit tests;
+- text and polyline commands use draw-list-owned backing storage. Texture
+  commands carry a non-owning backend-neutral texture id whose device resource
+  must remain alive through `UiDrawListRenderer::render`, plus an explicit
+  `Linear`/`Nearest` sampling mode. Sampling is sampler-owned render state, not
+  mutable texture state, and participates in Canvas2D batch boundaries;
+- `UiDrawListRenderer` renders every command through `Canvas2DRenderer` when a
+  default `FontAtlas` is configured for text. Its offscreen pixel smoke covers
+  text, sampled texture, rounded geometry and nested clip intersection on every
+  compiled headless backend (Vulkan on Linux and Vulkan/D3D11 on Windows);
+- `build_showcase(TcDocument)` and `build_python_showcase(TcDocument)` provide
+  deterministic C++-built and Python-built native control trees. Their
+  headless snapshots fix widget/model state, focus reachability, long UTF-8
+  text clipping and draw-command totals without a desktop window;
+- the SDL showcase accepts `TERMIN_GUI_NATIVE_SCREENSHOT=/path/to/frame.ppm`.
+  Capture mode freezes animated values at their initial state, reads back one
+  presented-size frame, writes binary PPM and exits, making the desktop backend
+  path suitable for repeatable screenshot comparison;
+- native window examples configure the shared standalone shader runtime before
+  constructing their renderers. They discover `termin_shaderc` and `slangc`
+  from the active SDK/build tree or explicit environment settings and keep
+  generated artifacts in the writable platform user cache;
+- `tc_ui_document` accepts a non-owning C text-measure callback with explicit
+  UTF-8 byte lengths. `UiDrawListRenderer::bind_text_measurer` adapts its
+  `FontAtlas`; the renderer must outlive document layout/paint using that
+  binding;
+- `Label`, `TextInput` and `TextArea` use typographic advances and line metrics.
+  Both editors expose byte-offset carets normalized to UTF-8 codepoint
+  boundaries, selection, mouse/keyboard navigation and copy/cut/paste through
+  document-level host clipboard callbacks. `TextInput` scrolls horizontally;
+  the unwrapped multiline `TextArea` scrolls on both axes;
+- `Slider` supports arbitrary finite ranges and optional step quantization.
+  `SliderEdit` materializes a canonical `Slider` + `SpinBox` child pair on its
+  first document layout and keeps programmatic and interactive values in sync;
+- `ScrollArea` keeps programmatic scroll geometry coherent immediately,
+  chains wheel input at axis boundaries, reveals focused descendants, exposes
+  keyboard line/page navigation and observable offsets, and supports
+  `Auto`/`Always`/`Hidden` overlay scrollbar policies with captured thumb drag;
+- `ComboBox` uses one document-owned, reusable overlay widget with outside
+  dismissal, keyboard selection and wheel scrolling. The first native pass
+  omits the legacy draggable scrollbar thumb while preserving selection and
+  scroll behavior;
+- `IconButton` accepts either UTF-8 icon text or a texture id. `ImageWidget`
+  and `Canvas` accept non-owning tgfx2 texture ids and explicit image sizes.
+  `ImageWidget` exposes `Stretch`, `Contain` and clipped `Cover` fit modes;
+  file decoding, upload, update and destruction remain host responsibilities.
+  `Canvas` provides fit/zoom/pan transforms plus a backend-neutral custom paint
+  callback inside its clip;
+- `CollectionModel` owns flat item data and emits typed reset/insert/update/erase
+  changes. `SelectionModel` provides reusable single, multiple and anchored
+  range selection while preserving indices across structural insert/erase;
+- `ListWidget` retains a shared collection model, paints only its computed
+  visible row range, scrolls without materializing per-row widgets, skips
+  disabled rows during direct/keyboard navigation and exposes the same model,
+  selection, activation and lifetime contract to C++ and Python;
+- `CollectionItem` may carry a backend-neutral texture id. `FileGridWidget`
+  presents the same shared model as a responsive virtualized tile grid with
+  bounded paint, optional icons, multi/range selection, disabled-item keyboard
+  navigation, wheel scrolling, pointer-captured scrollbar dragging and
+  activation/delete/context-menu signals in both C++ and Python;
+- `TreeModel` provides stable node IDs, ordered hierarchy mutation and
+  cycle-safe move/reorder operations, while `TreeExpansionModel` owns reusable
+  expansion state. `TreeWidget` caches the visible hierarchy projection on
+  model revisions, virtualizes paint without per-node widgets, and exposes
+  pointer selection/toggle, scrolling, keyboard navigation, activation and
+  delete requests consistently in C++ and Python;
+- `TableModel` owns stable row IDs and typed structural notifications, while
+  `TableColumnModel` owns unique stable column IDs and fixed/stretch sizing
+  constraints. `TableWidget` virtualizes row paint, reuses `SelectionModel`,
+  exposes header-click and activation signals, and resizes columns through
+  document pointer capture with the same API in C++ and Python;
+- `CommandModel` is the shared stable-ID source for chrome actions and
+  separators, including enabled/checkable/checked, backend-neutral `icon_id`,
+  shortcut, tooltip and nested-model metadata.
+  `UiIconRegistry::builtin()` records semantic icon commands from immutable
+  24-unit vector recipes. `UiDrawListRenderer` rasterizes their masks at the exact
+  physical size with supersampled coverage and caches the resulting device-local
+  textures, preserving crisp DPI scaling, theme tint and disabled state; `release_gpu()`
+  owns their teardown. Raw `texture_id` remains available for caller-owned dynamic
+  images. `ToolBar` renders and activates that model without per-action widgets,
+  aligns its command strip at the start, center or end, and uses pointer capture
+  for press/release. `StatusBar`
+  exposes deterministic persistent/temporary text; host scheduling explicitly
+  decides when to clear temporary messages. `Menu` presents the same model as
+  a clamped, bounded-scroll overlay with nested submenu ownership, keyboard
+  navigation and outside/Escape dismissal. `MenuBar` switches adjacent menus
+  through a single popup owner and dispatches cycle-safe shortcut descriptors;
+- `Dialog` provides centered modal composition with a viewport-clamped title-bar
+  drag gesture (disable with `set_draggable(false)`), canonical content/action
+  ownership, nested-modal focus containment/restoration, default/cancel
+  keyboard semantics and exactly-once typed results. `MessageBox` and
+  `InputDialog` reuse that contract in both C++ and Python; buttons are
+  focusable and keyboard-activatable across the native widget set;
+- `FileDialogModel` provides deterministic open-file, save-file and
+  open-directory semantics over an injected filesystem provider, including
+  parsed glob filters, directory-first sorting, history and directory creation.
+  `FileDialogOverlay` composes that model on `Dialog` as a two-pane browser with
+  common places, back/forward/up navigation, an editable path, directory
+  creation, semantic file icons, metadata and file-type filters. It vetoes
+  invalid accept actions without dismissing the modal. `FileDialogService` is
+  the explicit host boundary for platform-native pickers; it never selects the
+  overlay as a hidden fallback;
+- `ColorPickerModel` owns validated HSV/alpha state independently of UI.
+  `ColorPicker` provides SV, hue and optional alpha interaction with pointer
+  capture, old/new previews and reusable RGBA CPU surfaces. GPU texture IDs and
+  upload/update lifetime remain explicitly host-owned; the same widget paints
+  renderer-neutral draw-list gradients when no textures are attached.
+  `ColorDialog` delivers one optional typed color through the shared modal
+  contract, with matching C++ and Python APIs;
+- `RichTextModel` owns validated UTF-8 lines and styled segments, with a small
+  native HTML-subset adapter for diagnostic content. `RichTextView` wraps via
+  the document text service, clips visible rows, provides captured scrollbar
+  dragging and read-only source-stable selection/copy through the injected
+  clipboard. C++ and Python retain the same shared model; visual wrapping does
+  not mutate copied text;
+- `FrameTimeModel` is an explicitly host-fed bounded frame-time history, with
+  no hidden profiler or clock dependency. `FrameTimeGraph` renders its empty
+  state, target/warning guides and right-aligned green/yellow/red bars through
+  the native draw list; C++ and Python share the same retained model;
+- Python-authored production layouts can select fixed, preferred, flex or
+  stretch BoxLayout children and configure padding, spacing, borders and child
+  extent limits. The generic append path preserves the C ABI for Python/C
+  widget bodies instead of treating them as C++ native widgets;
+- `TextInput` changed/submitted signals and table/tree context-menu requests
+  are available through the Python bridge. Collection consumers can implement
+  live filters and reusable context actions without polling widget internals;
+- `Viewport3D` composites a display-owned backend-neutral texture through
+  a retained `ViewportSurfaceHost`. Layout performs an ordered
+  `before_resize` notification followed by host resize, while pointer, wheel,
+  key and UTF-8 text input use typed host methods. The Python bridge accepts
+  the same explicit protocol; `termin.display.Display` supplies texture,
+  resize and typed display input without a second surface facade or raw Python
+  pointer transport.
+  External drag/drop is a separate typed host callback so OS payload ownership
+  never leaks into the core pointer-event ABI;
+- `SceneView` accepts a shared `termin::visual::TcVisualScene` directly and
+  paints it without a GUI-side scene model or knowledge of concrete item
+  types. It owns only viewport behavior (pan, anchored zoom and coordinate
+  conversion), forwards raw input with world coordinates and exposes explicit
+  invalidation after external scene mutations. Selection, dragging and stable
+  domain IDs belong to the node graph or other scene owner. Embedded native
+  widgets remain generation-checked canonical document children. The reusable
+  `WidgetSceneProjectionBridge` stores only item/widget handles, reconciles
+  stale owners, and interleaves each portal at its source item's canonical
+  tree-local paint slot with matching reverse-order hit testing and host
+  clipping. It accepts exact source local bounds and world
+  affine placement; rotation, shear and non-uniform widget projection are
+  rejected instead of approximated by a stretched AABB. `SceneView` is its
+  first adapter and retains only camera/view policy. Plot annotations
+  intentionally remain owned by `tcplot`;
+- `UiDrawListRenderer` can flush the command list through
+  `tgfx::Canvas2DRenderer`;
+- `TERMIN_GUI_NATIVE_BUILD_EXAMPLES=ON` builds native window examples on the
+  public application host; the showcase receives portable pointer, wheel,
+  keyboard and text events and owns no SDL/render-target plumbing.
+- `TERMIN_BUILD_PYTHON=ON` builds `termin.gui_native`, whose Python-defined
+  widgets dispatch the complete measure/layout/paint/input/lifecycle vtable
+  through the same embedded `tc_widget` contract;
+- Python `WidgetRef` objects contain only an invalidation state plus a handle.
+  They expose common state and canonical tree mutation without duplicating
+  widget data or retaining the document itself;
+- cursor intent is backend-neutral common widget state. `Inherit` walks the
+  hovered leaf's ancestors, explicit `Default` stops that walk, and the
+  document notifies its host only when the resolved intent changes. SDL cursor
+  objects remain owned and cached by the platform host;
+- the same `WidgetRef` wraps C++ widgets created by the initial native
+  native document factories. Stateful input/media factories return typed
+  references without duplicating widget state;
+- the document-owned Python shim retains its Python body until the C deleter
+  runs under the GIL; stale refs remain safe after widget or document teardown;
+- Python widget classes can be registered with `register_widget_type` and
+  instantiated by type name through `TcDocument.create_registered_widget`.
+  `WidgetRef` exposes the registered type, implementation language and explicit
+  ownership policy; constructor failures roll back without leaving a live slot;
+- Python `TcDocument.inspect_snapshot()` converts the same C snapshot into plain
+  dictionaries, lists, value objects and generation handles. It does not retain
+  widgets or expose live native pointers, so editor tooling and MCP diagnostics
+  can safely keep a point-in-time result;
+- `tc_ui_document_serialize` emits versioned `termin.gui.document` schema v2.
+  Records use stable registered type names, common widget state (including
+  semantic cursor intent), per-type state
+  dictionaries and handle-free record indices for child/root/overlay topology.
+  Ephemeral hover, focus, press, capture and dirty flags are intentionally not
+  persisted;
+- restore is transactional into an empty document: it recreates every record
+  through the registered factory, restores common and type state, then attaches
+  topology. Any validation, factory or hook failure recursively destroys all
+  created widgets. Only registered types are serializable; this makes missing
+  type migration explicit instead of silently producing incomplete documents;
+- C++ exposes the schema as owning `tc::trent` through `TcDocument::serialize`
+  and `TcDocument::restore`. Python exposes detached primitive/list/dict data with
+  explicit paired hooks on `register_widget_type`; unsupported Python objects
+  are rejected rather than reflected or stringified;
+- `examples/ui_rect_window.py` mirrors the C++ rectangle-window example.
+
+## Widgets + TcVisualScene example
+
+`examples/visual_scene_composition.cpp` builds one canonical document
+containing an ordinary control panel, a `SceneView` backed by
+`TcVisualScene`, several draggable typed graphic items and a document-owned
+button attached through the public widget-portal API. The same builder is used
+by the windowed application and its automated headless smoke.
+
+Build and run the installed example:
+
+```bash
+task build
+./sdk/bin/termin_gui_native_visual_scene_example --headless-smoke
+./sdk/bin/termin_gui_native_visual_scene_example
+```
+
+The manual scenario is:
+
+1. resize the window and confirm the control panel keeps its fixed width while
+   the scene view and its clip resize;
+2. drag the blue card and orange ellipse, including moving the pointer outside
+   the original item bounds while captured;
+3. click `Reset scene` and confirm both graphic items return to their initial
+   positions;
+4. click the green `Portal action` control and confirm the click updates its
+   label without selecting or dragging the underlying graphic hit region;
+5. pan with the middle mouse button and zoom with the wheel; the portal remains
+   aligned with its scene item and the purple right-edge item remains clipped
+   by the view.
+
+This module is Termin's canonical retained UI toolkit. Its ownership, handle,
+polyglot widget, input, overlay and theme/style contracts are exercised through
+C, C++ and Python tests.
