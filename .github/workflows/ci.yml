@@ -460,11 +460,11 @@ jobs:
           name: sdk-full
           path: sdk/
 
-      - name: Resolve SDK Python layout
-        uses: ./.github/actions/resolve-sdk-python
-
       - name: Restore SDK executable permissions
         run: chmod +x sdk/bin/*
+
+      - name: Resolve SDK Python layout
+        uses: ./.github/actions/resolve-sdk-python
 
       - name: Install pip packages
         env:
@@ -557,11 +557,11 @@ jobs:
           name: sdk-full
           path: sdk/
 
-      - name: Resolve SDK Python layout
-        uses: ./.github/actions/resolve-sdk-python
-
       - name: Restore SDK executable permissions
         run: chmod +x sdk/bin/*
+
+      - name: Resolve SDK Python layout
+        uses: ./.github/actions/resolve-sdk-python
 
       - name: Install pip packages
         env:
@@ -656,11 +656,11 @@ jobs:
           name: sdk-full
           path: sdk/
 
-      - name: Resolve SDK Python layout
-        uses: ./.github/actions/resolve-sdk-python
-
       - name: Restore SDK executable permissions
         run: chmod +x sdk/bin/*
+
+      - name: Resolve SDK Python layout
+        uses: ./.github/actions/resolve-sdk-python
 
       - name: Install pip packages
         env:
