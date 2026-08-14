@@ -37,7 +37,7 @@
       },
       {
         "path": "core/termin-build-tools/tests/test_sdk_orchestrator.py",
-        "max_lines": 2008,
+        "max_lines": 2010,
         "reason": "Pre-existing SDK orchestrator test debt tracked by #1640"
       },
       {

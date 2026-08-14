@@ -307,9 +307,10 @@ def test_linux_sdk_build_skips_csharp_unless_requested(tmp_path, monkeypatch, ca
     )
 
     output = capsys.readouterr().out
+    normalized = output.replace("\\", "/")
     assert result == 0
-    assert "scripts/build/bindings.sh" in output
-    assert "scripts/build/csharp.sh" not in output
+    assert "scripts/build/bindings.sh" in normalized
+    assert "scripts/build/csharp.sh" not in normalized
     assert "Skipping C# bindings (use --csharp on Linux)." in output
 
 
@@ -338,8 +339,9 @@ def test_linux_sdk_build_can_request_csharp(tmp_path, monkeypatch, capsys):
     )
 
     output = capsys.readouterr().out
+    normalized = output.replace("\\", "/")
     assert result == 0
-    assert "scripts/build/csharp.sh --profile=full" in output
+    assert "scripts/build/csharp.sh --profile=full" in normalized
 
 
 def test_linux_csharp_stage_accepts_forwarded_profiles() -> None:
