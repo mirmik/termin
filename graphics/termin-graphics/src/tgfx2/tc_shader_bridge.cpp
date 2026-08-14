@@ -311,6 +311,8 @@ namespace termin {
             return "slang";
         case TC_SHADER_LANGUAGE_HLSL:
             return "hlsl";
+        case TC_SHADER_LANGUAGE_UNSPECIFIED:
+            return "unspecified";
         }
         return "";
     }
@@ -342,6 +344,8 @@ namespace termin {
             return "hlsl";
         case TC_SHADER_LANGUAGE_GLSL:
             return "glsl";
+        case TC_SHADER_LANGUAGE_UNSPECIFIED:
+            return "";
         }
         return "glsl";
     }

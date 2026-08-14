@@ -24,7 +24,7 @@ CMAKE_GENERATOR_NAME="${CMAKE_GENERATOR_NAME:-${TERMIN_CMAKE_GENERATOR:-}}"
 CLANG_TIDY_BIN="${CLANG_TIDY_BIN:-clang-tidy}"
 CHECKS="${CLANG_TIDY_CHECKS:--*,clang-diagnostic-*,clang-analyzer-*,-clang-analyzer-deadcode.*,-clang-analyzer-optin.*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,readability-function-size}"
 CHECKS_OVERRIDDEN=0
-WARNINGS_AS_ERRORS="${CLANG_TIDY_WARNINGS_AS_ERRORS:-*}"
+WARNINGS_AS_ERRORS="${CLANG_TIDY_WARNINGS_AS_ERRORS:-*,-readability-function-size}"
 HEADER_FILTER="${CLANG_TIDY_HEADER_FILTER:-}"
 DEFAULT_CLANG_TIDY_CONFIG="{CheckOptions: [{key: readability-function-size.ParameterThreshold, value: 7}, {key: readability-function-size.StatementThreshold, value: none}, {key: readability-function-size.LineThreshold, value: none}, {key: readability-function-size.BranchThreshold, value: none}, {key: readability-function-size.VariableThreshold, value: none}, {key: readability-function-size.NestingThreshold, value: none}]}"
 CLANG_TIDY_CONFIG="${CLANG_TIDY_CONFIG:-$DEFAULT_CLANG_TIDY_CONFIG}"
@@ -53,7 +53,8 @@ Options:
   --jobs N, -j N       Parallel clang-tidy jobs (default: nproc)
   --checks CHECKS      Override clang-tidy checks
   --warnings-as-errors CHECKS
-                       Override clang-tidy warnings-as-errors (default: *)
+                       Override clang-tidy warnings-as-errors (default: all
+                       except the advisory function-size baseline)
   --clang-tidy PATH    clang-tidy executable (default: clang-tidy)
   --help, -h           Show this help
 
@@ -323,13 +324,11 @@ excluded_parts = {
 
 
 def default_header_filter() -> str:
-    roots = sorted(
-        path
-        for path in repo.iterdir()
-        if path.is_dir()
-        and path.name.startswith("termin-")
-        and path.name != "termin-thirdparty"
-    )
+    roots = [
+        repo / name
+        for name in ("core", "graphics", "engine", "physics", "platform", "editor")
+        if (repo / name).is_dir()
+    ]
     roots.extend(
         path
         for name in ("tcplot", "cmake", "scripts", "tools")

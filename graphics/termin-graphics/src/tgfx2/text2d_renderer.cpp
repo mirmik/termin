@@ -9,6 +9,7 @@
 #include "tgfx2/text2d_renderer.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <stdexcept>

@@ -12,7 +12,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$ScriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 . (Join-Path $ScriptDir "scripts\Normalize-WindowsSdkPermissions.ps1")
 $PytestTargets = New-Object System.Collections.Generic.List[string]
 $Full = $false

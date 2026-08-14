@@ -17,7 +17,7 @@
     "baselines": [
       {
         "path": "core/termin-build-tools/termin_build/sdk.py",
-        "max_lines": 2414,
+        "max_lines": 2416,
         "reason": "Pre-existing orchestration debt tracked by #1640"
       },
       {
@@ -37,7 +37,7 @@
       },
       {
         "path": "core/termin-build-tools/tests/test_sdk_orchestrator.py",
-        "max_lines": 2077,
+        "max_lines": 2008,
         "reason": "Pre-existing SDK orchestrator test debt tracked by #1640"
       },
       {

@@ -5,11 +5,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PRODUCTION_EMBED_SOURCES = (
-    REPO_ROOT / "termin-app/cpp/app/main_launcher.cpp",
-    REPO_ROOT / "termin-app/cpp/app/main_minimal.cpp",
-    REPO_ROOT / "termin-python-host/src/termin_python.cpp",
-    REPO_ROOT / "termin-modules/src/module_python_backend.cpp",
-    REPO_ROOT / "termin-player/src/player_runtime_host.cpp",
+    REPO_ROOT / "editor/termin-app/cpp/app/main_launcher.cpp",
+    REPO_ROOT / "editor/termin-app/cpp/app/main_minimal.cpp",
+    REPO_ROOT / "core/termin-python-host/src/termin_python.cpp",
+    REPO_ROOT / "engine/termin-modules/src/module_python_backend.cpp",
+    REPO_ROOT / "editor/termin-player/src/player_runtime_host.cpp",
 )
 REMOVED_SINGLE_PHASE_API = (
     "Py_SetPythonHome",
@@ -31,7 +31,7 @@ def test_product_embedding_paths_use_canonical_python_host() -> None:
 
 def test_raw_player_module_declares_free_threaded_multiphase_contract() -> None:
     source = (
-        REPO_ROOT / "termin-player/src/player_runtime_host.cpp"
+        REPO_ROOT / "editor/termin-player/src/player_runtime_host.cpp"
     ).read_text(encoding="utf-8")
 
     assert "PyModuleDef_Init(&native_module)" in source

@@ -171,11 +171,11 @@ if(TERMIN_RUNTIME_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
     add_custom_command(
         OUTPUT "${TERMIN_RUNTIME_READER_FIXTURE_BLOB}"
         COMMAND "${TERMIN_RUNTIME_TEST_PYTHON}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/../termin-project-build/python/termin/project_build/runtime_package_blob.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../editor/termin-project-build/python/termin/project_build/runtime_package_blob.py"
             "${TERMIN_RUNTIME_READER_FIXTURE_ROOT}"
             "${TERMIN_RUNTIME_READER_FIXTURE_BLOB}"
         DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/../termin-project-build/python/termin/project_build/runtime_package_blob.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../editor/termin-project-build/python/termin/project_build/runtime_package_blob.py"
             "${TERMIN_RUNTIME_READER_FIXTURE_ROOT}/manifest.json"
             "${TERMIN_RUNTIME_READER_FIXTURE_ROOT}/scenes/Main.scene.json"
         VERBATIM)

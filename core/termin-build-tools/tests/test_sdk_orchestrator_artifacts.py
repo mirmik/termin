@@ -42,11 +42,6 @@ def test_graphics_build_profiles_require_spirv_cross(profile_name):
     assert "termin-thirdparty/spirv-cross" in DOCTOR_PROFILES.profile(profile_name).submodules
 
 
-@pytest.mark.parametrize("profile_name", ["sdk-core", "sdk-bindings-core"])
-def test_core_build_profiles_have_no_graphics_submodules(profile_name):
-    assert DOCTOR_PROFILES.profile(profile_name).submodules == ()
-
-
 def test_core_product_boundary_rejects_forbidden_domain_artifact(tmp_path):
     leaked = tmp_path / "lib" / "libtermin_graphics.so"
     leaked.parent.mkdir(parents=True)

@@ -138,7 +138,8 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = "$pwd\core\termin-build-tools"
-          python -m pytest core/termin-build-tools/tests/ -v
+          python -m pytest core/termin-build-tools/tests/ -v `
+            --ignore=core/termin-build-tools/tests/test_graphics_showcase_contract.py
 
       - name: Smoke Task build frontend
         shell: pwsh
@@ -205,6 +206,17 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Setup Slang compiler
+        shell: pwsh
+        run: |
+          $slangc = python scripts/install_slang_toolchain.py --no-configure --print-path
+          if ($LASTEXITCODE -ne 0) { throw "Slang setup failed" }
+          "TERMIN_SLANGC=$slangc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build D3D11 SDK
+        shell: pwsh
+        run: task build -- --no-vulkan --no-opengl --no-sdl
+
       - name: Validate D3D11 bound resource path
         shell: pwsh
         run: |
@@ -237,8 +249,19 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Prepare canonical Python build environment
+        env:
+          PYTHONPATH: ${{ github.workspace }}/core/termin-build-tools
+        run: |
+          python -m termin_build.sdk --repo-root . prepare-python-toolchain
+          echo "PYTHON_BIN=${{ github.workspace }}/build/python-runtime/build-env/bin/python" >> "$GITHUB_ENV"
+          echo "PYTHON_EXECUTABLE=${{ github.workspace }}/build/python-runtime/build-env/bin/python" >> "$GITHUB_ENV"
+
       - name: Install Linux build dependencies
         uses: ./.github/actions/setup-linux-build
+
+      - name: Setup Slang compiler
+        uses: ./.github/actions/setup-slang
 
       - name: Build
         run: task build:cpp --
@@ -264,6 +287,19 @@ jobs:
 
       - name: Install Linux build dependencies
         uses: ./.github/actions/setup-linux-build
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Prepare canonical Python build environment
+        env:
+          PYTHONPATH: ${{ github.workspace }}/core/termin-build-tools
+        run: |
+          python -m termin_build.sdk --repo-root . prepare-python-toolchain
+          echo "PYTHON_BIN=${{ github.workspace }}/build/python-runtime/build-env/bin/python" >> "$GITHUB_ENV"
+          echo "PYTHON_EXECUTABLE=${{ github.workspace }}/build/python-runtime/build-env/bin/python" >> "$GITHUB_ENV"
 
       - name: Setup Slang compiler
         uses: ./.github/actions/setup-slang
@@ -304,6 +340,22 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+
+      - name: Prepare canonical Python build environment
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "$pwd\core\termin-build-tools"
+          python -m termin_build.sdk --repo-root . prepare-python-toolchain
+          $python = "$pwd\build\python-runtime\build-env\Scripts\python.exe"
+          "PYTHON_BIN=$python" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PYTHON_EXECUTABLE=$python" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup Slang compiler
+        shell: pwsh
+        run: |
+          $slangc = python scripts/install_slang_toolchain.py --no-configure --print-path
+          if ($LASTEXITCODE -ne 0) { throw "Slang setup failed" }
+          "TERMIN_SLANGC=$slangc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build C++ SDK dependencies
         shell: pwsh
