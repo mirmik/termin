@@ -21,9 +21,9 @@ state, но не callbacks или Python objects.
 
 Связанные документы:
 
-- [Module Map](../../docs/modules.md#termin-base--tcbase)
-- [Build system](../../docs/build-system.md)
-- [Canonical naming](../../docs/architecture/2026-03-15-canonical-naming.md)
+- [Module Map](../../../docs/modules.md#termin-base--tcbase)
+- [Build system](../../../docs/build-system.md)
+- [Canonical naming](../../../docs/architecture/2026-03-15-canonical-naming.md)
 
 ## Основные области
 

@@ -7,13 +7,18 @@ on:
       - '**/docs/**'
       - '**/mkdocs.yml'
       - 'build-system/docs-publication.json'
+      - 'build-system/districts.json'
       - 'build-system/python-docs-lock.txt'
       - 'build-system/modules.json'
       - 'build-system/packages.json'
+      - 'build-system/repository-policies.json'
       - 'Taskfile.yml'
       - 'scripts/build/docs.sh'
       - 'scripts/build/setup-docs-env.sh'
       - 'core/termin-build-tools/termin_build/repository_control.py'
+      - 'core/termin-build-tools/termin_build/repository_control_cli.py'
+      - 'core/termin-build-tools/termin_build/source_size_policy.py'
+      - 'core/termin-build-tools/termin_build/product_manifest.py'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 

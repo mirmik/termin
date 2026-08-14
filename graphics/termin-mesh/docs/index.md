@@ -7,8 +7,8 @@
 
 Связанные документы:
 
-- [Module Map](../../docs/modules.md#termin-mesh--tmesh)
-- [termin-base](../../termin-base/docs/index.md)
+- [Module Map](../../../docs/modules.md#termin-mesh--tmesh)
+- [termin-base](../../../core/termin-base/docs/index.md)
 
 ## Основные области
 

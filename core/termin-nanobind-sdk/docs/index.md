@@ -5,7 +5,7 @@
 Связанные документы:
 
 - [README](../README.md)
-- [Build system](../../docs/build-system.md)
+- [Build system](../../../docs/build-system.md)
 
 ## Основные области
 

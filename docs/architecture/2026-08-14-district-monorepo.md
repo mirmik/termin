@@ -2,10 +2,17 @@
 
 Status: accepted target architecture.
 
+Implementation status: physical package ownership and the standalone Core and
+Graphics profiles are active. The universal cross-district dependency gate and
+the intended Physics closure are not complete yet; this document is normative
+where current code still carries migration debt.
+
 Termin is one source repository split into root-level product districts. A
 district is a package-ownership namespace, not a nested project or separate Git
 repository. The terminology is intentionally city-oriented: Termin is the city,
 while Core, Graphics, Physics, Engine, Editor and Platform are its districts.
+
+The abridged product layout is:
 
 ```text
 core/
@@ -18,6 +25,10 @@ docs/
 build-system/
 termin-thirdparty/
 ```
+
+Shared roots also include `cmake/`, `scripts/`, `examples/`, `tests/`,
+`test-projects/`, `tools/` and `termin-csharp/`. They are repository-owned
+infrastructure or cross-product surfaces, not unnamed districts.
 
 There is deliberately no `packages/` wrapper. Package paths include their
 district (`graphics/termin-graphics`, `core/termin-base`) and therefore carry
@@ -33,11 +44,12 @@ The allowed product direction is:
 
 ```text
 core <- graphics <- engine <- editor
-  ^         ^          ^
-  +------ physics -----+
-             ^
-          platform
+  ^                   ^
+  +------ physics ----+
 ```
+
+Platform hosts consume the selected lower product closure. Lower districts do
+not depend on Platform.
 
 - Core is domain-neutral and depends on no other district.
 - Graphics and Physics may depend on Core, but not on Engine or Editor.
@@ -50,9 +62,11 @@ core <- graphics <- engine <- editor
 - Platform owns Android, OpenXR and Web hosts; it consumes lower products and
   does not become a dependency of them.
 
-These rules are enforced by the ownership manifest, build profiles, dependency
-checks and CI. Source visibility in the monorepo is not permission to create an
-undeclared dependency.
+The ownership manifest currently enforces unique physical package ownership,
+and CI builds the closed Core and Graphics profiles. Some cross-district
+dependency checks remain incomplete, especially around the Physics migration.
+Source visibility in the monorepo is never permission to create an undeclared
+dependency; the absence of a universal gate is migration status, not policy.
 
 ## SDK products
 

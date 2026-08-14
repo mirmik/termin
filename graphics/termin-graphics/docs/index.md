@@ -4,17 +4,17 @@
 
 Связанные документы:
 
-- [Module Map](../../docs/modules.md#termin-graphics--tgfx)
+- [Module Map](../../../docs/modules.md#termin-graphics--tgfx)
 - [Architecture notes](architecture/index.md)
 - [Line rendering plan](line-rendering-plan.md)
 - [Point-cloud rendering](point-cloud-rendering.md)
 - [Shader artifact runtime](shader-artifact-runtime.md)
-- [Renderer facades plan](../../docs/plans/2026-05-12-tgfx-renderer-facades.md)
+- [Renderer facades plan](../../../docs/plans/2026-05-12-tgfx-renderer-facades.md)
 
 ## Examples
 
 The cross-package acceptance point for the installed `graphics` SDK is the
-[graphics profile showcase](../../examples/graphics-showcase/README.md). It
+[graphics profile showcase](../../../examples/graphics-showcase/README.md). It
 provides the required headless native UI, visual-scene/nodegraph and 2D/3D plot
 coverage. The focused examples below remain as interactive low-level line
 renderer tutorials and use the optional `termin-window` host.
@@ -50,7 +50,7 @@ application или isolated factories.
 Оконные, WPF, Android и OpenXR adapters могут по-разному подготовить platform
 device, но передают его во владение `GraphicsHost`. Они не должны создавать
 собственные параллельные device/cache/context bundles. Полный windowed contract
-описан в [Graphics Host and Window Session](../../docs/architecture/2026-07-21-graphics-host-and-window-session.md).
+описан в [Graphics Host and Window Session](../../../docs/architecture/2026-07-21-graphics-host-and-window-session.md).
 
 ## Texture CPU Sync
 

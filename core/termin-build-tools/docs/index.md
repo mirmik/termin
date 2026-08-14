@@ -4,7 +4,7 @@
 
 Связанные документы:
 
-- [Build system](../../docs/build-system.md)
+- [Build system](../../../docs/build-system.md)
 
 ## Основные области
 
