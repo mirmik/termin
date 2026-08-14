@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import zipfile
 
@@ -109,6 +110,19 @@ def extract_archive(archive: Path, destination: Path) -> None:
     raise RuntimeError(f"unsupported Slang archive format: {archive.name}")
 
 
+def replace_install_directory(staging: Path, install_dir: Path) -> None:
+    """Publish a verified toolchain despite transient Windows file locks."""
+    attempts = 10 if platform.system() == "Windows" else 1
+    for attempt in range(attempts):
+        try:
+            staging.replace(install_dir)
+            return
+        except PermissionError:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(0.25 * (attempt + 1))
+
+
 def install(lock_path: Path, root: Path, *, require_installed: bool) -> tuple[Path, str]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     version = str(lock["version"])
@@ -148,7 +162,7 @@ def install(lock_path: Path, root: Path, *, require_installed: bool) -> tuple[Pa
                 f"Slang archive does not contain {descriptor['executable']}"
             )
         verify_version(staged_executable, version)
-        staging.replace(install_dir)
+        replace_install_directory(staging, install_dir)
     finally:
         if staging.exists():
             shutil.rmtree(staging)
