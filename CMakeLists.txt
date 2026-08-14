@@ -281,4 +281,33 @@ if(TERMIN_BUILD_TESTS)
         termin_native_tests_with_window
         ${TERMIN_NATIVE_TEST_TARGETS_WITH_WINDOW}
     )
+
+    # The repository test planner validates its exact executable selection
+    # against this manifest before asking the native build tool for one of the
+    # aggregate targets.  Keeping the aggregate membership in CMake avoids
+    # hundreds of independent Make goal traversals without weakening planner
+    # capability filtering.
+    set(_termin_test_aggregate_manifest "schema=1\n")
+    foreach(_termin_target IN LISTS TERMIN_NATIVE_TEST_TARGETS)
+        string(APPEND _termin_test_aggregate_manifest
+            "termin_native_tests\t${_termin_target}\n")
+    endforeach()
+    foreach(_termin_target IN LISTS TERMIN_NATIVE_TEST_TARGETS_WITH_WINDOW)
+        string(APPEND _termin_test_aggregate_manifest
+            "termin_native_tests_with_window\t${_termin_target}\n")
+    endforeach()
+    file(WRITE
+        "${CMAKE_CURRENT_BINARY_DIR}/ctest-build-aggregates.txt"
+        "${_termin_test_aggregate_manifest}"
+    )
+
+    # Shader-driven native tests must use the compiler from this exact build
+    # graph.  It is a support tool rather than a CTest executable, so it is an
+    # explicit dependency but intentionally absent from the membership file.
+    if(NOT TARGET termin_shaderc)
+        message(FATAL_ERROR
+            "TERMIN_BUILD_TESTS=ON produced no termin_shaderc target")
+    endif()
+    add_dependencies(termin_native_tests termin_shaderc)
+    add_dependencies(termin_native_tests_with_window termin_shaderc)
 endif()

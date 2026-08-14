@@ -66,23 +66,9 @@ for arg in "${CPP_ARGS[@]}"; do
         TEST_BUILD_TYPE="Debug"
     fi
 done
-TEST_BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/build/$TEST_BUILD_TYPE}"
-TEST_ARTIFACT_PYTHON="$(command -v python3 || command -v python || true)"
-if [[ -z "$TEST_ARTIFACT_PYTHON" ]]; then
-    echo "ERROR: Python is required to resolve C++ test artifacts" >&2
-    failures+=("termin_shaderc provenance")
-elif ! TEST_SHADERC="$(
-    PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
-        "$TEST_ARTIFACT_PYTHON" -m termin_build.artifact_resolution shader-compiler \
-        --build-dir "$TEST_BUILD_DIR" \
-        --configuration "$TEST_BUILD_TYPE" \
-        --platform linux
-)"; then
-    failures+=("termin_shaderc provenance")
-elif ! bash "$SCRIPT_DIR/scripts/test/setup-python-env.sh"; then
+if ! bash "$SCRIPT_DIR/scripts/test/setup-python-env.sh"; then
     failures+=("Python environment")
-elif ! TERMIN_SHADERC="$TEST_SHADERC" \
-    TERMIN_TEST_CAPABILITIES="$(
+elif ! TERMIN_TEST_CAPABILITIES="$(
         if [[ "$PYTHON_WINDOW_CAPABILITY" -eq 1 ]]; then
             printf 'host,window'
         else

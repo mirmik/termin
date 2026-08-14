@@ -67,6 +67,12 @@ def build_parser(
         help="Emit the exact CMake executable targets selected by the plan.",
     )
     ctest_plan_parser.add_argument(
+        "--build-aggregate",
+        action="store_true",
+        dest="build_aggregate_output",
+        help="Emit the CMake aggregate whose membership exactly matches the plan.",
+    )
+    ctest_plan_parser.add_argument(
         "--config", help="CTest multi-config configuration, for example Release."
     )
 

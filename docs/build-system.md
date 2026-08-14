@@ -880,11 +880,12 @@ task test:cpp
 
 По умолчанию runner использует тот же `build/<BuildType>`, что и
 `task build`. После включения тестов CMake planner разрешает
-выбранные CTest registrations в точные executable targets и проверяет их
-принадлежность capability-aware целям `termin_native_tests` или
-`termin_native_tests_with_window`. Эти цели исключают Python-binding tests из
-нативного прогона и собирают зарегистрированные тесты с их зависимостями одним
-вызовом backend build system.
+выбранные CTest registrations в точные executable targets и сверяет весь набор
+с CMake-generated манифестом capability-aware целей `termin_native_tests` или
+`termin_native_tests_with_window`. При несовпадении составов runner падает до
+сборки. Эти цели исключают Python-binding tests из нативного прогона и собирают
+зарегистрированные тесты с их зависимостями одним графом backend build system,
+не обходя общие зависимости заново для каждого тестового executable.
 Уже собранные библиотеки ядра и third-party переиспользуются инкрементально;
 отдельный полный `build/Release-tests` для обычного прогона не создаётся.
 `BUILD_DIR` по-прежнему позволяет явно выбрать изолированный граф для
