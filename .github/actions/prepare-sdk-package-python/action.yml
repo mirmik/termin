@@ -1,0 +1,18 @@
+name: Prepare SDK package Python
+description: Prepare the pinned ABI-compatible Python used to build packages against a downloaded SDK.
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare canonical Python package build environment
+      shell: bash
+      run: |
+        PYTHONPATH="$GITHUB_WORKSPACE/core/termin-build-tools" \
+          python -m termin_build.sdk --repo-root "$GITHUB_WORKSPACE" \
+          prepare-python-toolchain
+        package_python="$GITHUB_WORKSPACE/build/python-runtime/build-env/bin/python"
+        if [[ ! -x "$package_python" ]]; then
+          echo "ERROR: canonical Python package build environment is missing: $package_python" >&2
+          exit 1
+        fi
+        echo "PYTHON_BIN=$package_python" >> "$GITHUB_ENV"

@@ -93,6 +93,9 @@ def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
     action = (repo_root / ".github/actions/resolve-sdk-python/action.yml").read_text(
         encoding="utf-8"
     )
+    package_python_action = (
+        repo_root / ".github/actions/prepare-sdk-package-python/action.yml"
+    ).read_text(encoding="utf-8")
     workflow = (repo_root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert '"$GITHUB_WORKSPACE/sdk/bin/termin_python" -I' in action
@@ -103,9 +106,13 @@ def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
       - name: Resolve SDK Python layout
         uses: ./.github/actions/resolve-sdk-python"""
     assert workflow.count(permission_then_resolve) == 3
+    assert "prepare-python-toolchain" in package_python_action
+    assert "build/python-runtime/build-env/bin/python" in package_python_action
+    assert "PYTHON_BIN=$package_python" in package_python_action
     assert workflow.count(
-        "python -m pip install setuptools==83.0.0 wheel==0.47.0"
+        "uses: ./.github/actions/prepare-sdk-package-python"
     ) == 3
+    assert "python -m pip install setuptools==83.0.0 wheel==0.47.0" not in workflow
 
 
 def test_central_runners_propagate_window_capability_to_python_planner() -> None:
