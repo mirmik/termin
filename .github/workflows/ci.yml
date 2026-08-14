@@ -64,7 +64,7 @@ jobs:
       - name: Install Ruff
         run: pip install ruff
 
-      - name: Validate republic ownership
+      - name: Validate district ownership
         run: task ownership
 
       - name: Run Python lint

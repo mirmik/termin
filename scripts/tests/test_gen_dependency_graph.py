@@ -59,10 +59,10 @@ class CMakeDependencyParserTests(unittest.TestCase):
             "termin-physics": ("physics", {"termin-base", "termin-collision"}),
         }
 
-        for module, (republic, dependencies) in expected.items():
+        for module, (district, dependencies) in expected.items():
             with self.subTest(module=module):
                 actual = GRAPH.parse_cmake_deps(
-                    str(Path(GRAPH.ROOT) / republic / module / "CMakeLists.txt")
+                    str(Path(GRAPH.ROOT) / district / module / "CMakeLists.txt")
                 )
                 self.assertTrue(dependencies <= actual)
 

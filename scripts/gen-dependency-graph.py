@@ -162,16 +162,16 @@ PYTHON_IMPORT_TO_DIR = {
     "termin": "termin",
 }
 
-# Repository packages are owned by republics, while the root CMake graph owns
+# Repository packages are owned by districts, while the root CMake graph owns
 # orchestration.  Keep this discovery list explicit so generated architecture
 # documentation cannot silently regress to the retired flat layout.
-REPUBLICS = ("core", "graphics", "engine", "editor", "physics")
+DISTRICTS = ("core", "graphics", "engine", "editor", "physics")
 PACKAGE_DIRS = {}
-for republic in REPUBLICS:
-    republic_path = os.path.join(ROOT, republic)
-    if not os.path.isdir(republic_path):
+for district in DISTRICTS:
+    district_path = os.path.join(ROOT, district)
+    if not os.path.isdir(district_path):
         continue
-    for current_root, directory_names, _file_names in os.walk(republic_path):
+    for current_root, directory_names, _file_names in os.walk(district_path):
         directory_names[:] = [
             name for name in directory_names
             if name not in {"build", "install", "sdk", ".git", "__pycache__"}

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "republics": [
+  "districts": [
     {
       "id": "core",
       "root": "core",

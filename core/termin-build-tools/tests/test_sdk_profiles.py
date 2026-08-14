@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PROFILES = load_sdk_profiles(REPO_ROOT)
 
 
-def test_core_sdk_profile_is_projected_from_republic_packages() -> None:
+def test_core_sdk_profile_is_projected_from_district_packages() -> None:
     packages = select_python_packages(
         PROFILES.profile("core"),
         load_manifest(REPO_ROOT),

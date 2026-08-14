@@ -4,8 +4,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-REPUBLIC_NAMES = ("core", "graphics", "engine", "editor", "physics", "platform")
-PACKAGE_REPUBLIC = {
+DISTRICT_NAMES = ("core", "graphics", "engine", "editor", "physics", "platform")
+PACKAGE_DISTRICT = {
     "termin-animation": "graphics",
     "termin-app": "editor",
     "termin-base": "core",
@@ -30,15 +30,15 @@ def _read_text(path: Path) -> str:
 def _package_roots() -> list[Path]:
     return [
         path
-        for republic_name in REPUBLIC_NAMES
-        for path in (REPO_ROOT / republic_name).iterdir()
+        for district_name in DISTRICT_NAMES
+        for path in (REPO_ROOT / district_name).iterdir()
         if path.is_dir() and path.name.startswith("termin-")
     ]
 
 
 def _owned_path(package_relative_path: str) -> Path:
     package_name = package_relative_path.split("/", 1)[0]
-    return REPO_ROOT / PACKAGE_REPUBLIC[package_name] / package_relative_path
+    return REPO_ROOT / PACKAGE_DISTRICT[package_name] / package_relative_path
 
 
 def test_android_runtime_uses_rendering_manager_topology() -> None:

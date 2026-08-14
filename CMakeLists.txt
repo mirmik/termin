@@ -170,7 +170,7 @@ add_subdirectory(core)
 
 # Core configures its own bindings inside core/'s CMake directory scope. The
 # canonical profile is included once more here so its nanobind_add_module()
-# contract is also visible to bindings owned by later republics.
+# contract is also visible to bindings owned by later districts.
 if(TERMIN_BUILD_PYTHON)
     include(core/termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake)
 endif()

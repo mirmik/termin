@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate unique package ownership in the republic monorepo."""
+"""Validate unique package ownership in the district monorepo."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST = REPO_ROOT / "build-system" / "republics.json"
+MANIFEST = REPO_ROOT / "build-system" / "districts.json"
 
 
 def main() -> int:
@@ -18,20 +18,20 @@ def main() -> int:
     owners: dict[str, str] = {}
     roots: set[str] = set()
 
-    for republic in data["republics"]:
-        republic_id = republic["id"]
-        root = republic["root"]
+    for district in data["districts"]:
+        district_id = district["id"]
+        root = district["root"]
         if root in roots:
-            errors.append(f"duplicate republic root: {root}")
+            errors.append(f"duplicate district root: {root}")
         roots.add(root)
-        for package in republic["packages"]:
+        for package in district["packages"]:
             previous = owners.get(package)
             if previous is not None:
                 errors.append(
-                    f"package {package} is owned by both {previous} and {republic_id}"
+                    f"package {package} is owned by both {previous} and {district_id}"
                 )
                 continue
-            owners[package] = republic_id
+            owners[package] = district_id
             migrated = REPO_ROOT / root / package
             legacy = REPO_ROOT / package
             if not migrated.exists():
@@ -52,7 +52,7 @@ def main() -> int:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print(f"Republic ownership OK: {len(owners)} packages, {len(roots)} republics")
+    print(f"District ownership OK: {len(owners)} packages, {len(roots)} districts")
     return 0
 
 
