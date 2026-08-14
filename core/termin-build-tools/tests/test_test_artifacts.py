@@ -103,6 +103,9 @@ def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
       - name: Resolve SDK Python layout
         uses: ./.github/actions/resolve-sdk-python"""
     assert workflow.count(permission_then_resolve) == 3
+    assert workflow.count(
+        "python -m pip install setuptools==83.0.0 wheel==0.47.0"
+    ) == 3
 
 
 def test_central_runners_propagate_window_capability_to_python_planner() -> None:
