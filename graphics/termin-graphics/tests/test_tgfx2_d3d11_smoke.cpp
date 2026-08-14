@@ -6,6 +6,7 @@
 #include "tgfx2/i_command_list.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/pipeline_cache.hpp"
+#include "tgfx2/point_cloud_renderer.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 #include "tgfx2/vertex_layout.hpp"
@@ -1664,6 +1665,50 @@ int main() {
                              solid_bottom_right[3]);
                 return 1;
             }
+
+            tgfx::PointCloud cloud;
+            const tgfx::PointCloudPoint cloud_point{
+                {0.0f, 0.0f, 0.0f},
+                1.0f,
+                {0.20f, 0.80f, 0.35f, 1.0f},
+            };
+            if (!cloud.upload(ctx, std::span<const tgfx::PointCloudPoint>(&cloud_point, 1))) {
+                std::fprintf(stderr, "D3D11 smoke: point-cloud upload failed\n");
+                return 1;
+            }
+            tgfx::PointCloudRenderer point_renderer;
+            tgfx::PointCloudStyle point_style;
+            point_style.size_px = 4.0f;
+            point_style.depth_test = false;
+            point_style.depth_write = false;
+            tgfx::PointCloudDrawParams point_params;
+
+            ctx.begin_frame();
+            ctx.begin_pass(color, {}, &canvas_clear, 1.0f, false);
+            ctx.set_viewport(0, 0, 4, 4);
+            point_renderer.draw(ctx, cloud, point_style, point_params);
+            ctx.end_pass();
+            ctx.end_frame();
+
+            float point_center[4] = {};
+            if (!device->read_pixel_rgba8(color, 2, 2, point_center)) {
+                std::fprintf(stderr, "D3D11 smoke: point-cloud readback failed\n");
+                return 1;
+            }
+            if (!close_enough(point_center[0], cloud_point.color.r) ||
+                !close_enough(point_center[1], cloud_point.color.g) ||
+                !close_enough(point_center[2], cloud_point.color.b) ||
+                !close_enough(point_center[3], cloud_point.color.a)) {
+                std::fprintf(stderr,
+                             "D3D11 smoke: unexpected point-cloud pixel %.3f %.3f %.3f %.3f\n",
+                             point_center[0],
+                             point_center[1],
+                             point_center[2],
+                             point_center[3]);
+                return 1;
+            }
+            point_renderer.release(ctx);
+            cloud.release(ctx);
 
             const std::filesystem::path font_path = find_text_smoke_font();
             if (!font_path.empty()) {

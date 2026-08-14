@@ -24,11 +24,13 @@ namespace tgfx::d3d11_internal {
         D3D_NAME system_value = D3D_NAME_UNDEFINED;
     };
 
-    // Slang-generated DXBC may encode a semantic such as TEXCOORD1 as the
+    // Some DXBC producers may encode a semantic such as TEXCOORD1 as the
     // literal name "TEXCOORD1" with SemanticIndex == 0. D3DCompile normally
     // reflects the same declaration as name "TEXCOORD" and index 1. Normalize
     // both representations before constructing an input layout or comparing
-    // stage signatures.
+    // stage signatures. Renderer-owned layouts still use reflected input order:
+    // current Slang can instead lower TEXCOORD1 to name "TEXCOORD", index 10,
+    // which cannot be distinguished from an intentional TEXCOORD10 here.
     inline D3D11InputSemantic normalize_reflected_semantic(std::string_view name, UINT index) {
         std::string normalized(name);
         for (char& ch : normalized) {

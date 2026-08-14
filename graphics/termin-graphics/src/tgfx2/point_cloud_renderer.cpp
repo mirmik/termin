@@ -254,7 +254,15 @@ namespace tgfx {
         ctx.use_shader_resource_layout(tc_shader_get(shader_handle_));
         ctx.bind_uniform_data(kDrawResource, &draw_data, static_cast<uint32_t>(sizeof(draw_data)));
 
-        const VertexLayoutDesc layouts[2] = {corner_layout(), point_layout()};
+        VertexLayoutDesc layouts[2] = {corner_layout(), point_layout()};
+        // Renderer-owned Slang inputs may not preserve their logical HLSL
+        // semantics when lowered to a native backend.  D3D11 in particular
+        // can reflect `TEXCOORD1` as `TEXCOORD` with index 10.  Bind the
+        // attributes in reflected entry-point order where the backend can
+        // provide it; WebGPU requires the explicit WGSL locations above.
+        const bool use_shader_input_locations = ctx.device().backend_type() != BackendType::WebGPU;
+        layouts[0].use_shader_input_locations = use_shader_input_locations;
+        layouts[1].use_shader_input_locations = use_shader_input_locations;
         ctx.set_vertex_layouts(layouts, 2);
         ctx.set_topology(PrimitiveTopology::TriangleList);
         ctx.draw_arrays_instanced(corner_buffer_, cloud.instance_buffer_, 6, cloud.point_count_);

@@ -1099,11 +1099,18 @@ if(BUILD_TGFX2_TESTS)
         add_executable(tgfx2_d3d11_smoke tests/test_tgfx2_d3d11_smoke.cpp)
         target_compile_definitions(tgfx2_d3d11_smoke PRIVATE TGFX2_HAS_D3D11)
         target_link_libraries(tgfx2_d3d11_smoke PRIVATE termin_graphics2 d3dcompiler)
+        if(TARGET termin_shaderc)
+            add_dependencies(tgfx2_d3d11_smoke termin_shaderc)
+        endif()
         termin_set_rpath_test(tgfx2_d3d11_smoke)
         add_test(NAME tgfx2_d3d11_smoke COMMAND tgfx2_d3d11_smoke)
         set_tests_properties(tgfx2_d3d11_smoke PROPERTIES
             TIMEOUT 10
             SKIP_REGULAR_EXPRESSION "D3D11CreateDevice failed|No D3D11")
+        if(TARGET termin_shaderc)
+            set_property(TEST tgfx2_d3d11_smoke APPEND PROPERTY
+                ENVIRONMENT "TERMIN_SHADERC=$<TARGET_FILE:termin_shaderc>")
+        endif()
         termin_add_test_labels(tgfx2_d3d11_smoke "termin:capability:d3d11")
 
         if(BUILD_TGFX2_D3D11_WINDOW_TEST)
