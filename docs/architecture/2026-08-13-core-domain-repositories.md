@@ -3,7 +3,7 @@
 Date: 2026-08-13
 
 Status: superseded on 2026-08-14 by the
-[republic monorepo](2026-08-14-republic-monorepo.md). This document is retained
+[district monorepo](2026-08-14-district-monorepo.md). This document is retained
 as historical analysis of package boundaries; its separate-repository and
 installed-SDK source-consumption decisions are no longer active.
 
@@ -19,7 +19,7 @@ Earlier analysis:
 The analysis below remains useful as an inventory of semantic package
 boundaries. All statements about physical repositories, installed-Core source
 consumption, subtree imports and cross-repository release composition are
-superseded. In the accepted design, Core and Graphics are republics in one
+superseded. In the accepted design, Core and Graphics are districts in one
 source tree and the root build produces their independently distributable SDK
 profiles.
 

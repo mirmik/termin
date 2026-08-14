@@ -1077,7 +1077,7 @@ Python, editor и launcher targets, чтобы платформенные зав
 `build-system/emscripten-version.txt`. В чистом checkout toolchain
 устанавливается, артефакт собирается и Node smoke запускается одной командой.
 Native `termin_shaderc` и wasm32 runtime собираются из того же checkout: Core
-входит в их CMake-граф как исходная республика, а не как внешний SDK input:
+входит в их CMake-граф как исходный район, а не как внешний SDK input:
 
 ```bash
 task build:web -- --setup

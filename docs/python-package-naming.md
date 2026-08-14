@@ -32,7 +32,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 
 - `python -m termin_build.package_manifest --repo-root . --check` проверяет
   manifest, порядок пакетов и native extension declarations.
-- Package order, distribution metadata and republic ownership are verified in
+- Package order, distribution metadata and district ownership are verified in
   this repository. Product profiles select closures from the same canonical
   manifest; no external Core repository participates in validation.
 - documentation inventory checks that the table below contains every manifest

@@ -90,7 +90,7 @@ The script:
 
 The repository style guide requires class and struct data members to appear
 before member functions. The AST checker uses the same compilation database as
-clang-tidy. After the republic reorganization, CI publishes complete normal and
+clang-tidy. After the district reorganization, CI publishes complete normal and
 Python/nanobind inventories in advisory mode while the 189-class regression is
 tracked by Kanboard #1641. The gate must return to fail-on-violation mode when
 that migration reaches zero:

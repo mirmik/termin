@@ -9,9 +9,9 @@ tasks:
       - task --list
 
   ownership:
-    desc: Verify that every package has exactly one republic owner
+    desc: Verify that every package has exactly one district owner
     cmds:
-      - ./scripts/check-republic-ownership.py
+      - ./scripts/check-district-ownership.py
 
   build:
     desc: Build the complete editor SDK
