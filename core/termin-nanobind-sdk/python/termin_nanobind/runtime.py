@@ -146,6 +146,14 @@ def close_windows_dll_directories():
 
 def _find_library(name, lib_dirs):
     for lib_dir in lib_dirs:
+        # Prefer the ELF SONAME spelling used by DT_NEEDED. GitHub artifact
+        # transport does not preserve symlinks and can turn libfoo.so and
+        # libfoo.so.0 into distinct regular files. Preloading the unversioned
+        # copy would then give the process two independent instances of every
+        # library-global registry once an extension loads libfoo.so.0.
+        versioned_so = sorted(lib_dir.glob(f"lib{name}.so.*"))
+        if versioned_so:
+            return versioned_so[0]
         candidates = [
             lib_dir / f"lib{name}.so",
             lib_dir / f"lib{name}.dylib",
@@ -153,10 +161,9 @@ def _find_library(name, lib_dirs):
         found = next((p for p in candidates if p.exists()), None)
         if found is not None:
             return found
-        versioned = sorted(lib_dir.glob(f"lib{name}.so.*")) \
-            or sorted(lib_dir.glob(f"lib{name}.*.dylib"))
-        if versioned:
-            return versioned[0]
+        versioned_dylib = sorted(lib_dir.glob(f"lib{name}.*.dylib"))
+        if versioned_dylib:
+            return versioned_dylib[0]
     return None
 
 

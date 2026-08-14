@@ -117,6 +117,8 @@ def test_downloaded_sdk_layout_is_resolved_by_its_bundled_python() -> None:
     assert "editor/termin-app/install" not in workflow
     python_runner = (repo_root / "scripts/test/python.sh").read_text(encoding="utf-8")
     assert 'export TERMIN_PYTHON_OVERLAY="$OVERLAY_MANIFEST"' in python_runner
+    cpp_lint = (repo_root / "scripts/test/lint-cpp.sh").read_text(encoding="utf-8")
+    assert '-DPython_EXECUTABLE="$PYTHON_FOR_CMAKE"' in cpp_lint
     assert "python -m pip install setuptools==83.0.0 wheel==0.47.0" not in workflow
 
 

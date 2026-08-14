@@ -446,6 +446,8 @@ jobs:
         with:
           version: 3.52.0
       - uses: actions/checkout@v5
+        with:
+          submodules: recursive
 
       - name: Setup Python
         uses: actions/setup-python@v6
