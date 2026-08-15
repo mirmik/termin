@@ -363,6 +363,27 @@ namespace termin::gui_native {
             return true;
         }
 
+        bool validate_text_widget_property(const char* name, const tc_value* value) {
+            if (!name || !value || value->type != TC_VALUE_STRING || !value->data.s) {
+                return false;
+            }
+            const std::string_view property_name{name};
+            return (property_name == "text" || property_name == "placeholder") &&
+                   detail::valid_utf8(value->data.s);
+        }
+
+        template <typename T>
+        bool apply_text_widget_properties(tc_widget* widget, const tc_value* properties) {
+            auto* text_widget = static_cast<T*>(widget->body);
+            if (const tc_value* text = property(properties, "text")) {
+                text_widget->set_text(text->data.s);
+            }
+            if (const tc_value* placeholder = property(properties, "placeholder")) {
+                text_widget->set_placeholder(placeholder->data.s);
+            }
+            return true;
+        }
+
         bool validate_checkbox_property(const char* name, const tc_value* value) {
             return name && value && std::string_view(name) == "checked" && value->type == TC_VALUE_BOOL;
         }
@@ -529,7 +550,8 @@ namespace termin::gui_native {
             return true;
         }
 
-        template <typename T> bool register_text_widget(const char* type_name) {
+        template <typename T>
+        bool register_text_widget(const char* type_name, const tc_uiscript_type_descriptor* uiscript) {
             if (tc_widget_registry_has(type_name)) {
                 return true;
             }
@@ -542,7 +564,7 @@ namespace termin::gui_native {
                 nullptr,
                 &serialize_text_widget<T>,
                 &deserialize_text_widget<T>,
-                nullptr,
+                uiscript,
             };
             return tc_widget_registry_register(type_name, kBuiltinOwner, kWidgetParent, &descriptor);
         }
@@ -592,6 +614,7 @@ namespace termin::gui_native {
         };
         constexpr const char* kLabelProperties[] = {"text", "font_size", "color", "wrap", "overflow", "max_lines"};
         constexpr const char* kCheckboxProperties[] = {"checked"};
+        constexpr const char* kTextWidgetProperties[] = {"text", "placeholder"};
 
         const tc_uiscript_type_descriptor kOverlayUiScript{
             TC_UISCRIPT_TYPE_ABI_VERSION,
@@ -692,6 +715,28 @@ namespace termin::gui_native {
             0,
             0,
         };
+        const tc_uiscript_type_descriptor kTextInputUiScript{
+            TC_UISCRIPT_TYPE_ABI_VERSION,
+            kTextWidgetProperties,
+            std::size(kTextWidgetProperties),
+            &validate_text_widget_property,
+            &apply_text_widget_properties<TextInput>,
+            nullptr,
+            nullptr,
+            0,
+            0,
+        };
+        const tc_uiscript_type_descriptor kTextAreaUiScript{
+            TC_UISCRIPT_TYPE_ABI_VERSION,
+            kTextWidgetProperties,
+            std::size(kTextWidgetProperties),
+            &validate_text_widget_property,
+            &apply_text_widget_properties<TextArea>,
+            nullptr,
+            nullptr,
+            0,
+            0,
+        };
 
         bool register_label_widget() {
             constexpr const char* type_name = NativeWidgetRuntimeType<Label>::name;
@@ -735,8 +780,8 @@ namespace termin::gui_native {
 
     bool register_builtin_widget_types() {
         return tc_widget_registry_initialize() &&
-               register_text_widget<TextInput>(NativeWidgetRuntimeType<TextInput>::name) &&
-               register_text_widget<TextArea>(NativeWidgetRuntimeType<TextArea>::name) &&
+               register_text_widget<TextInput>(NativeWidgetRuntimeType<TextInput>::name, &kTextInputUiScript) &&
+               register_text_widget<TextArea>(NativeWidgetRuntimeType<TextArea>::name, &kTextAreaUiScript) &&
                register_declarative_widget<OverlayLayout>(NativeWidgetRuntimeType<OverlayLayout>::name,
                                                           &kOverlayUiScript) &&
                register_declarative_widget<Panel>(NativeWidgetRuntimeType<Panel>::name, &kPanelUiScript) &&
