@@ -2,6 +2,7 @@
 #include <termin/gui_native/checkbox.hpp>
 #include <termin/gui_native/grid_layout.hpp>
 #include <termin/gui_native/scroll_area.hpp>
+#include <termin/gui_native/text_input.hpp>
 #include <termin/gui_native/uiscript.hpp>
 #include <termin/gui_native/wrap_layout.hpp>
 
@@ -427,6 +428,31 @@ root:
         }
     }
 
+    void test_text_input_facet() {
+        UiScriptLoader loader;
+        LoadedUiScript loaded = loader.load_string("uiscript: 2\n"
+                                                   "root:\n"
+                                                   "  type: termin.gui.TextInput\n"
+                                                   "  name: model\n"
+                                                   "  text: qwen3.8-27b-q4-mtp\n"
+                                                   "  placeholder: model profile\n");
+        tc_widget* widget = tc_ui_document_resolve_widget(loaded.document().handle(), loaded.root().handle);
+        assert(widget);
+        const auto* input = static_cast<const TextInput*>(widget->body);
+        assert(input->text() == "qwen3.8-27b-q4-mtp");
+        assert(input->placeholder() == "model profile");
+
+        try {
+            loader.parser.parse("uiscript: 2\n"
+                                "root:\n"
+                                "  type: termin.gui.TextInput\n"
+                                "  text: 42\n");
+            assert(false);
+        } catch (const UiScriptError& error) {
+            assert(std::string(error.what()).find("root.text") != std::string::npos);
+        }
+    }
+
     void test_responsive_variants_preserve_tree_and_interaction_state() {
         UiScriptLoader loader;
         LoadedUiScript loaded = loader.load_string(R"(
@@ -568,6 +594,7 @@ int main() {
     test_grid_and_scroll_facets();
     test_wrapped_label_and_wrap_layout_facets();
     test_checkbox_facet();
+    test_text_input_facet();
     test_responsive_variants_preserve_tree_and_interaction_state();
     test_responsive_grid_placement_and_diagnostics();
     return 0;
