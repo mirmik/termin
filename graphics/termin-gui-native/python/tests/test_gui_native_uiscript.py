@@ -15,6 +15,8 @@ from termin.gui_native import (
     Size,
     TouchTargetPolicy,
     TextOverflow,
+    TextArea,
+    TextInput,
     TextWrapMode,
     WidgetLayoutSpec,
     UiDocumentAsset,
@@ -287,6 +289,35 @@ def test_uiscript_materialization_lookup_reload_and_teardown():
     replacement.close()
     assert document.live_widget_count == 0
     assert document.root_count == 0
+
+
+@pytest.mark.parametrize(
+    ("runtime_type", "python_type"),
+    [
+        ("termin.gui.TextInput", TextInput),
+        ("termin.gui.TextArea", TextArea),
+    ],
+)
+def test_uiscript_editable_text_lookup_returns_typed_wrapper(
+    runtime_type, python_type
+):
+    loaded = UiScriptLoader().load_string(
+        f"""
+uiscript: 2
+root:
+  type: {runtime_type}
+  name: editor
+  text: initial
+  placeholder: Enter value
+"""
+    )
+    try:
+        editor = loaded.named("editor")
+        assert isinstance(editor, python_type)
+        assert editor.text == "initial"
+        assert editor.placeholder == "Enter value"
+    finally:
+        loaded.close()
 
 
 def test_uiscript_icon_button_materializes_visual_states():
