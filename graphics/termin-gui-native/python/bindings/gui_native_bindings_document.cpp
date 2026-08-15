@@ -40,6 +40,10 @@ namespace {
             return nb::cast(PanelRef{ref});
         if (type == "termin.gui.Label")
             return nb::cast(LabelRef{ref});
+        if (type == "termin.gui.TextInput")
+            return nb::cast(TextInputRef{ref});
+        if (type == "termin.gui.TextArea")
+            return nb::cast(TextAreaRef{ref});
         return nb::cast(ref);
     }
 
