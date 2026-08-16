@@ -45,6 +45,22 @@ def initialize_project_build_runtime_state(log_prefix: str) -> None:
         raise
 
 
+def initialize_project_build_player_runtime_state(log_prefix: str) -> None:
+    """Initialize the Python-enabled registry contract used by desktop player bundles."""
+    try:
+        from termin.bootstrap import bootstrap_player
+
+        bootstrap_player()
+    except Exception:
+        from tcbase import log
+
+        log.error(
+            f"{log_prefix} Failed to initialize desktop player build runtime state",
+            exc_info=True,
+        )
+        raise
+
+
 def preload_project_resources(project_root: Path, log_prefix: str) -> None:
     """Load project resources into runtime registries for non-editor builds."""
     try:

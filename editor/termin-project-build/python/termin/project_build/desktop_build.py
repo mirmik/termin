@@ -11,6 +11,7 @@ from pathlib import Path
 from termin.project.settings import ProjectSettings
 from termin.project_build.build_context import BuildContext, create_build_context
 from termin.project_build.capabilities import load_sdk_capabilities
+from termin.project_build.common import initialize_project_build_player_runtime_state
 from termin.project_build.diagnostics import DiagnosticLike
 from termin.project_build.desktop_runtime_packager import (
     DesktopRuntimeBundleResult,
@@ -27,7 +28,19 @@ from termin.project_build.project_module_packager import (
     package_project_modules,
 )
 from termin.project_build.runtime_package_exporter import RuntimePackageExportResult
+from termin.project_build.runtime_package_resource_validator import (
+    SceneComponentFactoryPolicy,
+)
+from termin.project_build.runtime_package_validator import validate_runtime_package
 from termin.project_build.target_preflight import DesktopPreflightResult, preflight_desktop_build
+
+
+DESKTOP_PLAYER_PYTHON_COMPONENT_OWNERS = frozenset(
+    {
+        "termin-builtin-python",
+        "termin-scene-python",
+    }
+)
 
 
 @dataclass
@@ -65,6 +78,7 @@ def build_desktop_project(
     python_requirements: Iterable[str] | None = None,
     modules: Iterable[str] | None = None,
 ) -> DesktopBuildResult:
+    selected_modules = tuple(modules or ())
     sdk_capabilities = load_sdk_capabilities(sdk_root=sdk_root)
     resolved_target_os = target_os or sdk_capabilities.desktop.os
     resolved_target_arch = target_arch or sdk_capabilities.desktop.arch
@@ -86,6 +100,7 @@ def build_desktop_project(
             }
         },
     )
+    module_preparation = _DesktopModuleClosurePreparation(context, selected_modules)
     pipeline_result = run_project_build_pipeline(
         context=context,
         target_name="Desktop",
@@ -105,13 +120,15 @@ def build_desktop_project(
             preflight_result,
             python_package_policy,
             tuple(python_requirements or ()),
-            tuple(modules or ()),
+            module_preparation.require_result(),
         ),
         shader_compiler=shader_compiler,
         fxc=fxc,
         default_shader_language=default_shader_language,
         shader_targets=runtime_backends,
         target_platform=(resolved_target_os, resolved_target_arch),
+        validate_package=module_preparation.validate_package,
+        initialize_runtime_state=initialize_project_build_player_runtime_state,
     )
     target_payload = pipeline_result.target_package_result.payload
 
@@ -147,13 +164,8 @@ def _package_desktop_target(
     preflight_result: DesktopPreflightResult,
     python_package_policy: str,
     python_requirements: tuple[str, ...],
-    selected_modules: tuple[str, ...],
+    module_result: ProjectModuleBundleResult,
 ) -> TargetPackageStepResult[_DesktopTargetPackagePayload]:
-    module_result = package_project_modules(
-        project_root=context.project_root,
-        output_dir=context.package_dir / "modules",
-        selected_modules=selected_modules,
-    )
     resolved_python_requirements = list(dict.fromkeys((
         *python_requirements,
         *module_result.requirements,
@@ -166,7 +178,6 @@ def _package_desktop_target(
         requirement_search_paths=_project_requirement_search_paths(context.project_root),
         python_package_policy=python_package_policy,
     )
-
     app_manifest_path = context.dist_dir / "app.json"
     module_descriptors = [f"package/modules/{module.descriptor}" for module in module_result.modules]
     project_settings = _load_project_settings(context.project_root)
@@ -244,11 +255,102 @@ def _package_desktop_target(
             runtime_result=runtime_result,
             app_manifest_path=app_manifest_path,
         ),
-        diagnostics=[
-            *module_result.diagnostics,
-            *runtime_result.diagnostics,
-        ],
+        diagnostics=[*runtime_result.diagnostics],
     )
+
+
+class _DesktopModuleClosurePreparation:
+    def __init__(self, context: BuildContext, selected_modules: tuple[str, ...]) -> None:
+        self._context = context
+        self._selected_modules = selected_modules
+        self._result: ProjectModuleBundleResult | None = None
+
+    def validate_package(self, package_dir: Path) -> list[DiagnosticLike]:
+        module_result = package_project_modules(
+            project_root=self._context.project_root,
+            output_dir=self._context.package_dir / "modules",
+            selected_modules=self._selected_modules,
+        )
+        self._result = module_result
+        module_owners = frozenset(module.name for module in module_result.modules)
+        preparer = _DesktopComponentFactoryPreparer(
+            project_root=self._context.project_root,
+            selected_modules=self._selected_modules,
+        )
+        diagnostics: list[DiagnosticLike] = [*module_result.diagnostics]
+        try:
+            diagnostics.extend(
+                validate_runtime_package(
+                    package_dir,
+                    component_factory_policy=SceneComponentFactoryPolicy(
+                        allowed_kinds=frozenset({"cxx", "python"}),
+                        allowed_python_owners=(
+                            DESKTOP_PLAYER_PYTHON_COMPONENT_OWNERS | module_owners
+                        ),
+                    ),
+                    prepare_component_factories=preparer.prepare,
+                )
+            )
+        finally:
+            cleanup_diagnostic = preparer.close()
+            if cleanup_diagnostic is not None:
+                diagnostics.append(cleanup_diagnostic)
+        return diagnostics
+
+    def require_result(self) -> ProjectModuleBundleResult:
+        if self._result is None:
+            raise RuntimeError("Desktop module closure was not prepared before target packaging")
+        return self._result
+
+
+class _DesktopComponentFactoryPreparer:
+    def __init__(
+        self,
+        *,
+        project_root: Path,
+        selected_modules: tuple[str, ...],
+    ) -> None:
+        self._project_root = project_root
+        self._selected_modules = selected_modules
+        self._runtime = None
+
+    def prepare(self, _required_types: frozenset[str]):
+        if not self._selected_modules:
+            return []
+
+        try:
+            from termin.project_modules.runtime import ProjectModulesRuntime
+
+            self._runtime = ProjectModulesRuntime(use_project_venv=True)
+            if not self._runtime.discover_project(self._project_root):
+                return [self._error(self._runtime.last_error)]
+            for module_id in self._selected_modules:
+                if not self._runtime.load_module(module_id):
+                    return [self._error(self._runtime.last_error, module_id)]
+        except Exception as exc:
+            return [self._error(str(exc))]
+        return []
+
+    def close(self):
+        if self._runtime is None:
+            return None
+        try:
+            if self._runtime.close():
+                return None
+            return self._error(self._runtime.last_error or "module runtime shutdown failed")
+        except Exception as exc:
+            return self._error(f"module runtime shutdown raised: {exc}")
+
+    @staticmethod
+    def _error(message: str, module_id: str | None = None):
+        from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
+
+        context = f"modules[{module_id}]" if module_id is not None else "modules"
+        return RuntimePackageExportDiagnostic(
+            "error",
+            context,
+            f"Failed to prepare selected project component factories: {message}",
+        )
 
 
 def _relative_runtime_path(dist_dir: Path, path: Path | None) -> str:

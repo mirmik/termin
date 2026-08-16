@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import json
 import struct
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
+
+
+@dataclass(frozen=True)
+class SceneComponentFactoryPolicy:
+    """Factory capabilities exposed by the runtime host for packaged scenes."""
+
+    allowed_kinds: frozenset[str] = frozenset({"cxx"})
+    allowed_python_owners: frozenset[str] = frozenset()
+
 
 def _is_portable_scene_identity(identity: str) -> bool:
     if "\\" in identity or ":" in identity or identity.endswith("/"):
@@ -258,11 +268,7 @@ def _ui_recipe_dependencies(recipe: Any) -> list[str] | None:
     return result if visit(recipe["root"]) else None
 
 
-def _validate_native_scene_component_contract(
-    scene: dict[str, Any],
-    diagnostics: list[RuntimePackageExportDiagnostic],
-    context: str,
-) -> None:
+def _scene_component_types(scene: dict[str, Any]) -> set[str]:
     component_types: set[str] = set()
 
     def visit_entity(entity: Any) -> None:
@@ -285,6 +291,16 @@ def _validate_native_scene_component_contract(
     if isinstance(entities, list):
         for entity in entities:
             visit_entity(entity)
+    return component_types
+
+
+def _validate_scene_component_factories(
+    scene: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    context: str,
+    policy: SceneComponentFactoryPolicy,
+) -> None:
+    component_types = _scene_component_types(scene)
     if not component_types:
         return
 
@@ -299,7 +315,7 @@ def _validate_native_scene_component_contract(
             RuntimePackageExportDiagnostic(
                 "error",
                 context,
-                f"Native component factory registry is unavailable: {exc}",
+                f"Scene component factory registry is unavailable: {exc}",
             )
         )
         return
@@ -316,12 +332,23 @@ def _validate_native_scene_component_contract(
             )
             continue
         info = registry.get_info(type_name)
-        if info["kind"] != "cxx":
+        kind = info["kind"]
+        if kind not in policy.allowed_kinds:
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     "error",
                     component_context,
-                    f"Packaged scene requires a C++ component factory; '{type_name}' is {info['kind']}",
+                    f"Runtime host does not support {kind} component factory '{type_name}'",
+                )
+            )
+            continue
+        if kind == "python" and info["owner"] not in policy.allowed_python_owners:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    component_context,
+                    f"Python component factory '{type_name}' is owned by unpackaged module "
+                    f"'{info['owner']}'",
                 )
             )
 

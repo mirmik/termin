@@ -1073,26 +1073,36 @@ print(json.dumps({
                 return;
             }
             if (!fs::is_directory(manifest.project_modules_root)) {
-                tc_log_error("termin_player: project modules enabled but directory is missing: %s",
-                             manifest.project_modules_root.string().c_str());
-                return;
+                throw std::runtime_error(
+                    "bundled project modules are enabled but their directory is missing: " +
+                    manifest.project_modules_root.string());
             }
             if (!fs::is_regular_file(manifest.module_manifest_path)) {
-                tc_log_error("termin_player: project module manifest is missing: %s",
-                             manifest.module_manifest_path.string().c_str());
-                return;
+                throw std::runtime_error(
+                    "bundled project modules are enabled but their manifest is missing: " +
+                    manifest.module_manifest_path.string());
             }
 
             configure_modules_runtime(false);
-            modules_runtime.discover(manifest.project_modules_root);
-            if (!modules_runtime.last_error().empty()) {
-                tc_log_error("termin_player: module discovery failed: %s", modules_runtime.last_error().c_str());
+            if (!modules_runtime.discover(manifest.project_modules_root)) {
+                const std::string detail = modules_runtime.last_error().empty()
+                                               ? "module runtime did not provide an error"
+                                               : modules_runtime.last_error();
+                throw std::runtime_error(
+                    "failed to discover bundled project modules under '" +
+                    manifest.project_modules_root.string() + "': " + detail);
             }
 
-            modules_loaded = modules_runtime.load_all();
-            if (!modules_loaded && !modules_runtime.last_error().empty()) {
-                tc_log_error("termin_player: module load failed: %s", modules_runtime.last_error().c_str());
+            if (!modules_runtime.load_all()) {
+                const std::string detail = modules_runtime.last_error().empty()
+                                               ? "module runtime did not provide an error"
+                                               : modules_runtime.last_error();
+                throw std::runtime_error(
+                    "failed to load bundled project module closure from '" +
+                    manifest.project_modules_root.string() + "' (manifest '" +
+                    manifest.module_manifest_path.string() + "'): " + detail);
             }
+            modules_loaded = true;
         }
 
         void enable_module_live_scene_sync() {
