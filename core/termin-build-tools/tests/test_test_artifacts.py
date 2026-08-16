@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -200,6 +201,66 @@ def test_cpp_runners_build_exact_planner_selected_aggregate() -> None:
     assert '--target "$CTEST_BUILD_AGGREGATE"' in linux_runner
     assert "--build-aggregate" in windows_runner
     assert "-Target @($CtestBuildAggregate)" in windows_runner
+
+
+def test_cpp_runners_isolate_ctest_temporary_and_shader_cache_roots() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    linux_runner = (repo_root / "scripts/test/cpp.sh").read_text(encoding="utf-8")
+    windows_runner = (repo_root / "scripts/test/cpp.ps1").read_text(encoding="utf-8")
+
+    assert 'CTEST_RUNTIME_ROOT="$BUILD_DIR/ctest-runtime"' in linux_runner
+    assert 'export TMPDIR="$CTEST_TEMP_ROOT"' in linux_runner
+    assert 'export TERMIN_SDK_SHADER_CACHE_ROOT="$CTEST_SHADER_CACHE_ROOT"' in linux_runner
+    assert '$CtestRuntimeRoot = Join-Path $BuildDir "ctest-runtime"' in windows_runner
+    assert '$env:TEMP = $CtestTempRoot' in windows_runner
+    assert '$env:TERMIN_SDK_SHADER_CACHE_ROOT = $CtestShaderCacheRoot' in windows_runner
+
+
+def test_native_test_aggregates_follow_configured_backend_capabilities(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    source_dir = tmp_path / "source"
+    build_dir = tmp_path / "build"
+    source_dir.mkdir()
+    (source_dir / "test.cpp").write_text("int main() { return 0; }\n", encoding="utf-8")
+    metadata = (repo_root / "cmake/TerminTestMetadata.cmake").as_posix()
+    (source_dir / "CMakeLists.txt").write_text(
+        f"""cmake_minimum_required(VERSION 3.19)
+project(test_metadata LANGUAGES CXX)
+enable_testing()
+set(TGFX2_ENABLE_VULKAN OFF)
+include(\"{metadata}\")
+
+foreach(target IN ITEMS host_test vulkan_test window_test)
+    add_executable(${{target}} test.cpp)
+    add_test(NAME ${{target}} COMMAND ${{target}})
+endforeach()
+termin_add_test_labels(vulkan_test \"termin:capability:vulkan\")
+termin_add_test_labels(window_test \"termin:capability:window\")
+termin_label_tests_in_directory(\"test-module\")
+
+get_property(headless GLOBAL PROPERTY TERMIN_NATIVE_TEST_TARGETS)
+get_property(with_window GLOBAL PROPERTY TERMIN_NATIVE_TEST_TARGETS_WITH_WINDOW)
+list(SORT headless)
+list(SORT with_window)
+file(WRITE \"${{CMAKE_BINARY_DIR}}/aggregates.txt\"
+    \"headless=${{headless}}\\nwith_window=${{with_window}}\\n\")
+""",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        ["cmake", "-S", str(source_dir), "-B", str(build_dir)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert (build_dir / "aggregates.txt").read_text(encoding="utf-8") == (
+        "headless=host_test\n"
+        "with_window=host_test;window_test\n"
+    )
 
 
 def test_windows_cmake_helper_builds_multiple_targets_as_one_solution_graph() -> None:

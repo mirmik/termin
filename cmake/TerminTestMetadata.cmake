@@ -1,5 +1,21 @@
 include_guard(GLOBAL)
 
+function(_termin_test_backend_capability_is_configured capability output)
+    if(capability STREQUAL "vulkan")
+        set(_termin_available "${TGFX2_ENABLE_VULKAN}")
+    elseif(capability STREQUAL "opengl")
+        set(_termin_available "${TGFX2_ENABLE_OPENGL}")
+    elseif(capability STREQUAL "d3d11")
+        set(_termin_available "${TGFX2_ENABLE_D3D11}")
+    elseif(capability STREQUAL "glfw")
+        set(_termin_available "${TERMIN_TGFX2_GLFW_AVAILABLE}")
+    else()
+        message(FATAL_ERROR
+            "Unknown configured CTest backend capability: ${capability}")
+    endif()
+    set("${output}" "${_termin_available}" PARENT_SCOPE)
+endfunction()
+
 # Keep CTest metadata machine-readable.  The repository planner uses these
 # labels to join CTest's concrete registrations back to the module/test-suite
 # inventory; do not replace them with ad-hoc target-name parsing in scripts.
@@ -18,6 +34,7 @@ function(termin_label_tests_in_directory module)
         set(_termin_build_target "")
         set(_termin_requires_python_bindings FALSE)
         set(_termin_requires_window FALSE)
+        set(_termin_requires_unconfigured_backend FALSE)
         foreach(_termin_label IN LISTS _termin_labels)
             if(_termin_label MATCHES "^termin:build-target:(.+)$")
                 if(_termin_build_target)
@@ -31,13 +48,22 @@ function(termin_label_tests_in_directory module)
                 set(_termin_requires_python_bindings TRUE)
             elseif(_termin_label STREQUAL "termin:capability:window")
                 set(_termin_requires_window TRUE)
+            elseif(_termin_label MATCHES
+                   "^termin:capability:(vulkan|opengl|d3d11|glfw)$")
+                _termin_test_backend_capability_is_configured(
+                    "${CMAKE_MATCH_1}"
+                    _termin_backend_available)
+                if(NOT _termin_backend_available)
+                    set(_termin_requires_unconfigured_backend TRUE)
+                endif()
             endif()
         endforeach()
         if(NOT _termin_build_target)
             message(FATAL_ERROR
                 "CTest registration ${_termin_test} has no build target")
         endif()
-        if(NOT _termin_requires_python_bindings)
+        if(NOT _termin_requires_python_bindings
+           AND NOT _termin_requires_unconfigured_backend)
             set_property(
                 GLOBAL APPEND PROPERTY
                 TERMIN_NATIVE_TEST_TARGETS_WITH_WINDOW

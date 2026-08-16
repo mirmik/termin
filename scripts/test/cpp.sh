@@ -278,6 +278,17 @@ if ! cmake --build "$BUILD_DIR" \
 fi
 
 CTEST_JUNIT="$BUILD_DIR/ctest-results.xml"
+# Keep test-owned temporary files and shader artifacts inside the build tree.
+# This makes CTest independent of user-profile ACLs and prevents automatic
+# tests from reading or writing the developer's persistent shader cache.
+CTEST_RUNTIME_ROOT="$BUILD_DIR/ctest-runtime"
+CTEST_TEMP_ROOT="$CTEST_RUNTIME_ROOT/temp"
+CTEST_SHADER_CACHE_ROOT="$CTEST_RUNTIME_ROOT/shader-cache"
+mkdir -p "$CTEST_TEMP_ROOT" "$CTEST_SHADER_CACHE_ROOT"
+export TMPDIR="$CTEST_TEMP_ROOT"
+export TEMP="$CTEST_TEMP_ROOT"
+export TMP="$CTEST_TEMP_ROOT"
+export TERMIN_SDK_SHADER_CACHE_ROOT="$CTEST_SHADER_CACHE_ROOT"
 # CTest does not reliably replace an existing JUnit document. A stale failure
 # must never be reported as the result of a later successful run.
 rm -f -- "$CTEST_JUNIT"

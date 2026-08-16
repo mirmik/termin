@@ -540,6 +540,21 @@ def test_ctest_build_targets_are_resolved_from_cmake_file_api(
 
     aggregate_manifest.write_text(
         "schema=1\n"
+        "termin_native_tests\tshared_test_target\n"
+        "termin_native_tests_with_window\tshared_test_target\n",
+        encoding="utf-8",
+    )
+    execution_plan["capabilities"] = ["host"]
+    assert repository_control.resolve_ctest_build_aggregate(
+        tmp_path, ctest_payload, execution_plan, "Release"
+    ) == "termin_native_tests"
+    execution_plan["capabilities"] = ["host", "window"]
+    assert repository_control.resolve_ctest_build_aggregate(
+        tmp_path, ctest_payload, execution_plan, "Release"
+    ) == "termin_native_tests_with_window"
+
+    aggregate_manifest.write_text(
+        "schema=1\n"
         "termin_selected_tests\tshared_test_target\n"
         "termin_selected_tests\tunselected_test_target\n",
         encoding="utf-8",
