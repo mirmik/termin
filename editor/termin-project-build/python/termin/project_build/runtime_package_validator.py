@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
 from termin.project_build.runtime_package_resource_validator import (
+    SceneComponentFactoryPolicy,
     _is_portable_scene_identity,
     _read_json_file,
     _resource_path,
-    _validate_native_scene_component_contract,
+    _scene_component_types,
+    _validate_scene_component_factories,
     _validate_relative_existing_path,
     _validate_resources,
     _validate_shader_resource,
@@ -22,7 +25,18 @@ SUPPORTED_RUNTIME_BACKENDS = frozenset({"vulkan", "opengl", "opengl330", "webgl2
 RUNTIME_PACKAGE_SCHEMA_VERSION = 2
 
 
-def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExportDiagnostic]:
+ComponentFactoryPreparer = Callable[
+    [frozenset[str]],
+    list[RuntimePackageExportDiagnostic],
+]
+
+
+def validate_runtime_package(
+    package_dir: str | Path,
+    *,
+    component_factory_policy: SceneComponentFactoryPolicy | None = None,
+    prepare_component_factories: ComponentFactoryPreparer | None = None,
+) -> list[RuntimePackageExportDiagnostic]:
     package_root = Path(package_dir).resolve()
     manifest_path = package_root / "manifest.json"
     diagnostics: list[RuntimePackageExportDiagnostic] = []
@@ -34,6 +48,14 @@ def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExpo
     _validate_version(manifest, diagnostics)
     scenes = _validate_scenes(package_root, manifest, diagnostics)
     resource_index = _validate_resources(package_root, manifest, diagnostics)
+    component_types = frozenset(
+        type_name
+        for _identity, scene in scenes
+        for type_name in _scene_component_types(scene)
+    )
+    if prepare_component_factories is not None:
+        diagnostics.extend(prepare_component_factories(component_types))
+    factory_policy = component_factory_policy or SceneComponentFactoryPolicy()
     for identity, scene in scenes:
         _validate_scene_resource_references(
             scene,
@@ -41,10 +63,11 @@ def validate_runtime_package(package_dir: str | Path) -> list[RuntimePackageExpo
             diagnostics,
             f"scenes[{identity}]",
         )
-        _validate_native_scene_component_contract(
+        _validate_scene_component_factories(
             scene,
             diagnostics,
             f"scenes[{identity}]",
+            factory_policy,
         )
     _validate_resource_graph(resource_index, diagnostics)
     _validate_target_requirements(manifest, resource_index, diagnostics)

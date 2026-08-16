@@ -420,6 +420,92 @@ def test_build_desktop_project_writes_bundle_contract(
 
 
 @full_runtime_package_exporter
+def test_build_desktop_project_accepts_selected_python_component_factory(tmp_path: Path) -> None:
+    project = _write_python_component_project(tmp_path)
+
+    result = build_desktop_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "linux-dev",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
+        target_os="linux",
+        target_arch="x86_64",
+        modules=("gameplay",),
+    )
+
+    assert not [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"]
+    assert [module.name for module in result.module_result.modules] == ["gameplay"]
+    assert (
+        result.dist_dir / "package" / "modules" / "python" / "gameplay" / "__init__.py"
+    ).is_file()
+
+
+@full_runtime_package_exporter
+def test_build_desktop_project_rejects_unselected_python_component_factory(
+    tmp_path: Path,
+) -> None:
+    project = _write_python_component_project(tmp_path)
+
+    with pytest.raises(
+        ProjectBuildPipelineError,
+        match="Runtime component factory is not registered for 'PackagedPythonController'",
+    ):
+        build_desktop_project(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=project / "dist" / "linux-dev",
+            shader_compiler=_write_fake_shader_compiler(tmp_path),
+            sdk_root=_write_fake_desktop_sdk(tmp_path),
+            target_os="linux",
+            target_arch="x86_64",
+            modules=(),
+        )
+
+
+def _write_python_component_project(tmp_path: Path) -> Path:
+    project = tmp_path / "PythonComponentGame"
+    project.mkdir()
+    _write_json(
+        project / "PythonComponentGame.terminproj",
+        {"version": 1, "name": "PythonComponentGame"},
+    )
+    _write_json(
+        project / "Main.scene",
+        {
+            "uuid": "python-component-scene",
+            "entities": [
+                {
+                    "uuid": "controller",
+                    "components": [
+                        {"type": "PackagedPythonController", "data": {}},
+                    ],
+                    "children": [],
+                }
+            ],
+        },
+    )
+    _write_json(
+        project / "gameplay.pymodule",
+        {
+            "name": "gameplay",
+            "type": "python",
+            "root": ".",
+            "packages": ["gameplay"],
+        },
+    )
+    gameplay = project / "gameplay"
+    gameplay.mkdir()
+    (gameplay / "__init__.py").write_text(
+        "from termin.scene import PythonComponent\n"
+        "class PackagedPythonController(PythonComponent):\n"
+        "    pass\n",
+        encoding="utf-8",
+    )
+    return project
+
+
+@full_runtime_package_exporter
 def test_build_desktop_project_rejects_target_package_error_diagnostics(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

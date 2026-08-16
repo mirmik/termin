@@ -5,6 +5,9 @@ from pathlib import Path
 import pytest
 
 from termin.project_build import runtime_package_resource_validator
+from termin.project_build.runtime_package_resource_validator import (
+    SceneComponentFactoryPolicy,
+)
 from termin.project_build.runtime_package_validator import validate_runtime_package
 
 
@@ -416,6 +419,73 @@ def test_validate_runtime_package_rejects_missing_component_factory(
         and "MissingPackagedComponent" in diagnostic.message
         for diagnostic in diagnostics
     )
+
+
+def test_validate_runtime_package_applies_python_factory_owner_policy(
+    tmp_path: Path,
+) -> None:
+    from termin.bootstrap import bootstrap_player
+    from termin.scene import ComponentRegistry, PythonComponent, publish_python_component
+    from termin.scene.python_component import unregister_python_component_owner
+
+    bootstrap_player()
+    owner = "packaged-gameplay"
+
+    class PackagedPythonProbe(PythonComponent):
+        pass
+
+    registry = ComponentRegistry.instance()
+    publish_python_component(PackagedPythonProbe, owner=owner)
+    package_dir = _write_valid_package(tmp_path)
+    _write_json(
+        package_dir / SCENE_PATH,
+        {
+            "uuid": "scene",
+            "entities": [
+                {
+                    "uuid": "entity",
+                    "components": [
+                        {"type": "PackagedPythonProbe", "data": {}},
+                    ],
+                    "children": [],
+                }
+            ],
+        },
+    )
+
+    try:
+        native_only = validate_runtime_package(package_dir)
+        assert any(
+            diagnostic.level == "error"
+            and "does not support python component factory" in diagnostic.message
+            for diagnostic in native_only
+        )
+
+        wrong_owner = validate_runtime_package(
+            package_dir,
+            component_factory_policy=SceneComponentFactoryPolicy(
+                allowed_kinds=frozenset({"cxx", "python"}),
+                allowed_python_owners=frozenset({"another-module"}),
+            ),
+        )
+        assert any(
+            diagnostic.level == "error"
+            and "owned by unpackaged module" in diagnostic.message
+            and owner in diagnostic.message
+            for diagnostic in wrong_owner
+        )
+
+        allowed = validate_runtime_package(
+            package_dir,
+            component_factory_policy=SceneComponentFactoryPolicy(
+                allowed_kinds=frozenset({"cxx", "python"}),
+                allowed_python_owners=frozenset({owner}),
+            ),
+        )
+        assert allowed == []
+    finally:
+        registry.unregister_python("PackagedPythonProbe")
+        unregister_python_component_owner(owner)
 
 
 def test_validate_runtime_package_accepts_builtin_shader_contract(tmp_path: Path) -> None:
