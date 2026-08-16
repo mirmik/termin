@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -36,6 +35,9 @@ namespace termin {
 
         struct EndpointOwner {
             EndpointKind kind = EndpointKind::Ignored;
+            // Scene-local entity identity keeps contact row ordering stable
+            // across allocator layouts while remaining persistent per entity.
+            std::uint64_t stable_id = 0;
             physics_qopt::RigidBody3DContribution* body = nullptr;
             physics_qopt::Articulation3DDynamicsContribution* articulation = nullptr;
             std::size_t unit_index = 0;
@@ -65,22 +67,22 @@ namespace termin {
         }
 
         void collect_live_groups() {
-            using LiveEndpoint = std::pair<colliders::Collider*, const EndpointOwner*>;
-            std::vector<LiveEndpoint> live_endpoints;
+            std::vector<const EndpointOwner*> live_endpoints;
             live_endpoints.reserve(endpoint_owners.size());
             for (const auto& [collider, endpoint] : endpoint_owners) {
-                live_endpoints.emplace_back(collider, &endpoint);
+                (void)collider;
+                live_endpoints.push_back(&endpoint);
             }
-            std::sort(live_endpoints.begin(), live_endpoints.end(), [](const LiveEndpoint& a, const LiveEndpoint& b) {
-                return std::less<colliders::Collider*>{}(a.first, b.first);
+            std::sort(live_endpoints.begin(), live_endpoints.end(), [](const EndpointOwner* a, const EndpointOwner* b) {
+                return a->stable_id < b->stable_id;
             });
 
             for (std::size_t first = 0; first < live_endpoints.size(); ++first) {
                 for (std::size_t second = first + 1; second < live_endpoints.size(); ++second) {
-                    if (!accepts_pair(*live_endpoints[first].second, *live_endpoints[second].second)) {
+                    if (!accepts_pair(*live_endpoints[first], *live_endpoints[second])) {
                         continue;
                     }
-                    live_groups.push_back(group_key(live_endpoints[first].first, live_endpoints[second].first));
+                    live_groups.push_back(group_key(*live_endpoints[first], *live_endpoints[second]));
                 }
             }
         }
@@ -90,11 +92,11 @@ namespace termin {
                 return;
             }
 
-            const std::uint64_t patch_group_key = nonzero_key(patch.pair_key());
+            const std::uint64_t patch_group_key = group_key(a, b);
             for (std::size_t point_index = 0; point_index < patch.points.size(); ++point_index) {
                 const collision::ContactCandidate& point = patch.points[point_index];
                 contacts.push_back({
-                    .key = contact_key(patch, point.features, point_index, patch_group_key),
+                    .key = contact_key(a, b, point.features, point_index, patch_group_key),
                     .group_key = patch_group_key,
                     .endpoint_a = make_endpoint(a, point.point_on_a_world),
                     .endpoint_b = make_endpoint(b, point.point_on_b_world),
@@ -188,18 +190,18 @@ namespace termin {
             return physics_qopt::ContactEndpoint3D{};
         }
 
-        [[nodiscard]] static std::uint64_t group_key(colliders::Collider* collider_a, colliders::Collider* collider_b) {
-            collision::ContactPatch pair;
-            pair.collider_a = collider_a;
-            pair.collider_b = collider_b;
-            return nonzero_key(pair.pair_key());
+        [[nodiscard]] static std::uint64_t group_key(const EndpointOwner& a, const EndpointOwner& b) {
+            const std::uint64_t first = std::min(a.stable_id, b.stable_id);
+            const std::uint64_t second = std::max(a.stable_id, b.stable_id);
+            return combine_key(nonzero_key(first), second);
         }
 
-        [[nodiscard]] std::uint64_t contact_key(const collision::ContactPatch& patch,
+        [[nodiscard]] std::uint64_t contact_key(const EndpointOwner& a,
+                                                const EndpointOwner& b,
                                                 collision::ContactFeaturePair features,
                                                 std::size_t point_index,
                                                 std::uint64_t patch_group_key) {
-            if (std::less<colliders::Collider*>{}(patch.collider_b, patch.collider_a)) {
+            if (b.stable_id < a.stable_id) {
                 std::swap(features.feature_a, features.feature_b);
             }
 
@@ -307,6 +309,13 @@ namespace termin {
 
             colliders::Collider* collider = collider_component->attached_collider();
             ContactRefreshState::EndpointOwner endpoint;
+            const std::uint64_t stable_id = candidate.runtime_id();
+            if (stable_id == 0) {
+                tc::Log::error("[FEMPhysicsWorldComponent] collider on '%s' has no stable entity identity",
+                               candidate.name());
+                return false;
+            }
+            endpoint.stable_id = stable_id;
             const std::uint64_t layer = candidate.layer();
             const bool selected_layer = layer < 64 && (collision_layer_mask & (std::uint64_t{1} << layer)) != 0;
             if (!candidate.enabled() || !collider_component->enabled() || !selected_layer) {
@@ -400,6 +409,7 @@ namespace termin {
             } else {
                 endpoint.kind = ContactRefreshState::EndpointKind::Static;
             }
+            endpoint.stable_id = stable_id;
             state.endpoint_owners.emplace(collider, endpoint);
         }
         return true;

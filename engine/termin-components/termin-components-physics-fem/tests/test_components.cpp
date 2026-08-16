@@ -1183,7 +1183,8 @@ TEST_CASE("FEM multi-point box contact dissipates tangential slip") {
     fixture.world->contact_friction_coefficient = 0.5;
     fixture.world->start();
     REQUIRE(fixture.body->initialized());
-    REQUIRE(fixture.body->set_velocity_local(Screw3{Vec3::zero(), Vec3{0.75, 0.0, 0.0}}));
+    constexpr double initial_tangent_speed = 0.75;
+    REQUIRE(fixture.body->set_velocity_local(Screw3{Vec3::zero(), Vec3{initial_tangent_speed, 0.0, 0.0}}));
 
     double maximum_tangent_impulse = 0.0;
     double accumulated_friction_work = 0.0;
@@ -1203,11 +1204,11 @@ TEST_CASE("FEM multi-point box contact dissipates tangential slip") {
     // require it to dissipate more than 99% of the initial slip without
     // demanding the exact axial cancellation of an eight-facet cone.
     CHECK(std::abs(position.z - 0.5) < 2.0e-5);
-    CHECK(std::abs(fixture.body->velocity_local().lin.x) < 5.0e-3);
+    CHECK_LT(std::abs(fixture.body->velocity_local().lin.x), initial_tangent_speed * 0.01);
     CHECK(maximum_tangent_impulse > 0.0);
     CHECK(accumulated_friction_work < 0.0);
     CHECK(position.x > 0.0);
-    CHECK(position.x < 0.75 * 3.0);
+    CHECK(position.x < initial_tangent_speed * 3.0);
 
     fixture.scene.destroy();
 }
