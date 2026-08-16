@@ -1,4 +1,5 @@
 #include <tgfx/resources/tc_shader_registry.h>
+#include <tgfx2/canvas2d_renderer.hpp>
 #include <tgfx2/device_factory.hpp>
 #include <tgfx2/font_atlas.hpp>
 #include <tgfx2/i_render_device.hpp>
@@ -106,6 +107,34 @@ namespace {
         pixels.resize(static_cast<size_t>(kWidth) * kHeight * 4u);
         const bool read = device.read_texture_rgba_float(target, pixels.data());
         renderer.release_gpu();
+        return read;
+    }
+
+    bool render_canvas_per_call_font(tgfx::IRenderDevice& device,
+                                     tgfx::RenderContext2& context,
+                                     tgfx::TextureHandle target,
+                                     tgfx::FontAtlas& font,
+                                     std::vector<float>& pixels) {
+        const termin::LinearColor black{0.0f, 0.0f, 0.0f, 1.0f};
+        tgfx::Canvas2DRenderer canvas;
+
+        context.begin_frame();
+        context.begin_pass(target, {}, &black, 1.0f, false);
+        canvas.begin(context, static_cast<int>(kWidth), static_cast<int>(kHeight));
+        canvas.draw_text("Per-call font",
+                         4.0f,
+                         4.0f,
+                         14.0f,
+                         termin::SrgbColor::white(),
+                         &font);
+        canvas.end();
+        context.end_pass();
+        context.end_frame();
+        device.wait_idle();
+
+        pixels.resize(static_cast<size_t>(kWidth) * kHeight * 4u);
+        const bool read = device.read_texture_rgba_float(target, pixels.data());
+        canvas.release_gpu();
         return read;
     }
 
@@ -223,17 +252,26 @@ namespace {
             heading_override_read && heading_override_sample.energy < heading_linear_sample.energy;
         const bool sdf_unchanged = sdf_read && sdf_max_delta <= 1.0e-6f;
 
+        std::vector<float> canvas_per_call_pixels;
+        const bool canvas_per_call_read =
+            render_canvas_per_call_font(*device, context, target, font, canvas_per_call_pixels);
+        const TextSample canvas_per_call = measure(canvas_per_call_pixels);
+        const bool canvas_per_call_contract =
+            canvas_per_call_read && canvas_per_call.solid_pixels + canvas_per_call.partial_pixels >= 8;
+
         font.release_gpu();
         device->destroy(target);
         std::error_code error;
         std::filesystem::remove_all(artifact_root, error);
-        if (!bitmap_contract || !heading_neutral || !heading_override_literal || !sdf_unchanged) {
+        if (!bitmap_contract || !heading_neutral || !heading_override_literal || !sdf_unchanged ||
+            !canvas_per_call_contract) {
             std::fprintf(stderr,
-                         "Text coverage contract failed: bitmap=%d heading=%d override=%d sdf=%d\n",
+                         "Text coverage contract failed: bitmap=%d heading=%d override=%d sdf=%d canvas-per-call=%d\n",
                          bitmap_contract,
                          heading_neutral,
                          heading_override_literal,
-                         sdf_unchanged);
+                         sdf_unchanged,
+                         canvas_per_call_contract);
             return 1;
         }
         return 0;

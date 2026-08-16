@@ -1005,7 +1005,8 @@ namespace tgfx {
                          .size = size_px,
                          .anchor = anchor,
                          .coverage_gamma = coverage_gamma,
-                     });
+                     },
+                     active_font);
     }
 
     FontAtlas::Size2f Canvas2DRenderer::measure_text(std::string_view text, float size_px, FontAtlas* font) const {

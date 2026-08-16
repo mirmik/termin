@@ -186,8 +186,9 @@ namespace tgfx {
         build_ortho_pixel_to_ndc(static_cast<float>(viewport_w), static_cast<float>(viewport_h), proj_);
     }
 
-    void Text2DRenderer::draw(std::string_view text_utf8, const DrawOptions& options) {
-        if (text_utf8.empty() || font_ == nullptr || ctx_ == nullptr)
+    void Text2DRenderer::draw(std::string_view text_utf8, const DrawOptions& options, FontAtlas* font) {
+        FontAtlas* active_font = font ? font : font_;
+        if (text_utf8.empty() || active_font == nullptr || ctx_ == nullptr)
             return;
         if (options.coverage_gamma.has_value() &&
             (!std::isfinite(*options.coverage_gamma) || *options.coverage_gamma <= 0.0f)) {
@@ -203,13 +204,13 @@ namespace tgfx {
         // once at reference size. The atlas handles branching internally.
         if (profile)
             tc_profiler_begin_section("text.ensure_glyphs");
-        font_->ensure_glyphs(text_utf8, options.size, ctx_);
+        active_font->ensure_glyphs(text_utf8, options.size, ctx_);
         if (profile)
             tc_profiler_end_section();
 
         if (profile)
             tc_profiler_begin_section("text.measure");
-        auto total = font_->measure_text(text_utf8, options.size);
+        auto total = active_font->measure_text(text_utf8, options.size);
         const float total_w = total.width;
         if (profile)
             tc_profiler_end_section();
@@ -244,9 +245,9 @@ namespace tgfx {
         // our own begin() and this draw.
         RenderContext2& ctx = *ctx_;
 
-        const bool use_sdf = font_->is_sdf_size(options.size);
-        const float sdf_scale = use_sdf ? options.size / static_cast<float>(font_->sdf_reference_px()) : 1.0f;
-        const float sdf_spread_px = use_sdf ? static_cast<float>(font_->sdf_spread()) * sdf_scale : 0.0f;
+        const bool use_sdf = active_font->is_sdf_size(options.size);
+        const float sdf_scale = use_sdf ? options.size / static_cast<float>(active_font->sdf_reference_px()) : 1.0f;
+        const float sdf_spread_px = use_sdf ? static_cast<float>(active_font->sdf_spread()) * sdf_scale : 0.0f;
 
         const ShaderHandle selected_vs = use_sdf ? vs_sdf_ : vs_;
         const ShaderHandle selected_fs = use_sdf ? fs_sdf_ : fs_;
@@ -288,7 +289,7 @@ namespace tgfx {
             // smoothing: ±1 reference texel edge width → 1/(2*spread) in
             // texture space where edge=0.5 and dist=[0,1] maps to
             // [-spread, +spread] reference texels.
-            push.smoothing = 1.0f / (2.0f * static_cast<float>(font_->sdf_spread()));
+            push.smoothing = 1.0f / (2.0f * static_cast<float>(active_font->sdf_spread()));
             ctx.bind_uniform_data("text2d_sdf_draw", &push, static_cast<uint32_t>(sizeof(push)));
         } else {
             Text2DPushData push{};
@@ -310,7 +311,7 @@ namespace tgfx {
 
         if (profile)
             tc_profiler_begin_section("text.ensure_texture");
-        TextureHandle atlas = use_sdf ? font_->sdf_atlas_texture(&ctx) : font_->ensure_texture(&ctx);
+        TextureHandle atlas = use_sdf ? active_font->sdf_atlas_texture(&ctx) : active_font->ensure_texture(&ctx);
         if (profile)
             tc_profiler_end_section();
 
@@ -330,7 +331,7 @@ namespace tgfx {
         size_t i = 0;
         while (i < text_utf8.size()) {
             uint32_t cp = internal::utf8_decode(text_utf8, i);
-            auto gi = font_->get_glyph(cp, options.size);
+            auto gi = active_font->get_glyph(cp, options.size);
             if (!gi)
                 continue;
 
