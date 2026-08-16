@@ -266,6 +266,17 @@ def resolve_ctest_build_aggregate(
     if len(matches) == 1:
         return matches[0]
     if len(matches) > 1:
+        capabilities = execution_plan.get("capabilities")
+        if isinstance(capabilities, list) and all(
+            isinstance(capability, str) for capability in capabilities
+        ):
+            preferred = (
+                "termin_native_tests_with_window"
+                if "window" in capabilities
+                else "termin_native_tests"
+            )
+            if preferred in matches:
+                return preferred
         raise ManifestError(
             "multiple CTest build aggregates match the selected plan: "
             + ", ".join(matches)
