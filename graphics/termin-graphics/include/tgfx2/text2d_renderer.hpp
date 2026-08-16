@@ -106,7 +106,9 @@ namespace tgfx {
         // scaled from the atlas rasterise size). Anchor selects whether
         // (x, y) is the left, centre or right of the text box (top-aligned
         // on Y for Left/Right, center for Center).
-        void draw(std::string_view text_utf8, const DrawOptions& options);
+        // `font` overrides the retained font for this draw only. This keeps
+        // callers that mix atlases explicit without changing the next draw.
+        void draw(std::string_view text_utf8, const DrawOptions& options, FontAtlas* font = nullptr);
 
         // Draw caller-prepared glyph triangles. This is used by DrawList2D after
         // affine transformation and CPU geometric clipping. The caller must have
