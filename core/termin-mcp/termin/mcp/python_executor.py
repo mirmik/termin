@@ -53,8 +53,16 @@ class PythonScriptExecutor:
         self._pending: deque[_ExecutionRequest] = deque()
         self._pending_lock = threading.Lock()
         self._closed = False
+        self._context_released = False
 
     def execute_repl_line(self, text: str) -> PythonExecutionResult:
+        with self._pending_lock:
+            if self._closed:
+                return PythonExecutionResult(
+                    ok=False,
+                    output="",
+                    error="Python executor is closed",
+                )
         if not text.strip() and not self._console.buffer:
             return PythonExecutionResult(ok=True, output="")
 
@@ -78,6 +86,13 @@ class PythonScriptExecutor:
         )
 
     def execute_script(self, script: str) -> PythonExecutionResult:
+        with self._pending_lock:
+            if self._closed:
+                return PythonExecutionResult(
+                    ok=False,
+                    output="",
+                    error="Python executor is closed",
+                )
         if not script.strip():
             return PythonExecutionResult(ok=True, output="")
 
@@ -172,26 +187,44 @@ class PythonScriptExecutor:
         return processed
 
     def close(self) -> None:
-        """Reject new work and cancel requests not yet claimed by the owner thread."""
+        """Reject new work, cancel queued requests, and release the host namespace."""
+        release_context = False
+        warn_deferred_release = False
         with self._pending_lock:
-            if self._closed:
-                return
-            self._closed = True
-            while self._pending:
-                request = self._pending.popleft()
-                if request.state != "queued":
-                    log.error(
-                        f"[{self._log_prefix}] close encountered invalid pending "
-                        f"request state {request.state}"
+            if not self._closed:
+                self._closed = True
+                while self._pending:
+                    request = self._pending.popleft()
+                    if request.state != "queued":
+                        log.error(
+                            f"[{self._log_prefix}] close encountered invalid pending "
+                            f"request state {request.state}"
+                        )
+                        continue
+                    request.state = "cancelled"
+                    request.result = PythonExecutionResult(
+                        ok=False,
+                        output="",
+                        error="Python executor closed before execution",
                     )
-                    continue
-                request.state = "cancelled"
-                request.result = PythonExecutionResult(
-                    ok=False,
-                    output="",
-                    error="Python executor closed before execution",
-                )
-                request.done.set()
+                    request.done.set()
+
+            if not self._context_released:
+                if threading.get_ident() == self._main_thread_id:
+                    self._context_released = True
+                    release_context = True
+                else:
+                    warn_deferred_release = True
+
+        if warn_deferred_release:
+            log.warning(
+                f"[{self._log_prefix}] executor closed away from its owner thread; "
+                "persistent context release is deferred until owner-thread close or object destruction"
+            )
+        if release_context:
+            self._console.resetbuffer()
+            self._console.locals.clear()
+            self._context_provider = lambda: {}
 
     def _request_result(self, request: _ExecutionRequest) -> PythonExecutionResult:
         if request.result is None:

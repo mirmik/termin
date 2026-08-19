@@ -1,5 +1,6 @@
 import threading
 import time
+import weakref
 
 from termin.mcp.python_executor import PythonScriptExecutor
 
@@ -128,3 +129,57 @@ def test_close_cancels_queued_work_and_rejects_new_requests() -> None:
     rejected.join(timeout=1.0)
     assert not rejected.is_alive()
     assert result_holder[1].error == "Python executor is closed"
+
+
+def test_close_releases_persistent_host_context_on_owner_thread() -> None:
+    class HostValue:
+        pass
+
+    class HostContext:
+        def __init__(self) -> None:
+            self.value = HostValue()
+
+        def build(self) -> dict[str, object]:
+            return {"value": self.value}
+
+    context = HostContext()
+    context_ref = weakref.ref(context)
+    value_ref = weakref.ref(context.value)
+    executor = PythonScriptExecutor(context.build)
+
+    result = executor.execute_script("retained_value = value")
+    assert result.ok
+    del context
+    assert context_ref() is not None
+    assert value_ref() is not None
+
+    executor.close()
+
+    assert context_ref() is None
+    assert value_ref() is None
+    assert executor._console.locals == {}
+    assert executor.execute_script("print('closed')").error == "Python executor is closed"
+    assert executor.execute_repl_line("print('closed')").error == "Python executor is closed"
+
+
+def test_owner_close_releases_context_after_off_owner_close() -> None:
+    class HostValue:
+        pass
+
+    context = {"value": HostValue()}
+    value_ref = weakref.ref(context["value"])
+    executor = PythonScriptExecutor(lambda: context)
+    assert executor.execute_script("retained_value = value").ok
+    context.clear()
+
+    worker = threading.Thread(target=executor.close)
+    worker.start()
+    worker.join(timeout=1.0)
+
+    assert not worker.is_alive()
+    assert value_ref() is not None
+
+    executor.close()
+
+    assert value_ref() is None
+    assert executor._console.locals == {}
