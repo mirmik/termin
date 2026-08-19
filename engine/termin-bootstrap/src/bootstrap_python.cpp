@@ -281,8 +281,14 @@ namespace termin::bootstrap {
         }
 
         try {
+            // The Python base module may survive a complete native runtime
+            // shutdown while its runtime-type descriptor does not. Restore
+            // the base and every already-loaded subclass before importing
+            // builtin pass providers: their class bodies register against the
+            // PythonFramePass parent as an import side effect.
+            nb::module_ python_passes = nb::module_::import_("termin.render_framework.python_pass");
+            python_passes.attr("register_loaded_python_passes")();
             nb::module_::import_("termin.render_passes");
-            nb::module_::import_("termin.render_framework.python_pass").attr("register_loaded_python_passes")();
             g_python_render_passes_initialized = true;
         } catch (const std::exception& e) {
             tc::Log::error(e, "[termin-bootstrap] Failed to import Python render passes");

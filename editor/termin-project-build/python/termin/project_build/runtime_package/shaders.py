@@ -51,7 +51,11 @@ ENGINE_BLOOM_BLUR_VERTICAL_SHADER_UUID = "termin-engine-bloom-blur-vertical"
 ENGINE_BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample"
 ENGINE_BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite"
 ENGINE_TONEMAP_SHADER_UUID = "termin-engine-tonemap"
+ENGINE_OUTPUT_TRANSFORM_SHADER_UUID = "termin-engine-output-transform"
 ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID = "termin-engine-multiview-tonemap"
+ENGINE_MULTIVIEW_OUTPUT_TRANSFORM_SHADER_UUID = (
+    "termin-engine-multiview-output-transform"
+)
 ENGINE_CANVAS2D_SOLID_SHADER_UUID = "termin-engine-canvas2d-solid"
 ENGINE_CANVAS2D_TEXTURE_SHADER_UUID = "termin-engine-canvas2d-texture"
 ENGINE_TEXT2D_SHADER_UUID = "termin-engine-text2d"
@@ -636,7 +640,9 @@ def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
         builtin_engine_shader_artifact(ENGINE_BLOOM_UPSAMPLE_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_BLOOM_COMPOSITE_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_TONEMAP_SHADER_UUID),
+        builtin_engine_shader_artifact(ENGINE_OUTPUT_TRANSFORM_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID),
+        builtin_engine_shader_artifact(ENGINE_MULTIVIEW_OUTPUT_TRANSFORM_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_CANVAS2D_SOLID_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_CANVAS2D_TEXTURE_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_TEXT2D_SHADER_UUID),

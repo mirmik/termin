@@ -271,6 +271,24 @@ def test_player_bootstrap_publishes_builtin_type_projections_once():
     assert "explicit descriptor publication failed" not in output
 
 
+def test_player_bootstrap_restores_preimported_python_pass_parent_first():
+    _run_python_without_nanobind_leaks(
+        """
+        import termin.bootstrap
+        import termin.render_framework.python_pass  # noqa: F401
+        from termin.render_framework import tc_pass_registry_has
+
+        termin.bootstrap.bootstrap_runtime()
+        termin.bootstrap.shutdown_runtime()
+
+        termin.bootstrap.bootstrap_player()
+        assert tc_pass_registry_has("PythonFramePass")
+        assert tc_pass_registry_has("HighlightPass")
+        termin.bootstrap.shutdown_player()
+        """
+    )
+
+
 def test_player_shutdown_releases_standalone_entity_components():
     _run_python_without_nanobind_leaks(
         """
