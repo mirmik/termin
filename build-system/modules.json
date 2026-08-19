@@ -147,14 +147,6 @@
         "cmake",
         "documentation"
       ]
-    },
-    {
-      "id": "termin-runtime",
-      "path": "engine/termin-runtime",
-      "kinds": [
-        "cmake",
-        "runtime"
-      ]
     }
   ]
 }

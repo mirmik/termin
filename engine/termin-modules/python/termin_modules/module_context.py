@@ -17,11 +17,13 @@ _owners_by_package: dict[str, str] = {}
 
 @dataclass(frozen=True)
 class OwnerContributionParticipant:
-    """One idempotent owner cleanup step with an independent audit."""
+    """One owner-scoped publication/cleanup participant with an independent audit."""
 
     identity: str
     revoke: Callable[[str], Iterable[str] | None]
     audit: Callable[[str], Iterable[str]]
+    commit: Callable[[str], Iterable[str] | None] | None = None
+    cleanup_order: int = 0
 
 
 @dataclass
@@ -31,6 +33,15 @@ class _OwnerCleanupSession:
 
 _owner_contribution_participants: list[OwnerContributionParticipant] = []
 _owner_cleanup_sessions: dict[str, _OwnerCleanupSession] = {}
+
+
+def _participants_in_cleanup_order() -> tuple[OwnerContributionParticipant, ...]:
+    return tuple(
+        sorted(
+            _owner_contribution_participants,
+            key=lambda participant: participant.cleanup_order,
+        )
+    )
 
 
 def _audit_participant(
@@ -106,7 +117,7 @@ def unregister_module_owner(module_id: str) -> None:
     if not module_id:
         return
     session = _owner_cleanup_sessions.setdefault(module_id, _OwnerCleanupSession())
-    for participant in tuple(_owner_contribution_participants):
+    for participant in _participants_in_cleanup_order():
         if participant.identity in session.completed:
             continue
         try:
@@ -134,7 +145,7 @@ def unregister_module_owner(module_id: str) -> None:
         )
 
     leaked: list[str] = []
-    for participant in tuple(_owner_contribution_participants):
+    for participant in _participants_in_cleanup_order():
         remaining = _audit_participant(module_id, participant)
         if remaining:
             session.completed.discard(participant.identity)
@@ -173,12 +184,30 @@ def unregister_owner_contribution_participant(identity: str) -> None:
 
 
 def publish_module_owner(module_id: str) -> None:
-    """Commit component descriptors after all packages imported successfully."""
+    """Commit every owner contribution after all packages imported successfully."""
     if not module_id:
         raise ValueError("module_id must be non-empty")
+    for participant in tuple(_owner_contribution_participants):
+        if participant.commit is None:
+            continue
+        try:
+            published = tuple(sorted(participant.commit(module_id) or ()))
+        except Exception:
+            log.error(
+                f"[termin_modules] owner='{module_id}' participant='{participant.identity}' phase='commit' failed",
+                exc_info=True,
+            )
+            raise
+        log.info(
+            f"[termin_modules] owner='{module_id}' participant="
+            f"'{participant.identity}' phase='commit' published={list(published)!r}"
+        )
+
+
+def _publish_python_component_classes(module_id: str) -> list[str]:
     from termin.scene import publish_python_component_owner
 
-    publish_python_component_owner(module_id)
+    return publish_python_component_owner(module_id)
 
 
 def _runtime_type_records_for_owner(module_id: str, facet: str) -> list[str]:
@@ -288,6 +317,7 @@ for _participant in (
         "python-component-classes",
         lambda owner: _unregister_python_component_classes(owner),
         lambda owner: _audit_python_component_classes(owner),
+        lambda owner: _publish_python_component_classes(owner),
     ),
     OwnerContributionParticipant(
         "python-frame-pass-classes",
@@ -303,11 +333,13 @@ for _participant in (
         "runtime-types",
         lambda owner: _commit_runtime_type_records(owner),
         lambda owner: _audit_runtime_type_records(owner),
+        cleanup_order=1000,
     ),
     OwnerContributionParticipant(
         "package-claims",
         lambda owner: _revoke_module_packages(owner),
         lambda owner: _audit_module_packages(owner),
+        cleanup_order=2000,
     ),
 ):
     register_owner_contribution_participant(_participant)

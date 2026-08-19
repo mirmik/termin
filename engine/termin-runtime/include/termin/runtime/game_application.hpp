@@ -41,6 +41,8 @@ namespace termin::runtime {
         GameApplicationTypeDescriptorBuilder(GameApplicationTypeDescriptorBuilder&& other) noexcept;
         GameApplicationTypeDescriptorBuilder& operator=(GameApplicationTypeDescriptorBuilder&& other) noexcept;
 
+        GameApplicationTypeDescriptorBuilder&
+        runtime_binding(const char* binding_id, void* payload, tc_runtime_type_facet_destroy_fn destroy = nullptr);
         bool commit();
 
         template <typename T>

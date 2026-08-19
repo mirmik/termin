@@ -63,6 +63,14 @@ namespace termin::runtime {
         return *this;
     }
 
+    GameApplicationTypeDescriptorBuilder& GameApplicationTypeDescriptorBuilder::runtime_binding(
+        const char* binding_id, void* payload, tc_runtime_type_facet_destroy_fn destroy) {
+        if (!_descriptor || !tc_runtime_type_descriptor_add_binding(_descriptor, binding_id, payload, destroy)) {
+            _valid = false;
+        }
+        return *this;
+    }
+
     bool GameApplicationTypeDescriptorBuilder::commit() {
         if (!_valid || !_descriptor) {
             tc::Log::error("[GameApplicationTypeDescriptor] invalid descriptor for %s", _type_name.c_str());
