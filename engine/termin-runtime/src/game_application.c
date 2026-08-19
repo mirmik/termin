@@ -15,7 +15,6 @@ struct tc_game_application_instance {
     void* object;
     tc_game_application_destroy_fn destroy;
     const tc_game_application_ops_v1* ops;
-    tc_game_application_context_v1 context;
     tc_runtime_type_instance_link type_link;
     tc_game_application_state state;
 };
@@ -82,7 +81,7 @@ static bool prepare_game_application_facet_unload(const char* type_name, void* p
 
     tc_log(TC_LOG_ERROR,
            "[GameApplication] refusing to unload type '%s' while %zu application instance(s) are live; stop and "
-           "destroy the RuntimeSession first",
+           "destroy the application instances first",
            type_name ? type_name : "<unknown>",
            instance_count);
     return false;
@@ -207,18 +206,12 @@ static bool factory_result_is_valid(const tc_game_application_factory_result_v1*
 }
 
 tc_game_application_instance* tc_game_application_instance_create(const char* type_name,
-                                                                  const tc_game_application_context_v1* context,
                                                                   tc_game_application_error_v1* error) {
     clear_error(error);
     if (!type_name || !type_name[0]) {
         fail_with_message(error, "application type name must be non-empty");
         return NULL;
     }
-    if (!context || context->struct_size < sizeof(tc_game_application_context_v1) || !context->session) {
-        fail_for_type(error, type_name, "creation requires a valid per-run RuntimeSession context");
-        return NULL;
-    }
-
     tc_game_application_facet_payload* facet = game_application_facet(type_name);
     if (!facet) {
         fail_for_type(error, type_name, "runtime type has no GameApplication facet");
@@ -239,13 +232,10 @@ tc_game_application_instance* tc_game_application_instance_create(const char* ty
         fail_for_type(error, type_name, "failed to allocate the engine-owned instance wrapper");
         return NULL;
     }
-    instance->context.struct_size = sizeof(tc_game_application_context_v1);
-    instance->context.session = context->session;
     instance->state = TC_GAME_APPLICATION_STATE_CREATED;
     tc_runtime_type_instance_link_init(&instance->type_link);
 
-    tc_game_application_factory_request_v1 request = {
-        sizeof(tc_game_application_factory_request_v1), &instance->context, error};
+    tc_game_application_factory_request_v1 request = {sizeof(tc_game_application_factory_request_v1), error};
     tc_game_application_factory_result_v1 result = {sizeof(tc_game_application_factory_result_v1), NULL, NULL, NULL};
     if (!tc_runtime_owned_factory_invoke(&facet->factory, &request, &result)) {
         free(instance);
@@ -286,7 +276,7 @@ bool tc_game_application_instance_start(tc_game_application_instance* instance, 
     }
 
     instance->state = TC_GAME_APPLICATION_STATE_STARTING;
-    const bool started = instance->ops->start(instance->object, &instance->context, error);
+    const bool started = instance->ops->start(instance->object, error);
     if (!started) {
         instance->state = TC_GAME_APPLICATION_STATE_START_FAILED;
         if (!error_text(error, NULL)) {
@@ -315,7 +305,7 @@ bool tc_game_application_instance_stop(tc_game_application_instance* instance, t
     }
 
     instance->state = TC_GAME_APPLICATION_STATE_STOPPING;
-    const bool stopped = instance->ops->stop(instance->object, &instance->context, error);
+    const bool stopped = instance->ops->stop(instance->object, error);
     instance->state = TC_GAME_APPLICATION_STATE_STOPPED;
     if (!stopped) {
         if (!error_text(error, NULL)) {
@@ -368,8 +358,4 @@ tc_game_application_state tc_game_application_instance_state(const tc_game_appli
 
 const char* tc_game_application_instance_type_name(const tc_game_application_instance* instance) {
     return instance ? instance->type_link.type_name : NULL;
-}
-
-tc_runtime_session* tc_game_application_instance_session(const tc_game_application_instance* instance) {
-    return instance ? instance->context.session : NULL;
 }

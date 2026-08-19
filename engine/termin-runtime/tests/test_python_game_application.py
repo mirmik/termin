@@ -21,10 +21,10 @@ def test_project_owner_commit_publishes_declarations_only_after_import_boundary(
         class ProjectDirector(GameApplication):
             game_application_type_name = "ProjectDirector.CommitProbe"
 
-            def start(self, context) -> None:
+            def start(self) -> None:
                 pass
 
-            def stop(self, context) -> None:
+            def stop(self) -> None:
                 pass
 
         assert _game_application_type_info("ProjectDirector.CommitProbe") is None
@@ -46,14 +46,14 @@ def test_failed_batch_validation_publishes_no_partial_descriptor() -> None:
     owner = "python_game_application_batch_failure_test"
 
     class ValidDirector(GameApplication):
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
-        def stop(self, context) -> None:
+        def stop(self) -> None:
             pass
 
     class MissingStopDirector(GameApplication):
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
     try:
@@ -72,20 +72,20 @@ def test_same_owner_publication_replaces_python_class_when_no_instance_is_live()
         game_application_type_name = "ReplaceableProjectDirector"
         version = 1
 
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
-        def stop(self, context) -> None:
+        def stop(self) -> None:
             pass
 
     class SecondDirector(GameApplication):
         game_application_type_name = "ReplaceableProjectDirector"
         version = 2
 
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
-        def stop(self, context) -> None:
+        def stop(self) -> None:
             pass
 
     try:
@@ -105,37 +105,37 @@ def test_failed_batch_restores_replaced_descriptor_and_removes_new_types() -> No
     class PreviousDirector(GameApplication):
         game_application_type_name = "A.RollbackProjectDirector"
 
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
-        def stop(self, context) -> None:
+        def stop(self) -> None:
             pass
 
     class ReplacementDirector(GameApplication):
         game_application_type_name = "A.RollbackProjectDirector"
 
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
-        def stop(self, context) -> None:
+        def stop(self) -> None:
             pass
 
     class NewDirector(GameApplication):
         game_application_type_name = "B.RollbackNewDirector"
 
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
-        def stop(self, context) -> None:
+        def stop(self) -> None:
             pass
 
     class ForeignDirector(GameApplication):
         game_application_type_name = "Z.RollbackForeignDirector"
 
-        def start(self, context) -> None:
+        def start(self) -> None:
             pass
 
-        def stop(self, context) -> None:
+        def stop(self) -> None:
             pass
 
     try:

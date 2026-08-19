@@ -20,18 +20,6 @@ namespace termin::runtime::python {
 
         constexpr const char* kPythonClassProjectionBinding = "termin.python.game_application_class_projection";
 
-        class PythonGameApplicationContext {
-            tc_runtime_session* _session = nullptr;
-
-        public:
-            explicit PythonGameApplicationContext(tc_runtime_session* session)
-                : _session(session) {}
-
-            bool valid() const {
-                return _session != nullptr;
-            }
-        };
-
         struct PythonGameApplicationFactoryContext {
             nb::object cls;
             std::string type_name;
@@ -83,22 +71,17 @@ namespace termin::runtime::python {
             delete static_cast<PythonGameApplicationObject*>(object);
         }
 
-        bool invoke_lifecycle(void* object,
-                              const tc_game_application_context_v1* context,
-                              tc_game_application_error_v1* error,
-                              const char* operation) {
+        bool invoke_lifecycle(void* object, tc_game_application_error_v1* error, const char* operation) {
             auto* application = static_cast<PythonGameApplicationObject*>(object);
-            if (!application || !context || context->struct_size < sizeof(tc_game_application_context_v1) ||
-                !context->session) {
-                set_error(error, "Python GameApplication lifecycle received an invalid object or RuntimeSession");
-                tc::Log::error("[PythonGameApplication] operation='%s' received invalid native context", operation);
+            if (!application) {
+                set_error(error, "Python GameApplication lifecycle received a null object");
+                tc::Log::error("[PythonGameApplication] operation='%s' received a null object", operation);
                 return false;
             }
 
             nb::gil_scoped_acquire gil;
             try {
-                nb::object result =
-                    application->value.attr(operation)(nb::cast(PythonGameApplicationContext(context->session)));
+                nb::object result = application->value.attr(operation)();
                 if (!result.is_none()) {
                     const std::string message =
                         "Python GameApplication '" + application->type_name + "' " + operation + " must return None";
@@ -120,16 +103,12 @@ namespace termin::runtime::python {
             return false;
         }
 
-        bool start_python_application(void* object,
-                                      const tc_game_application_context_v1* context,
-                                      tc_game_application_error_v1* error) {
-            return invoke_lifecycle(object, context, error, "start");
+        bool start_python_application(void* object, tc_game_application_error_v1* error) {
+            return invoke_lifecycle(object, error, "start");
         }
 
-        bool stop_python_application(void* object,
-                                     const tc_game_application_context_v1* context,
-                                     tc_game_application_error_v1* error) {
-            return invoke_lifecycle(object, context, error, "stop");
+        bool stop_python_application(void* object, tc_game_application_error_v1* error) {
+            return invoke_lifecycle(object, error, "stop");
         }
 
         const tc_game_application_ops_v1 kPythonGameApplicationOps = {
@@ -144,7 +123,6 @@ namespace termin::runtime::python {
             const auto* request = static_cast<const tc_game_application_factory_request_v1*>(request_raw);
             auto* result = static_cast<tc_game_application_factory_result_v1*>(result_raw);
             if (!factory || !request || request->struct_size < sizeof(tc_game_application_factory_request_v1) ||
-                !request->context || request->context->struct_size < sizeof(tc_game_application_context_v1) ||
                 !result || result->struct_size < sizeof(tc_game_application_factory_result_v1)) {
                 tc_game_application_set_error(request ? request->error : nullptr,
                                               "Python GameApplication factory received an incompatible request");
@@ -317,12 +295,6 @@ namespace termin::runtime::python {
     } // namespace
 
     void bind_game_application(nb::module_& module) {
-        nb::class_<PythonGameApplicationContext>(module, "GameApplicationContext")
-            .def_prop_ro("valid", &PythonGameApplicationContext::valid)
-            .def("__repr__", [](const PythonGameApplicationContext& context) {
-                return context.valid() ? "GameApplicationContext(valid=True)" : "GameApplicationContext(valid=False)";
-            });
-
         module.def("_bootstrap_game_application_registry", &tc_game_application_registry_init);
         module.def("_register_game_application",
                    &register_python_application,

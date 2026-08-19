@@ -19,7 +19,6 @@ extern "C" {
 #define TC_GAME_APPLICATION_ROOT_TYPE "GameApplication"
 #define TC_GAME_APPLICATION_ROOT_OWNER "termin-runtime"
 
-typedef struct tc_runtime_session tc_runtime_session;
 typedef struct tc_game_application_instance tc_game_application_instance;
 
 typedef struct tc_game_application_error_v1 {
@@ -43,20 +42,12 @@ static inline void tc_game_application_set_error(tc_game_application_error_v1* e
     error->message[length] = '\0';
 }
 
-typedef struct tc_game_application_context_v1 {
-    uint32_t struct_size;
-    tc_runtime_session* session;
-} tc_game_application_context_v1;
-
 typedef struct tc_game_application_factory_request_v1 {
     uint32_t struct_size;
-    const tc_game_application_context_v1* context;
     tc_game_application_error_v1* error;
 } tc_game_application_factory_request_v1;
 
-typedef bool (*tc_game_application_lifecycle_fn)(void* object,
-                                                 const tc_game_application_context_v1* context,
-                                                 tc_game_application_error_v1* error);
+typedef bool (*tc_game_application_lifecycle_fn)(void* object, tc_game_application_error_v1* error);
 typedef void (*tc_game_application_destroy_fn)(void* object);
 
 typedef struct tc_game_application_ops_v1 {
@@ -102,10 +93,8 @@ TERMIN_RUNTIME_API bool tc_game_application_type_is_abstract(const char* type_na
 TERMIN_RUNTIME_API size_t tc_game_application_type_count(void);
 TERMIN_RUNTIME_API const char* tc_game_application_type_at(size_t index);
 
-// context is copied into the instance and must name a live per-run session.
-// The session itself remains host-owned and must outlive the application.
 TERMIN_RUNTIME_API tc_game_application_instance* tc_game_application_instance_create(
-    const char* type_name, const tc_game_application_context_v1* context, tc_game_application_error_v1* error);
+    const char* type_name, tc_game_application_error_v1* error);
 TERMIN_RUNTIME_API bool tc_game_application_instance_start(tc_game_application_instance* instance,
                                                            tc_game_application_error_v1* error);
 TERMIN_RUNTIME_API bool tc_game_application_instance_stop(tc_game_application_instance* instance,
@@ -120,8 +109,6 @@ TERMIN_RUNTIME_API bool tc_game_application_instance_destroy(tc_game_application
 TERMIN_RUNTIME_API tc_game_application_state
 tc_game_application_instance_state(const tc_game_application_instance* instance);
 TERMIN_RUNTIME_API const char* tc_game_application_instance_type_name(const tc_game_application_instance* instance);
-TERMIN_RUNTIME_API tc_runtime_session*
-tc_game_application_instance_session(const tc_game_application_instance* instance);
 
 #ifdef __cplusplus
 }
