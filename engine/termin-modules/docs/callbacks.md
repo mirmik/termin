@@ -68,11 +68,16 @@
     revoke атомарно снимает owner descriptors, затем audit запрещает закрытие
     handle при любой оставшейся contribution identity
 
-Python-side registries используют тот же revoke/audit contract через
-`OwnerContributionParticipant`. Новая extension registry подключается
-регистрацией participant со стабильным identity; backend-specific ветвление в
-unload для неё не добавляется. `sys.modules` не является participant: exact
-import entries удаляются позднее, при backend cleanup.
+Python-side registries используют общий commit/revoke/audit contract через
+`OwnerContributionParticipant`. Во время импорта registry только запоминает
+owner-scoped declarations; optional `commit(owner)` публикует их после
+успешного импорта всех packages из `.pymodule`. При ошибке commit Python backend
+запускает обычный revoke/audit rollback. Новая extension registry подключается
+participant со стабильным identity; backend-specific ветвление для неё не
+добавляется. `cleanup_order` оставляет доменные registries перед общим
+`runtime-types` backstop, а package claims снимаются последними. `sys.modules`
+не является participant: exact import entries удаляются позднее, при backend
+cleanup.
 
 - `after_unload`
   - завершить cleanup после фактической выгрузки shared library

@@ -3,9 +3,9 @@
 ## Status
 
 Accepted architecture for umbrella card #1748. The native registry and instance
-lifecycle are the first implementation slice (#1749); scene context, Python,
-profile selection, `SceneFlow`, host composition and rendered rotation remain
-separate dependent slices.
+lifecycle (#1749) and optional Python publication/factory adapter (#1750) are
+implemented. Scene context, profile selection, `SceneFlow`, host composition
+and rendered rotation remain separate dependent slices.
 
 ## Problem
 
@@ -85,9 +85,47 @@ shape is rejected. The engine-owned opaque instance copies the context and
 links itself to the selected type record before it is returned to a host.
 
 C++ `GameApplication` and its descriptor builder are convenience adapters over
-this contract. They catch exceptions at the C boundary. Python will use the
-same C result and operations model while acquiring the GIL inside its adapter;
-no C++ subclass trampoline or inspector facet is required.
+this contract. They catch exceptions at the C boundary. Python uses the same C
+result and operations model through an optional adapter; no C++ subclass
+trampoline or inspector facet is required.
+
+## Python declaration and module publication
+
+A project application remains an ordinary Python class:
+
+```python
+from termin.runtime import GameApplication
+
+
+class AvalonGameDirector(GameApplication):
+    game_application_type_name = "avalon.GameDirector"
+
+    def start(self, context) -> None:
+        ...
+
+    def stop(self, context) -> None:
+        ...
+```
+
+Creating the subclass records an owner-scoped declaration but does not mutate
+the live runtime type registry. The `.pymodule` backend first establishes its
+package-to-owner claims, imports every declared package, and only then asks all
+commit-capable `OwnerContributionParticipant`s to publish their declarations.
+Consequently, a package import failure cannot expose a half-loaded application
+type. The backend runs the same participant revoke/audit path before evicting
+the exact imported objects from `sys.modules`.
+
+The native factory retains the class object. Construction, `start`, `stop` and
+destruction acquire the GIL inside the adapter. Python exceptions are logged
+with their traceback and returned to the native lifecycle as explicit errors;
+`start` and `stop` must return `None`. A live native instance link prevents both
+same-owner descriptor replacement and module-owner unload until the host has
+stopped and destroyed the application.
+
+`publish_game_application` and `publish_game_applications` provide the same
+registration path for tests and custom hosts outside `.pymodule` loading. The
+module path remains canonical for project code because it supplies the real
+owner identity and the transactional import boundary.
 
 ## Lifecycle contract
 
@@ -194,4 +232,3 @@ service instead of each growing a private transition state machine.
 6. #1754: `RuntimeSession` composition and failure cleanup.
 7. #1755, #1756 and #1757: editor, packaged, source and headless host adapters.
 8. #1744: rendered/input-active packaged scene rotation over `SceneFlow`.
-

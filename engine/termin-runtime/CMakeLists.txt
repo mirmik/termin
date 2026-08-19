@@ -11,6 +11,19 @@ option(TERMIN_RUNTIME_MINIMAL_ONLY
 option(TERMIN_RUNTIME_RENDER_ONLY
     "Build the portable package-v2 scene/render resource profile"
     ${TERMIN_PLATFORM_WEB})
+option(TERMIN_BUILD_PYTHON "Build optional Python/nanobind runtime adapters" OFF)
+
+if(TERMIN_BUILD_PYTHON)
+    if(NOT Python_EXECUTABLE)
+        if(WIN32)
+            set(Python_EXECUTABLE "python")
+        else()
+            set(Python_EXECUTABLE "python3")
+        endif()
+    endif()
+    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+endif()
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -166,6 +179,52 @@ if(EMSCRIPTEN)
     target_compile_options(termin_runtime PRIVATE -fexceptions)
 endif()
 
+if(TERMIN_BUILD_PYTHON)
+    add_library(termin_runtime_python SHARED
+        python/bindings/python_game_application.cpp
+    )
+    target_compile_definitions(termin_runtime_python PRIVATE TERMIN_RUNTIME_PYTHON_EXPORTS)
+    target_include_directories(termin_runtime_python
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/python/bindings>
+        PRIVATE
+            ${NB_DIR}/include
+    )
+    target_link_libraries(termin_runtime_python
+        PUBLIC
+            termin_runtime
+        PRIVATE
+            Python::Python
+    )
+    termin_nanobind_link_runtime(termin_runtime_python PUBLIC)
+    set_target_properties(termin_runtime_python PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    termin_set_rpath_lib(termin_runtime_python)
+
+    nanobind_add_module(_runtime_native NB_SHARED
+        python/bindings/runtime_module.cpp
+    )
+    target_link_libraries(_runtime_native PRIVATE termin_runtime_python)
+    termin_set_rpath_python(_runtime_native)
+
+    install(TARGETS termin_runtime_python
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+    install(TARGETS _runtime_native DESTINATION lib/python/termin/runtime)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/runtime/
+        DESTINATION lib/python/termin/runtime
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+        PATTERN "lib" EXCLUDE
+    )
+endif()
+
 if(TERMIN_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
     enable_testing()
 
@@ -182,6 +241,31 @@ if(TERMIN_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
     add_test(NAME termin_runtime_game_application_test COMMAND termin_runtime_game_application_test)
+
+    if(TERMIN_BUILD_PYTHON)
+        add_executable(termin_runtime_python_game_application_test
+            tests/test_python_game_application.cpp
+        )
+        target_include_directories(termin_runtime_python_game_application_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+        )
+        target_link_libraries(termin_runtime_python_game_application_test PRIVATE
+            termin_runtime_python
+            Python::Python
+        )
+        target_compile_definitions(termin_runtime_python_game_application_test PRIVATE
+            TERMIN_RUNTIME_PYTHON_MODULE_DIR="$<TARGET_FILE_DIR:_runtime_native>"
+        )
+        add_dependencies(termin_runtime_python_game_application_test _runtime_native)
+        set_target_properties(termin_runtime_python_game_application_test PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        )
+        add_test(
+            NAME termin_runtime_python_game_application_test
+            COMMAND termin_runtime_python_game_application_test)
+        termin_add_test_labels(termin_runtime_python_game_application_test
+            "termin:capability:python-bindings")
+    endif()
 
     add_executable(termin_runtime_package_loader_test
         tests/test_runtime_package_loader.cpp

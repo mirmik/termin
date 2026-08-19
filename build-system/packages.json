@@ -229,6 +229,16 @@
       ]
     },
     {
+      "path": "engine/termin-runtime",
+      "distribution": "termin-runtime",
+      "native_extensions": [
+        {
+          "extension": "termin.runtime._runtime_native",
+          "target": "_runtime_native"
+        }
+      ]
+    },
+    {
       "path": "physics/termin-robotics",
       "distribution": "termin-robotics",
       "native_extensions": [

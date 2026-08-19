@@ -128,6 +128,96 @@ def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Pat
         termin.bootstrap.shutdown_player()
 
 
+def test_pymodule_game_application_uses_commit_reload_and_unload_protocol(
+    tmp_path: Path,
+) -> None:
+    from termin.runtime._runtime_native import _game_application_type_info
+
+    source_root = tmp_path / "Scripts"
+    package = source_root / "owned_application"
+    package.mkdir(parents=True)
+    descriptor = tmp_path / "application.pymodule"
+    descriptor.write_text(
+        "name: application\nroot: Scripts\npackages: [owned_application]\n",
+        encoding="utf-8",
+    )
+
+    def write_application(version: int) -> None:
+        (package / "__init__.py").write_text(
+            "from termin.runtime import GameApplication\n"
+            "class OwnedGameDirector(GameApplication):\n"
+            f"    version = {version}\n"
+            "    def start(self, context):\n"
+            "        pass\n"
+            "    def stop(self, context):\n"
+            "        pass\n",
+            encoding="utf-8",
+        )
+
+    runtime = _runtime_without_project_venv()
+    runtime.set_sync_live_scenes(False)
+    try:
+        write_application(1)
+        assert runtime.load_project(tmp_path)
+        first_class = sys.modules["owned_application"].OwnedGameDirector
+        first_info = _game_application_type_info("OwnedGameDirector")
+        assert first_info is not None
+        assert first_info["owner"] == "application"
+        assert first_info["python_class"] is first_class
+        assert first_class.version == 1
+
+        write_application(2)
+        assert runtime.reload_module("application")
+        second_class = sys.modules["owned_application"].OwnedGameDirector
+        second_info = _game_application_type_info("OwnedGameDirector")
+        assert second_info is not None
+        assert second_info["python_class"] is second_class
+        assert second_class is not first_class
+        assert second_class.version == 2
+
+        assert runtime.unload_module("application")
+        assert _game_application_type_info("OwnedGameDirector") is None
+        assert "owned_application" not in sys.modules
+    finally:
+        runtime.close()
+
+
+def test_failed_pymodule_import_never_publishes_game_application(
+    tmp_path: Path,
+) -> None:
+    from termin.runtime import list_python_game_application_owner
+    from termin.runtime._runtime_native import _game_application_type_info
+
+    source_root = tmp_path / "Scripts"
+    package = source_root / "broken_application"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        "from termin.runtime import GameApplication\n"
+        "class BrokenGameDirector(GameApplication):\n"
+        "    def start(self, context):\n"
+        "        pass\n"
+        "    def stop(self, context):\n"
+        "        pass\n"
+        "raise RuntimeError('injected application import failure')\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "application.pymodule").write_text(
+        "name: broken-application\nroot: Scripts\npackages: [broken_application]\n",
+        encoding="utf-8",
+    )
+
+    runtime = _runtime_without_project_venv()
+    runtime.set_sync_live_scenes(False)
+    try:
+        assert not runtime.load_project(tmp_path)
+        assert "injected application import failure" in runtime.last_error
+        assert _game_application_type_info("BrokenGameDirector") is None
+        assert list_python_game_application_owner("broken-application") == []
+        assert "broken_application" not in sys.modules
+    finally:
+        runtime.close()
+
+
 def test_pymodule_rejected_descriptor_commit_leaves_no_partial_facets(tmp_path: Path) -> None:
     import termin.bootstrap
     from termin.inspect import InspectRegistry
@@ -515,6 +605,63 @@ def test_owner_contribution_cleanup_resumes_at_each_failed_participant() -> None
             module_context.unregister_module_owner(module_id)
             assert all(calls[candidate] == 1 for candidate in completed_before_failure)
             assert all(calls[candidate] >= 1 for candidate in identities[failed_index:])
+    finally:
+        for identity in identities:
+            module_context.unregister_owner_contribution_participant(identity)
+        module_context.unregister_module_packages(module_id)
+
+
+def test_owner_contribution_commits_are_ordered_and_cleanup_partial_failure() -> None:
+    module_id = "owner_commit_participant_probe"
+    events: list[str] = []
+
+    def participant(
+        identity: str,
+        *,
+        fail_commit: bool = False,
+        cleanup_order: int = 0,
+    ):
+        def commit(owner: str) -> list[str]:
+            assert owner == module_id
+            events.append(f"commit:{identity}")
+            if fail_commit:
+                raise RuntimeError(f"injected {identity} commit failure")
+            return [f"{identity}-contribution"]
+
+        def revoke(owner: str) -> list[str]:
+            assert owner == module_id
+            events.append(f"revoke:{identity}")
+            return [f"{identity}-contribution"]
+
+        return module_context.OwnerContributionParticipant(
+            identity,
+            revoke,
+            lambda owner: (),
+            commit,
+            cleanup_order,
+        )
+
+    identities = ["synthetic-commit-first", "synthetic-commit-second"]
+    module_context.register_owner_contribution_participant(
+        participant(identities[0], cleanup_order=20)
+    )
+    module_context.register_owner_contribution_participant(
+        participant(identities[1], fail_commit=True, cleanup_order=10)
+    )
+    module_context.register_module_packages(module_id, [module_id])
+    try:
+        with pytest.raises(RuntimeError, match="injected synthetic-commit-second"):
+            module_context.publish_module_owner(module_id)
+        assert events[:2] == [
+            "commit:synthetic-commit-first",
+            "commit:synthetic-commit-second",
+        ]
+
+        module_context.unregister_module_owner(module_id)
+        assert events[2:] == [
+            "revoke:synthetic-commit-second",
+            "revoke:synthetic-commit-first",
+        ]
     finally:
         for identity in identities:
             module_context.unregister_owner_contribution_participant(identity)
