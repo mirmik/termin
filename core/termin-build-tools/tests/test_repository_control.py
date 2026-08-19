@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import threading
+import time
 from io import StringIO
 from pathlib import Path
 
 import pytest
 
 from termin_build import process_smoke, repository_control
+from termin_build.managed_process import process_group_exists
+
+
+PROCESS_TREE_FIXTURE = (
+    Path(__file__).with_name("fixtures") / "process_tree_fixture.py"
+)
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -1158,11 +1167,15 @@ def test_run_executes_manifest_process_smoke(tmp_path: Path, monkeypatch) -> Non
         stderr,
         text,
         timeout,
+        terminate_timeout_seconds=None,
     ):
-        calls.append((args, cwd, check, env, timeout))
+        calls.append(
+            (args, cwd, check, env, timeout, terminate_timeout_seconds)
+        )
         return type("Result", (), {"returncode": 0, "stdout": "ok\n"})()
 
     monkeypatch.setattr(process_smoke.subprocess, "run", fake_run)
+    monkeypatch.setattr(process_smoke, "run_managed_process", fake_run)
 
     result = repository_control.main(
         [
@@ -1182,6 +1195,12 @@ def test_run_executes_manifest_process_smoke(tmp_path: Path, monkeypatch) -> Non
     assert result == 0
     assert calls[0][:3] == ([str(command)], repo, False)
     assert calls[0][4] == 900.0
+    expected_terminate_timeout = (
+        process_smoke.PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS
+        if os.name == "posix"
+        else None
+    )
+    assert calls[0][5] == expected_terminate_timeout
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["kind"] == "termin-test-execution"
     assert report["executor"] == "process-smoke"
@@ -1235,6 +1254,7 @@ def test_windows_process_smoke_executes_from_canonical_plan(
         return type("Result", (), {"returncode": 0, "stdout": "windows ok\n"})()
 
     monkeypatch.setattr(process_smoke.subprocess, "run", fake_run)
+    monkeypatch.setattr(process_smoke, "run_managed_process", fake_run)
 
     result = repository_control.main(
         [
@@ -1300,7 +1320,7 @@ def test_process_smoke_timeout_fails_and_retains_log(
     tmp_path: Path, monkeypatch
 ) -> None:
     repo = _repository(tmp_path)
-    _add_process_smoke_suite(
+    command = _add_process_smoke_suite(
         repo,
         profile="editor-smoke",
         platform="linux",
@@ -1308,27 +1328,41 @@ def test_process_smoke_timeout_fails_and_retains_log(
         capability="editor",
     )
     catalog = repository_control.load_catalog(repo)
+    command.write_text(PROCESS_TREE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    command.chmod(0o755)
+    state_path = tmp_path / "central-process-smoke-tree.json"
+    monkeypatch.setenv("TERMIN_PROCESS_TREE_STATE", str(state_path))
 
-    def timeout(*_args, **_kwargs):
-        raise process_smoke.subprocess.TimeoutExpired(
-            ["scripts/smoke"], 3.0, output="partial output\n"
+    state = None
+    try:
+        result = repository_control.run_process_smoke_plan(
+            repo,
+            catalog,
+            "editor-smoke",
+            "linux",
+            capabilities=("editor",),
+            timeout_seconds=1.0,
         )
-
-    monkeypatch.setattr(process_smoke.subprocess, "run", timeout)
-
-    result = repository_control.run_process_smoke_plan(
-        repo,
-        catalog,
-        "editor-smoke",
-        "linux",
-        capabilities=("editor",),
-        timeout_seconds=3.0,
-    )
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    finally:
+        if state_path.is_file():
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            process_group_id = int(state["process_group_id"])
+            if process_group_exists(process_group_id):
+                os.killpg(process_group_id, signal.SIGKILL)
+                deadline = time.monotonic() + 5.0
+                while (
+                    process_group_exists(process_group_id)
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.02)
 
     assert result.exit_code == 1
-    assert "timed out after 3s" in result.failed["alpha-process-smoke"]
+    assert "timed out after 1s" in result.failed["alpha-process-smoke"]
     log_path = repo / result.logs["alpha-process-smoke"]
-    assert "partial output" in log_path.read_text(encoding="utf-8")
+    assert "PROCESS_TREE_READY" in log_path.read_text(encoding="utf-8")
+    assert state is not None
+    assert not process_group_exists(int(state["process_group_id"]))
 
 
 def test_ctest_report_records_selected_executed_and_skipped(tmp_path: Path) -> None:
