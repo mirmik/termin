@@ -40,6 +40,11 @@ else()
     find_package(termin_scene REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_inspect termin_inspect::termin_inspect)
+else()
+    find_package(termin_inspect REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
 else()
     find_package(termin_bootstrap REQUIRED)
@@ -83,12 +88,16 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 
 set(TERMIN_RUNTIME_SOURCES
+    src/game_application.c
+    src/game_application.cpp
     src/runtime_package.cpp
     src/runtime_package_reader.cpp
     src/runtime_shader_inference.cpp
 )
 if(TERMIN_RUNTIME_MINIMAL_ONLY)
     set(TERMIN_RUNTIME_SOURCES
+        src/game_application.c
+        src/game_application.cpp
         src/runtime_package_minimal.cpp
         src/runtime_package_reader.cpp)
 endif()
@@ -124,6 +133,7 @@ target_include_directories(termin_runtime
 
 target_link_libraries(termin_runtime PUBLIC
         tcbase::termin_base
+        termin_inspect::termin_inspect
         termin_scene::termin_scene
         termin_bootstrap::termin_bootstrap
 )
@@ -158,6 +168,20 @@ endif()
 
 if(TERMIN_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
     enable_testing()
+
+    add_executable(termin_runtime_game_application_test
+        tests/test_game_application.cpp
+    )
+    target_include_directories(termin_runtime_game_application_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_runtime_game_application_test PRIVATE
+        termin_runtime
+    )
+    set_target_properties(termin_runtime_game_application_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(NAME termin_runtime_game_application_test COMMAND termin_runtime_game_application_test)
 
     add_executable(termin_runtime_package_loader_test
         tests/test_runtime_package_loader.cpp
