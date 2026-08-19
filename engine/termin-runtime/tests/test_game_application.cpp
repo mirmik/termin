@@ -12,10 +12,6 @@ extern "C" {
 #include <inspect/tc_runtime_type_registry.h>
 }
 
-struct tc_runtime_session {
-    int marker = 0;
-};
-
 namespace {
 
     struct ErrorBuffer {
@@ -36,7 +32,6 @@ namespace {
 
     struct RawCounters {
         std::vector<Event> events;
-        tc_runtime_session* expected_session = nullptr;
         bool fail_create = false;
         bool invalid_ops = false;
         bool fail_start = false;
@@ -47,13 +42,9 @@ namespace {
         RawCounters* counters = nullptr;
     };
 
-    bool raw_start(void* object, const tc_game_application_context_v1* context, tc_game_application_error_v1* error) {
+    bool raw_start(void* object, tc_game_application_error_v1* error) {
         auto* application = static_cast<RawApplication*>(object);
         application->counters->events.push_back(Event::Start);
-        if (!context || context->session != application->counters->expected_session) {
-            tc_game_application_set_error(error, "raw start received the wrong session");
-            return false;
-        }
         if (application->counters->fail_start) {
             tc_game_application_set_error(error, "injected start failure");
             return false;
@@ -61,13 +52,9 @@ namespace {
         return true;
     }
 
-    bool raw_stop(void* object, const tc_game_application_context_v1* context, tc_game_application_error_v1* error) {
+    bool raw_stop(void* object, tc_game_application_error_v1* error) {
         auto* application = static_cast<RawApplication*>(object);
         application->counters->events.push_back(Event::Stop);
-        if (!context || context->session != application->counters->expected_session) {
-            tc_game_application_set_error(error, "raw stop received the wrong session");
-            return false;
-        }
         if (application->counters->fail_stop) {
             tc_game_application_set_error(error, "injected stop failure");
             return false;
@@ -146,7 +133,6 @@ namespace {
         int started = 0;
         int stopped = 0;
         int destroyed = 0;
-        tc_runtime_session* expected_session = nullptr;
         bool throw_on_start = false;
     };
 
@@ -161,24 +147,17 @@ namespace {
             ++g_cxx_counters->destroyed;
         }
 
-        bool start(const tc_game_application_context_v1& context, std::string& error) override {
+        bool start(std::string& error) override {
             ++g_cxx_counters->started;
-            if (context.session != g_cxx_counters->expected_session) {
-                error = "C++ adapter received the wrong session";
-                return false;
-            }
             if (g_cxx_counters->throw_on_start) {
                 throw std::runtime_error("injected C++ start exception");
             }
             return true;
         }
 
-        bool stop(const tc_game_application_context_v1& context, std::string& error) override {
+        bool stop(std::string& error) override {
+            (void)error;
             ++g_cxx_counters->stopped;
-            if (context.session != g_cxx_counters->expected_session) {
-                error = "C++ adapter received the wrong session while stopping";
-                return false;
-            }
             return true;
         }
     };
@@ -194,10 +173,8 @@ TEST_CASE("GameApplication root bootstrap is explicit idempotent and abstract") 
     CHECK_EQ(std::string(tc_runtime_type_registry_get_owner(TC_GAME_APPLICATION_ROOT_TYPE)),
              std::string(TC_GAME_APPLICATION_ROOT_OWNER));
 
-    tc_runtime_session session{17};
-    tc_game_application_context_v1 context{sizeof(tc_game_application_context_v1), &session};
     ErrorBuffer error;
-    CHECK(tc_game_application_instance_create(TC_GAME_APPLICATION_ROOT_TYPE, &context, &error.value) == nullptr);
+    CHECK(tc_game_application_instance_create(TC_GAME_APPLICATION_ROOT_TYPE, &error.value) == nullptr);
     CHECK(error.text[0] != '\0');
     CHECK_EQ(tc_runtime_type_registry_instance_count(TC_GAME_APPLICATION_ROOT_TYPE), 0u);
     tc_runtime_type_registry_clear();
@@ -207,17 +184,13 @@ TEST_CASE("C GameApplication lifecycle is exact and protects its module owner") 
     reset_registry();
     constexpr const char* type_name = "TestGameApplication";
     constexpr const char* owner = "game-application-test-module";
-    tc_runtime_session session{29};
     RawCounters counters;
-    counters.expected_session = &session;
     REQUIRE(register_raw_type(type_name, owner, counters));
 
-    tc_game_application_context_v1 context{sizeof(tc_game_application_context_v1), &session};
     ErrorBuffer error;
-    tc_game_application_instance* instance = tc_game_application_instance_create(type_name, &context, &error.value);
+    tc_game_application_instance* instance = tc_game_application_instance_create(type_name, &error.value);
     REQUIRE(instance != nullptr);
     CHECK_EQ(tc_game_application_instance_state(instance), TC_GAME_APPLICATION_STATE_CREATED);
-    CHECK_EQ(tc_game_application_instance_session(instance), &session);
     CHECK_EQ(std::string(tc_game_application_instance_type_name(instance)), std::string(type_name));
     CHECK_EQ(tc_runtime_type_registry_instance_count(type_name), 1u);
 
@@ -228,7 +201,6 @@ TEST_CASE("C GameApplication lifecycle is exact and protects its module owner") 
     CHECK_EQ(counters.events.size(), 2u);
 
     RawCounters refused_replacement;
-    refused_replacement.expected_session = &session;
     CHECK_FALSE(register_raw_type(type_name, owner, refused_replacement, true));
     CHECK_FALSE(tc_runtime_type_registry_prepare_owner_unload(owner, nullptr));
     CHECK(tc_runtime_type_registry_has_type(type_name));
@@ -249,7 +221,6 @@ TEST_CASE("C GameApplication lifecycle is exact and protects its module owner") 
     CHECK(counters.events[3] == Event::Destroy);
 
     RawCounters replacement;
-    replacement.expected_session = &session;
     REQUIRE(register_raw_type(type_name, owner, replacement, true));
     CHECK(tc_runtime_type_registry_prepare_owner_unload(owner, nullptr));
     size_t removed = 0;
@@ -265,26 +236,22 @@ TEST_CASE("GameApplication creation and start failures clean ownership without l
     constexpr const char* invalid_ops_type = "InvalidOpsGameApplication";
     constexpr const char* start_failure_type = "StartFailureGameApplication";
     constexpr const char* owner = "game-application-failure-test-module";
-    tc_runtime_session session{41};
-    tc_game_application_context_v1 context{sizeof(tc_game_application_context_v1), &session};
     ErrorBuffer error;
 
     RawCounters create_failure;
-    create_failure.expected_session = &session;
     create_failure.fail_create = true;
     REQUIRE(register_raw_type(create_failure_type, owner, create_failure));
-    CHECK(tc_game_application_instance_create(create_failure_type, &context, &error.value) == nullptr);
+    CHECK(tc_game_application_instance_create(create_failure_type, &error.value) == nullptr);
     CHECK_EQ(std::string(error.text), std::string("injected creation failure"));
     CHECK_EQ(tc_runtime_type_registry_instance_count(create_failure_type), 0u);
     REQUIRE_EQ(create_failure.events.size(), 1u);
     CHECK(create_failure.events[0] == Event::Create);
 
     RawCounters invalid_ops;
-    invalid_ops.expected_session = &session;
     invalid_ops.invalid_ops = true;
     REQUIRE(register_raw_type(invalid_ops_type, owner, invalid_ops));
     error.clear();
-    CHECK(tc_game_application_instance_create(invalid_ops_type, &context, &error.value) == nullptr);
+    CHECK(tc_game_application_instance_create(invalid_ops_type, &error.value) == nullptr);
     CHECK(error.text[0] != '\0');
     CHECK_EQ(tc_runtime_type_registry_instance_count(invalid_ops_type), 0u);
     REQUIRE_EQ(invalid_ops.events.size(), 2u);
@@ -292,12 +259,11 @@ TEST_CASE("GameApplication creation and start failures clean ownership without l
     CHECK(invalid_ops.events[1] == Event::Destroy);
 
     RawCounters start_failure;
-    start_failure.expected_session = &session;
     start_failure.fail_start = true;
     REQUIRE(register_raw_type(start_failure_type, owner, start_failure));
     error.clear();
     tc_game_application_instance* instance =
-        tc_game_application_instance_create(start_failure_type, &context, &error.value);
+        tc_game_application_instance_create(start_failure_type, &error.value);
     REQUIRE(instance != nullptr);
     CHECK_FALSE(tc_game_application_instance_start(instance, &error.value));
     CHECK_EQ(std::string(error.text), std::string("injected start failure"));
@@ -321,9 +287,7 @@ TEST_CASE("C++ GameApplication adapter publishes C facet and contains exceptions
     reset_registry();
     constexpr const char* type_name = "CxxTestGameApplication";
     constexpr const char* owner = "cxx-game-application-test-module";
-    tc_runtime_session session{53};
     CxxCounters counters;
-    counters.expected_session = &session;
     counters.throw_on_start = true;
     g_cxx_counters = &counters;
 
@@ -332,9 +296,8 @@ TEST_CASE("C++ GameApplication adapter publishes C facet and contains exceptions
     CHECK(tc_game_application_type_is_registered(type_name));
     CHECK_FALSE(tc_game_application_type_is_abstract(type_name));
 
-    tc_game_application_context_v1 context{sizeof(tc_game_application_context_v1), &session};
     ErrorBuffer error;
-    tc_game_application_instance* instance = tc_game_application_instance_create(type_name, &context, &error.value);
+    tc_game_application_instance* instance = tc_game_application_instance_create(type_name, &error.value);
     REQUIRE(instance != nullptr);
     CHECK_EQ(counters.constructed, 1);
 

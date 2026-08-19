@@ -12,10 +12,6 @@ GUARD_TEST_MAIN();
 #include <inspect/tc_runtime_type_registry.h>
 #include <termin/runtime/game_application.h>
 
-struct tc_runtime_session {
-    int marker = 0;
-};
-
 namespace {
 
     namespace nb = nanobind;
@@ -58,12 +54,10 @@ class LifecycleApplication:
     def __init__(self):
         events.append("construct:1")
 
-    def start(self, context):
-        assert context.valid
+    def start(self):
         events.append("start:1")
 
-    def stop(self, context):
-        assert context.valid
+    def stop(self):
         events.append("stop:1")
 
     def __del__(self):
@@ -72,31 +66,31 @@ class LifecycleApplication:
 class ReplacementApplication:
     version = 2
 
-    def start(self, context):
+    def start(self):
         pass
 
-    def stop(self, context):
+    def stop(self):
         pass
 
 class ConstructorFailureApplication:
     def __init__(self):
         raise RuntimeError("injected Python constructor failure")
 
-    def start(self, context):
+    def start(self):
         pass
 
-    def stop(self, context):
+    def stop(self):
         pass
 
 class StartFailureApplication:
     def __init__(self):
         events.append("construct:failure")
 
-    def start(self, context):
+    def start(self):
         events.append("start:failure")
         raise RuntimeError("injected Python start failure")
 
-    def stop(self, context):
+    def stop(self):
         events.append("stop:failure")
 
     def __del__(self):
@@ -108,13 +102,11 @@ class StartFailureApplication:
         constexpr const char* lifecycle_type = "PythonLifecycleApplication";
         REQUIRE(register_class(bindings, main, lifecycle_type, "LifecycleApplication", owner));
 
-        tc_runtime_session session{71};
-        tc_game_application_context_v1 context{sizeof(tc_game_application_context_v1), &session};
         ErrorBuffer error;
         tc_game_application_instance* instance = nullptr;
 
         PyThreadState* thread_state = PyEval_SaveThread();
-        instance = tc_game_application_instance_create(lifecycle_type, &context, &error.value);
+        instance = tc_game_application_instance_create(lifecycle_type, &error.value);
         const bool started = tc_game_application_instance_start(instance, &error.value);
         const bool unload_while_live = tc_runtime_type_registry_prepare_owner_unload(owner, nullptr);
         PyEval_RestoreThread(thread_state);
@@ -149,7 +141,7 @@ class StartFailureApplication:
         error.text[0] = '\0';
         thread_state = PyEval_SaveThread();
         tc_game_application_instance* failed_construction =
-            tc_game_application_instance_create(constructor_failure_type, &context, &error.value);
+            tc_game_application_instance_create(constructor_failure_type, &error.value);
         PyEval_RestoreThread(thread_state);
         CHECK(failed_construction == nullptr);
         CHECK(std::string(error.text).find("injected Python constructor failure") != std::string::npos);
@@ -160,7 +152,7 @@ class StartFailureApplication:
         error.text[0] = '\0';
         thread_state = PyEval_SaveThread();
         tc_game_application_instance* failed_start =
-            tc_game_application_instance_create(start_failure_type, &context, &error.value);
+            tc_game_application_instance_create(start_failure_type, &error.value);
         const bool start_result = tc_game_application_instance_start(failed_start, &error.value);
         PyEval_RestoreThread(thread_state);
         REQUIRE(failed_start != nullptr);

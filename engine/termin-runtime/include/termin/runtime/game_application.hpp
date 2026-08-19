@@ -16,8 +16,8 @@ namespace termin::runtime {
     public:
         virtual ~GameApplication() = default;
 
-        virtual bool start(const tc_game_application_context_v1& context, std::string& error) = 0;
-        virtual bool stop(const tc_game_application_context_v1& context, std::string& error) = 0;
+        virtual bool start(std::string& error) = 0;
+        virtual bool stop(std::string& error) = 0;
     };
 
     class TERMIN_RUNTIME_API GameApplicationTypeDescriptorBuilder {
@@ -79,7 +79,6 @@ namespace termin::runtime {
                 const auto* request = static_cast<const tc_game_application_factory_request_v1*>(request_raw);
                 auto* result = static_cast<tc_game_application_factory_result_v1*>(result_raw);
                 if (!request || request->struct_size < sizeof(tc_game_application_factory_request_v1) ||
-                    !request->context || request->context->struct_size < sizeof(tc_game_application_context_v1) ||
                     !result || result->struct_size < sizeof(tc_game_application_factory_result_v1)) {
                     set_factory_error(request, "native factory received an incompatible request or result");
                     return false;
@@ -99,15 +98,14 @@ namespace termin::runtime {
                 return false;
             }
 
-            static bool
-            start(void* object, const tc_game_application_context_v1* context, tc_game_application_error_v1* error) {
-                if (!object || !context || context->struct_size < sizeof(tc_game_application_context_v1)) {
-                    tc_game_application_set_error(error, "native start received an invalid object or context");
+            static bool start(void* object, tc_game_application_error_v1* error) {
+                if (!object) {
+                    tc_game_application_set_error(error, "native start received a null object");
                     return false;
                 }
                 try {
                     std::string message;
-                    const bool result = static_cast<T*>(object)->start(*context, message);
+                    const bool result = static_cast<T*>(object)->start(message);
                     if (!result && !message.empty()) {
                         tc_game_application_set_error(error, message.c_str());
                     }
@@ -120,15 +118,14 @@ namespace termin::runtime {
                 return false;
             }
 
-            static bool
-            stop(void* object, const tc_game_application_context_v1* context, tc_game_application_error_v1* error) {
-                if (!object || !context || context->struct_size < sizeof(tc_game_application_context_v1)) {
-                    tc_game_application_set_error(error, "native stop received an invalid object or context");
+            static bool stop(void* object, tc_game_application_error_v1* error) {
+                if (!object) {
+                    tc_game_application_set_error(error, "native stop received a null object");
                     return false;
                 }
                 try {
                     std::string message;
-                    const bool result = static_cast<T*>(object)->stop(*context, message);
+                    const bool result = static_cast<T*>(object)->stop(message);
                     if (!result && !message.empty()) {
                         tc_game_application_set_error(error, message.c_str());
                     }

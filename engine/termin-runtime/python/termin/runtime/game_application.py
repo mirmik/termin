@@ -9,7 +9,6 @@ from typing import ClassVar
 from tcbase import log
 
 from ._runtime_native import (
-    GameApplicationContext,
     _game_application_type_info,
     _python_game_application_types,
     _register_game_application,
@@ -101,7 +100,7 @@ def _validate_lifecycle_methods(cls: type["GameApplication"]) -> None:
         if implementation is None or not callable(implementation):
             raise TypeError(f"{cls.__name__}.{method_name} must be callable")
         if implementation is GameApplication.__dict__[method_name]:
-            raise TypeError(f"{cls.__name__} must implement {method_name}(context)")
+            raise TypeError(f"{cls.__name__} must implement {method_name}()")
 
 
 def _publication_order(
@@ -262,7 +261,7 @@ def shutdown_python_game_applications() -> None:
 
 
 class GameApplication:
-    """Pure-Python project composition root created once per RuntimeSession."""
+    """Pure-Python project composition root with explicit start/stop lifecycle."""
 
     game_application_type_name: ClassVar[str | None] = None
 
@@ -274,10 +273,10 @@ class GameApplication:
             owner=_owner_for_game_application_class(cls),
         )
 
-    def start(self, context: GameApplicationContext) -> None:
+    def start(self) -> None:
         raise NotImplementedError
 
-    def stop(self, context: GameApplicationContext) -> None:
+    def stop(self) -> None:
         raise NotImplementedError
 
 
@@ -303,7 +302,6 @@ atexit.register(shutdown_python_game_applications)
 
 __all__ = [
     "GameApplication",
-    "GameApplicationContext",
     "list_python_game_application_owner",
     "publish_game_application",
     "publish_game_application_owner",

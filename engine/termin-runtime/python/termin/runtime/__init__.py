@@ -4,7 +4,6 @@ preload_sdk_libs("termin_runtime")
 
 from .game_application import (
     GameApplication,
-    GameApplicationContext,
     list_python_game_application_owner,
     publish_game_application,
     publish_game_application_owner,
@@ -15,7 +14,6 @@ from .game_application import (
 
 __all__ = [
     "GameApplication",
-    "GameApplicationContext",
     "list_python_game_application_owner",
     "publish_game_application",
     "publish_game_application_owner",
