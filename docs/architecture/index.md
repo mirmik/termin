@@ -6,6 +6,7 @@
 
 ## Current Notes
 
+- [GameApplication and per-run RuntimeSession](2026-08-19-game-application-runtime-session.md) - явный project-selected composition root поверх C runtime type facet, session-owned lifecycle вне сцен, непрерывное состояние при scene rotation и общий `SceneFlow` без зависимости `termin-scene -> termin-runtime`.
 - [District monorepo](2026-08-14-district-monorepo.md) - принятая схема единого репозитория с корневыми `core`, `graphics`, `physics`, `engine`, `editor` и `platform`, общим build orchestration и независимыми SDK-профилями.
 - [Shared 2D composition](2026-08-11-shared-2d-composition.md) - отдельные Widget и GraphicItem semantic trees поверх общего affine/clip/bounds evaluation и канонического `DrawList2D`, с невладеющими handle-based projections между ними.
 - [Articulation3D as a chain of moving frames](2026-08-04-articulation3d-moving-frame-chain.md) - `Articulation3D` как unit-only дерево подвижных выходных фреймов без runtime-разделения на joint/link, включая инерцию, контакты и границу scene authoring.
