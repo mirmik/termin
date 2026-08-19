@@ -10,6 +10,19 @@ import subprocess
 import sys
 from typing import Iterable, Mapping
 
+from .managed_process import (
+    DEFAULT_KILL_TIMEOUT_SECONDS,
+    DEFAULT_TERMINATE_TIMEOUT_SECONDS,
+    run_managed_process,
+)
+
+
+# A smoke script may own another managed group. Give its SIGTERM handler enough
+# time to complete both cleanup phases before the outer supervisor escalates.
+PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS = (
+    DEFAULT_TERMINATE_TIMEOUT_SECONDS + DEFAULT_KILL_TIMEOUT_SECONDS + 2.0
+)
+
 
 @dataclass(frozen=True)
 class ProcessSmokeRun:
@@ -100,46 +113,58 @@ def execute_process_smoke_suites(
         print("----------------------------------------")
         print(f"  {suite_id}")
         print("----------------------------------------")
-        for root in suite["roots"]:
-            command = repo_root / str(root)
-            command_line, command_error = _command_line(command, platform)
-            if command_error is not None or command_line is None:
-                failed[suite_id] = f"{command_error}; log: {displayed_log_path}"
-                log_parts.append(f"ERROR: {failed[suite_id]}\n")
-                break
-            log_parts.append(f"$ {' '.join(command_line)}\n")
-            try:
-                result = subprocess.run(
-                    command_line,
-                    cwd=repo_root,
-                    env=environment,
-                    check=False,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    timeout=timeout_seconds,
-                )
-                output = result.stdout or ""
-            except subprocess.TimeoutExpired as exc:
-                output = exc.stdout or ""
-                if isinstance(output, bytes):
-                    output = output.decode(errors="replace")
+        try:
+            for root in suite["roots"]:
+                command = repo_root / str(root)
+                command_line, command_error = _command_line(command, platform)
+                if command_error is not None or command_line is None:
+                    failed[suite_id] = f"{command_error}; log: {displayed_log_path}"
+                    log_parts.append(f"ERROR: {failed[suite_id]}\n")
+                    break
+                log_parts.append(f"$ {' '.join(command_line)}\n")
+                try:
+                    run_options = {
+                        "cwd": repo_root,
+                        "env": environment,
+                        "check": False,
+                        "stdout": subprocess.PIPE,
+                        "stderr": subprocess.STDOUT,
+                        "text": True,
+                        "timeout": timeout_seconds,
+                    }
+                    if os.name == "posix":
+                        result = run_managed_process(
+                            command_line,
+                            terminate_timeout_seconds=(
+                                PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS
+                            ),
+                            **run_options,
+                        )
+                    else:
+                        result = subprocess.run(command_line, **run_options)
+                    output = result.stdout or ""
+                except subprocess.TimeoutExpired as exc:
+                    output = exc.stdout or ""
+                    if isinstance(output, bytes):
+                        output = output.decode(errors="replace")
+                    log_parts.append(output)
+                    failed[suite_id] = (
+                        f"timed out after {timeout_seconds:g}s; "
+                        f"log: {displayed_log_path}"
+                    )
+                    break
                 log_parts.append(output)
-                failed[suite_id] = (
-                    f"timed out after {timeout_seconds:g}s; log: {displayed_log_path}"
-                )
-                break
-            log_parts.append(output)
-            if output:
-                sys.stdout.write(output)
-                sys.stdout.flush()
-            if result.returncode != 0:
-                failed[suite_id] = (
-                    f"command exited with code {result.returncode}; "
-                    f"log: {displayed_log_path}"
-                )
-                break
-        log_path.write_text("".join(log_parts), encoding="utf-8")
+                if output:
+                    sys.stdout.write(output)
+                    sys.stdout.flush()
+                if result.returncode != 0:
+                    failed[suite_id] = (
+                        f"command exited with code {result.returncode}; "
+                        f"log: {displayed_log_path}"
+                    )
+                    break
+        finally:
+            log_path.write_text("".join(log_parts), encoding="utf-8")
         if suite_id not in failed:
             executed.append(suite_id)
 

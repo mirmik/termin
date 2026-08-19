@@ -14,16 +14,52 @@ import time
 from urllib.request import Request, urlopen
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+BUILD_TOOLS_ROOT = REPO_ROOT / "core" / "termin-build-tools"
+sys.path.insert(0, str(BUILD_TOOLS_ROOT))
+
+from termin_build.managed_process import (  # noqa: E402
+    ManagedProcess,
+    run_managed_process,
+)
+
+
 class SmokeError(RuntimeError):
     pass
 
 
+FORCE_MCP_FAILURE_ENV = "TERMIN_NATIVE_PLAYER_SMOKE_FORCE_FAILURE_AFTER_MCP_READY"
+PROCESS_STATE_FILE_ENV = "TERMIN_NATIVE_PLAYER_SMOKE_PROCESS_STATE_FILE"
+
+
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return REPO_ROOT
+
+
+def _record_managed_player_state(
+    managed: ManagedProcess,
+    temp_root: Path,
+) -> None:
+    raw_state_path = os.environ.get(PROCESS_STATE_FILE_ENV)
+    if not raw_state_path:
+        return
+    state_path = Path(raw_state_path)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "player_pid": managed.process.pid,
+                "process_group_id": managed.process_group_id,
+                "temp_root": str(temp_root),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
+    result = run_managed_process(
         command,
         cwd=cwd,
         check=False,
@@ -245,19 +281,24 @@ def main() -> int:
         environment.pop("LD_LIBRARY_PATH", None)
         environment["TERMIN_PLAYER_MCP_SESSION_FILE"] = str(session_file)
         environment["TERMIN_PLAYER_MCP_PORT"] = "0"
+        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            environment["LP_NUM_THREADS"] = "2"
 
         with log_path.open("w", encoding="utf-8") as log:
-            process = subprocess.Popen(
+            managed = ManagedProcess.start(
                 _player_command(launcher),
                 cwd=manifest_path.parent,
                 env=environment,
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 text=True,
-                start_new_session=True,
             )
+            process = managed.process
             try:
+                _record_managed_player_state(managed, temp_root)
                 session = _wait_for_json(session_file, process, 20.0)
+                if os.environ.get(FORCE_MCP_FAILURE_ENV) == "1":
+                    raise SmokeError("injected failure after MCP session publication")
                 context = _rpc(
                     session,
                     1,
@@ -324,13 +365,7 @@ def main() -> int:
                     f"{exc}\nPlayer log tail:\n{log_text[-12000:]}"
                 ) from exc
             finally:
-                if process.poll() is None:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5.0)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=5.0)
+                managed.close()
 
         print(
             "[native-player-mcp-smoke] PASS "
