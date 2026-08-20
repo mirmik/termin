@@ -26,6 +26,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from termin.project.scene_paths import project_scene_identity
 from termin.project.settings import load_project_settings
 from termin.project_build.runtime_package.models import (
     RuntimePackageExportDiagnostic,
@@ -171,7 +172,7 @@ def export_runtime_package(
         packaged_path = output_dir_path / _packaged_scene_path(identity)
         _write_json(packaged_path, scene_data)
         packaged_scene_paths[identity] = packaged_path
-    entry_identity = entry_scene_path.relative_to(project_root_path).as_posix()
+    entry_identity = project_scene_identity(project_root_path, entry_scene_path)
     scene_path = packaged_scene_paths[entry_identity]
 
     resources: list[dict[str, str]] = []
@@ -312,11 +313,11 @@ def _resolve_scene_paths(
     resolved: dict[str, Path] = {}
     for scene in scenes:
         scene_path = _resolve_entry_scene(project_root, Path(scene))
-        identity = scene_path.relative_to(project_root).as_posix()
+        identity = project_scene_identity(project_root, scene_path)
         if identity in resolved:
             raise ValueError(f"Duplicate runtime scene identity: {identity}")
         resolved[identity] = scene_path
-    entry_identity = entry_scene.relative_to(project_root).as_posix()
+    entry_identity = project_scene_identity(project_root, entry_scene)
     if entry_identity not in resolved:
         raise ValueError("Runtime package entry scene must occur in the explicit scene roots")
     return dict(sorted(resolved.items()))

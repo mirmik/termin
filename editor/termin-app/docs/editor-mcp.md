@@ -178,7 +178,8 @@ The Python namespace contains:
 
 - `editor`: the live `EditorWindowTcgui`.
 - `scene`: the current editor scene.
-- `scene_name` / `editor_scene_name`: current editor scene name.
+- `scene_name` / `editor_scene_name`: current project-relative editor scene identity
+  (for example `Scenes/Main.scene`); this is not the short UI label.
 - `current_scene` / `current_scene_name`: aliases for the current editor scene.
 - `scene_manager`: the engine scene manager.
 - `selected` / `selected_entity`: currently selected editor entity or `None`.

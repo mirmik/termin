@@ -20,6 +20,7 @@ from termin.project.world_controller_selection import (
     ProjectWorldControllerSelection,
     create_selected_world_controller,
 )
+from termin.project.scene_paths import project_scene_identity, scene_display_label
 
 __all__ = [
     "InvalidProjectNameError",
@@ -36,4 +37,6 @@ __all__ = [
     "make_default_scene",
     "validate_project_name",
     "write_default_scene",
+    "project_scene_identity",
+    "scene_display_label",
 ]

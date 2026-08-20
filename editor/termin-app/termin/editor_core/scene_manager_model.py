@@ -49,7 +49,7 @@ class ManagedSceneSnapshot:
     @property
     def details(self) -> str:
         lines = [
-            f"Name: {self.name}",
+            f"Identity: {self.name}",
             f"Role: {self.role}",
             f"Handle: {self.handle} (index:generation)",
             f"Mode: {self.mode}",

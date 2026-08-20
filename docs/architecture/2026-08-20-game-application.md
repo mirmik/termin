@@ -49,6 +49,9 @@ inside that session and does not survive Stop.
 editor-owned scene and its gameplay copy to share one canonical project
 identity without string suffixes. Editor Play uses exactly this model, so its
 entry runtime identity matches the packaged-player identity.
+For a project scene file, that identity is its normalized project-relative
+POSIX path including the `.scene` suffix. The absolute source path and the
+short display label are separate data and are never lookup aliases.
 The role belongs to the host registration and never crosses the serialized
 scene or runtime-package boundary. A `RuntimeSession` binds runtime handles;
 authoring instances remain outside gameplay lifecycle.

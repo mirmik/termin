@@ -79,6 +79,7 @@ namespace termin {
 
         bool register_scene(const SceneKey& key, tc_scene_handle scene);
         bool unregister_scene(const SceneKey& key);
+        bool rekey_scene(const SceneKey& source, const SceneKey& destination);
 
         tc_scene_handle get_scene(const SceneKey& key) const;
         bool has_scene(const SceneKey& key) const;

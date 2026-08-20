@@ -383,7 +383,7 @@ def _write_project_contents(project_dir: Path, name: str, final_scene_file: Path
             "navmesh_area_names": navmesh_area_names,
         },
     )
-    _write_json(settings_dir / ".editor_state.json", {"last_scene": str(final_scene_file)})
+    _write_json(settings_dir / ".editor_state.json", {"last_scene": "scene.scene"})
     write_default_scene(str(project_dir / "scene.scene"))
 
 

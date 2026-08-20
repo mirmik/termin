@@ -179,6 +179,11 @@ namespace termin {
                  &SceneManager::unregister_scene,
                  nb::arg("key"),
                  "Unregister a scene by key (does not destroy it).")
+            .def("rekey_scene",
+                 &SceneManager::rekey_scene,
+                 nb::arg("source_key"),
+                 nb::arg("destination_key"),
+                 "Atomically replace a scene registry key without changing its instance.")
             .def(
                 "get_scene",
                 [](const SceneManager& self, const SceneKey& key) -> nb::object {

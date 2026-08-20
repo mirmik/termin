@@ -49,7 +49,9 @@ SceneManager **не управляет** вьюпортами, дисплеям�
 редактора и runtime-экземпляр той же сцены. Поэтому
 `AUTHORING("Scenes/Main.scene")` и `RUNTIME("Scenes/Main.scene")` могут
 существовать одновременно. Роль не сериализуется в `.scene`, а `tc_scene.name`
-остаётся диагностическим именем и не используется как ключ реестра.
+остаётся коротким диагностическим именем и не используется как ключ реестра.
+Для файлов проекта `identity` всегда является нормализованным project-relative
+POSIX-путём с суффиксом `.scene`; абсолютный source path хранится отдельно.
 
 ### Ключевые операции
 
@@ -57,6 +59,8 @@ SceneManager **не управляет** вьюпортами, дисплеям�
 - `close_scene(key)` или `close_scene(handle)` — дерегистрация и освобождение через `tc_scene_free`. Перед удалением вызывает role-aware `invoke_before_scene_close()`, чтобы RenderingManager или editor успел отмонтировать точный экземпляр;
 - `copy_scene(source_key, destination_key)` — создание глубокой копии, в том числе Play-модель `AUTHORING(identity)` → `RUNTIME(identity)` без изменения identity;
 - `get_scene(key)` / `key_of(handle)` — однозначное разрешение в обе стороны;
+- `rekey_scene(source, destination)` — атомарная смена identity при Save As без
+  смены экземпляра или роли;
 - `set_mode(key, mode)` или handle-вариант — переключение режима точного экземпляра.
 
 Name-only lookup намеренно отсутствует: если обе роли одной identity загружены,

@@ -40,7 +40,7 @@ def test_create_project_writes_manifest_settings_and_default_scene(tmp_path):
     assert len(navigation["navmesh_area_names"]) == 64
 
     editor_state = json.loads((settings_dir / ".editor_state.json").read_text(encoding="utf-8"))
-    assert editor_state == {"last_scene": str(project_dir / "scene.scene")}
+    assert editor_state == {"last_scene": "scene.scene"}
 
     scene = json.loads((project_dir / "scene.scene").read_text(encoding="utf-8"))
     assert scene["version"] == "1.0"

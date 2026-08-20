@@ -138,6 +138,35 @@ namespace termin {
         return true;
     }
 
+    bool SceneManager::rekey_scene(const SceneKey& source, const SceneKey& destination) {
+        if (destination.identity.empty()) {
+            tc_log(TC_LOG_ERROR, "[SceneManager] rekey_scene: empty destination identity");
+            return false;
+        }
+        auto source_it = _scenes.find(source);
+        if (source_it == _scenes.end()) {
+            tc_log(TC_LOG_ERROR, "[SceneManager] rekey_scene: source scene '%s' (%s) not found",
+                   source.identity.c_str(), role_name(source.role));
+            return false;
+        }
+        if (source == destination) return true;
+        if (source.role != destination.role) {
+            tc_log(TC_LOG_ERROR, "[SceneManager] rekey_scene: cannot change scene role from %s to %s",
+                   role_name(source.role), role_name(destination.role));
+            return false;
+        }
+        if (_scenes.contains(destination)) {
+            tc_log(TC_LOG_ERROR, "[SceneManager] rekey_scene: destination scene '%s' (%s) already exists",
+                   destination.identity.c_str(), role_name(destination.role));
+            return false;
+        }
+
+        auto node = _scenes.extract(source_it);
+        node.key() = destination;
+        _scenes.insert(std::move(node));
+        return true;
+    }
+
     tc_scene_handle SceneManager::get_scene(const SceneKey& key) const {
         const auto it = _scenes.find(key);
         return it != _scenes.end() ? it->second.handle : TC_SCENE_HANDLE_INVALID;

@@ -56,3 +56,30 @@ TEST_CASE("SceneManager rejects duplicate keys and handles without replacing ent
     CHECK_FALSE(manager.unregister_scene(authoring));
     tc_scene_free(first);
 }
+
+TEST_CASE("SceneManager atomically rekeys a registered scene") {
+    termin::SceneManager manager;
+    const termin::SceneKey untitled("untitled", termin::SceneRole::Authoring);
+    const termin::SceneKey saved("Scenes/Main.scene", termin::SceneRole::Authoring);
+    const termin::SceneKey occupied("Scenes/Occupied.scene", termin::SceneRole::Authoring);
+    const tc_scene_handle scene = manager.create_scene(untitled);
+    const tc_scene_handle other = manager.create_scene(occupied);
+    REQUIRE(tc_scene_handle_valid(scene));
+    REQUIRE(tc_scene_handle_valid(other));
+    REQUIRE(manager.set_scene_path(untitled, "/project/Scenes/Main.scene"));
+
+    REQUIRE(manager.rekey_scene(untitled, saved));
+    CHECK_FALSE(manager.has_scene(untitled));
+    CHECK(tc_scene_handle_eq(manager.get_scene(saved), scene));
+    CHECK_EQ(manager.get_scene_path(saved), std::string("/project/Scenes/Main.scene"));
+    REQUIRE(manager.key_of(scene).has_value());
+    CHECK(manager.key_of(scene).value() == saved);
+
+    CHECK_FALSE(manager.rekey_scene(saved, occupied));
+    CHECK(tc_scene_handle_eq(manager.get_scene(saved), scene));
+    CHECK(tc_scene_handle_eq(manager.get_scene(occupied), other));
+    CHECK_FALSE(manager.rekey_scene(untitled, saved));
+    CHECK_FALSE(manager.rekey_scene(
+        saved,
+        termin::SceneKey("Scenes/Main.scene", termin::SceneRole::Runtime)));
+}

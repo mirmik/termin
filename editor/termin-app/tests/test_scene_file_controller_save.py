@@ -9,15 +9,37 @@ class _SceneManager:
         self,
         calls: list[object],
         scene_path: str | None = None,
+        occupied: set[SceneKey] | None = None,
     ) -> None:
         self.calls = calls
         self.scene_path = scene_path
+        self.key = SceneKey("scene4.scene", SceneRole.AUTHORING)
+        self.occupied = set() if occupied is None else set(occupied)
+
+    def has_scene(self, key: SceneKey) -> bool:
+        return key == self.key or key in self.occupied
 
     def get_scene_path(self, _key: SceneKey) -> str | None:
         return self.scene_path
 
     def save_scene(self, key: SceneKey, path: str, editor_data) -> None:
         self.calls.append(("save", key, path, editor_data))
+        self.scene_path = path
+
+    def rekey_scene(self, source: SceneKey, destination: SceneKey) -> bool:
+        self.calls.append(("rekey", source, destination))
+        if source != self.key:
+            return False
+        if destination in self.occupied:
+            return False
+        self.key = destination
+        return True
+
+    def set_scene_path(self, key: SceneKey, path: str) -> bool:
+        if key != self.key:
+            return False
+        self.scene_path = path
+        return True
 
 
 class _ProjectSettings:
@@ -35,6 +57,7 @@ def _controller(
     *,
     scene_manager=None,
     dialog_service=None,
+    project_root,
 ) -> SceneFileController:
     monkeypatch.setattr(
         scene_file_controller_module.log,
@@ -44,10 +67,10 @@ def _controller(
     return SceneFileController(
         scene_manager=scene_manager or _SceneManager(calls),
         get_dialog_service=lambda: dialog_service,
-        get_editor_scene_name=lambda: "scene4",
-        set_editor_scene_name=lambda _name: None,
+        get_editor_scene_name=lambda: "scene4.scene",
+        set_editor_scene_name=lambda name: calls.append(("active-identity", name)),
         get_scene=lambda: None,
-        get_project_path=lambda: None,
+        get_project_path=lambda: str(project_root),
         get_editor_state_io=lambda: None,
         prepare_scene_for_save=prepare_scene_for_save,
         has_editor_attachment=lambda: False,
@@ -77,14 +100,15 @@ def test_save_synchronizes_live_render_state_before_scene_serialization(
         monkeypatch,
         calls,
         lambda name: calls.append(("prepare", name)),
+        project_root=tmp_path,
     )
     path = str(tmp_path / "scene4.scene")
 
     controller.save_scene_to_file(path)
 
     assert calls[:2] == [
-        ("prepare", "scene4"),
-        ("save", SceneKey("scene4", SceneRole.AUTHORING), path, None),
+        ("prepare", "scene4.scene"),
+        ("save", SceneKey("scene4.scene", SceneRole.AUTHORING), path, None),
     ]
 
 
@@ -103,6 +127,7 @@ def test_save_aborts_when_render_state_synchronization_fails(
         calls,
         lambda _name: False,
         scene_manager=_SceneManager(calls, path),
+        project_root=tmp_path,
     )
     completions: list[bool] = []
 
@@ -114,7 +139,7 @@ def test_save_aborts_when_render_state_synchronization_fails(
         (
             "log-error",
             "Failed to save scene: "
-            "Failed to synchronize scene state before saving 'scene4'",
+            "Failed to synchronize scene state before saving 'scene4.scene'",
         )
     ]
 
@@ -134,13 +159,14 @@ def test_save_existing_scene_reports_success_after_persistence(
         calls,
         lambda _name: True,
         scene_manager=_SceneManager(calls, path),
+        project_root=tmp_path,
     )
     completions: list[bool] = []
 
     controller.save_scene(completions.append)
 
     assert completions == [True]
-    assert ("save", SceneKey("scene4", SceneRole.AUTHORING), path, None) in calls
+    assert ("save", SceneKey("scene4.scene", SceneRole.AUTHORING), path, None) in calls
 
 
 class _SaveDialog:
@@ -172,6 +198,7 @@ def test_save_as_completes_only_after_dialog_result(monkeypatch, tmp_path) -> No
         calls,
         lambda _name: True,
         dialog_service=dialogs,
+        project_root=tmp_path,
     )
     completions: list[bool] = []
 
@@ -182,10 +209,16 @@ def test_save_as_completes_only_after_dialog_result(monkeypatch, tmp_path) -> No
     path = str(tmp_path / "saved.scene")
     dialogs.on_result(path)
     assert completions == [True]
-    assert ("save", SceneKey("scene4", SceneRole.AUTHORING), path, None) in calls
+    assert (
+        "rekey",
+        SceneKey("scene4.scene", SceneRole.AUTHORING),
+        SceneKey("saved.scene", SceneRole.AUTHORING),
+    ) in calls
+    assert ("active-identity", "saved.scene") in calls
+    assert ("save", SceneKey("saved.scene", SceneRole.AUTHORING), path, None) in calls
 
 
-def test_save_as_cancellation_reports_failure(monkeypatch) -> None:
+def test_save_as_cancellation_reports_failure(monkeypatch, tmp_path) -> None:
     calls: list[object] = []
     dialogs = _SaveDialog()
     controller = _controller(
@@ -193,6 +226,7 @@ def test_save_as_cancellation_reports_failure(monkeypatch) -> None:
         calls,
         lambda _name: True,
         dialog_service=dialogs,
+        project_root=tmp_path,
     )
     completions: list[bool] = []
 
@@ -202,3 +236,42 @@ def test_save_as_cancellation_reports_failure(monkeypatch) -> None:
     dialogs.on_result(None)
     assert completions == [False]
     assert not any(call[0] == "save" for call in calls)
+
+
+def test_save_as_rejects_an_open_destination_identity(monkeypatch, tmp_path) -> None:
+    calls: list[object] = []
+    destination = SceneKey("Scenes/saved.scene", SceneRole.AUTHORING)
+    manager = _SceneManager(calls, occupied={destination})
+    controller = _controller(
+        monkeypatch,
+        calls,
+        lambda _name: True,
+        scene_manager=manager,
+        project_root=tmp_path,
+    )
+    path = tmp_path / "Scenes" / "saved.scene"
+
+    assert controller.save_scene_to_file(str(path)) is False
+    assert not any(call[0] in {"rekey", "save"} for call in calls)
+    assert any(
+        call[0] == "log-error" and "destination identity is already open" in call[1]
+        for call in calls
+    )
+
+
+def test_save_rejects_a_path_outside_the_project(monkeypatch, tmp_path) -> None:
+    calls: list[object] = []
+    project_root = tmp_path / "Project"
+    controller = _controller(
+        monkeypatch,
+        calls,
+        lambda _name: True,
+        project_root=project_root,
+    )
+
+    assert controller.save_scene_to_file(str(tmp_path / "outside.scene")) is False
+    assert not any(call[0] in {"rekey", "save"} for call in calls)
+    assert any(
+        call[0] == "log-error" and "outside project root" in call[1]
+        for call in calls
+    )
