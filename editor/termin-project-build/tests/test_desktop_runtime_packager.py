@@ -266,6 +266,7 @@ def test_build_desktop_project_writes_bundle_contract(
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "kinematic" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "robotics" / "__init__.py").exists()
     assert (
         result.dist_dir
         / "lib"
@@ -642,6 +643,7 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "kinematic" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "robotics" / "__init__.py").exists()
     assert (
         dist_dir
         / "python"

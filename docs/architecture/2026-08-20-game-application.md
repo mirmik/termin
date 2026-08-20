@@ -9,9 +9,9 @@ The language-neutral `WorldController` registry, instance lifecycle, native
 adapter, Python declaration transaction, and `EngineCore`-owned
 `RuntimeSession` lifecycle are implemented in `termin-engine`. The transient
 scene-to-session `WorldContext` route and synchronous primary-scene switching
-are also implemented. Editor Play/Stop is the first integrated host. Project
-selection now crosses the build boundary in strict runtime-package and desktop
-app manifests; packaged-player session startup, source and headless launch
+are also implemented. Editor Play/Stop and the packaged desktop player host the
+same engine-owned session. Project selection crosses the build boundary in
+strict runtime-package and desktop app manifests; source and headless launch
 paths remain follow-up work.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
@@ -258,6 +258,30 @@ does not take part in the gameplay render transaction.
 No runtime-session state contains authoring paths, copy provenance, editor
 selection, undo state, view models, editor callbacks, or host binding arrays.
 
+## Packaged player boundary
+
+The desktop player loads the exact packaged module closure, creates the
+selected controller, and begins the `EngineCore` session before loading any
+scene. It then loads and registers the fixed package scene table, binds every
+scene to the session, creates rendering/window services, and requests the entry
+scene through `WorldContext`. Initial activation uses
+`EngineCore::tick_and_render(0)` rather than a player-only transition path.
+
+During the run, project code requests another already packaged scene through
+the same context. `EngineCore` commits it at the start of `tick_and_render()`;
+the player only observes the published primary scene on the next event poll to
+reconcile its automation projection and viewport input. The Python MCP
+`scene`, `scene_name`, and `viewport` values are live properties, not cached
+entry-scene objects.
+
+Shutdown closes automation ingress first, ends the session, destroys all
+package-owned scenes and engine render objects, and only then unloads project
+modules. A missing explicit controller type is fatal and never starts a null
+session. A null manifest selection still creates a valid controller-free
+session. The process smoke exercises a relocated bundle in both modes plus an
+exact-selection failure and an `entry -> secondary -> entry` retained-scene
+round trip.
+
 ## Dependency placement
 
 The existing dependency direction is `termin-runtime -> termin-engine`, so an
@@ -301,6 +325,6 @@ Composition and host sequence:
 - #1788 transports project selection through build/package manifests
   (implemented);
 - #1785 integrates editor Play/Stop (implemented);
-- #1786 integrates the packaged player;
+- #1786 integrates the packaged player (implemented);
 - #1789 integrates source and headless runs;
 - #1784 performs the final cross-host lifecycle and cleanup verification.

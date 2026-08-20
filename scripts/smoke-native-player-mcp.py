@@ -77,9 +77,12 @@ def _run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def _create_project(sdk_python: Path, temp_root: Path) -> Path:
     code = (
-        "from termin.project.creation import create_project\n"
+        "from termin.project.creation import create_project, write_default_scene\n"
+        "from pathlib import Path\n"
         "import sys\n"
-        "print(create_project('NativePlayerMcpSmoke', sys.argv[1]))\n"
+        "project_file = Path(create_project('NativePlayerMcpSmoke', sys.argv[1]))\n"
+        "write_default_scene(str(project_file.parent / 'secondary.scene'))\n"
+        "print(project_file)\n"
     )
     result = _run(
         [str(sdk_python), "-c", code, str(temp_root)],
@@ -89,6 +92,16 @@ def _create_project(sdk_python: Path, temp_root: Path) -> Path:
     project_root = project_file.parent
     settings = project_root / "project_settings"
     settings.mkdir(exist_ok=True)
+    project_settings_path = settings / "project.json"
+    project_settings = json.loads(project_settings_path.read_text(encoding="utf-8"))
+    project_settings["world_controller"] = {
+        "module": "game",
+        "type": "SmokeDirector",
+    }
+    project_settings_path.write_text(
+        json.dumps(project_settings, indent=2),
+        encoding="utf-8",
+    )
     profiles = {
         "version": 2,
         "profiles": {
@@ -101,7 +114,7 @@ def _create_project(sdk_python: Path, temp_root: Path) -> Path:
                 "configuration": "dev",
                 "content": {
                     "entry_scene": "scene.scene",
-                    "scenes": ["scene.scene"],
+                    "scenes": ["scene.scene", "secondary.scene"],
                     "modules": [],
                     "python": {"requirements": []},
                     "resources": {"policy": "strict", "include": []},
@@ -115,6 +128,131 @@ def _create_project(sdk_python: Path, temp_root: Path) -> Path:
     }
     (settings / "build_profiles.json").write_text(
         json.dumps(profiles, indent=2),
+        encoding="utf-8",
+    )
+
+    for identity, label, entity_uuid in (
+        ("scene.scene", "entry", "10000000-0000-0000-0000-000000000001"),
+        ("secondary.scene", "secondary", "20000000-0000-0000-0000-000000000001"),
+    ):
+        scene_path = project_root / identity
+        document = json.loads(scene_path.read_text(encoding="utf-8"))
+        document["scene"]["entities"].append(
+            {
+                "uuid": entity_uuid,
+                "name": f"{label.title()} Runtime Probe",
+                "priority": 0,
+                "visible": True,
+                "enabled": True,
+                "pickable": False,
+                "selectable": False,
+                "layer": 0,
+                "flags": 0,
+                "pose": {
+                    "position": [0.0, 0.0, 0.0],
+                    "rotation": [0.0, 0.0, 0.0, 1.0],
+                },
+                "scale": [1.0, 1.0, 1.0],
+                "components": [
+                    {
+                        "type": "SmokeProbe",
+                        "data": {"label": label},
+                    }
+                ],
+            }
+        )
+        scene_path.write_text(json.dumps(document, indent=2), encoding="utf-8")
+
+    (project_root / "game.pymodule").write_text(
+        json.dumps(
+            {
+                "name": "game",
+                "type": "python",
+                "root": ".",
+                "packages": ["Game"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    game_package = project_root / "Game"
+    game_package.mkdir()
+    (game_package / "__init__.py").write_text(
+        '''from __future__ import annotations
+
+import os
+
+from tcbase import log
+from termin.engine import WorldController, require_world_context
+from termin.inspect import InspectField
+from termin.scene import PythonComponent
+
+
+def _event(name: str) -> None:
+    message = f"[WorldControllerSmoke] {name}"
+    log.info(message)
+    path = os.environ.get("TERMIN_WORLD_CONTROLLER_SMOKE_EVENTS")
+    if path:
+        with open(path, "a", encoding="utf-8") as stream:
+            stream.write(name + "\\n")
+
+
+class SmokeDirector(WorldController):
+    def __init__(self) -> None:
+        self.context = None
+        self.started = False
+        _event("controller:create")
+
+    def start(self, context) -> None:
+        self.context = context
+        self.started = True
+        _event("controller:start")
+
+    def stop(self, context) -> None:
+        assert context == self.context
+        _event("controller:stop")
+        self.started = False
+        self.context = None
+
+    def rotate(self, scene) -> bool:
+        assert self.started and self.context is not None
+        return self.context.request_primary_scene(scene)
+
+    def __del__(self) -> None:
+        _event("controller:destroy")
+
+
+class SmokeProbe(PythonComponent):
+    inspect_fields = {
+        "label": InspectField(path="label", label="Label", kind="string"),
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.label = ""
+        self.started = False
+        self.updates = 0
+
+    def start(self) -> None:
+        context = require_world_context(self.scene, f"SmokeProbe[{self.label}]")
+        controller = context.controller
+        if controller is not None:
+            assert controller.started
+        self.started = True
+        _event(f"probe:{self.label}:start")
+
+    def update(self, dt: float) -> None:
+        self.updates += 1
+
+    def on_scene_active(self) -> None:
+        _event(f"probe:{self.label}:active")
+
+    def on_scene_inactive(self) -> None:
+        _event(f"probe:{self.label}:inactive")
+
+    def on_destroy(self) -> None:
+        _event(f"probe:{self.label}:destroy")
+''',
         encoding="utf-8",
     )
     return project_file
@@ -132,6 +270,21 @@ def _find_bundle(project_root: Path) -> tuple[Path, Path]:
         raise SmokeError(f"packaged native player launcher is missing: {launcher}")
     package_manifest_path = manifest_path.parent / manifest["package"]["manifest"]
     package_manifest = json.loads(package_manifest_path.read_text(encoding="utf-8"))
+    expected_controller = {"module": "game", "type": "SmokeDirector"}
+    if manifest["runtime"]["world_controller"] != expected_controller:
+        raise SmokeError("app manifest did not preserve the selected WorldController")
+    if package_manifest["world_controller"] != expected_controller:
+        raise SmokeError("package manifest did not preserve the selected WorldController")
+    if package_manifest["entry_scene"] != "scene.scene":
+        raise SmokeError("package manifest changed the entry scene identity")
+    packaged_scenes = {item["identity"] for item in package_manifest["scenes"]}
+    if packaged_scenes != {"scene.scene", "secondary.scene"}:
+        raise SmokeError(f"unexpected packaged scene table: {sorted(packaged_scenes)!r}")
+    module_manifest_path = manifest_path.parent / manifest["runtime"]["modules"]["manifest"]
+    module_manifest = json.loads(module_manifest_path.read_text(encoding="utf-8"))
+    module_names = {item["name"] for item in module_manifest["modules"]}
+    if "game" not in module_names:
+        raise SmokeError("selected WorldController owner module was not auto-packaged")
     packaged_resources = {
         (item["type"], item["uuid"])
         for item in package_manifest["resources"]
@@ -181,8 +334,17 @@ def _verify_linux_launcher_linkage(launcher: Path, bundle_root: Path) -> None:
             )
 
 
-def _player_command(launcher: Path) -> list[str]:
-    command = [str(launcher), "--backend", "opengl", "--windowed", "--mcp"]
+def _player_command(
+    launcher: Path,
+    *,
+    mcp: bool,
+    exit_after_frames: int | None = None,
+) -> list[str]:
+    command = [str(launcher), "--backend", "opengl", "--windowed"]
+    if mcp:
+        command.append("--mcp")
+    if exit_after_frames is not None:
+        command.append(f"--exit-after-frames={exit_after_frames}")
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
         return command
     xvfb_run = shutil.which("xvfb-run")
@@ -251,6 +413,84 @@ def _wait_for_cleanup(
         raise SmokeError("native player left its owned MCP session file behind")
 
 
+def _rewrite_world_controller(
+    app_manifest_path: Path,
+    selection: dict[str, str] | None,
+) -> None:
+    app_manifest = json.loads(app_manifest_path.read_text(encoding="utf-8"))
+    app_manifest["runtime"]["world_controller"] = selection
+    app_manifest_path.write_text(json.dumps(app_manifest, indent=2), encoding="utf-8")
+
+    package_manifest_path = app_manifest_path.parent / app_manifest["package"]["manifest"]
+    package_manifest = json.loads(package_manifest_path.read_text(encoding="utf-8"))
+    package_manifest["world_controller"] = selection
+    package_manifest_path.write_text(
+        json.dumps(package_manifest, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _player_environment(
+    *,
+    event_path: Path,
+    session_file: Path | None = None,
+) -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.pop("LD_LIBRARY_PATH", None)
+    environment["TERMIN_WORLD_CONTROLLER_SMOKE_EVENTS"] = str(event_path)
+    if session_file is not None:
+        environment["TERMIN_PLAYER_MCP_SESSION_FILE"] = str(session_file)
+        environment["TERMIN_PLAYER_MCP_PORT"] = "0"
+    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        environment["LP_NUM_THREADS"] = "2"
+    return environment
+
+
+def _run_non_mcp_case(
+    launcher: Path,
+    *,
+    bundle_root: Path,
+    event_path: Path,
+    expected_exit_code: int,
+) -> str:
+    result = run_managed_process(
+        _player_command(launcher, mcp=False, exit_after_frames=2),
+        cwd=bundle_root,
+        env=_player_environment(event_path=event_path),
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != expected_exit_code:
+        raise SmokeError(
+            f"player exited with {result.returncode}, expected {expected_exit_code}\n"
+            f"Player log tail:\n{result.stdout[-12000:]}"
+        )
+    return result.stdout
+
+
+def _assert_log_order(log_text: str, *fragments: str) -> None:
+    cursor = -1
+    for fragment in fragments:
+        position = log_text.find(fragment, cursor + 1)
+        if position < 0:
+            raise SmokeError(f"player log is missing lifecycle event: {fragment!r}")
+        cursor = position
+
+
+def _assert_clean_runtime_log(log_text: str) -> None:
+    forbidden = (
+        "RuntimeSession shutdown reported lifecycle failures",
+        "project module shutdown failed",
+        "Failed to prepare registered component",
+        "Entity is invalid",
+    )
+    found = [fragment for fragment in forbidden if fragment in log_text]
+    if found:
+        raise SmokeError(f"player reported dirty runtime cleanup: {found!r}")
+
+
 def main() -> int:
     root = _repo_root()
     sdk = root / "sdk"
@@ -273,21 +513,74 @@ def main() -> int:
             cwd=root,
         )
         launcher, manifest_path = _find_bundle(project_file.parent)
-        _verify_linux_launcher_linkage(launcher, manifest_path.parent)
+        built_bundle_root = manifest_path.parent
+        launcher_relative = launcher.relative_to(built_bundle_root)
+        manifest_relative = manifest_path.relative_to(built_bundle_root)
+
+        selected_root = temp_root / "relocated-selected"
+        shutil.copytree(built_bundle_root, selected_root)
+        shutil.rmtree(project_file.parent)
+        selected_launcher = selected_root / launcher_relative
+        _verify_linux_launcher_linkage(selected_launcher, selected_root)
+
+        null_root = temp_root / "relocated-null"
+        invalid_root = temp_root / "relocated-invalid"
+        shutil.copytree(selected_root, null_root)
+        shutil.copytree(selected_root, invalid_root)
+        _rewrite_world_controller(null_root / manifest_relative, None)
+        _rewrite_world_controller(
+            invalid_root / manifest_relative,
+            {"module": "game", "type": "MissingSmokeDirector"},
+        )
+
+        null_events = temp_root / "null-events.txt"
+        null_log = _run_non_mcp_case(
+            null_root / launcher_relative,
+            bundle_root=null_root,
+            event_path=null_events,
+            expected_exit_code=0,
+        )
+        if "controller:create" in null_events.read_text(encoding="utf-8"):
+            raise SmokeError("null selection unexpectedly constructed a WorldController")
+        _assert_clean_runtime_log(null_log)
+        _assert_log_order(
+            null_log,
+            "[WorldControllerSmoke] probe:entry:start",
+            "[WorldControllerSmoke] probe:entry:destroy",
+            "termin_player: module game unloaded",
+        )
+
+        invalid_events = temp_root / "invalid-events.txt"
+        invalid_log = _run_non_mcp_case(
+            invalid_root / launcher_relative,
+            bundle_root=invalid_root,
+            event_path=invalid_events,
+            expected_exit_code=1,
+        )
+        expected_invalid = (
+            "failed to create selected WorldController 'MissingSmokeDirector' "
+            "from module 'game'"
+        )
+        if expected_invalid not in invalid_log:
+            raise SmokeError(
+                "invalid exact WorldController selection did not produce an actionable fatal error"
+            )
+        if invalid_events.exists() and "probe:entry:start" in invalid_events.read_text(encoding="utf-8"):
+            raise SmokeError("invalid WorldController selection fell back to a running null session")
+
         session_file = temp_root / "player-mcp-session.json"
         screenshot = temp_root / "player.png"
         log_path = temp_root / "player.log"
-        environment = os.environ.copy()
-        environment.pop("LD_LIBRARY_PATH", None)
-        environment["TERMIN_PLAYER_MCP_SESSION_FILE"] = str(session_file)
-        environment["TERMIN_PLAYER_MCP_PORT"] = "0"
-        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-            environment["LP_NUM_THREADS"] = "2"
+        selected_events = temp_root / "selected-events.txt"
+        environment = _player_environment(
+            event_path=selected_events,
+            session_file=session_file,
+        )
 
         with log_path.open("w", encoding="utf-8") as log:
             managed = ManagedProcess.start(
-                _player_command(launcher),
-                cwd=manifest_path.parent,
+                _player_command(selected_launcher, mcp=True),
+                cwd=selected_root,
                 env=environment,
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -305,35 +598,111 @@ def main() -> int:
                     "termin/execute_python",
                     {
                         "script": (
-                            "from termin.collision import CollisionWorld\n"
-                            "from termin.colliders.collider_component import ColliderComponent\n"
-                            "print(type(scene).__name__)\n"
-                            "print(type(window).__name__)\n"
-                            "print(type(display).__name__)\n"
-                            "print(scene.is_alive())\n"
-                            "collision_world = CollisionWorld.from_scene(scene)\n"
-                            "print(collision_world is not None)\n"
-                            "collider_count = collision_world.size()\n"
-                            "collider_entity = scene.create_entity('NativePlayerSmokeCollider')\n"
-                            "collider_entity.add_component(ColliderComponent())\n"
-                            "print(collision_world.size() == collider_count + 1)"
+                            "from termin.display import _viewport_get_input_manager\n"
+                            "from termin.engine import require_world_context\n"
+                            "from termin.engine import scene as engine_scene\n"
+                            "entry_scene = scene\n"
+                            "entry_probe = scene.get_components_of_type('SmokeProbe')[0]\n"
+                            "director = require_world_context(scene, 'packaged smoke').controller\n"
+                            "secondary_scene = runtime._engine.scene_manager.get_scene('secondary.scene')\n"
+                            "print(scene_name)\n"
+                            "print(entry_probe.label)\n"
+                            "print(entry_probe.started)\n"
+                            "print(entry_probe.updates > 0)\n"
+                            "print(director.started)\n"
+                            "print(runtime.rendering_manager.topology.is_attached(entry_scene))\n"
+                            "print(not runtime.rendering_manager.topology.is_attached(secondary_scene))\n"
+                            "print(_viewport_get_input_manager(*viewport._viewport_handle()) != 0)\n"
+                            "print(director.rotate(secondary_scene))"
                         )
                     },
                 )
                 context_lines = context["output"].splitlines()
                 if context_lines != [
-                    "TcScene",
-                    "NativePlayerWindow",
-                    "Display",
+                    "scene.scene",
+                    "entry",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
                     "True",
                     "True",
                     "True",
                 ]:
                     raise SmokeError(f"unexpected live runtime context: {context_lines!r}")
 
-                captured = _rpc(
+                secondary = _rpc(
                     session,
                     2,
+                    "termin/execute_python",
+                    {
+                        "script": (
+                            "secondary_probe = scene.get_components_of_type('SmokeProbe')[0]\n"
+                            "print(scene_name)\n"
+                            "print(secondary_probe.label)\n"
+                            "print(secondary_probe.started)\n"
+                            "print(secondary_probe.updates > 0)\n"
+                            "print(entry_scene.get_mode() == engine_scene.SceneMode.INACTIVE)\n"
+                            "print(scene.get_mode() == engine_scene.SceneMode.PLAY)\n"
+                            "print(not runtime.rendering_manager.topology.is_attached(entry_scene))\n"
+                            "print(runtime.rendering_manager.topology.is_attached(scene))\n"
+                            "print(_viewport_get_input_manager(*viewport._viewport_handle()) != 0)\n"
+                            "print(director.rotate(entry_scene))"
+                        )
+                    },
+                )
+                secondary_lines = secondary["output"].splitlines()
+                if secondary_lines != [
+                    "secondary.scene",
+                    "secondary",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                ]:
+                    raise SmokeError(
+                        f"unexpected secondary scene runtime state: {secondary_lines!r}"
+                    )
+
+                returned = _rpc(
+                    session,
+                    3,
+                    "termin/execute_python",
+                    {
+                        "script": (
+                            "print(scene_name)\n"
+                            "print(scene.equal(entry_scene))\n"
+                            "print(scene.get_components_of_type('SmokeProbe')[0] is entry_probe)\n"
+                            "print(scene.get_mode() == engine_scene.SceneMode.PLAY)\n"
+                            "print(secondary_scene.get_mode() == engine_scene.SceneMode.INACTIVE)\n"
+                            "print(runtime.rendering_manager.topology.is_attached(scene))\n"
+                            "print(not runtime.rendering_manager.topology.is_attached(secondary_scene))\n"
+                            "print(_viewport_get_input_manager(*viewport._viewport_handle()) != 0)"
+                        )
+                    },
+                )
+                returned_lines = returned["output"].splitlines()
+                if returned_lines != [
+                    "scene.scene",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                    "True",
+                ]:
+                    raise SmokeError(
+                        f"unexpected retained entry scene runtime state: {returned_lines!r}"
+                    )
+
+                captured = _rpc(
+                    session,
+                    4,
                     "tools/call",
                     {
                         "name": "capture_player_screenshot",
@@ -353,7 +722,7 @@ def main() -> int:
 
                 _rpc(
                     session,
-                    3,
+                    5,
                     "termin/execute_python",
                     {"script": "request_quit(0)"},
                 )
@@ -367,10 +736,27 @@ def main() -> int:
             finally:
                 managed.close()
 
+        selected_log = log_path.read_text(encoding="utf-8", errors="replace")
+        _assert_clean_runtime_log(selected_log)
+        _assert_log_order(
+            selected_log,
+            "[WorldControllerSmoke] controller:create",
+            "[WorldControllerSmoke] controller:start",
+            "[WorldControllerSmoke] probe:entry:start",
+        )
+        _assert_log_order(
+            selected_log,
+            "[WorldControllerSmoke] controller:stop",
+            "[WorldControllerSmoke] controller:destroy",
+            "[WorldControllerSmoke] probe:entry:destroy",
+            "[WorldControllerSmoke] probe:secondary:destroy",
+            "termin_player: module game unloaded",
+        )
+
         print(
             "[native-player-mcp-smoke] PASS "
-            f"scene/window/display/collision live; PNG={screenshot.stat().st_size} bytes; "
-            "request_quit/session cleanup clean"
+            f"null/exact-failure/selected lifecycle; retained scene round-trip; "
+            f"PNG={screenshot.stat().st_size} bytes; cleanup clean"
         )
     return 0
 

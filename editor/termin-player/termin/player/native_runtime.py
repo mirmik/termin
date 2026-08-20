@@ -42,21 +42,34 @@ class NativePlayerRuntime:
         self._bridge = bridge
         self._engine = _borrow_engine_core(bridge.engine_capsule())
         self.rendering_manager = self._engine.rendering_manager
+        from termin.default_assets.resource_manager import DefaultResourceManager
 
-        scene_index, scene_generation = bridge.scene_handle()
-        self.scene = TcScene.from_handle(scene_index, scene_generation)
+        self.resource_manager = DefaultResourceManager.instance()
 
         display_index, display_generation = bridge.display_handle()
         self.display = Display.from_handle(display_index, display_generation)
 
-        viewport_index, viewport_generation = bridge.viewport_handle()
-        self.viewport = Viewport._from_handle((viewport_index, viewport_generation))
-
         self.window = NativePlayerWindow(bridge)
         self.camera = None
         self.project_path = Path(bridge.project_path())
-        self.scene_name = str(bridge.scene_name())
         self.delta_time = 0.0
+
+    @property
+    def scene(self):
+        """Return the primary packaged scene published by RuntimeSession."""
+        scene_index, scene_generation = self._bridge.scene_handle()
+        return TcScene.from_handle(scene_index, scene_generation)
+
+    @property
+    def viewport(self):
+        """Return the current primary scene's first packaged viewport."""
+        viewport_index, viewport_generation = self._bridge.viewport_handle()
+        return Viewport._from_handle((viewport_index, viewport_generation))
+
+    @property
+    def scene_name(self) -> str:
+        """Return the stable package identity of the primary scene."""
+        return str(self._bridge.scene_name())
 
     @property
     def exit_code(self) -> int:
