@@ -4,6 +4,7 @@ from pathlib import Path
 from termin_assets import PreLoadResult
 
 from termin.player import project_runtime_support
+from termin.player import project_settings
 
 
 class RecordingResourceManager:
@@ -23,6 +24,19 @@ class RecordingPreloader:
     def preload(self, path: str) -> PreLoadResult:
         self.paths.append(path)
         return PreLoadResult(resource_type="shader", path=path)
+
+
+def test_source_project_settings_treat_missing_ignored_paths_as_empty(monkeypatch, tmp_path: Path):
+    settings_dir = tmp_path / "project_settings"
+    settings_dir.mkdir()
+    (settings_dir / "project.json").write_text("{}", encoding="utf-8")
+    warnings: list[str] = []
+    monkeypatch.setattr(project_settings, "_log_warning", warnings.append)
+
+    settings = project_settings.load_project_runtime_settings(tmp_path)
+
+    assert settings.ignored_resource_paths == ()
+    assert warnings == []
 
 
 def test_source_asset_scan_ignores_generated_and_project_ignored_paths(monkeypatch, tmp_path: Path):
