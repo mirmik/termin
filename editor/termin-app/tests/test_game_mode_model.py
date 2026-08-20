@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 from termin.engine import (
@@ -417,6 +418,7 @@ def _make_game_mode_model(
     *,
     prepare_code_for_play=None,
     create_controller_for_play=None,
+    get_project_path=None,
 ):
     return GameModeModel(
         engine=engine,
@@ -424,13 +426,14 @@ def _make_game_mode_model(
         render_scene_session=render_session,
         rendering_controller=_RenderingController(),
         get_editor_scene_name=lambda: "Editor",
+        get_project_path=get_project_path,
         scene_tree_controller=_SceneTreeController(),
         prepare_code_for_play=prepare_code_for_play,
         create_controller_for_play=create_controller_for_play,
     )
 
 
-def _new_game_mode_fixture():
+def _new_game_mode_fixture(project_path: Path | None = None):
     bootstrap_runtime()
     engine = EngineCore()
     editor_scene = engine.scene_manager.create_scene(_authoring_key("Editor"), [])
@@ -439,7 +442,14 @@ def _new_game_mode_fixture():
     editor_connector = _EditorConnector()
     editor_connector.attached_scene_name = "Editor"
     render_session = _RenderSession()
-    model = _make_game_mode_model(engine, editor_connector, render_session)
+    model = _make_game_mode_model(
+        engine,
+        editor_connector,
+        render_session,
+        get_project_path=(
+            None if project_path is None else lambda: str(project_path)
+        ),
+    )
     return engine, editor_scene, editor_connector, render_session, model
 
 
@@ -675,6 +685,39 @@ def test_game_mode_model_observes_rotation_without_host_transition_binding():
             and engine.scene_manager.has_scene(_runtime_key("Secondary"))
         ):
             engine.scene_manager.close_scene(_runtime_key("Secondary"))
+
+
+def test_game_mode_model_elevates_runtime_scene_from_project_filesystem(tmp_path):
+    secondary_path = tmp_path / "Secondary.scene"
+    secondary_path.write_text(
+        json.dumps({"version": "1.0", "scene": {"entities": []}}),
+        encoding="utf-8",
+    )
+    engine, _editor_scene, connector, render_session, model = (
+        _new_game_mode_fixture(tmp_path)
+    )
+
+    try:
+        model.toggle_game_mode()
+        engine.tick_and_render(0.0)
+        context = model._game_session.context
+        assert context.transition_to("Secondary.scene")
+        assert engine.scene_manager.get_scene(_runtime_key("Secondary.scene")) is None
+
+        engine.tick_and_render(0.0)
+        model.refresh_primary_scene()
+
+        secondary = engine.scene_manager.get_scene(_runtime_key("Secondary.scene"))
+        assert secondary is not None
+        assert context.primary_scene.equal(secondary)
+        assert context.scene_identities == ("Editor", "Secondary.scene")
+        assert connector.attached_scene_name == "Secondary.scene"
+        assert render_session.events[-1] == ("reconcile", "Secondary.scene")
+
+        model.toggle_game_mode()
+        assert engine.scene_manager.get_scene(_runtime_key("Secondary.scene")) is None
+    finally:
+        _stop_and_shutdown(engine, model)
 
 
 def test_stop_preserves_runtime_scene_that_predates_play_session():

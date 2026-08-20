@@ -103,6 +103,7 @@ class HeadlessRuntime:
             if not self._engine.begin_session(controller):
                 raise HeadlessRuntimeError("EngineCore refused to start RuntimeSession")
             self._session_started = True
+            self._engine.scene_manager.set_scene_elevator(self._elevate_scene)
             if self.load_assets:
                 scan_project_assets(self.project_path, log_prefix="[HeadlessRuntime]")
 
@@ -152,10 +153,12 @@ class HeadlessRuntime:
             if not self._engine.end_session():
                 log.error("[HeadlessRuntime] RuntimeSession shutdown reported lifecycle failures")
             self._session_started = False
+            self._engine.scene_manager.set_scene_elevator(None)
 
         if self._engine is not None:
-            if self.scene is not None and self.scene.is_alive():
-                self._engine.scene_manager.close_scene(self.scene)
+            from termin.engine import SceneRole
+
+            self._engine.scene_manager.close_scenes(SceneRole.RUNTIME)
             if not self._engine.shutdown():
                 log.error("[HeadlessRuntime] EngineCore shutdown reported lifecycle failures")
         self.scene = None
@@ -220,7 +223,41 @@ class HeadlessRuntime:
         )
 
     def _load_scene(self):
-        scene_path = self.project_path / self.scene_name
+        return self._materialize_scene(self.scene_name, bind=True)
+
+    def _elevate_scene(self, key) -> bool:
+        from tcbase import log
+        from termin.engine import SceneRole
+
+        if key.role != SceneRole.RUNTIME:
+            log.error(
+                f"[HeadlessRuntime] Refusing to elevate non-runtime scene '{key.identity}'"
+            )
+            return False
+        try:
+            self._materialize_scene(key.identity, bind=False)
+            return True
+        except Exception as error:
+            log.error(
+                f"[HeadlessRuntime] Failed to elevate runtime scene "
+                f"'{key.identity}': {error}"
+            )
+            return False
+
+    def _materialize_scene(self, identity: str, *, bind: bool):
+        scene_path = self.project_path / identity
+        from termin.project.scene_paths import project_scene_identity
+
+        try:
+            canonical_identity = project_scene_identity(self.project_path, scene_path)
+        except ValueError as error:
+            raise HeadlessRuntimeError(
+                f"Invalid runtime scene identity '{identity}': {error}"
+            ) from error
+        if canonical_identity != identity:
+            raise HeadlessRuntimeError(
+                f"Runtime scene identity '{identity}' resolves as '{canonical_identity}'"
+            )
         if not scene_path.exists():
             raise HeadlessRuntimeError(f"Scene not found: {scene_path}")
 
@@ -243,18 +280,20 @@ class HeadlessRuntime:
             raise HeadlessRuntimeError("Headless runtime has no EngineCore")
         from termin.engine import scene as engine_scene
 
-        scene_key = engine_scene.SceneKey(self.scene_name, engine_scene.SceneRole.RUNTIME)
+        scene_key = engine_scene.SceneKey(identity, engine_scene.SceneRole.RUNTIME)
         scene = self._engine.scene_manager.create_scene(
             scene_key,
             list(self.scene_extensions),
         )
         if scene is None:
-            raise HeadlessRuntimeError(f"Failed to create scene: {self.scene_name}")
-        if not self._engine.bind_runtime_scene(scene):
+            raise HeadlessRuntimeError(f"Failed to create scene: {identity}")
+        bound = False
+        if bind and not self._engine.bind_runtime_scene(scene):
             self._engine.scene_manager.close_scene(scene)
             raise HeadlessRuntimeError(
-                f"Failed to bind scene to RuntimeSession: {self.scene_name}"
+                f"Failed to bind scene to RuntimeSession: {identity}"
             )
+        bound = bind
         try:
             scene.source_path = str(scene_path.resolve())
             if scene_data:
@@ -267,7 +306,8 @@ class HeadlessRuntime:
                 upgrade_scene_unknown_components(scene)
         except BaseException:
             if scene.is_alive():
-                self._engine.unbind_runtime_scene(scene)
+                if bound:
+                    self._engine.unbind_runtime_scene(scene)
                 self._engine.scene_manager.close_scene(scene)
             raise
         return scene

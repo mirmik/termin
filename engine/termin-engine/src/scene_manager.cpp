@@ -1,6 +1,7 @@
 #include "termin/scene/scene_manager.hpp"
 
 #include <filesystem>
+#include <exception>
 #include <fstream>
 #include <sstream>
 
@@ -172,6 +173,65 @@ namespace termin {
         return it != _scenes.end() ? it->second.handle : TC_SCENE_HANDLE_INVALID;
     }
 
+    tc_scene_handle SceneManager::elevate_scene(const SceneKey& key) {
+        const tc_scene_handle existing = get_scene(key);
+        if (tc_scene_alive(existing)) {
+            return existing;
+        }
+        if (key.identity.empty()) {
+            tc_log(TC_LOG_ERROR, "[SceneManager] elevate_scene: empty scene identity");
+            return TC_SCENE_HANDLE_INVALID;
+        }
+        if (!_scene_elevator) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] elevate_scene: no provider can materialize scene '%s' (%s)",
+                   key.identity.c_str(),
+                   role_name(key.role));
+            return TC_SCENE_HANDLE_INVALID;
+        }
+        if (!_elevating_scenes.emplace(key).second) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] elevate_scene: recursive elevation of scene '%s' (%s)",
+                   key.identity.c_str(),
+                   role_name(key.role));
+            return TC_SCENE_HANDLE_INVALID;
+        }
+
+        bool provided = false;
+        try {
+            provided = _scene_elevator(key);
+        } catch (const std::exception& error) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] elevate_scene: provider failed for scene '%s' (%s): %s",
+                   key.identity.c_str(),
+                   role_name(key.role),
+                   error.what());
+        } catch (...) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] elevate_scene: provider failed for scene '%s' (%s) with an unknown exception",
+                   key.identity.c_str(),
+                   role_name(key.role));
+        }
+        _elevating_scenes.erase(key);
+        if (!provided) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] elevate_scene: provider could not materialize scene '%s' (%s)",
+                   key.identity.c_str(),
+                   role_name(key.role));
+            return TC_SCENE_HANDLE_INVALID;
+        }
+
+        const tc_scene_handle materialized = get_scene(key);
+        if (!tc_scene_alive(materialized)) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] elevate_scene: provider reported success without registering scene '%s' (%s)",
+                   key.identity.c_str(),
+                   role_name(key.role));
+            return TC_SCENE_HANDLE_INVALID;
+        }
+        return materialized;
+    }
+
     bool SceneManager::has_scene(const SceneKey& key) const { return _scenes.contains(key); }
 
     bool SceneManager::is_registered(tc_scene_handle scene) const noexcept {
@@ -337,6 +397,9 @@ namespace termin {
     }
     void SceneManager::set_before_scene_destroy_guard(BeforeSceneDestroyGuard guard) {
         _before_scene_destroy_guard = std::move(guard);
+    }
+    void SceneManager::set_scene_elevator(SceneElevationCallback callback) {
+        _scene_elevator = std::move(callback);
     }
     void SceneManager::invoke_after_render() { if (_on_after_render) _on_after_render(); }
     void SceneManager::invoke_before_scene_close(const SceneKey& key) {

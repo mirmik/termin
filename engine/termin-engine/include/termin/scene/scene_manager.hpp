@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -50,6 +51,7 @@ namespace termin {
         using AfterRenderCallback = std::function<void()>;
         using BeforeSceneCloseCallback = std::function<void(const SceneKey&)>;
         using BeforeSceneDestroyGuard = std::function<void(tc_scene_handle)>;
+        using SceneElevationCallback = std::function<bool(const SceneKey&)>;
 
     protected:
         struct SceneRecord {
@@ -62,6 +64,8 @@ namespace termin {
         AfterRenderCallback _on_after_render;
         BeforeSceneCloseCallback _on_before_scene_close;
         BeforeSceneDestroyGuard _before_scene_destroy_guard;
+        SceneElevationCallback _scene_elevator;
+        std::unordered_set<SceneKey, SceneKeyHash> _elevating_scenes;
 
     public:
         SceneManager();
@@ -82,6 +86,7 @@ namespace termin {
         bool rekey_scene(const SceneKey& source, const SceneKey& destination);
 
         tc_scene_handle get_scene(const SceneKey& key) const;
+        tc_scene_handle elevate_scene(const SceneKey& key);
         bool has_scene(const SceneKey& key) const;
         bool is_registered(tc_scene_handle scene) const noexcept;
         std::optional<SceneKey> key_of(tc_scene_handle scene) const;
@@ -108,6 +113,7 @@ namespace termin {
         void set_on_after_render(AfterRenderCallback callback);
         void set_on_before_scene_close(BeforeSceneCloseCallback callback);
         void set_before_scene_destroy_guard(BeforeSceneDestroyGuard guard);
+        void set_scene_elevator(SceneElevationCallback callback);
         void invoke_after_render();
         void invoke_before_scene_close(const SceneKey& key);
     };

@@ -195,6 +195,14 @@ namespace termin {
                 },
                 nb::arg("key"),
                 "Get scene by key. Returns TcScene or None.")
+            .def(
+                "elevate_scene",
+                [](SceneManager& self, const SceneKey& key) -> nb::object {
+                    const tc_scene_handle scene = self.elevate_scene(key);
+                    return tc_scene_alive(scene) ? scene_from_handle(scene) : nb::none();
+                },
+                nb::arg("key"),
+                "Return an existing scene or ask the host provider to materialize and register it.")
             .def("has_scene", &SceneManager::has_scene, nb::arg("key"), "Check if scene exists.")
             .def(
                 "is_registered",
@@ -282,6 +290,22 @@ namespace termin {
                 },
                 nb::arg("callback").none(),
                 "Set callback to run before scene close. Pass None to clear.")
+
+            .def(
+                "set_scene_elevator",
+                [](SceneManager& self, nb::object callback) {
+                    if (callback.is_none()) {
+                        self.set_scene_elevator(nullptr);
+                    } else {
+                        auto cb = std::make_shared<nb::object>(callback);
+                        self.set_scene_elevator([cb](const SceneKey& key) {
+                            nb::gil_scoped_acquire guard;
+                            return nb::cast<bool>((*cb)(key));
+                        });
+                    }
+                },
+                nb::arg("callback").none(),
+                "Set the host scene materialization provider. Pass None to clear.")
 
             .def("invoke_after_render", &SceneManager::invoke_after_render, "Invoke after_render callback (if set).")
 

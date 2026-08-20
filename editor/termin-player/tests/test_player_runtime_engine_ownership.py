@@ -39,7 +39,13 @@ def test_source_player_transfers_selected_controller_after_module_publication(mo
     module_runtime = object()
     controller = object()
 
+    class _SceneManager:
+        def set_scene_elevator(self, elevator):
+            events.append(("elevator", elevator))
+
     class _Engine:
+        scene_manager = _SceneManager()
+
         def begin_session(self, selected):
             events.append(("begin", selected))
             return True
@@ -58,10 +64,11 @@ def test_source_player_transfers_selected_controller_after_module_publication(mo
 
     runtime._start_project_session()
 
-    assert events == [
+    assert events[:3] == [
         ("modules", None),
         ("create", (runtime.project_path, "[PlayerRuntime]")),
         ("begin", controller),
     ]
+    assert events[3] == ("elevator", runtime._elevate_scene)
     assert runtime._project_modules_runtime is module_runtime
     assert runtime._session_started

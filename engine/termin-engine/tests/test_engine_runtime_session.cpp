@@ -347,7 +347,9 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
     termin::WorldContext retained = termin::WorldContext::from_scene(external.handle());
     REQUIRE(retained.valid());
     CHECK(retained.scene_identities() == std::vector<std::string>{"registered-runtime-scene"});
-    CHECK_FALSE(retained.transition_to("missing.scene"));
+    CHECK(retained.transition_to("missing.scene"));
+    (void)engine.tick(0.0);
+    CHECK_FALSE(tc_scene_handle_valid(retained.primary_scene()));
     CHECK(engine.unbind_runtime_scene(external.handle()));
     CHECK(retained.scene_identities().empty());
     CHECK_FALSE(termin::WorldContext::from_scene(external.handle()).valid());
@@ -499,6 +501,38 @@ TEST_CASE("Render-free EngineCore ticks rotate primary worlds without a graphics
 
     CHECK(engine.end_session());
     CHECK(tc_scene_get_mode(second.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK(engine.shutdown());
+}
+
+TEST_CASE("RuntimeSession elevates and binds an unresolved runtime identity at the safe point") {
+    termin::EngineCore engine;
+    termin::TcSceneRef entry(engine.scene_manager.create_scene(
+        termin::SceneKey{"Scenes/Entry.scene", termin::SceneRole::Runtime}));
+    REQUIRE(entry.valid());
+    tc_scene_handle elevated = TC_SCENE_HANDLE_INVALID;
+    engine.scene_manager.set_scene_elevator([&](const termin::SceneKey& key) {
+        CHECK_EQ(key.identity, std::string("Scenes/Lazy.scene"));
+        CHECK(key.role == termin::SceneRole::Runtime);
+        elevated = engine.scene_manager.create_scene(key);
+        return tc_scene_handle_valid(elevated);
+    });
+
+    REQUIRE(engine.begin_session());
+    REQUIRE(engine.bind_runtime_scene(entry.handle()));
+    termin::WorldContext context = termin::WorldContext::require_from_scene(
+        entry.handle(), "lazy runtime transition test");
+    REQUIRE(context.transition_to("Scenes/Entry.scene"));
+    CHECK(engine.tick(0.0));
+    REQUIRE(context.transition_to("Scenes/Lazy.scene"));
+    CHECK_FALSE(tc_scene_handle_valid(elevated));
+
+    CHECK(engine.tick(0.0));
+    REQUIRE(tc_scene_handle_valid(elevated));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), elevated));
+    CHECK(termin::WorldContext::from_scene(elevated) == context);
+    const std::vector<std::string> identities{"Scenes/Entry.scene", "Scenes/Lazy.scene"};
+    CHECK(context.scene_identities() == identities);
+    CHECK(engine.end_session());
     CHECK(engine.shutdown());
 }
 
