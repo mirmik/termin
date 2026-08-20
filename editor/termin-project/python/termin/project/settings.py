@@ -33,6 +33,10 @@ from termin.project.resource_paths import (
     SERVICE_RESOURCE_IGNORE_PATHS as SERVICE_RESOURCE_IGNORE_PATHS,
     normalize_project_resource_paths,
 )
+from termin.project.world_controller_selection import (
+    ProjectWorldControllerSelection,
+    WorldControllerSelectionError,
+)
 DEFAULT_PLAYER_WINDOW_WIDTH = 1280
 DEFAULT_PLAYER_WINDOW_HEIGHT = 720
 DEFAULT_PLAYER_WINDOW_FULLSCREEN = True
@@ -142,6 +146,9 @@ class ProjectSettings:
     application: ProjectApplicationIdentity = field(
         default_factory=lambda: default_project_application_identity("Termin Project")
     )
+    # Optional project composition root. Product identity above is unrelated:
+    # it names the built application rather than a runtime controller class.
+    world_controller: ProjectWorldControllerSelection | None = None
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -152,6 +159,11 @@ class ProjectSettings:
             "render_phase_names": list(self.render_phase_names),
             "player_window": self.player_window.to_dict(),
             "application": self.application.to_dict(),
+            "world_controller": (
+                self.world_controller.to_dict()
+                if self.world_controller is not None
+                else None
+            ),
         }
 
     @staticmethod
@@ -179,6 +191,9 @@ class ProjectSettings:
             data.get("application"),
             project_name=project_name,
         )
+        world_controller = ProjectWorldControllerSelection.from_dict(
+            data.get("world_controller")
+        )
 
         return ProjectSettings(
             render_sync_mode=sync_mode,
@@ -187,6 +202,7 @@ class ProjectSettings:
             render_phase_names=render_phase_names,
             player_window=player_window,
             application=application,
+            world_controller=world_controller,
         )
 
     @staticmethod
@@ -253,6 +269,12 @@ class ProjectSettingsManager:
                 raise ValueError("project settings root must be an object")
             self._settings = ProjectSettings.from_dict(data, project_name=project_name)
             self._sync_to_c()
+        except WorldControllerSelectionError as e:
+            log.error(
+                "[ProjectSettings] Failed to load explicit WorldController "
+                f"selection from {path}: {e}"
+            )
+            raise
         except Exception as e:
             log.error(f"[ProjectSettings] Failed to load settings: {e}")
             self._settings = ProjectSettings.for_project(project_name)
@@ -360,6 +382,20 @@ class ProjectSettingsManager:
             },
             project_name=_read_project_name(self._project_path),
         )
+        self.save()
+
+    def set_world_controller(
+        self,
+        selection: ProjectWorldControllerSelection | None,
+    ) -> None:
+        """Set or explicitly clear the project WorldController selection."""
+        if selection is not None and not isinstance(
+            selection, ProjectWorldControllerSelection
+        ):
+            raise TypeError(
+                "selection must be ProjectWorldControllerSelection or None"
+            )
+        self._settings.world_controller = selection
         self.save()
 
     def _get_editor_state_path(self) -> Optional[Path]:

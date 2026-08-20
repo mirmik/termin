@@ -7,10 +7,23 @@ import logging
 from typing import Callable
 
 from termin.project.settings import ProjectSettingsManager, RenderSyncMode
+from termin.project.world_controller_selection import ProjectWorldControllerSelection
 
 
 _logger = logging.getLogger(__name__)
 RENDER_SYNC_MODES = tuple(RenderSyncMode)
+
+
+def world_controller_selection_from_fields(
+    module: str,
+    type_name: str,
+) -> ProjectWorldControllerSelection | None:
+    """Convert the dialog's two fields without accepting a partial selection."""
+    if not module.strip() and not type_name.strip():
+        return None
+    return ProjectWorldControllerSelection.from_dict(
+        {"module": module, "type": type_name}
+    )
 
 
 @dataclass(frozen=True)
@@ -21,6 +34,7 @@ class ProjectSettingsSnapshot:
     application_label: str
     version_code: int
     version_name: str
+    world_controller: ProjectWorldControllerSelection | None
     player_width: int
     player_height: int
     player_fullscreen: bool
@@ -53,6 +67,7 @@ class ProjectSettingsController:
             application_label=settings.application.label,
             version_code=settings.application.version_code,
             version_name=settings.application.version_name,
+            world_controller=settings.world_controller,
             player_width=int(settings.player_window.width),
             player_height=int(settings.player_window.height),
             player_fullscreen=bool(settings.player_window.fullscreen),
@@ -102,6 +117,8 @@ class ProjectSettingsController:
                 snapshot.version_code,
                 snapshot.version_name,
             )
+        if before.world_controller != snapshot.world_controller:
+            self._manager.set_world_controller(snapshot.world_controller)
         if (
             before.player_width != int(snapshot.player_width)
             or before.player_height != int(snapshot.player_height)
@@ -136,4 +153,5 @@ __all__ = [
     "ProjectSettingsController",
     "ProjectSettingsSnapshot",
     "RENDER_SYNC_MODES",
+    "world_controller_selection_from_fields",
 ]

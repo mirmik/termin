@@ -16,6 +16,7 @@ from termin.project.creation import (
     validate_project_name,
     write_default_scene,
 )
+from termin.project.world_controller_selection import ProjectWorldControllerSelection
 
 __all__ = [
     "InvalidProjectNameError",
@@ -23,6 +24,7 @@ __all__ = [
     "ProjectAlreadyExistsError",
     "ProjectCreationError",
     "ProjectApplicationIdentity",
+    "ProjectWorldControllerSelection",
     "create_project",
     "create_project_file",
     "initialize_project",
