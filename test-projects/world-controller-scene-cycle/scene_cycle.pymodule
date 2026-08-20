@@ -1,0 +1,3 @@
+name: scene_cycle
+root: Scripts
+packages: [scene_cycle]

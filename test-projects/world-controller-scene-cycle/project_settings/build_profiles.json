@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "profiles": {
+    "linux-dev": {
+      "target": {
+        "kind": "desktop",
+        "os": "linux",
+        "arch": "x86_64"
+      },
+      "configuration": "dev",
+      "content": {
+        "entry_scene": "Scenes/Alpha.scene",
+        "scenes": [
+          "Scenes/Alpha.scene",
+          "Scenes/Beta.scene",
+          "Scenes/Gamma.scene"
+        ],
+        "modules": [],
+        "python": {
+          "requirements": []
+        },
+        "resources": {
+          "policy": "strict",
+          "include": []
+        }
+      },
+      "runtime": {
+        "backends": [
+          "vulkan",
+          "opengl"
+        ],
+        "python_package_policy": "minimal_strict"
+      },
+      "output_dir": "dist/linux"
+    }
+  }
+}

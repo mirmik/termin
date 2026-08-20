@@ -399,9 +399,19 @@ def _compose_native_editor(
             initial_scene.scene_handle(),
         ):
             raise RuntimeError("Failed to register the initial editor scene")
+
+        def cleanup_initial_scene_registration() -> None:
+            if not engine.scene_manager.has_scene(initial_scene_key):
+                return
+            if not engine.scene_manager.unregister_scene(initial_scene_key):
+                _logger.error(
+                    "Failed to unregister initial editor scene '%s'",
+                    initial_scene_key.identity,
+                )
+
         workspace_stage.add_cleanup(
             "initial editor scene registration",
-            lambda: engine.scene_manager.unregister_scene(initial_scene_key),
+            cleanup_initial_scene_registration,
         )
         engine.scene_manager.set_mode(initial_scene_key, engine_scene.SceneMode.STOP)
     undo_stack = UndoStack()

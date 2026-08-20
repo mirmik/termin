@@ -143,7 +143,7 @@ class SceneFileController:
         self._scene_manager.create_scene(scene_key, default_scene_extensions())
         self._scene_manager.set_mode(scene_key, SceneMode.STOP)
         if self._has_editor_attachment():
-            self._attach_editor_to_scene(scene_name, restore_state=False)
+            self._attach_editor_to_scene(scene_key, restore_state=False)
             self._attach_scene_to_render(scene_name)
         self._sync_scene_tree()
         self._observe_scene_events(self._get_scene())
@@ -428,7 +428,10 @@ class SceneFileController:
 
         if self._has_editor_attachment():
             with trace.stage("commit-attach-editor"):
-                self._attach_editor_to_scene(scene_name, restore_state=False)
+                self._attach_editor_to_scene(
+                    _authoring_key(scene_name),
+                    restore_state=False,
+                )
             with trace.stage("commit-attach-render"):
                 self._attach_scene_to_render(scene_name)
 

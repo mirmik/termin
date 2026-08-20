@@ -13,3 +13,6 @@ Each project owns its build and run instructions in its local `README.md`.
   bodies, collisions, lighting, and shadows.
 - `fem-double-pendulum`: native desktop QP multibody simulation with two rigid
   links, a fixed anchor, and an axial inter-body revolute joint.
+- `world-controller-scene-cycle`: Editor Play, source-player, and packaged
+  desktop acceptance for identity-based `WorldController` navigation across
+  three retained runtime scenes.
