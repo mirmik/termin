@@ -4,8 +4,10 @@
 #include <exception>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include <termin/engine/world_context.h>
 #include <termin/engine/world_controller.h>
@@ -45,7 +47,8 @@ namespace termin {
         }
         std::optional<WorldControllerRef> controller() const noexcept;
         tc_scene_handle primary_scene() const noexcept;
-        bool request_primary_scene(tc_scene_handle scene) const noexcept;
+        std::vector<std::string> scene_identities() const;
+        bool transition_to(std::string_view scene_identity) const;
 
         tc_world_context* native_handle() const noexcept {
             return _native;

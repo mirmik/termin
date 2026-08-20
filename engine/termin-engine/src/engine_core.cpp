@@ -159,6 +159,11 @@ namespace termin {
         };
 
         class RuntimeSession {
+            struct BoundScene {
+                std::string identity;
+                tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+            };
+
         public:
             RuntimeSession(EngineCore& engine, WorldControllerInstance controller)
                 : _engine(engine),
@@ -211,8 +216,8 @@ namespace termin {
                 }
                 bool clean = true;
                 release_primary_scene();
-                for (tc_scene_handle scene : _bound_scenes) {
-                    if (!unbind_world_context_scene(_context, scene)) {
+                for (const BoundScene& bound : _bound_scenes) {
+                    if (!unbind_world_context_scene(_context, bound.scene)) {
                         clean = false;
                     }
                 }
@@ -238,29 +243,29 @@ namespace termin {
                 return clean;
             }
 
-            bool bind_scene(tc_scene_handle scene) {
+            bool bind_scene(const SceneKey& key, tc_scene_handle scene) {
                 if (!_active) {
                     tc_log(TC_LOG_ERROR, "[RuntimeSession] Cannot bind a scene before session start");
                     return false;
                 }
                 const auto existing = std::find_if(
-                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
-                        return tc_scene_handle_eq(bound, scene);
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](const BoundScene& bound) {
+                        return tc_scene_handle_eq(bound.scene, scene);
                     });
                 if (existing != _bound_scenes.end()) {
                     return true;
                 }
-                if (!bind_world_context_scene(_context, scene)) {
+                if (!bind_world_context_scene(_context, key.identity, scene)) {
                     return false;
                 }
-                _bound_scenes.push_back(scene);
+                _bound_scenes.push_back(BoundScene{key.identity, scene});
                 return true;
             }
 
             bool unbind_scene(tc_scene_handle scene) {
                 const auto existing = std::find_if(
-                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
-                        return tc_scene_handle_eq(bound, scene);
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](const BoundScene& bound) {
+                        return tc_scene_handle_eq(bound.scene, scene);
                     });
                 if (existing == _bound_scenes.end()) {
                     tc_log(TC_LOG_ERROR, "[RuntimeSession] Scene is not bound to this session");
@@ -281,8 +286,8 @@ namespace termin {
 
             void on_scene_destroying(tc_scene_handle scene) noexcept {
                 const auto existing = std::find_if(
-                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
-                        return tc_scene_handle_eq(bound, scene);
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](const BoundScene& bound) {
+                        return tc_scene_handle_eq(bound.scene, scene);
                     });
                 if (existing == _bound_scenes.end()) {
                     return;
@@ -295,11 +300,12 @@ namespace termin {
             }
 
             void process_primary_scene_request() {
-                const tc_scene_handle candidate = take_world_context_primary_request(_context);
+                const WorldContextSceneRequest request = take_world_context_primary_request(_context);
+                const tc_scene_handle candidate = request.scene;
                 if (!tc_scene_handle_valid(candidate)) {
                     return;
                 }
-                if (!scene_is_transition_candidate(candidate)) {
+                if (!scene_is_transition_candidate(request.identity, candidate)) {
                     tc_log(TC_LOG_ERROR,
                            "[RuntimeSession] Dropped primary scene request: target must remain registered "
                            "as RUNTIME, bound to this session, inactive and render-detached");
@@ -340,7 +346,7 @@ namespace termin {
                            "[RuntimeSession] Primary scene render preparation failed; keeping the current primary");
                     return;
                 }
-                if (!scene_is_prepared_candidate(candidate)) {
+                if (!scene_is_prepared_candidate(request.identity, candidate)) {
                     tc_log(TC_LOG_ERROR,
                            "[RuntimeSession] Candidate changed during render preparation; rolling it back");
                     cleanup_candidate(candidate);
@@ -354,7 +360,7 @@ namespace termin {
                     }
                 }
 
-                if (!scene_is_prepared_candidate(candidate)) {
+                if (!scene_is_prepared_candidate(request.identity, candidate)) {
                     tc_log(TC_LOG_ERROR,
                            "[RuntimeSession] Candidate changed while deactivating the old primary; rolling back");
                     cleanup_candidate(candidate);
@@ -387,8 +393,8 @@ namespace termin {
         private:
             bool scene_is_bound(tc_scene_handle scene) const noexcept {
                 const auto existing = std::find_if(
-                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
-                        return tc_scene_handle_eq(bound, scene);
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](const BoundScene& bound) {
+                        return tc_scene_handle_eq(bound.scene, scene);
                     });
                 if (existing == _bound_scenes.end()) {
                     return false;
@@ -399,25 +405,35 @@ namespace termin {
                 return matches;
             }
 
-            bool scene_is_transition_candidate(tc_scene_handle scene) const noexcept {
-                return scene_is_candidate_identity(scene) &&
+            bool scene_is_transition_candidate(const std::string& identity,
+                                               tc_scene_handle scene) const noexcept {
+                return scene_is_candidate_identity(identity, scene) &&
                        !_engine.render_topology.is_attached(scene);
             }
 
-            bool scene_is_prepared_candidate(tc_scene_handle scene) const noexcept {
-                return scene_is_candidate_identity(scene) &&
+            bool scene_is_prepared_candidate(const std::string& identity,
+                                             tc_scene_handle scene) const noexcept {
+                return scene_is_candidate_identity(identity, scene) &&
                        _engine.render_topology.is_attached(scene);
             }
 
-            bool scene_is_candidate_identity(tc_scene_handle scene) const noexcept {
+            bool scene_is_candidate_identity(const std::string& identity,
+                                             tc_scene_handle scene) const noexcept {
                 return tc_scene_alive(scene) && scene_is_bound(scene) &&
-                       scene_is_registered_runtime(scene) &&
+                       scene_is_registered_runtime(identity, scene) &&
                        tc_scene_get_mode(scene) == TC_SCENE_MODE_INACTIVE;
             }
 
             bool scene_is_registered_runtime(tc_scene_handle scene) const noexcept {
                 const std::optional<SceneKey> key = _engine.scene_manager.key_of(scene);
                 return key.has_value() && key->role == SceneRole::Runtime;
+            }
+
+            bool scene_is_registered_runtime(const std::string& identity,
+                                             tc_scene_handle scene) const noexcept {
+                const std::optional<SceneKey> key = _engine.scene_manager.key_of(scene);
+                return key.has_value() && key->role == SceneRole::Runtime &&
+                       key->identity == identity;
             }
 
             void cleanup_candidate(tc_scene_handle scene) {
@@ -485,7 +501,7 @@ namespace termin {
             EngineCore& _engine;
             WorldControllerInstance _controller;
             tc_world_context* _context = nullptr;
-            std::vector<tc_scene_handle> _bound_scenes;
+            std::vector<BoundScene> _bound_scenes;
             bool _active = false;
         };
 
@@ -779,7 +795,7 @@ namespace termin {
                    key->identity.c_str());
             return false;
         }
-        return _runtime_session->bind_scene(scene);
+        return _runtime_session->bind_scene(*key, scene);
     }
 
     bool EngineCore::unbind_runtime_scene(tc_scene_handle scene) {

@@ -74,7 +74,7 @@ def test_packaged_player_starts_session_before_loading_scenes_and_uses_engine_sa
     assert "engine->begin_session()" in begin_body
     assert "engine->bind_runtime_scene(packaged_scene.scene.handle())" in register_body
     assert "TC_SCENE_MODE_PLAY" not in register_body
-    assert "world_context.request_primary_scene(entry)" in activate_body
+    assert "world_context.transition_to(scene_name)" in activate_body
     assert "engine->tick_and_render(0.0)" in activate_body
 
 

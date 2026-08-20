@@ -93,8 +93,8 @@ def test_player_runtime_tracks_runtime_session_primary_viewports(monkeypatch):
     class _Context:
         primary_scene = runtime.scene
 
-        def request_primary_scene(self, scene):
-            assert scene is runtime.scene
+        def transition_to(self, scene_identity):
+            assert scene_identity == "scene.json"
             return True
 
     class _Topology:

@@ -366,13 +366,24 @@ namespace termin::python {
                     return tc_scene_alive(scene) ? nb::cast(TcSceneRef(scene)) : nb::none();
                 },
                 "The live primary gameplay scene, or None before/after publication.")
-            .def(
-                "request_primary_scene",
-                [](const WorldContext& context, const TcSceneRef& scene) {
-                    return context.request_primary_scene(scene.handle());
+            .def_prop_ro(
+                "scene_identities",
+                [](const WorldContext& context) {
+                    const std::vector<std::string> identities = context.scene_identities();
+                    nb::list result;
+                    for (const std::string& identity : identities) {
+                        result.append(nb::str(identity.c_str()));
+                    }
+                    return nb::tuple(result);
                 },
-                nb::arg("scene"),
-                "Queue one inactive bound scene for the next EngineCore safe point.")
+                "Immutable sorted identities of runtime scenes bound to this session.")
+            .def(
+                "transition_to",
+                [](const WorldContext& context, const std::string& scene_identity) {
+                    return context.transition_to(scene_identity);
+                },
+                nb::arg("scene_identity"),
+                "Queue a transition to one inactive scene from this session's catalog.")
             .def("__bool__", &WorldContext::valid)
             .def("__eq__", [](const WorldContext& self, const WorldContext& other) { return self == other; });
 

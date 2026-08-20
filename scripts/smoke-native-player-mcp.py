@@ -214,9 +214,9 @@ class SmokeDirector(WorldController):
         self.started = False
         self.context = None
 
-    def rotate(self, scene) -> bool:
+    def rotate(self, scene_identity: str) -> bool:
         assert self.started and self.context is not None
-        return self.context.request_primary_scene(scene)
+        return self.context.transition_to(scene_identity)
 
     def __del__(self) -> None:
         _event("controller:destroy")
@@ -614,7 +614,7 @@ def main() -> int:
                             "print(runtime.rendering_manager.topology.is_attached(entry_scene))\n"
                             "print(not runtime.rendering_manager.topology.is_attached(secondary_scene))\n"
                             "print(_viewport_get_input_manager(*viewport._viewport_handle()) != 0)\n"
-                            "print(director.rotate(secondary_scene))"
+                            "print(director.rotate('secondary.scene'))"
                         )
                     },
                 )
@@ -648,7 +648,7 @@ def main() -> int:
                             "print(not runtime.rendering_manager.topology.is_attached(entry_scene))\n"
                             "print(runtime.rendering_manager.topology.is_attached(scene))\n"
                             "print(_viewport_get_input_manager(*viewport._viewport_handle()) != 0)\n"
-                            "print(director.rotate(entry_scene))"
+                            "print(director.rotate('scene.scene'))"
                         )
                     },
                 )

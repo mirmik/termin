@@ -2,11 +2,14 @@
 
 #include "world_context_internal.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <mutex>
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 extern "C" {
@@ -27,7 +30,10 @@ struct tc_world_context {
     std::atomic<bool> active{true};
     std::atomic<tc_world_controller_instance*> controller{nullptr};
     std::atomic<std::uint64_t> primary_scene{kNoSceneToken};
-    std::atomic<std::uint64_t> pending_primary_scene{kNoSceneToken};
+    mutable std::mutex scenes_mutex;
+    std::unordered_map<std::string, std::uint64_t> scenes;
+    std::uint64_t pending_primary_scene = kNoSceneToken;
+    std::string pending_primary_identity;
 
     tc_world_context(std::uint64_t generation_value,
                      tc_world_controller_instance* controller_value) noexcept
@@ -174,13 +180,29 @@ extern "C" {
         return tc_scene_alive(scene) ? scene : TC_SCENE_HANDLE_INVALID;
     }
 
-    bool tc_world_context_request_primary_scene(tc_world_context* context, tc_scene_handle scene) {
+    bool tc_world_context_transition_to(tc_world_context* context, const char* scene_identity) {
         if (!tc_world_context_is_valid(context)) {
-            tc_log(TC_LOG_ERROR, "[WorldContext] Cannot request a primary scene through an inactive context");
+            tc_log(TC_LOG_ERROR, "[WorldContext] Cannot transition through an inactive context");
             return false;
         }
+        if (!scene_identity || !scene_identity[0]) {
+            tc_log(TC_LOG_ERROR, "[WorldContext] Scene transition requires a non-empty identity");
+            return false;
+        }
+
+        std::lock_guard lock(context->scenes_mutex);
+        const auto catalog_entry = context->scenes.find(scene_identity);
+        if (catalog_entry == context->scenes.end()) {
+            tc_log(TC_LOG_ERROR,
+                   "[WorldContext] Scene '%s' is not bound to this RuntimeSession",
+                   scene_identity);
+            return false;
+        }
+        const tc_scene_handle scene = scene_from_token(catalog_entry->second);
         if (!tc_scene_alive(scene)) {
-            tc_log(TC_LOG_ERROR, "[WorldContext] Primary scene request requires a live scene");
+            tc_log(TC_LOG_ERROR,
+                   "[WorldContext] Bound scene '%s' is no longer alive",
+                   scene_identity);
             return false;
         }
         if (!scene_is_bound_to_context(context, scene)) {
@@ -190,8 +212,7 @@ extern "C" {
         }
 
         const std::uint64_t token = scene_token(scene);
-        const std::uint64_t pending =
-            context->pending_primary_scene.load(std::memory_order_acquire);
+        const std::uint64_t pending = context->pending_primary_scene;
         if (pending != kNoSceneToken) {
             if (pending == token) {
                 return true;
@@ -207,19 +228,11 @@ extern "C" {
             return false;
         }
 
-        std::uint64_t expected = kNoSceneToken;
-        if (!context->pending_primary_scene.compare_exchange_strong(
-                expected, token, std::memory_order_acq_rel, std::memory_order_acquire)) {
-            if (expected == token) {
-                return true;
-            }
-            tc_log(TC_LOG_ERROR, "[WorldContext] Another primary scene request is already pending");
-            return false;
-        }
+        context->pending_primary_scene = token;
+        context->pending_primary_identity = scene_identity;
         if (!tc_world_context_is_valid(context)) {
-            expected = token;
-            context->pending_primary_scene.compare_exchange_strong(
-                expected, kNoSceneToken, std::memory_order_acq_rel, std::memory_order_acquire);
+            context->pending_primary_scene = kNoSceneToken;
+            context->pending_primary_identity.clear();
             tc_log(TC_LOG_ERROR, "[WorldContext] RuntimeSession ended while queuing a primary scene request");
             return false;
         }
@@ -363,8 +376,13 @@ namespace termin {
         return tc_world_context_primary_scene(_native);
     }
 
-    bool WorldContext::request_primary_scene(tc_scene_handle scene) const noexcept {
-        return tc_world_context_request_primary_scene(_native, scene);
+    std::vector<std::string> WorldContext::scene_identities() const {
+        return engine_detail::world_context_scene_identities(_native);
+    }
+
+    bool WorldContext::transition_to(std::string_view scene_identity) const {
+        const std::string owned_identity(scene_identity);
+        return tc_world_context_transition_to(_native, owned_identity.c_str());
     }
 
     bool WorldControllerRef::valid() const noexcept {
@@ -403,12 +421,19 @@ namespace termin {
                 return;
             }
             context->active.store(false, std::memory_order_release);
-            context->pending_primary_scene.store(kNoSceneToken, std::memory_order_release);
+            {
+                std::lock_guard lock(context->scenes_mutex);
+                context->pending_primary_scene = kNoSceneToken;
+                context->pending_primary_identity.clear();
+                context->scenes.clear();
+            }
             context->primary_scene.store(kNoSceneToken, std::memory_order_release);
             context->controller.store(nullptr, std::memory_order_release);
         }
 
-        bool bind_world_context_scene(tc_world_context* context, tc_scene_handle scene) noexcept {
+        bool bind_world_context_scene(tc_world_context* context,
+                                      const std::string& identity,
+                                      tc_scene_handle scene) noexcept {
             if (!tc_world_context_is_valid(context)) {
                 tc_log(TC_LOG_ERROR, "[WorldContext] Cannot bind a scene to an inactive context");
                 return false;
@@ -416,6 +441,36 @@ namespace termin {
             if (!tc_scene_alive(scene)) {
                 tc_log(TC_LOG_ERROR, "[WorldContext] Cannot bind a dead or invalid scene handle");
                 return false;
+            }
+            if (identity.empty()) {
+                tc_log(TC_LOG_ERROR, "[WorldContext] Cannot bind a scene with an empty identity");
+                return false;
+            }
+            const std::uint64_t token = scene_token(scene);
+            std::lock_guard lock(context->scenes_mutex);
+            const auto same_identity = context->scenes.find(identity);
+            bool catalog_already_bound = false;
+            if (same_identity != context->scenes.end()) {
+                if (same_identity->second == token) {
+                    catalog_already_bound = true;
+                } else {
+                    tc_log(TC_LOG_ERROR,
+                           "[WorldContext] Runtime scene identity '%s' is already bound",
+                           identity.c_str());
+                    return false;
+                }
+            }
+            if (!catalog_already_bound) {
+                const auto same_scene = std::find_if(
+                    context->scenes.begin(), context->scenes.end(), [token](const auto& entry) {
+                        return entry.second == token;
+                    });
+                if (same_scene != context->scenes.end()) {
+                    tc_log(TC_LOG_ERROR,
+                           "[WorldContext] Scene is already bound as '%s'",
+                           same_scene->first.c_str());
+                    return false;
+                }
             }
             if (!tc_world_context_scene_extension_init() ||
                 !tc_scene_ext_attach(scene, TC_SCENE_EXT_TYPE_WORLD_CONTEXT)) {
@@ -429,6 +484,9 @@ namespace termin {
                 return false;
             }
             if (extension->context == context && extension->generation == context->generation) {
+                if (!catalog_already_bound) {
+                    context->scenes.emplace(identity, token);
+                }
                 return true;
             }
             if (extension->context &&
@@ -441,6 +499,9 @@ namespace termin {
             }
             extension->context = tc_world_context_retain(context);
             extension->generation = context->generation;
+            if (!catalog_already_bound) {
+                context->scenes.emplace(identity, token);
+            }
             return true;
         }
 
@@ -456,16 +517,47 @@ namespace termin {
                 tc_log(TC_LOG_ERROR, "[WorldContext] Refusing to unbind a scene owned by another RuntimeSession");
                 return false;
             }
+            const std::uint64_t token = scene_token(scene);
+            {
+                std::lock_guard lock(context->scenes_mutex);
+                const auto entry = std::find_if(
+                    context->scenes.begin(), context->scenes.end(), [token](const auto& candidate) {
+                        return candidate.second == token;
+                    });
+                if (entry != context->scenes.end()) {
+                    context->scenes.erase(entry);
+                }
+            }
             tc_scene_ext_detach(scene, TC_SCENE_EXT_TYPE_WORLD_CONTEXT);
             return true;
         }
 
-        tc_scene_handle take_world_context_primary_request(tc_world_context* context) noexcept {
+        std::vector<std::string> world_context_scene_identities(const tc_world_context* context) {
             if (!tc_world_context_is_valid(context)) {
-                return TC_SCENE_HANDLE_INVALID;
+                return {};
             }
-            return scene_from_token(
-                context->pending_primary_scene.exchange(kNoSceneToken, std::memory_order_acq_rel));
+            std::lock_guard lock(context->scenes_mutex);
+            std::vector<std::string> identities;
+            identities.reserve(context->scenes.size());
+            for (const auto& [identity, scene] : context->scenes) {
+                (void)scene;
+                identities.push_back(identity);
+            }
+            std::sort(identities.begin(), identities.end());
+            return identities;
+        }
+
+        WorldContextSceneRequest take_world_context_primary_request(tc_world_context* context) noexcept {
+            if (!tc_world_context_is_valid(context)) {
+                return {};
+            }
+            std::lock_guard lock(context->scenes_mutex);
+            WorldContextSceneRequest request{
+                std::move(context->pending_primary_identity),
+                scene_from_token(context->pending_primary_scene)};
+            context->pending_primary_scene = kNoSceneToken;
+            context->pending_primary_identity.clear();
+            return request;
         }
 
         bool publish_world_context_primary_scene(tc_world_context* context,
@@ -491,10 +583,12 @@ namespace termin {
             if (token == kNoSceneToken) {
                 return;
             }
+            std::lock_guard lock(context->scenes_mutex);
+            if (context->pending_primary_scene == token) {
+                context->pending_primary_scene = kNoSceneToken;
+                context->pending_primary_identity.clear();
+            }
             std::uint64_t expected = token;
-            context->pending_primary_scene.compare_exchange_strong(
-                expected, kNoSceneToken, std::memory_order_acq_rel, std::memory_order_acquire);
-            expected = token;
             context->primary_scene.compare_exchange_strong(
                 expected, kNoSceneToken, std::memory_order_acq_rel, std::memory_order_acquire);
         }

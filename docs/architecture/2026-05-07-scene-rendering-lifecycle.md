@@ -229,7 +229,7 @@ attachment оставляет `EngineCore::RuntimeSession`.
    // save_state=False — конфиги уже сохранены на шаге 1
 
 4. Запросить initial primary через WorldContext:
-   context.request_primary_scene(game_scene)
+   context.transition_to(identity)
 
 5. Перевести authoring-сцену в INACTIVE. Runtime-сцена пока остаётся INACTIVE.
 
@@ -277,7 +277,7 @@ GameModeModel._start_game_mode()
   ├─ copy_scene(AUTHORING(identity), RUNTIME(identity))
   ├─ bind_runtime_scene(runtime)
   ├─ detach(authoring)
-  ├─ request_primary_scene(runtime)
+  ├─ transition_to(identity)
   └─ set_mode(authoring, INACTIVE)
 
 EngineCore safe point

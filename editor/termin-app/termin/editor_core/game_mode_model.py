@@ -250,7 +250,7 @@ class GameModeModel:
             self._render_scene_session.detach(editor_scene_key, save_state=False)
             editor_render_detached = True
             context = require_world_context(runtime_scene, "Editor Play")
-            if not context.request_primary_scene(runtime_scene):
+            if not context.transition_to(runtime_scene_key.identity):
                 raise RuntimeError(f"failed to request primary scene '{editor_scene_name}'")
             self._scene_manager.set_mode(
                 editor_scene_key,
