@@ -119,6 +119,9 @@ namespace termin {
         WorldControllerInstance& operator=(WorldControllerInstance&& other) noexcept;
 
         static WorldControllerInstance create(const char* type_name, std::string& error);
+        static WorldControllerInstance create(const char* type_name,
+                                              const char* expected_owner,
+                                              std::string& error);
 
         bool valid() const noexcept {
             return _instance != nullptr;

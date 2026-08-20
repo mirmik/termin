@@ -66,6 +66,25 @@ class ProjectWorldControllerSelection:
         )
 
 
+def create_selected_world_controller(
+    selection: ProjectWorldControllerSelection | None,
+):
+    """Create the exact selected controller, or return ``None`` for absence.
+
+    Module publication must already be complete. An explicit selection is
+    strict: a same-named type owned by another module is an error.
+    """
+    if selection is None:
+        return None
+    if not isinstance(selection, ProjectWorldControllerSelection):
+        raise TypeError(
+            "selection must be ProjectWorldControllerSelection or None"
+        )
+    from termin.engine import create_world_controller
+
+    return create_world_controller(selection.type_name, selection.module)
+
+
 def _normalized_nonempty_string(value: object, *, field_name: str) -> str:
     if not isinstance(value, str):
         raise WorldControllerSelectionError(f"{field_name} must be a string")
@@ -88,4 +107,5 @@ def _require_normalized_nonempty_string(value: object, *, field_name: str) -> No
 __all__ = [
     "ProjectWorldControllerSelection",
     "WorldControllerSelectionError",
+    "create_selected_world_controller",
 ]

@@ -206,17 +206,36 @@ static bool factory_result_is_valid(const tc_world_controller_factory_result_v1*
     return true;
 }
 
-tc_world_controller_instance* tc_world_controller_instance_create(const char* type_name,
-                                                                  tc_world_controller_error_v1* error) {
+static tc_world_controller_instance* create_world_controller_instance(
+    const char* type_name,
+    const char* expected_owner,
+    tc_world_controller_error_v1* error) {
     clear_error(error);
     if (!type_name || !type_name[0]) {
         fail_with_message(error, "controller type name must be non-empty");
+        return NULL;
+    }
+    if (expected_owner && !expected_owner[0]) {
+        fail_with_message(error, "expected controller owner must be non-empty");
         return NULL;
     }
     tc_world_controller_facet_payload* facet = world_controller_facet(type_name);
     if (!facet) {
         fail_for_type(error, type_name, "runtime type has no WorldController facet");
         return NULL;
+    }
+    if (expected_owner) {
+        const char* actual_owner = tc_runtime_type_registry_get_owner(type_name);
+        if (!actual_owner || strcmp(actual_owner, expected_owner) != 0) {
+            char message[512] = {0};
+            snprintf(message,
+                     sizeof(message),
+                     "runtime type owner is '%s', expected '%s'",
+                     actual_owner && actual_owner[0] ? actual_owner : "<unknown>",
+                     expected_owner);
+            fail_for_type(error, type_name, message);
+            return NULL;
+        }
     }
     if (facet->is_abstract) {
         fail_for_type(error, type_name, "abstract controller types cannot be instantiated");
@@ -264,6 +283,19 @@ tc_world_controller_instance* tc_world_controller_instance_create(const char* ty
     }
 
     return instance;
+}
+
+tc_world_controller_instance* tc_world_controller_instance_create(
+    const char* type_name,
+    tc_world_controller_error_v1* error) {
+    return create_world_controller_instance(type_name, NULL, error);
+}
+
+tc_world_controller_instance* tc_world_controller_instance_create_for_owner(
+    const char* type_name,
+    const char* expected_owner,
+    tc_world_controller_error_v1* error) {
+    return create_world_controller_instance(type_name, expected_owner, error);
 }
 
 bool tc_world_controller_instance_start(tc_world_controller_instance* instance,

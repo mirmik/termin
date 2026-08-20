@@ -9,7 +9,8 @@ The language-neutral `WorldController` registry, instance lifecycle, native
 adapter, Python declaration transaction, and `EngineCore`-owned
 `RuntimeSession` lifecycle are implemented in `termin-engine`. The transient
 scene-to-session `WorldContext` route and synchronous primary-scene switching
-are also implemented. Host integration remains a separate follow-up step.
+are also implemented. Editor Play/Stop is the first integrated host; packaged,
+source and headless launch paths remain follow-up work.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
 design deliberately has no public `SceneFlow`, scene providers, host binding
@@ -84,11 +85,11 @@ An explicit selection is strict. A missing module, unpublished type, abstract
 type, failed factory, or failed `start()` blocks startup and is never silently
 reinterpreted as no controller.
 
-Build profiles do not select the controller in the first version. A build
-copies the resolved project selection into its runtime manifest and includes
-or validates the selected module as part of the packaged module closure.
-Future profiles may overlay controller configuration without necessarily
-replacing its class.
+Build profiles do not select the controller in the first version. Packaged
+host integration will copy the resolved project selection into its runtime
+manifest and include or validate the selected module as part of the packaged
+module closure. Future profiles may overlay controller configuration without
+necessarily replacing its class.
 
 ## Construction and teardown order
 
@@ -124,6 +125,13 @@ the session and all project-owned scene/component instances have been released.
 
 `EngineCore::shutdown()` is the final backstop and must end an active session
 before closing scenes and rendering resources.
+
+When the engine loop is not running, a host may begin or end a session
+synchronously. While the loop is running, these lifecycle mutations are
+accepted only from the owning loop client's `poll_events()` callback. This is
+the host-safe phase before scene ticking and frame completion; lifecycle calls
+from component callbacks, frame-completion callbacks, or another thread are
+rejected and logged.
 
 ## WorldContext scene extension
 
@@ -236,6 +244,12 @@ it does not roll back an otherwise valid gameplay transition. Before closing a
 runtime copy, Stop first makes editor-owned views release or rebind their
 references.
 
+The editor begins and ends the session from its ordinary event-poll callback.
+`EngineCore` commits a pending primary request at the start of the following
+`tick_and_render()`. On the next poll the editor observes the published
+`WorldContext.primary_scene`, reconciles viewport input and hierarchy, and
+does not take part in the gameplay render transaction.
+
 No runtime-session state contains authoring paths, copy provenance, editor
 selection, undo state, view models, editor callbacks, or host binding arrays.
 
@@ -280,7 +294,7 @@ Engine sequence:
 Composition and host sequence:
 
 - #1788 transports project selection through build/package manifests;
-- #1785 integrates editor Play/Stop;
+- #1785 integrates editor Play/Stop (implemented);
 - #1786 integrates the packaged player;
 - #1789 integrates source and headless runs;
 - #1784 performs the final cross-host lifecycle and cleanup verification.

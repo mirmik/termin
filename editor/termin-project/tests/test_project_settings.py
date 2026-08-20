@@ -13,6 +13,7 @@ from termin.project.settings import (
 from termin.project.world_controller_selection import (
     ProjectWorldControllerSelection,
     WorldControllerSelectionError,
+    create_selected_world_controller,
 )
 from termin.player.project_settings import ProjectRuntimeSettings
 from termin.project_build.desktop_build import _load_project_settings
@@ -242,6 +243,48 @@ def test_project_world_controller_rejects_malformed_explicit_selection(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         ProjectSettings.from_dict({"world_controller": value})
+
+
+def test_project_world_controller_factory_requires_exact_selected_owner() -> None:
+    from termin.engine import (
+        EngineCore,
+        WorldController,
+        publish_world_controllers,
+        unregister_python_world_controller_owner,
+    )
+
+    owner = "project-world-controller-selection-test"
+
+    class ProjectSelectionDirector(WorldController):
+        def start(self, _context) -> None:
+            pass
+
+        def stop(self, _context) -> None:
+            pass
+
+    publish_world_controllers([ProjectSelectionDirector], owner=owner)
+    engine = EngineCore()
+    try:
+        with pytest.raises(RuntimeError, match="expected 'wrong-module'"):
+            create_selected_world_controller(
+                ProjectWorldControllerSelection(
+                    module="wrong-module",
+                    type_name="ProjectSelectionDirector",
+                )
+            )
+
+        controller = create_selected_world_controller(
+            ProjectWorldControllerSelection(
+                module=owner,
+                type_name="ProjectSelectionDirector",
+            )
+        )
+        assert controller is not None
+        assert engine.begin_session(controller)
+        assert engine.end_session()
+    finally:
+        engine.shutdown()
+        unregister_python_world_controller_owner(owner)
 
 
 def test_project_settings_manager_sets_and_clears_world_controller(tmp_path) -> None:

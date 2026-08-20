@@ -126,6 +126,30 @@ namespace termin {
             std::optional<EngineLoopClient> client;
             std::uint64_t generation = 0;
             std::atomic<bool> running{false};
+            bool polling = false;
+            std::thread::id polling_thread;
+        };
+
+        class EngineLoopPollScope {
+        public:
+            explicit EngineLoopPollScope(EngineLoopState& state) noexcept
+                : _state(state) {
+                std::lock_guard lock(_state.mutex);
+                _state.polling = true;
+                _state.polling_thread = std::this_thread::get_id();
+            }
+
+            ~EngineLoopPollScope() {
+                std::lock_guard lock(_state.mutex);
+                _state.polling = false;
+                _state.polling_thread = {};
+            }
+
+            EngineLoopPollScope(const EngineLoopPollScope&) = delete;
+            EngineLoopPollScope& operator=(const EngineLoopPollScope&) = delete;
+
+        private:
+            EngineLoopState& _state;
         };
 
         struct EngineFrameCompletionState {
@@ -652,8 +676,9 @@ namespace termin {
             tc_log(TC_LOG_ERROR, "[EngineCore] Cannot begin RuntimeSession after shutdown");
             return false;
         }
-        if (is_running()) {
-            tc_log(TC_LOG_ERROR, "[EngineCore] Cannot begin RuntimeSession while the main loop is running");
+        if (!session_mutation_is_safe()) {
+            tc_log(TC_LOG_ERROR,
+                   "[EngineCore] Cannot begin RuntimeSession outside the owning loop's poll callback");
             return false;
         }
         if (_session_operation != SessionOperation::Idle) {
@@ -702,8 +727,9 @@ namespace termin {
             tc_log(TC_LOG_ERROR, "[EngineCore] Refusing RuntimeSession end without an active session");
             return false;
         }
-        if (is_running()) {
-            tc_log(TC_LOG_ERROR, "[EngineCore] Cannot end RuntimeSession while the main loop is running");
+        if (!session_mutation_is_safe()) {
+            tc_log(TC_LOG_ERROR,
+                   "[EngineCore] Cannot end RuntimeSession outside the owning loop's poll callback");
             return false;
         }
 
@@ -717,6 +743,15 @@ namespace termin {
             tc_log(TC_LOG_ERROR, "[EngineCore] RuntimeSession ended with lifecycle failures");
         }
         return clean;
+    }
+
+    bool EngineCore::session_mutation_is_safe() const noexcept {
+        if (!is_running()) {
+            return true;
+        }
+        std::lock_guard lock(_loop_state->mutex);
+        return _loop_state->polling &&
+               _loop_state->polling_thread == std::this_thread::get_id();
     }
 
     bool EngineCore::bind_runtime_scene(tc_scene_handle scene) {
@@ -956,8 +991,10 @@ namespace termin {
                     else
                         tc_profiler_begin_section_muted("UI");
                 }
-                if (loop_client.poll_events)
+                if (loop_client.poll_events) {
+                    engine_detail::EngineLoopPollScope poll_scope(*_loop_state);
                     loop_client.poll_events();
+                }
                 if (profile)
                     tc_profiler_end_section();
 

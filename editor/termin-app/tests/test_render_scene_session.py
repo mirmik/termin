@@ -15,7 +15,14 @@ class _SceneManager:
 
 class _RenderingModel:
     def __init__(self, display, viewport):
-        self.manager = SimpleNamespace(get_display_for_viewport=lambda _viewport: display)
+        self.topology = SimpleNamespace(
+            is_attached=lambda _scene: True,
+            viewports=lambda _scene: (viewport,),
+        )
+        self.manager = SimpleNamespace(
+            topology=self.topology,
+            get_display_for_viewport=lambda _viewport: display,
+        )
         self.viewport = viewport
         self.detached = []
         self.synced = []
@@ -56,7 +63,7 @@ class _Workspace:
 
 
 def _session(*, fail=False):
-    scene = object()
+    scene = SimpleNamespace(name="Scene")
     viewport = object()
     display = SimpleNamespace(handle=(2, 1), viewports=[])
     model = _RenderingModel(display, viewport)
@@ -97,3 +104,23 @@ def test_render_scene_session_rejects_unknown_scene():
     session, *_rest = _session()
     with pytest.raises(ValueError, match="does not exist"):
         session.attach("Missing")
+
+
+def test_render_scene_session_reconciles_engine_attached_scene():
+    session, scene, viewport, display, _model, workspace, events = _session()
+
+    session.reconcile_attached_scene(scene)
+
+    assert workspace.configured == [(display, viewport)]
+    assert workspace.removed == [display]
+    assert events == ["sync", "render"]
+
+
+def test_render_scene_session_rejects_unattached_primary_scene():
+    session, scene, _viewport, _display, model, _workspace, events = _session()
+    model.topology.is_attached = lambda _scene: False
+
+    with pytest.raises(RuntimeError, match="has no render attachment"):
+        session.reconcile_attached_scene(scene)
+
+    assert events == []

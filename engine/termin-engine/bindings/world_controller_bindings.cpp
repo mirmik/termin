@@ -398,16 +398,24 @@ namespace termin::python {
 
         module.def(
             "create_world_controller",
-            [](const std::string& type_name) {
+            [](const std::string& type_name, nb::object owner) {
                 std::string error;
-                WorldControllerInstance instance = WorldControllerInstance::create(type_name.c_str(), error);
+                WorldControllerInstance instance;
+                if (owner.is_none()) {
+                    instance = WorldControllerInstance::create(type_name.c_str(), error);
+                } else {
+                    const std::string expected_owner = nb::cast<std::string>(owner);
+                    instance = WorldControllerInstance::create(
+                        type_name.c_str(), expected_owner.c_str(), error);
+                }
                 if (!instance) {
                     throw std::runtime_error(error);
                 }
                 return instance;
             },
             nb::arg("type_name"),
-            "Create one move-only WorldController owner without starting it.");
+            nb::arg("owner") = nb::none(),
+            "Create one move-only WorldController owner without starting it; an explicit owner is exact.");
 
         module.def(
             "world_context",

@@ -1,4 +1,10 @@
-# Transactional Play/Stop Plan
+# Transactional Play/Stop Plan (superseded)
+
+This historical plan is superseded by
+`docs/architecture/2026-08-20-game-application.md`. In particular,
+`PrimaryRenderSceneBinding` was removed: `EngineCore` now owns the primary
+gameplay transition, while the editor only observes the committed scene and
+maintains its own presentation.
 
 ## Status
 
