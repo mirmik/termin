@@ -5,6 +5,7 @@
 #pragma once
 
 #include "termin/engine/termin_engine_api.hpp"
+#include "termin/engine/world_controller.hpp"
 #include "termin/render/rendering_manager.hpp"
 #include "termin/scene/scene_manager.hpp"
 
@@ -18,6 +19,7 @@ namespace termin {
     namespace engine_detail {
         struct EngineLoopState;
         struct EngineFrameCompletionState;
+        class RuntimeSession;
     } // namespace engine_detail
 
     // Complete external integration required by EngineCore::run(). Keeping these
@@ -152,9 +154,18 @@ namespace termin {
     private:
         std::shared_ptr<engine_detail::EngineLoopState> _loop_state;
         std::shared_ptr<engine_detail::EngineFrameCompletionState> _frame_completion_state;
+        std::unique_ptr<engine_detail::RuntimeSession> _runtime_session;
         std::atomic<double> _target_fps{60.0};
         bool _profile_ui = false;
         bool _shutdown = false;
+        enum class SessionOperation {
+            Idle,
+            Beginning,
+            Ending,
+        };
+        SessionOperation _session_operation = SessionOperation::Idle;
+
+        bool begin_session_owned(WorldControllerInstance&& controller);
 
     public:
         EngineCore();
@@ -209,6 +220,16 @@ namespace termin {
 
         // Check if running
         bool is_running() const;
+
+        // Begin one EngineCore-owned world run. The no-argument overload is a
+        // real session without a project controller. The owning overload
+        // consumes a valid instance only after all preconditions pass.
+        bool begin_session();
+        bool begin_session(WorldControllerInstance&& controller);
+        bool end_session();
+        bool has_runtime_session() const noexcept {
+            return _runtime_session != nullptr;
+        }
 
         // Finalize engine-owned scenes and rendering resources. Hosts must call
         // this after their scene/display integrations are detached and before

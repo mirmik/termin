@@ -6,9 +6,9 @@ This document records the accepted second design for persistent gameplay state
 outside scenes.
 
 The language-neutral `WorldController` registry, instance lifecycle, native
-adapter, and Python declaration transaction are implemented in `termin-engine`.
-Hosting the controller inside an `EngineCore`-owned `RuntimeSession` remains the
-next integration step.
+adapter, Python declaration transaction, and `EngineCore`-owned
+`RuntimeSession` lifecycle are implemented in `termin-engine`. Scene access and
+host integration remain separate follow-up steps.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
 design deliberately has no public `SceneFlow`, scene providers, host binding
@@ -257,7 +257,7 @@ Independent foundations:
 
 Engine sequence:
 
-- #1783 adds the `EngineCore`-owned session lifecycle;
+- #1783 adds the `EngineCore`-owned session lifecycle (implemented);
 - #1787 adds the transient scene extension;
 - #1790 adds synchronous primary-scene switching at the engine safe point.
 

@@ -31,6 +31,6 @@ NB_MODULE(_engine_native, m) {
             render_module.attr("RenderAttachmentContext").attr("_from_capsule"));
     termin::bind_term_modules_integration(modules_module);
     termin::bind_scene_render_ext(m);
-    termin::bind_engine_core(m);
     termin::python::bind_world_controller(m);
+    termin::bind_engine_core(m);
 }

@@ -15,6 +15,10 @@ extern "C" {
 #include <tcbase/tc_log.h>
 }
 
+struct tc_world_context {
+    termin::EngineCore* engine = nullptr;
+};
+
 namespace termin {
 
     EngineHostFrameCadence EngineHostFrameCadenceTracker::observe(double start_time_ms,
@@ -131,6 +135,74 @@ namespace termin {
             std::uint64_t generation = 0;
         };
 
+        class RuntimeSession {
+        public:
+            RuntimeSession(EngineCore& engine, WorldControllerInstance controller)
+                : _controller(std::move(controller)) {
+                _context.engine = &engine;
+            }
+
+            ~RuntimeSession() {
+                if (_active && !end()) {
+                    tc_log(TC_LOG_ERROR, "[RuntimeSession] Failed to end during destruction");
+                }
+            }
+
+            RuntimeSession(const RuntimeSession&) = delete;
+            RuntimeSession& operator=(const RuntimeSession&) = delete;
+
+            bool start() {
+                if (_active) {
+                    tc_log(TC_LOG_ERROR, "[RuntimeSession] Refusing repeated start");
+                    return false;
+                }
+                if (_controller) {
+                    char message[1024] = {};
+                    tc_world_controller_error_v1 error{
+                        sizeof(tc_world_controller_error_v1), message, sizeof(message)};
+                    if (!tc_world_controller_instance_start(
+                            _controller.native_handle(), &_context, &error)) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RuntimeSession] WorldController start failed: %s",
+                               message[0] ? message : "unknown lifecycle failure");
+                        _controller.reset();
+                        return false;
+                    }
+                }
+                _active = true;
+                return true;
+            }
+
+            bool end() {
+                if (!_active) {
+                    tc_log(TC_LOG_ERROR, "[RuntimeSession] Refusing end without an active session");
+                    return false;
+                }
+                bool clean = true;
+                if (_controller) {
+                    char message[1024] = {};
+                    tc_world_controller_error_v1 error{
+                        sizeof(tc_world_controller_error_v1), message, sizeof(message)};
+                    if (!tc_world_controller_instance_stop(_controller.native_handle(), &error)) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RuntimeSession] WorldController stop failed: %s",
+                               message[0] ? message : "unknown lifecycle failure");
+                        clean = false;
+                    }
+                    if (!_controller.reset()) {
+                        clean = false;
+                    }
+                }
+                _active = false;
+                return clean;
+            }
+
+        private:
+            WorldControllerInstance _controller;
+            tc_world_context _context{};
+            bool _active = false;
+        };
+
     } // namespace engine_detail
 
     EngineLoopClientConnection::EngineLoopClientConnection(std::weak_ptr<engine_detail::EngineLoopState> state,
@@ -235,6 +307,9 @@ namespace termin {
         : rendering_manager(render_topology),
           _loop_state(std::make_shared<engine_detail::EngineLoopState>()),
           _frame_completion_state(std::make_shared<engine_detail::EngineFrameCompletionState>()) {
+        if (!tc_world_controller_registry_init()) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Failed to initialize the WorldController registry root");
+        }
         scene_manager.set_before_scene_destroy_guard([this](tc_scene_handle scene) {
             if (!render_topology.is_attached(scene) && render_topology.render_targets(scene).empty() &&
                 render_topology.viewports(scene).empty()) {
@@ -266,6 +341,20 @@ namespace termin {
             tc_log(TC_LOG_ERROR, "[EngineCore] Refusing shutdown while the main loop is running");
             return false;
         }
+        if (_session_operation != SessionOperation::Idle) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing shutdown during RuntimeSession lifecycle callback");
+            return false;
+        }
+
+        bool clean = true;
+        if (_runtime_session) {
+            clean = end_session();
+            if (_runtime_session) {
+                tc_log(TC_LOG_ERROR,
+                       "[EngineCore] Refusing resource shutdown while RuntimeSession teardown is reentrant");
+                return false;
+            }
+        }
 
         // Scene-owned render objects must be detached while scene handles and the
         // scene runtime are still alive. The frontend has already released its
@@ -279,7 +368,91 @@ namespace termin {
         rendering_manager.shutdown();
         _shutdown = true;
         tc_log(TC_LOG_INFO, "[EngineCore] Shutdown complete");
-        return true;
+        return clean;
+    }
+
+    bool EngineCore::begin_session() {
+        WorldControllerInstance controller;
+        return begin_session_owned(std::move(controller));
+    }
+
+    bool EngineCore::begin_session(WorldControllerInstance&& controller) {
+        if (!controller) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing an invalid or already-consumed WorldController owner");
+            return false;
+        }
+        return begin_session_owned(std::move(controller));
+    }
+
+    bool EngineCore::begin_session_owned(WorldControllerInstance&& controller) {
+        if (_shutdown) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Cannot begin RuntimeSession after shutdown");
+            return false;
+        }
+        if (is_running()) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Cannot begin RuntimeSession while the main loop is running");
+            return false;
+        }
+        if (_session_operation != SessionOperation::Idle) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing reentrant RuntimeSession begin");
+            return false;
+        }
+        if (_runtime_session) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing a second active RuntimeSession");
+            return false;
+        }
+        if (controller && controller.state() != TC_WORLD_CONTROLLER_STATE_CREATED) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] WorldController owner is not in CREATED state");
+            return false;
+        }
+
+        _session_operation = SessionOperation::Beginning;
+        try {
+            auto candidate = std::make_unique<engine_detail::RuntimeSession>(*this, std::move(controller));
+            if (!candidate->start()) {
+                _session_operation = SessionOperation::Idle;
+                return false;
+            }
+            _runtime_session = std::move(candidate);
+            _session_operation = SessionOperation::Idle;
+            tc_log(TC_LOG_INFO, "[EngineCore] RuntimeSession started");
+            return true;
+        } catch (const std::exception& exception) {
+            _session_operation = SessionOperation::Idle;
+            tc_log(TC_LOG_ERROR,
+                   "[EngineCore] Failed to allocate RuntimeSession: %s",
+                   exception.what());
+        } catch (...) {
+            _session_operation = SessionOperation::Idle;
+            tc_log(TC_LOG_ERROR, "[EngineCore] Failed to allocate RuntimeSession with unknown exception");
+        }
+        return false;
+    }
+
+    bool EngineCore::end_session() {
+        if (_session_operation != SessionOperation::Idle) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing reentrant RuntimeSession end");
+            return false;
+        }
+        if (!_runtime_session) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing RuntimeSession end without an active session");
+            return false;
+        }
+        if (is_running()) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Cannot end RuntimeSession while the main loop is running");
+            return false;
+        }
+
+        _session_operation = SessionOperation::Ending;
+        const bool clean = _runtime_session->end();
+        _runtime_session.reset();
+        _session_operation = SessionOperation::Idle;
+        if (clean) {
+            tc_log(TC_LOG_INFO, "[EngineCore] RuntimeSession ended");
+        } else {
+            tc_log(TC_LOG_ERROR, "[EngineCore] RuntimeSession ended with lifecycle failures");
+        }
+        return clean;
     }
 
     EngineLoopClientConnection EngineCore::attach_loop_client(EngineLoopClient client) {

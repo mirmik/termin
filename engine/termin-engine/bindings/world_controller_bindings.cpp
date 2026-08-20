@@ -334,6 +334,29 @@ namespace termin::python {
         nb::class_<WorldContext>(module, "WorldContext")
             .def_prop_ro("valid", &WorldContext::valid);
 
+        nb::class_<WorldControllerInstance>(module, "WorldControllerInstance")
+            .def_prop_ro("valid", &WorldControllerInstance::valid)
+            .def_prop_ro(
+                "type_name",
+                [](const WorldControllerInstance& instance) -> nb::object {
+                    const char* type_name = instance.type_name();
+                    return type_name ? nb::cast(type_name) : nb::none();
+                })
+            .def("__bool__", &WorldControllerInstance::valid);
+
+        module.def(
+            "create_world_controller",
+            [](const std::string& type_name) {
+                std::string error;
+                WorldControllerInstance instance = WorldControllerInstance::create(type_name.c_str(), error);
+                if (!instance) {
+                    throw std::runtime_error(error);
+                }
+                return instance;
+            },
+            nb::arg("type_name"),
+            "Create one move-only WorldController owner without starting it.");
+
         module.def("_bootstrap_world_controller_registry", &tc_world_controller_registry_init);
         module.def("_register_world_controller",
                    &register_python_controller,

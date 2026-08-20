@@ -1,0 +1,192 @@
+#include "guard_main.h"
+
+GUARD_TEST_MAIN();
+
+#include <string>
+#include <vector>
+
+#include <inspect/tc_runtime_type_registry.h>
+#include <termin/engine/engine_core.hpp>
+
+namespace {
+
+    enum class Event {
+        Construct,
+        Start,
+        Stop,
+        Destroy,
+        SceneClose,
+    };
+
+    struct SessionProbe {
+        std::vector<Event> events;
+        termin::EngineCore* engine = nullptr;
+        bool fail_start = false;
+        bool fail_stop = false;
+        bool reenter = false;
+        bool reentrant_begin_result = true;
+        bool reentrant_end_result = true;
+        bool shutdown_during_start_result = true;
+        bool shutdown_during_stop_result = true;
+        size_t scenes_during_start = 99;
+    };
+
+    SessionProbe* g_probe = nullptr;
+
+    class SessionController final : public termin::WorldController {
+    public:
+        SessionController() {
+            g_probe->events.push_back(Event::Construct);
+        }
+
+        ~SessionController() override {
+            g_probe->events.push_back(Event::Destroy);
+        }
+
+        bool start(termin::WorldContext context, std::string& error) override {
+            g_probe->events.push_back(Event::Start);
+            g_probe->scenes_during_start = g_probe->engine->scene_manager.scene_names().size();
+            CHECK(context.valid());
+            if (g_probe->reenter) {
+                g_probe->reentrant_begin_result = g_probe->engine->begin_session();
+                g_probe->shutdown_during_start_result = g_probe->engine->shutdown();
+            }
+            if (g_probe->fail_start) {
+                error = "injected session start failure";
+                return false;
+            }
+            return true;
+        }
+
+        bool stop(termin::WorldContext context, std::string& error) override {
+            g_probe->events.push_back(Event::Stop);
+            CHECK(context.valid());
+            if (g_probe->reenter) {
+                g_probe->reentrant_end_result = g_probe->engine->end_session();
+                g_probe->shutdown_during_stop_result = g_probe->engine->shutdown();
+            }
+            if (g_probe->fail_stop) {
+                error = "injected session stop failure";
+                return false;
+            }
+            return true;
+        }
+    };
+
+    constexpr const char* kType = "EngineRuntimeSessionController";
+    constexpr const char* kOwner = "engine-runtime-session-test";
+
+    void register_controller() {
+        tc_runtime_type_registry_clear();
+        REQUIRE(tc_world_controller_registry_init());
+        auto descriptor =
+            termin::WorldControllerTypeDescriptorBuilder::native<SessionController>(kType, kOwner);
+        REQUIRE(descriptor.commit());
+    }
+
+    termin::WorldControllerInstance create_controller() {
+        std::string error;
+        auto controller = termin::WorldControllerInstance::create(kType, error);
+        REQUIRE(controller.valid());
+        CHECK(error.empty());
+        return controller;
+    }
+
+} // namespace
+
+TEST_CASE("EngineCore repeatedly owns explicit null RuntimeSessions") {
+    termin::EngineCore engine;
+    termin::EngineCore independent_engine;
+    CHECK_FALSE(engine.has_runtime_session());
+    CHECK(engine.begin_session());
+    CHECK(independent_engine.begin_session());
+    CHECK(engine.has_runtime_session());
+    CHECK(independent_engine.has_runtime_session());
+    CHECK_FALSE(engine.begin_session());
+    CHECK(engine.end_session());
+    CHECK_FALSE(engine.has_runtime_session());
+    CHECK(independent_engine.has_runtime_session());
+    CHECK(independent_engine.end_session());
+    CHECK_FALSE(engine.end_session());
+    CHECK(engine.begin_session());
+    CHECK(engine.end_session());
+    CHECK(engine.shutdown());
+    CHECK_FALSE(engine.begin_session());
+}
+
+TEST_CASE("EngineCore consumes and supervises one native WorldController") {
+    register_controller();
+    termin::EngineCore engine;
+    SessionProbe probe;
+    probe.engine = &engine;
+    probe.reenter = true;
+    g_probe = &probe;
+    auto controller = create_controller();
+    CHECK_EQ(tc_runtime_type_registry_instance_count(kType), 1u);
+
+    CHECK(engine.begin_session(std::move(controller)));
+    CHECK_FALSE(controller.valid());
+    CHECK(engine.has_runtime_session());
+    CHECK_EQ(probe.scenes_during_start, 0u);
+    CHECK_FALSE(probe.reentrant_begin_result);
+    CHECK_FALSE(probe.shutdown_during_start_result);
+    CHECK_FALSE(tc_runtime_type_registry_prepare_owner_unload(kOwner, nullptr));
+
+    engine.scene_manager.set_on_before_scene_close(
+        [&probe](const std::string&) { probe.events.push_back(Event::SceneClose); });
+    engine.scene_manager.create_scene("runtime-scene");
+    CHECK(engine.shutdown());
+    CHECK_FALSE(engine.has_runtime_session());
+    CHECK_FALSE(probe.reentrant_end_result);
+    CHECK_FALSE(probe.shutdown_during_stop_result);
+    CHECK_EQ(tc_runtime_type_registry_instance_count(kType), 0u);
+    CHECK(tc_runtime_type_registry_prepare_owner_unload(kOwner, nullptr));
+
+    REQUIRE_EQ(probe.events.size(), 5u);
+    CHECK(probe.events[0] == Event::Construct);
+    CHECK(probe.events[1] == Event::Start);
+    CHECK(probe.events[2] == Event::Stop);
+    CHECK(probe.events[3] == Event::Destroy);
+    CHECK(probe.events[4] == Event::SceneClose);
+    tc_runtime_type_registry_clear();
+}
+
+TEST_CASE("RuntimeSession start failure destroys its controller and leaves no active run") {
+    register_controller();
+    termin::EngineCore engine;
+    SessionProbe probe;
+    probe.engine = &engine;
+    probe.fail_start = true;
+    g_probe = &probe;
+    auto controller = create_controller();
+
+    CHECK_FALSE(engine.begin_session(std::move(controller)));
+    CHECK_FALSE(controller.valid());
+    CHECK_FALSE(engine.has_runtime_session());
+    CHECK_EQ(tc_runtime_type_registry_instance_count(kType), 0u);
+    REQUIRE_EQ(probe.events.size(), 4u);
+    CHECK(probe.events[0] == Event::Construct);
+    CHECK(probe.events[1] == Event::Start);
+    CHECK(probe.events[2] == Event::Stop);
+    CHECK(probe.events[3] == Event::Destroy);
+    CHECK(engine.begin_session());
+    CHECK(engine.end_session());
+    tc_runtime_type_registry_clear();
+}
+
+TEST_CASE("RuntimeSession reports stop failure after releasing controller ownership") {
+    register_controller();
+    termin::EngineCore engine;
+    SessionProbe probe;
+    probe.engine = &engine;
+    probe.fail_stop = true;
+    g_probe = &probe;
+    auto controller = create_controller();
+
+    CHECK(engine.begin_session(std::move(controller)));
+    CHECK_FALSE(engine.end_session());
+    CHECK_FALSE(engine.has_runtime_session());
+    CHECK_EQ(tc_runtime_type_registry_instance_count(kType), 0u);
+    CHECK(engine.shutdown());
+    tc_runtime_type_registry_clear();
+}

@@ -101,6 +101,28 @@ namespace termin {
 
             .def("is_running", &EngineCore::is_running, "Check if main loop is running")
 
+            .def(
+                "begin_session",
+                [](EngineCore& self, nb::object controller) {
+                    if (controller.is_none()) {
+                        return self.begin_session();
+                    }
+                    if (!nb::isinstance<WorldControllerInstance>(controller)) {
+                        throw nb::type_error(
+                            "controller must be a WorldControllerInstance or None");
+                    }
+                    auto& owner = nb::cast<WorldControllerInstance&>(controller);
+                    return self.begin_session(std::move(owner));
+                },
+                nb::arg("controller") = nb::none(),
+                "Begin one supervised world run and consume an optional controller owner.")
+
+            .def("end_session", &EngineCore::end_session, "End and release the active world run.")
+
+            .def_prop_ro("has_runtime_session",
+                         &EngineCore::has_runtime_session,
+                         "Whether this EngineCore owns an active RuntimeSession.")
+
             .def("shutdown",
                  &EngineCore::shutdown,
                  "Finalize engine-owned scenes and rendering resources. Repeated calls are harmless.");
