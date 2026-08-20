@@ -1,32 +1,87 @@
 #pragma once
 
+#include <cstdint>
 #include <exception>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
 
+#include <termin/engine/world_context.h>
 #include <termin/engine/world_controller.h>
 
 namespace termin {
 
     class EngineCore;
+    class WorldControllerRef;
 
-    // Non-owning view of the EngineCore-owned per-run context. The C handle is
-    // intentionally opaque here; the EngineCore runtime host defines its
-    // concrete contents.
+    // Safe value handle to the EngineCore-owned per-run context. Copies retain
+    // only the invalidatable control block, never the RuntimeSession itself.
     class WorldContext {
         tc_world_context* _native = nullptr;
+        std::uint64_t _generation = 0;
+
+        struct AdoptRetained {};
+        WorldContext(tc_world_context* native, AdoptRetained) noexcept;
 
     public:
-        explicit WorldContext(tc_world_context* native) noexcept
-            : _native(native) {}
+        WorldContext() = default;
+        explicit WorldContext(tc_world_context* native) noexcept;
+        ~WorldContext();
 
-        bool valid() const noexcept {
-            return _native != nullptr;
+        WorldContext(const WorldContext& other) noexcept;
+        WorldContext& operator=(const WorldContext& other) noexcept;
+        WorldContext(WorldContext&& other) noexcept;
+        WorldContext& operator=(WorldContext&& other) noexcept;
+
+        static WorldContext from_scene(tc_scene_handle scene) noexcept;
+        static WorldContext require_from_scene(tc_scene_handle scene, const char* consumer);
+        static WorldContext from_component(const tc_component* component) noexcept;
+        static WorldContext require_from_component(const tc_component* component, const char* consumer);
+
+        bool valid() const noexcept;
+        explicit operator bool() const noexcept {
+            return valid();
         }
+        std::optional<WorldControllerRef> controller() const noexcept;
 
         tc_world_context* native_handle() const noexcept {
             return _native;
+        }
+
+        std::uint64_t generation() const noexcept {
+            return _generation;
+        }
+
+        friend bool operator==(const WorldContext& lhs, const WorldContext& rhs) noexcept {
+            return lhs._native == rhs._native && lhs._generation == rhs._generation;
+        }
+        friend bool operator!=(const WorldContext& lhs, const WorldContext& rhs) noexcept {
+            return !(lhs == rhs);
+        }
+    };
+
+    // Invalidatable, non-owning projection of the controller supervised by a
+    // WorldContext. It intentionally exposes identity, not lifecycle authority.
+    class TERMIN_ENGINE_API WorldControllerRef {
+        friend class WorldContext;
+        explicit WorldControllerRef(WorldContext context) noexcept
+            : _context(std::move(context)) {}
+
+        WorldContext _context;
+        tc_world_controller_instance* native_handle() const noexcept;
+
+    public:
+        bool valid() const noexcept;
+        explicit operator bool() const noexcept {
+            return valid();
+        }
+        const char* type_name() const noexcept;
+        void* object() const noexcept;
+
+        template <typename T>
+        T* object_as() const noexcept {
+            return static_cast<T*>(object());
         }
     };
 

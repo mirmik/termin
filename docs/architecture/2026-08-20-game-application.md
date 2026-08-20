@@ -7,8 +7,9 @@ outside scenes.
 
 The language-neutral `WorldController` registry, instance lifecycle, native
 adapter, Python declaration transaction, and `EngineCore`-owned
-`RuntimeSession` lifecycle are implemented in `termin-engine`. Scene access and
-host integration remain separate follow-up steps.
+`RuntimeSession` lifecycle are implemented in `termin-engine`. The transient
+scene-to-session `WorldContext` route is also implemented. Primary-scene
+switching and host integration remain separate follow-up steps.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
 design deliberately has no public `SceneFlow`, scene providers, host binding
@@ -134,10 +135,22 @@ The initial public surface is intentionally narrow:
 
 ```text
 WorldContext
-|-- controller() -> optional WorldController
-|-- primary_scene() -> optional scene handle
-`-- request_primary_scene(...)
+|-- valid
+`-- controller() -> optional borrowed/invalidatable WorldController
 ```
+
+Native code can acquire or require the context from a `tc_scene_handle` or
+`tc_component*`; the C++ value wrapper provides the corresponding
+`from_scene`/`from_component` and `require_from_*` helpers. Python components
+use `world_context(self.scene)` or `require_world_context(self.scene, consumer)`.
+The native controller projection exposes type identity plus a borrowed project
+object pointer. Python-backed controllers are exposed as weak proxies to the
+actual project object. Components can therefore use their world-level state
+without extending controller or module lifetime beyond the session. The
+projection never hands lifecycle authority or ownership to scene code.
+
+Primary-scene identity and transition requests are deliberately absent here;
+they belong to the separate primary-scene operation described below.
 
 The context is not a string-to-pointer service dictionary. It may internally
 retain an engine-owned link, so exposing additional `EngineCore` facilities in
@@ -258,7 +271,7 @@ Independent foundations:
 Engine sequence:
 
 - #1783 adds the `EngineCore`-owned session lifecycle (implemented);
-- #1787 adds the transient scene extension;
+- #1787 adds the transient scene extension (implemented);
 - #1790 adds synchronous primary-scene switching at the engine safe point.
 
 Composition and host sequence:

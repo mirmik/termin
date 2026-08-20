@@ -366,3 +366,7 @@ tc_world_controller_state tc_world_controller_instance_state(const tc_world_cont
 const char* tc_world_controller_instance_type_name(const tc_world_controller_instance* instance) {
     return instance ? instance->type_link.type_name : NULL;
 }
+
+void* tc_world_controller_instance_object(const tc_world_controller_instance* instance) {
+    return instance ? instance->object : NULL;
+}

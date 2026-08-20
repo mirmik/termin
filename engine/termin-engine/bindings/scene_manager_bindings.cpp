@@ -7,6 +7,7 @@
 #include <nanobind/trampoline.h>
 
 #include "termin/scene/scene_manager.hpp"
+#include <termin/tc_scene.hpp>
 
 extern "C" {
 #include "core/tc_entity_pool.h"
@@ -210,6 +211,14 @@ namespace termin {
                 "Get scene by name. Returns TcScene or None.")
 
             .def("has_scene", &SceneManager::has_scene, nb::arg("name"), "Check if scene exists.")
+
+            .def(
+                "is_registered",
+                [](const SceneManager& self, const TcSceneRef& scene) {
+                    return self.is_registered(scene.handle());
+                },
+                nb::arg("scene"),
+                "Check whether this exact live scene instance is registered.")
 
             .def("scene_names", &SceneManager::scene_names, "Get list of all scene names.")
 

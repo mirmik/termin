@@ -66,6 +66,7 @@ namespace termin {
 
         tc_scene_handle get_scene(const std::string& name) const;
         bool has_scene(const std::string& name) const;
+        bool is_registered(tc_scene_handle scene) const noexcept;
         std::vector<std::string> scene_names() const;
 
         // --- Path management ---

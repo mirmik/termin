@@ -78,6 +78,7 @@ set(TERMIN_ENGINE_SOURCES
     src/render_topology.cpp
     src/modules/term_modules_integration.cpp
     src/viewport_render_state.cpp
+    src/world_context.cpp
     src/world_controller.c
     src/world_controller.cpp
 )

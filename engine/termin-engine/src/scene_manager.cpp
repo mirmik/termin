@@ -145,6 +145,19 @@ namespace termin {
         return _scenes.find(name) != _scenes.end();
     }
 
+    bool SceneManager::is_registered(tc_scene_handle scene) const noexcept {
+        if (!tc_scene_alive(scene)) {
+            return false;
+        }
+        for (const auto& [name, registered] : _scenes) {
+            (void)name;
+            if (tc_scene_handle_eq(scene, registered)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::vector<std::string> SceneManager::scene_names() const {
         std::vector<std::string> names;
         names.reserve(_scenes.size());
