@@ -253,7 +253,7 @@ Independent foundations:
 
 - #1781 moves and renames the complete native/Python controller contract
   (implemented);
-- #1782 adds the optional project-settings selection.
+- #1782 adds the optional project-settings selection (implemented).
 
 Engine sequence:
 

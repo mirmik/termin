@@ -11,6 +11,7 @@ from termin.editor_core.project_settings_model import (
     ProjectSettingsController,
     ProjectSettingsSnapshot,
     RENDER_SYNC_MODES,
+    world_controller_selection_from_fields,
 )
 from termin.gui_native import DialogAction, TcDocument, Rect, Size, WidgetRef
 
@@ -45,6 +46,8 @@ class NativeProjectSettingsDialog:
     application_label: object
     version_code: object
     version_name: object
+    world_controller_module: object
+    world_controller_type: object
     player_width: object
     player_height: object
     player_fullscreen: object
@@ -83,6 +86,10 @@ class NativeProjectSettingsDialog:
             application_label=self.application_label.text,
             version_code=int(self.version_code.value),
             version_name=self.version_name.text,
+            world_controller=world_controller_selection_from_fields(
+                self.world_controller_module.text,
+                self.world_controller_type.text,
+            ),
             player_width=int(self.player_width.value),
             player_height=int(self.player_height.value),
             player_fullscreen=bool(self.player_fullscreen.checked),
@@ -102,6 +109,12 @@ class NativeProjectSettingsDialog:
             self.application_label.text = snapshot.application_label
             self.version_code.value = snapshot.version_code
             self.version_name.text = snapshot.version_name
+            if snapshot.world_controller is None:
+                self.world_controller_module.text = ""
+                self.world_controller_type.text = ""
+            else:
+                self.world_controller_module.text = snapshot.world_controller.module
+                self.world_controller_type.text = snapshot.world_controller.type_name
             self.player_width.value = snapshot.player_width
             self.player_height.value = snapshot.player_height
             self.player_fullscreen.checked = snapshot.player_fullscreen
@@ -158,7 +171,7 @@ def build_native_project_settings_dialog(
 ) -> NativeProjectSettingsDialog:
     root = document.create_vstack("native-project-settings")
     root.stable_id = "editor.project-settings"
-    root.preferred_size = Size(620.0, 520.0)
+    root.preferred_size = Size(620.0, 620.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     render_sync = document.create_combo_box()
@@ -188,6 +201,16 @@ def build_native_project_settings_dialog(
     version_name = document.create_text_input()
     root.add_fixed_child(
         _row(document, "Version Name", version_name),
+        EDITOR_UI_METRICS.field_row,
+    )
+    world_controller_module = document.create_text_input()
+    root.add_fixed_child(
+        _row(document, "World Controller Module", world_controller_module),
+        EDITOR_UI_METRICS.field_row,
+    )
+    world_controller_type = document.create_text_input()
+    root.add_fixed_child(
+        _row(document, "World Controller Type", world_controller_type),
         EDITOR_UI_METRICS.field_row,
     )
     width = document.create_spin_box()
@@ -235,6 +258,8 @@ def build_native_project_settings_dialog(
         application_label=application_label,
         version_code=version_code,
         version_name=version_name,
+        world_controller_module=world_controller_module,
+        world_controller_type=world_controller_type,
         player_width=width,
         player_height=height,
         player_fullscreen=fullscreen,

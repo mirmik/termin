@@ -10,6 +10,10 @@ from termin.project.settings import (
     ProjectSettingsManager,
     RenderSyncMode,
 )
+from termin.project.world_controller_selection import (
+    ProjectWorldControllerSelection,
+    WorldControllerSelectionError,
+)
 from termin.player.project_settings import ProjectRuntimeSettings
 from termin.project_build.desktop_build import _load_project_settings
 from termin.render import (
@@ -188,6 +192,100 @@ def test_project_application_identity_defaults_and_round_trips() -> None:
         custom.to_dict(),
         project_name="Ignored Default",
     ).application == custom.application
+
+
+def test_project_world_controller_absence_and_selection_round_trip() -> None:
+    absent = ProjectSettings.from_dict({})
+    explicit_null = ProjectSettings.from_dict({"world_controller": None})
+
+    assert absent.world_controller is None
+    assert explicit_null.world_controller is None
+    assert absent.to_dict()["world_controller"] is None
+
+    selected = ProjectSettings.from_dict(
+        {
+            "world_controller": {
+                "module": " avalon.game ",
+                "type": " avalon.GameDirector ",
+            }
+        }
+    )
+    assert selected.world_controller == ProjectWorldControllerSelection(
+        module="avalon.game",
+        type_name="avalon.GameDirector",
+    )
+    assert ProjectSettings.from_dict(selected.to_dict()).world_controller == (
+        selected.world_controller
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        (False, "world_controller must be null or an object"),
+        ({}, "missing required field"),
+        ({"module": "game"}, "missing required field"),
+        ({"type": "Director"}, "missing required field"),
+        (
+            {"module": "game", "type": "Director", "config": {}},
+            "unexpected field",
+        ),
+        ({"module": 7, "type": "Director"}, "world_controller.module"),
+        ({"module": "game", "type": None}, "world_controller.type"),
+        ({"module": " ", "type": "Director"}, "world_controller.module"),
+        ({"module": "game", "type": ""}, "world_controller.type"),
+    ],
+)
+def test_project_world_controller_rejects_malformed_explicit_selection(
+    value: object,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ProjectSettings.from_dict({"world_controller": value})
+
+
+def test_project_settings_manager_sets_and_clears_world_controller(tmp_path) -> None:
+    manager = ProjectSettingsManager()
+    manager.set_project_path(tmp_path)
+    selection = ProjectWorldControllerSelection(
+        module="avalon.game",
+        type_name="avalon.GameDirector",
+    )
+
+    manager.set_world_controller(selection)
+
+    settings_path = tmp_path / "project_settings" / "project.json"
+    assert json.loads(settings_path.read_text(encoding="utf-8"))["world_controller"] == {
+        "module": "avalon.game",
+        "type": "avalon.GameDirector",
+    }
+    reloaded = ProjectSettingsManager()
+    reloaded.set_project_path(tmp_path)
+    assert reloaded.settings.world_controller == selection
+
+    reloaded.set_world_controller(None)
+    assert json.loads(settings_path.read_text(encoding="utf-8"))["world_controller"] is None
+
+
+def test_project_settings_manager_does_not_turn_malformed_selection_into_null(
+    tmp_path,
+) -> None:
+    settings_path = tmp_path / "project_settings" / "project.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "world_controller": {
+                    "module": "avalon.game",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ProjectSettingsManager()
+    with pytest.raises(WorldControllerSelectionError, match="missing required field"):
+        manager.set_project_path(tmp_path)
 
 
 def test_last_scene_is_stored_relative_to_project_root(tmp_path) -> None:
