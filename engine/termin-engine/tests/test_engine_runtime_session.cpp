@@ -13,6 +13,9 @@ GUARD_TEST_MAIN();
 extern "C" {
 #include <core/tc_scene_extension.h>
 #include <core/tc_scene_extension_ids.h>
+#include <core/tc_scene_render_mount.h>
+#include <render/tc_display.h>
+#include <tc_viewport_config.h>
 }
 
 namespace {
@@ -129,6 +132,49 @@ namespace {
         termin::WorldContext start_context;
         termin::WorldContext active_context;
     };
+
+    class PrimaryTransitionProbe final : public termin::CxxComponent {
+    public:
+        PrimaryTransitionProbe(std::vector<std::string>& events, std::string label)
+            : CxxComponent("PrimaryTransitionProbe"),
+              _events(events),
+              _label(std::move(label)) {
+            set_has_update(true);
+        }
+
+        void on_scene_active() override {
+            _events.push_back(_label + ":active");
+        }
+
+        void on_scene_inactive() override {
+            _events.push_back(_label + ":inactive");
+        }
+
+        void update(float) override {
+            _events.push_back(_label + ":update");
+            if (tc_scene_handle_valid(request_target)) {
+                termin::WorldContext context = termin::WorldContext::require_from_component(
+                    tc_component_ptr(), "PrimaryTransitionProbe::update");
+                CHECK(context.request_primary_scene(request_target));
+                request_target = TC_SCENE_HANDLE_INVALID;
+            }
+        }
+
+        tc_scene_handle request_target = TC_SCENE_HANDLE_INVALID;
+
+    private:
+        std::vector<std::string>& _events;
+        std::string _label;
+    };
+
+    PrimaryTransitionProbe* add_transition_probe(termin::TcSceneRef scene,
+                                                 std::vector<std::string>& events,
+                                                 const std::string& label) {
+        termin::Entity entity = scene.create_entity(label);
+        auto* probe = new PrimaryTransitionProbe(events, label);
+        entity.add_component_ptr(probe->tc_component_ptr());
+        return probe;
+    }
 
 } // namespace
 
@@ -302,5 +348,187 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
     CHECK(engine.end_session());
     CHECK_FALSE(retained.valid());
     external.destroy();
+    CHECK(engine.shutdown());
+}
+
+TEST_CASE("Primary scene requests commit at the next EngineCore tick safe point") {
+    tc_scene_render_mount_extension_init();
+    termin::EngineCore engine;
+    termin::TcSceneRef first(engine.scene_manager.create_scene("primary-first"));
+    termin::TcSceneRef second(engine.scene_manager.create_scene("primary-second"));
+    termin::TcSceneRef auxiliary(engine.scene_manager.create_scene("primary-auxiliary"));
+    REQUIRE(first.valid());
+    REQUIRE(second.valid());
+    REQUIRE(auxiliary.valid());
+    (void)engine.rendering_manager.attach_scene_full(auxiliary.handle());
+    REQUIRE(engine.render_topology.is_attached(auxiliary.handle()));
+
+    std::vector<std::string> events;
+    PrimaryTransitionProbe* first_probe = add_transition_probe(first, events, "first");
+    (void)add_transition_probe(second, events, "second");
+
+    REQUIRE(engine.begin_session());
+    REQUIRE(engine.bind_runtime_scene(first.handle()));
+    REQUIRE(engine.bind_runtime_scene(second.handle()));
+    termin::WorldContext context = termin::WorldContext::require_from_scene(
+        first.handle(), "primary transition test");
+    CHECK_FALSE(tc_scene_handle_valid(context.primary_scene()));
+    REQUIRE(context.request_primary_scene(first.handle()));
+    CHECK_FALSE(context.request_primary_scene(second.handle()));
+
+    CHECK(engine.tick_and_render(0.016));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
+    CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_PLAY);
+    CHECK(tc_scene_get_mode(second.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK(engine.render_topology.is_attached(first.handle()));
+    CHECK_FALSE(engine.render_topology.is_attached(second.handle()));
+    CHECK(engine.render_topology.is_attached(auxiliary.handle()));
+    const std::vector<std::string> first_frame_events{"first:active", "first:update"};
+    CHECK(events == first_frame_events);
+    CHECK(context.request_primary_scene(first.handle()));
+
+    first_probe->request_target = second.handle();
+    events.clear();
+    CHECK(engine.tick_and_render(0.016));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
+    CHECK(events == std::vector<std::string>{"first:update"});
+
+    events.clear();
+    CHECK(engine.tick_and_render(0.016));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), second.handle()));
+    CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK(tc_scene_get_mode(second.handle()) == TC_SCENE_MODE_PLAY);
+    CHECK_FALSE(engine.render_topology.is_attached(first.handle()));
+    CHECK(engine.render_topology.is_attached(second.handle()));
+    CHECK(engine.render_topology.is_attached(auxiliary.handle()));
+    const std::vector<std::string> transition_frame_events{
+        "first:inactive", "second:active", "second:update"};
+    CHECK(events == transition_frame_events);
+
+    REQUIRE(context.request_primary_scene(first.handle()));
+    CHECK(engine.tick_and_render(0.016));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
+    CHECK(engine.render_topology.is_attached(first.handle()));
+    CHECK_FALSE(engine.render_topology.is_attached(second.handle()));
+    CHECK(engine.render_topology.is_attached(auxiliary.handle()));
+    CHECK(engine.end_session());
+    CHECK_FALSE(tc_scene_handle_valid(context.primary_scene()));
+    CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK_FALSE(engine.render_topology.is_attached(first.handle()));
+    CHECK(engine.render_topology.is_attached(auxiliary.handle()));
+    CHECK(engine.shutdown());
+}
+
+TEST_CASE("Primary scene preparation failure preserves the old world and permits retry") {
+    tc_scene_render_mount_extension_init();
+    termin::EngineCore engine;
+    termin::TcSceneRef first(engine.scene_manager.create_scene("prepare-old"));
+    termin::TcSceneRef broken(engine.scene_manager.create_scene("prepare-broken"));
+    termin::TcSceneRef recovery(engine.scene_manager.create_scene("prepare-recovery"));
+    REQUIRE(first.valid());
+    REQUIRE(broken.valid());
+    REQUIRE(recovery.valid());
+
+    tc_viewport_config viewport;
+    tc_viewport_config_init(&viewport);
+    viewport.name = "BrokenViewport";
+    viewport.display_name = "UnavailableDisplay";
+    viewport.enabled = true;
+    tc_scene_add_viewport_config(broken.handle(), &viewport);
+    engine.rendering_manager.set_display_factory(
+        [](const std::string&) { return TC_DISPLAY_HANDLE_INVALID; });
+
+    REQUIRE(engine.begin_session());
+    REQUIRE(engine.bind_runtime_scene(first.handle()));
+    REQUIRE(engine.bind_runtime_scene(broken.handle()));
+    REQUIRE(engine.bind_runtime_scene(recovery.handle()));
+    termin::WorldContext context = termin::WorldContext::require_from_scene(
+        first.handle(), "primary prepare rollback test");
+    REQUIRE(context.request_primary_scene(first.handle()));
+    CHECK(engine.tick_and_render(0.0));
+    REQUIRE(tc_scene_handle_eq(context.primary_scene(), first.handle()));
+
+    REQUIRE(context.request_primary_scene(broken.handle()));
+    CHECK(engine.tick_and_render(0.0));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
+    CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_PLAY);
+    CHECK(tc_scene_get_mode(broken.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK(engine.render_topology.is_attached(first.handle()));
+    CHECK_FALSE(engine.render_topology.is_attached(broken.handle()));
+
+    REQUIRE(context.request_primary_scene(recovery.handle()));
+    CHECK(engine.tick_and_render(0.0));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), recovery.handle()));
+    CHECK_FALSE(engine.render_topology.is_attached(first.handle()));
+    CHECK(engine.render_topology.is_attached(recovery.handle()));
+
+    tc_scene_set_mode(recovery.handle(), TC_SCENE_MODE_STOP);
+    REQUIRE(context.request_primary_scene(first.handle()));
+    CHECK(engine.tick_and_render(0.0));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
+    CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_STOP);
+    CHECK(engine.end_session());
+    CHECK(engine.shutdown());
+}
+
+TEST_CASE("RuntimeSession cancellation drops pending primary work during shutdown") {
+    tc_scene_render_mount_extension_init();
+    termin::EngineCore engine;
+    termin::TcSceneRef scene(engine.scene_manager.create_scene("pending-at-shutdown"));
+    REQUIRE(scene.valid());
+    REQUIRE(engine.begin_session());
+    REQUIRE(engine.bind_runtime_scene(scene.handle()));
+    termin::WorldContext context = termin::WorldContext::require_from_scene(
+        scene.handle(), "pending shutdown test");
+    REQUIRE(context.request_primary_scene(scene.handle()));
+    CHECK(engine.end_session());
+    CHECK_FALSE(context.valid());
+    CHECK(tc_scene_get_mode(scene.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK_FALSE(engine.render_topology.is_attached(scene.handle()));
+    CHECK(engine.shutdown());
+}
+
+TEST_CASE("Blocking EngineCore loop processes primary requests before each scene tick") {
+    tc_scene_render_mount_extension_init();
+    termin::EngineCore engine;
+    engine.set_target_fps(0.0);
+    termin::TcSceneRef first(engine.scene_manager.create_scene("loop-primary-first"));
+    termin::TcSceneRef second(engine.scene_manager.create_scene("loop-primary-second"));
+    REQUIRE(first.valid());
+    REQUIRE(second.valid());
+
+    std::vector<std::string> events;
+    PrimaryTransitionProbe* first_probe = add_transition_probe(first, events, "loop-first");
+    (void)add_transition_probe(second, events, "loop-second");
+    first_probe->request_target = second.handle();
+
+    REQUIRE(engine.begin_session());
+    REQUIRE(engine.bind_runtime_scene(first.handle()));
+    REQUIRE(engine.bind_runtime_scene(second.handle()));
+    termin::WorldContext context = termin::WorldContext::require_from_scene(
+        first.handle(), "blocking loop transition test");
+    REQUIRE(context.request_primary_scene(first.handle()));
+
+    int continuation_checks = 0;
+    int shutdowns = 0;
+    std::vector<tc_scene_handle> completed_primary_scenes;
+    auto loop = engine.attach_loop_client(termin::EngineLoopClient{
+        []() {},
+        [&continuation_checks]() { return ++continuation_checks < 3; },
+        [&shutdowns]() { ++shutdowns; },
+    });
+    auto completion = engine.attach_frame_completion_callback([&]() {
+        completed_primary_scenes.push_back(context.primary_scene());
+    });
+
+    engine.run();
+
+    REQUIRE_EQ(completed_primary_scenes.size(), 2u);
+    CHECK(tc_scene_handle_eq(completed_primary_scenes[0], first.handle()));
+    CHECK(tc_scene_handle_eq(completed_primary_scenes[1], second.handle()));
+    CHECK_EQ(shutdowns, 1);
+    CHECK(loop.connected());
+    CHECK(completion.connected());
+    CHECK(engine.end_session());
     CHECK(engine.shutdown());
 }

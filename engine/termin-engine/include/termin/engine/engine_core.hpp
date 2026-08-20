@@ -162,6 +162,7 @@ namespace termin {
             Idle,
             Beginning,
             Ending,
+            SwitchingPrimary,
         };
         SessionOperation _session_operation = SessionOperation::Idle;
 

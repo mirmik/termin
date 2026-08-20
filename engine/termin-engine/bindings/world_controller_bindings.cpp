@@ -359,6 +359,20 @@ namespace termin::python {
                     return controller ? project_controller(*controller) : nb::none();
                 },
                 "The optional project controller; Python controllers are exposed as weak proxies.")
+            .def_prop_ro(
+                "primary_scene",
+                [](const WorldContext& context) -> nb::object {
+                    const tc_scene_handle scene = context.primary_scene();
+                    return tc_scene_alive(scene) ? nb::cast(TcSceneRef(scene)) : nb::none();
+                },
+                "The live primary gameplay scene, or None before/after publication.")
+            .def(
+                "request_primary_scene",
+                [](const WorldContext& context, const TcSceneRef& scene) {
+                    return context.request_primary_scene(scene.handle());
+                },
+                nb::arg("scene"),
+                "Queue one inactive bound scene for the next EngineCore safe point.")
             .def("__bool__", &WorldContext::valid)
             .def("__eq__", [](const WorldContext& self, const WorldContext& other) { return self == other; });
 

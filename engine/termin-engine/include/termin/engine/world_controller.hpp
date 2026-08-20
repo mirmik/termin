@@ -44,6 +44,8 @@ namespace termin {
             return valid();
         }
         std::optional<WorldControllerRef> controller() const noexcept;
+        tc_scene_handle primary_scene() const noexcept;
+        bool request_primary_scene(tc_scene_handle scene) const noexcept;
 
         tc_world_context* native_handle() const noexcept {
             return _native;

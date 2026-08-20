@@ -17,11 +17,17 @@ extern "C" {
 #include <termin_scene/internal/tc_scene_extension_registry.h>
 }
 
+namespace {
+    constexpr std::uint64_t kNoSceneToken = UINT64_C(0xFFFFFFFF00000000);
+}
+
 struct tc_world_context {
     std::atomic<std::uint32_t> references{1};
     const std::uint64_t generation;
     std::atomic<bool> active{true};
     std::atomic<tc_world_controller_instance*> controller{nullptr};
+    std::atomic<std::uint64_t> primary_scene{kNoSceneToken};
+    std::atomic<std::uint64_t> pending_primary_scene{kNoSceneToken};
 
     tc_world_context(std::uint64_t generation_value,
                      tc_world_controller_instance* controller_value) noexcept
@@ -37,6 +43,24 @@ namespace {
     };
 
     std::atomic<std::uint64_t> g_next_world_context_generation{1};
+
+    std::uint64_t scene_token(tc_scene_handle scene) noexcept {
+        if (!tc_scene_handle_valid(scene)) {
+            return kNoSceneToken;
+        }
+        return (static_cast<std::uint64_t>(scene.index) << 32) |
+               static_cast<std::uint64_t>(scene.generation);
+    }
+
+    tc_scene_handle scene_from_token(std::uint64_t token) noexcept {
+        if (token == kNoSceneToken) {
+            return TC_SCENE_HANDLE_INVALID;
+        }
+        tc_scene_handle scene{};
+        scene.index = static_cast<std::uint32_t>(token >> 32);
+        scene.generation = static_cast<std::uint32_t>(token);
+        return scene;
+    }
 
     void* create_world_context_extension(tc_scene_handle, void*) {
         return new (std::nothrow) WorldContextSceneExtension();
@@ -60,6 +84,13 @@ namespace {
 
     const char* consumer_name(const char* consumer) noexcept {
         return consumer && consumer[0] ? consumer : "runtime component";
+    }
+
+    bool scene_is_bound_to_context(tc_world_context* context, tc_scene_handle scene) noexcept {
+        auto* extension = world_context_extension(scene);
+        return extension && extension->context == context &&
+               extension->generation == tc_world_context_generation(context) &&
+               tc_world_context_generation_is_valid(context, extension->generation);
     }
 
 } // namespace
@@ -132,6 +163,67 @@ extern "C" {
             return nullptr;
         }
         return context->controller.load(std::memory_order_acquire);
+    }
+
+    tc_scene_handle tc_world_context_primary_scene(const tc_world_context* context) {
+        if (!tc_world_context_is_valid(context)) {
+            return TC_SCENE_HANDLE_INVALID;
+        }
+        const tc_scene_handle scene =
+            scene_from_token(context->primary_scene.load(std::memory_order_acquire));
+        return tc_scene_alive(scene) ? scene : TC_SCENE_HANDLE_INVALID;
+    }
+
+    bool tc_world_context_request_primary_scene(tc_world_context* context, tc_scene_handle scene) {
+        if (!tc_world_context_is_valid(context)) {
+            tc_log(TC_LOG_ERROR, "[WorldContext] Cannot request a primary scene through an inactive context");
+            return false;
+        }
+        if (!tc_scene_alive(scene)) {
+            tc_log(TC_LOG_ERROR, "[WorldContext] Primary scene request requires a live scene");
+            return false;
+        }
+        if (!scene_is_bound_to_context(context, scene)) {
+            tc_log(TC_LOG_ERROR,
+                   "[WorldContext] Primary scene request target is not bound to this RuntimeSession");
+            return false;
+        }
+
+        const std::uint64_t token = scene_token(scene);
+        const std::uint64_t pending =
+            context->pending_primary_scene.load(std::memory_order_acquire);
+        if (pending != kNoSceneToken) {
+            if (pending == token) {
+                return true;
+            }
+            tc_log(TC_LOG_ERROR, "[WorldContext] Another primary scene request is already pending");
+            return false;
+        }
+        if (context->primary_scene.load(std::memory_order_acquire) == token) {
+            return true;
+        }
+        if (tc_scene_get_mode(scene) != TC_SCENE_MODE_INACTIVE) {
+            tc_log(TC_LOG_ERROR, "[WorldContext] Primary scene request target must be inactive");
+            return false;
+        }
+
+        std::uint64_t expected = kNoSceneToken;
+        if (!context->pending_primary_scene.compare_exchange_strong(
+                expected, token, std::memory_order_acq_rel, std::memory_order_acquire)) {
+            if (expected == token) {
+                return true;
+            }
+            tc_log(TC_LOG_ERROR, "[WorldContext] Another primary scene request is already pending");
+            return false;
+        }
+        if (!tc_world_context_is_valid(context)) {
+            expected = token;
+            context->pending_primary_scene.compare_exchange_strong(
+                expected, kNoSceneToken, std::memory_order_acq_rel, std::memory_order_acquire);
+            tc_log(TC_LOG_ERROR, "[WorldContext] RuntimeSession ended while queuing a primary scene request");
+            return false;
+        }
+        return true;
     }
 
     tc_world_context* tc_world_context_acquire_from_scene(tc_scene_handle scene) {
@@ -267,6 +359,14 @@ namespace termin {
         return WorldControllerRef(*this);
     }
 
+    tc_scene_handle WorldContext::primary_scene() const noexcept {
+        return tc_world_context_primary_scene(_native);
+    }
+
+    bool WorldContext::request_primary_scene(tc_scene_handle scene) const noexcept {
+        return tc_world_context_request_primary_scene(_native, scene);
+    }
+
     bool WorldControllerRef::valid() const noexcept {
         return tc_world_context_controller(_context.native_handle()) != nullptr;
     }
@@ -302,8 +402,10 @@ namespace termin {
             if (!context) {
                 return;
             }
-            context->controller.store(nullptr, std::memory_order_release);
             context->active.store(false, std::memory_order_release);
+            context->pending_primary_scene.store(kNoSceneToken, std::memory_order_release);
+            context->primary_scene.store(kNoSceneToken, std::memory_order_release);
+            context->controller.store(nullptr, std::memory_order_release);
         }
 
         bool bind_world_context_scene(tc_world_context* context, tc_scene_handle scene) noexcept {
@@ -356,6 +458,45 @@ namespace termin {
             }
             tc_scene_ext_detach(scene, TC_SCENE_EXT_TYPE_WORLD_CONTEXT);
             return true;
+        }
+
+        tc_scene_handle take_world_context_primary_request(tc_world_context* context) noexcept {
+            if (!tc_world_context_is_valid(context)) {
+                return TC_SCENE_HANDLE_INVALID;
+            }
+            return scene_from_token(
+                context->pending_primary_scene.exchange(kNoSceneToken, std::memory_order_acq_rel));
+        }
+
+        bool publish_world_context_primary_scene(tc_world_context* context,
+                                                 tc_scene_handle scene) noexcept {
+            if (!tc_world_context_is_valid(context)) {
+                return false;
+            }
+            if (tc_scene_handle_valid(scene) && !scene_is_bound_to_context(context, scene)) {
+                tc_log(TC_LOG_ERROR,
+                       "[WorldContext] Refusing to publish a primary scene owned by another RuntimeSession");
+                return false;
+            }
+            context->primary_scene.store(scene_token(scene), std::memory_order_release);
+            return true;
+        }
+
+        void clear_world_context_scene_references(tc_world_context* context,
+                                                  tc_scene_handle scene) noexcept {
+            if (!context) {
+                return;
+            }
+            const std::uint64_t token = scene_token(scene);
+            if (token == kNoSceneToken) {
+                return;
+            }
+            std::uint64_t expected = token;
+            context->pending_primary_scene.compare_exchange_strong(
+                expected, kNoSceneToken, std::memory_order_acq_rel, std::memory_order_acquire);
+            expected = token;
+            context->primary_scene.compare_exchange_strong(
+                expected, kNoSceneToken, std::memory_order_acq_rel, std::memory_order_acquire);
         }
 
     } // namespace engine_detail

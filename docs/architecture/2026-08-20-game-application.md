@@ -8,8 +8,8 @@ outside scenes.
 The language-neutral `WorldController` registry, instance lifecycle, native
 adapter, Python declaration transaction, and `EngineCore`-owned
 `RuntimeSession` lifecycle are implemented in `termin-engine`. The transient
-scene-to-session `WorldContext` route is also implemented. Primary-scene
-switching and host integration remain separate follow-up steps.
+scene-to-session `WorldContext` route and synchronous primary-scene switching
+are also implemented. Host integration remains a separate follow-up step.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
 design deliberately has no public `SceneFlow`, scene providers, host binding
@@ -114,8 +114,9 @@ The controller is started before the initial scene is loaded. Scene components
 can therefore reach persistent world state from their first runtime lifecycle
 callback.
 
-Shutdown first rejects new requests, deactivates and detaches session-bound
-scenes while the controller is still alive, unbinds their contexts, calls
+Shutdown first rejects new requests, deactivates and detaches the primary
+gameplay scene while the controller is still alive, unbinds every scene
+context, calls
 `WorldController.stop()`, destroys the controller, and finally removes the
 session. Physical scene destruction remains the responsibility of
 `SceneManager` and the scene's actual owner. Module unload happens only after
@@ -136,7 +137,9 @@ The initial public surface is intentionally narrow:
 ```text
 WorldContext
 |-- valid
-`-- controller() -> optional borrowed/invalidatable WorldController
+|-- controller() -> optional borrowed/invalidatable WorldController
+|-- primary_scene() -> optional scene handle
+`-- request_primary_scene(inactive bound scene) -> accepted/rejected
 ```
 
 Native code can acquire or require the context from a `tc_scene_handle` or
@@ -148,9 +151,8 @@ object pointer. Python-backed controllers are exposed as weak proxies to the
 actual project object. Components can therefore use their world-level state
 without extending controller or module lifetime beyond the session. The
 projection never hands lifecycle authority or ownership to scene code.
-
-Primary-scene identity and transition requests are deliberately absent here;
-they belong to the separate primary-scene operation described below.
+`request_primary_scene` only records one intent; manager mutation remains at
+the `EngineCore` safe point described below.
 
 The context is not a string-to-pointer service dictionary. It may internally
 retain an engine-owned link, so exposing additional `EngineCore` facilities in
@@ -272,7 +274,8 @@ Engine sequence:
 
 - #1783 adds the `EngineCore`-owned session lifecycle (implemented);
 - #1787 adds the transient scene extension (implemented);
-- #1790 adds synchronous primary-scene switching at the engine safe point.
+- #1790 adds synchronous primary-scene switching at the engine safe point
+  (implemented).
 
 Composition and host sequence:
 

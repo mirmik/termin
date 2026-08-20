@@ -7,6 +7,7 @@ from termin.engine import (
     WorldController,
     create_world_controller,
     publish_world_controllers,
+    register_default_scene_extensions,
     require_world_context,
     scene as engine_scene,
     unregister_python_world_controller_owner,
@@ -191,4 +192,67 @@ def test_null_session_context_is_transient_and_available_to_python_lifecycle() -
     assert not retained.valid
     assert not component.active_context.valid
     assert not component.start_context.valid
+    assert engine.shutdown()
+
+
+def test_python_component_requests_primary_scene_for_next_engine_tick() -> None:
+    register_default_scene_extensions()
+    events: list[str] = []
+
+    class TransitionProbe(PythonComponent):
+        def __init__(self, label: str) -> None:
+            super().__init__()
+            self.label = label
+            self.target = None
+
+        def on_scene_active(self) -> None:
+            events.append(f"{self.label}:active")
+
+        def on_scene_inactive(self) -> None:
+            events.append(f"{self.label}:inactive")
+
+        def update(self, _dt: float) -> None:
+            events.append(f"{self.label}:update")
+            if self.target is not None:
+                context = require_world_context(self.scene, "TransitionProbe.update")
+                assert context.request_primary_scene(self.target)
+                self.target = None
+
+    engine = EngineCore()
+    first = engine.scene_manager.create_scene("python-primary-first")
+    second = engine.scene_manager.create_scene("python-primary-second")
+    assert first is not None
+    assert second is not None
+    first_entity = first.create_entity("first-probe")
+    first_probe = TransitionProbe("first")
+    first_entity.add_component(first_probe)
+    second_entity = second.create_entity("second-probe")
+    second_entity.add_component(TransitionProbe("second"))
+
+    assert engine.begin_session()
+    assert engine.bind_runtime_scene(first)
+    assert engine.bind_runtime_scene(second)
+    context = require_world_context(first, "Python transition test")
+    assert context.primary_scene is None
+    assert context.request_primary_scene(first)
+    assert not context.request_primary_scene(second)
+
+    assert engine.tick_and_render(0.016)
+    assert context.primary_scene.name == first.name
+    assert events == ["first:active", "first:update"]
+
+    events.clear()
+    first_probe.target = second
+    assert engine.tick_and_render(0.016)
+    assert context.primary_scene.name == first.name
+    assert events == ["first:update"]
+
+    events.clear()
+    assert engine.tick_and_render(0.016)
+    assert context.primary_scene.name == second.name
+    assert events == ["first:inactive", "second:active", "second:update"]
+
+    assert engine.end_session()
+    assert context.primary_scene is None
+    assert not context.valid
     assert engine.shutdown()
