@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -17,6 +18,8 @@ extern "C" {
 }
 
 namespace termin::runtime {
+
+    inline constexpr std::uint32_t RUNTIME_PACKAGE_SCHEMA_VERSION = 3;
 
     struct RuntimePackageResourceKeepalive;
 
@@ -76,10 +79,20 @@ namespace termin::runtime {
         TcSceneRef scene;
     };
 
+    struct RuntimePackageWorldControllerSelection {
+        std::string module;
+        std::string type;
+
+        bool operator==(const RuntimePackageWorldControllerSelection& other) const noexcept {
+            return module == other.module && type == other.type;
+        }
+    };
+
     struct RuntimePackageLoadResult {
         bool ok = false;
         std::string message;
         std::string entry_scene_identity;
+        std::optional<RuntimePackageWorldControllerSelection> world_controller;
         std::vector<RuntimePackageScene> scenes;
         // Convenience alias for the entry in ``scenes``.
         TcSceneRef scene;

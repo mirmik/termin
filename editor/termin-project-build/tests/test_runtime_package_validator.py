@@ -26,8 +26,9 @@ def _scene_manifest(
     path: str = SCENE_PATH,
 ) -> dict[str, object]:
     return {
-        "version": 2,
+        "version": 3,
         "entry_scene": identity,
+        "world_controller": None,
         "scenes": [{"identity": identity, "path": path}],
     }
 
@@ -50,6 +51,55 @@ def _write_valid_package(tmp_path: Path) -> Path:
         },
     )
     return package_dir
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        (False, "must be null or an object"),
+        ({}, "requires exactly module and type"),
+        ({"module": "game", "type": "Director", "extra": True}, "requires exactly"),
+        ({"module": " game ", "type": "Director"}, "must be a non-empty trimmed string"),
+        ({"module": "game", "type": ""}, "must be a non-empty trimmed string"),
+    ],
+)
+def test_validate_runtime_package_rejects_invalid_world_controller(
+    tmp_path: Path,
+    value: object,
+    message: str,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    manifest_path = package_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["world_controller"] = value
+    _write_json(manifest_path, manifest)
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any(
+        diagnostic.path.startswith("world_controller")
+        and message in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_validate_runtime_package_requires_explicit_world_controller_and_v3(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    manifest_path = package_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.pop("world_controller")
+    manifest["version"] = 2
+    _write_json(manifest_path, manifest)
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert any("supported version is 3" in item.message for item in diagnostics)
+    assert any(
+        item.path == "world_controller" and "explicitly define" in item.message
+        for item in diagnostics
+    )
 
 
 def _write_shader_resource(package_dir: Path, shader_uuid: str = "shader-uuid") -> None:
@@ -611,8 +661,9 @@ def test_validate_runtime_package_rejects_missing_entry_and_duplicate_scene_iden
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 2,
+            "version": 3,
             "entry_scene": "Scenes/Missing.scene",
+            "world_controller": None,
             "scenes": [
                 {"identity": SCENE_IDENTITY, "path": SCENE_PATH},
                 {

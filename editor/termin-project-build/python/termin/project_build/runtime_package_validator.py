@@ -22,7 +22,7 @@ from termin.project_build.runtime_package_resource_validator import (
 
 
 SUPPORTED_RUNTIME_BACKENDS = frozenset({"vulkan", "opengl", "opengl330", "webgl2", "d3d11", "webgpu"})
-RUNTIME_PACKAGE_SCHEMA_VERSION = 2
+RUNTIME_PACKAGE_SCHEMA_VERSION = 3
 
 
 ComponentFactoryPreparer = Callable[
@@ -46,6 +46,7 @@ def validate_runtime_package(
         return diagnostics
 
     _validate_version(manifest, diagnostics)
+    _validate_world_controller(manifest, diagnostics)
     scenes = _validate_scenes(package_root, manifest, diagnostics)
     resource_index = _validate_resources(package_root, manifest, diagnostics)
     component_types = frozenset(
@@ -145,6 +146,67 @@ def _validate_version(
                 f"Unsupported runtime package schema version {value}; supported version is {RUNTIME_PACKAGE_SCHEMA_VERSION}",
             )
         )
+
+
+def _validate_world_controller(
+    manifest: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    if "world_controller" not in manifest:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "world_controller",
+                "Runtime package manifest must explicitly define world_controller as null or {module, type}",
+            )
+        )
+        return
+    value = manifest["world_controller"]
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "world_controller",
+                "Runtime package world_controller must be null or an object",
+            )
+        )
+        return
+    expected = {"module", "type"}
+    actual = set(value)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+        detail: list[str] = []
+        if missing:
+            detail.append("missing " + ", ".join(missing))
+        if unexpected:
+            detail.append("unexpected " + ", ".join(unexpected))
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "world_controller",
+                "Runtime package world_controller requires exactly module and type ("
+                + "; ".join(detail)
+                + ")",
+            )
+        )
+        return
+    for field in ("module", "type"):
+        field_value = value[field]
+        if (
+            not isinstance(field_value, str)
+            or not field_value
+            or field_value.strip() != field_value
+        ):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"world_controller.{field}",
+                    f"Runtime package world_controller.{field} must be a non-empty trimmed string",
+                )
+            )
 
 
 def _validate_scenes(

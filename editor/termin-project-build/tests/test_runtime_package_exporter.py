@@ -909,8 +909,9 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     assert "editor" not in scene_data
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    assert manifest["version"] == 2
+    assert manifest["version"] == 3
     assert manifest["entry_scene"] == "Scenes/Main.scene"
+    assert manifest["world_controller"] is None
     assert manifest["scenes"] == [
         {
             "identity": "Scenes/Main.scene",
@@ -952,6 +953,15 @@ def test_export_runtime_package_emits_multi_scene_closure(tmp_path: Path) -> Non
     project = tmp_path / "MultiSceneGame"
     main_scene = project / "Scenes" / "Main.scene"
     menu_scene = project / "Scenes" / "Menu.scene"
+    _write_json(
+        project / "project_settings" / "project.json",
+        {
+            "world_controller": {
+                "module": "game",
+                "type": "game.ProjectDirector",
+            }
+        },
+    )
     _write_json(
         main_scene,
         {
@@ -1009,6 +1019,10 @@ def test_export_runtime_package_emits_multi_scene_closure(tmp_path: Path) -> Non
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     shutil.rmtree(project)
     assert manifest["entry_scene"] == "Scenes/Main.scene"
+    assert manifest["world_controller"] == {
+        "module": "game",
+        "type": "game.ProjectDirector",
+    }
     assert manifest["scenes"] == [
         {
             "identity": "Scenes/Main.scene",

@@ -26,6 +26,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from termin.project.settings import load_project_settings
 from termin.project_build.runtime_package.models import (
     RuntimePackageExportDiagnostic,
     RuntimePackageExportResult,
@@ -119,6 +120,7 @@ def export_runtime_package(
         entry_scene_path,
         scenes if scenes is not None else (entry_scene_path,),
     )
+    world_controller = load_project_settings(project_root_path).world_controller
 
     from termin.glb_adapters.scene_animation_repair import repair_glb_animation_player_clip_refs
 
@@ -262,9 +264,12 @@ def export_runtime_package(
     resources.sort(key=_resource_sort_key)
 
     manifest = {
-        "version": 2,
+        "version": 3,
         "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
         "entry_scene": entry_identity,
+        "world_controller": (
+            world_controller.to_dict() if world_controller is not None else None
+        ),
         "builtin_shader_contract": builtin_shader_contract,
         "pipeline_shader_requirements": pipeline_shader_requirements,
         "resources": resources,

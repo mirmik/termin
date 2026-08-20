@@ -9,8 +9,10 @@ The language-neutral `WorldController` registry, instance lifecycle, native
 adapter, Python declaration transaction, and `EngineCore`-owned
 `RuntimeSession` lifecycle are implemented in `termin-engine`. The transient
 scene-to-session `WorldContext` route and synchronous primary-scene switching
-are also implemented. Editor Play/Stop is the first integrated host; packaged,
-source and headless launch paths remain follow-up work.
+are also implemented. Editor Play/Stop is the first integrated host. Project
+selection now crosses the build boundary in strict runtime-package and desktop
+app manifests; packaged-player session startup, source and headless launch
+paths remain follow-up work.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
 design deliberately has no public `SceneFlow`, scene providers, host binding
@@ -85,11 +87,14 @@ An explicit selection is strict. A missing module, unpublished type, abstract
 type, failed factory, or failed `start()` blocks startup and is never silently
 reinterpreted as no controller.
 
-Build profiles do not select the controller in the first version. Packaged
-host integration will copy the resolved project selection into its runtime
-manifest and include or validate the selected module as part of the packaged
-module closure. Future profiles may overlay controller configuration without
-necessarily replacing its class.
+Build profiles do not select the controller in the first version. Runtime
+package schema v3 stores an explicit `null` or the exact project pair, while
+desktop app schema v2 repeats that pair and the player rejects disagreement.
+Desktop build adds the selected owner to module roots, verifies that it belongs
+to the packaged closure, then validates the published type, owner and abstract
+flag without constructing project code. Targets that cannot package project
+modules reject a non-null selection during preflight. Future profiles may
+overlay controller configuration without necessarily replacing its class.
 
 ## Construction and teardown order
 
@@ -293,7 +298,8 @@ Engine sequence:
 
 Composition and host sequence:
 
-- #1788 transports project selection through build/package manifests;
+- #1788 transports project selection through build/package manifests
+  (implemented);
 - #1785 integrates editor Play/Stop (implemented);
 - #1786 integrates the packaged player;
 - #1789 integrates source and headless runs;

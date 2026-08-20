@@ -4,6 +4,7 @@ import json
 import pytest
 
 from termin.project_build.build_context import create_build_context, resolve_build_dist_dir
+from termin.project.world_controller_selection import ProjectWorldControllerSelection
 
 
 def _write_project(tmp_path: Path, name: str = "ContextGame") -> Path:
@@ -41,7 +42,32 @@ def test_create_build_context_uses_project_name_and_default_desktop_dirs(tmp_pat
     assert context.dist_dir == (project / "dist" / "desktop" / "ContextGame").resolve()
     assert context.package_dir == context.dist_dir / "package"
     assert context.logs_dir == context.dist_dir / "logs"
+    assert context.world_controller is None
     assert context.target_options == {}
+
+
+def test_create_build_context_captures_project_world_controller(tmp_path: Path) -> None:
+    project = _write_project(tmp_path)
+    settings_path = project / "project_settings" / "project.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        json.dumps(
+            {
+                "world_controller": {
+                    "module": "game",
+                    "type": "game.ProjectDirector",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    context = create_build_context(project, "Scenes/Main.scene", "desktop")
+
+    assert context.world_controller == ProjectWorldControllerSelection(
+        module="game",
+        type_name="game.ProjectDirector",
+    )
 
 
 def test_create_build_context_uses_target_default_dist_dirs(tmp_path: Path) -> None:

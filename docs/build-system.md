@@ -751,6 +751,16 @@ roots и closure. Для Android/Quest выбранные project modules, а д
 target-ов explicit dynamic resource roots пока завершаются diagnostic
 `profile.feature_pending`, а не молча игнорируются.
 
+Project-level `world_controller` не является полем build profile. Значение
+`null` либо точная пара `{module, type}` читается из
+`project_settings/project.json` и без изменений записывается в runtime package.
+Desktop build автоматически добавляет выбранный owner module в module roots,
+проверяет его присутствие в packaged closure и после загрузки сверяет facet,
+owner и abstract-флаг выбранного типа. Поэтому профиль не может случайно
+выкинуть контроллер из bundle. Android/Quest до появления project-module
+packaging отклоняют непустой выбор на preflight с явной диагностикой; `null`
+остается переносимым общим контрактом.
+
 Project-level defaults для окна standalone player хранятся в
 `project_settings/project.json` в поле `player_window`:
 
@@ -772,6 +782,9 @@ Project-level defaults для окна standalone player хранятся в
 ```
 
 Desktop bundle `app.json` записывает эти значения в `runtime.window`.
+Schema v2 `app.json` также повторяет project selection в
+`runtime.world_controller`; packaged player требует точного совпадения с
+runtime package manifest.
 Python `termin.player` и C++ `termin_player` используют их как дефолт, а
 CLI-флаги `--width`, `--height`, `--fullscreen` и `--windowed` остаются явными
 override-ами для smoke/manual runs.
@@ -827,12 +840,14 @@ Runtime package validation является gate перед target packaging. Е
 runtime package. CLI backend печатает diagnostics и возвращает non-zero exit
 code при `error` diagnostics.
 
-Runtime package manifest schema v2 задаёт multi-scene contract явно:
+Runtime package manifest schema v3 задаёт multi-scene и world-controller
+contract явно:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "entry_scene": "Scenes/Main.scene",
+  "world_controller": null,
   "scenes": [
     {
       "identity": "Scenes/Main.scene",
@@ -853,6 +868,9 @@ package. `entry_scene` обязан присутствовать в таблиц
 каждую сцену и полный объединённый resource closure, а native runtime загружает
 и регистрирует всю таблицу; player запускает entry scene и оставляет остальные
 сцены неактивными до явного перехода через `SceneManager`.
+Поле `world_controller` обязательно даже при отсутствии контроллера: допустимы
+только `null` и объект ровно с непустыми нормализованными строками `module` и
+`type`. Старые schema versions не угадываются и не мигрируют в runtime.
 
 Для packaged scene closure включает исполняемые фабрики, а не только файлы.
 Допустимые component factories определяются возможностями target host:

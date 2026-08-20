@@ -42,3 +42,13 @@ def test_packaged_modules_are_marked_loaded_only_after_complete_closure_load() -
     loaded_assignment = load_modules_body.index("modules_loaded = true;")
     assert load_call < loaded_assignment
     assert "modules_loaded = modules_runtime.load_all()" not in load_modules_body
+
+
+def test_packaged_manifest_requires_matching_world_controller_metadata() -> None:
+    source = PLAYER_HOST_SOURCE.read_text(encoding="utf-8")
+    load_manifest_body = _function_body(source, "AppManifest load_app_manifest(")
+    load_package_body = _function_body(source, "void load_package()")
+
+    assert "app manifest requires schema version 2" in load_manifest_body
+    assert "required_world_controller_selection(" in load_manifest_body
+    assert "package.world_controller != manifest.world_controller" in load_package_body

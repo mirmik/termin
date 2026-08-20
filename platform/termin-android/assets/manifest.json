@@ -1,5 +1,6 @@
 {
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/AndroidSmoke.scene",
   "scenes": [
     {

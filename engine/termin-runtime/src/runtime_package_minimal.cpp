@@ -1,5 +1,7 @@
 #include <termin/runtime/runtime_package.hpp>
 
+#include "runtime_package_manifest.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -142,6 +144,7 @@ namespace termin::runtime {
         }
         scenes.clear();
         scene = {};
+        world_controller.reset();
         resources.reset();
         ok = false;
     }
@@ -161,9 +164,13 @@ namespace termin::runtime {
                 throw std::runtime_error("manifest.json not found in " + reader->describe("manifest.json"));
             }
             const nos::trent manifest = nos::json::parse(read_text_file(*reader, "manifest.json"));
-            if (number_field(manifest, "version") != 2.0) {
-                throw std::runtime_error("runtime package manifest requires version 2");
+            if (number_field(manifest, "version") !=
+                static_cast<double>(RUNTIME_PACKAGE_SCHEMA_VERSION)) {
+                throw std::runtime_error(
+                    "runtime package manifest requires version " +
+                    std::to_string(RUNTIME_PACKAGE_SCHEMA_VERSION));
             }
+            result.world_controller = detail::parse_world_controller_selection(manifest);
 
             const nos::trent* resources = dict_get(manifest, "resources");
             if (!resources || !resources->is_list()) {

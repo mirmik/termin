@@ -9,10 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from termin.project.settings import ProjectSettings
+from termin.project.world_controller_selection import ProjectWorldControllerSelection
 from termin.project_build.build_context import BuildContext, create_build_context
 from termin.project_build.capabilities import load_sdk_capabilities
 from termin.project_build.common import initialize_project_build_player_runtime_state
-from termin.project_build.diagnostics import DiagnosticLike
+from termin.project_build.diagnostics import BuildDiagnostic, DiagnosticLike, build_error
 from termin.project_build.desktop_runtime_packager import (
     DesktopRuntimeBundleResult,
     MINIMAL_PYTHON_PACKAGE_POLICY,
@@ -199,7 +200,7 @@ def _package_desktop_target(
     _write_app_manifest(
         app_manifest_path,
         {
-            "version": 1,
+            "version": 2,
             "format": "termin.desktop_bundle",
             "target": {
                 "kind": "desktop",
@@ -236,6 +237,11 @@ def _package_desktop_target(
                 "native_library_dirs": _runtime_native_library_dirs(context.dist_dir, runtime_result),
                 "window": project_settings.player_window.to_dict(),
                 "render_phase_names": list(project_settings.render_phase_names),
+                "world_controller": (
+                    context.world_controller.to_dict()
+                    if context.world_controller is not None
+                    else None
+                ),
                 "mcp": {
                     "enabled": False,
                     "host": "127.0.0.1",
@@ -262,7 +268,13 @@ def _package_desktop_target(
 class _DesktopModuleClosurePreparation:
     def __init__(self, context: BuildContext, selected_modules: tuple[str, ...]) -> None:
         self._context = context
-        self._selected_modules = selected_modules
+        module_roots = list(selected_modules)
+        if (
+            context.world_controller is not None
+            and context.world_controller.module not in module_roots
+        ):
+            module_roots.append(context.world_controller.module)
+        self._selected_modules = tuple(module_roots)
         self._result: ProjectModuleBundleResult | None = None
 
     def validate_package(self, package_dir: Path) -> list[DiagnosticLike]:
@@ -273,11 +285,22 @@ class _DesktopModuleClosurePreparation:
         )
         self._result = module_result
         module_owners = frozenset(module.name for module in module_result.modules)
-        preparer = _DesktopComponentFactoryPreparer(
+        preparer = _DesktopRuntimeTypePreparer(
             project_root=self._context.project_root,
             selected_modules=self._selected_modules,
+            world_controller=self._context.world_controller,
         )
         diagnostics: list[DiagnosticLike] = [*module_result.diagnostics]
+        if (
+            self._context.world_controller is not None
+            and self._context.world_controller.module not in module_owners
+        ):
+            diagnostics.append(
+                _world_controller_error(
+                    f"owner '{self._context.world_controller.module}' is absent from "
+                    "the packaged module closure"
+                )
+            )
         try:
             diagnostics.extend(
                 validate_runtime_package(
@@ -303,15 +326,17 @@ class _DesktopModuleClosurePreparation:
         return self._result
 
 
-class _DesktopComponentFactoryPreparer:
+class _DesktopRuntimeTypePreparer:
     def __init__(
         self,
         *,
         project_root: Path,
         selected_modules: tuple[str, ...],
+        world_controller: ProjectWorldControllerSelection | None,
     ) -> None:
         self._project_root = project_root
         self._selected_modules = selected_modules
+        self._world_controller = world_controller
         self._runtime = None
 
     def prepare(self, _required_types: frozenset[str]):
@@ -327,9 +352,33 @@ class _DesktopComponentFactoryPreparer:
             for module_id in self._selected_modules:
                 if not self._runtime.load_module(module_id):
                     return [self._error(self._runtime.last_error, module_id)]
+            controller_diagnostic = self._validate_world_controller()
+            if controller_diagnostic is not None:
+                return [controller_diagnostic]
         except Exception as exc:
             return [self._error(str(exc))]
         return []
+
+    def _validate_world_controller(self) -> BuildDiagnostic | None:
+        selection = self._world_controller
+        if selection is None:
+            return None
+        from termin.engine._engine_native import _world_controller_type_info
+
+        info = _world_controller_type_info(selection.type_name)
+        if info is None:
+            return _world_controller_error(
+                f"type '{selection.type_name}' was not published by module '{selection.module}'"
+            )
+        if info["owner"] != selection.module:
+            return _world_controller_error(
+                f"type '{selection.type_name}' is owned by {info['owner']!r}, not '{selection.module}'"
+            )
+        if info["abstract"]:
+            return _world_controller_error(
+                f"type '{selection.type_name}' is abstract and cannot be created"
+            )
+        return None
 
     def close(self):
         if self._runtime is None:
@@ -342,15 +391,19 @@ class _DesktopComponentFactoryPreparer:
             return self._error(f"module runtime shutdown raised: {exc}")
 
     @staticmethod
-    def _error(message: str, module_id: str | None = None):
-        from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
-
+    def _error(message: str, module_id: str | None = None) -> BuildDiagnostic:
         context = f"modules[{module_id}]" if module_id is not None else "modules"
-        return RuntimePackageExportDiagnostic(
-            "error",
+        return build_error(
             context,
             f"Failed to prepare selected project component factories: {message}",
         )
+
+
+def _world_controller_error(message: str) -> BuildDiagnostic:
+    return build_error(
+        "world_controller",
+        f"Cannot package selected WorldController: {message}",
+    )
 
 
 def _relative_runtime_path(dist_dir: Path, path: Path | None) -> str:

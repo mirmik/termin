@@ -1,5 +1,6 @@
 {
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "diagnostics": [],
   "entry_scene": "Main.scene",
   "builtin_shader_contract": {
