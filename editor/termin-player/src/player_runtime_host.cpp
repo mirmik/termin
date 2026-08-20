@@ -69,6 +69,22 @@ namespace termin::player {
 
         std::atomic<int> g_requested_shutdown_signal{0};
 
+        class PythonGilScope {
+        public:
+            PythonGilScope()
+                : state_(PyGILState_Ensure()) {}
+
+            ~PythonGilScope() {
+                PyGILState_Release(state_);
+            }
+
+            PythonGilScope(const PythonGilScope&) = delete;
+            PythonGilScope& operator=(const PythonGilScope&) = delete;
+
+        private:
+            PyGILState_STATE state_;
+        };
+
         const char* native_build_type() {
 #ifdef NDEBUG
             return "Release";
@@ -275,20 +291,42 @@ namespace termin::player {
             return result;
         }
 
-        std::vector<std::string> package_runtime_backends(const fs::path& manifest_path) {
+        struct RuntimePackageManifestContract {
+            std::vector<std::string> runtime_backends;
+            std::optional<termin::runtime::RuntimePackageWorldControllerSelection> world_controller;
+        };
+
+        RuntimePackageManifestContract load_runtime_package_manifest_contract(
+            const fs::path& manifest_path) {
             if (!fs::is_regular_file(manifest_path)) {
-                throw std::runtime_error("package manifest not found for backend selection: " + manifest_path.string());
+                throw std::runtime_error("package manifest not found: " + manifest_path.string());
             }
 
             const nos::trent root = nos::json::parse(read_text_file(manifest_path));
             if (!root.is_dict()) {
                 throw std::runtime_error("package manifest root is not an object: " + manifest_path.string());
             }
+            const nos::trent* version = dict_get(root, "version");
+            if (!version || !version->is_numer() ||
+                version->as_numer() !=
+                    static_cast<double>(termin::runtime::RUNTIME_PACKAGE_SCHEMA_VERSION)) {
+                throw std::runtime_error(
+                    "package manifest requires schema version " +
+                    std::to_string(termin::runtime::RUNTIME_PACKAGE_SCHEMA_VERSION));
+            }
             const nos::trent* requirements = dict_get(root, "target_requirements");
             if (!requirements || !requirements->is_dict()) {
                 throw std::runtime_error("package manifest target_requirements must be an object");
             }
-            return required_backend_list(*requirements, "backends", "package manifest target_requirements.backends");
+            return RuntimePackageManifestContract{
+                required_backend_list(
+                    *requirements,
+                    "backends",
+                    "package manifest target_requirements.backends"),
+                required_world_controller_selection(
+                    root,
+                    "package manifest world_controller"),
+            };
         }
 
         bool vector_contains(const std::vector<std::string>& values, const std::string& value) {
@@ -616,10 +654,15 @@ namespace termin::player {
                     manifest.mcp_options_json = nos::json::dump(*mcp);
                 }
             }
-            const std::vector<std::string> package_backends = package_runtime_backends(manifest.package_manifest_path);
-            if (manifest.runtime_backends != package_backends) {
+            const RuntimePackageManifestContract package_contract =
+                load_runtime_package_manifest_contract(manifest.package_manifest_path);
+            if (manifest.runtime_backends != package_contract.runtime_backends) {
                 throw std::runtime_error("app manifest runtime.backends does not match package manifest "
                                          "target_requirements.backends");
+            }
+            if (manifest.world_controller != package_contract.world_controller) {
+                throw std::runtime_error(
+                    "app manifest runtime.world_controller does not match package manifest world_controller");
             }
             const nos::trent* modules = runtime && runtime->is_dict() ? dict_get(*runtime, "modules") : nullptr;
             if (modules && modules->is_dict()) {
@@ -773,8 +816,8 @@ namespace termin::player {
         termin::runtime::RuntimePackageLoadResult package;
         TcSceneRef scene;
         std::string scene_name;
+        WorldContext world_context;
         std::vector<std::string> registered_scene_names;
-        bool scene_attached = false;
         std::vector<tc_viewport_handle> viewports;
         std::vector<tc_viewport_input_manager*> viewport_input_managers;
         std::vector<std::string> backend_attempts;
@@ -823,10 +866,12 @@ namespace termin::player {
                         [target = remote_profiler]() { target->pump_frame_thread(); });
                 }
                 load_project_modules();
+                begin_runtime_session();
                 load_package();
                 register_scenes();
                 enable_module_live_scene_sync();
                 initialize_window_and_rendering();
+                activate_initial_scene();
                 activate_native_bridge();
                 start_automation_session();
                 run_loop();
@@ -880,7 +925,10 @@ print(json.dumps({
         }
 
         void request_quit(int requested_exit_code) {
-            exit_code.store(requested_exit_code);
+            if (requested_exit_code != 0) {
+                int clean_exit = 0;
+                (void)exit_code.compare_exchange_strong(clean_exit, requested_exit_code);
+            }
             quit_requested.store(true);
             if (engine) {
                 engine->stop();
@@ -1111,6 +1159,12 @@ print(json.dumps({
         }
 
         void load_project_modules() {
+            if (manifest.world_controller.has_value() && !manifest.modules_enabled) {
+                throw std::runtime_error(
+                    "selected WorldController '" + manifest.world_controller->type +
+                    "' requires packaged owner module '" + manifest.world_controller->module +
+                    "', but project modules are disabled");
+            }
             if (!manifest.modules_enabled) {
                 return;
             }
@@ -1147,6 +1201,36 @@ print(json.dumps({
             modules_loaded = true;
         }
 
+        void begin_runtime_session() {
+            if (!engine) {
+                throw std::runtime_error("cannot begin RuntimeSession without EngineCore");
+            }
+            if (!manifest.world_controller.has_value()) {
+                if (!engine->begin_session()) {
+                    throw std::runtime_error(
+                        "EngineCore refused to begin a controller-free RuntimeSession");
+                }
+                return;
+            }
+
+            const auto& selection = *manifest.world_controller;
+            PythonGilScope gil;
+            std::string error;
+            WorldControllerInstance controller = WorldControllerInstance::create(
+                selection.type.c_str(), selection.module.c_str(), error);
+            if (!controller) {
+                throw std::runtime_error(
+                    "failed to create selected WorldController '" + selection.type +
+                    "' from module '" + selection.module + "': " + error);
+            }
+            const bool started = engine->begin_session(std::move(controller));
+            if (!started) {
+                throw std::runtime_error(
+                    "EngineCore refused to start selected WorldController '" + selection.type +
+                    "' from module '" + selection.module + "'");
+            }
+        }
+
         void enable_module_live_scene_sync() {
             if (modules_configured) {
                 configure_modules_runtime(true);
@@ -1157,18 +1241,12 @@ print(json.dumps({
             if (!modules_configured) {
                 return;
             }
-            std::vector<std::string> loaded_ids;
-            for (const termin_modules::ModuleRecord* record : modules_runtime.list()) {
-                if (record && record->state == termin_modules::ModuleState::Loaded) {
-                    loaded_ids.push_back(record->spec.id);
-                }
-            }
-            std::reverse(loaded_ids.begin(), loaded_ids.end());
-            for (const std::string& module_id : loaded_ids) {
-                if (!modules_runtime.unload_module(module_id)) {
-                    tc_log_error("termin_player: failed to unload module '%s': %s",
-                                 module_id.c_str(),
-                                 modules_runtime.last_error().c_str());
+            if (!modules_runtime.shutdown()) {
+                tc_log_error(
+                    "termin_player: project module shutdown failed: %s",
+                    modules_runtime.last_error().c_str());
+                if (exit_code.load() == 0) {
+                    exit_code.store(1);
                 }
             }
             modules_loaded = false;
@@ -1182,7 +1260,15 @@ print(json.dumps({
                 manager->set_mode(packaged_scene.identity, TC_SCENE_MODE_INACTIVE);
                 registered_scene_names.push_back(packaged_scene.identity);
             }
-            manager->set_mode(scene_name, TC_SCENE_MODE_PLAY);
+            for (const termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
+                if (!engine->bind_runtime_scene(packaged_scene.scene.handle())) {
+                    throw std::runtime_error(
+                        "failed to bind packaged scene '" + packaged_scene.identity +
+                        "' to the active RuntimeSession");
+                }
+            }
+            world_context = WorldContext::require_from_scene(
+                scene.handle(), "packaged player entry scene");
         }
 
         tc_display_handle display_factory(const std::string& requested_name) {
@@ -1251,18 +1337,105 @@ print(json.dumps({
             RenderingManager& manager = engine->rendering_manager;
             manager.set_display_factory([this](const std::string& name) { return display_factory(name); });
             manager.set_pipeline_factory(nullptr);
-
-            viewports = manager.attach_scene_full(scene.handle());
-            if (viewports.empty()) {
-                throw std::runtime_error("scene has no attachable viewport config");
-            }
-            disable_unrenderable_unused_render_targets(manager);
-            scene_attached = true;
-            tc_log_info("termin_player: attached scene rendering: %zu viewport(s)", viewports.size());
-            setup_input(manager);
         }
 
-        void setup_input(RenderingManager& manager) {
+        const termin::runtime::RuntimePackageScene* find_packaged_scene(
+            tc_scene_handle handle) const noexcept {
+            for (const termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
+                if (tc_scene_handle_eq(packaged_scene.scene.handle(), handle)) {
+                    return &packaged_scene;
+                }
+            }
+            return nullptr;
+        }
+
+        void activate_initial_scene() {
+            if (!world_context || !scene.valid()) {
+                throw std::runtime_error(
+                    "cannot activate the packaged entry scene without a live WorldContext");
+            }
+            const tc_scene_handle entry = scene.handle();
+            if (!world_context.request_primary_scene(entry)) {
+                throw std::runtime_error(
+                    "RuntimeSession refused packaged entry scene '" + scene_name + "'");
+            }
+
+            // Initial activation uses the same EngineCore safe point as every
+            // later controller/component request. The warm-up frame completes
+            // before the automation facade is published, so its live scene and
+            // viewport properties are valid from the first external request.
+            (void)engine->tick_and_render(0.0);
+            const tc_scene_handle primary = world_context.primary_scene();
+            if (!tc_scene_handle_eq(primary, entry) ||
+                !engine->render_topology.is_attached(entry) ||
+                tc_scene_get_mode(entry) != TC_SCENE_MODE_PLAY) {
+                throw std::runtime_error(
+                    "failed to activate packaged entry scene '" + scene_name +
+                    "' through EngineCore RuntimeSession");
+            }
+            reconcile_active_scene(true);
+        }
+
+        void reconcile_active_scene(bool required) {
+            const tc_scene_handle primary = world_context.primary_scene();
+            if (!tc_scene_handle_valid(primary)) {
+                if (required) {
+                    throw std::runtime_error(
+                        "RuntimeSession has no published primary packaged scene");
+                }
+                return;
+            }
+            if (scene.valid() && tc_scene_handle_eq(scene.handle(), primary) &&
+                !viewports.empty()) {
+                return;
+            }
+
+            const termin::runtime::RuntimePackageScene* packaged_scene =
+                find_packaged_scene(primary);
+            if (packaged_scene == nullptr) {
+                throw std::runtime_error(
+                    "RuntimeSession published a primary scene outside the packaged scene table");
+            }
+            if (!engine->render_topology.is_attached(primary)) {
+                throw std::runtime_error(
+                    "RuntimeSession primary scene '" + packaged_scene->identity +
+                    "' has no render attachment");
+            }
+
+            std::vector<tc_viewport_handle> next_viewports =
+                engine->render_topology.viewports(primary);
+            if (next_viewports.empty()) {
+                throw std::runtime_error(
+                    "RuntimeSession primary scene '" + packaged_scene->identity +
+                    "' has no attachable viewport config");
+            }
+            const std::size_t viewport_count = next_viewports.size();
+
+            clear_input();
+            disable_unrenderable_unused_render_targets(
+                engine->rendering_manager, next_viewports);
+            setup_input(engine->rendering_manager, next_viewports);
+
+            // The raw bridge may be queried by free-threaded Python while the
+            // frame thread publishes a completed RuntimeSession transition.
+            // Publish scene identity, handle and viewport as one snapshot, but
+            // never hold this mutex across lifecycle callbacks or render/input
+            // operations: project Python is allowed to call the bridge there.
+            {
+                std::lock_guard<std::mutex> lock(g_active_host_mutex);
+                scene = packaged_scene->scene;
+                scene_name = packaged_scene->identity;
+                viewports = std::move(next_viewports);
+            }
+            tc_log_info(
+                "termin_player: primary packaged scene is '%s': %zu viewport(s)",
+                packaged_scene->identity.c_str(),
+                viewport_count);
+        }
+
+        void setup_input(
+            RenderingManager& manager,
+            const std::vector<tc_viewport_handle>& active_scene_viewports) {
             if (!display || !display->is_valid()) {
                 tc_log_error("termin_player: cannot set up input without display");
                 return;
@@ -1279,7 +1452,7 @@ print(json.dumps({
             }
 
             int active_viewports = 0;
-            for (tc_viewport_handle viewport : viewports) {
+            for (tc_viewport_handle viewport : active_scene_viewports) {
                 if (!tc_viewport_handle_valid(viewport)) {
                     continue;
                 }
@@ -1329,10 +1502,12 @@ print(json.dumps({
             viewport_input_managers.clear();
         }
 
-        void disable_unrenderable_unused_render_targets(RenderingManager& manager) {
+        void disable_unrenderable_unused_render_targets(
+            RenderingManager& manager,
+            const std::vector<tc_viewport_handle>& active_scene_viewports) {
             std::vector<tc_render_target_handle> viewport_targets;
-            viewport_targets.reserve(viewports.size());
-            for (tc_viewport_handle viewport : viewports) {
+            viewport_targets.reserve(active_scene_viewports.size());
+            for (tc_viewport_handle viewport : active_scene_viewports) {
                 tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
                 if (tc_render_target_handle_valid(rt)) {
                     viewport_targets.push_back(rt);
@@ -1382,7 +1557,10 @@ print(json.dumps({
             auto loop_connection = engine->attach_loop_client(EngineLoopClient{
                 .poll_events =
                     [this]() {
-                        consume_shutdown_signal();
+                        if (consume_shutdown_signal() || quit_requested.load()) {
+                            return;
+                        }
+                        reconcile_active_scene(true);
                         if (window) {
                             window->poll_events();
                         }
@@ -1437,16 +1615,31 @@ print(json.dumps({
                     g_active_host = nullptr;
                 }
             }
-            unload_project_modules();
 
             RenderingManager* manager = engine ? &engine->rendering_manager : nullptr;
             if (manager != nullptr) {
                 clear_input();
-                manager->set_display_factory(nullptr);
-                if (scene_attached && scene.valid()) {
-                    manager->detach_scene_full(scene.handle());
-                    scene_attached = false;
+            }
+
+            if (engine && engine->has_runtime_session()) {
+                bool clean = false;
+                if (python_initialized) {
+                    PythonGilScope gil;
+                    clean = engine->end_session();
+                } else {
+                    clean = engine->end_session();
                 }
+                if (!clean) {
+                    tc_log_error("termin_player: RuntimeSession shutdown reported lifecycle failures");
+                    if (exit_code.load() == 0) {
+                        exit_code.store(1);
+                    }
+                }
+            }
+            world_context = WorldContext();
+
+            if (manager != nullptr) {
+                manager->set_display_factory(nullptr);
                 if (display && display->is_valid()) {
                     manager->remove_display(display->handle());
                 }
@@ -1464,13 +1657,25 @@ print(json.dumps({
             }
             registered_scene_names.clear();
             scene = TcSceneRef();
+            scene_name.clear();
+            viewports.clear();
             package.destroy();
             tgfx::set_builtin_shader_root(nullptr);
 
             if (engine) {
                 engine->scene_manager.set_on_after_render(nullptr);
+                if (!engine->shutdown()) {
+                    tc_log_error("termin_player: EngineCore shutdown reported lifecycle failures");
+                    if (exit_code.load() == 0) {
+                        exit_code.store(1);
+                    }
+                }
                 engine.reset();
             }
+
+            // Project code remains loaded until its controller, scenes,
+            // components and engine-owned render objects are all gone.
+            unload_project_modules();
 
             if (window) {
                 window->close();

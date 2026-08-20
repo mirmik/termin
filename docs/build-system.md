@@ -866,8 +866,12 @@ contract явно:
 остаётся стабильным после переноса bundle. `path` указывает только внутрь
 package. `entry_scene` обязан присутствовать в таблице. Валидатор проверяет
 каждую сцену и полный объединённый resource closure, а native runtime загружает
-и регистрирует всю таблицу; player запускает entry scene и оставляет остальные
-сцены неактивными до явного перехода через `SceneManager`.
+и регистрирует всю таблицу. Player начинает engine-owned `RuntimeSession`,
+привязывает к ней все сцены, активирует entry scene через
+`WorldContext.request_primary_scene()` и оставляет остальные сцены неактивными
+до такого же запроса из игрового кода. Сам переход выполняется только в safe
+point `EngineCore::tick_and_render()`; player не содержит отдельной машины
+состояний транзита.
 Поле `world_controller` обязательно даже при отсутствии контроллера: допустимы
 только `null` и объект ровно с непустыми нормализованными строками `module` и
 `type`. Старые schema versions не угадываются и не мигрируют в runtime.
@@ -893,7 +897,10 @@ Desktop target packaging больше не должен копировать SDK
 целиком по умолчанию. В `minimal_strict` bundle получает Python stdlib из SDK
 без `site-packages`, затем создаёт чистый `site-packages` и добавляет только
 явный Termin player runtime seed плюс requirements из выбранного module closure
-и профиля.
+и профиля. Транзитивное замыкание строится из wheel metadata (`Requires-Dist`),
+поэтому runtime-зависимости native/Python-пакета должны быть перечислены в его
+package metadata; например, `termin-components-kinematic` явно требует
+`termin-robotics`, `termin-scene` и `termin-inspect`.
 Состав записывается в `python-runtime.json`. Если временно нужен старый broad
 copy для диагностики, профиль должен явно указать:
 
