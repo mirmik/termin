@@ -6,8 +6,6 @@ framework. The native frontend delegates to these models and services.
 No module in this package may import tcgui or any other UI framework.
 """
 
-from pathlib import Path
-
 from .menu_spec import MenuItemSpec, MenuSpec
 from .menu_bar_model import (
     DebugMenuActions,
@@ -26,11 +24,6 @@ from .menu_bar_model import (
 )
 
 
-def scene_name_from_file_path(file_path: str) -> str:
-    """Return the scene manager slot name for a scene file path."""
-    return Path(file_path).stem
-
-
 __all__ = [
     "MenuItemSpec",
     "MenuSpec",
@@ -47,5 +40,4 @@ __all__ = [
     "SceneMenuActions",
     "ViewMenuActions",
     "build_editor_menu_spec",
-    "scene_name_from_file_path",
 ]

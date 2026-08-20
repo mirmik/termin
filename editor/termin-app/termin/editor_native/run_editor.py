@@ -1301,8 +1301,13 @@ def _compose_native_editor(
         session_presentation.update(message=message)
 
     def update_window_title() -> None:
-        scene_name = active_scene_name()
-        session_presentation.update(scene_label=scene_name or "No Scene")
+        scene_identity = active_scene_name()
+        if scene_identity is None:
+            session_presentation.update(scene_label="No Scene")
+            return
+        from termin.project.scene_paths import scene_display_label
+
+        session_presentation.update(scene_label=scene_display_label(scene_identity))
 
     pre_prefab_scene_name: str | None = None
 

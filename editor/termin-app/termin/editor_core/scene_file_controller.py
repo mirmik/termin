@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
-import os
 from pathlib import Path
 import threading
 import time
@@ -218,19 +217,49 @@ class SceneFileController:
             return False
         if not self.validate_scene_path(path):
             return False
-        scene_name = self._get_editor_scene_name()
-        if scene_name is None:
+        scene_identity = self._get_editor_scene_name()
+        if scene_identity is None:
             log.error("Failed to save scene: no editor scene is active")
             return False
+        source_key = _authoring_key(scene_identity)
         try:
-            prepared = self._prepare_scene_for_save(scene_name)
+            target_identity = self._scene_identity_for_path(path)
+        except ValueError as e:
+            self._report_invalid_scene_path(path, str(e))
+            return False
+        target_key = _authoring_key(target_identity)
+        if target_key != source_key and self._scene_manager.has_scene(target_key):
+            log.error(
+                "Failed to save scene: destination identity is already open: "
+                f"'{target_identity}'"
+            )
+            return False
+
+        rekeyed = False
+        old_path = self._scene_manager.get_scene_path(source_key)
+        try:
+            prepared = self._prepare_scene_for_save(scene_identity)
             if prepared is False:
                 raise RuntimeError(
-                    f"Failed to synchronize scene state before saving '{scene_name}'"
+                    f"Failed to synchronize scene state before saving '{scene_identity}'"
                 )
             state_io = self._get_editor_state_io()
             editor_data = state_io.collect() if state_io else None
-            self._scene_manager.save_scene(_authoring_key(scene_name), path, editor_data)
+            if target_key != source_key:
+                if not self._scene_manager.rekey_scene(source_key, target_key):
+                    raise RuntimeError(
+                        f"Failed to change scene identity from '{scene_identity}' "
+                        f"to '{target_identity}'"
+                    )
+                rekeyed = True
+                self._set_editor_scene_name(target_identity)
+            if self._scene_manager.save_scene(target_key, path, editor_data) is False:
+                raise RuntimeError(f"Failed to serialize scene '{target_identity}'")
+            scene = self._get_scene()
+            if scene is not None:
+                from termin.project.scene_paths import scene_display_label
+
+                scene.name = scene_display_label(target_identity)
             from termin.project.settings import ProjectSettingsManager
 
             ProjectSettingsManager.instance().set_last_scene(path)
@@ -238,6 +267,15 @@ class SceneFileController:
             self._update_window_title()
             return True
         except Exception as e:
+            if rekeyed:
+                if self._scene_manager.rekey_scene(target_key, source_key):
+                    self._scene_manager.set_scene_path(source_key, old_path)
+                    self._set_editor_scene_name(scene_identity)
+                else:
+                    log.error(
+                        "Failed to roll back scene identity after save failure: "
+                        f"'{target_identity}' -> '{scene_identity}'"
+                    )
             log.error(f"Failed to save scene: {e}")
             return False
 
@@ -250,9 +288,10 @@ class SceneFileController:
         stage = "parse"
         staged_scene = None
         try:
-            from termin.editor_core import scene_name_from_file_path
+            scene_identity = self._scene_identity_for_path(path)
+            from termin.project.scene_paths import scene_display_label
 
-            scene_name = scene_name_from_file_path(path)
+            scene_label = scene_display_label(scene_identity)
             with trace.stage("parse"):
                 with open(path, "r", encoding="utf-8") as f:
                     file_data = json.load(f)
@@ -273,12 +312,12 @@ class SceneFileController:
             stage = "staging-create"
             with trace.stage(stage):
                 staged_scene = create_scene_with_extensions(
-                    scene_name,
+                    scene_label,
                     "",
                     default_scene_extensions(),
                 )
                 if staged_scene is None or not staged_scene.is_alive():
-                    raise RuntimeError(f"Failed to create staging scene '{scene_name}'")
+                    raise RuntimeError(f"Failed to create staging scene '{scene_identity}'")
 
             if scene_data is not None:
                 stage = "deserialize"
@@ -317,7 +356,7 @@ class SceneFileController:
         try:
             with trace.stage("commit"):
                 self._replace_scene(
-                    scene_name=scene_name,
+                    scene_name=scene_identity,
                     path=path,
                     staged_scene=staged_scene,
                     editor_data=editor_data,
@@ -405,24 +444,36 @@ class SceneFileController:
             self._update_window_title()
 
     def validate_scene_path(self, path: str) -> bool:
+        try:
+            self._scene_identity_for_path(path)
+            return True
+        except ValueError as e:
+            self._report_invalid_scene_path(path, str(e))
+            return False
+
+    def _scene_identity_for_path(self, path: str) -> str:
         project_path = self._get_project_path()
         if not project_path:
-            return True
-        real_file = os.path.realpath(path)
-        real_project = os.path.realpath(project_path)
-        if real_file.startswith(real_project + os.sep) or real_file == real_project:
-            return True
+            raise ValueError("a project must be open before loading or saving a scene")
+        from termin.project.scene_paths import project_scene_identity
 
+        return project_scene_identity(project_path, path)
+
+    def _report_invalid_scene_path(self, path: str, reason: str) -> None:
+        project_path = self._get_project_path()
         dialogs = self._get_dialog_service()
         if dialogs is not None:
             dialogs.show_error(
-                "Scene Outside Project",
-                f"The scene file must be inside the project directory.\n\n"
+                "Invalid Scene Path",
+                f"The scene file must be a .scene file inside the project directory.\n\n"
                 f"Scene: {path}\n"
-                f"Project: {project_path}",
+                f"Project: {project_path or '(no project)'}\n"
+                f"Reason: {reason}",
             )
-        log.error(f"Scene path outside project: scene={path} project={project_path}")
-        return False
+        log.error(
+            f"Invalid scene path: scene={path} "
+            f"project={project_path or '(no project)'} reason={reason}"
+        )
 
     def load_last_scene(self) -> None:
         from termin.project.settings import ProjectSettingsManager

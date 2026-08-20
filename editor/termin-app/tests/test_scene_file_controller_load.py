@@ -81,6 +81,7 @@ def _build_controller(
     calls: list[object],
     *,
     staged_scene: _Scene,
+    project_root,
 ) -> tuple[SceneFileController, _SceneManager, list[str | None]]:
     old_scene = _Scene(calls)
     manager = _SceneManager(calls, old_scene)
@@ -131,7 +132,7 @@ def _build_controller(
         get_scene=lambda: (
             None if active_name[0] is None else manager.get_scene(_authoring_key(active_name[0]))
         ),
-        get_project_path=lambda: None,
+        get_project_path=lambda: str(project_root),
         get_editor_state_io=lambda: None,
         prepare_scene_for_save=lambda _name: True,
         has_editor_attachment=lambda: True,
@@ -182,6 +183,7 @@ def test_malformed_scene_does_not_replace_active_scene(monkeypatch, tmp_path) ->
         monkeypatch,
         calls,
         staged_scene=staged_scene,
+        project_root=tmp_path,
     )
     path = tmp_path / "broken.scene"
     path.write_text("{", encoding="utf-8")
@@ -206,6 +208,7 @@ def test_repair_failure_does_not_create_or_replace_scene(monkeypatch, tmp_path) 
         monkeypatch,
         calls,
         staged_scene=staged_scene,
+        project_root=tmp_path,
     )
     monkeypatch.setattr(
         scene_animation_repair,
@@ -244,6 +247,7 @@ def test_failure_after_staging_creation_destroys_only_staging_scene(
         monkeypatch,
         calls,
         staged_scene=staged_scene,
+        project_root=tmp_path,
     )
     if failure_stage == "editor-state":
         monkeypatch.setattr(
@@ -274,6 +278,7 @@ def test_successful_load_commits_staged_scene_once(monkeypatch, tmp_path) -> Non
         monkeypatch,
         calls,
         staged_scene=staged_scene,
+        project_root=tmp_path,
     )
     replace_calls = 0
     original_replace = controller._replace_scene
@@ -289,9 +294,9 @@ def test_successful_load_commits_staged_scene_once(monkeypatch, tmp_path) -> Non
     controller.load_scene_from_file(path)
 
     assert replace_calls == 1
-    assert active_name == ["loaded"]
+    assert active_name == ["loaded.scene"]
     assert not manager.has_scene(_authoring_key("old"))
-    assert manager.get_scene(_authoring_key("loaded")) is staged_scene
+    assert manager.get_scene(_authoring_key("loaded.scene")) is staged_scene
     assert staged_scene.alive
     assert not any(
         isinstance(call, tuple) and call[0] == "destroy-stage" for call in calls
@@ -307,10 +312,38 @@ def test_successful_load_commits_staged_scene_once(monkeypatch, tmp_path) -> Non
         if isinstance(call, tuple) and call[0] == "deserialize"
     )
     assert deserialize_index < detach_editor_index
-    assert calls.count(("register", _authoring_key("loaded"), staged_scene)) == 1
-    assert ("attach-editor", "loaded", {"restore_state": False}) in calls
-    assert ("attach-render", "loaded") in calls
+    assert calls.count(("register", _authoring_key("loaded.scene"), staged_scene)) == 1
+    assert ("stage", "loaded", "", (11, 12)) in calls
+    assert ("attach-editor", "loaded.scene", {"restore_state": False}) in calls
+    assert ("attach-render", "loaded.scene") in calls
     assert ("last-scene", path) in calls
+
+
+def test_equal_stems_in_different_directories_have_distinct_identities(
+    monkeypatch, tmp_path
+) -> None:
+    calls: list[object] = []
+    staged_scene = _Scene(calls)
+    controller, manager, active_name = _build_controller(
+        monkeypatch,
+        calls,
+        staged_scene=staged_scene,
+        project_root=tmp_path,
+    )
+    other_key = _authoring_key("Scenes/B/Main.scene")
+    other_scene = _Scene(calls)
+    manager.scenes[other_key] = other_scene
+    path = tmp_path / "Scenes" / "A" / "Main.scene"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"scene": {"entities": []}}), encoding="utf-8")
+
+    controller.load_scene_from_file(str(path))
+
+    loaded_key = _authoring_key("Scenes/A/Main.scene")
+    assert active_name == [loaded_key.identity]
+    assert manager.get_scene(loaded_key) is staged_scene
+    assert manager.get_scene(other_key) is other_scene
+    assert ("stage", "Main", "", (11, 12)) in calls
 
 
 def test_successful_load_logs_realtime_stage_boundaries(monkeypatch, tmp_path) -> None:
@@ -321,6 +354,7 @@ def test_successful_load_logs_realtime_stage_boundaries(monkeypatch, tmp_path) -
         monkeypatch,
         calls,
         staged_scene=staged_scene,
+        project_root=tmp_path,
     )
     monkeypatch.setattr(scene_file_controller_module.log, "info", messages.append)
     path = _write_scene(tmp_path)
