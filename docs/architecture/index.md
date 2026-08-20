@@ -6,7 +6,7 @@
 
 ## Current Notes
 
-- [GameApplication](2026-08-20-game-application.md) - зарегистрированный native/Python composition root с самостоятельным lifecycle; интеграция в `EngineCore` намеренно оставлена отдельным решением.
+- [WorldController and EngineCore RuntimeSession](2026-08-20-game-application.md) - проектный world-level controller, минимальная per-run session, transient scene context и синхронная смена primary scene в safe point движка.
 - [District monorepo](2026-08-14-district-monorepo.md) - принятая схема единого репозитория с корневыми `core`, `graphics`, `physics`, `engine`, `editor` и `platform`, общим build orchestration и независимыми SDK-профилями.
 - [Shared 2D composition](2026-08-11-shared-2d-composition.md) - отдельные Widget и GraphicItem semantic trees поверх общего affine/clip/bounds evaluation и канонического `DrawList2D`, с невладеющими handle-based projections между ними.
 - [Articulation3D as a chain of moving frames](2026-08-04-articulation3d-moving-frame-chain.md) - `Articulation3D` как unit-only дерево подвижных выходных фреймов без runtime-разделения на joint/link, включая инерцию, контакты и границу scene authoring.
