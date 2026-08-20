@@ -296,7 +296,7 @@ def test_build_desktop_project_writes_bundle_contract(
     assert str(project.resolve()) not in app_manifest_text
     app_manifest = json.loads(app_manifest_text)
     assert app_manifest == {
-        "version": 1,
+        "version": 2,
         "format": "termin.desktop_bundle",
             "target": {
                 "kind": "desktop",
@@ -346,6 +346,7 @@ def test_build_desktop_project_writes_bundle_contract(
                 "vsync": vsync,
             },
             "render_phase_names": project_render_phase_names,
+            "world_controller": None,
             "mcp": {
                 "enabled": False,
                 "host": "127.0.0.1",
@@ -360,6 +361,7 @@ def test_build_desktop_project_writes_bundle_contract(
 
     package_manifest = json.loads(result.package_result.manifest_path.read_text(encoding="utf-8"))
     assert package_manifest["entry_scene"] == "Main.scene"
+    assert package_manifest["world_controller"] is None
     assert package_manifest["scenes"] == [
         {"identity": "Main.scene", "path": "scenes/Main.scene.json"},
         {"identity": "Menu.scene", "path": "scenes/Menu.scene.json"},
@@ -393,6 +395,7 @@ def test_build_desktop_project_writes_bundle_contract(
         ],
         "diagnostics": [],
     }
+
     runtime_manifest = json.loads(
         result.runtime_result.python_runtime_manifest_path.read_text(encoding="utf-8")
     )
@@ -417,6 +420,78 @@ def test_build_desktop_project_writes_bundle_contract(
         "version": "1.0",
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
+
+
+@full_runtime_package_exporter
+def test_desktop_build_auto_packages_and_validates_selected_world_controller(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "ControllerGame"
+    project.mkdir()
+    selection = {"module": "game", "type": "ProjectDirector"}
+    _write_json(
+        project / "project_settings" / "project.json",
+        {"world_controller": selection},
+    )
+    _write_json(
+        project / "ControllerGame.terminproj",
+        {"version": 1, "name": "ControllerGame"},
+    )
+    _write_json(project / "Main.scene", {"uuid": "controller-scene", "entities": []})
+    _write_json(
+        project / "game.pymodule",
+        {"name": "game", "root": ".", "packages": ["Game"]},
+    )
+    game_package = project / "Game"
+    game_package.mkdir()
+    (game_package / "__init__.py").write_text(
+        "from termin.engine import WorldController\n"
+        "class ProjectDirector(WorldController):\n"
+        "    def start(self, context):\n"
+        "        pass\n"
+        "    def stop(self, context):\n"
+        "        pass\n",
+        encoding="utf-8",
+    )
+
+    result = build_desktop_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=tmp_path / "bundle",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
+        target_os="linux",
+        target_arch="x86_64",
+    )
+
+    package_manifest = json.loads(
+        result.package_result.manifest_path.read_text(encoding="utf-8")
+    )
+    app_manifest = json.loads(result.app_manifest_path.read_text(encoding="utf-8"))
+    assert package_manifest["world_controller"] == selection
+    assert app_manifest["runtime"]["world_controller"] == selection
+    assert result.module_result.roots == ("game",)
+    assert [module.name for module in result.module_result.modules] == ["game"]
+
+    _write_json(
+        project / "project_settings" / "project.json",
+        {
+            "world_controller": {
+                "module": "game",
+                "type": "MissingProjectDirector",
+            }
+        },
+    )
+    with pytest.raises(ProjectBuildPipelineError, match="was not published"):
+        build_desktop_project(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=tmp_path / "broken-bundle",
+            shader_compiler=_write_fake_shader_compiler(tmp_path),
+            sdk_root=_write_fake_desktop_sdk(tmp_path / "broken-sdk"),
+            target_os="linux",
+            target_arch="x86_64",
+        )
 
 
 @full_runtime_package_exporter

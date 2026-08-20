@@ -25,7 +25,9 @@ def parse_blob(blob: bytes) -> tuple[dict, bytes]:
 def test_runtime_package_blob_is_deterministic_and_hash_indexed(tmp_path: Path) -> None:
     package = tmp_path / "package"
     (package / "scenes").mkdir(parents=True)
-    (package / "manifest.json").write_text('{"version":2}', encoding="utf-8")
+    (package / "manifest.json").write_text(
+        '{"version":3,"world_controller":null}', encoding="utf-8"
+    )
     (package / "scenes" / "Main.scene.json").write_bytes(b"scene")
 
     first = build_runtime_package_blob(package)

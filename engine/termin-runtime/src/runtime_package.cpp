@@ -1,5 +1,6 @@
 #include <termin/runtime/runtime_package.hpp>
 
+#include "runtime_package_manifest.hpp"
 #include "runtime_shader_inference.hpp"
 
 #include <any>
@@ -1845,6 +1846,7 @@ namespace termin::runtime {
         }
         scenes.clear();
         scene = TcSceneRef();
+        world_controller.reset();
         resources.reset();
         ok = false;
     }
@@ -1863,11 +1865,14 @@ namespace termin::runtime {
             }
 
             const nos::trent manifest = nos::json::parse(read_text_file(*reader, "manifest.json"));
-            if (number_field(manifest, "version", 0.0) != 2.0) {
-                result.message = "runtime package manifest requires version 2";
+            if (number_field(manifest, "version", 0.0) !=
+                static_cast<double>(RUNTIME_PACKAGE_SCHEMA_VERSION)) {
+                result.message = "runtime package manifest requires version " +
+                                 std::to_string(RUNTIME_PACKAGE_SCHEMA_VERSION);
                 tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
                 return result;
             }
+            result.world_controller = detail::parse_world_controller_selection(manifest);
             const nos::trent* artifact_root_field = dict_get(manifest, "shader_artifact_root");
             std::string shader_root;
             if (artifact_root_field) {

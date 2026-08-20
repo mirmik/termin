@@ -218,6 +218,34 @@ namespace termin::player {
             return value->as_bool();
         }
 
+        std::optional<termin::runtime::RuntimePackageWorldControllerSelection>
+        required_world_controller_selection(const nos::trent& owner, const std::string& context) {
+            const nos::trent* value = dict_get(owner, "world_controller");
+            if (!value) {
+                throw std::runtime_error(context + " must be explicitly defined as null or {module, type}");
+            }
+            if (value->is_nil()) {
+                return std::nullopt;
+            }
+            if (!value->is_dict()) {
+                throw std::runtime_error(context + " must be null or an object");
+            }
+            if (value->as_dict().size() != 2 || !dict_get(*value, "module") || !dict_get(*value, "type")) {
+                throw std::runtime_error(context + " requires exactly module and type");
+            }
+            const std::string module = string_field(*value, "module");
+            const std::string type = string_field(*value, "type");
+            const auto trimmed_nonempty = [](const std::string& text) {
+                return !text.empty() &&
+                       !std::isspace(static_cast<unsigned char>(text.front())) &&
+                       !std::isspace(static_cast<unsigned char>(text.back()));
+            };
+            if (!trimmed_nonempty(module) || !trimmed_nonempty(type)) {
+                throw std::runtime_error(context + " module and type must be non-empty trimmed strings");
+            }
+            return termin::runtime::RuntimePackageWorldControllerSelection{module, type};
+        }
+
         bool vector_contains(const std::vector<std::string>& values, const std::string& value);
         std::string canonical_backend_name(const std::string& value);
 
@@ -537,6 +565,7 @@ namespace termin::player {
             std::string project_name = "Termin Player";
             std::string mcp_options_json = "{}";
             PlayerWindowSettings window;
+            std::optional<termin::runtime::RuntimePackageWorldControllerSelection> world_controller;
             bool modules_enabled = false;
         };
 
@@ -552,6 +581,13 @@ namespace termin::player {
             const nos::trent root = nos::json::parse(read_text_file(manifest.app_manifest_path));
             if (!root.is_dict()) {
                 throw std::runtime_error("app manifest root must be an object: " + manifest.app_manifest_path.string());
+            }
+            const nos::trent* version = dict_get(root, "version");
+            if (!version || !version->is_numer() || version->as_numer() != 2.0) {
+                throw std::runtime_error("app manifest requires schema version 2");
+            }
+            if (string_field(root, "format") != "termin.desktop_bundle") {
+                throw std::runtime_error("app manifest format must be 'termin.desktop_bundle'");
             }
 
             manifest.project_name = string_field(root, "project_name", "Termin Player");
@@ -569,6 +605,8 @@ namespace termin::player {
                 throw std::runtime_error("app manifest field 'runtime' must be an object");
             }
             manifest.runtime_backends = required_backend_list(*runtime, "backends", "app manifest runtime.backends");
+            manifest.world_controller = required_world_controller_selection(
+                *runtime, "app manifest runtime.world_controller");
             const nos::trent* mcp = dict_get(*runtime, "mcp");
             if (mcp != nullptr) {
                 if (!mcp->is_dict()) {
@@ -1009,6 +1047,10 @@ print(json.dumps({
             package = loader.load(manifest.package_root.string(), options);
             if (!package.ok) {
                 throw std::runtime_error("failed to load runtime package: " + package.message);
+            }
+            if (package.world_controller != manifest.world_controller) {
+                throw std::runtime_error(
+                    "app manifest runtime.world_controller does not match package manifest world_controller");
             }
             tgfx::set_builtin_shader_root(package.shader_runtime.builtin_shader_root.c_str());
             engine->rendering_manager.render_engine()->configure_shader_artifacts(

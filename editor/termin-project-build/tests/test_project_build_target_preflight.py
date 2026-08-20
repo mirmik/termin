@@ -159,6 +159,41 @@ def test_preflight_project_context_accepts_project_dist_output(tmp_path: Path) -
     assert result.diagnostics == []
 
 
+def test_preflight_rejects_selected_controller_when_target_cannot_package_modules(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    (project / "Main.scene").write_text("{}", encoding="utf-8")
+    settings = project / "project_settings" / "project.json"
+    settings.parent.mkdir()
+    settings.write_text(
+        json.dumps(
+            {
+                "world_controller": {
+                    "module": "game",
+                    "type": "game.ProjectDirector",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(TargetPreflightError) as error:
+        _preflight_project_context(
+            project,
+            "Main.scene",
+            project / "dist" / "android" / "Game",
+            "Android",
+        )
+
+    _assert_single_error(
+        error.value,
+        "world_controller",
+        "project-module packaging is currently desktop-only",
+    )
+
+
 def test_preflight_project_context_accepts_empty_external_output(tmp_path: Path) -> None:
     project = tmp_path / "Game"
     project.mkdir()

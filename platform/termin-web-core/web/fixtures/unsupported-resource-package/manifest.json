@@ -1,5 +1,6 @@
 {
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}

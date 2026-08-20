@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Mapping
 
 from termin.project.settings import load_project_settings
+from termin.project.world_controller_selection import ProjectWorldControllerSelection
 from termin.project_build.common import read_project_name
 
 
@@ -24,6 +25,7 @@ class BuildContext:
     dist_dir: Path
     package_dir: Path
     logs_dir: Path
+    world_controller: ProjectWorldControllerSelection | None
     target_options: dict[str, object] = field(default_factory=dict)
 
 
@@ -70,6 +72,7 @@ def create_build_context(
         dist_dir=dist_dir,
         package_dir=dist_dir / "package",
         logs_dir=dist_dir / "logs",
+        world_controller=settings.world_controller,
         target_options=dict(target_options or {}),
     )
 

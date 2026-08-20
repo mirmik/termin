@@ -232,7 +232,8 @@ void main() {
 
     std::string manifest() {
         return R"({
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}
@@ -274,7 +275,8 @@ void main() {
 
     std::string manifest_with_packaged_texture() {
         return R"({
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}
@@ -489,7 +491,8 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
     termin::bootstrap::shutdown_runtime();
     const std::filesystem::path root = make_package_root();
     write_text(root / "manifest.json", R"({
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}
@@ -541,7 +544,8 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
 
     write_text(root / "scene.json", R"({"uuid": "minimal-runtime-scene", "entities": []})");
     write_text(root / "manifest.json", R"({
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}
@@ -562,7 +566,8 @@ TEST_CASE("RuntimePackageLoader restores OrbitCameraController horizon lock") {
     termin::bootstrap::shutdown_runtime();
     const std::filesystem::path root = make_package_root();
     write_text(root / "manifest.json", R"({
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}
@@ -812,7 +817,8 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
 
     write_binary(root / "pipelines" / "compiled.pipeline-template", payload);
     write_text(root / "manifest.json", R"({
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}
@@ -880,7 +886,8 @@ root:
         ui_uuid, "Runtime UI", "UI/runtime.uiscript", source);
     write_text(root / "ui" / "runtime.ui-document.json", compiled);
     write_text(root / "manifest.json", R"({
-  "version": 2,
+  "version": 3,
+  "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
     {"identity": "Scenes/Main.scene", "path": "scene.json"}
@@ -1053,6 +1060,41 @@ TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or 
     CHECK_FALSE(invalid.scene.valid());
     CHECK(invalid.message.find("failed to parse packaged runtime scene") != std::string::npos);
     CHECK(invalid.message.find("scene.json") != std::string::npos);
+}
+
+TEST_CASE("RuntimePackageLoader preserves strict optional WorldController selection") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+    write_text(root / "manifest.json",
+               replace_once(
+                   manifest(),
+                   "\"world_controller\": null",
+                   "\"world_controller\": {\"module\": \"game\", \"type\": \"game.ProjectDirector\"}"));
+
+    termin::runtime::RuntimePackageLoadResult selected =
+        termin::runtime::load_runtime_package(root.string());
+    REQUIRE(selected.ok);
+    REQUIRE(selected.world_controller.has_value());
+    CHECK_EQ(selected.world_controller->module, "game");
+    CHECK_EQ(selected.world_controller->type, "game.ProjectDirector");
+    selected.destroy();
+    CHECK_FALSE(selected.world_controller.has_value());
+
+    write_text(root / "manifest.json",
+               replace_once(manifest(),
+                            "\"world_controller\": null,\n",
+                            ""));
+    const auto missing = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing.ok);
+    CHECK(missing.message.find("explicitly define world_controller") != std::string::npos);
+
+    write_text(root / "manifest.json",
+               replace_once(manifest(),
+                            "\"world_controller\": null",
+                            "\"world_controller\": {\"module\": \" game \", \"type\": \"Director\"}"));
+    const auto malformed = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(malformed.ok);
+    CHECK(malformed.message.find("non-empty trimmed strings") != std::string::npos);
 }
 
 TEST_CASE("RuntimePackageLoader resolves and transitions between packaged scene identities") {

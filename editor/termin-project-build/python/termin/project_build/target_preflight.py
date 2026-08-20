@@ -119,6 +119,15 @@ def preflight_project_build_context(
         target_name,
         diagnostics,
     )
+    if context.world_controller is not None and context.target != "desktop":
+        diagnostics.append(
+            build_error(
+                "world_controller",
+                "Selected WorldController module "
+                f"'{context.world_controller.module}' cannot be packaged for target "
+                f"'{context.target}': project-module packaging is currently desktop-only",
+            )
+        )
     _raise_if_errors(target_name, diagnostics)
 
     return ProjectBuildContextPreflightResult(
