@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "termin/engine/engine_core.hpp"
+#include <termin/tc_scene.hpp>
 
 namespace nb = nanobind;
 
@@ -118,6 +119,22 @@ namespace termin {
                 "Begin one supervised world run and consume an optional controller owner.")
 
             .def("end_session", &EngineCore::end_session, "End and release the active world run.")
+
+            .def(
+                "bind_runtime_scene",
+                [](EngineCore& self, const TcSceneRef& scene) {
+                    return self.bind_runtime_scene(scene.handle());
+                },
+                nb::arg("scene"),
+                "Bind an already registered runtime scene to the active WorldContext.")
+
+            .def(
+                "unbind_runtime_scene",
+                [](EngineCore& self, const TcSceneRef& scene) {
+                    return self.unbind_runtime_scene(scene.handle());
+                },
+                nb::arg("scene"),
+                "Remove this session's transient WorldContext association from a scene.")
 
             .def_prop_ro("has_runtime_session",
                          &EngineCore::has_runtime_session,

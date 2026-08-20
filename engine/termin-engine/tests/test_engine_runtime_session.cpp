@@ -7,6 +7,13 @@ GUARD_TEST_MAIN();
 
 #include <inspect/tc_runtime_type_registry.h>
 #include <termin/engine/engine_core.hpp>
+#include <termin/entity/component.hpp>
+#include <termin/tc_scene.hpp>
+
+extern "C" {
+#include <core/tc_scene_extension.h>
+#include <core/tc_scene_extension_ids.h>
+}
 
 namespace {
 
@@ -29,6 +36,11 @@ namespace {
         bool shutdown_during_start_result = true;
         bool shutdown_during_stop_result = true;
         size_t scenes_during_start = 99;
+        tc_scene_handle runtime_scene = TC_SCENE_HANDLE_INVALID;
+        void* controller_object = nullptr;
+        termin::WorldContext start_context;
+        termin::WorldContext stop_context;
+        bool scene_context_absent_during_stop = false;
     };
 
     SessionProbe* g_probe = nullptr;
@@ -36,6 +48,7 @@ namespace {
     class SessionController final : public termin::WorldController {
     public:
         SessionController() {
+            g_probe->controller_object = this;
             g_probe->events.push_back(Event::Construct);
         }
 
@@ -47,6 +60,7 @@ namespace {
             g_probe->events.push_back(Event::Start);
             g_probe->scenes_during_start = g_probe->engine->scene_manager.scene_names().size();
             CHECK(context.valid());
+            g_probe->start_context = context;
             if (g_probe->reenter) {
                 g_probe->reentrant_begin_result = g_probe->engine->begin_session();
                 g_probe->shutdown_during_start_result = g_probe->engine->shutdown();
@@ -61,6 +75,11 @@ namespace {
         bool stop(termin::WorldContext context, std::string& error) override {
             g_probe->events.push_back(Event::Stop);
             CHECK(context.valid());
+            g_probe->stop_context = context;
+            if (tc_scene_handle_valid(g_probe->runtime_scene)) {
+                g_probe->scene_context_absent_during_stop =
+                    !termin::WorldContext::from_scene(g_probe->runtime_scene).valid();
+            }
             if (g_probe->reenter) {
                 g_probe->reentrant_end_result = g_probe->engine->end_session();
                 g_probe->shutdown_during_stop_result = g_probe->engine->shutdown();
@@ -91,6 +110,25 @@ namespace {
         CHECK(error.empty());
         return controller;
     }
+
+    class ContextLifecycleProbe final : public termin::CxxComponent {
+    public:
+        ContextLifecycleProbe()
+            : CxxComponent("ContextLifecycleProbe") {}
+
+        void start() override {
+            start_context = termin::WorldContext::require_from_component(
+                tc_component_ptr(), "ContextLifecycleProbe::start");
+        }
+
+        void on_scene_active() override {
+            active_context = termin::WorldContext::require_from_component(
+                tc_component_ptr(), "ContextLifecycleProbe::on_scene_active");
+        }
+
+        termin::WorldContext start_context;
+        termin::WorldContext active_context;
+    };
 
 } // namespace
 
@@ -134,11 +172,27 @@ TEST_CASE("EngineCore consumes and supervises one native WorldController") {
 
     engine.scene_manager.set_on_before_scene_close(
         [&probe](const std::string&) { probe.events.push_back(Event::SceneClose); });
-    engine.scene_manager.create_scene("runtime-scene");
+    probe.runtime_scene = engine.scene_manager.create_scene("runtime-scene");
+    REQUIRE(engine.bind_runtime_scene(probe.runtime_scene));
+    termin::WorldContext scene_context = termin::WorldContext::from_scene(probe.runtime_scene);
+    CHECK(scene_context.valid());
+    CHECK(scene_context == probe.start_context);
+    auto controller_ref = scene_context.controller();
+    REQUIRE(controller_ref.has_value());
+    CHECK(controller_ref->valid());
+    CHECK_EQ(std::string(controller_ref->type_name()), std::string(kType));
+    CHECK_EQ(static_cast<void*>(controller_ref->object_as<SessionController>()),
+             probe.controller_object);
     CHECK(engine.shutdown());
     CHECK_FALSE(engine.has_runtime_session());
     CHECK_FALSE(probe.reentrant_end_result);
     CHECK_FALSE(probe.shutdown_during_stop_result);
+    CHECK(probe.scene_context_absent_during_stop);
+    CHECK(probe.start_context == probe.stop_context);
+    CHECK_FALSE(probe.start_context.valid());
+    CHECK_FALSE(scene_context.valid());
+    CHECK_FALSE(controller_ref->valid());
+    CHECK(controller_ref->object() == nullptr);
     CHECK_EQ(tc_runtime_type_registry_instance_count(kType), 0u);
     CHECK(tc_runtime_type_registry_prepare_owner_unload(kOwner, nullptr));
 
@@ -189,4 +243,64 @@ TEST_CASE("RuntimeSession reports stop failure after releasing controller owners
     CHECK_EQ(tc_runtime_type_registry_instance_count(kType), 0u);
     CHECK(engine.shutdown());
     tc_runtime_type_registry_clear();
+}
+
+TEST_CASE("Null RuntimeSession binds transient scene context before component lifecycle") {
+    termin::EngineCore engine;
+    tc_scene_handle scene_handle = engine.scene_manager.create_scene("null-controller-runtime-scene");
+    REQUIRE(tc_scene_alive(scene_handle));
+    termin::TcSceneRef scene(scene_handle);
+    termin::Entity entity = scene.create_entity("context-probe");
+    auto* component = new ContextLifecycleProbe();
+    entity.add_component_ptr(component->tc_component_ptr());
+
+    CHECK_FALSE(termin::WorldContext::from_scene(scene_handle).valid());
+    CHECK_FALSE(tc_scene_ext_has(scene_handle, TC_SCENE_EXT_TYPE_WORLD_CONTEXT));
+    CHECK(engine.begin_session());
+    CHECK_FALSE(termin::WorldContext::from_scene(scene_handle).valid());
+    REQUIRE(engine.bind_runtime_scene(scene_handle));
+    CHECK(tc_scene_ext_has(scene_handle, TC_SCENE_EXT_TYPE_WORLD_CONTEXT));
+
+    termin::WorldContext retained = termin::WorldContext::from_scene(scene_handle);
+    REQUIRE(retained.valid());
+    CHECK_FALSE(retained.controller().has_value());
+    CHECK(scene.to_json_string().find("world_context") == std::string::npos);
+
+    engine.scene_manager.set_mode("null-controller-runtime-scene", TC_SCENE_MODE_PLAY);
+    CHECK(component->active_context.valid());
+    CHECK(component->active_context == retained);
+    engine.scene_manager.tick(0.016);
+    CHECK(component->start_context.valid());
+    CHECK(component->start_context == retained);
+
+    CHECK(engine.end_session());
+    CHECK(tc_scene_alive(scene_handle));
+    CHECK_FALSE(tc_scene_ext_has(scene_handle, TC_SCENE_EXT_TYPE_WORLD_CONTEXT));
+    CHECK_FALSE(termin::WorldContext::from_scene(scene_handle).valid());
+    CHECK_FALSE(retained.valid());
+    CHECK_FALSE(component->start_context.valid());
+    CHECK(engine.shutdown());
+}
+
+TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind removes only its link") {
+    termin::EngineCore engine;
+    termin::TcSceneRef external = termin::TcSceneRef::create("unregistered-runtime-scene");
+    REQUIRE(external.valid());
+    REQUIRE(engine.begin_session());
+    CHECK_FALSE(engine.bind_runtime_scene(external.handle()));
+
+    engine.scene_manager.register_scene("registered-runtime-scene", external.handle());
+    REQUIRE(engine.bind_runtime_scene(external.handle()));
+    termin::WorldContext retained = termin::WorldContext::from_scene(external.handle());
+    REQUIRE(retained.valid());
+    CHECK(engine.unbind_runtime_scene(external.handle()));
+    CHECK_FALSE(termin::WorldContext::from_scene(external.handle()).valid());
+    CHECK(retained.valid());
+    CHECK_FALSE(engine.unbind_runtime_scene(external.handle()));
+
+    engine.scene_manager.unregister_scene("registered-runtime-scene");
+    CHECK(engine.end_session());
+    CHECK_FALSE(retained.valid());
+    external.destroy();
+    CHECK(engine.shutdown());
 }

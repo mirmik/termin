@@ -1,7 +1,9 @@
 // engine_core.cpp - EngineCore implementation
 #include "termin/engine/engine_core.hpp"
 #include "frame_cadence.hpp"
+#include "world_context_internal.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -9,15 +11,12 @@
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <vector>
 
 extern "C" {
 #include "tc_profiler.h"
 #include <tcbase/tc_log.h>
 }
-
-struct tc_world_context {
-    termin::EngineCore* engine = nullptr;
-};
 
 namespace termin {
 
@@ -137,15 +136,16 @@ namespace termin {
 
         class RuntimeSession {
         public:
-            RuntimeSession(EngineCore& engine, WorldControllerInstance controller)
-                : _controller(std::move(controller)) {
-                _context.engine = &engine;
-            }
+            explicit RuntimeSession(WorldControllerInstance controller)
+                : _controller(std::move(controller)),
+                  _context(create_world_context(_controller.native_handle())) {}
 
             ~RuntimeSession() {
                 if (_active && !end()) {
                     tc_log(TC_LOG_ERROR, "[RuntimeSession] Failed to end during destruction");
                 }
+                invalidate_world_context(_context);
+                tc_world_context_release(_context);
             }
 
             RuntimeSession(const RuntimeSession&) = delete;
@@ -156,16 +156,22 @@ namespace termin {
                     tc_log(TC_LOG_ERROR, "[RuntimeSession] Refusing repeated start");
                     return false;
                 }
+                if (!_context) {
+                    tc_log(TC_LOG_ERROR, "[RuntimeSession] Cannot start without a WorldContext");
+                    _controller.reset();
+                    return false;
+                }
                 if (_controller) {
                     char message[1024] = {};
                     tc_world_controller_error_v1 error{
                         sizeof(tc_world_controller_error_v1), message, sizeof(message)};
                     if (!tc_world_controller_instance_start(
-                            _controller.native_handle(), &_context, &error)) {
+                            _controller.native_handle(), _context, &error)) {
                         tc_log(TC_LOG_ERROR,
                                "[RuntimeSession] WorldController start failed: %s",
                                message[0] ? message : "unknown lifecycle failure");
                         _controller.reset();
+                        invalidate_world_context(_context);
                         return false;
                     }
                 }
@@ -179,6 +185,12 @@ namespace termin {
                     return false;
                 }
                 bool clean = true;
+                for (tc_scene_handle scene : _bound_scenes) {
+                    if (!unbind_world_context_scene(_context, scene)) {
+                        clean = false;
+                    }
+                }
+                _bound_scenes.clear();
                 if (_controller) {
                     char message[1024] = {};
                     tc_world_controller_error_v1 error{
@@ -189,6 +201,9 @@ namespace termin {
                                message[0] ? message : "unknown lifecycle failure");
                         clean = false;
                     }
+                }
+                invalidate_world_context(_context);
+                if (_controller) {
                     if (!_controller.reset()) {
                         clean = false;
                     }
@@ -197,9 +212,59 @@ namespace termin {
                 return clean;
             }
 
+            bool bind_scene(tc_scene_handle scene) {
+                if (!_active) {
+                    tc_log(TC_LOG_ERROR, "[RuntimeSession] Cannot bind a scene before session start");
+                    return false;
+                }
+                const auto existing = std::find_if(
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
+                        return tc_scene_handle_eq(bound, scene);
+                    });
+                if (existing != _bound_scenes.end()) {
+                    return true;
+                }
+                if (!bind_world_context_scene(_context, scene)) {
+                    return false;
+                }
+                _bound_scenes.push_back(scene);
+                return true;
+            }
+
+            bool unbind_scene(tc_scene_handle scene) {
+                const auto existing = std::find_if(
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
+                        return tc_scene_handle_eq(bound, scene);
+                    });
+                if (existing == _bound_scenes.end()) {
+                    tc_log(TC_LOG_ERROR, "[RuntimeSession] Scene is not bound to this session");
+                    return false;
+                }
+                if (!unbind_world_context_scene(_context, scene)) {
+                    return false;
+                }
+                _bound_scenes.erase(existing);
+                return true;
+            }
+
+            void on_scene_destroying(tc_scene_handle scene) noexcept {
+                const auto existing = std::find_if(
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
+                        return tc_scene_handle_eq(bound, scene);
+                    });
+                if (existing == _bound_scenes.end()) {
+                    return;
+                }
+                if (!unbind_world_context_scene(_context, scene)) {
+                    tc_log(TC_LOG_ERROR, "[RuntimeSession] Failed to unbind a scene before destruction");
+                }
+                _bound_scenes.erase(existing);
+            }
+
         private:
             WorldControllerInstance _controller;
-            tc_world_context _context{};
+            tc_world_context* _context = nullptr;
+            std::vector<tc_scene_handle> _bound_scenes;
             bool _active = false;
         };
 
@@ -310,7 +375,13 @@ namespace termin {
         if (!tc_world_controller_registry_init()) {
             tc_log(TC_LOG_ERROR, "[EngineCore] Failed to initialize the WorldController registry root");
         }
+        if (!tc_world_context_scene_extension_init()) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Failed to register the WorldContext scene extension");
+        }
         scene_manager.set_before_scene_destroy_guard([this](tc_scene_handle scene) {
+            if (_runtime_session) {
+                _runtime_session->on_scene_destroying(scene);
+            }
             if (!render_topology.is_attached(scene) && render_topology.render_targets(scene).empty() &&
                 render_topology.viewports(scene).empty()) {
                 return;
@@ -408,7 +479,7 @@ namespace termin {
 
         _session_operation = SessionOperation::Beginning;
         try {
-            auto candidate = std::make_unique<engine_detail::RuntimeSession>(*this, std::move(controller));
+            auto candidate = std::make_unique<engine_detail::RuntimeSession>(std::move(controller));
             if (!candidate->start()) {
                 _session_operation = SessionOperation::Idle;
                 return false;
@@ -453,6 +524,34 @@ namespace termin {
             tc_log(TC_LOG_ERROR, "[EngineCore] RuntimeSession ended with lifecycle failures");
         }
         return clean;
+    }
+
+    bool EngineCore::bind_runtime_scene(tc_scene_handle scene) {
+        if (_session_operation != SessionOperation::Idle) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing scene bind during RuntimeSession lifecycle callback");
+            return false;
+        }
+        if (!_runtime_session) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Cannot bind a runtime scene without an active RuntimeSession");
+            return false;
+        }
+        if (!scene_manager.is_registered(scene)) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Runtime scene must be live and registered with this SceneManager");
+            return false;
+        }
+        return _runtime_session->bind_scene(scene);
+    }
+
+    bool EngineCore::unbind_runtime_scene(tc_scene_handle scene) {
+        if (_session_operation != SessionOperation::Idle) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing scene unbind during RuntimeSession lifecycle callback");
+            return false;
+        }
+        if (!_runtime_session) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Cannot unbind a runtime scene without an active RuntimeSession");
+            return false;
+        }
+        return _runtime_session->unbind_scene(scene);
     }
 
     EngineLoopClientConnection EngineCore::attach_loop_client(EngineLoopClient client) {

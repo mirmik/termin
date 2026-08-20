@@ -114,6 +114,11 @@ TERMIN_ENGINE_API tc_world_controller_state
 tc_world_controller_instance_state(const tc_world_controller_instance* instance);
 TERMIN_ENGINE_API const char* tc_world_controller_instance_type_name(const tc_world_controller_instance* instance);
 
+// Borrow the language/native object created by the registered factory. The
+// pointer is valid only while the supervising controller instance is alive;
+// callers must not destroy or retain ownership of it.
+TERMIN_ENGINE_API void* tc_world_controller_instance_object(const tc_world_controller_instance* instance);
+
 #ifdef __cplusplus
 }
 #endif

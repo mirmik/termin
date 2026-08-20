@@ -11,6 +11,7 @@
 #include <inspect/tc_runtime_type_registry.h>
 #include <tcbase/tc_log.hpp>
 #include <termin/engine/world_controller.hpp>
+#include <termin/tc_scene.hpp>
 
 namespace termin::python {
 
@@ -196,6 +197,24 @@ namespace termin::python {
                 tc_runtime_type_registry_get_binding(type_name, kPythonClassProjectionBinding));
         }
 
+        nb::object project_controller(const WorldControllerRef& controller) {
+            nb::gil_scoped_acquire gil;
+            const char* type_name = controller.type_name();
+            if (!type_name || !python_factory_context(type_name)) {
+                return nb::cast(controller);
+            }
+
+            auto* object = static_cast<PythonWorldControllerObject*>(controller.object());
+            if (!object || !object->value.is_valid()) {
+                throw std::runtime_error("live Python WorldController has no project object");
+            }
+            PyObject* proxy = PyWeakref_NewProxy(object->value.ptr(), nullptr);
+            if (!proxy) {
+                throw nb::python_error();
+            }
+            return nb::steal<nb::object>(proxy);
+        }
+
         bool class_has_callable(nb::handle cls, const char* method_name, const std::string& type_name) {
             PyObject* method = PyObject_GetAttrString(cls.ptr(), method_name);
             if (!method) {
@@ -332,7 +351,26 @@ namespace termin::python {
 
     void bind_world_controller(nb::module_& module) {
         nb::class_<WorldContext>(module, "WorldContext")
-            .def_prop_ro("valid", &WorldContext::valid);
+            .def_prop_ro("valid", &WorldContext::valid)
+            .def_prop_ro(
+                "controller",
+                [](const WorldContext& context) -> nb::object {
+                    auto controller = context.controller();
+                    return controller ? project_controller(*controller) : nb::none();
+                },
+                "The optional project controller; Python controllers are exposed as weak proxies.")
+            .def("__bool__", &WorldContext::valid)
+            .def("__eq__", [](const WorldContext& self, const WorldContext& other) { return self == other; });
+
+        nb::class_<WorldControllerRef>(module, "WorldControllerRef")
+            .def_prop_ro("valid", &WorldControllerRef::valid)
+            .def_prop_ro(
+                "type_name",
+                [](const WorldControllerRef& controller) -> nb::object {
+                    const char* type_name = controller.type_name();
+                    return type_name ? nb::cast(type_name) : nb::none();
+                })
+            .def("__bool__", &WorldControllerRef::valid);
 
         nb::class_<WorldControllerInstance>(module, "WorldControllerInstance")
             .def_prop_ro("valid", &WorldControllerInstance::valid)
@@ -356,6 +394,20 @@ namespace termin::python {
             },
             nb::arg("type_name"),
             "Create one move-only WorldController owner without starting it.");
+
+        module.def(
+            "world_context",
+            [](const TcSceneRef& scene) { return WorldContext::from_scene(scene.handle()); },
+            nb::arg("scene"),
+            "Return the live WorldContext for a bound runtime scene, or an invalid handle.");
+        module.def(
+            "require_world_context",
+            [](const TcSceneRef& scene, const std::string& consumer) {
+                return WorldContext::require_from_scene(scene.handle(), consumer.c_str());
+            },
+            nb::arg("scene"),
+            nb::arg("consumer") = "Python runtime component",
+            "Return a bound scene's WorldContext or raise with an actionable error.");
 
         module.def("_bootstrap_world_controller_registry", &tc_world_controller_registry_init);
         module.def("_register_world_controller",

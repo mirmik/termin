@@ -227,6 +227,8 @@ namespace termin {
         bool begin_session();
         bool begin_session(WorldControllerInstance&& controller);
         bool end_session();
+        bool bind_runtime_scene(tc_scene_handle scene);
+        bool unbind_runtime_scene(tc_scene_handle scene);
         bool has_runtime_session() const noexcept {
             return _runtime_session != nullptr;
         }

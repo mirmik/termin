@@ -7,6 +7,7 @@ GUARD_TEST_MAIN();
 #include <vector>
 
 #include <termin/engine/world_controller.hpp>
+#include <termin/engine/engine_core.hpp>
 
 extern "C" {
 #include <inspect/tc_runtime_type_registry.h>
@@ -163,7 +164,6 @@ namespace {
 
         bool start(termin::WorldContext context, std::string& error) override {
             CHECK(context.valid());
-            CHECK_EQ(context.native_handle(), test_context());
             (void)error;
             ++g_cxx_counters->started;
             if (g_cxx_counters->throw_on_start) {
@@ -174,7 +174,6 @@ namespace {
 
         bool stop(termin::WorldContext context, std::string& error) override {
             CHECK(context.valid());
-            CHECK_EQ(context.native_handle(), test_context());
             (void)error;
             ++g_cxx_counters->stopped;
             return true;
@@ -315,15 +314,16 @@ TEST_CASE("C++ WorldController adapter publishes C facet and contains exceptions
     CHECK(tc_world_controller_type_is_registered(type_name));
     CHECK_FALSE(tc_world_controller_type_is_abstract(type_name));
 
-    ErrorBuffer error;
-    tc_world_controller_instance* instance = tc_world_controller_instance_create(type_name, &error.value);
-    REQUIRE(instance != nullptr);
+    std::string create_error;
+    termin::WorldControllerInstance instance =
+        termin::WorldControllerInstance::create(type_name, create_error);
+    REQUIRE(instance.valid());
     CHECK_EQ(counters.constructed, 1);
 
-    CHECK_FALSE(tc_world_controller_instance_start(instance, test_context(), &error.value));
-    CHECK_EQ(std::string(error.text), std::string("injected C++ start exception"));
+    termin::EngineCore engine;
+    CHECK_FALSE(engine.begin_session(std::move(instance)));
+    CHECK_FALSE(instance.valid());
     CHECK_EQ(counters.started, 1);
-    CHECK(tc_world_controller_instance_destroy(&instance, &error.value));
     CHECK_EQ(counters.stopped, 1);
     CHECK_EQ(counters.destroyed, 1);
     CHECK_EQ(tc_runtime_type_registry_instance_count(type_name), 0u);

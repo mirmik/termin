@@ -7,8 +7,10 @@ from termin.engine._engine_native import (
     EngineLoopClient,
     EngineLoopClientConnection,
     WorldContext,
+    WorldControllerRef,
     WorldControllerInstance,
     create_world_controller,
+    require_world_context,
     _borrow_engine_core as _borrow_engine_core,
     SCENE_EXT_TYPE_COLLISION_WORLD,
     create_scene,
@@ -22,6 +24,7 @@ from termin.engine._engine_native import (
     render,
     scene,
     scene_ext_attached_names,
+    world_context,
 )
 
 from .world_controller import (
@@ -65,7 +68,9 @@ __all__ = [
     "WorldContext",
     "WorldController",
     "WorldControllerInstance",
+    "WorldControllerRef",
     "create_world_controller",
+    "require_world_context",
     "create_scene",
     "create_scene_with_extensions",
     "create_scene_with_render",
@@ -77,6 +82,7 @@ __all__ = [
     "render",
     "scene",
     "scene_ext_attached_names",
+    "world_context",
     "list_python_world_controller_owner",
     "publish_world_controller",
     "publish_world_controller_owner",
