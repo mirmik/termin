@@ -9,6 +9,10 @@ import pytest
 
 import termin.project_modules.runtime as modules_runtime
 from termin.player.headless import HeadlessRuntime, HeadlessRuntimeError
+from termin.player.project_runtime_support import (
+    ProjectRuntimeSupportError,
+    load_project_modules,
+)
 from termin.physics_components import PhysicsWorldComponent
 from termin.scene import PythonComponent
 from termin.engine import create_scene, scene_ext_attached_names
@@ -168,6 +172,96 @@ def _write_hot_reload_project(project_path: Path) -> None:
     )
 
 
+def _write_world_controller_project(project_path: Path) -> None:
+    (project_path / "gameplay").mkdir()
+    (project_path / "gameplay.pymodule").write_text(
+        "\n".join(
+            [
+                "name: gameplay",
+                "type: python",
+                "root: .",
+                "packages: [gameplay]",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (project_path / "gameplay" / "__init__.py").write_text(
+        "\n".join(
+            [
+                "from termin.engine import WorldController, require_world_context",
+                "from termin.scene import PythonComponent",
+                "",
+                "EVENTS = []",
+                "",
+                "class HeadlessDirector(WorldController):",
+                "    def start(self, context):",
+                "        EVENTS.append('controller:start')",
+                "",
+                "    def stop(self, context):",
+                "        EVENTS.append('controller:stop')",
+                "",
+                "    def __del__(self):",
+                "        EVENTS.append('controller:destroy')",
+                "",
+                "class HeadlessSessionProbe(PythonComponent):",
+                "    def on_added(self):",
+                "        context = require_world_context(self.scene, 'HeadlessSessionProbe.on_added')",
+                "        controller = context.controller",
+                "        EVENTS.append('component:added:' + controller.__class__.__name__)",
+                "",
+                "    def on_scene_active(self):",
+                "        require_world_context(self.scene, 'HeadlessSessionProbe.on_scene_active')",
+                "        EVENTS.append('component:active')",
+                "",
+                "    def update(self, dt):",
+                "        EVENTS.append('component:update')",
+                "",
+                "    def on_scene_inactive(self):",
+                "        EVENTS.append('component:inactive')",
+                "",
+                "    def on_destroy(self):",
+                "        EVENTS.append('component:destroy')",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (project_path / "project_settings").mkdir()
+    (project_path / "project_settings" / "project.json").write_text(
+        json.dumps(
+            {
+                "world_controller": {
+                    "module": "gameplay",
+                    "type": "HeadlessDirector",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (project_path / "Main.scene").write_text(
+        json.dumps(
+            {
+                "scene": {
+                    "entities": [
+                        {
+                            "uuid": "00000000-0000-0000-7000-000000000010",
+                            "name": "SessionProbe",
+                            "components": [
+                                {
+                                    "type": "HeadlessSessionProbe",
+                                    "data": {},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def _write_hot_reload_component_sources(project_path: Path, *, step: int, mtime: int) -> None:
     package = project_path / "gameplay"
     version_path = package / "version.py"
@@ -267,6 +361,7 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         load_assets=False,
         register_builtin_resources=False,
         scene_manager=scene_manager,
+        manage_bootstrap=False,
     )
 
     try:
@@ -277,12 +372,12 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(components) == 1
         component = components[0]
-        assert component.value == 5
+        assert component.value == 6
         assert component.step == 1
         assert runtime.scene.get_component_type_counts().get("UnknownComponent") is None
 
         runtime.run_frames(frames=1, dt=0.01)
-        assert component.value == 6
+        assert component.value == 7
         del component
         del components
         gc.collect()
@@ -295,12 +390,12 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         reloaded_components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(reloaded_components) == 1
         reloaded = reloaded_components[0]
-        assert reloaded.value == 6
+        assert reloaded.value == 7
         assert reloaded.step == 10
         assert runtime.scene.get_component_type_counts().get("UnknownComponent") is None
 
         runtime.run_frames(frames=1, dt=0.01)
-        assert reloaded.value == 16
+        assert reloaded.value == 17
         assert reloaded.step == 10
         del reloaded
         del reloaded_components
@@ -326,6 +421,7 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         load_assets=False,
         register_builtin_resources=False,
         scene_manager=scene_manager,
+        manage_bootstrap=False,
     )
 
     try:
@@ -335,7 +431,7 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(components) == 1
         runtime.run_frames(frames=1, dt=0.01)
-        assert components[0].value == 6
+        assert components[0].value == 7
         del components
         gc.collect()
 
@@ -356,12 +452,12 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         reloaded_components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(reloaded_components) == 1
         reloaded = reloaded_components[0]
-        assert reloaded.value == 6
+        assert reloaded.value == 7
         assert reloaded.step == 10
         assert runtime.scene.get_component_type_counts().get("UnknownComponent") is None
 
         runtime.run_frames(frames=1, dt=0.01)
-        assert reloaded.value == 16
+        assert reloaded.value == 17
         del reloaded
         del reloaded_components
         gc.collect()
@@ -384,13 +480,14 @@ def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: 
         load_assets=False,
         register_builtin_resources=False,
         scene_manager=scene_manager,
+        manage_bootstrap=False,
     )
 
     try:
         runtime.initialize()
         scene_manager.register_scene("Main.scene", runtime.scene.scene_handle())
         project_modules = modules_runtime.get_project_modules_runtime()
-        expected_value = 5
+        expected_value = 6
         active_step = 1
 
         for next_step in (2, 3, 4):
@@ -424,7 +521,134 @@ def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: 
         _reset_project_modules_runtime()
 
 
-def test_headless_runtime_ticks_scene_without_render_extensions(tmp_path: Path) -> None:
+def test_headless_runtime_hosts_selected_world_controller_and_scene_context(
+    tmp_path: Path,
+) -> None:
+    _install_project_modules_runtime_without_venv()
+    _write_world_controller_project(tmp_path)
+    runtime = HeadlessRuntime(
+        tmp_path,
+        "Main.scene",
+        load_modules=True,
+        load_assets=False,
+        register_builtin_resources=False,
+        manage_bootstrap=False,
+    )
+
+    try:
+        runtime.initialize()
+        import gameplay
+
+        assert gameplay.EVENTS == [
+            "controller:start",
+            "component:added:HeadlessDirector",
+            "component:active",
+            "component:update",
+        ]
+        runtime.step(0.01)
+        assert gameplay.EVENTS[-1] == "component:update"
+
+        runtime.shutdown()
+        assert gameplay.EVENTS == [
+            "controller:start",
+            "component:added:HeadlessDirector",
+            "component:active",
+            "component:update",
+            "component:update",
+            "component:inactive",
+            "controller:stop",
+            "controller:destroy",
+            "component:destroy",
+        ]
+    finally:
+        runtime.shutdown()
+        _reset_project_modules_runtime()
+
+
+def test_headless_runtime_rejects_invalid_world_controller_selection_cleanly(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "project_settings").mkdir()
+    (tmp_path / "project_settings" / "project.json").write_text(
+        json.dumps(
+            {
+                "world_controller": {
+                    "module": "missing-module",
+                    "type": "MissingDirector",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "Main.scene").write_text(
+        json.dumps({"scene": {"entities": []}}),
+        encoding="utf-8",
+    )
+    runtime = HeadlessRuntime(
+        tmp_path,
+        "Main.scene",
+        load_modules=False,
+        load_assets=False,
+        register_builtin_resources=False,
+        manage_bootstrap=False,
+    )
+
+    with pytest.raises(RuntimeError, match="failed to create selected WorldController"):
+        runtime.initialize()
+
+    assert runtime.scene is None
+    assert runtime._engine is None
+    assert not runtime._session_started
+
+
+def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_path: Path) -> None:
+    from termin.engine import require_world_context, scene as engine_scene
+
+    (tmp_path / "Main.scene").write_text(
+        json.dumps({"scene": {"entities": []}}),
+        encoding="utf-8",
+    )
+    runtime = HeadlessRuntime(
+        tmp_path,
+        "Main.scene",
+        load_modules=False,
+        load_assets=False,
+        register_builtin_resources=False,
+        manage_bootstrap=False,
+    )
+
+    try:
+        runtime.initialize()
+        engine = runtime._engine
+        second = engine.scene_manager.create_scene(
+            "Secondary.scene",
+            list(runtime.scene_extensions),
+        )
+        assert second is not None
+        assert engine.bind_runtime_scene(second)
+        context = require_world_context(runtime.scene, "headless transition test")
+
+        assert context.request_primary_scene(second)
+        assert engine.tick(0.0)
+        assert context.primary_scene.name == "Secondary.scene"
+        assert engine.scene_manager.get_mode("Main.scene") == engine_scene.SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode("Secondary.scene") == engine_scene.SceneMode.PLAY
+        assert not engine.render_topology.is_attached(runtime.scene)
+        assert engine.render_topology.is_attached(second)
+        assert list(engine.render_topology.viewports(second)) == []
+        assert list(engine.render_topology.render_targets(second)) == []
+
+        assert context.request_primary_scene(runtime.scene)
+        assert engine.tick(0.0)
+        assert context.primary_scene.name == "Main.scene"
+        assert engine.scene_manager.get_mode("Secondary.scene") == engine_scene.SceneMode.INACTIVE
+        assert engine.render_topology.is_attached(runtime.scene)
+        assert not engine.render_topology.is_attached(second)
+    finally:
+        runtime.shutdown()
+
+
+def test_headless_runtime_ticks_scene_without_render_device_or_frames(tmp_path: Path) -> None:
     _write_scene_with_component(tmp_path)
     runtime = HeadlessRuntime(
         tmp_path,
@@ -432,13 +656,16 @@ def test_headless_runtime_ticks_scene_without_render_extensions(tmp_path: Path) 
         load_modules=False,
         load_assets=False,
         register_builtin_resources=False,
+        manage_bootstrap=False,
     )
 
     try:
         runtime.initialize()
         attached_exts = scene_ext_attached_names(runtime.scene)
-        assert "render_mount" not in attached_exts
+        assert "render_mount" in attached_exts
         assert "render_state" not in attached_exts
+        assert list(runtime._engine.render_topology.viewports(runtime.scene)) == []
+        assert list(runtime._engine.render_topology.render_targets(runtime.scene)) == []
 
         components = runtime.scene.get_components_of_type("HeadlessCounterComponent")
         assert len(components) == 1
@@ -447,8 +674,8 @@ def test_headless_runtime_ticks_scene_without_render_extensions(tmp_path: Path) 
 
         component = components[0]
         assert component.start_count == 1
-        assert component.update_count == 3
-        assert component.late_update_count == 3
+        assert component.update_count == 4
+        assert component.late_update_count == 4
         assert component.last_dt == pytest.approx(0.125)
         assert stats.frames == 3
         assert stats.simulated_time == pytest.approx(0.375)
@@ -477,11 +704,18 @@ def test_headless_runtime_ignores_serialized_render_extensions(tmp_path: Path) -
         load_modules=False,
         load_assets=False,
         register_builtin_resources=False,
+        manage_bootstrap=False,
     )
 
     try:
         runtime.initialize()
-        assert scene_ext_attached_names(runtime.scene) == ["collision_world"]
+        assert scene_ext_attached_names(runtime.scene) == [
+            "render_mount",
+            "collision_world",
+            "world_context",
+        ]
+        assert list(runtime._engine.render_topology.viewports(runtime.scene)) == []
+        assert list(runtime._engine.render_topology.render_targets(runtime.scene)) == []
     finally:
         runtime.shutdown()
 
@@ -509,6 +743,7 @@ def test_headless_runtime_rejects_requested_render_extensions(
         load_assets=False,
         register_builtin_resources=False,
         scene_extensions=[extension],
+        manage_bootstrap=False,
     )
 
     with pytest.raises(
@@ -527,6 +762,7 @@ def test_headless_runtime_run_forever_stops_on_request_quit(tmp_path: Path) -> N
         load_modules=False,
         load_assets=False,
         register_builtin_resources=False,
+        manage_bootstrap=False,
     )
 
     try:
@@ -535,8 +771,8 @@ def test_headless_runtime_run_forever_stops_on_request_quit(tmp_path: Path) -> N
         components = runtime.scene.get_components_of_type("HeadlessQuitComponent")
         assert len(components) == 1
         assert components[0].update_count == 3
-        assert stats.frames == 3
-        assert stats.simulated_time == pytest.approx(0.03)
+        assert stats.frames == 2
+        assert stats.simulated_time == pytest.approx(0.02)
         assert stats.exit_code == 7
     finally:
         runtime.shutdown()
@@ -550,13 +786,14 @@ def test_headless_runtime_attaches_collision_world_for_physics(tmp_path: Path) -
         "Main.scene",
         load_modules=False,
         load_assets=False,
+        manage_bootstrap=False,
     )
 
     try:
         runtime.initialize()
         assert tc_pipeline_registry_count() == baseline_pipeline_count
         attached_exts = scene_ext_attached_names(runtime.scene)
-        assert attached_exts == ["collision_world"]
+        assert attached_exts == ["render_mount", "collision_world", "world_context"]
 
         components = runtime.scene.get_components_of_type("PhysicsWorldComponent")
         assert len(components) == 1
@@ -577,10 +814,45 @@ def test_headless_runtime_rejects_missing_scene(tmp_path: Path) -> None:
         load_modules=False,
         load_assets=False,
         register_builtin_resources=False,
+        manage_bootstrap=False,
     )
 
     with pytest.raises(HeadlessRuntimeError, match="Scene not found"):
         runtime.initialize()
+
+
+def test_failed_project_module_load_is_closed_before_the_host_rejects_startup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailedModuleRuntime:
+        def __init__(self) -> None:
+            self.runtime = self
+            self.last_error = "injected module failure"
+            self.closed = False
+
+        def load_project(self, project_path: Path) -> bool:
+            assert project_path == tmp_path
+            return False
+
+        def records(self) -> list:
+            return []
+
+        def close(self) -> bool:
+            self.closed = True
+            return True
+
+    module_runtime = FailedModuleRuntime()
+    monkeypatch.setattr(
+        modules_runtime,
+        "get_project_modules_runtime",
+        lambda scene_manager=None: module_runtime,
+    )
+
+    with pytest.raises(ProjectRuntimeSupportError, match="injected module failure"):
+        load_project_modules(tmp_path, log_prefix="[test]")
+
+    assert module_runtime.closed
 
 
 def test_player_cli_runs_headless_empty_scene(tmp_path: Path) -> None:

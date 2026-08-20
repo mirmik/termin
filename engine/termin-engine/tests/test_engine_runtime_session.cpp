@@ -419,6 +419,44 @@ TEST_CASE("Primary scene requests commit at the next EngineCore tick safe point"
     CHECK(engine.shutdown());
 }
 
+TEST_CASE("Render-free EngineCore ticks rotate primary worlds without a graphics host") {
+    termin::EngineCore engine;
+    termin::TcSceneRef first(engine.scene_manager.create_scene("headless-primary-first"));
+    termin::TcSceneRef second(engine.scene_manager.create_scene("headless-primary-second"));
+    REQUIRE(first.valid());
+    REQUIRE(second.valid());
+    REQUIRE_FALSE(tc_scene_ext_has(first.handle(), TC_SCENE_EXT_TYPE_RENDER_MOUNT));
+    REQUIRE_FALSE(tc_scene_ext_has(second.handle(), TC_SCENE_EXT_TYPE_RENDER_MOUNT));
+
+    REQUIRE(engine.begin_session());
+    REQUIRE(engine.bind_runtime_scene(first.handle()));
+    REQUIRE(engine.bind_runtime_scene(second.handle()));
+    termin::WorldContext context = termin::WorldContext::require_from_scene(
+        first.handle(), "renderless primary transition test");
+
+    REQUIRE(context.request_primary_scene(first.handle()));
+    CHECK(engine.tick(0.0));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
+    CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_PLAY);
+    CHECK(engine.render_topology.is_attached(first.handle()));
+    CHECK(engine.render_topology.viewports(first.handle()).empty());
+    CHECK(engine.render_topology.render_targets(first.handle()).empty());
+
+    REQUIRE(context.request_primary_scene(second.handle()));
+    CHECK(engine.tick(0.0));
+    CHECK(tc_scene_handle_eq(context.primary_scene(), second.handle()));
+    CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK(tc_scene_get_mode(second.handle()) == TC_SCENE_MODE_PLAY);
+    CHECK_FALSE(engine.render_topology.is_attached(first.handle()));
+    CHECK(engine.render_topology.is_attached(second.handle()));
+    CHECK(engine.render_topology.viewports(second.handle()).empty());
+    CHECK(engine.render_topology.render_targets(second.handle()).empty());
+
+    CHECK(engine.end_session());
+    CHECK(tc_scene_get_mode(second.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK(engine.shutdown());
+}
+
 TEST_CASE("Primary scene preparation failure preserves the old world and permits retry") {
     tc_scene_render_mount_extension_init();
     termin::EngineCore engine;

@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.player.project_runtime_support import (
+    close_project_modules,
+    create_project_world_controller,
     load_project_modules,
     register_project_runtime_resources,
     scan_project_assets,
@@ -154,16 +156,17 @@ class PlayerRuntime:
         self.render_phase_names = load_project_runtime_settings(self.project_path).render_phase_names
         self.mcp_enabled = bool(mcp_enabled)
         self.mcp_options = mcp_options if mcp_options is not None else {}
-        self._scene_file_data = None
 
         self.running = False
         self.scene: Scene | None = None
         self.window = None
         self._graphics_session = None
         self.graphics = None
-        self.camera = None
         self._engine = engine
         self._owns_engine = engine is None
+        self._project_modules_runtime = None
+        self._session_started = False
+        self._bootstrap_started = False
         self._surface_size: tuple[int, int] = (0, 0)
 
         # Timing
@@ -175,7 +178,6 @@ class PlayerRuntime:
         self._display = None
         self._viewport = None
         self._viewports = []
-        self._fallback_render_target = None
         self._input_manager = None
         self._mcp_executor = None
         self._mcp_server = None
@@ -202,11 +204,23 @@ class PlayerRuntime:
         return self._engine.rendering_manager
 
     def initialize(self) -> bool:
+        """Initialize transactionally and release every acquired runtime layer on failure."""
+        from tcbase import log
+
+        try:
+            return self._initialize()
+        except Exception as error:
+            log.error(f"[PlayerRuntime] Unexpected initialization failure: {error}")
+            self.shutdown()
+            return False
+
+    def _initialize(self) -> bool:
         """Initialize player systems."""
         from tcbase import log
         from termin.bootstrap import bootstrap_player
 
         bootstrap_player()
+        self._bootstrap_started = True
         from termin.render import configure_project_render_phases
         configure_project_render_phases(self.render_phase_names)
         self._configure_backend_default()
@@ -218,8 +232,10 @@ class PlayerRuntime:
         self._ensure_texture_registry()
 
         if not self._ensure_engine_core():
+            self.shutdown()
             return False
         if not self._configure_shader_runtime():
+            self.shutdown()
             return False
 
         from termin.default_assets.resource_manager import DefaultResourceManager
@@ -237,7 +253,12 @@ class PlayerRuntime:
         self._register_components()
 
         # Load C++ modules
-        self._load_modules()
+        try:
+            self._start_project_session()
+        except Exception as error:
+            log.error(f"[PlayerRuntime] Failed to start project runtime session: {error}")
+            self.shutdown()
+            return False
 
         self._scan_project_assets()
 
@@ -251,7 +272,7 @@ class PlayerRuntime:
         # Create one host-owned graphics runtime before its presentation
         # window. RenderEngine reuses this device instead of creating a second
         # device with incompatible texture handles.
-        from termin.display.window import WindowedGraphicsSession, quit_sdl
+        from termin.display.window import WindowedGraphicsSession
 
         try:
             self._graphics_session = WindowedGraphicsSession.create_native()
@@ -270,13 +291,7 @@ class PlayerRuntime:
                 self.window.set_fullscreen(True)
         except Exception as e:
             log.error(f"[PlayerRuntime] Failed to create backend window: {e}")
-            if self._graphics_session is not None:
-                try:
-                    self._graphics_session.close()
-                except Exception as close_error:
-                    log.error(f"[PlayerRuntime] Failed to close graphics runtime: {close_error}")
-                self._graphics_session = None
-            quit_sdl()
+            self.shutdown()
             return False
 
         # Create display
@@ -293,17 +308,30 @@ class PlayerRuntime:
         scene_path = self.project_path / self.scene_name
         if not scene_path.exists():
             log.error(f"[PlayerRuntime] Scene not found: {scene_path}")
+            self.shutdown()
             return False
 
         import json
-        from termin.engine import create_scene
+        from termin.engine import default_scene_extensions
 
         with open(scene_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        self._scene_file_data = data
-
-        # Create new scene and load data
-        self.scene = create_scene(name=self.scene_name)
+        # Register and bind the empty scene before deserialization so component
+        # construction can resolve the active WorldContext and controller.
+        self.scene = self._engine.scene_manager.create_scene(
+            self.scene_name,
+            default_scene_extensions(),
+        )
+        if self.scene is None:
+            log.error(f"[PlayerRuntime] Failed to create scene: {self.scene_name}")
+            self.shutdown()
+            return False
+        if not self._engine.bind_runtime_scene(self.scene):
+            log.error(f"[PlayerRuntime] Failed to bind scene to RuntimeSession: {self.scene_name}")
+            self._engine.scene_manager.close_scene(self.scene_name)
+            self.scene = None
+            self.shutdown()
+            return False
         self.scene.source_path = str(scene_path.resolve())
         scene_data = data.get("scene")
         if scene_data is None:
@@ -312,19 +340,25 @@ class PlayerRuntime:
                 scene_data = scenes[0]
         if scene_data is None and ("entities" in data or "uuid" in data):
             scene_data = data
-        if scene_data:
-            from termin.glb_adapters.scene_animation_repair import repair_glb_animation_player_clip_refs
+        try:
+            if scene_data:
+                from termin.glb_adapters.scene_animation_repair import repair_glb_animation_player_clip_refs
 
-            repair_glb_animation_player_clip_refs(scene_data)
-            self.scene.load_from_data(scene_data, context=None, update_settings=True)
-            from termin.project_modules.runtime import upgrade_scene_unknown_components
-            upgraded = upgrade_scene_unknown_components(self.scene)
-            if upgraded > 0:
-                log.info(f"[PlayerRuntime] Upgraded {upgraded} unknown component(s)")
+                repair_glb_animation_player_clip_refs(scene_data)
+                self.scene.load_from_data(scene_data, context=None, update_settings=True)
+                from termin.project_modules.runtime import upgrade_scene_unknown_components
+                upgraded = upgrade_scene_unknown_components(self.scene)
+                if upgraded > 0:
+                    log.info(f"[PlayerRuntime] Upgraded {upgraded} unknown component(s)")
+        except Exception as error:
+            log.error(f"[PlayerRuntime] Failed to deserialize scene {self.scene_name}: {error}")
+            self.shutdown()
+            return False
 
         log.info(f"[PlayerRuntime] Scene loaded: {self.scene_name}")
 
-        if not self._attach_scene_rendering(manager, pipeline):
+        if not self._activate_primary_scene(manager):
+            self.shutdown()
             return False
 
         # Set up input handling
@@ -381,61 +415,41 @@ class PlayerRuntime:
         log.error(f"[PlayerRuntime] Pipeline not found: {name}")
         return None
 
-    def _attach_scene_rendering(self, manager, pipeline) -> bool:
-        """Attach scene rendering from saved viewport/render-target config."""
+    def _activate_primary_scene(self, manager) -> bool:
+        """Commit the initial renderable scene through EngineCore RuntimeSession."""
         from tcbase import log
+        from termin.engine import require_world_context
 
-        viewports = manager.attach_scene_full(self.scene)
-        if len(viewports) > 0:
-            self._viewports = list(viewports)
-            self._viewport = viewports[0]
-            self._disable_unrenderable_unused_render_targets(manager, viewports)
-            log.info(f"[PlayerRuntime] Attached scene rendering: {len(viewports)} viewport(s)")
-            return True
-
-        log.warning("[PlayerRuntime] Scene has no attachable viewport config, creating fallback viewport")
-        self._setup_camera()
-        return self._create_fallback_viewport(manager, pipeline)
-
-    def _create_fallback_viewport(self, manager, pipeline) -> bool:
-        """Create a minimal runtime viewport for scenes without saved display config."""
-        from tcbase import log
-        from termin.render_framework import render_target_new
-
-        if self._display is None:
-            log.error("[PlayerRuntime] Cannot create fallback viewport without display")
-            return False
         if self.scene is None:
-            log.error("[PlayerRuntime] Cannot create fallback viewport without scene")
+            log.error("[PlayerRuntime] Cannot activate a missing scene")
             return False
-        if self.camera is None:
-            log.error("[PlayerRuntime] Cannot create fallback viewport without camera")
+        context = require_world_context(self.scene, "PlayerRuntime initial scene")
+        if not context.request_primary_scene(self.scene):
+            log.error("[PlayerRuntime] RuntimeSession rejected the initial primary scene request")
             return False
+        self._engine.tick_and_render(0.0)
 
-        self._display.name = "Main"
-        manager.add_display(self._display, "Main")
-
-        self._fallback_render_target = render_target_new("Main")
-        self._fallback_render_target.scene = self.scene.scene_handle()
-        self._fallback_render_target.camera = self.camera
-        self._fallback_render_target.pipeline = pipeline
-        self._fallback_render_target.dynamic_resolution = True
-        self._fallback_render_target.enabled = True
-
-        self._viewport = self._display.create_viewport(
-            scene=self.scene,
-            camera=self.camera,
-            rect=(0.0, 0.0, 1.0, 1.0),
-            name="Main",
-        )
-        self._viewport.render_target = self._fallback_render_target
-        if not manager.register_viewport_attachment(self._display, self._viewport):
-            log.error("[PlayerRuntime] Failed to register fallback viewport attachment")
-            self._display.remove_viewport(self._viewport)
-            self._viewport = None
+        primary = context.primary_scene
+        primary_handle = primary.scene_handle() if primary is not None else None
+        scene_handle = self.scene.scene_handle()
+        if (
+            primary_handle is None
+            or primary_handle.index != scene_handle.index
+            or primary_handle.generation != scene_handle.generation
+        ):
+            log.error(
+                "[PlayerRuntime] Initial scene has no attachable render topology; "
+                "source player requires a saved runtime viewport configuration"
+            )
             return False
-        self._viewports = [self._viewport]
-        log.info("[PlayerRuntime] Created fallback viewport with render target 'Main'")
+        viewports = list(manager.topology.viewports(self.scene))
+        if not viewports:
+            log.error("[PlayerRuntime] Primary scene committed without a viewport")
+            return False
+        self._viewports = viewports
+        self._viewport = viewports[0]
+        self._disable_unrenderable_unused_render_targets(manager, viewports)
+        log.info(f"[PlayerRuntime] Activated primary scene with {len(viewports)} viewport(s)")
         return True
 
     def _disable_unrenderable_unused_render_targets(self, manager, viewports) -> None:
@@ -523,145 +537,28 @@ class PlayerRuntime:
         """Register builtin components and resources."""
         register_project_runtime_resources(include_render_resources=True)
 
-    def _load_modules(self) -> None:
+    def _load_modules(self):
         """Load all project modules through termin-modules runtime."""
-        load_project_modules(
+        return load_project_modules(
             self.project_path,
             log_prefix="[PlayerRuntime]",
             scene_manager=self._engine.scene_manager,
         )
 
+    def _start_project_session(self) -> None:
+        """Publish project modules, create the selected controller and transfer it."""
+        self._project_modules_runtime = self._load_modules()
+        controller = create_project_world_controller(
+            self.project_path,
+            log_prefix="[PlayerRuntime]",
+        )
+        if not self._engine.begin_session(controller):
+            raise RuntimeError("EngineCore refused to start RuntimeSession")
+        self._session_started = True
+
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
         scan_project_assets(self.project_path, log_prefix="[PlayerRuntime]")
-
-    def _setup_camera(self):
-        """Find existing camera or create default one."""
-        from tcbase import log
-        from termin.render_components.camera import CameraComponent
-
-        log.info(f"[PlayerRuntime] Looking for camera in {len(self.scene.entities)} entities")
-
-        # Look for existing camera in scene
-        for entity in self.scene.entities:
-            camera = entity.get_component(CameraComponent)
-            if camera is not None:
-                self.camera = camera
-                log.info(f"[PlayerRuntime] Found camera on entity '{entity.name}'")
-                return
-
-        # Create default camera if none found
-        log.warn("[PlayerRuntime] No camera found in scene, creating default")
-
-        camera_entity = self.scene.create_entity("PlayerCamera")
-        self.camera = CameraComponent()
-        camera_entity.add_component(self.camera)
-
-        if self._setup_camera_from_saved_editor(camera_entity):
-            return
-
-        # Position camera behind the scene and point it at the default content area.
-        from termin.geombase import Quat, Vec3
-        camera_position = Vec3(0, -6, 3)
-        camera_target = Vec3(0, 0, 1)
-        camera_entity.transform.set_local_position(camera_position)
-        camera_entity.transform.set_local_rotation(
-            Quat.look_rotation(camera_target - camera_position, Vec3(0, 0, 1))
-        )
-        log.info("[PlayerRuntime] Created default camera at (0, -6, 3), looking at (0, 0, 1)")
-
-    def _setup_camera_from_saved_editor(self, camera_entity) -> bool:
-        """Use saved editor camera as a runtime fallback when the scene has no game camera."""
-        from tcbase import log
-        from termin.geombase import Quat, Vec3
-
-        if not isinstance(self._scene_file_data, dict):
-            return False
-
-        editor = self._scene_file_data.get("editor")
-        if not isinstance(editor, dict):
-            return False
-
-        camera = editor.get("camera")
-        if not isinstance(camera, dict):
-            return False
-
-        position = camera.get("position")
-        rotation = camera.get("rotation")
-        if not self._is_vec3_list(position) or not self._is_quat_list(rotation):
-            log.warning("[PlayerRuntime] Saved editor camera is incomplete, using default fallback camera")
-            return False
-
-        camera_entity.transform.set_local_position(Vec3(position[0], position[1], position[2]))
-        camera_entity.transform.set_local_rotation(Quat(rotation[0], rotation[1], rotation[2], rotation[3]))
-
-        camera_components = camera.get("editor_entities")
-        if isinstance(camera_components, dict):
-            self._apply_saved_editor_camera_component(camera_components.get("camera"))
-
-        log.info(
-            "[PlayerRuntime] Created fallback camera from saved editor camera "
-            f"at ({position[0]}, {position[1]}, {position[2]})"
-        )
-        return True
-
-    def _apply_saved_editor_camera_component(self, components) -> None:
-        if not isinstance(components, list):
-            return
-
-        for component in components:
-            if not isinstance(component, dict):
-                continue
-            if component.get("type") != "CameraComponent":
-                continue
-
-            data = component.get("data")
-            if not isinstance(data, dict):
-                return
-
-            self._apply_saved_camera_data(data)
-            return
-
-    def _apply_saved_camera_data(self, data: dict) -> None:
-        near_clip = data.get("near_clip")
-        if isinstance(near_clip, (int, float)):
-            self.camera.near_clip = float(near_clip)
-
-        far_clip = data.get("far_clip")
-        if isinstance(far_clip, (int, float)):
-            self.camera.far_clip = float(far_clip)
-
-        ortho_size = data.get("ortho_size")
-        if isinstance(ortho_size, (int, float)):
-            self.camera.ortho_size = float(ortho_size)
-
-        fov_x_degrees = data.get("fov_x_degrees")
-        if isinstance(fov_x_degrees, (int, float)):
-            self.camera.fov_x_degrees = float(fov_x_degrees)
-
-        fov_y_degrees = data.get("fov_y_degrees")
-        if isinstance(fov_y_degrees, (int, float)):
-            self.camera.fov_y_degrees = float(fov_y_degrees)
-
-        fov_mode = data.get("fov_mode")
-        if isinstance(fov_mode, str) and fov_mode != "":
-            self.camera.fov_mode = fov_mode
-
-        layer_mask = data.get("layer_mask")
-        if isinstance(layer_mask, str) and layer_mask.startswith("0x"):
-            self.camera.layer_mask = int(layer_mask, 16)
-        elif isinstance(layer_mask, int):
-            self.camera.layer_mask = layer_mask
-
-    def _is_vec3_list(self, value) -> bool:
-        if not isinstance(value, list) or len(value) != 3:
-            return False
-        return all(isinstance(item, (int, float)) for item in value)
-
-    def _is_quat_list(self, value) -> bool:
-        if not isinstance(value, list) or len(value) != 4:
-            return False
-        return all(isinstance(item, (int, float)) for item in value)
 
     def _setup_input(self):
         """Set up input handling."""
@@ -735,12 +632,9 @@ class PlayerRuntime:
         if self._mcp_executor is not None:
             self._mcp_executor.process_pending()
 
-        # Update scene
-        if self.scene is not None:
-            self.scene.update(self.delta_time)
-
-        # Render
-        self._render()
+        if self._engine is not None:
+            self._engine.tick_and_render(self.delta_time)
+        self._present()
 
         # Frame rate limiting
         frame_time = time.perf_counter() - current_time
@@ -748,10 +642,8 @@ class PlayerRuntime:
         if frame_time < target_time:
             time.sleep(target_time - frame_time)
 
-    def _render(self):
-        """Render using RenderingManager."""
-        manager = self._engine.rendering_manager
-        manager.render_all(present=True)
+    def _present(self):
+        """Present the display rendered by EngineCore."""
         if self.window is not None and self._display is not None:
             self.window.present(self._display.color_tex)
 
@@ -795,20 +687,24 @@ class PlayerRuntime:
                 log.error(f"[PlayerRuntime] Failed to close pipeline reload binding: {e}")
             self._pipeline_reload_binding = None
 
-        # Remove display from manager
         manager = None
-        if self._engine is not None or self.scene is not None or self._display is not None:
+        if self._engine is not None:
             try:
                 manager = self._engine.rendering_manager
             except Exception as e:
                 log.error(f"[PlayerRuntime] Failed to access RenderingManager during shutdown: {e}")
 
+        if self._session_started and self._engine is not None:
+            if not self._engine.end_session():
+                log.error("[PlayerRuntime] RuntimeSession shutdown reported lifecycle failures")
+            self._session_started = False
+
         if manager is not None:
             manager.set_display_factory(lambda name: None)
-            if self.scene is not None:
+            if self.scene is not None and manager.topology.is_attached(self.scene):
                 manager.detach_scene_full(self.scene)
-                self._fallback_render_target = None
-                self._viewport = None
+            self._viewport = None
+            self._viewports = []
 
             if self._display is not None:
                 manager.remove_display(self._display)
@@ -826,14 +722,13 @@ class PlayerRuntime:
             self._display = None
         self.graphics = None
 
-        try:
-            from termin.bootstrap import shutdown_player
-
-            shutdown_player()
-        except Exception as e:
-            log.error(f"[PlayerRuntime] Failed to shutdown bootstrap runtime: {e}")
-
+        if self._engine is not None and self.scene is not None and self.scene.is_alive():
+            self._engine.scene_manager.close_scene(self.scene_name)
         self.scene = None
+
+        if self._owns_engine and self._engine is not None:
+            if not self._engine.shutdown():
+                log.error("[PlayerRuntime] EngineCore shutdown reported lifecycle failures")
 
         if self.window is not None:
             self.window.close()
@@ -852,8 +747,22 @@ class PlayerRuntime:
             except Exception as e:
                 log.error(f"[PlayerRuntime] Failed to quit SDL: {e}")
 
-        # Release a borrowed wrapper only after all engine-backed resources are
-        # detached. For standalone runtimes this also destroys the owned engine.
+        close_project_modules(
+            self._project_modules_runtime,
+            log_prefix="[PlayerRuntime]",
+        )
+        self._project_modules_runtime = None
+
+        if self._bootstrap_started:
+            try:
+                from termin.bootstrap import shutdown_player
+
+                shutdown_player()
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to shutdown bootstrap runtime: {e}")
+            self._bootstrap_started = False
+
+        # Release a borrowed wrapper only after all runtime-owned objects are gone.
         self._engine = None
         self._resource_manager = None
 

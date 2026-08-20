@@ -183,7 +183,7 @@ def test_null_session_context_is_transient_and_available_to_python_lifecycle() -
         "python-null-controller-runtime-scene", engine_scene.SceneMode.PLAY
     )
     assert component.active_context == retained
-    engine.scene_manager.tick(0.016)
+    assert engine.tick(0.016)
     assert component.start_context == retained
 
     assert engine.end_session()
