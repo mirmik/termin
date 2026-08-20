@@ -128,10 +128,10 @@ def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Pat
         termin.bootstrap.shutdown_player()
 
 
-def test_pymodule_game_application_uses_commit_reload_and_unload_protocol(
+def test_pymodule_world_controller_uses_commit_reload_and_unload_protocol(
     tmp_path: Path,
 ) -> None:
-    from termin.runtime._runtime_native import _game_application_type_info
+    from termin.engine._engine_native import _world_controller_type_info
 
     source_root = tmp_path / "Scripts"
     package = source_root / "owned_application"
@@ -144,8 +144,8 @@ def test_pymodule_game_application_uses_commit_reload_and_unload_protocol(
 
     def write_application(version: int) -> None:
         (package / "__init__.py").write_text(
-            "from termin.runtime import GameApplication\n"
-            "class OwnedGameDirector(GameApplication):\n"
+            "from termin.engine import WorldController\n"
+            "class OwnedGameDirector(WorldController):\n"
             f"    version = {version}\n"
             "    def start(self, context):\n"
             "        pass\n"
@@ -160,7 +160,7 @@ def test_pymodule_game_application_uses_commit_reload_and_unload_protocol(
         write_application(1)
         assert runtime.load_project(tmp_path)
         first_class = sys.modules["owned_application"].OwnedGameDirector
-        first_info = _game_application_type_info("OwnedGameDirector")
+        first_info = _world_controller_type_info("OwnedGameDirector")
         assert first_info is not None
         assert first_info["owner"] == "application"
         assert first_info["python_class"] is first_class
@@ -169,31 +169,31 @@ def test_pymodule_game_application_uses_commit_reload_and_unload_protocol(
         write_application(2)
         assert runtime.reload_module("application")
         second_class = sys.modules["owned_application"].OwnedGameDirector
-        second_info = _game_application_type_info("OwnedGameDirector")
+        second_info = _world_controller_type_info("OwnedGameDirector")
         assert second_info is not None
         assert second_info["python_class"] is second_class
         assert second_class is not first_class
         assert second_class.version == 2
 
         assert runtime.unload_module("application")
-        assert _game_application_type_info("OwnedGameDirector") is None
+        assert _world_controller_type_info("OwnedGameDirector") is None
         assert "owned_application" not in sys.modules
     finally:
         runtime.close()
 
 
-def test_failed_pymodule_import_never_publishes_game_application(
+def test_failed_pymodule_import_never_publishes_world_controller(
     tmp_path: Path,
 ) -> None:
-    from termin.runtime import list_python_game_application_owner
-    from termin.runtime._runtime_native import _game_application_type_info
+    from termin.engine import list_python_world_controller_owner
+    from termin.engine._engine_native import _world_controller_type_info
 
     source_root = tmp_path / "Scripts"
     package = source_root / "broken_application"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text(
-        "from termin.runtime import GameApplication\n"
-        "class BrokenGameDirector(GameApplication):\n"
+        "from termin.engine import WorldController\n"
+        "class BrokenGameDirector(WorldController):\n"
         "    def start(self, context):\n"
         "        pass\n"
         "    def stop(self, context):\n"
@@ -211,8 +211,8 @@ def test_failed_pymodule_import_never_publishes_game_application(
     try:
         assert not runtime.load_project(tmp_path)
         assert "injected application import failure" in runtime.last_error
-        assert _game_application_type_info("BrokenGameDirector") is None
-        assert list_python_game_application_owner("broken-application") == []
+        assert _world_controller_type_info("BrokenGameDirector") is None
+        assert list_python_world_controller_owner("broken-application") == []
         assert "broken_application" not in sys.modules
     finally:
         runtime.close()

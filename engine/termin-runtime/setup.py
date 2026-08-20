@@ -26,8 +26,6 @@ setup(
     package_dir={"termin.runtime": "python/termin/runtime"},
     install_requires=[
         "termin-nanobind",
-        "termin-modules",
-        "tcbase",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
