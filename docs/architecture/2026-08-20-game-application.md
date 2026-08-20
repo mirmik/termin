@@ -165,7 +165,8 @@ WorldContext
 |-- valid
 |-- controller() -> optional borrowed/invalidatable WorldController
 |-- primary_scene() -> optional scene handle
-`-- request_primary_scene(inactive bound scene) -> accepted/rejected
+|-- scene_identities() -> immutable sorted runtime identities
+`-- transition_to(identity) -> accepted/rejected
 ```
 
 Native code can acquire or require the context from a `tc_scene_handle` or
@@ -177,8 +178,12 @@ object pointer. Python-backed controllers are exposed as weak proxies to the
 actual project object. Components can therefore use their world-level state
 without extending controller or module lifetime beyond the session. The
 projection never hands lifecycle authority or ownership to scene code.
-`request_primary_scene` only records one intent; manager mutation remains at
-the `EngineCore` safe point described below.
+`transition_to` resolves only scenes already registered as `RUNTIME` and bound
+to this exact session. It records one intent; manager mutation remains at the
+`EngineCore` safe point described below. Project code therefore navigates the
+session catalog without borrowing `EngineCore`, `SceneManager`, or scene
+objects. The identity and role are revalidated when the intent commits, so a
+stale registry entry is rejected.
 
 The context is not a string-to-pointer service dictionary. It may internally
 retain an engine-owned link, so exposing additional `EngineCore` facilities in

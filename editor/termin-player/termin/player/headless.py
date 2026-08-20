@@ -278,7 +278,7 @@ class HeadlessRuntime:
         if self._engine is None or self.scene is None:
             raise HeadlessRuntimeError("Cannot activate a headless scene without EngineCore")
         context = require_world_context(self.scene, "HeadlessRuntime initial scene")
-        if not context.request_primary_scene(self.scene):
+        if not context.transition_to(self.scene_name):
             raise HeadlessRuntimeError("RuntimeSession rejected the initial headless scene")
         self._engine.tick(0.0)
 

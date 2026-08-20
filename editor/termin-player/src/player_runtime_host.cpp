@@ -1359,7 +1359,7 @@ print(json.dumps({
                     "cannot activate the packaged entry scene without a live WorldContext");
             }
             const tc_scene_handle entry = scene.handle();
-            if (!world_context.request_primary_scene(entry)) {
+            if (!world_context.transition_to(scene_name)) {
                 throw std::runtime_error(
                     "RuntimeSession refused packaged entry scene '" + scene_name + "'");
             }

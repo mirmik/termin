@@ -436,7 +436,7 @@ class PlayerRuntime:
             log.error("[PlayerRuntime] Cannot activate a missing scene")
             return False
         context = require_world_context(self.scene, "PlayerRuntime initial scene")
-        if not context.request_primary_scene(self.scene):
+        if not context.transition_to(self.scene_name):
             log.error("[PlayerRuntime] RuntimeSession rejected the initial primary scene request")
             return False
         self._engine.tick_and_render(0.0)

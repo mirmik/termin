@@ -32,13 +32,14 @@ TERMIN_ENGINE_API bool tc_world_context_generation_is_valid(const tc_world_conte
 TERMIN_ENGINE_API tc_world_controller_instance*
 tc_world_context_controller(const tc_world_context* context);
 
-// Primary gameplay scene projection and deferred command. A successful request
+// Primary gameplay scene projection and deferred transition. A successful request
 // is either already satisfied or queued for the next EngineCore safe point; it
 // does not perform scene or rendering lifecycle work on the caller's stack.
-// V1 accepts only a live inactive scene bound to this exact context.
+// The identity is resolved only inside this RuntimeSession's bound RUNTIME-scene
+// catalog. It must name a live inactive scene registered under the same identity.
 TERMIN_ENGINE_API tc_scene_handle tc_world_context_primary_scene(const tc_world_context* context);
-TERMIN_ENGINE_API bool tc_world_context_request_primary_scene(tc_world_context* context,
-                                                               tc_scene_handle scene);
+TERMIN_ENGINE_API bool tc_world_context_transition_to(tc_world_context* context,
+                                                       const char* scene_identity);
 
 // Acquire a context through the transient scene extension. The caller owns one
 // reference and must release it. The require variants additionally log an

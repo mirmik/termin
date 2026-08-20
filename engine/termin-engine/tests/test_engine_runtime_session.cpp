@@ -152,15 +152,15 @@ namespace {
 
         void update(float) override {
             _events.push_back(_label + ":update");
-            if (tc_scene_handle_valid(request_target)) {
+            if (!request_target.empty()) {
                 termin::WorldContext context = termin::WorldContext::require_from_component(
                     tc_component_ptr(), "PrimaryTransitionProbe::update");
-                CHECK(context.request_primary_scene(request_target));
-                request_target = TC_SCENE_HANDLE_INVALID;
+                CHECK(context.transition_to(request_target));
+                request_target.clear();
             }
         }
 
-        tc_scene_handle request_target = TC_SCENE_HANDLE_INVALID;
+        std::string request_target;
 
     private:
         std::vector<std::string>& _events;
@@ -346,7 +346,10 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
     REQUIRE(engine.bind_runtime_scene(external.handle()));
     termin::WorldContext retained = termin::WorldContext::from_scene(external.handle());
     REQUIRE(retained.valid());
+    CHECK(retained.scene_identities() == std::vector<std::string>{"registered-runtime-scene"});
+    CHECK_FALSE(retained.transition_to("missing.scene"));
     CHECK(engine.unbind_runtime_scene(external.handle()));
+    CHECK(retained.scene_identities().empty());
     CHECK_FALSE(termin::WorldContext::from_scene(external.handle()).valid());
     CHECK(retained.valid());
     CHECK_FALSE(engine.unbind_runtime_scene(external.handle()));
@@ -354,6 +357,7 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
     engine.scene_manager.unregister_scene(external_key);
     CHECK(engine.end_session());
     CHECK_FALSE(retained.valid());
+    CHECK(retained.scene_identities().empty());
     external.destroy();
     CHECK(engine.shutdown());
 }
@@ -371,7 +375,7 @@ TEST_CASE("RuntimeSession drops a primary request when a bound scene is re-regis
 
     REQUIRE(engine.scene_manager.unregister_scene(runtime_key));
     REQUIRE(engine.scene_manager.register_scene(authoring_key, scene.handle()));
-    REQUIRE(context.request_primary_scene(scene.handle()));
+    REQUIRE(context.transition_to(runtime_key.identity));
     (void)engine.tick_and_render(0.0);
 
     CHECK_FALSE(tc_scene_handle_valid(context.primary_scene()));
@@ -410,8 +414,10 @@ TEST_CASE("Primary scene requests commit at the next EngineCore tick safe point"
     termin::WorldContext context = termin::WorldContext::require_from_scene(
         first.handle(), "primary transition test");
     CHECK_FALSE(tc_scene_handle_valid(context.primary_scene()));
-    REQUIRE(context.request_primary_scene(first.handle()));
-    CHECK_FALSE(context.request_primary_scene(second.handle()));
+    const std::vector<std::string> bound_identities{"primary-first", "primary-second"};
+    CHECK(context.scene_identities() == bound_identities);
+    REQUIRE(context.transition_to("primary-first"));
+    CHECK_FALSE(context.transition_to("primary-second"));
 
     CHECK(engine.tick_and_render(0.016));
     CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
@@ -422,9 +428,9 @@ TEST_CASE("Primary scene requests commit at the next EngineCore tick safe point"
     CHECK(engine.render_topology.is_attached(auxiliary.handle()));
     const std::vector<std::string> first_frame_events{"first:active", "first:update"};
     CHECK(events == first_frame_events);
-    CHECK(context.request_primary_scene(first.handle()));
+    CHECK(context.transition_to("primary-first"));
 
-    first_probe->request_target = second.handle();
+    first_probe->request_target = "primary-second";
     events.clear();
     CHECK(engine.tick_and_render(0.016));
     CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
@@ -442,7 +448,7 @@ TEST_CASE("Primary scene requests commit at the next EngineCore tick safe point"
         "first:inactive", "second:active", "second:update"};
     CHECK(events == transition_frame_events);
 
-    REQUIRE(context.request_primary_scene(first.handle()));
+    REQUIRE(context.transition_to("primary-first"));
     CHECK(engine.tick_and_render(0.016));
     CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
     CHECK(engine.render_topology.is_attached(first.handle()));
@@ -473,7 +479,7 @@ TEST_CASE("Render-free EngineCore ticks rotate primary worlds without a graphics
     termin::WorldContext context = termin::WorldContext::require_from_scene(
         first.handle(), "renderless primary transition test");
 
-    REQUIRE(context.request_primary_scene(first.handle()));
+    REQUIRE(context.transition_to("headless-primary-first"));
     CHECK(engine.tick(0.0));
     CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
     CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_PLAY);
@@ -481,7 +487,7 @@ TEST_CASE("Render-free EngineCore ticks rotate primary worlds without a graphics
     CHECK(engine.render_topology.viewports(first.handle()).empty());
     CHECK(engine.render_topology.render_targets(first.handle()).empty());
 
-    REQUIRE(context.request_primary_scene(second.handle()));
+    REQUIRE(context.transition_to("headless-primary-second"));
     CHECK(engine.tick(0.0));
     CHECK(tc_scene_handle_eq(context.primary_scene(), second.handle()));
     CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_INACTIVE);
@@ -524,11 +530,11 @@ TEST_CASE("Primary scene preparation failure preserves the old world and permits
     REQUIRE(engine.bind_runtime_scene(recovery.handle()));
     termin::WorldContext context = termin::WorldContext::require_from_scene(
         first.handle(), "primary prepare rollback test");
-    REQUIRE(context.request_primary_scene(first.handle()));
+    REQUIRE(context.transition_to("prepare-old"));
     CHECK(engine.tick_and_render(0.0));
     REQUIRE(tc_scene_handle_eq(context.primary_scene(), first.handle()));
 
-    REQUIRE(context.request_primary_scene(broken.handle()));
+    REQUIRE(context.transition_to("prepare-broken"));
     CHECK(engine.tick_and_render(0.0));
     CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
     CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_PLAY);
@@ -536,14 +542,14 @@ TEST_CASE("Primary scene preparation failure preserves the old world and permits
     CHECK(engine.render_topology.is_attached(first.handle()));
     CHECK_FALSE(engine.render_topology.is_attached(broken.handle()));
 
-    REQUIRE(context.request_primary_scene(recovery.handle()));
+    REQUIRE(context.transition_to("prepare-recovery"));
     CHECK(engine.tick_and_render(0.0));
     CHECK(tc_scene_handle_eq(context.primary_scene(), recovery.handle()));
     CHECK_FALSE(engine.render_topology.is_attached(first.handle()));
     CHECK(engine.render_topology.is_attached(recovery.handle()));
 
     tc_scene_set_mode(recovery.handle(), TC_SCENE_MODE_STOP);
-    REQUIRE(context.request_primary_scene(first.handle()));
+    REQUIRE(context.transition_to("prepare-old"));
     CHECK(engine.tick_and_render(0.0));
     CHECK(tc_scene_handle_eq(context.primary_scene(), first.handle()));
     CHECK(tc_scene_get_mode(first.handle()) == TC_SCENE_MODE_STOP);
@@ -561,7 +567,7 @@ TEST_CASE("RuntimeSession cancellation drops pending primary work during shutdow
     REQUIRE(engine.bind_runtime_scene(scene.handle()));
     termin::WorldContext context = termin::WorldContext::require_from_scene(
         scene.handle(), "pending shutdown test");
-    REQUIRE(context.request_primary_scene(scene.handle()));
+    REQUIRE(context.transition_to("pending-at-shutdown"));
     CHECK(engine.end_session());
     CHECK_FALSE(context.valid());
     CHECK(tc_scene_get_mode(scene.handle()) == TC_SCENE_MODE_INACTIVE);
@@ -583,14 +589,14 @@ TEST_CASE("Blocking EngineCore loop processes primary requests before each scene
     std::vector<std::string> events;
     PrimaryTransitionProbe* first_probe = add_transition_probe(first, events, "loop-first");
     (void)add_transition_probe(second, events, "loop-second");
-    first_probe->request_target = second.handle();
+    first_probe->request_target = "loop-primary-second";
 
     REQUIRE(engine.begin_session());
     REQUIRE(engine.bind_runtime_scene(first.handle()));
     REQUIRE(engine.bind_runtime_scene(second.handle()));
     termin::WorldContext context = termin::WorldContext::require_from_scene(
         first.handle(), "blocking loop transition test");
-    REQUIRE(context.request_primary_scene(first.handle()));
+    REQUIRE(context.transition_to("loop-primary-first"));
 
     int continuation_checks = 0;
     int shutdowns = 0;
@@ -636,7 +642,7 @@ TEST_CASE("RuntimeSession lifecycle changes are safe in the owning loop poll pha
                 REQUIRE(engine.bind_runtime_scene(scene.handle()));
                 context = termin::WorldContext::require_from_scene(
                     scene.handle(), "loop poll session test");
-                REQUIRE(context.request_primary_scene(scene.handle()));
+                REQUIRE(context.transition_to("poll-owned-session"));
             } else if (polls == 2) {
                 CHECK(tc_scene_handle_eq(context.primary_scene(), scene.handle()));
                 CHECK(engine.end_session());

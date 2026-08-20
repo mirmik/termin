@@ -239,7 +239,7 @@ def test_python_component_requests_primary_scene_for_next_engine_tick() -> None:
             events.append(f"{self.label}:update")
             if self.target is not None:
                 context = require_world_context(self.scene, "TransitionProbe.update")
-                assert context.request_primary_scene(self.target)
+                assert context.transition_to(self.target)
                 self.target = None
 
     engine = EngineCore()
@@ -262,15 +262,18 @@ def test_python_component_requests_primary_scene_for_next_engine_tick() -> None:
     assert engine.bind_runtime_scene(second)
     context = require_world_context(first, "Python transition test")
     assert context.primary_scene is None
-    assert context.request_primary_scene(first)
-    assert not context.request_primary_scene(second)
+    assert context.scene_identities == ("python-primary-first", "python-primary-second")
+    assert isinstance(context.scene_identities, tuple)
+    assert not context.transition_to("missing.scene")
+    assert context.transition_to("python-primary-first")
+    assert not context.transition_to("python-primary-second")
 
     assert engine.tick_and_render(0.016)
     assert context.primary_scene.name == first.name
     assert events == ["first:active", "first:update"]
 
     events.clear()
-    first_probe.target = second
+    first_probe.target = "python-primary-second"
     assert engine.tick_and_render(0.016)
     assert context.primary_scene.name == first.name
     assert events == ["first:update"]

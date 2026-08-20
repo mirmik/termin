@@ -632,7 +632,7 @@ def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_pa
         assert engine.bind_runtime_scene(second)
         context = require_world_context(runtime.scene, "headless transition test")
 
-        assert context.request_primary_scene(second)
+        assert context.transition_to("Secondary.scene")
         assert engine.tick(0.0)
         assert context.primary_scene.name == "Secondary.scene"
         main_key = engine_scene.SceneKey("Main.scene", engine_scene.SceneRole.RUNTIME)
@@ -643,7 +643,7 @@ def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_pa
         assert list(engine.render_topology.viewports(second)) == []
         assert list(engine.render_topology.render_targets(second)) == []
 
-        assert context.request_primary_scene(runtime.scene)
+        assert context.transition_to("Main.scene")
         assert engine.tick(0.0)
         assert context.primary_scene.name == "Main.scene"
         assert engine.scene_manager.get_mode(second_key) == engine_scene.SceneMode.INACTIVE

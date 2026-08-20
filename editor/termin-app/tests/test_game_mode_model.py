@@ -654,7 +654,7 @@ def test_game_mode_model_observes_rotation_without_host_transition_binding():
         assert secondary is not None
         assert engine.bind_runtime_scene(secondary)
         context = model._game_session.context
-        assert context.request_primary_scene(secondary)
+        assert context.transition_to("Secondary")
 
         engine.tick_and_render(0.0)
         model.refresh_primary_scene()

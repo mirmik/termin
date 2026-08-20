@@ -868,7 +868,7 @@ package. `entry_scene` обязан присутствовать в таблиц
 каждую сцену и полный объединённый resource closure, а native runtime загружает
 и регистрирует всю таблицу. Player начинает engine-owned `RuntimeSession`,
 привязывает к ней все сцены, активирует entry scene через
-`WorldContext.request_primary_scene()` и оставляет остальные сцены неактивными
+`WorldContext.transition_to(entry_scene)` и оставляет остальные сцены неактивными
 до такого же запроса из игрового кода. Сам переход выполняется только в safe
 point `EngineCore::tick_and_render()`; player не содержит отдельной машины
 состояний транзита.
