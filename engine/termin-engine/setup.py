@@ -27,6 +27,8 @@ setup(
         "termin-scene",
         "termin-display",
         "termin-render",
+        "termin-modules",
+        "tcbase",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},

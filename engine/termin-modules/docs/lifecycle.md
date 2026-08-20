@@ -179,7 +179,7 @@ Load, reload, build/clean и активация зависимых модуле�
 - package claims устанавливаются до импорта; после успешного импорта всех
   packages backend вызывает commit каждого commit-capable contribution
   participant в детерминированном порядке
-- component и GameApplication классы во время импорта создают только
+- component и WorldController классы во время импорта создают только
   owner-scoped declarations; descriptor становится видимым лишь на commit
 - ошибка import или commit запускает тот же revoke/audit rollback до очистки
   `sys.modules`, поэтому частично опубликованные owner contributions не
@@ -191,7 +191,7 @@ Load, reload, build/clean и активация зависимых модуле�
   session-owned `sys.path` при module unload не меняется
 - после успешного prepare `module_context` проходит упорядоченный список
   contribution participants: app resource classes, Python component/pass и
-  GameApplication declarations, Python kinds, runtime types и package claims
+  WorldController declarations, Python kinds, runtime types и package claims
 - каждый participant имеет стабильный identity, идемпотентный revoke и
   независимый audit; завершённые participants записываются в owner cleanup
   session, поэтому retry продолжает с первого незавершённого шага

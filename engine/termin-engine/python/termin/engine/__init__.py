@@ -6,6 +6,7 @@ from termin.engine._engine_native import (
     EngineCore,
     EngineLoopClient,
     EngineLoopClientConnection,
+    WorldContext,
     _borrow_engine_core as _borrow_engine_core,
     SCENE_EXT_TYPE_COLLISION_WORLD,
     create_scene,
@@ -19,6 +20,16 @@ from termin.engine._engine_native import (
     render,
     scene,
     scene_ext_attached_names,
+)
+
+from .world_controller import (
+    WorldController,
+    list_python_world_controller_owner,
+    publish_world_controller,
+    publish_world_controller_owner,
+    publish_world_controllers,
+    shutdown_python_world_controllers,
+    unregister_python_world_controller_owner,
 )
 
 TermModulesIntegration = modules.TermModulesIntegration
@@ -49,6 +60,8 @@ __all__ = [
     "SceneManager",
     "TermModulesIntegration",
     "ViewportRenderState",
+    "WorldContext",
+    "WorldController",
     "create_scene",
     "create_scene_with_extensions",
     "create_scene_with_render",
@@ -60,4 +73,10 @@ __all__ = [
     "render",
     "scene",
     "scene_ext_attached_names",
+    "list_python_world_controller_owner",
+    "publish_world_controller",
+    "publish_world_controller_owner",
+    "publish_world_controllers",
+    "shutdown_python_world_controllers",
+    "unregister_python_world_controller_owner",
 ]

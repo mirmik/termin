@@ -230,13 +230,7 @@
     },
     {
       "path": "engine/termin-runtime",
-      "distribution": "termin-runtime",
-      "native_extensions": [
-        {
-          "extension": "termin.runtime._runtime_native",
-          "target": "_runtime_native"
-        }
-      ]
+      "distribution": "termin-runtime"
     },
     {
       "path": "physics/termin-robotics",

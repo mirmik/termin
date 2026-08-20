@@ -52,6 +52,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_modules REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_inspect termin_inspect::termin_inspect)
+else()
+    find_package(termin_inspect REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
@@ -73,6 +78,8 @@ set(TERMIN_ENGINE_SOURCES
     src/render_topology.cpp
     src/modules/term_modules_integration.cpp
     src/viewport_render_state.cpp
+    src/world_controller.c
+    src/world_controller.cpp
 )
 
 if(TERMIN_ENGINE_BUILD_SHARED)
@@ -119,6 +126,7 @@ target_link_libraries(termin_engine
         termin_input::termin_input
         termin_collision::termin_collision
         termin_modules::termin_modules
+        termin_inspect::termin_inspect
 )
 
 if(UNIX AND NOT APPLE)
@@ -143,10 +151,12 @@ if(TERMIN_BUILD_PYTHON)
         bindings/scene_render_ext_bindings.cpp
         bindings/rendering_manager_bindings.cpp
         bindings/term_modules_integration_bindings.cpp
+        bindings/world_controller_bindings.cpp
     )
     target_link_libraries(_engine_native PRIVATE termin_engine)
     target_include_directories(_engine_native PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/bindings
     )
     termin_set_rpath_python(_engine_native)
     install(TARGETS _engine_native DESTINATION lib/python/termin/engine)
@@ -202,6 +212,55 @@ install(FILES
 
 if(TERMIN_BUILD_TESTS)
     enable_testing()
+
+    add_executable(termin_engine_world_controller_test
+        tests/test_world_controller.cpp
+    )
+    target_include_directories(termin_engine_world_controller_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_engine_world_controller_test PRIVATE termin_engine)
+    set_target_properties(termin_engine_world_controller_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(NAME termin_engine_world_controller_test COMMAND termin_engine_world_controller_test)
+
+    if(TERMIN_BUILD_PYTHON)
+        nanobind_add_module(_world_controller_test_native NB_SHARED
+            tests/world_controller_test_module.cpp
+            bindings/world_controller_bindings.cpp
+        )
+        target_include_directories(_world_controller_test_native PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/include
+            ${CMAKE_CURRENT_LIST_DIR}/bindings
+        )
+        target_link_libraries(_world_controller_test_native PRIVATE termin_engine)
+        termin_set_rpath_python(_world_controller_test_native)
+
+        add_executable(termin_engine_python_world_controller_test
+            tests/test_python_world_controller.cpp
+        )
+        target_include_directories(termin_engine_python_world_controller_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+            ${NB_DIR}/include
+        )
+        target_link_libraries(termin_engine_python_world_controller_test PRIVATE
+            termin_engine
+            Python::Python
+        )
+        termin_nanobind_link_runtime(termin_engine_python_world_controller_test PRIVATE)
+        target_compile_definitions(termin_engine_python_world_controller_test PRIVATE
+            TERMIN_ENGINE_WORLD_CONTROLLER_TEST_MODULE_DIR="$<TARGET_FILE_DIR:_world_controller_test_native>"
+        )
+        add_dependencies(termin_engine_python_world_controller_test _world_controller_test_native)
+        set_target_properties(termin_engine_python_world_controller_test PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        )
+        add_test(NAME termin_engine_python_world_controller_test
+            COMMAND termin_engine_python_world_controller_test)
+        termin_add_test_labels(termin_engine_python_world_controller_test
+            "termin:capability:python-bindings")
+    endif()
 
     add_library(termin_engine_cpp_hot_reload_test_module SHARED
         tests/cpp_hot_reload_module.cpp

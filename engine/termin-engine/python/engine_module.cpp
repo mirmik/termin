@@ -3,6 +3,7 @@
 #include "termin/bindings/engine/engine_core_bindings.hpp"
 #include "termin/bindings/modules/term_modules_integration_bindings.hpp"
 #include "termin/bindings/scene/scene_manager_bindings.hpp"
+#include "world_controller_bindings.hpp"
 
 namespace nb = nanobind;
 
@@ -31,4 +32,5 @@ NB_MODULE(_engine_native, m) {
     termin::bind_term_modules_integration(modules_module);
     termin::bind_scene_render_ext(m);
     termin::bind_engine_core(m);
+    termin::python::bind_world_controller(m);
 }

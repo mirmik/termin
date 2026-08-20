@@ -1035,14 +1035,6 @@
       ]
     },
     {
-      "id": "termin-runtime-tests",
-      "module": "termin-runtime",
-      "executor": "pytest",
-      "roots": [
-        "engine/termin-runtime/tests"
-      ]
-    },
-    {
       "id": "termin-scene-tests-native",
       "module": "termin-scene",
       "executor": "ctest",

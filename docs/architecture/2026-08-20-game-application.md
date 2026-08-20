@@ -5,10 +5,10 @@
 This document records the accepted second design for persistent gameplay state
 outside scenes.
 
-The current code still exposes the standalone `GameApplication` registry and
-instance lifecycle from `termin-runtime`. The target design renames that
-project-defined object to `WorldController`, moves its contract to the engine
-layer, and hosts it inside an `EngineCore`-owned `RuntimeSession`.
+The language-neutral `WorldController` registry, instance lifecycle, native
+adapter, and Python declaration transaction are implemented in `termin-engine`.
+Hosting the controller inside an `EngineCore`-owned `RuntimeSession` remains the
+next integration step.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
 design deliberately has no public `SceneFlow`, scene providers, host binding
@@ -50,8 +50,8 @@ The engine contract is named `WorldController`, not `GameApplication`:
 - `GameDirector` remains a suitable project-specific implementation name.
 
 The registry root, facet, C/C++ symbols, Python base class and documentation
-will migrate together. This is an active-development migration; the final API
-does not retain a public `GameApplication` compatibility alias.
+migrated together. The active-development API does not retain a public
+`GameApplication` compatibility alias.
 
 ## Optional selection
 
@@ -231,7 +231,7 @@ The existing dependency direction is `termin-runtime -> termin-engine`, so an
 `GameApplication` implementation without a cycle.
 
 The C ABI, registry facet, instance wrapper, native convenience class and
-engine-owned Python adapter move to `termin-engine` as `WorldController`.
+engine-owned Python adapter live in `termin-engine` as `WorldController`.
 Runtime package loading remains in the higher-level `termin-runtime` library.
 
 ## Non-goals for the first implementation
@@ -251,7 +251,8 @@ Umbrella: #1780.
 
 Independent foundations:
 
-- #1781 moves and renames the complete native/Python controller contract;
+- #1781 moves and renames the complete native/Python controller contract
+  (implemented);
 - #1782 adds the optional project-settings selection.
 
 Engine sequence:
