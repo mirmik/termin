@@ -314,7 +314,11 @@ def test_successful_load_commits_staged_scene_once(monkeypatch, tmp_path) -> Non
     assert deserialize_index < detach_editor_index
     assert calls.count(("register", _authoring_key("loaded.scene"), staged_scene)) == 1
     assert ("stage", "loaded", "", (11, 12)) in calls
-    assert ("attach-editor", "loaded.scene", {"restore_state": False}) in calls
+    assert (
+        "attach-editor",
+        _authoring_key("loaded.scene"),
+        {"restore_state": False},
+    ) in calls
     assert ("attach-render", "loaded.scene") in calls
     assert ("last-scene", path) in calls
 

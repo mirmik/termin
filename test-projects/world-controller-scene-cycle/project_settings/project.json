@@ -1,0 +1,19 @@
+{
+  "render_sync_mode": "none",
+  "application": {
+    "id": "org.termin.testprojects.worldcontrollerscenecycle",
+    "label": "Termin WorldController Scene Cycle",
+    "version_code": 1,
+    "version_name": "0.1.0"
+  },
+  "player_window": {
+    "width": 960,
+    "height": 640,
+    "fullscreen": false,
+    "vsync": true
+  },
+  "world_controller": {
+    "module": "scene_cycle",
+    "type": "SceneCycleDirector"
+  }
+}
