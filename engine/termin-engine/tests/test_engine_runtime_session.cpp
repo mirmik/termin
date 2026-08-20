@@ -61,7 +61,7 @@ namespace {
 
         bool start(termin::WorldContext context, std::string& error) override {
             g_probe->events.push_back(Event::Start);
-            g_probe->scenes_during_start = g_probe->engine->scene_manager.scene_names().size();
+            g_probe->scenes_during_start = g_probe->engine->scene_manager.scene_entries().size();
             CHECK(context.valid());
             g_probe->start_context = context;
             if (g_probe->reenter) {
@@ -217,8 +217,9 @@ TEST_CASE("EngineCore consumes and supervises one native WorldController") {
     CHECK_FALSE(tc_runtime_type_registry_prepare_owner_unload(kOwner, nullptr));
 
     engine.scene_manager.set_on_before_scene_close(
-        [&probe](const std::string&) { probe.events.push_back(Event::SceneClose); });
-    probe.runtime_scene = engine.scene_manager.create_scene("runtime-scene");
+        [&probe](const termin::SceneKey&) { probe.events.push_back(Event::SceneClose); });
+    probe.runtime_scene = engine.scene_manager.create_scene(
+        termin::SceneKey{"runtime-scene", termin::SceneRole::Runtime});
     REQUIRE(engine.bind_runtime_scene(probe.runtime_scene));
     termin::WorldContext scene_context = termin::WorldContext::from_scene(probe.runtime_scene);
     CHECK(scene_context.valid());
@@ -293,7 +294,8 @@ TEST_CASE("RuntimeSession reports stop failure after releasing controller owners
 
 TEST_CASE("Null RuntimeSession binds transient scene context before component lifecycle") {
     termin::EngineCore engine;
-    tc_scene_handle scene_handle = engine.scene_manager.create_scene("null-controller-runtime-scene");
+    const termin::SceneKey scene_key{"null-controller-runtime-scene", termin::SceneRole::Runtime};
+    tc_scene_handle scene_handle = engine.scene_manager.create_scene(scene_key);
     REQUIRE(tc_scene_alive(scene_handle));
     termin::TcSceneRef scene(scene_handle);
     termin::Entity entity = scene.create_entity("context-probe");
@@ -312,7 +314,7 @@ TEST_CASE("Null RuntimeSession binds transient scene context before component li
     CHECK_FALSE(retained.controller().has_value());
     CHECK(scene.to_json_string().find("world_context") == std::string::npos);
 
-    engine.scene_manager.set_mode("null-controller-runtime-scene", TC_SCENE_MODE_PLAY);
+    engine.scene_manager.set_mode(scene_key, TC_SCENE_MODE_PLAY);
     CHECK(component->active_context.valid());
     CHECK(component->active_context == retained);
     engine.scene_manager.tick(0.016);
@@ -335,7 +337,8 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
     REQUIRE(engine.begin_session());
     CHECK_FALSE(engine.bind_runtime_scene(external.handle()));
 
-    engine.scene_manager.register_scene("registered-runtime-scene", external.handle());
+    const termin::SceneKey external_key{"registered-runtime-scene", termin::SceneRole::Runtime};
+    engine.scene_manager.register_scene(external_key, external.handle());
     REQUIRE(engine.bind_runtime_scene(external.handle()));
     termin::WorldContext retained = termin::WorldContext::from_scene(external.handle());
     REQUIRE(retained.valid());
@@ -344,7 +347,7 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
     CHECK(retained.valid());
     CHECK_FALSE(engine.unbind_runtime_scene(external.handle()));
 
-    engine.scene_manager.unregister_scene("registered-runtime-scene");
+    engine.scene_manager.unregister_scene(external_key);
     CHECK(engine.end_session());
     CHECK_FALSE(retained.valid());
     external.destroy();
@@ -354,9 +357,12 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
 TEST_CASE("Primary scene requests commit at the next EngineCore tick safe point") {
     tc_scene_render_mount_extension_init();
     termin::EngineCore engine;
-    termin::TcSceneRef first(engine.scene_manager.create_scene("primary-first"));
-    termin::TcSceneRef second(engine.scene_manager.create_scene("primary-second"));
-    termin::TcSceneRef auxiliary(engine.scene_manager.create_scene("primary-auxiliary"));
+    termin::TcSceneRef first(engine.scene_manager.create_scene(
+        termin::SceneKey{"primary-first", termin::SceneRole::Runtime}));
+    termin::TcSceneRef second(engine.scene_manager.create_scene(
+        termin::SceneKey{"primary-second", termin::SceneRole::Runtime}));
+    termin::TcSceneRef auxiliary(engine.scene_manager.create_scene(
+        termin::SceneKey{"primary-auxiliary", termin::SceneRole::Runtime}));
     REQUIRE(first.valid());
     REQUIRE(second.valid());
     REQUIRE(auxiliary.valid());
@@ -421,8 +427,10 @@ TEST_CASE("Primary scene requests commit at the next EngineCore tick safe point"
 
 TEST_CASE("Render-free EngineCore ticks rotate primary worlds without a graphics host") {
     termin::EngineCore engine;
-    termin::TcSceneRef first(engine.scene_manager.create_scene("headless-primary-first"));
-    termin::TcSceneRef second(engine.scene_manager.create_scene("headless-primary-second"));
+    termin::TcSceneRef first(engine.scene_manager.create_scene(
+        termin::SceneKey{"headless-primary-first", termin::SceneRole::Runtime}));
+    termin::TcSceneRef second(engine.scene_manager.create_scene(
+        termin::SceneKey{"headless-primary-second", termin::SceneRole::Runtime}));
     REQUIRE(first.valid());
     REQUIRE(second.valid());
     REQUIRE_FALSE(tc_scene_ext_has(first.handle(), TC_SCENE_EXT_TYPE_RENDER_MOUNT));
@@ -460,9 +468,12 @@ TEST_CASE("Render-free EngineCore ticks rotate primary worlds without a graphics
 TEST_CASE("Primary scene preparation failure preserves the old world and permits retry") {
     tc_scene_render_mount_extension_init();
     termin::EngineCore engine;
-    termin::TcSceneRef first(engine.scene_manager.create_scene("prepare-old"));
-    termin::TcSceneRef broken(engine.scene_manager.create_scene("prepare-broken"));
-    termin::TcSceneRef recovery(engine.scene_manager.create_scene("prepare-recovery"));
+    termin::TcSceneRef first(engine.scene_manager.create_scene(
+        termin::SceneKey{"prepare-old", termin::SceneRole::Runtime}));
+    termin::TcSceneRef broken(engine.scene_manager.create_scene(
+        termin::SceneKey{"prepare-broken", termin::SceneRole::Runtime}));
+    termin::TcSceneRef recovery(engine.scene_manager.create_scene(
+        termin::SceneKey{"prepare-recovery", termin::SceneRole::Runtime}));
     REQUIRE(first.valid());
     REQUIRE(broken.valid());
     REQUIRE(recovery.valid());
@@ -512,7 +523,8 @@ TEST_CASE("Primary scene preparation failure preserves the old world and permits
 TEST_CASE("RuntimeSession cancellation drops pending primary work during shutdown") {
     tc_scene_render_mount_extension_init();
     termin::EngineCore engine;
-    termin::TcSceneRef scene(engine.scene_manager.create_scene("pending-at-shutdown"));
+    termin::TcSceneRef scene(engine.scene_manager.create_scene(
+        termin::SceneKey{"pending-at-shutdown", termin::SceneRole::Runtime}));
     REQUIRE(scene.valid());
     REQUIRE(engine.begin_session());
     REQUIRE(engine.bind_runtime_scene(scene.handle()));
@@ -530,8 +542,10 @@ TEST_CASE("Blocking EngineCore loop processes primary requests before each scene
     tc_scene_render_mount_extension_init();
     termin::EngineCore engine;
     engine.set_target_fps(0.0);
-    termin::TcSceneRef first(engine.scene_manager.create_scene("loop-primary-first"));
-    termin::TcSceneRef second(engine.scene_manager.create_scene("loop-primary-second"));
+    termin::TcSceneRef first(engine.scene_manager.create_scene(
+        termin::SceneKey{"loop-primary-first", termin::SceneRole::Runtime}));
+    termin::TcSceneRef second(engine.scene_manager.create_scene(
+        termin::SceneKey{"loop-primary-second", termin::SceneRole::Runtime}));
     REQUIRE(first.valid());
     REQUIRE(second.valid());
 
@@ -575,7 +589,8 @@ TEST_CASE("RuntimeSession lifecycle changes are safe in the owning loop poll pha
     tc_scene_render_mount_extension_init();
     termin::EngineCore engine;
     engine.set_target_fps(0.0);
-    termin::TcSceneRef scene(engine.scene_manager.create_scene("poll-owned-session"));
+    termin::TcSceneRef scene(engine.scene_manager.create_scene(
+        termin::SceneKey{"poll-owned-session", termin::SceneRole::Runtime}));
     REQUIRE(scene.valid());
 
     int polls = 0;

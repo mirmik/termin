@@ -15,7 +15,7 @@ def test_prefab_edit_controller_roundtrips_v3_hierarchy(tmp_path) -> None:
         f"""
         import termin.bootstrap
         from termin.editor_core.prefab_edit_controller import PrefabEditController
-        from termin.engine import SceneManager
+        from termin.engine import SceneKey, SceneManager, SceneRole
         from termin.inspect import InspectField
         from termin.prefab.persistence import PrefabPersistence, load_document
         from termin.scene import PythonComponent, publish_python_component
@@ -32,8 +32,11 @@ def test_prefab_edit_controller_roundtrips_v3_hierarchy(tmp_path) -> None:
         termin.bootstrap.bootstrap_player()
         publish_python_component(PrefabRoundtripProbe, owner="termin-app-test")
         manager = SceneManager()
-        editor_scene = manager.create_scene("editor", [])
-        author_scene = manager.create_scene("author", [])
+        editor_key = SceneKey("editor", SceneRole.AUTHORING)
+        author_key = SceneKey("author", SceneRole.AUTHORING)
+        prefab_key = SceneKey("prefab", SceneRole.AUTHORING)
+        editor_scene = manager.create_scene(editor_key, [])
+        author_scene = manager.create_scene(author_key, [])
         root = author_scene.create_entity("[Root]")
         child = root.create_child("Child")
         child.create_child("Grandchild")
@@ -47,7 +50,7 @@ def test_prefab_edit_controller_roundtrips_v3_hierarchy(tmp_path) -> None:
         path = {str(tmp_path / 'Nested.prefab')!r}
         persistence = PrefabPersistence()
         persistence.save(root, path, uuid="prefab-asset-id")
-        manager.close_scene("author")
+        manager.close_scene(author_key)
 
         controller = PrefabEditController(
             manager,
@@ -78,8 +81,8 @@ def test_prefab_edit_controller_roundtrips_v3_hierarchy(tmp_path) -> None:
         assert saved_component["data"]["target"]["uuid"] == child_uuid
 
         controller.exit()
-        assert not manager.has_scene("prefab")
-        manager.close_scene("editor")
+        assert not manager.has_scene(prefab_key)
+        manager.close_scene(editor_key)
         termin.bootstrap.shutdown_player()
         """
     )
@@ -95,12 +98,14 @@ def test_prefab_edit_controller_failed_load_leaves_editor_scene_untouched(tmp_pa
         f"""
         import termin.bootstrap
         from termin.editor_core.prefab_edit_controller import PrefabEditController
-        from termin.engine import SceneManager, scene as engine_scene
+        from termin.engine import SceneKey, SceneManager, SceneRole, scene as engine_scene
 
         termin.bootstrap.bootstrap_player()
         manager = SceneManager()
-        manager.create_scene("editor", [])
-        manager.set_mode("editor", engine_scene.SceneMode.STOP)
+        editor_key = SceneKey("editor", SceneRole.AUTHORING)
+        prefab_key = SceneKey("prefab", SceneRole.AUTHORING)
+        manager.create_scene(editor_key, [])
+        manager.set_mode(editor_key, engine_scene.SceneMode.STOP)
         controller = PrefabEditController(
             manager,
             object(),
@@ -110,10 +115,10 @@ def test_prefab_edit_controller_failed_load_leaves_editor_scene_untouched(tmp_pa
         assert not controller.open_prefab({str(legacy_path)!r})
         assert not controller.is_editing
         assert controller.root_entity is None
-        assert not manager.has_scene("prefab")
-        assert manager.get_mode("editor") == engine_scene.SceneMode.STOP
+        assert not manager.has_scene(prefab_key)
+        assert manager.get_mode(editor_key) == engine_scene.SceneMode.STOP
 
-        manager.close_scene("editor")
+        manager.close_scene(editor_key)
         termin.bootstrap.shutdown_player()
         """
     )

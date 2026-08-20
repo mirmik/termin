@@ -14,6 +14,8 @@ from tcbase import log
 from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.engine import (
+    SceneKey,
+    SceneRole,
     create_scene_with_extensions,
     default_scene_extensions,
     scene as engine_scene,
@@ -21,6 +23,10 @@ from termin.engine import (
 
 SceneMode = engine_scene.SceneMode
 SceneSaveCompletion = Callable[[bool], None]
+
+
+def _authoring_key(identity: str) -> SceneKey:
+    return SceneKey(identity, SceneRole.AUTHORING)
 
 
 class _SceneLoadTrace:
@@ -127,15 +133,16 @@ class SceneFileController:
 
     def do_new_scene(self) -> None:
         old_scene_name = self._get_editor_scene_name()
-        if old_scene_name and self._scene_manager.has_scene(old_scene_name):
+        if old_scene_name and self._scene_manager.has_scene(_authoring_key(old_scene_name)):
             self._detach_editor_from_scene(save_state=True, clear_editor_scene_name=False)
             self._detach_scene_from_render(old_scene_name, save_state=True)
-            self._scene_manager.close_scene(old_scene_name)
+            self._scene_manager.close_scene(_authoring_key(old_scene_name))
 
         scene_name = "untitled"
         self._set_editor_scene_name(scene_name)
-        self._scene_manager.create_scene(scene_name, default_scene_extensions())
-        self._scene_manager.set_mode(scene_name, SceneMode.STOP)
+        scene_key = _authoring_key(scene_name)
+        self._scene_manager.create_scene(scene_key, default_scene_extensions())
+        self._scene_manager.set_mode(scene_key, SceneMode.STOP)
         if self._has_editor_attachment():
             self._attach_editor_to_scene(scene_name, restore_state=False)
             self._attach_scene_to_render(scene_name)
@@ -148,7 +155,7 @@ class SceneFileController:
         on_complete: SceneSaveCompletion | None = None,
     ) -> None:
         scene_name = self._get_editor_scene_name()
-        scene_path = self._scene_manager.get_scene_path(scene_name) if scene_name else None
+        scene_path = self._scene_manager.get_scene_path(_authoring_key(scene_name)) if scene_name else None
         if scene_path is not None:
             saved = self.save_scene_to_file(scene_path)
             if on_complete is not None:
@@ -198,9 +205,10 @@ class SceneFileController:
     def close_scene(self) -> None:
         scene_name = self._get_editor_scene_name()
         if scene_name:
-            self._scene_manager.close_scene(scene_name)
-            self._scene_manager.create_scene(scene_name, default_scene_extensions())
-            self._scene_manager.set_mode(scene_name, SceneMode.STOP)
+            scene_key = _authoring_key(scene_name)
+            self._scene_manager.close_scene(scene_key)
+            self._scene_manager.create_scene(scene_key, default_scene_extensions())
+            self._scene_manager.set_mode(scene_key, SceneMode.STOP)
         self._sync_scene_tree()
         self._observe_scene_events(self._get_scene())
         self._update_window_title()
@@ -222,7 +230,7 @@ class SceneFileController:
                 )
             state_io = self._get_editor_state_io()
             editor_data = state_io.collect() if state_io else None
-            self._scene_manager.save_scene(scene_name, path, editor_data)
+            self._scene_manager.save_scene(_authoring_key(scene_name), path, editor_data)
             from termin.project.settings import ProjectSettingsManager
 
             ProjectSettingsManager.instance().set_last_scene(path)
@@ -331,7 +339,7 @@ class SceneFileController:
     ) -> None:
         old_scene_name = self._get_editor_scene_name()
         if (
-            self._scene_manager.has_scene(scene_name)
+            self._scene_manager.has_scene(_authoring_key(scene_name))
             and scene_name != old_scene_name
         ):
             staged_scene.destroy()
@@ -339,7 +347,7 @@ class SceneFileController:
                 f"Scene '{scene_name}' is already open and is not the active scene"
             )
 
-        if old_scene_name and self._scene_manager.has_scene(old_scene_name):
+        if old_scene_name and self._scene_manager.has_scene(_authoring_key(old_scene_name)):
             with trace.stage("commit-detach-editor"):
                 self._detach_editor_from_scene(
                     save_state=True,
@@ -348,15 +356,19 @@ class SceneFileController:
             with trace.stage("commit-detach-render"):
                 self._detach_scene_from_render(old_scene_name, save_state=True)
             with trace.stage("commit-close-old-scene"):
-                self._scene_manager.close_scene(old_scene_name)
+                self._scene_manager.close_scene(_authoring_key(old_scene_name))
 
         with trace.stage("commit-register-scene"):
-            self._scene_manager.register_scene(
-                scene_name,
+            scene_key = _authoring_key(scene_name)
+            if not self._scene_manager.register_scene(
+                scene_key,
                 staged_scene.scene_handle(),
-            )
-            self._scene_manager.set_scene_path(scene_name, path)
-            self._scene_manager.set_mode(scene_name, SceneMode.STOP)
+            ):
+                if staged_scene.is_alive():
+                    staged_scene.destroy()
+                raise RuntimeError(f"Failed to register loaded scene '{scene_name}'")
+            self._scene_manager.set_scene_path(scene_key, path)
+            self._scene_manager.set_mode(scene_key, SceneMode.STOP)
             self._set_editor_scene_name(scene_name)
 
         from termin.project.settings import ProjectSettingsManager

@@ -7,6 +7,11 @@ from termin.editor_core.scene_file_controller import SceneFileController
 from termin.glb_adapters import scene_animation_repair
 from termin.project.settings import ProjectSettingsManager
 from termin.project_modules import runtime as project_modules_runtime
+from termin.engine import SceneKey, SceneRole
+
+
+def _authoring_key(identity: str) -> SceneKey:
+    return SceneKey(identity, SceneRole.AUTHORING)
 
 
 class _Scene:
@@ -37,27 +42,30 @@ class _Scene:
 class _SceneManager:
     def __init__(self, calls: list[object], old_scene: _Scene) -> None:
         self.calls = calls
-        self.scenes = {"old": old_scene}
+        self.scenes = {_authoring_key("old"): old_scene}
 
-    def has_scene(self, name: str) -> bool:
-        return name in self.scenes
+    def has_scene(self, key: SceneKey) -> bool:
+        return key in self.scenes
 
-    def get_scene(self, name: str):
-        return self.scenes.get(name)
+    def get_scene(self, key: SceneKey):
+        return self.scenes.get(key)
 
-    def close_scene(self, name: str) -> None:
-        self.calls.append(("close", name))
-        del self.scenes[name]
+    def close_scene(self, key: SceneKey) -> None:
+        self.calls.append(("close", key))
+        del self.scenes[key]
 
-    def register_scene(self, name: str, scene: _Scene) -> None:
-        self.calls.append(("register", name, scene))
-        self.scenes[name] = scene
+    def register_scene(self, key: SceneKey, scene: _Scene) -> bool:
+        self.calls.append(("register", key, scene))
+        self.scenes[key] = scene
+        return True
 
-    def set_scene_path(self, name: str, path: str) -> None:
-        self.calls.append(("path", name, path))
+    def set_scene_path(self, key: SceneKey, path: str) -> bool:
+        self.calls.append(("path", key, path))
+        return True
 
-    def set_mode(self, name: str, mode) -> None:
-        self.calls.append(("mode", name, mode))
+    def set_mode(self, key: SceneKey, mode) -> bool:
+        self.calls.append(("mode", key, mode))
+        return True
 
 
 class _ProjectSettings:
@@ -121,7 +129,7 @@ def _build_controller(
             active_name.__setitem__(0, name),
         ),
         get_scene=lambda: (
-            None if active_name[0] is None else manager.get_scene(active_name[0])
+            None if active_name[0] is None else manager.get_scene(_authoring_key(active_name[0]))
         ),
         get_project_path=lambda: None,
         get_editor_state_io=lambda: None,
@@ -159,7 +167,7 @@ def _assert_old_scene_untouched(
     active_name: list[str | None],
 ) -> None:
     assert active_name == ["old"]
-    assert manager.has_scene("old")
+    assert manager.has_scene(_authoring_key("old"))
     assert not any(
         isinstance(call, tuple)
         and call[0] in {"close", "register", "detach-editor", "detach-render"}
@@ -282,8 +290,8 @@ def test_successful_load_commits_staged_scene_once(monkeypatch, tmp_path) -> Non
 
     assert replace_calls == 1
     assert active_name == ["loaded"]
-    assert not manager.has_scene("old")
-    assert manager.get_scene("loaded") is staged_scene
+    assert not manager.has_scene(_authoring_key("old"))
+    assert manager.get_scene(_authoring_key("loaded")) is staged_scene
     assert staged_scene.alive
     assert not any(
         isinstance(call, tuple) and call[0] == "destroy-stage" for call in calls
@@ -299,7 +307,7 @@ def test_successful_load_commits_staged_scene_once(monkeypatch, tmp_path) -> Non
         if isinstance(call, tuple) and call[0] == "deserialize"
     )
     assert deserialize_index < detach_editor_index
-    assert calls.count(("register", "loaded", staged_scene)) == 1
+    assert calls.count(("register", _authoring_key("loaded"), staged_scene)) == 1
     assert ("attach-editor", "loaded", {"restore_state": False}) in calls
     assert ("attach-render", "loaded") in calls
     assert ("last-scene", path) in calls

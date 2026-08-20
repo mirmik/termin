@@ -36,54 +36,67 @@ namespace termin {
     };
 
     void bind_scene_manager(nb::module_& m) {
-        // Bind SceneMode enum
         nb::enum_<tc_scene_mode>(m, "SceneMode")
             .value("INACTIVE", TC_SCENE_MODE_INACTIVE, "Loaded but not updated")
             .value("STOP", TC_SCENE_MODE_STOP, "Editor update (gizmos, selection)")
             .value("PLAY", TC_SCENE_MODE_PLAY, "Full simulation")
             .export_values();
 
-        // Bind SceneManager class
+        nb::enum_<SceneRole>(m, "SceneRole")
+            .value("AUTHORING", SceneRole::Authoring)
+            .value("RUNTIME", SceneRole::Runtime);
+
+        nb::class_<SceneKey>(m, "SceneKey")
+            .def(nb::init<std::string, SceneRole>(), nb::arg("identity"), nb::arg("role"))
+            .def_ro("identity", &SceneKey::identity)
+            .def_ro("role", &SceneKey::role)
+            .def("__eq__", [](const SceneKey& self, const SceneKey& other) { return self == other; })
+            .def("__hash__", [](const SceneKey& self) { return SceneKeyHash{}(self); })
+            .def("__repr__", [](const SceneKey& self) {
+                return "SceneKey(identity='" + self.identity + "', role=SceneRole." +
+                       (self.role == SceneRole::Authoring ? "AUTHORING" : "RUNTIME") + ")";
+            });
+
+        nb::class_<ManagedSceneInfo>(m, "ManagedSceneInfo")
+            .def_ro("key", &ManagedSceneInfo::key)
+            .def_ro("path", &ManagedSceneInfo::path)
+            .def_prop_ro("scene", [](const ManagedSceneInfo& self) { return scene_from_handle(self.handle); });
+
         nb::class_<SceneManager, PySceneManager>(m, "SceneManager")
             .def(nb::init<>())
-
-            // --- Scene lifecycle ---
-
             .def(
                 "create_scene",
-                [](SceneManager& self, const std::string& name, nb::object extensions_obj) -> nb::object {
+                [](SceneManager& self, const SceneKey& key, nb::object extensions_obj) -> nb::object {
                     std::vector<tc_scene_ext_type_id> extensions;
                     if (!extensions_obj.is_none()) {
                         extensions = nb::cast<std::vector<tc_scene_ext_type_id>>(extensions_obj);
                     }
-                    tc_scene_handle h = self.create_scene(name, extensions);
+                    tc_scene_handle h = self.create_scene(key, extensions);
                     if (!tc_scene_handle_valid(h)) {
                         return nb::none();
                     }
                     return scene_from_handle(h);
                 },
-                nb::arg("name"),
+                nb::arg("key"),
                 nb::arg("extensions") = nb::none(),
                 "Create a new scene and register it. Returns TcScene.")
-
-            .def("close_scene", &SceneManager::close_scene, nb::arg("name"), "Close and destroy a scene.")
-
+            .def("close_scene", [](SceneManager& self, const SceneKey& key) { return self.close_scene(key); },
+                 nb::arg("key"), "Close and destroy a scene by key.")
+            .def("close_scene", [](SceneManager& self, const TcSceneRef& scene) {
+                    return self.close_scene(scene.handle());
+                 }, nb::arg("scene"), "Close and destroy an exact scene instance.")
             .def("close_all_scenes", &SceneManager::close_all_scenes, "Close all scenes.")
-
+            .def("close_scenes", &SceneManager::close_scenes, nb::arg("role"), "Close all scenes with a role.")
             .def(
                 "copy_scene",
-                [](SceneManager& self, const std::string& src_name, const std::string& dst_name) -> nb::object {
-                    tc_scene_handle src_h = self.get_scene(src_name);
+                [](SceneManager& self, const SceneKey& source, const SceneKey& destination) -> nb::object {
+                    tc_scene_handle src_h = self.get_scene(source);
                     if (!tc_scene_handle_valid(src_h)) {
                         return nb::none();
                     }
-
                     nb::object src_scene = scene_from_handle(src_h);
-
-                    // Serialize source
                     nb::object data = src_scene.attr("serialize")();
-
-                    tc_scene_handle dst_h = self.create_scene(dst_name, {});
+                    tc_scene_handle dst_h = self.create_scene(destination, {});
                     if (!tc_scene_handle_valid(dst_h)) {
                         return nb::none();
                     }
@@ -92,29 +105,21 @@ namespace termin {
 
                     return dst_scene;
                 },
-                nb::arg("source_name"),
-                nb::arg("dest_name"),
+                nb::arg("source_key"),
+                nb::arg("destination_key"),
                 "Copy scene. Returns new TcScene.")
-
             .def(
                 "load_scene",
-                [](SceneManager& self, const std::string& name, const std::string& path) -> nb::object {
-                    // Check if scene already exists
-                    if (self.has_scene(name)) {
+                [](SceneManager& self, const SceneKey& key, const std::string& path) -> nb::object {
+                    if (self.has_scene(key)) {
                         return nb::none();
                     }
-
-                    // Read file
                     std::string json_str = SceneManager::read_json_file(path);
                     if (json_str.empty()) {
                         return nb::none();
                     }
-
-                    // Parse JSON
                     nb::module_ json_module = nb::module_::import_("json");
                     nb::object data = json_module.attr("loads")(json_str);
-
-                    // Extract scene data (support both formats)
                     nb::object scene_data = data.attr("get")("scene");
                     if (scene_data.is_none()) {
                         nb::object scenes = data.attr("get")("scenes");
@@ -122,96 +127,70 @@ namespace termin {
                             scene_data = scenes[nb::int_(0)];
                         }
                     }
-
-                    tc_scene_handle handle = self.create_scene(name, {});
+                    tc_scene_handle handle = self.create_scene(key, {});
                     if (!tc_scene_handle_valid(handle)) {
                         return nb::none();
                     }
                     nb::object scene = scene_from_handle(handle);
-
-                    // Load data if present
                     if (!scene_data.is_none()) {
                         scene.attr("load_from_data")(scene_data, nb::none(), true);
                     }
-
-                    self.set_scene_path(name, path);
-
-                    // Notify editor start
+                    self.set_scene_path(key, path);
                     scene.attr("notify_editor_start")();
-
                     return scene;
                 },
-                nb::arg("name"),
+                nb::arg("key"),
                 nb::arg("path"),
                 "Load scene from file. Returns TcScene or None.")
-
             .def(
                 "save_scene",
-                [](SceneManager& self, const std::string& name, const std::string& path, nb::object editor_data)
+                [](SceneManager& self, const SceneKey& key, const std::string& path, nb::object editor_data)
                     -> bool {
-                    tc_scene_handle h = self.get_scene(name);
+                    tc_scene_handle h = self.get_scene(key);
                     if (!tc_scene_handle_valid(h)) {
                         return false;
                     }
-
                     nb::object scene = scene_from_handle(h);
-
-                    // Serialize scene
                     nb::object scene_data = scene.attr("serialize")();
-
-                    // Build full data dict
                     nb::dict data;
                     data["version"] = "1.0";
                     data["scene"] = scene_data;
                     if (!editor_data.is_none()) {
                         data["editor"] = editor_data;
                     }
-
-                    // Convert to JSON
                     nb::module_ json_module = nb::module_::import_("json");
                     nb::object json_str =
                         json_module.attr("dumps")(data, nb::arg("indent") = 2, nb::arg("ensure_ascii") = false);
 
-                    // Write file
                     SceneManager::write_json_file(path, nb::cast<std::string>(json_str));
-                    self.set_scene_path(name, path);
-
+                    self.set_scene_path(key, path);
                     return true;
                 },
-                nb::arg("name"),
+                nb::arg("key"),
                 nb::arg("path"),
                 nb::arg("editor_data") = nb::none(),
                 "Save scene to file. Returns true on success.")
-
-            // --- Scene registration (for external scenes) ---
-
             .def(
                 "register_scene",
-                [](SceneManager& self, const std::string& name, tc_scene_handle h) { self.register_scene(name, h); },
-                nb::arg("name"),
+                [](SceneManager& self, const SceneKey& key, tc_scene_handle h) { return self.register_scene(key, h); },
+                nb::arg("key"),
                 nb::arg("handle"))
-
             .def("unregister_scene",
                  &SceneManager::unregister_scene,
-                 nb::arg("name"),
-                 "Unregister a scene by name (does not destroy it).")
-
-            // --- Scene access ---
-
+                 nb::arg("key"),
+                 "Unregister a scene by key (does not destroy it).")
             .def(
                 "get_scene",
-                [](const SceneManager& self, const std::string& name) -> nb::object {
-                    tc_scene_handle h = self.get_scene(name);
+                [](const SceneManager& self, const SceneKey& key) -> nb::object {
+                    tc_scene_handle h = self.get_scene(key);
                     if (!tc_scene_handle_valid(h)) {
                         return nb::none();
                     }
                     return scene_from_handle(h);
                 },
-                nb::arg("name"),
-                "Get scene by name. Returns TcScene or None.")
-
-            .def("has_scene", &SceneManager::has_scene, nb::arg("name"), "Check if scene exists.")
-
+                nb::arg("key"),
+                "Get scene by key. Returns TcScene or None.")
+            .def("has_scene", &SceneManager::has_scene, nb::arg("key"), "Check if scene exists.")
             .def(
                 "is_registered",
                 [](const SceneManager& self, const TcSceneRef& scene) {
@@ -219,57 +198,44 @@ namespace termin {
                 },
                 nb::arg("scene"),
                 "Check whether this exact live scene instance is registered.")
-
-            .def("scene_names", &SceneManager::scene_names, "Get list of all scene names.")
-
-            // --- Path management ---
-
-            .def("get_scene_path",
-                 &SceneManager::get_scene_path,
-                 nb::arg("name"),
-                 "Get file path for scene (empty if not set).")
-
-            .def("set_scene_path",
-                 &SceneManager::set_scene_path,
-                 nb::arg("name"),
-                 nb::arg("path"),
-                 "Set file path for scene.")
-
-            // --- Mode management ---
-
-            .def(
-                "get_mode",
-                [](const SceneManager& self, const std::string& name) { return self.get_mode(name); },
-                nb::arg("name"),
-                "Get scene mode.")
-
-            .def(
-                "set_mode",
-                [](SceneManager& self, const std::string& name, tc_scene_mode mode) { self.set_mode(name, mode); },
-                nb::arg("name"),
-                nb::arg("mode"),
-                "Set scene mode.")
-
+            .def("key_of", [](const SceneManager& self, const TcSceneRef& scene) -> nb::object {
+                    const auto key = self.key_of(scene.handle());
+                    return key ? nb::cast(*key) : nb::none();
+                 }, nb::arg("scene"), "Return the key of an exact registered scene instance.")
+            .def("scene_entries", &SceneManager::scene_entries, "Return registry entry snapshots.")
+            .def("get_scene_path", [](const SceneManager& self, const SceneKey& key) {
+                    return self.get_scene_path(key);
+                 }, nb::arg("key"))
+            .def("get_scene_path", [](const SceneManager& self, const TcSceneRef& scene) {
+                    return self.get_scene_path(scene.handle());
+                 }, nb::arg("scene"))
+            .def("set_scene_path", [](SceneManager& self, const SceneKey& key, const std::string& path) {
+                    return self.set_scene_path(key, path);
+                 }, nb::arg("key"), nb::arg("path"))
+            .def("set_scene_path", [](SceneManager& self, const TcSceneRef& scene, const std::string& path) {
+                    return self.set_scene_path(scene.handle(), path);
+                 }, nb::arg("scene"), nb::arg("path"))
+            .def("get_mode", [](const SceneManager& self, const SceneKey& key) { return self.get_mode(key); },
+                 nb::arg("key"), "Get scene mode.")
+            .def("get_mode", [](const SceneManager& self, const TcSceneRef& scene) {
+                    return self.get_mode(scene.handle());
+                 }, nb::arg("scene"), "Get exact scene instance mode.")
+            .def("set_mode", [](SceneManager& self, const SceneKey& key, tc_scene_mode mode) {
+                    return self.set_mode(key, mode);
+                 }, nb::arg("key"), nb::arg("mode"), "Set scene mode.")
+            .def("set_mode", [](SceneManager& self, const TcSceneRef& scene, tc_scene_mode mode) {
+                    return self.set_mode(scene.handle(), mode);
+                 }, nb::arg("scene"), nb::arg("mode"), "Set exact scene instance mode.")
             .def("has_play_scenes", &SceneManager::has_play_scenes, "Check if any scene is in PLAY mode.")
-
-            // --- Update cycle ---
-
             .def("tick",
                  &SceneManager::tick,
                  nb::arg("dt"),
                  "Update all scenes based on their mode. Returns true if render "
                  "needed.")
-
-            // --- Render request ---
-
             .def("request_render", &SceneManager::request_render, "Request render on next tick.")
-
             .def("consume_render_request",
                  &SceneManager::consume_render_request,
                  "Consume and return render request flag.")
-
-            // --- File I/O ---
-
             .def_static("read_json_file",
                         &SceneManager::read_json_file,
                         nb::arg("path"),
@@ -280,17 +246,12 @@ namespace termin {
                         nb::arg("path"),
                         nb::arg("json"),
                         "Write JSON string to file (atomic write).")
-
-            // --- Callbacks ---
-
             .def(
                 "set_on_after_render",
                 [](SceneManager& self, nb::object callback) {
                     if (callback.is_none()) {
                         self.set_on_after_render(nullptr);
                     } else {
-                        // Store callback as shared_ptr to prevent preventing Python
-                        // shutdown
                         auto cb = std::make_shared<nb::object>(callback);
                         self.set_on_after_render([cb]() {
                             nb::gil_scoped_acquire guard;
@@ -308,9 +269,9 @@ namespace termin {
                         self.set_on_before_scene_close(nullptr);
                     } else {
                         auto cb = std::make_shared<nb::object>(callback);
-                        self.set_on_before_scene_close([cb](const std::string& name) {
+                        self.set_on_before_scene_close([cb](const SceneKey& key) {
                             nb::gil_scoped_acquire guard;
-                            (*cb)(name);
+                            (*cb)(key);
                         });
                     }
                 },
@@ -321,7 +282,7 @@ namespace termin {
 
             .def("invoke_before_scene_close",
                  &SceneManager::invoke_before_scene_close,
-                 nb::arg("name"),
+                 nb::arg("key"),
                  "Invoke before_scene_close callback (if set).");
 
         // Scene pool query functions (used by CoreRegistryViewer)

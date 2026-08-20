@@ -3,14 +3,18 @@ from types import SimpleNamespace
 import pytest
 
 from termin.editor_core.render_scene_session import RenderSceneSession
+from termin.engine import SceneKey, SceneRole
+
+
+SCENE_KEY = SceneKey("Scene", SceneRole.AUTHORING)
 
 
 class _SceneManager:
     def __init__(self, scene):
         self.scene = scene
 
-    def get_scene(self, name):
-        return self.scene if name == "Scene" else None
+    def get_scene(self, key):
+        return self.scene if key == SCENE_KEY else None
 
 
 class _RenderingModel:
@@ -81,11 +85,11 @@ def _session(*, fail=False):
 
 def test_render_scene_session_attaches_configures_and_detaches():
     session, scene, viewport, display, model, workspace, events = _session()
-    assert session.attach("Scene")
+    assert session.attach(SCENE_KEY)
     assert workspace.configured == [(display, viewport)]
     assert events == ["sync", "render"]
 
-    assert session.detach("Scene")
+    assert session.detach(SCENE_KEY)
     assert model.synced == [("viewports", scene), ("targets", scene)]
     assert model.detached == [scene]
     assert workspace.removed == [display]
@@ -95,7 +99,7 @@ def test_render_scene_session_attaches_configures_and_detaches():
 def test_render_scene_session_rolls_back_failed_input_setup():
     session, scene, _viewport, display, model, workspace, _events = _session(fail=True)
     with pytest.raises(RuntimeError, match="input failed"):
-        session.attach("Scene")
+        session.attach(SCENE_KEY)
     assert model.detached == [scene]
     assert workspace.removed == [display]
 
@@ -103,7 +107,7 @@ def test_render_scene_session_rolls_back_failed_input_setup():
 def test_render_scene_session_rejects_unknown_scene():
     session, *_rest = _session()
     with pytest.raises(ValueError, match="does not exist"):
-        session.attach("Missing")
+        session.attach(SceneKey("Missing", SceneRole.AUTHORING))
 
 
 def test_render_scene_session_reconciles_engine_attached_scene():

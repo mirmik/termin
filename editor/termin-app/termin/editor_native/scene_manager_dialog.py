@@ -58,7 +58,7 @@ class NativeSceneManagerDialog:
                 self.scenes.add_item(
                     f"{scene.display_name} | {scene.mode} | {scene.entity_count} | {scene.handle}"
                 )
-                if scene.name == snapshot.selected_name:
+                if scene.key == snapshot.selected_key:
                     selected_index = index
             self.scenes.selected_index = selected_index
             selected = self.selected_scene()
@@ -78,18 +78,18 @@ class NativeSceneManagerDialog:
         self.request_render()
 
     def selected_scene(self):
-        if self.snapshot is None or self.snapshot.selected_name is None:
+        if self.snapshot is None or self.snapshot.selected_key is None:
             return None
         return next(
-            (item for item in self.snapshot.scenes if item.name == self.snapshot.selected_name),
+            (item for item in self.snapshot.scenes if item.key == self.snapshot.selected_key),
             None,
         )
 
     def select(self, index: int) -> None:
         if self._updating or self.snapshot is None:
             return
-        name = self.snapshot.scenes[index].name if 0 <= index < len(self.snapshot.scenes) else None
-        self.perform(lambda: self.controller.select(name))
+        key = self.snapshot.scenes[index].key if 0 <= index < len(self.snapshot.scenes) else None
+        self.perform(lambda: self.controller.select(key))
 
     def perform(self, action) -> None:
         try:

@@ -47,6 +47,10 @@ FrameGraphDebuggerSuspendReason = render.FrameGraphDebuggerSuspendReason
 RenderAttachmentContext = render.RenderAttachmentContext
 RenderTopology = render.RenderTopology
 SceneManager = scene.SceneManager
+SceneKey = scene.SceneKey
+SceneRole = scene.SceneRole
+SceneMode = scene.SceneMode
+ManagedSceneInfo = scene.ManagedSceneInfo
 ViewportRenderState = render.ViewportRenderState
 
 __all__ = [
@@ -62,7 +66,11 @@ __all__ = [
     "RenderAttachmentContext",
     "RenderTopology",
     "SCENE_EXT_TYPE_COLLISION_WORLD",
+    "ManagedSceneInfo",
+    "SceneKey",
     "SceneManager",
+    "SceneMode",
+    "SceneRole",
     "TermModulesIntegration",
     "ViewportRenderState",
     "WorldContext",

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from termin.engine import scene as engine_scene
+from termin.engine import SceneKey
 
 
 _logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ def _same_scene(left, right) -> bool:
 
 @dataclass(frozen=True)
 class ManagedSceneSnapshot:
-    name: str
+    key: SceneKey
     display_name: str
     mode: str
     entity_count: int
@@ -38,9 +39,18 @@ class ManagedSceneSnapshot:
     root_entities: tuple[str, ...]
 
     @property
+    def name(self) -> str:
+        return self.key.identity
+
+    @property
+    def role(self) -> str:
+        return self.key.role.name
+
+    @property
     def details(self) -> str:
         lines = [
             f"Name: {self.name}",
+            f"Role: {self.role}",
             f"Handle: {self.handle} (index:generation)",
             f"Mode: {self.mode}",
             f"Path: {self.path or '(unsaved)'}",
@@ -63,7 +73,7 @@ class ManagedSceneSnapshot:
 @dataclass(frozen=True)
 class SceneManagerSnapshot:
     scenes: tuple[ManagedSceneSnapshot, ...]
-    selected_name: str | None
+    selected_key: SceneKey | None
     total_entities: int
     playing_count: int
 
@@ -74,9 +84,9 @@ class SceneManagerController:
         scene_manager,
         *,
         get_editor_attachment: Callable[[], object | None] | None = None,
-        on_render_attach: Callable[[str], object] | None = None,
-        on_render_detach: Callable[[str], object] | None = None,
-        on_editor_attach: Callable[[str], object] | None = None,
+        on_render_attach: Callable[[SceneKey], object] | None = None,
+        on_render_detach: Callable[[SceneKey], object] | None = None,
+        on_editor_attach: Callable[[SceneKey], object] | None = None,
         on_editor_detach: Callable[[], object] | None = None,
         on_changed: Callable[[], None] | None = None,
     ) -> None:
@@ -87,7 +97,7 @@ class SceneManagerController:
         self._on_editor_attach = on_editor_attach
         self._on_editor_detach = on_editor_detach
         self._on_changed = on_changed
-        self._selected_name: str | None = None
+        self._selected_key: SceneKey | None = None
 
     @property
     def can_render_attach(self) -> bool:
@@ -109,11 +119,17 @@ class SceneManagerController:
         attachment = self._get_editor_attachment() if self._get_editor_attachment else None
         editing_scene = None if attachment is None else attachment.scene
         snapshots = []
-        for name in sorted(self._scene_manager.scene_names()):
-            scene = self._scene_manager.get_scene(name)
+        entries = sorted(
+            self._scene_manager.scene_entries(),
+            key=lambda entry: (entry.key.identity, entry.key.role.name),
+        )
+        for entry in entries:
+            key = entry.key
+            name = key.identity
+            scene = self._scene_manager.get_scene(key)
             if scene is None:
                 continue
-            path = self._scene_manager.get_scene_path(name) or ""
+            path = entry.path or ""
             handle = scene.scene_handle()
             entities = list(scene.entities)
             roots = tuple(
@@ -128,10 +144,14 @@ class SceneManagerController:
             except Exception:
                 _logger.exception("Failed to inspect extensions for scene '%s'", name)
                 extensions = ()
-            mode = self._scene_manager.get_mode(name)
+            mode = self._scene_manager.get_mode(key)
             snapshots.append(ManagedSceneSnapshot(
-                name=name,
-                display_name=(f"{Path(path).stem} [{name}]" if path else f"{name} (unsaved)"),
+                key=key,
+                display_name=(
+                    f"{Path(path).stem} [{name}] ({key.role.name})"
+                    if path
+                    else f"{name} ({key.role.name}, unsaved)"
+                ),
                 mode=mode.name if mode is not None else "?",
                 entity_count=len(entities),
                 handle=f"{handle.index}:{handle.generation}",
@@ -140,20 +160,22 @@ class SceneManagerController:
                 extensions=extensions,
                 root_entities=roots,
             ))
-        names = {item.name for item in snapshots}
-        if self._selected_name not in names:
-            self._selected_name = snapshots[0].name if snapshots else None
+        keys = {item.key for item in snapshots}
+        if self._selected_key not in keys:
+            self._selected_key = snapshots[0].key if snapshots else None
         return SceneManagerSnapshot(
             tuple(snapshots),
-            self._selected_name,
+            self._selected_key,
             sum(item.entity_count for item in snapshots),
             sum(item.mode == SceneMode.PLAY.name for item in snapshots),
         )
 
-    def select(self, name: str | None) -> SceneManagerSnapshot:
-        if name is not None and not self._scene_manager.has_scene(name):
-            raise ValueError(f"scene '{name}' does not exist")
-        self._selected_name = name
+    def select(self, key: SceneKey | None) -> SceneManagerSnapshot:
+        if key is not None and not self._scene_manager.has_scene(key):
+            raise ValueError(
+                f"scene '{key.identity}' ({key.role.name}) does not exist"
+            )
+        self._selected_key = key
         return self.refresh()
 
     def duplicate_selected(self, new_name: str) -> SceneManagerSnapshot:
@@ -161,28 +183,29 @@ class SceneManagerController:
         target = new_name.strip()
         if not target:
             raise ValueError("scene copy name must not be empty")
-        if self._scene_manager.has_scene(target):
+        target_key = SceneKey(target, source.role)
+        if self._scene_manager.has_scene(target_key):
             raise ValueError(f"scene '{target}' already exists")
-        if self._scene_manager.copy_scene(source, target) is None:
-            raise RuntimeError(f"failed to copy scene '{source}'")
-        self._selected_name = target
+        if self._scene_manager.copy_scene(source, target_key) is None:
+            raise RuntimeError(f"failed to copy scene '{source.identity}'")
+        self._selected_key = target_key
         return self._changed()
 
     def unload_selected(self) -> SceneManagerSnapshot:
-        name = self._require_selected()
-        scene = self._scene_manager.get_scene(name)
+        key = self._require_selected()
+        scene = self._scene_manager.get_scene(key)
         attachment = self._get_editor_attachment() if self._get_editor_attachment else None
         if attachment is not None and _same_scene(attachment.scene, scene):
             if self._on_editor_detach is None:
                 raise RuntimeError("cannot unload the editor-attached scene")
             self._require_success(self._on_editor_detach(), "failed to detach editor from scene")
-        self._scene_manager.close_scene(name)
-        self._selected_name = None
+        self._scene_manager.close_scene(key)
+        self._selected_key = None
         return self._changed()
 
     def set_selected_mode(self, mode: SceneMode) -> SceneManagerSnapshot:
-        name = self._require_selected()
-        self._scene_manager.set_mode(name, mode)
+        key = self._require_selected()
+        self._scene_manager.set_mode(key, mode)
         return self._changed()
 
     def render_attach_selected(self) -> SceneManagerSnapshot:
@@ -219,12 +242,15 @@ class SceneManagerController:
         if result is False:
             raise RuntimeError(message)
 
-    def _require_selected(self) -> str:
-        if self._selected_name is None:
+    def _require_selected(self) -> SceneKey:
+        if self._selected_key is None:
             raise RuntimeError("no scene is selected")
-        if not self._scene_manager.has_scene(self._selected_name):
-            raise RuntimeError(f"selected scene '{self._selected_name}' no longer exists")
-        return self._selected_name
+        if not self._scene_manager.has_scene(self._selected_key):
+            raise RuntimeError(
+                f"selected scene '{self._selected_key.identity}' "
+                f"({self._selected_key.role.name}) no longer exists"
+            )
+        return self._selected_key
 
     def _changed(self) -> SceneManagerSnapshot:
         value = self.refresh()

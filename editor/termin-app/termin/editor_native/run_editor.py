@@ -198,7 +198,10 @@ def _compose_native_editor(
     from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
     from termin.editor_core.mcp_server import start_editor_mcp_server
     from termin.editor_core.python_executor import EditorPythonExecutor
-    from termin.engine import create_scene, scene as engine_scene
+    from termin.engine import SceneKey, SceneRole, create_scene, scene as engine_scene
+
+    def authoring_key(identity: str) -> SceneKey:
+        return SceneKey(identity, SceneRole.AUTHORING)
 
     bootstrap_editor()
     configure_editor_resource_manager_factory()
@@ -390,15 +393,17 @@ def _compose_native_editor(
 
     editor_scene_name = "untitled"
     if initial_scene is not None:
-        engine.scene_manager.register_scene(
-            editor_scene_name,
+        initial_scene_key = authoring_key(editor_scene_name)
+        if not engine.scene_manager.register_scene(
+            initial_scene_key,
             initial_scene.scene_handle(),
-        )
+        ):
+            raise RuntimeError("Failed to register the initial editor scene")
         workspace_stage.add_cleanup(
             "initial editor scene registration",
-            lambda: engine.scene_manager.unregister_scene(editor_scene_name),
+            lambda: engine.scene_manager.unregister_scene(initial_scene_key),
         )
-        engine.scene_manager.set_mode(editor_scene_name, engine_scene.SceneMode.STOP)
+        engine.scene_manager.set_mode(initial_scene_key, engine_scene.SceneMode.STOP)
     undo_stack = UndoStack()
     dialog_service = NativeDialogService(
         host.document,
@@ -937,8 +942,8 @@ def _compose_native_editor(
     def inspector_scenes() -> tuple[object, ...]:
         return tuple(
             scene
-            for name in engine.scene_manager.scene_names()
-            if (scene := engine.scene_manager.get_scene(name)) is not None
+            for entry in engine.scene_manager.scene_entries()
+            if (scene := engine.scene_manager.get_scene(entry.key)) is not None
         )
 
     def inspector_displays(viewport) -> tuple[object, ...]:
@@ -1127,12 +1132,12 @@ def _compose_native_editor(
             on_switched=scene_switched,
         )
 
-    def attach_editor_scene(name: str, *, restore_state: bool = True, **_options):
+    def attach_editor_scene(scene_key: SceneKey, *, restore_state: bool = True, **_options):
         if editor_scene_session is None:
             raise RuntimeError("native editor scene attachment is unavailable")
-        scene = engine.scene_manager.get_scene(name)
+        scene = engine.scene_manager.get_scene(scene_key)
         if scene is None:
-            raise ValueError(f"scene '{name}' does not exist")
+            raise ValueError(f"scene '{scene_key.identity}' does not exist")
         return editor_scene_session.attach(scene, restore_state=restore_state)
 
     def detach_editor_scene(*, save_state: bool = True, **_options):
@@ -1286,14 +1291,9 @@ def _compose_native_editor(
         scene = current_scene()
         if scene is None:
             return None
-        handle = scene.scene_handle()
-        for name in engine.scene_manager.scene_names():
-            candidate = engine.scene_manager.get_scene(name)
-            if candidate is None:
-                continue
-            candidate_handle = candidate.scene_handle()
-            if candidate_handle.index == handle.index and candidate_handle.generation == handle.generation:
-                return name
+        key = engine.scene_manager.key_of(scene)
+        if key is not None:
+            return key.identity
         _logger.error("Native editor active scene is not registered in SceneManager")
         return None
 
@@ -1312,22 +1312,23 @@ def _compose_native_editor(
         if game_mode_controller is not None:
             game_mode_controller.set_available(not editing)
         if editing:
-            prefab_scene = engine.scene_manager.get_scene("prefab")
+            prefab_key = authoring_key("prefab")
+            prefab_scene = engine.scene_manager.get_scene(prefab_key)
             if prefab_scene is None or editor_scene_session is None:
                 raise RuntimeError("prefab edit scene attachment is unavailable")
             if pre_prefab_scene_name and render_scene_session is not None:
-                render_scene_session.detach(pre_prefab_scene_name, save_state=True)
+                render_scene_session.detach(authoring_key(pre_prefab_scene_name), save_state=True)
             editor_scene_session.attach(prefab_scene, restore_state=False)
             if render_scene_session is not None:
-                render_scene_session.attach("prefab")
+                render_scene_session.attach(prefab_key)
             session_presentation.update(scene_label=f"Prefab: {prefab_name or ''}")
         else:
             previous = pre_prefab_scene_name
             pre_prefab_scene_name = None
-            if previous and engine.scene_manager.has_scene(previous):
-                attach_editor_scene(previous, restore_state=True)
+            if previous and engine.scene_manager.has_scene(authoring_key(previous)):
+                attach_editor_scene(authoring_key(previous), restore_state=True)
                 if render_scene_session is not None:
-                    render_scene_session.attach(previous)
+                    render_scene_session.attach(authoring_key(previous))
             update_window_title()
         request_editor_render()
 
@@ -1362,8 +1363,9 @@ def _compose_native_editor(
             return
         if editor_scene_session is not None and active_scene_name() == "prefab":
             editor_scene_session.detach(save_state=False)
-        if render_scene_session is not None and engine.scene_manager.has_scene("prefab"):
-            render_scene_session.detach("prefab", save_state=False)
+        prefab_key = authoring_key("prefab")
+        if render_scene_session is not None and engine.scene_manager.has_scene(prefab_key):
+            render_scene_session.detach(prefab_key, save_state=False)
         prefab_edit_controller.exit()
 
     def on_prefab_toolbar(_index: int, command_id: int, _command) -> None:
@@ -1396,16 +1398,16 @@ def _compose_native_editor(
         ),
         get_editor_state_io=lambda: editor_state_io,
         prepare_scene_for_save=lambda name: (
-            True if render_scene_session is None else render_scene_session.sync_scene_render_state(name)
+            True if render_scene_session is None else render_scene_session.sync_scene_render_state(authoring_key(name))
         ),
         has_editor_attachment=lambda: editor_scene_session is not None,
         detach_editor_from_scene=detach_editor_scene,
         detach_scene_from_render=lambda name, **_options: (
-            False if render_scene_session is None else render_scene_session.detach(name)
+            False if render_scene_session is None else render_scene_session.detach(authoring_key(name))
         ),
         attach_editor_to_scene=attach_editor_scene,
         attach_scene_to_render=lambda name: (
-            False if render_scene_session is None else render_scene_session.attach(name)
+            False if render_scene_session is None else render_scene_session.attach(authoring_key(name))
         ),
         get_scene_tree_controller=lambda: scene_hierarchy_controller,
         get_inspector_controller=lambda: entity_inspector_controller,

@@ -226,6 +226,18 @@ if(TERMIN_BUILD_TESTS)
     )
     add_test(NAME termin_engine_world_controller_test COMMAND termin_engine_world_controller_test)
 
+    add_executable(termin_engine_scene_manager_test
+        tests/test_scene_manager.cpp
+    )
+    target_include_directories(termin_engine_scene_manager_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_engine_scene_manager_test PRIVATE termin_engine)
+    set_target_properties(termin_engine_scene_manager_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(NAME termin_engine_scene_manager_test COMMAND termin_engine_scene_manager_test)
+
     add_executable(termin_engine_runtime_session_test
         tests/test_engine_runtime_session.cpp
     )

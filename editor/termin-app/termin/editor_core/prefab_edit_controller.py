@@ -23,6 +23,12 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
+def _authoring_key(identity: str):
+    from termin.engine import SceneKey, SceneRole
+
+    return SceneKey(identity, SceneRole.AUTHORING)
+
+
 class PrefabEditController:
     """
     Manages prefab editing in isolation mode.
@@ -116,8 +122,8 @@ class PrefabEditController:
         # Set editor scene to inactive
         from termin.engine import scene as engine_scene
         SceneMode = engine_scene.SceneMode
-        if self._previous_scene_name and self._scene_manager.has_scene(self._previous_scene_name):
-            self._scene_manager.set_mode(self._previous_scene_name, SceneMode.INACTIVE)
+        if self._previous_scene_name and self._scene_manager.has_scene(_authoring_key(self._previous_scene_name)):
+            self._scene_manager.set_mode(_authoring_key(self._previous_scene_name), SceneMode.INACTIVE)
 
         self._editing = True
         self._log(f"Editing prefab: {self.prefab_name}")
@@ -173,7 +179,7 @@ class PrefabEditController:
         """
         from termin.prefab.persistence import PrefabPersistence
 
-        scene = self._scene_manager.get_scene("prefab")
+        scene = self._scene_manager.get_scene(_authoring_key("prefab"))
         if scene is None:
             return None
 
@@ -223,14 +229,14 @@ class PrefabEditController:
         prefab_name = self.prefab_name
 
         # Close prefab scene
-        if self._scene_manager.has_scene("prefab"):
-            self._scene_manager.close_scene("prefab")
+        if self._scene_manager.has_scene(_authoring_key("prefab")):
+            self._scene_manager.close_scene(_authoring_key("prefab"))
 
         # Reactivate editor scene
         from termin.engine import scene as engine_scene
         SceneMode = engine_scene.SceneMode
-        if self._previous_scene_name and self._scene_manager.has_scene(self._previous_scene_name):
-            self._scene_manager.set_mode(self._previous_scene_name, SceneMode.STOP)
+        if self._previous_scene_name and self._scene_manager.has_scene(_authoring_key(self._previous_scene_name)):
+            self._scene_manager.set_mode(_authoring_key(self._previous_scene_name), SceneMode.STOP)
 
         self._editing = False
         self._prefab_path = None
@@ -252,25 +258,26 @@ class PrefabEditController:
         from termin.engine import default_scene_extensions
         SceneMode = engine_scene.SceneMode
 
-        if self._scene_manager.has_scene("prefab"):
-            self._scene_manager.close_scene("prefab")
+        prefab_key = _authoring_key("prefab")
+        if self._scene_manager.has_scene(prefab_key):
+            self._scene_manager.close_scene(prefab_key)
 
         prefab_scene = self._scene_manager.create_scene(
-            "prefab",
+            prefab_key,
             default_scene_extensions(),
         )
         try:
             persistence = PrefabPersistence(self._resource_manager)
             root_entity = persistence.load(prefab_path, prefab_scene)
         except Exception:
-            if self._scene_manager.has_scene("prefab"):
-                self._scene_manager.close_scene("prefab")
+            if self._scene_manager.has_scene(prefab_key):
+                self._scene_manager.close_scene(prefab_key)
             raise
 
         self._root_entity = root_entity
 
         # Set mode to EDITOR for prefab scene
-        self._scene_manager.set_mode("prefab", SceneMode.STOP)
+        self._scene_manager.set_mode(prefab_key, SceneMode.STOP)
 
     def _current_editor_scene_name(self) -> str | None:
         if self._get_editor_scene_name is not None:

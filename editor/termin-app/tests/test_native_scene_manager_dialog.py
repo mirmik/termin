@@ -6,14 +6,15 @@ from termin.editor_core.scene_manager_model import SceneManagerController, Scene
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.scene_manager_dialog import build_native_scene_manager_dialog
-from termin.engine import SceneManager
+from termin.engine import SceneKey, SceneManager, SceneRole
 from termin.gui_native import Rect
 
 
 def test_native_scene_manager_selects_mutates_reopens_and_releases():
     manager = SceneManager()
-    manager.create_scene("A", [])
-    manager.create_scene("B", [])
+    manager.create_scene(SceneKey("A", SceneRole.AUTHORING), [])
+    manager.create_scene(SceneKey("B", SceneRole.AUTHORING), [])
+    manager.create_scene(SceneKey("B", SceneRole.RUNTIME), [])
     document = tc_ui_document_create()
     renders = []
     viewport = lambda: Rect(0.0, 0.0, 1000.0, 700.0)
@@ -32,10 +33,11 @@ def test_native_scene_manager_selects_mutates_reopens_and_releases():
         root = dialog.dialog.widget.children[0]
         assert root.children[0].bounds.height == EDITOR_UI_METRICS.field_row
         assert root.children[-1].bounds.height == EDITOR_UI_METRICS.action_row
-        dialog.select(1)
-        assert dialog.snapshot.selected_name == "B"
+        dialog.select(2)
+        assert dialog.snapshot.selected_key == SceneKey("B", SceneRole.RUNTIME)
         dialog.perform(lambda: controller.set_selected_mode(SceneMode.PLAY))
-        assert manager.get_mode("B") == SceneMode.PLAY
+        assert manager.get_mode(SceneKey("B", SceneRole.RUNTIME)) == SceneMode.PLAY
+        assert manager.get_mode(SceneKey("B", SceneRole.AUTHORING)) != SceneMode.PLAY
         assert dialog.dialog.activate("close")
         assert dialog.show()
         dialog.close()

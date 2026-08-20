@@ -96,7 +96,7 @@ namespace {
         WebGraphicsBackend backend = WebGraphicsBackend::None;
         std::unique_ptr<termin::EngineCore> engine;
         termin::runtime::RuntimePackageLoadResult package;
-        std::vector<std::string> registered_scene_names;
+        std::vector<termin::SceneKey> registered_scene_keys;
         std::vector<tc_viewport_handle> viewports;
         std::vector<tc_viewport_input_manager*> viewport_input_managers;
         std::vector<tc_display_handle> owned_displays;
@@ -157,7 +157,7 @@ namespace {
         web_player->package.destroy();
         web_player->viewports.clear();
         web_player->presentation_display = TC_DISPLAY_HANDLE_INVALID;
-        web_player->registered_scene_names.clear();
+        web_player->registered_scene_keys.clear();
         for (tc_display_handle display : web_player->owned_displays) {
             if (tc_display_alive(display) && !tc_display_free(display)) {
                 tc_log_error("TerminWebHost: failed to release owned display");
@@ -603,12 +603,17 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
 
         termin::SceneManager& scene_manager = web_player->engine->scene_manager;
         for (const termin::runtime::RuntimePackageScene& packaged : web_player->package.scenes) {
-            scene_manager.register_scene(packaged.identity, packaged.scene.handle());
-            scene_manager.set_scene_path(packaged.identity, packaged.scene.source_path());
-            scene_manager.set_mode(packaged.identity, TC_SCENE_MODE_INACTIVE);
-            web_player->registered_scene_names.push_back(packaged.identity);
+            const termin::SceneKey key{packaged.identity, termin::SceneRole::Runtime};
+            if (!scene_manager.register_scene(key, packaged.scene.handle())) {
+                throw std::runtime_error("failed to register packaged scene '" + packaged.identity + "'");
+            }
+            scene_manager.set_scene_path(key, packaged.scene.source_path());
+            scene_manager.set_mode(key, TC_SCENE_MODE_INACTIVE);
+            web_player->registered_scene_keys.push_back(key);
         }
-        scene_manager.set_mode(web_player->package.entry_scene_identity, TC_SCENE_MODE_PLAY);
+        scene_manager.set_mode(
+            termin::SceneKey{web_player->package.entry_scene_identity, termin::SceneRole::Runtime},
+            TC_SCENE_MODE_PLAY);
 
         termin::RenderingManager& manager = web_player->engine->rendering_manager;
         manager.set_display_factory([](const std::string& name) { return create_web_player_display(name); });

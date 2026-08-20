@@ -6,6 +6,15 @@ from collections.abc import Callable
 
 from tcbase import log
 from termin.editor_core.signal import Signal
+from termin.engine import SceneKey, SceneRole
+
+
+def _authoring_key(identity: str) -> SceneKey:
+    return SceneKey(identity, SceneRole.AUTHORING)
+
+
+def _runtime_key(identity: str) -> SceneKey:
+    return SceneKey(identity, SceneRole.RUNTIME)
 
 
 class _GameModeSession:
@@ -82,7 +91,11 @@ class GameModeModel:
             return False
         from termin.engine import scene as engine_scene
 
-        return self._scene_manager.get_mode(primary.name) == engine_scene.SceneMode.STOP
+        primary_key = self._scene_manager.key_of(primary)
+        if primary_key is None:
+            log.error("[GameModeModel] Primary scene is not registered")
+            return False
+        return self._scene_manager.get_mode(primary_key) == engine_scene.SceneMode.STOP
 
     def toggle_game_mode(self) -> None:
         if self._transitioning:
@@ -107,13 +120,17 @@ class GameModeModel:
             return
         from termin.engine import scene as engine_scene
 
-        current_mode = self._scene_manager.get_mode(primary.name)
+        primary_key = self._scene_manager.key_of(primary)
+        if primary_key is None:
+            log.error("[GameModeModel] Cannot pause an unregistered primary scene")
+            return
+        current_mode = self._scene_manager.get_mode(primary_key)
         next_mode = (
             engine_scene.SceneMode.STOP
             if current_mode == engine_scene.SceneMode.PLAY
             else engine_scene.SceneMode.PLAY
         )
-        self._scene_manager.set_mode(primary.name, next_mode)
+        self._scene_manager.set_mode(primary_key, next_mode)
         self.state_changed.emit(self)
 
     def refresh_primary_scene(self) -> None:
@@ -135,8 +152,11 @@ class GameModeModel:
                 f"primary scene '{primary.name}'"
             )
         try:
+            primary_key = self._scene_manager.key_of(primary)
+            if primary_key is None:
+                raise RuntimeError("committed primary scene is not registered")
             self._attach_editor(
-                primary.name,
+                primary_key,
                 restore_state=False,
                 transfer_camera_state=True,
                 update_editor_scene_name=False,
@@ -171,7 +191,8 @@ class GameModeModel:
             log.error("[GameModeModel] Play blocked because code update failed")
             return
 
-        editor_scene = self._scene_manager.get_scene(editor_scene_name)
+        editor_scene_key = _authoring_key(editor_scene_name)
+        editor_scene = self._scene_manager.get_scene(editor_scene_key)
         if editor_scene is None:
             log.error(
                 f"[GameModeModel] Play blocked because editor scene "
@@ -196,16 +217,17 @@ class GameModeModel:
             saved_tree_expanded_uuids = self._scene_tree_controller.get_expanded_entity_uuids()
 
         self._save_editor_viewport_camera_to_scene(editor_scene)
-        editor_mode = self._scene_manager.get_mode(editor_scene_name)
+        editor_mode = self._scene_manager.get_mode(editor_scene_key)
         runtime_scene_name = f"{editor_scene_name}(game)"
+        runtime_scene_key = _runtime_key(runtime_scene_name)
         runtime_scene = None
         runtime_bound = False
         editor_render_detached = False
         try:
-            self._render_scene_session.sync_scene_render_state(editor_scene_name)
+            self._render_scene_session.sync_scene_render_state(editor_scene_key)
             runtime_scene = self._scene_manager.copy_scene(
-                editor_scene_name,
-                runtime_scene_name,
+                editor_scene_key,
+                runtime_scene_key,
             )
             if runtime_scene is None:
                 raise RuntimeError(f"failed to copy editor scene '{editor_scene_name}'")
@@ -213,13 +235,13 @@ class GameModeModel:
                 raise RuntimeError(f"failed to bind runtime scene '{runtime_scene_name}'")
             runtime_bound = True
 
-            self._render_scene_session.detach(editor_scene_name, save_state=False)
+            self._render_scene_session.detach(editor_scene_key, save_state=False)
             editor_render_detached = True
             context = require_world_context(runtime_scene, "Editor Play")
             if not context.request_primary_scene(runtime_scene):
                 raise RuntimeError(f"failed to request primary scene '{runtime_scene_name}'")
             self._scene_manager.set_mode(
-                editor_scene_name,
+                editor_scene_key,
                 engine_scene.SceneMode.INACTIVE,
             )
         except Exception:
@@ -227,15 +249,15 @@ class GameModeModel:
             if runtime_bound and runtime_scene is not None:
                 if not self._engine.unbind_runtime_scene(runtime_scene):
                     log.error("[GameModeModel] Failed to unbind rejected runtime copy")
-            if runtime_scene is not None and self._scene_manager.has_scene(runtime_scene_name):
-                self._scene_manager.close_scene(runtime_scene_name)
+            if runtime_scene is not None and self._scene_manager.has_scene(runtime_scene_key):
+                self._scene_manager.close_scene(runtime_scene_key)
             if editor_render_detached:
                 try:
-                    self._render_scene_session.attach(editor_scene_name)
+                    self._render_scene_session.attach(editor_scene_key)
                 except Exception:
                     log.exception("[GameModeModel] Failed to restore editor render attachment")
             try:
-                self._scene_manager.set_mode(editor_scene_name, editor_mode)
+                self._scene_manager.set_mode(editor_scene_key, editor_mode)
             except Exception:
                 log.exception("[GameModeModel] Failed to restore editor scene mode")
             if not self._engine.end_session():
@@ -255,7 +277,8 @@ class GameModeModel:
         session = self._game_session
         if session is None:
             return
-        editor_scene = self._scene_manager.get_scene(session.editor_scene_name)
+        editor_scene_key = _authoring_key(session.editor_scene_name)
+        editor_scene = self._scene_manager.get_scene(editor_scene_key)
         if editor_scene is None:
             log.error(
                 f"[GameModeModel] Stop blocked because editor scene "
@@ -267,20 +290,20 @@ class GameModeModel:
         editor_render_attached = False
         try:
             self._attach_editor(
-                session.editor_scene_name,
+                editor_scene_key,
                 restore_state=True,
                 transfer_camera_state=False,
                 update_editor_scene_name=True,
             )
             editor_presented = True
-            self._render_scene_session.attach(session.editor_scene_name)
+            self._render_scene_session.attach(editor_scene_key)
             editor_render_attached = True
         except Exception:
             log.exception("[GameModeModel] Stop could not release editor presentation")
             if editor_render_attached:
                 try:
                     self._render_scene_session.detach(
-                        session.editor_scene_name,
+                        editor_scene_key,
                         save_state=False,
                     )
                 except Exception:
@@ -288,7 +311,7 @@ class GameModeModel:
             if editor_presented and session.primary_scene is not None:
                 try:
                     self._attach_editor(
-                        session.primary_scene.name,
+                        self._require_scene_key(session.primary_scene),
                         restore_state=False,
                         transfer_camera_state=True,
                         update_editor_scene_name=False,
@@ -302,7 +325,7 @@ class GameModeModel:
             log.error("[GameModeModel] EngineCore refused to end RuntimeSession")
             try:
                 self._render_scene_session.detach(
-                    session.editor_scene_name,
+                    editor_scene_key,
                     save_state=False,
                 )
             except Exception:
@@ -318,10 +341,10 @@ class GameModeModel:
         except Exception:
             log.exception("[GameModeModel] Failed to reconcile editor rendering after Stop")
 
-        runtime_scene_name = session.runtime_scene.name
-        if self._scene_manager.has_scene(runtime_scene_name):
-            self._scene_manager.close_scene(runtime_scene_name)
-        self._scene_manager.set_mode(session.editor_scene_name, session.editor_mode)
+        runtime_scene_key = self._require_scene_key(session.runtime_scene)
+        if self._scene_manager.has_scene(runtime_scene_key):
+            self._scene_manager.close_scene(runtime_scene_key)
+        self._scene_manager.set_mode(editor_scene_key, session.editor_mode)
 
         self._game_session = None
         self.state_changed.emit(self)
@@ -333,20 +356,26 @@ class GameModeModel:
 
     def _attach_editor(
         self,
-        scene_name: str,
+        scene_key: SceneKey,
         *,
         restore_state: bool,
         transfer_camera_state: bool,
         update_editor_scene_name: bool,
     ) -> None:
         result = self._editor_connector.attach_editor_to_scene(
-            scene_name,
+            scene_key,
             restore_state=restore_state,
             transfer_camera_state=transfer_camera_state,
             update_editor_scene_name=update_editor_scene_name,
         )
         if result is False:
-            raise RuntimeError(f"failed to attach editor to scene '{scene_name}'")
+            raise RuntimeError(f"failed to attach editor to scene '{scene_key.identity}'")
+
+    def _require_scene_key(self, scene) -> SceneKey:
+        key = self._scene_manager.key_of(scene)
+        if key is None:
+            raise RuntimeError(f"scene '{scene.name}' is not registered")
+        return key
 
     def _save_editor_viewport_camera_to_scene(self, scene) -> None:
         if self._rendering_controller is None:

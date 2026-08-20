@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Callable
 
+from termin.engine import SceneKey, SceneRole
+
 
 class RenderSceneAttachment:
     """Attach/detach scene-owned render state by scene name.
@@ -27,7 +29,7 @@ class RenderSceneAttachment:
         if self._rendering_controller is None:
             self._error("Cannot sync render state: RenderingController not available")
             return False
-        scene = self._scene_manager.get_scene(scene_name)
+        scene = self._scene_manager.get_scene(SceneKey(scene_name, SceneRole.AUTHORING))
         if scene is None:
             self._error(f"Cannot sync render state for scene '{scene_name}': not found")
             return False
@@ -39,7 +41,7 @@ class RenderSceneAttachment:
         if self._rendering_controller is None:
             self._error("Cannot attach scene to render: RenderingController not available")
             return False
-        scene = self._scene_manager.get_scene(scene_name)
+        scene = self._scene_manager.get_scene(SceneKey(scene_name, SceneRole.AUTHORING))
         if scene is None:
             self._error(f"Cannot attach scene '{scene_name}' to render: not found")
             return False
@@ -54,7 +56,7 @@ class RenderSceneAttachment:
         if self._rendering_controller is None:
             self._error("Cannot detach scene from render: RenderingController not available")
             return False
-        scene = self._scene_manager.get_scene(scene_name)
+        scene = self._scene_manager.get_scene(SceneKey(scene_name, SceneRole.AUTHORING))
         if scene is None:
             self._error(f"Cannot detach scene '{scene_name}' from render: not found")
             return False
@@ -66,4 +68,3 @@ class RenderSceneAttachment:
     def _error(self, message: str) -> None:
         if self._log_error is not None:
             self._log_error(message)
-

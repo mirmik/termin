@@ -155,7 +155,7 @@ class HeadlessRuntime:
 
         if self._engine is not None:
             if self.scene is not None and self.scene.is_alive():
-                self._engine.scene_manager.close_scene(self.scene_name)
+                self._engine.scene_manager.close_scene(self.scene)
             if not self._engine.shutdown():
                 log.error("[HeadlessRuntime] EngineCore shutdown reported lifecycle failures")
         self.scene = None
@@ -241,14 +241,17 @@ class HeadlessRuntime:
 
         if self._engine is None:
             raise HeadlessRuntimeError("Headless runtime has no EngineCore")
+        from termin.engine import scene as engine_scene
+
+        scene_key = engine_scene.SceneKey(self.scene_name, engine_scene.SceneRole.RUNTIME)
         scene = self._engine.scene_manager.create_scene(
-            self.scene_name,
+            scene_key,
             list(self.scene_extensions),
         )
         if scene is None:
             raise HeadlessRuntimeError(f"Failed to create scene: {self.scene_name}")
         if not self._engine.bind_runtime_scene(scene):
-            self._engine.scene_manager.close_scene(self.scene_name)
+            self._engine.scene_manager.close_scene(scene)
             raise HeadlessRuntimeError(
                 f"Failed to bind scene to RuntimeSession: {self.scene_name}"
             )
@@ -265,7 +268,7 @@ class HeadlessRuntime:
         except BaseException:
             if scene.is_alive():
                 self._engine.unbind_runtime_scene(scene)
-                self._engine.scene_manager.close_scene(self.scene_name)
+                self._engine.scene_manager.close_scene(scene)
             raise
         return scene
 

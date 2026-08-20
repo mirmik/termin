@@ -55,8 +55,9 @@ def test_scene_local_render_request_is_consumed_by_scene_manager_tick():
     from termin.engine import SceneManager, scene as engine_scene
 
     manager = SceneManager()
-    scene = manager.create_scene("render-invalidated")
-    manager.set_mode("render-invalidated", engine_scene.SceneMode.STOP)
+    key = engine_scene.SceneKey("render-invalidated", engine_scene.SceneRole.RUNTIME)
+    scene = manager.create_scene(key)
+    manager.set_mode(key, engine_scene.SceneMode.STOP)
 
     assert not manager.tick(0.0)
     scene.request_render()
@@ -68,14 +69,15 @@ def test_scene_local_invalidation_preserves_host_wide_and_play_rendering():
     from termin.engine import SceneManager, scene as engine_scene
 
     manager = SceneManager()
-    manager.create_scene("render-modes")
-    manager.set_mode("render-modes", engine_scene.SceneMode.STOP)
+    key = engine_scene.SceneKey("render-modes", engine_scene.SceneRole.RUNTIME)
+    manager.create_scene(key)
+    manager.set_mode(key, engine_scene.SceneMode.STOP)
 
     manager.request_render()
     assert manager.tick(0.0)
     assert not manager.tick(0.0)
 
-    manager.set_mode("render-modes", engine_scene.SceneMode.PLAY)
+    manager.set_mode(key, engine_scene.SceneMode.PLAY)
     assert manager.tick(0.0)
     assert manager.tick(0.0)
 
@@ -91,12 +93,13 @@ def test_scene_manager_callbacks_accept_none_for_shutdown_cleanup():
 
 
 def test_scene_manager_invokes_before_close_hook_before_releasing_scene():
-    from termin.engine import SceneManager
+    from termin.engine import SceneManager, scene as engine_scene
 
     manager = SceneManager()
-    closed: list[str] = []
+    closed: list[object] = []
     manager.set_on_before_scene_close(closed.append)
-    manager.create_scene("before-close-hook")
-    manager.close_scene("before-close-hook")
+    key = engine_scene.SceneKey("before-close-hook", engine_scene.SceneRole.RUNTIME)
+    manager.create_scene(key)
+    manager.close_scene(key)
 
-    assert closed == ["before-close-hook"]
+    assert closed == [key]

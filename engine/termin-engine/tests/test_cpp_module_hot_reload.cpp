@@ -286,7 +286,8 @@ namespace {
         TEST_ASSERT(engine_owned_component_probe_intact("module load", engine_component_error),
                     engine_component_error.c_str());
 
-        tc_scene_handle scene_handle = scene_manager.create_scene("cpp-hot-reload");
+        const termin::SceneKey scene_key{"cpp-hot-reload", termin::SceneRole::Runtime};
+        tc_scene_handle scene_handle = scene_manager.create_scene(scene_key);
         termin::TcSceneRef scene(scene_handle);
         termin::Entity entity = scene.create_entity("entity");
         tc_component* component = tc_component_registry_create(kComponentType);
@@ -404,7 +405,7 @@ namespace {
                     engine_component_error.c_str());
 
         unmanaged_scene.destroy();
-        scene_manager.close_scene("cpp-hot-reload");
+        scene_manager.close_scene(scene_key);
         tc_pipeline_destroy(pipeline);
         runtime.unload_module(kModuleId);
         termin::ComponentRegistry::instance().unregister(kEngineOwnedProbeComponent);

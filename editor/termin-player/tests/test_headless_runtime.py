@@ -349,7 +349,7 @@ def test_python_module_load_discovers_components_without_descriptor_list(tmp_pat
 
 
 def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path: Path) -> None:
-    from termin.engine import SceneManager
+    from termin.engine import SceneManager, scene as engine_scene
 
     _install_project_modules_runtime_without_venv()
     _write_hot_reload_project(tmp_path)
@@ -363,12 +363,13 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         scene_manager=scene_manager,
         manage_bootstrap=False,
     )
+    scene_key = engine_scene.SceneKey("Main.scene", engine_scene.SceneRole.RUNTIME)
 
     try:
         runtime.initialize()
         # The headless host explicitly registers the live scene with its
         # injected SceneManager before enabling reload synchronization.
-        scene_manager.register_scene("Main.scene", runtime.scene.scene_handle())
+        scene_manager.register_scene(scene_key, runtime.scene.scene_handle())
         components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(components) == 1
         component = components[0]
@@ -401,7 +402,7 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         del reloaded_components
         gc.collect()
     finally:
-        scene_manager.unregister_scene("Main.scene")
+        scene_manager.unregister_scene(scene_key)
         runtime.shutdown()
         _reset_project_modules_runtime()
 
@@ -409,7 +410,7 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
 def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
     tmp_path: Path,
 ) -> None:
-    from termin.engine import SceneManager
+    from termin.engine import SceneManager, scene as engine_scene
 
     _install_project_modules_runtime_without_venv()
     _write_hot_reload_project(tmp_path)
@@ -423,10 +424,11 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         scene_manager=scene_manager,
         manage_bootstrap=False,
     )
+    scene_key = engine_scene.SceneKey("Main.scene", engine_scene.SceneRole.RUNTIME)
 
     try:
         runtime.initialize()
-        scene_manager.register_scene("Main.scene", runtime.scene.scene_handle())
+        scene_manager.register_scene(scene_key, runtime.scene.scene_handle())
 
         components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(components) == 1
@@ -462,13 +464,13 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         del reloaded_components
         gc.collect()
     finally:
-        scene_manager.unregister_scene("Main.scene")
+        scene_manager.unregister_scene(scene_key)
         runtime.shutdown()
         _reset_project_modules_runtime()
 
 
 def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: Path) -> None:
-    from termin.engine import SceneManager
+    from termin.engine import SceneManager, scene as engine_scene
 
     _install_project_modules_runtime_without_venv()
     _write_hot_reload_project(tmp_path)
@@ -482,10 +484,11 @@ def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: 
         scene_manager=scene_manager,
         manage_bootstrap=False,
     )
+    scene_key = engine_scene.SceneKey("Main.scene", engine_scene.SceneRole.RUNTIME)
 
     try:
         runtime.initialize()
-        scene_manager.register_scene("Main.scene", runtime.scene.scene_handle())
+        scene_manager.register_scene(scene_key, runtime.scene.scene_handle())
         project_modules = modules_runtime.get_project_modules_runtime()
         expected_value = 6
         active_step = 1
@@ -516,7 +519,7 @@ def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: 
         del final_components
         gc.collect()
     finally:
-        scene_manager.unregister_scene("Main.scene")
+        scene_manager.unregister_scene(scene_key)
         runtime.shutdown()
         _reset_project_modules_runtime()
 
@@ -620,8 +623,9 @@ def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_pa
     try:
         runtime.initialize()
         engine = runtime._engine
+        second_key = engine_scene.SceneKey("Secondary.scene", engine_scene.SceneRole.RUNTIME)
         second = engine.scene_manager.create_scene(
-            "Secondary.scene",
+            second_key,
             list(runtime.scene_extensions),
         )
         assert second is not None
@@ -631,8 +635,9 @@ def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_pa
         assert context.request_primary_scene(second)
         assert engine.tick(0.0)
         assert context.primary_scene.name == "Secondary.scene"
-        assert engine.scene_manager.get_mode("Main.scene") == engine_scene.SceneMode.INACTIVE
-        assert engine.scene_manager.get_mode("Secondary.scene") == engine_scene.SceneMode.PLAY
+        main_key = engine_scene.SceneKey("Main.scene", engine_scene.SceneRole.RUNTIME)
+        assert engine.scene_manager.get_mode(main_key) == engine_scene.SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode(second_key) == engine_scene.SceneMode.PLAY
         assert not engine.render_topology.is_attached(runtime.scene)
         assert engine.render_topology.is_attached(second)
         assert list(engine.render_topology.viewports(second)) == []
@@ -641,7 +646,7 @@ def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_pa
         assert context.request_primary_scene(runtime.scene)
         assert engine.tick(0.0)
         assert context.primary_scene.name == "Main.scene"
-        assert engine.scene_manager.get_mode("Secondary.scene") == engine_scene.SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode(second_key) == engine_scene.SceneMode.INACTIVE
         assert engine.render_topology.is_attached(runtime.scene)
         assert not engine.render_topology.is_attached(second)
     finally:
