@@ -118,6 +118,20 @@ def test_player_runtime_tracks_runtime_session_primary_viewports(monkeypatch):
     assert runtime._viewports == viewports
 
 
+def test_player_runtime_camera_follows_presented_viewport():
+    runtime = PlayerRuntime(".", "scene.json")
+
+    assert runtime.camera is None
+
+    viewport = _Viewport("Main", "simple", 1, 10)
+    runtime._viewport = viewport
+    assert runtime.camera is None
+
+    camera = object()
+    viewport.render_target = type("_RenderTarget", (), {"camera": camera})()
+    assert runtime.camera is camera
+
+
 def test_player_runtime_shutdown_runs_after_failed_initialize():
     class _FailingRuntime(PlayerRuntime):
         def __init__(self):

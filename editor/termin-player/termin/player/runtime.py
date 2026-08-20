@@ -194,6 +194,17 @@ class PlayerRuntime:
         return self._viewport
 
     @property
+    def camera(self):
+        """Return the camera of the currently presented primary viewport."""
+        viewport = self._viewport
+        if viewport is None:
+            return None
+        render_target = viewport.render_target
+        if render_target is None:
+            return None
+        return render_target.camera
+
+    @property
     def resource_manager(self):
         return self._resource_manager
 

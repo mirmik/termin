@@ -79,7 +79,7 @@ class ProjectRuntimeSettings:
             ),
             ignored_resource_paths=tuple(
                 normalize_project_resource_paths(
-                    data.get("ignored_resource_paths"),
+                    data.get("ignored_resource_paths", []),
                     field_name="ignored_resource_paths",
                     warning=lambda message: _log_warning(f"[PlayerProjectSettings] {message}"),
                 )
