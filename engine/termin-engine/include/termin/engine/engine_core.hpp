@@ -207,6 +207,10 @@ namespace termin {
         [[nodiscard]] EngineFrameCompletionConnection attach_frame_completion_callback(std::function<void()> callback);
 
         // --- Main loop ---
+        // Advance world state and RuntimeSession requests without invoking rendering.
+        // Returns whether the scene manager requested a render for this frame.
+        bool tick(double dt);
+
         // Run one frame: scene tick, RenderingManager render, after_render callback.
         // Returns true if rendering happened.
         bool tick_and_render(double dt);

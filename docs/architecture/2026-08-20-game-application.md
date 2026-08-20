@@ -11,8 +11,8 @@ adapter, Python declaration transaction, and `EngineCore`-owned
 scene-to-session `WorldContext` route and synchronous primary-scene switching
 are also implemented. Editor Play/Stop and the packaged desktop player host the
 same engine-owned session. Project selection crosses the build boundary in
-strict runtime-package and desktop app manifests; source and headless launch
-paths remain follow-up work.
+strict runtime-package and desktop app manifests. Source and headless players
+resolve the same canonical project selection after publishing project modules.
 
 The earlier host-owned `RuntimeSession`/`SceneFlow` design is retired. The new
 design deliberately has no public `SceneFlow`, scene providers, host binding
@@ -109,8 +109,9 @@ load project modules and publish controller types
 create the selected WorldController instance, or null
 create RuntimeSession inside EngineCore and transfer ownership
 create WorldContext and call WorldController.start(context), if present
-create/load a runtime scene
+create and register an empty runtime scene
 bind the scene's transient WorldContext extension
+deserialize the scene while that context is already available
 prepare gameplay rendering
 publish the scene as primary and activate it
 run the first component start/update tick
@@ -199,11 +200,15 @@ Scene-management authority remains split by domain:
 - `EngineCore` is the safe coordination boundary between its managers.
 
 A request records intent and does not mutate managers immediately. At the very
-start of `EngineCore::tick_and_render()`, before `SceneManager::tick()`, the
-engine processes at most one request synchronously:
+start of `EngineCore::tick()`, before `SceneManager::tick()`, the engine
+processes at most one request synchronously. `tick_and_render()` uses that same
+simulation entry point before optional rendering:
 
 1. Resolve and validate an already registered inactive candidate scene.
-2. Prepare its gameplay rendering while the old scene remains untouched.
+2. Ask `RenderingManager` to prepare the candidate's gameplay attachment while
+   the old scene remains untouched. A scene with no saved viewports or render
+   targets still gets an empty topology attachment; this requires no graphics
+   device and keeps the transition invariant uniform across hosts.
 3. If preparation fails, clean the candidate attachment and leave the old
    primary scene active.
 4. Deactivate and detach the old primary scene.
@@ -282,6 +287,33 @@ session. The process smoke exercises a relocated bundle in both modes plus an
 exact-selection failure and an `entry -> secondary -> entry` retained-scene
 round trip.
 
+## Source and headless player boundary
+
+Both Python development hosts create or borrow `EngineCore` before project
+module publication, resolve `project_settings/project.json` only after that
+publication completes, and transfer the exact selected controller (or null)
+into a fresh session before scene construction. The empty scene is registered
+with that engine and bound to its `WorldContext` before deserialization, so
+component `on_added` and later lifecycle callbacks see the controller.
+
+The windowed source player activates its initial scene through the ordinary
+primary-scene request. It requires a saved runtime viewport configuration;
+there is no second fallback path that synthesizes a camera and mutates render
+topology outside the session transaction. Its frame loop delegates simulation
+and rendering to `EngineCore::tick_and_render()`.
+
+The headless player uses the same primary-scene request and render-free
+`EngineCore::tick()`. It strips serialized render extensions and never creates
+a graphics device or invokes rendering. RuntimeSession still establishes the
+same lightweight topology attachment invariant as every other host; with no
+saved viewports or render targets this is bookkeeping only. Embedded callers
+may explicitly keep ownership of an already bootstrapped process runtime; the
+standalone headless entry point owns and closes its bootstrap boundary.
+
+Both hosts deactivate/end the session, destroy the scene, and only then close
+the project module runtime. Invalid exact selection is a startup failure and
+uses the same cleanup path.
+
 ## Dependency placement
 
 The existing dependency direction is `termin-runtime -> termin-engine`, so an
@@ -326,5 +358,5 @@ Composition and host sequence:
   (implemented);
 - #1785 integrates editor Play/Stop (implemented);
 - #1786 integrates the packaged player (implemented);
-- #1789 integrates source and headless runs;
+- #1789 integrates source and headless runs (implemented);
 - #1784 performs the final cross-host lifecycle and cleanup verification.

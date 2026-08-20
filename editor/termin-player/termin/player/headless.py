@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Sequence
 
 from termin.player.project_runtime_support import (
+    close_project_modules,
+    create_project_world_controller,
     load_project_modules,
     register_project_runtime_resources,
     scan_project_assets,
@@ -42,6 +44,7 @@ class HeadlessRuntime:
         include_render_resources: bool = False,
         scene_extensions: Sequence[int] | None = None,
         scene_manager=None,
+        manage_bootstrap: bool = True,
     ) -> None:
         self.project_path = Path(project_path)
         self.scene_name = scene_name
@@ -49,12 +52,13 @@ class HeadlessRuntime:
         self.load_assets = load_assets
         self.register_builtin_resources = register_builtin_resources
         self.include_render_resources = include_render_resources
-        self.scene_extensions = (
-            _default_headless_scene_extensions()
-            if scene_extensions is None
-            else tuple(scene_extensions)
-        )
+        self.scene_extensions = None if scene_extensions is None else tuple(scene_extensions)
         self.scene_manager = scene_manager
+        self.manage_bootstrap = manage_bootstrap
+        self._engine = None
+        self._project_modules_runtime = None
+        self._session_started = False
+        self._bootstrap_started = False
         self.scene = None
         self.frames = 0
         self.simulated_time = 0.0
@@ -72,24 +76,43 @@ class HeadlessRuntime:
             raise HeadlessRuntimeError(f"Project path does not exist: {self.project_path}")
 
         bootstrap_player()
-        _validate_headless_scene_extensions(self.scene_extensions)
-        log.info(f"[HeadlessRuntime] Initializing project: {self.project_path}")
-        if self.register_builtin_resources:
-            register_project_runtime_resources(
-                include_render_resources=self.include_render_resources
-            )
-        if self.load_modules:
-            load_project_modules(
+        self._bootstrap_started = self.manage_bootstrap
+        try:
+            if self.scene_extensions is None:
+                self.scene_extensions = _default_headless_scene_extensions()
+            _validate_headless_scene_extensions(self.scene_extensions)
+            from termin.engine import EngineCore
+
+            self._engine = EngineCore()
+            log.info(f"[HeadlessRuntime] Initializing project: {self.project_path}")
+            if self.register_builtin_resources:
+                register_project_runtime_resources(
+                    include_render_resources=self.include_render_resources
+                )
+            if self.load_modules:
+                module_scene_manager = self.scene_manager or self._engine.scene_manager
+                self._project_modules_runtime = load_project_modules(
+                    self.project_path,
+                    log_prefix="[HeadlessRuntime]",
+                    scene_manager=module_scene_manager,
+                )
+            controller = create_project_world_controller(
                 self.project_path,
                 log_prefix="[HeadlessRuntime]",
-                scene_manager=self.scene_manager,
             )
-        if self.load_assets:
-            scan_project_assets(self.project_path, log_prefix="[HeadlessRuntime]")
+            if not self._engine.begin_session(controller):
+                raise HeadlessRuntimeError("EngineCore refused to start RuntimeSession")
+            self._session_started = True
+            if self.load_assets:
+                scan_project_assets(self.project_path, log_prefix="[HeadlessRuntime]")
 
-        self.scene = self._load_scene()
-        self.initialized = True
-        log.info(f"[HeadlessRuntime] Scene loaded: {self.scene_name}")
+            self.scene = self._load_scene()
+            self._activate_primary_scene()
+            self.initialized = True
+            log.info(f"[HeadlessRuntime] Scene loaded: {self.scene_name}")
+        except BaseException:
+            self.shutdown()
+            raise
 
     def step(self, dt: float) -> None:
         if dt < 0.0:
@@ -99,7 +122,9 @@ class HeadlessRuntime:
         if self.scene is None:
             raise HeadlessRuntimeError("Headless runtime has no scene")
 
-        self.scene.update(float(dt))
+        if self._engine is None:
+            raise HeadlessRuntimeError("Headless runtime has no EngineCore")
+        self._engine.tick(float(dt))
         self.frames += 1
         self.simulated_time += float(dt)
 
@@ -121,9 +146,35 @@ class HeadlessRuntime:
         self.running = False
 
     def shutdown(self) -> None:
-        if self.scene is not None and self.scene.is_alive():
-            self.scene.destroy()
+        from tcbase import log
+
+        if self._session_started and self._engine is not None:
+            if not self._engine.end_session():
+                log.error("[HeadlessRuntime] RuntimeSession shutdown reported lifecycle failures")
+            self._session_started = False
+
+        if self._engine is not None:
+            if self.scene is not None and self.scene.is_alive():
+                self._engine.scene_manager.close_scene(self.scene_name)
+            if not self._engine.shutdown():
+                log.error("[HeadlessRuntime] EngineCore shutdown reported lifecycle failures")
         self.scene = None
+        self._engine = None
+
+        close_project_modules(
+            self._project_modules_runtime,
+            log_prefix="[HeadlessRuntime]",
+        )
+        self._project_modules_runtime = None
+
+        if self._bootstrap_started:
+            try:
+                from termin.bootstrap import shutdown_player
+
+                shutdown_player()
+            except Exception as error:
+                log.error(f"[HeadlessRuntime] Failed to shutdown bootstrap runtime: {error}")
+            self._bootstrap_started = False
         self.initialized = False
         self.running = False
 
@@ -188,12 +239,19 @@ class HeadlessRuntime:
                 + ", ".join(ignored_extensions)
             )
 
-        from termin.engine import create_scene
-
-        scene = create_scene(
-            name=self.scene_name,
-            extensions=list(self.scene_extensions),
+        if self._engine is None:
+            raise HeadlessRuntimeError("Headless runtime has no EngineCore")
+        scene = self._engine.scene_manager.create_scene(
+            self.scene_name,
+            list(self.scene_extensions),
         )
+        if scene is None:
+            raise HeadlessRuntimeError(f"Failed to create scene: {self.scene_name}")
+        if not self._engine.bind_runtime_scene(scene):
+            self._engine.scene_manager.close_scene(self.scene_name)
+            raise HeadlessRuntimeError(
+                f"Failed to bind scene to RuntimeSession: {self.scene_name}"
+            )
         try:
             scene.source_path = str(scene_path.resolve())
             if scene_data:
@@ -206,9 +264,30 @@ class HeadlessRuntime:
                 upgrade_scene_unknown_components(scene)
         except BaseException:
             if scene.is_alive():
-                scene.destroy()
+                self._engine.unbind_runtime_scene(scene)
+                self._engine.scene_manager.close_scene(self.scene_name)
             raise
         return scene
+
+    def _activate_primary_scene(self) -> None:
+        from termin.engine import require_world_context
+
+        if self._engine is None or self.scene is None:
+            raise HeadlessRuntimeError("Cannot activate a headless scene without EngineCore")
+        context = require_world_context(self.scene, "HeadlessRuntime initial scene")
+        if not context.request_primary_scene(self.scene):
+            raise HeadlessRuntimeError("RuntimeSession rejected the initial headless scene")
+        self._engine.tick(0.0)
+
+        primary = context.primary_scene
+        primary_handle = primary.scene_handle() if primary is not None else None
+        scene_handle = self.scene.scene_handle()
+        if (
+            primary_handle is None
+            or primary_handle.index != scene_handle.index
+            or primary_handle.generation != scene_handle.generation
+        ):
+            raise HeadlessRuntimeError("RuntimeSession failed to activate the headless scene")
 
 
 def _prepare_headless_scene_data(data: object) -> tuple[dict, tuple[str, ...]]:

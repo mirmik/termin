@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
+    from termin.project_modules.runtime import ProjectModulesRuntime
 
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.player.project_settings import (
@@ -15,6 +16,10 @@ from termin.player.project_settings import (
     ProjectRuntimeSettings,
     load_project_runtime_settings,
 )
+
+
+class ProjectRuntimeSupportError(RuntimeError):
+    """A project-backed runtime could not establish its strict runtime contract."""
 
 
 def register_project_runtime_resources(*, include_render_resources: bool) -> None:
@@ -35,7 +40,7 @@ def load_project_modules(
     *,
     log_prefix: str,
     scene_manager=None,
-) -> None:
+) -> "ProjectModulesRuntime":
     """Load project modules through termin-modules runtime."""
     from tcbase import log
     from termin_modules import ModuleKind, ModuleState
@@ -43,8 +48,9 @@ def load_project_modules(
 
     runtime = get_project_modules_runtime(scene_manager)
     success = runtime.load_project(Path(project_path))
-    if not success and runtime.last_error:
-        log.error(f"{log_prefix} Module load error: {runtime.last_error}")
+    if not success:
+        detail = runtime.last_error or "project module runtime rejected the load"
+        log.error(f"{log_prefix} Module load error: {detail}")
 
     cpp_loaded = 0
     cpp_failed = 0
@@ -69,6 +75,60 @@ def load_project_modules(
 
     log.info(f"{log_prefix} C++ modules: {cpp_loaded} loaded, {cpp_failed} failed")
     log.info(f"{log_prefix} Python modules: {py_loaded} loaded, {py_failed} failed")
+    if not success or cpp_failed > 0 or py_failed > 0:
+        detail = runtime.last_error or (
+            f"{cpp_failed} C++ and {py_failed} Python module(s) failed"
+        )
+        if not runtime.close():
+            cleanup_detail = runtime.last_error or "unknown module cleanup failure"
+            log.error(
+                f"{log_prefix} Module cleanup after failed startup failed: {cleanup_detail}"
+            )
+        raise ProjectRuntimeSupportError(f"project module load failed: {detail}")
+    return runtime
+
+
+def create_project_world_controller(project_path: str | Path, *, log_prefix: str):
+    """Resolve and create the exact controller selected by canonical project settings."""
+    from tcbase import log
+    from termin.project import create_selected_world_controller
+    from termin.project.settings import load_project_settings
+
+    try:
+        settings = load_project_settings(project_path)
+        controller = create_selected_world_controller(settings.world_controller)
+    except Exception as error:
+        log.error(f"{log_prefix} WorldController selection failed: {error}")
+        raise ProjectRuntimeSupportError(
+            f"failed to create selected WorldController: {error}"
+        ) from error
+
+    if settings.world_controller is None:
+        log.info(f"{log_prefix} Project has no WorldController selection")
+    else:
+        log.info(
+            f"{log_prefix} Created WorldController "
+            f"{settings.world_controller.module}:{settings.world_controller.type_name}"
+        )
+    return controller
+
+
+def close_project_modules(
+    runtime: "ProjectModulesRuntime | None",
+    *,
+    log_prefix: str,
+) -> bool:
+    """Close a project module runtime after all project-owned objects are gone."""
+    if runtime is None:
+        return True
+    if runtime.close():
+        return True
+
+    from tcbase import log
+
+    detail = runtime.last_error or "unknown module shutdown failure"
+    log.error(f"{log_prefix} Module runtime shutdown failed: {detail}")
+    return False
 
 
 def create_build_import_registry() -> "AssetTypeRegistry":

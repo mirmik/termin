@@ -849,14 +849,11 @@ namespace termin {
         _target_fps.store(fps);
     }
 
-    bool EngineCore::tick_and_render(double dt) {
+    bool EngineCore::tick(double dt) {
         if (_shutdown) {
             tc_log(TC_LOG_ERROR, "[EngineCore] Cannot tick after shutdown");
             return false;
         }
-        // Frame scope is owned by run() — tick_and_render only opens sections
-        // inside the already-open frame. When called standalone (outside run),
-        // sections are no-ops because current_frame is NULL.
         bool profile = tc_profiler_enabled();
 
         if (_runtime_session) {
@@ -881,9 +878,22 @@ namespace termin {
 
         if (profile)
             tc_profiler_begin_section("SceneManager Tick");
-        bool should_render = scene_manager.tick(dt);
+        const bool should_render = scene_manager.tick(dt);
         if (profile)
             tc_profiler_end_section();
+
+        return should_render;
+    }
+
+    bool EngineCore::tick_and_render(double dt) {
+        // Frame scope is owned by run() — tick_and_render only opens sections
+        // inside the already-open frame. When called standalone (outside run),
+        // sections are no-ops because current_frame is NULL.
+        const bool should_render = tick(dt);
+        if (_shutdown) {
+            return false;
+        }
+        const bool profile = tc_profiler_enabled();
 
         if (should_render) {
             if (profile)

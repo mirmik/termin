@@ -74,22 +74,46 @@ def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monke
     assert runtime.window.display_handle == (101, 7)
 
 
-def test_player_runtime_tracks_attached_viewports():
+def test_player_runtime_tracks_runtime_session_primary_viewports(monkeypatch):
+    import termin.engine
+
     runtime = PlayerRuntime(".", "scene.json")
-    runtime.scene = object()
+    handle = type("_SceneHandle", (), {"index": 4, "generation": 2})()
+
+    class _Scene:
+        def scene_handle(self):
+            return handle
+
+    runtime.scene = _Scene()
     viewports = [
         _Viewport("Main", "simple", 1, 10),
         _Viewport("Overlay", "basic", 2, 20),
     ]
 
-    class _Manager:
-        managed_render_targets = []
+    class _Context:
+        primary_scene = runtime.scene
 
-        def attach_scene_full(self, scene):
+        def request_primary_scene(self, scene):
+            assert scene is runtime.scene
+            return True
+
+    class _Topology:
+        def viewports(self, scene):
             assert scene is runtime.scene
             return viewports
 
-    assert runtime._attach_scene_rendering(_Manager(), object())
+    class _Manager:
+        managed_render_targets = []
+        topology = _Topology()
+
+    class _Engine:
+        def tick_and_render(self, dt):
+            assert dt == 0.0
+
+    monkeypatch.setattr(termin.engine, "require_world_context", lambda scene, scope: _Context())
+    runtime._engine = _Engine()
+
+    assert runtime._activate_primary_scene(_Manager())
     assert runtime._viewport is viewports[0]
     assert runtime._viewports == viewports
 

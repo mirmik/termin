@@ -89,6 +89,11 @@ namespace termin {
                 "The returned connection controls its lifetime.")
 
             // Main loop
+            .def("tick",
+                 &EngineCore::tick,
+                 nb::arg("dt"),
+                 "Advance RuntimeSession and scene simulation without rendering.")
+
             .def("tick_and_render",
                  &EngineCore::tick_and_render,
                  nb::arg("dt"),
