@@ -36,7 +36,10 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
     editor_log_capture = Mock()
     editor_log_capture.drain.return_value = False
     game_mode_controller = SimpleNamespace(
-        model=SimpleNamespace(is_game_mode=game_mode)
+        model=SimpleNamespace(
+            is_game_mode=game_mode,
+            refresh_primary_scene=Mock(),
+        )
     )
     request_editor_render = Mock()
     window = Mock()
@@ -83,6 +86,7 @@ def test_native_editor_event_loop_polls_services_and_honors_frame_limit() -> Non
     event_loop.poll_events()
 
     services.project_file_watcher.poll.assert_called_once_with()
+    services.game_mode_controller.model.refresh_primary_scene.assert_called_once_with()
     services.scene_structure_observer.poll.assert_called_once_with()
     services.spacemouse.poll.assert_called_once_with()
     services.framegraph_debugger.update.assert_called_once_with()
@@ -101,6 +105,7 @@ def test_native_editor_event_loop_interrupt_requests_shutdown_before_polling() -
 
     services.window.set_should_close.assert_called_once_with(True)
     services.window_manager.poll_events.assert_not_called()
+    services.game_mode_controller.model.refresh_primary_scene.assert_not_called()
 
 
 def test_native_editor_event_loop_should_continue_tracks_window() -> None:

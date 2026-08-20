@@ -117,6 +117,28 @@ def test_editor_camera_mode_controller_has_no_frontend_dependency() -> None:
     assert offenders == []
 
 
+def test_engine_runtime_session_has_no_editor_host_participants() -> None:
+    source = _read_text(REPO_ROOT / "engine/termin-engine/src/engine_core.cpp")
+    start = source.index("class RuntimeSession")
+    end = source.index("\n        };\n\n    } // namespace engine_detail", start)
+    runtime_session = source[start:end]
+
+    forbidden = (
+        "Editor",
+        "Binding",
+        "Callback",
+        "Provider",
+        "std::function",
+        "PyObject",
+        "nb::",
+    )
+    assert [name for name in forbidden if name in runtime_session] == []
+    assert not (
+        REPO_ROOT
+        / "editor/termin-app/termin/editor_core/primary_render_scene_binding.py"
+    ).exists()
+
+
 def test_runtime_types_have_no_incremental_publication_api() -> None:
     forbidden = (
         "tc_runtime_type_registry_ensure_type",

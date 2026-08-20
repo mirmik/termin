@@ -68,6 +68,9 @@ class NativeEditorEventLoop:
             log.info("[Editor] SIGINT received; requesting native editor shutdown")
             self._window.set_should_close(True)
             return
+        with self._capture_profiler.section("Game Session"):
+            if self._game_mode_controller is not None:
+                self._game_mode_controller.model.refresh_primary_scene()
         with self._capture_profiler.section("Events"):
             keep_running, _routed = self._window_manager.poll_events()
         if not keep_running:

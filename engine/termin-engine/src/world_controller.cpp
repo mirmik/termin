@@ -42,6 +42,19 @@ namespace termin {
         return WorldControllerInstance(instance);
     }
 
+    WorldControllerInstance WorldControllerInstance::create(const char* type_name,
+                                                            const char* expected_owner,
+                                                            std::string& error) {
+        error.clear();
+        WorldControllerErrorBuffer buffer;
+        tc_world_controller_instance* instance =
+            tc_world_controller_instance_create_for_owner(type_name, expected_owner, &buffer.error);
+        if (!instance) {
+            error = buffer.text[0] ? buffer.text : "WorldController instance creation failed";
+        }
+        return WorldControllerInstance(instance);
+    }
+
     tc_world_controller_state WorldControllerInstance::state() const noexcept {
         return tc_world_controller_instance_state(_instance);
     }

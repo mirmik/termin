@@ -55,6 +55,31 @@ class RenderSceneSession:
         self._rendering_model.sync_viewport_configs_to_scene(scene)
         self._rendering_model.sync_render_target_configs_to_scene(scene)
 
+    def reconcile_attached_scene(self, scene) -> None:
+        """Reconcile editor presentation after EngineCore changed primary.
+
+        RuntimeSession owns the gameplay attachment itself. The editor only
+        wires host input, removes now-empty display pages, and republishes its
+        viewport projection; failures here do not participate in the gameplay
+        transaction.
+        """
+        topology = self._rendering_model.manager.topology
+        if not topology.is_attached(scene):
+            raise RuntimeError(
+                f"primary scene '{scene.name}' has no render attachment"
+            )
+        for viewport in topology.viewports(scene):
+            display = self._rendering_model.manager.get_display_for_viewport(viewport)
+            if display is not None:
+                self._workspace.configure_viewport_input(display, viewport)
+        empty_displays = {
+            display.handle
+            for display in tuple(self._workspace.displays)
+            if not self._workspace.is_editor_display(display) and not display.viewports
+        }
+        self._remove_empty_displays(empty_displays)
+        self._publish()
+
     def _require_scene(self, name: str):
         scene = self._scene_manager.get_scene(name)
         if scene is None:

@@ -206,7 +206,13 @@ TEST_CASE("C WorldController lifecycle is exact and protects its module owner") 
     REQUIRE(register_raw_type(type_name, owner, counters));
 
     ErrorBuffer error;
-    tc_world_controller_instance* instance = tc_world_controller_instance_create(type_name, &error.value);
+    CHECK(tc_world_controller_instance_create_for_owner(
+              type_name, "another-module", &error.value) == nullptr);
+    CHECK(std::string(error.text).find("expected 'another-module'") != std::string::npos);
+    CHECK_EQ(tc_runtime_type_registry_instance_count(type_name), 0u);
+    error.clear();
+    tc_world_controller_instance* instance =
+        tc_world_controller_instance_create_for_owner(type_name, owner, &error.value);
     REQUIRE(instance != nullptr);
     CHECK_EQ(tc_world_controller_instance_state(instance), TC_WORLD_CONTROLLER_STATE_CREATED);
     CHECK_EQ(std::string(tc_world_controller_instance_type_name(instance)), std::string(type_name));

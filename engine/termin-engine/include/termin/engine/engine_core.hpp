@@ -167,6 +167,7 @@ namespace termin {
         SessionOperation _session_operation = SessionOperation::Idle;
 
         bool begin_session_owned(WorldControllerInstance&& controller);
+        bool session_mutation_is_safe() const noexcept;
 
     public:
         EngineCore();

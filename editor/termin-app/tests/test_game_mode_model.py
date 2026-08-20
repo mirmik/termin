@@ -1,7 +1,16 @@
 import importlib.util
 from pathlib import Path
 
-from termin.engine import SceneManager, scene as engine_scene
+from termin.engine import (
+    EngineCore,
+    SceneManager,
+    WorldController,
+    create_world_controller,
+    publish_world_controllers,
+    scene as engine_scene,
+    unregister_python_world_controller_owner,
+)
+from termin.bootstrap import bootstrap_runtime
 
 SceneMode = engine_scene.SceneMode
 
@@ -17,18 +26,10 @@ def _load_source_module(name: str, relative_path: str):
     return module
 
 
-PrimaryRenderSceneBinding = _load_source_module(
-    "primary_render_scene_binding_under_test",
-    "termin-app/termin/editor_core/primary_render_scene_binding.py",
-).PrimaryRenderSceneBinding
 GameModeModel = _load_source_module(
     "game_mode_model_under_test",
     "termin-app/termin/editor_core/game_mode_model.py",
 ).GameModeModel
-RenderSceneAttachment = _load_source_module(
-    "render_scene_attachment_under_test",
-    "termin-app/termin/editor_core/render_scene_attachment.py",
-).RenderSceneAttachment
 
 
 class _RenderingController:
@@ -200,7 +201,7 @@ class _EditorConnector:
         return True
 
 
-class _RenderConnector:
+class _RenderSession:
     events: list[tuple]
 
     def __init__(self):
@@ -219,19 +220,31 @@ class _RenderConnector:
 
     def sync_scene_render_state(self, scene_name: str) -> bool:
         self.events.append(("sync_scene_render_state", scene_name))
-        return not self._should_fail("sync", scene_name)
+        if self._should_fail("sync", scene_name):
+            raise RuntimeError("injected render sync failure")
+        return True
 
-    def attach_scene_to_render(self, scene_name: str) -> bool:
-        self.events.append(("attach_scene_to_render", scene_name))
-        return not self._should_fail("attach", scene_name)
+    def attach(self, scene_name: str) -> bool:
+        self.events.append(("attach", scene_name))
+        if self._should_fail("attach", scene_name):
+            raise RuntimeError("injected render attach failure")
+        return True
 
-    def detach_scene_from_render(
+    def detach(
         self,
         scene_name: str,
         save_state: bool = True,
     ) -> bool:
-        self.events.append(("detach_scene_from_render", scene_name, save_state))
-        return not self._should_fail("detach", scene_name)
+        self.events.append(("detach", scene_name, save_state))
+        if self._should_fail("detach", scene_name):
+            raise RuntimeError("injected render detach failure")
+        return True
+
+    def reconcile_attached_scene(self, scene) -> bool:
+        self.events.append(("reconcile", scene.name))
+        if self._should_fail("reconcile", scene.name):
+            raise RuntimeError("injected render presentation failure")
+        return True
 
 
 class _SceneTreeController:
@@ -369,367 +382,292 @@ class _Display:
             self.viewports.remove(viewport)
 
 
-def _make_game_mode_model(scene_manager, editor_connector, render_connector):
+def _make_game_mode_model(
+    engine,
+    editor_connector,
+    render_session,
+    *,
+    prepare_code_for_play=None,
+    create_controller_for_play=None,
+):
     return GameModeModel(
-        scene_manager=scene_manager,
+        engine=engine,
         editor_connector=editor_connector,
+        render_scene_session=render_session,
         rendering_controller=_RenderingController(),
         get_editor_scene_name=lambda: "Editor",
-        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
-            render_connector,
-            scene_name,
-        ),
+        scene_tree_controller=_SceneTreeController(),
+        prepare_code_for_play=prepare_code_for_play,
+        create_controller_for_play=create_controller_for_play,
     )
 
 
-def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
+def _new_game_mode_fixture():
+    bootstrap_runtime()
+    engine = EngineCore()
+    editor_scene = engine.scene_manager.create_scene("Editor", [])
     assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
+    engine.scene_manager.set_mode("Editor", SceneMode.STOP)
+    editor_connector = _EditorConnector()
+    editor_connector.attached_scene_name = "Editor"
+    render_session = _RenderSession()
+    model = _make_game_mode_model(engine, editor_connector, render_session)
+    return engine, editor_scene, editor_connector, render_session, model
 
-    rendering = _RenderingController()
-    connector = _EditorConnector()
-    render_connector = _RenderConnector()
-    tree = _SceneTreeController()
-    prepare_calls = []
 
-    model = GameModeModel(
-        scene_manager=scene_manager,
-        editor_connector=connector,
-        rendering_controller=rendering,
-        get_editor_scene_name=lambda: "Editor",
-        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
-            render_connector,
-            scene_name,
-        ),
-        scene_tree_controller=tree,
-        prepare_code_for_play=lambda: prepare_calls.append("prepare") or True,
+def _stop_and_shutdown(engine, model) -> None:
+    if model.is_game_mode:
+        model.toggle_game_mode()
+    assert engine.shutdown()
+
+
+def test_game_mode_model_routes_play_pause_and_stop_through_engine_session():
+    engine, _editor_scene, connector, render_session, model = (
+        _new_game_mode_fixture()
     )
-
     state_events = []
     mode_events = []
-    model.state_changed.connect(lambda m: state_events.append((m.is_game_mode, m.is_game_paused)))
+    model.state_changed.connect(
+        lambda current: state_events.append(
+            (current.is_game_mode, current.is_game_paused)
+        )
+    )
     model.mode_entered.connect(
-        lambda is_playing, scene, expanded: mode_events.append(
-            (is_playing, scene.name if scene is not None else None, expanded)
+        lambda playing, scene, expanded: mode_events.append(
+            (playing, scene.name, expanded)
         )
     )
 
     try:
         model.toggle_game_mode()
 
-        assert prepare_calls == ["prepare"]
-        assert model.is_game_mode is True
-        assert model.is_game_paused is False
+        assert engine.has_runtime_session
+        assert model.is_game_mode
         assert model.game_scene_name == "Editor(game)"
-        assert scene_manager.has_scene("Editor")
-        assert scene_manager.has_scene("Editor(game)")
-        assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
-        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
-        assert scene_manager.has_play_scenes() is True
-        assert rendering.sync_calls == []
-        assert rendering.sync_render_target_calls == []
-        assert rendering.detach_calls == []
-        assert rendering.attach_calls == []
-        assert render_connector.events == [
+        assert engine.scene_manager.get_mode("Editor") == SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.INACTIVE
+        assert render_session.events == [
             ("sync_scene_render_state", "Editor"),
-            ("attach_scene_to_render", "Editor(game)"),
-            ("detach_scene_from_render", "Editor", False),
+            ("detach", "Editor", False),
         ]
-        assert connector.events == [
-            (
-                "attach_editor_to_scene",
-                "Editor(game)",
-                False,
-                True,
-                False,
-            ),
-        ]
-        assert connector.attached_scene_name == "Editor(game)"
+        assert connector.events == []
         assert state_events == [(True, False)]
-        assert mode_events == [(True, "Editor(game)", ["entity-a", "entity-b"])]
+        assert mode_events == []
+
+        engine.tick_and_render(0.016)
+        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+        model.refresh_primary_scene()
+        assert connector.attached_scene_name == "Editor(game)"
+        assert render_session.events[-1] == ("reconcile", "Editor(game)")
+        assert mode_events == [
+            (True, "Editor(game)", ["entity-a", "entity-b"])
+        ]
 
         model.toggle_pause()
-        assert model.is_game_paused is True
-        assert scene_manager.get_mode("Editor(game)") == SceneMode.STOP
-        assert scene_manager.has_play_scenes() is False
-
+        assert model.is_game_paused
+        assert engine.has_runtime_session
+        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.STOP
         model.toggle_pause()
-        assert model.is_game_paused is False
-        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
-        assert scene_manager.has_play_scenes() is True
+        assert not model.is_game_paused
+        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
 
         model.toggle_game_mode()
 
-        assert model.is_game_mode is False
-        assert model.is_game_paused is False
-        assert model.game_scene_name is None
-        assert scene_manager.has_scene("Editor") is True
-        assert scene_manager.has_scene("Editor(game)") is False
-        assert scene_manager.get_mode("Editor") == SceneMode.STOP
-        assert scene_manager.has_play_scenes() is False
-        assert rendering.detach_calls == []
-        assert rendering.attach_calls == []
-        assert render_connector.events == [
-            ("sync_scene_render_state", "Editor"),
-            ("attach_scene_to_render", "Editor(game)"),
-            ("detach_scene_from_render", "Editor", False),
-            ("attach_scene_to_render", "Editor"),
-            ("detach_scene_from_render", "Editor(game)", False),
-        ]
-        assert connector.events == [
-            (
-                "attach_editor_to_scene",
-                "Editor(game)",
-                False,
-                True,
-                False,
-            ),
-            (
-                "attach_editor_to_scene",
-                "Editor",
-                True,
-                False,
-                True,
-            ),
-        ]
+        assert not engine.has_runtime_session
+        assert not model.is_game_mode
+        assert not engine.scene_manager.has_scene("Editor(game)")
+        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
         assert connector.attached_scene_name == "Editor"
-        assert state_events == [
-            (True, False),
-            (True, True),
-            (True, False),
-            (False, False),
+        assert render_session.events[-2:] == [
+            ("attach", "Editor"),
+            ("reconcile", "Editor"),
         ]
-        assert mode_events[-1] == (False, "Editor", ["entity-a", "entity-b"])
+        assert mode_events[-1] == (
+            False,
+            "Editor",
+            ["entity-a", "entity-b"],
+        )
     finally:
-        scene_manager.close_all_scenes()
+        _stop_and_shutdown(engine, model)
 
 
 def test_game_mode_model_blocks_play_when_code_prepare_fails():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
-    assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
-
-    connector = _EditorConnector()
-    render_connector = _RenderConnector()
-    model = GameModeModel(
-        scene_manager=scene_manager,
-        editor_connector=connector,
-        rendering_controller=_RenderingController(),
-        get_editor_scene_name=lambda: "Editor",
-        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
-            render_connector,
-            scene_name,
-        ),
+    engine, _editor_scene, connector, render_session, _model = (
+        _new_game_mode_fixture()
+    )
+    model = _make_game_mode_model(
+        engine,
+        connector,
+        render_session,
         prepare_code_for_play=lambda: False,
     )
 
     try:
         model.toggle_game_mode()
 
-        assert model.is_game_mode is False
-        assert scene_manager.has_scene("Editor(game)") is False
-        assert scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert not model.is_game_mode
+        assert not engine.has_runtime_session
+        assert not engine.scene_manager.has_scene("Editor(game)")
+        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
         assert connector.events == []
-        assert render_connector.events == []
+        assert render_session.events == []
     finally:
-        scene_manager.close_all_scenes()
+        _stop_and_shutdown(engine, model)
 
 
-def test_game_mode_model_rolls_back_failed_start_render_rebind():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
-    assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
-    editor_connector = _EditorConnector()
-    editor_connector.attached_scene_name = "Editor"
-    render_connector = _RenderConnector()
-    render_connector.fail_next("attach", "Editor(game)")
-    model = _make_game_mode_model(
-        scene_manager,
-        editor_connector,
-        render_connector,
-    )
-    state_events = []
-    model.state_changed.connect(lambda _model: state_events.append("changed"))
-
-    try:
-        model.toggle_game_mode()
-
-        assert model.is_game_mode is False
-        assert scene_manager.has_scene("Editor(game)") is False
-        assert scene_manager.get_mode("Editor") == SceneMode.STOP
-        assert editor_connector.attached_scene_name == "Editor"
-        assert state_events == []
-    finally:
-        scene_manager.close_all_scenes()
-
-
-def test_game_mode_model_rolls_back_failed_start_editor_switch():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
-    assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
-    editor_connector = _EditorConnector()
-    editor_connector.attached_scene_name = "Editor"
-    editor_connector.fail_next_attach("Editor(game)")
-    render_connector = _RenderConnector()
-    model = _make_game_mode_model(
-        scene_manager,
-        editor_connector,
-        render_connector,
+def test_selected_controller_starts_before_runtime_copy_and_stops_before_close():
+    owner = "editor-game-mode-controller-owner"
+    events = []
+    engine, _editor_scene, connector, render_session, _model = (
+        _new_game_mode_fixture()
     )
 
-    try:
-        model.toggle_game_mode()
+    class EditorDirector(WorldController):
+        def start(self, _context) -> None:
+            assert not engine.scene_manager.has_scene("Editor(game)")
+            events.append("controller:start")
 
-        assert model.is_game_mode is False
-        assert scene_manager.has_scene("Editor(game)") is False
-        assert scene_manager.get_mode("Editor") == SceneMode.STOP
-        assert editor_connector.attached_scene_name == "Editor"
-        assert render_connector.events[-2:] == [
-            ("attach_scene_to_render", "Editor"),
-            ("detach_scene_from_render", "Editor(game)", False),
-        ]
-    finally:
-        scene_manager.close_all_scenes()
+        def stop(self, _context) -> None:
+            assert engine.scene_manager.has_scene("Editor(game)")
+            events.append("controller:stop")
 
-
-def test_game_mode_model_keeps_playing_when_stop_render_rebind_fails():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
-    assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
-    editor_connector = _EditorConnector()
-    editor_connector.attached_scene_name = "Editor"
-    render_connector = _RenderConnector()
+    publish_world_controllers([EditorDirector], owner=owner)
     model = _make_game_mode_model(
-        scene_manager,
-        editor_connector,
-        render_connector,
-    )
-
-    try:
-        model.toggle_game_mode()
-        render_connector.fail_next("attach", "Editor")
-        model.toggle_game_mode()
-
-        assert model.is_game_mode is True
-        assert scene_manager.has_scene("Editor(game)") is True
-        assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
-        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
-        assert editor_connector.attached_scene_name == "Editor(game)"
-    finally:
-        scene_manager.close_all_scenes()
-
-
-def test_game_mode_model_rolls_back_failed_stop_editor_switch():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
-    assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
-    editor_connector = _EditorConnector()
-    editor_connector.attached_scene_name = "Editor"
-    render_connector = _RenderConnector()
-    model = _make_game_mode_model(
-        scene_manager,
-        editor_connector,
-        render_connector,
-    )
-
-    try:
-        model.toggle_game_mode()
-        editor_connector.fail_next_attach("Editor")
-        model.toggle_game_mode()
-
-        assert model.is_game_mode is True
-        assert scene_manager.has_scene("Editor(game)") is True
-        assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
-        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
-        assert editor_connector.attached_scene_name == "Editor(game)"
-        assert render_connector.events[-2:] == [
-            ("attach_scene_to_render", "Editor(game)"),
-            ("detach_scene_from_render", "Editor", False),
-        ]
-    finally:
-        scene_manager.close_all_scenes()
-
-
-def test_game_mode_model_supports_repeated_play_stop_cycles():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
-    assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
-    editor_connector = _EditorConnector()
-    editor_connector.attached_scene_name = "Editor"
-    render_connector = _RenderConnector()
-    model = _make_game_mode_model(
-        scene_manager,
-        editor_connector,
-        render_connector,
-    )
-
-    try:
-        for _ in range(3):
-            model.toggle_game_mode()
-            assert model.is_game_mode is True
-            assert scene_manager.has_scene("Editor(game)") is True
-            model.toggle_game_mode()
-            assert model.is_game_mode is False
-            assert scene_manager.has_scene("Editor(game)") is False
-        assert editor_connector.attached_scene_name == "Editor"
-        assert scene_manager.get_mode("Editor") == SceneMode.STOP
-    finally:
-        scene_manager.close_all_scenes()
-
-
-def test_game_mode_model_restores_render_counts_with_shared_render_attachment():
-    scene_manager = SceneManager()
-    editor_scene = scene_manager.create_scene("Editor", [])
-    assert editor_scene is not None
-    scene_manager.set_mode("Editor", SceneMode.STOP)
-
-    rendering = _CountingRenderingController()
-    render_attachment = RenderSceneAttachment(scene_manager, rendering)
-    render_attachment.attach_scene_to_render("Editor")
-    baseline = rendering.counts
-
-    connector = _EditorConnector()
-    model = GameModeModel(
-        scene_manager=scene_manager,
-        editor_connector=connector,
-        rendering_controller=rendering,
-        get_editor_scene_name=lambda: "Editor",
-        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
-            render_attachment,
-            scene_name,
+        engine,
+        connector,
+        render_session,
+        prepare_code_for_play=lambda: events.append("modules:ready") or True,
+        create_controller_for_play=lambda: (
+            events.append("controller:create")
+            or create_world_controller("EditorDirector", owner)
         ),
     )
 
     try:
         model.toggle_game_mode()
+        assert events == [
+            "modules:ready",
+            "controller:create",
+            "controller:start",
+        ]
+        engine.tick_and_render(0.0)
+        model.refresh_primary_scene()
+        model.toggle_game_mode()
+        assert events == [
+            "modules:ready",
+            "controller:create",
+            "controller:start",
+            "controller:stop",
+        ]
+    finally:
+        _stop_and_shutdown(engine, model)
+        unregister_python_world_controller_owner(owner)
 
-        assert rendering.counts == baseline
-        assert rendering.sync_calls == ["Editor"]
-        assert rendering.sync_render_target_calls == ["Editor"]
-        assert rendering.detach_calls == ["Editor"]
-        assert rendering.attach_calls == ["Editor", "Editor(game)"]
-        assert rendering.editor_display.viewports[0].render_target is rendering.editor_render_target
-        assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
-        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
 
+def test_failed_play_setup_ends_session_and_restores_authoring_scene():
+    engine, _editor_scene, connector, render_session, _model = (
+        _new_game_mode_fixture()
+    )
+    render_session.fail_next("detach", "Editor")
+    model = _make_game_mode_model(engine, connector, render_session)
+
+    try:
         model.toggle_game_mode()
 
-        assert rendering.counts == baseline
-        assert rendering.detach_calls == ["Editor", "Editor(game)"]
-        assert rendering.attach_calls == ["Editor", "Editor(game)", "Editor"]
-        assert rendering.editor_display.viewports[0].render_target is rendering.editor_render_target
-        assert scene_manager.get_mode("Editor") == SceneMode.STOP
-        assert scene_manager.has_scene("Editor(game)") is False
+        assert not model.is_game_mode
+        assert not engine.has_runtime_session
+        assert not engine.scene_manager.has_scene("Editor(game)")
+        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert render_session.events == [
+            ("sync_scene_render_state", "Editor"),
+            ("detach", "Editor", False),
+        ]
     finally:
-        scene_manager.close_all_scenes()
+        _stop_and_shutdown(engine, model)
+
+
+def test_editor_presentation_failure_does_not_roll_back_committed_primary():
+    engine, _editor_scene, connector, render_session, model = (
+        _new_game_mode_fixture()
+    )
+    connector.fail_next_attach("Editor(game)")
+
+    try:
+        model.toggle_game_mode()
+        runtime_scene = engine.scene_manager.get_scene("Editor(game)")
+        assert runtime_scene is not None
+        engine.tick_and_render(0.0)
+        model.refresh_primary_scene()
+
+        context = model._game_session.context
+        assert context.primary_scene.name == "Editor(game)"
+        assert engine.rendering_manager.topology.is_attached(runtime_scene)
+        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+        assert model.is_game_mode
+        assert connector.attached_scene_name == "Editor"
+    finally:
+        _stop_and_shutdown(engine, model)
+
+
+def test_game_mode_model_observes_rotation_without_host_transition_binding():
+    engine, _editor_scene, connector, render_session, model = (
+        _new_game_mode_fixture()
+    )
+    secondary = None
+
+    try:
+        model.toggle_game_mode()
+        engine.tick_and_render(0.0)
+        model.refresh_primary_scene()
+
+        secondary = engine.scene_manager.create_scene("Secondary(game)", [])
+        assert secondary is not None
+        assert engine.bind_runtime_scene(secondary)
+        context = model._game_session.context
+        assert context.request_primary_scene(secondary)
+
+        engine.tick_and_render(0.0)
+        model.refresh_primary_scene()
+
+        assert model.game_scene_name == "Secondary(game)"
+        assert connector.attached_scene_name == "Secondary(game)"
+        assert render_session.events[-1] == ("reconcile", "Secondary(game)")
+        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode("Secondary(game)") == SceneMode.PLAY
+
+        model.toggle_game_mode()
+        assert not context.valid
+        assert engine.scene_manager.has_scene("Secondary(game)")
+        assert engine.scene_manager.get_mode("Secondary(game)") == SceneMode.INACTIVE
+    finally:
+        _stop_and_shutdown(engine, model)
+        if (
+            secondary is not None
+            and engine.scene_manager.has_scene("Secondary(game)")
+        ):
+            engine.scene_manager.close_scene("Secondary(game)")
+
+
+def test_game_mode_model_supports_repeated_play_stop_cycles():
+    engine, _editor_scene, connector, render_session, model = (
+        _new_game_mode_fixture()
+    )
+
+    try:
+        for _ in range(3):
+            model.toggle_game_mode()
+            assert model.is_game_mode
+            assert engine.has_runtime_session
+            engine.tick_and_render(0.0)
+            model.refresh_primary_scene()
+            model.toggle_game_mode()
+            assert not model.is_game_mode
+            assert not engine.has_runtime_session
+            assert not engine.scene_manager.has_scene("Editor(game)")
+        assert connector.attached_scene_name == "Editor"
+        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
+    finally:
+        _stop_and_shutdown(engine, model)
 
 
 def test_editor_scene_attachment_reuses_editor_render_target(monkeypatch):

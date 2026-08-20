@@ -532,3 +532,49 @@ TEST_CASE("Blocking EngineCore loop processes primary requests before each scene
     CHECK(engine.end_session());
     CHECK(engine.shutdown());
 }
+
+TEST_CASE("RuntimeSession lifecycle changes are safe in the owning loop poll phase") {
+    tc_scene_render_mount_extension_init();
+    termin::EngineCore engine;
+    engine.set_target_fps(0.0);
+    termin::TcSceneRef scene(engine.scene_manager.create_scene("poll-owned-session"));
+    REQUIRE(scene.valid());
+
+    int polls = 0;
+    int completions = 0;
+    int shutdowns = 0;
+    termin::WorldContext context;
+    auto loop = engine.attach_loop_client(termin::EngineLoopClient{
+        [&]() {
+            ++polls;
+            if (polls == 1) {
+                REQUIRE(engine.begin_session());
+                REQUIRE(engine.bind_runtime_scene(scene.handle()));
+                context = termin::WorldContext::require_from_scene(
+                    scene.handle(), "loop poll session test");
+                REQUIRE(context.request_primary_scene(scene.handle()));
+            } else if (polls == 2) {
+                CHECK(tc_scene_handle_eq(context.primary_scene(), scene.handle()));
+                CHECK(engine.end_session());
+            }
+        },
+        [&]() { return polls < 2; },
+        [&]() { ++shutdowns; },
+    });
+    auto completion = engine.attach_frame_completion_callback([&]() {
+        ++completions;
+        CHECK_FALSE(engine.end_session());
+        CHECK(engine.has_runtime_session());
+    });
+
+    engine.run();
+
+    CHECK_EQ(polls, 2);
+    CHECK_EQ(completions, 1);
+    CHECK_EQ(shutdowns, 1);
+    CHECK_FALSE(engine.has_runtime_session());
+    CHECK_FALSE(context.valid());
+    CHECK(loop.connected());
+    CHECK(completion.connected());
+    CHECK(engine.shutdown());
+}

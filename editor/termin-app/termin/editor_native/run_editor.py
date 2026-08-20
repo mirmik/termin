@@ -71,11 +71,7 @@ from termin.editor_core.scene_file_controller import SceneFileController
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_core.shader_runtime import resolve_slangc, resolve_termin_shaderc
 from termin.editor_core.game_mode_model import GameModeModel
-from termin.editor_core.game_mode_session_connectors import (
-    EditorGameModeConnector,
-    RenderGameModeConnector,
-)
-from termin.editor_core.primary_render_scene_binding import PrimaryRenderSceneBinding
+from termin.editor_core.game_mode_session_connectors import EditorGameModeConnector
 from termin.editor_core.navigation_settings_model import NavigationSettingsController
 from termin.editor_core.spacemouse_controller import SpaceMouseController
 from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
@@ -1724,22 +1720,27 @@ def _compose_native_editor(
             return False
         return True
 
+    def create_controller_for_play():
+        from termin.project import create_selected_world_controller
+        from termin.project.settings import ProjectSettingsManager
+
+        selection = ProjectSettingsManager.instance().settings.world_controller
+        return create_selected_world_controller(selection)
+
     game_mode_controller = None
     if editor_scene_session is not None and render_scene_session is not None and display_workspace is not None:
         game_mode_model = GameModeModel(
-            scene_manager=engine.scene_manager,
+            engine=engine,
             editor_connector=EditorGameModeConnector(
                 engine.scene_manager,
                 editor_scene_session,
             ),
+            render_scene_session=render_scene_session,
             rendering_controller=display_workspace,
             get_editor_scene_name=active_scene_name,
-            render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
-                RenderGameModeConnector(render_scene_session),
-                scene_name,
-            ),
             scene_tree_controller=scene_hierarchy_controller,
             prepare_code_for_play=prepare_code_for_play,
+            create_controller_for_play=create_controller_for_play,
         )
         game_mode_controller = NativeGameModeController(
             game_mode_model,

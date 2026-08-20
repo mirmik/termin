@@ -98,6 +98,11 @@ TERMIN_ENGINE_API const char* tc_world_controller_type_at(size_t index);
 
 TERMIN_ENGINE_API tc_world_controller_instance* tc_world_controller_instance_create(
     const char* type_name, tc_world_controller_error_v1* error);
+// Create only when the published runtime type belongs to expected_owner. This
+// is the strict project/manifest selection path; it never falls back to a
+// same-named type from another module.
+TERMIN_ENGINE_API tc_world_controller_instance* tc_world_controller_instance_create_for_owner(
+    const char* type_name, const char* expected_owner, tc_world_controller_error_v1* error);
 TERMIN_ENGINE_API bool tc_world_controller_instance_start(tc_world_controller_instance* instance,
                                                            tc_world_context* context,
                                                            tc_world_controller_error_v1* error);

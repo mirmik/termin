@@ -1,4 +1,4 @@
-"""Adapters from GameModeModel's stable protocol to scene sessions."""
+"""Editor-presentation adapter used by GameModeModel."""
 
 from __future__ import annotations
 
@@ -38,20 +38,4 @@ class EditorGameModeConnector:
         return True
 
 
-class RenderGameModeConnector:
-    def __init__(self, session) -> None:
-        self._session = session
-
-    def sync_scene_render_state(self, name: str) -> None:
-        self._session.sync_scene_render_state(name)
-
-    def attach_scene_to_render(self, name: str) -> bool:
-        self._session.attach(name)
-        return True
-
-    def detach_scene_from_render(self, name: str, *, save_state: bool) -> bool:
-        self._session.detach(name, save_state=save_state)
-        return True
-
-
-__all__ = ["EditorGameModeConnector", "RenderGameModeConnector"]
+__all__ = ["EditorGameModeConnector"]
