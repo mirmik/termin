@@ -9,6 +9,8 @@
 
 namespace termin {
 
+    class EngineCore;
+
     // Non-owning view of the EngineCore-owned per-run context. The C handle is
     // intentionally opaque here; the EngineCore runtime host defines its
     // concrete contents.
@@ -37,6 +39,42 @@ namespace termin {
 
         virtual bool start(WorldContext context, std::string& error) = 0;
         virtual bool stop(WorldContext context, std::string& error) = 0;
+    };
+
+    // Move-only owner of one language-neutral controller instance. The owner
+    // may be transferred into EngineCore; destruction is a lifecycle backstop
+    // and releases the runtime type instance link.
+    class TERMIN_ENGINE_API WorldControllerInstance {
+        friend class EngineCore;
+
+        tc_world_controller_instance* _instance = nullptr;
+
+        explicit WorldControllerInstance(tc_world_controller_instance* instance) noexcept
+            : _instance(instance) {}
+
+    public:
+        WorldControllerInstance() = default;
+        ~WorldControllerInstance();
+
+        WorldControllerInstance(const WorldControllerInstance&) = delete;
+        WorldControllerInstance& operator=(const WorldControllerInstance&) = delete;
+        WorldControllerInstance(WorldControllerInstance&& other) noexcept;
+        WorldControllerInstance& operator=(WorldControllerInstance&& other) noexcept;
+
+        static WorldControllerInstance create(const char* type_name, std::string& error);
+
+        bool valid() const noexcept {
+            return _instance != nullptr;
+        }
+        explicit operator bool() const noexcept {
+            return valid();
+        }
+        tc_world_controller_state state() const noexcept;
+        const char* type_name() const noexcept;
+        tc_world_controller_instance* native_handle() const noexcept {
+            return _instance;
+        }
+        bool reset() noexcept;
     };
 
     class TERMIN_ENGINE_API WorldControllerTypeDescriptorBuilder {

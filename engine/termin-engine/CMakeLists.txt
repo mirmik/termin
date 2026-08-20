@@ -225,6 +225,18 @@ if(TERMIN_BUILD_TESTS)
     )
     add_test(NAME termin_engine_world_controller_test COMMAND termin_engine_world_controller_test)
 
+    add_executable(termin_engine_runtime_session_test
+        tests/test_engine_runtime_session.cpp
+    )
+    target_include_directories(termin_engine_runtime_session_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_engine_runtime_session_test PRIVATE termin_engine)
+    set_target_properties(termin_engine_runtime_session_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(NAME termin_engine_runtime_session_test COMMAND termin_engine_runtime_session_test)
+
     if(TERMIN_BUILD_PYTHON)
         nanobind_add_module(_world_controller_test_native NB_SHARED
             tests/world_controller_test_module.cpp

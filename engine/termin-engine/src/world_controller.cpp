@@ -6,6 +6,63 @@
 
 namespace termin {
 
+    namespace {
+
+        struct WorldControllerErrorBuffer {
+            char text[1024] = {};
+            tc_world_controller_error_v1 error{sizeof(tc_world_controller_error_v1), text, sizeof(text)};
+        };
+
+    } // namespace
+
+    WorldControllerInstance::~WorldControllerInstance() {
+        reset();
+    }
+
+    WorldControllerInstance::WorldControllerInstance(WorldControllerInstance&& other) noexcept
+        : _instance(std::exchange(other._instance, nullptr)) {}
+
+    WorldControllerInstance& WorldControllerInstance::operator=(WorldControllerInstance&& other) noexcept {
+        if (this != &other) {
+            if (!reset()) {
+                return *this;
+            }
+            _instance = std::exchange(other._instance, nullptr);
+        }
+        return *this;
+    }
+
+    WorldControllerInstance WorldControllerInstance::create(const char* type_name, std::string& error) {
+        error.clear();
+        WorldControllerErrorBuffer buffer;
+        tc_world_controller_instance* instance = tc_world_controller_instance_create(type_name, &buffer.error);
+        if (!instance) {
+            error = buffer.text[0] ? buffer.text : "WorldController instance creation failed";
+        }
+        return WorldControllerInstance(instance);
+    }
+
+    tc_world_controller_state WorldControllerInstance::state() const noexcept {
+        return tc_world_controller_instance_state(_instance);
+    }
+
+    const char* WorldControllerInstance::type_name() const noexcept {
+        return tc_world_controller_instance_type_name(_instance);
+    }
+
+    bool WorldControllerInstance::reset() noexcept {
+        if (!_instance) {
+            return true;
+        }
+        WorldControllerErrorBuffer buffer;
+        const bool result = tc_world_controller_instance_destroy(&_instance, &buffer.error);
+        if (!result) {
+            tc::Log::error("[WorldControllerInstance] destroy failed: %s",
+                           buffer.text[0] ? buffer.text : "unknown lifecycle failure");
+        }
+        return result;
+    }
+
     WorldControllerTypeDescriptorBuilder::WorldControllerTypeDescriptorBuilder(const char* type_name,
                                                                                const char* owner,
                                                                                const char* parent,
