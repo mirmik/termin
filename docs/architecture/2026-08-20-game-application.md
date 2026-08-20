@@ -182,12 +182,13 @@ The extension:
 - has no persistence key and is never serialized or copied as authored data;
 - uses an invalidatable/generation-safe link so a scene cannot dereference a
   destroyed session;
-- is guaranteed to be valid by component `on_start`, `on_scene_active`, and
-  the first update, but not from a language object constructor that may not yet
-  have an owning entity or scene.
+- for a bound runtime scene, is guaranteed to be valid by component
+  `on_start`, `on_scene_active`, and the first update, but not from a language
+  object constructor that may not yet have an owning entity or scene.
 
-Authoring scenes do not receive a live world context. An editor runtime copy is
-bound only after a session exists.
+Authoring scenes do not receive a live world context; their ordinary editor
+lifecycle callbacks do not imply one. An editor runtime copy is bound only
+after a session exists.
 
 ## Primary-scene transition
 
@@ -253,6 +254,10 @@ Editor observers live in the editor session and are never stored inside
 it does not roll back an otherwise valid gameplay transition. Before closing a
 runtime copy, Stop first makes editor-owned views release or rebind their
 references.
+
+`EditorSceneAttachment` never emits scene lifecycle callbacks. `SceneManager`
+mode transitions are their sole owner, so presenting an already active scene
+cannot redeliver `on_scene_active`.
 
 The editor begins and ends the session from its ordinary event-poll callback.
 `EngineCore` commits a pending primary request at the start of the following

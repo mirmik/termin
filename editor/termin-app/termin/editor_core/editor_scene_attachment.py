@@ -193,12 +193,12 @@ class EditorSceneAttachment:
 
         self._attached_scene = scene
 
-        # Notify components that scene is active
-        scene.notify_scene_active()
-
         # Editor attachment is separate from scene render attachment: it only
         # creates the editor viewport/tools. Scene-owned viewports are mounted
         # by explicit render orchestration such as Attach UI or GameModeModel.
+        # Scene lifecycle remains owned exclusively by SceneManager mode
+        # transitions; presenting an already active scene must not emit a
+        # second on_scene_active callback.
         if self._rendering_controller is not None:
             self._rendering_controller._viewport_list.refresh()
             self._rendering_controller._refresh_render_targets()

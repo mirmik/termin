@@ -11,6 +11,7 @@ from termin.engine import (
     unregister_python_world_controller_owner,
 )
 from termin.bootstrap import bootstrap_runtime
+from termin.scene import PythonComponent
 
 SceneMode = engine_scene.SceneMode
 
@@ -382,6 +383,19 @@ class _Display:
             self.viewports.remove(viewport)
 
 
+class _SceneActiveProbe(PythonComponent):
+    def __init__(self):
+        super().__init__()
+        self.active_count = 0
+        self.inactive_count = 0
+
+    def on_scene_active(self) -> None:
+        self.active_count += 1
+
+    def on_scene_inactive(self) -> None:
+        self.inactive_count += 1
+
+
 def _make_game_mode_model(
     engine,
     editor_connector,
@@ -725,4 +739,67 @@ def test_editor_scene_attachment_reuses_editor_render_target(monkeypatch):
         assert rendering._viewport_list.refresh_count == 3
         assert rendering.render_target_refresh_count == 3
     finally:
+        scene_manager.close_all_scenes()
+
+
+def test_editor_scene_attachment_leaves_lifecycle_notifications_to_scene_mode(
+    monkeypatch,
+):
+    from termin.editor_core import editor_camera
+    import termin.render_framework._render_framework_native as render_framework_native
+
+    EditorSceneAttachment = _load_source_module(
+        "editor_scene_attachment_lifecycle_under_test",
+        "termin-app/termin/editor_core/editor_scene_attachment.py",
+    ).EditorSceneAttachment
+
+    monkeypatch.setattr(editor_camera, "EditorCameraManager", _CameraManager)
+    monkeypatch.setattr(
+        render_framework_native,
+        "render_target_new",
+        lambda name: _RenderTarget(name),
+    )
+
+    scene_manager = SceneManager()
+    authoring_scene = scene_manager.create_scene("Editor", [])
+    game_scene = scene_manager.create_scene("Editor(game)", [])
+    assert authoring_scene is not None
+    assert game_scene is not None
+    authoring_probe = _SceneActiveProbe()
+    game_probe = _SceneActiveProbe()
+    authoring_scene.create_entity("AuthoringProbe").add_component(authoring_probe)
+    game_scene.create_entity("GameProbe").add_component(game_probe)
+
+    rendering = _RenderingControllerForAttachment()
+    attachment = EditorSceneAttachment(
+        display=_Display(),
+        rendering_controller=rendering,
+        rendering_manager=rendering._manager,
+        make_editor_pipeline=_Pipeline,
+    )
+
+    try:
+        attachment.attach(authoring_scene, restore_state=False)
+        assert authoring_probe.active_count == 0
+        scene_manager.set_mode("Editor", SceneMode.STOP)
+        assert authoring_probe.active_count == 1
+
+        attachment.attach(game_scene, transfer_camera_state=True)
+        assert game_probe.active_count == 0
+        scene_manager.set_mode("Editor(game)", SceneMode.PLAY)
+        assert game_probe.active_count == 1
+
+        # Rebinding presentation while a scene stays active is not a scene
+        # lifecycle transition and must not redeliver on_scene_active.
+        attachment.attach(authoring_scene, restore_state=False)
+        assert authoring_probe.active_count == 1
+
+        scene_manager.set_mode("Editor", SceneMode.INACTIVE)
+        assert authoring_probe.inactive_count == 1
+        attachment.attach(authoring_scene, restore_state=False)
+        assert authoring_probe.active_count == 1
+        scene_manager.set_mode("Editor", SceneMode.STOP)
+        assert authoring_probe.active_count == 2
+    finally:
+        attachment.close(save_state=False)
         scene_manager.close_all_scenes()
