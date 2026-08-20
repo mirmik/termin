@@ -136,8 +136,9 @@ namespace termin {
 
         class RuntimeSession {
         public:
-            explicit RuntimeSession(WorldControllerInstance controller)
-                : _controller(std::move(controller)),
+            RuntimeSession(EngineCore& engine, WorldControllerInstance controller)
+                : _engine(engine),
+                  _controller(std::move(controller)),
                   _context(create_world_context(_controller.native_handle())) {}
 
             ~RuntimeSession() {
@@ -185,6 +186,7 @@ namespace termin {
                     return false;
                 }
                 bool clean = true;
+                release_primary_scene();
                 for (tc_scene_handle scene : _bound_scenes) {
                     if (!unbind_world_context_scene(_context, scene)) {
                         clean = false;
@@ -240,6 +242,12 @@ namespace termin {
                     tc_log(TC_LOG_ERROR, "[RuntimeSession] Scene is not bound to this session");
                     return false;
                 }
+                if (tc_scene_handle_eq(tc_world_context_primary_scene(_context), scene)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Cannot unbind the primary scene; switch it or end the session first");
+                    return false;
+                }
+                clear_world_context_scene_references(_context, scene);
                 if (!unbind_world_context_scene(_context, scene)) {
                     return false;
                 }
@@ -255,13 +263,197 @@ namespace termin {
                 if (existing == _bound_scenes.end()) {
                     return;
                 }
+                clear_world_context_scene_references(_context, scene);
                 if (!unbind_world_context_scene(_context, scene)) {
                     tc_log(TC_LOG_ERROR, "[RuntimeSession] Failed to unbind a scene before destruction");
                 }
                 _bound_scenes.erase(existing);
             }
 
+            void process_primary_scene_request() {
+                const tc_scene_handle candidate = take_world_context_primary_request(_context);
+                if (!tc_scene_handle_valid(candidate)) {
+                    return;
+                }
+                if (!scene_is_transition_candidate(candidate)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Dropped primary scene request: target must remain registered, "
+                           "bound to this session, inactive and render-detached");
+                    return;
+                }
+
+                const tc_scene_handle previous = tc_world_context_primary_scene(_context);
+                if (tc_scene_handle_eq(previous, candidate)) {
+                    return;
+                }
+
+                tc_scene_mode active_mode = TC_SCENE_MODE_PLAY;
+                if (tc_scene_handle_valid(previous)) {
+                    if (!scene_is_bound(previous) || !_engine.scene_manager.is_registered(previous) ||
+                        !_engine.render_topology.is_attached(previous)) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RuntimeSession] Dropped primary scene request: current primary invariant is broken");
+                        return;
+                    }
+                    active_mode = tc_scene_get_mode(previous);
+                    if (active_mode != TC_SCENE_MODE_PLAY && active_mode != TC_SCENE_MODE_STOP) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RuntimeSession] Dropped primary scene request: current primary is not active");
+                        return;
+                    }
+                }
+
+                try {
+                    (void)_engine.rendering_manager.attach_scene_full(candidate);
+                } catch (...) {
+                    if (tc_scene_alive(candidate)) {
+                        _engine.rendering_manager.detach_scene_full(candidate);
+                    }
+                    throw;
+                }
+                if (!_engine.render_topology.is_attached(candidate)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Primary scene render preparation failed; keeping the current primary");
+                    return;
+                }
+                if (!scene_is_prepared_candidate(candidate)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Candidate changed during render preparation; rolling it back");
+                    cleanup_candidate(candidate);
+                    return;
+                }
+
+                if (tc_scene_handle_valid(previous)) {
+                    tc_scene_set_mode(previous, TC_SCENE_MODE_INACTIVE);
+                    if (tc_scene_alive(previous) && _engine.render_topology.is_attached(previous)) {
+                        _engine.rendering_manager.detach_scene_full(previous);
+                    }
+                }
+
+                if (!scene_is_prepared_candidate(candidate)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Candidate changed while deactivating the old primary; rolling back");
+                    cleanup_candidate(candidate);
+                    restore_previous_primary(previous, active_mode);
+                    return;
+                }
+                if (!publish_world_context_primary_scene(_context, candidate)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Failed to publish the prepared primary scene; rolling back");
+                    cleanup_candidate(candidate);
+                    restore_previous_primary(previous, active_mode);
+                    return;
+                }
+
+                tc_scene_set_mode(candidate, active_mode);
+                if (!tc_scene_alive(candidate) ||
+                    !tc_scene_handle_eq(tc_world_context_primary_scene(_context), candidate) ||
+                    !_engine.render_topology.is_attached(candidate) ||
+                    tc_scene_get_mode(candidate) != active_mode) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Primary scene activation violated transaction invariants; rolling back");
+                    cleanup_candidate(candidate);
+                    restore_previous_primary(previous, active_mode);
+                    return;
+                }
+
+                _engine.scene_manager.request_render();
+            }
+
         private:
+            bool scene_is_bound(tc_scene_handle scene) const noexcept {
+                const auto existing = std::find_if(
+                    _bound_scenes.begin(), _bound_scenes.end(), [scene](tc_scene_handle bound) {
+                        return tc_scene_handle_eq(bound, scene);
+                    });
+                if (existing == _bound_scenes.end()) {
+                    return false;
+                }
+                tc_world_context* context = tc_world_context_acquire_from_scene(scene);
+                const bool matches = context == _context;
+                tc_world_context_release(context);
+                return matches;
+            }
+
+            bool scene_is_transition_candidate(tc_scene_handle scene) const noexcept {
+                return scene_is_candidate_identity(scene) &&
+                       !_engine.render_topology.is_attached(scene);
+            }
+
+            bool scene_is_prepared_candidate(tc_scene_handle scene) const noexcept {
+                return scene_is_candidate_identity(scene) &&
+                       _engine.render_topology.is_attached(scene);
+            }
+
+            bool scene_is_candidate_identity(tc_scene_handle scene) const noexcept {
+                return tc_scene_alive(scene) && scene_is_bound(scene) &&
+                       _engine.scene_manager.is_registered(scene) &&
+                       tc_scene_get_mode(scene) == TC_SCENE_MODE_INACTIVE;
+            }
+
+            void cleanup_candidate(tc_scene_handle scene) {
+                if (!tc_scene_alive(scene)) {
+                    return;
+                }
+                if (tc_scene_get_mode(scene) != TC_SCENE_MODE_INACTIVE) {
+                    tc_scene_set_mode(scene, TC_SCENE_MODE_INACTIVE);
+                }
+                if (_engine.render_topology.is_attached(scene)) {
+                    _engine.rendering_manager.detach_scene_full(scene);
+                }
+                clear_world_context_scene_references(_context, scene);
+            }
+
+            bool restore_previous_primary(tc_scene_handle previous, tc_scene_mode mode) noexcept {
+                if (!tc_scene_handle_valid(previous)) {
+                    (void)publish_world_context_primary_scene(_context, TC_SCENE_HANDLE_INVALID);
+                    return true;
+                }
+                if (!tc_scene_alive(previous) || !scene_is_bound(previous) ||
+                    !_engine.scene_manager.is_registered(previous)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Cannot roll back: the previous primary scene is no longer available");
+                    (void)publish_world_context_primary_scene(_context, TC_SCENE_HANDLE_INVALID);
+                    return false;
+                }
+                if (!_engine.render_topology.is_attached(previous)) {
+                    try {
+                        (void)_engine.rendering_manager.attach_scene_full(previous);
+                    } catch (...) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RuntimeSession] Exception while restoring the previous primary rendering");
+                        (void)publish_world_context_primary_scene(_context, TC_SCENE_HANDLE_INVALID);
+                        return false;
+                    }
+                }
+                if (!_engine.render_topology.is_attached(previous) ||
+                    !publish_world_context_primary_scene(_context, previous)) {
+                    tc_log(TC_LOG_ERROR,
+                           "[RuntimeSession] Failed to restore the previous primary render attachment");
+                    (void)publish_world_context_primary_scene(_context, TC_SCENE_HANDLE_INVALID);
+                    return false;
+                }
+                tc_scene_set_mode(previous, mode);
+                _engine.scene_manager.request_render();
+                return tc_scene_get_mode(previous) == mode;
+            }
+
+            void release_primary_scene() {
+                (void)take_world_context_primary_request(_context);
+                const tc_scene_handle primary = tc_world_context_primary_scene(_context);
+                if (!tc_scene_handle_valid(primary)) {
+                    return;
+                }
+                if (tc_scene_alive(primary)) {
+                    tc_scene_set_mode(primary, TC_SCENE_MODE_INACTIVE);
+                    if (_engine.render_topology.is_attached(primary)) {
+                        _engine.rendering_manager.detach_scene_full(primary);
+                    }
+                }
+                (void)publish_world_context_primary_scene(_context, TC_SCENE_HANDLE_INVALID);
+            }
+
+            EngineCore& _engine;
             WorldControllerInstance _controller;
             tc_world_context* _context = nullptr;
             std::vector<tc_scene_handle> _bound_scenes;
@@ -479,7 +671,8 @@ namespace termin {
 
         _session_operation = SessionOperation::Beginning;
         try {
-            auto candidate = std::make_unique<engine_detail::RuntimeSession>(std::move(controller));
+            auto candidate =
+                std::make_unique<engine_detail::RuntimeSession>(*this, std::move(controller));
             if (!candidate->start()) {
                 _session_operation = SessionOperation::Idle;
                 return false;
@@ -630,6 +823,26 @@ namespace termin {
         // inside the already-open frame. When called standalone (outside run),
         // sections are no-ops because current_frame is NULL.
         bool profile = tc_profiler_enabled();
+
+        if (_runtime_session) {
+            if (_session_operation != SessionOperation::Idle) {
+                tc_log(TC_LOG_ERROR,
+                       "[EngineCore] Cannot process a primary scene request during RuntimeSession lifecycle work");
+            } else {
+                _session_operation = SessionOperation::SwitchingPrimary;
+                try {
+                    _runtime_session->process_primary_scene_request();
+                } catch (const std::exception& exception) {
+                    tc_log(TC_LOG_ERROR,
+                           "[EngineCore] Primary scene transaction raised an exception: %s",
+                           exception.what());
+                } catch (...) {
+                    tc_log(TC_LOG_ERROR,
+                           "[EngineCore] Primary scene transaction raised an unknown exception");
+                }
+                _session_operation = SessionOperation::Idle;
+            }
+        }
 
         if (profile)
             tc_profiler_begin_section("SceneManager Tick");
