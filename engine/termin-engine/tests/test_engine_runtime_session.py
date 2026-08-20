@@ -29,6 +29,20 @@ def test_engine_core_reuses_null_runtime_session_without_placeholder() -> None:
     assert engine.shutdown()
 
 
+def test_runtime_session_rejects_authoring_scene_binding() -> None:
+    engine = EngineCore()
+    scene = engine.scene_manager.create_scene(
+        engine_scene.SceneKey("python-authoring-scene", engine_scene.SceneRole.AUTHORING)
+    )
+    assert scene is not None
+
+    assert engine.begin_session()
+    assert not engine.bind_runtime_scene(scene)
+    assert not world_context(scene).valid
+    assert engine.end_session()
+    assert engine.shutdown()
+
+
 def test_engine_core_consumes_python_controller_and_preserves_context_identity() -> None:
     owner = "python_engine_runtime_session_test"
     events: list[tuple[str, object]] = []

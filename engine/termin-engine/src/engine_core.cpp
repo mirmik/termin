@@ -301,8 +301,8 @@ namespace termin {
                 }
                 if (!scene_is_transition_candidate(candidate)) {
                     tc_log(TC_LOG_ERROR,
-                           "[RuntimeSession] Dropped primary scene request: target must remain registered, "
-                           "bound to this session, inactive and render-detached");
+                           "[RuntimeSession] Dropped primary scene request: target must remain registered "
+                           "as RUNTIME, bound to this session, inactive and render-detached");
                     return;
                 }
 
@@ -313,7 +313,7 @@ namespace termin {
 
                 tc_scene_mode active_mode = TC_SCENE_MODE_PLAY;
                 if (tc_scene_handle_valid(previous)) {
-                    if (!scene_is_bound(previous) || !_engine.scene_manager.is_registered(previous) ||
+                    if (!scene_is_bound(previous) || !scene_is_registered_runtime(previous) ||
                         !_engine.render_topology.is_attached(previous)) {
                         tc_log(TC_LOG_ERROR,
                                "[RuntimeSession] Dropped primary scene request: current primary invariant is broken");
@@ -411,8 +411,13 @@ namespace termin {
 
             bool scene_is_candidate_identity(tc_scene_handle scene) const noexcept {
                 return tc_scene_alive(scene) && scene_is_bound(scene) &&
-                       _engine.scene_manager.is_registered(scene) &&
+                       scene_is_registered_runtime(scene) &&
                        tc_scene_get_mode(scene) == TC_SCENE_MODE_INACTIVE;
+            }
+
+            bool scene_is_registered_runtime(tc_scene_handle scene) const noexcept {
+                const std::optional<SceneKey> key = _engine.scene_manager.key_of(scene);
+                return key.has_value() && key->role == SceneRole::Runtime;
             }
 
             void cleanup_candidate(tc_scene_handle scene) {
@@ -434,7 +439,7 @@ namespace termin {
                     return true;
                 }
                 if (!tc_scene_alive(previous) || !scene_is_bound(previous) ||
-                    !_engine.scene_manager.is_registered(previous)) {
+                    !scene_is_registered_runtime(previous)) {
                     tc_log(TC_LOG_ERROR,
                            "[RuntimeSession] Cannot roll back: the previous primary scene is no longer available");
                     (void)publish_world_context_primary_scene(_context, TC_SCENE_HANDLE_INVALID);
@@ -763,8 +768,15 @@ namespace termin {
             tc_log(TC_LOG_ERROR, "[EngineCore] Cannot bind a runtime scene without an active RuntimeSession");
             return false;
         }
-        if (!scene_manager.is_registered(scene)) {
+        const std::optional<SceneKey> key = scene_manager.key_of(scene);
+        if (!key.has_value()) {
             tc_log(TC_LOG_ERROR, "[EngineCore] Runtime scene must be live and registered with this SceneManager");
+            return false;
+        }
+        if (key->role != SceneRole::Runtime) {
+            tc_log(TC_LOG_ERROR,
+                   "[EngineCore] Cannot bind AUTHORING scene '%s' to RuntimeSession; RUNTIME role is required",
+                   key->identity.c_str());
             return false;
         }
         return _runtime_session->bind_scene(scene);
