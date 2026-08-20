@@ -333,9 +333,13 @@ TEST_CASE("Null RuntimeSession binds transient scene context before component li
 TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind removes only its link") {
     termin::EngineCore engine;
     termin::TcSceneRef external = termin::TcSceneRef::create("unregistered-runtime-scene");
+    termin::TcSceneRef authoring(engine.scene_manager.create_scene(
+        termin::SceneKey{"authoring-scene", termin::SceneRole::Authoring}));
     REQUIRE(external.valid());
+    REQUIRE(authoring.valid());
     REQUIRE(engine.begin_session());
     CHECK_FALSE(engine.bind_runtime_scene(external.handle()));
+    CHECK_FALSE(engine.bind_runtime_scene(authoring.handle()));
 
     const termin::SceneKey external_key{"registered-runtime-scene", termin::SceneRole::Runtime};
     engine.scene_manager.register_scene(external_key, external.handle());
@@ -351,6 +355,33 @@ TEST_CASE("RuntimeSession rejects unregistered scenes and explicit unbind remove
     CHECK(engine.end_session());
     CHECK_FALSE(retained.valid());
     external.destroy();
+    CHECK(engine.shutdown());
+}
+
+TEST_CASE("RuntimeSession drops a primary request when a bound scene is re-registered as AUTHORING") {
+    termin::EngineCore engine;
+    const termin::SceneKey runtime_key{"role-mutated-primary", termin::SceneRole::Runtime};
+    const termin::SceneKey authoring_key{"role-mutated-primary", termin::SceneRole::Authoring};
+    termin::TcSceneRef scene(engine.scene_manager.create_scene(runtime_key));
+    REQUIRE(scene.valid());
+    REQUIRE(engine.begin_session());
+    REQUIRE(engine.bind_runtime_scene(scene.handle()));
+    termin::WorldContext context = termin::WorldContext::require_from_scene(
+        scene.handle(), "role-mutated primary test");
+
+    REQUIRE(engine.scene_manager.unregister_scene(runtime_key));
+    REQUIRE(engine.scene_manager.register_scene(authoring_key, scene.handle()));
+    REQUIRE(context.request_primary_scene(scene.handle()));
+    (void)engine.tick_and_render(0.0);
+
+    CHECK_FALSE(tc_scene_handle_valid(context.primary_scene()));
+    CHECK(tc_scene_get_mode(scene.handle()) == TC_SCENE_MODE_INACTIVE);
+    CHECK_FALSE(engine.render_topology.is_attached(scene.handle()));
+    REQUIRE(engine.scene_manager.unregister_scene(authoring_key));
+    REQUIRE(engine.scene_manager.register_scene(runtime_key, scene.handle()));
+    CHECK(engine.end_session());
+    REQUIRE(engine.scene_manager.unregister_scene(runtime_key));
+    scene.destroy();
     CHECK(engine.shutdown());
 }
 

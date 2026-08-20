@@ -47,9 +47,8 @@ inside that session and does not survive Stop.
 `SceneManager` keys each registered instance by `SceneKey { identity, role }`.
 `SceneRole::Authoring` and `SceneRole::Runtime` make it possible for an
 editor-owned scene and its gameplay copy to share one canonical project
-identity without string suffixes. The registry foundation is in place; moving
-Editor Play from its transitional `(game)` identity to that model is a separate
-host migration.
+identity without string suffixes. Editor Play uses exactly this model, so its
+entry runtime identity matches the packaged-player identity.
 The role belongs to the host registration and never crosses the serialized
 scene or runtime-package boundary. A `RuntimeSession` binds runtime handles;
 authoring instances remain outside gameplay lifecycle.
@@ -200,6 +199,12 @@ Authoring scenes do not receive a live world context; their ordinary editor
 lifecycle callbacks do not imply one. An editor runtime copy is bound only
 after a session exists.
 
+`EngineCore::bind_runtime_scene()` requires the exact registered record to have
+`SceneRole::Runtime`; an `Authoring` record is rejected and logged. The safe
+point repeats this role check before committing a primary request, so removing
+and re-registering a bound handle under another role cannot bypass the session
+boundary.
+
 ## Primary-scene transition
 
 Scene-management authority remains split by domain:
@@ -215,7 +220,8 @@ start of `EngineCore::tick()`, before `SceneManager::tick()`, the engine
 processes at most one request synchronously. `tick_and_render()` uses that same
 simulation entry point before optional rendering:
 
-1. Resolve and validate an already registered inactive candidate scene.
+1. Resolve and validate an already registered `Runtime`, bound, inactive
+   candidate scene.
 2. Ask `RenderingManager` to prepare the candidate's gameplay attachment while
    the old scene remains untouched. A scene with no saved viewports or render
    targets still gets an empty topology attachment; this requires no graphics

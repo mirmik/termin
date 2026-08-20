@@ -21,17 +21,19 @@ class _GameModeSession:
     def __init__(
         self,
         *,
-        editor_scene_name: str,
+        editor_scene_key: SceneKey,
         editor_mode,
         runtime_scene,
         context,
+        preexisting_runtime_handles: frozenset[tuple[int, int]],
         saved_tree_expanded_uuids: list[str] | None,
     ) -> None:
-        self.editor_scene_name = editor_scene_name
+        self.editor_scene_key = editor_scene_key
         self.editor_mode = editor_mode
         self.runtime_scene = runtime_scene
         self.context = context
         self.primary_scene = None
+        self.preexisting_runtime_handles = preexisting_runtime_handles
         self.saved_tree_expanded_uuids = saved_tree_expanded_uuids
 
 
@@ -39,7 +41,8 @@ class GameModeModel:
     """Own editor composition around one EngineCore world run.
 
     EngineCore/RuntimeSession own the gameplay primary association and render
-    transaction. This model owns only the runtime copy and editor presentation.
+    transaction. This model owns runtime scenes created during the Play session
+    and the editor presentation that observes the committed primary scene.
     """
 
     def __init__(
@@ -75,7 +78,11 @@ class GameModeModel:
         if session is None:
             return None
         scene = session.primary_scene or session.runtime_scene
-        return scene.name
+        key = self._scene_manager.key_of(scene)
+        if key is None:
+            log.error("[GameModeModel] Presented gameplay scene is not registered")
+            return None
+        return key.identity
 
     @property
     def is_game_mode(self) -> bool:
@@ -200,6 +207,12 @@ class GameModeModel:
             )
             return
 
+        preexisting_runtime_handles = frozenset(
+            self._scene_handle_identity(entry.scene)
+            for entry in self._scene_manager.scene_entries()
+            if entry.key.role == SceneRole.RUNTIME
+        )
+
         try:
             controller = self._create_controller_for_play()
         except Exception:
@@ -218,8 +231,7 @@ class GameModeModel:
 
         self._save_editor_viewport_camera_to_scene(editor_scene)
         editor_mode = self._scene_manager.get_mode(editor_scene_key)
-        runtime_scene_name = f"{editor_scene_name}(game)"
-        runtime_scene_key = _runtime_key(runtime_scene_name)
+        runtime_scene_key = _runtime_key(editor_scene_name)
         runtime_scene = None
         runtime_bound = False
         editor_render_detached = False
@@ -232,14 +244,14 @@ class GameModeModel:
             if runtime_scene is None:
                 raise RuntimeError(f"failed to copy editor scene '{editor_scene_name}'")
             if not self._engine.bind_runtime_scene(runtime_scene):
-                raise RuntimeError(f"failed to bind runtime scene '{runtime_scene_name}'")
+                raise RuntimeError(f"failed to bind runtime scene '{editor_scene_name}'")
             runtime_bound = True
 
             self._render_scene_session.detach(editor_scene_key, save_state=False)
             editor_render_detached = True
             context = require_world_context(runtime_scene, "Editor Play")
             if not context.request_primary_scene(runtime_scene):
-                raise RuntimeError(f"failed to request primary scene '{runtime_scene_name}'")
+                raise RuntimeError(f"failed to request primary scene '{editor_scene_name}'")
             self._scene_manager.set_mode(
                 editor_scene_key,
                 engine_scene.SceneMode.INACTIVE,
@@ -249,8 +261,6 @@ class GameModeModel:
             if runtime_bound and runtime_scene is not None:
                 if not self._engine.unbind_runtime_scene(runtime_scene):
                     log.error("[GameModeModel] Failed to unbind rejected runtime copy")
-            if runtime_scene is not None and self._scene_manager.has_scene(runtime_scene_key):
-                self._scene_manager.close_scene(runtime_scene_key)
             if editor_render_detached:
                 try:
                     self._render_scene_session.attach(editor_scene_key)
@@ -262,13 +272,16 @@ class GameModeModel:
                 log.exception("[GameModeModel] Failed to restore editor scene mode")
             if not self._engine.end_session():
                 log.error("[GameModeModel] RuntimeSession cleanup reported a failure")
+            if not self._engine.has_runtime_session:
+                self._close_play_owned_runtime_scenes(preexisting_runtime_handles)
             return
 
         self._game_session = _GameModeSession(
-            editor_scene_name=editor_scene_name,
+            editor_scene_key=editor_scene_key,
             editor_mode=editor_mode,
             runtime_scene=runtime_scene,
             context=context,
+            preexisting_runtime_handles=preexisting_runtime_handles,
             saved_tree_expanded_uuids=saved_tree_expanded_uuids,
         )
         self.state_changed.emit(self)
@@ -277,12 +290,12 @@ class GameModeModel:
         session = self._game_session
         if session is None:
             return
-        editor_scene_key = _authoring_key(session.editor_scene_name)
+        editor_scene_key = session.editor_scene_key
         editor_scene = self._scene_manager.get_scene(editor_scene_key)
         if editor_scene is None:
             log.error(
                 f"[GameModeModel] Stop blocked because editor scene "
-                f"'{session.editor_scene_name}' is missing"
+                f"'{editor_scene_key.identity}' is missing"
             )
             return
 
@@ -341,9 +354,7 @@ class GameModeModel:
         except Exception:
             log.exception("[GameModeModel] Failed to reconcile editor rendering after Stop")
 
-        runtime_scene_key = self._require_scene_key(session.runtime_scene)
-        if self._scene_manager.has_scene(runtime_scene_key):
-            self._scene_manager.close_scene(runtime_scene_key)
+        self._close_play_owned_runtime_scenes(session.preexisting_runtime_handles)
         self._scene_manager.set_mode(editor_scene_key, session.editor_mode)
 
         self._game_session = None
@@ -376,6 +387,26 @@ class GameModeModel:
         if key is None:
             raise RuntimeError(f"scene '{scene.name}' is not registered")
         return key
+
+    def _close_play_owned_runtime_scenes(
+        self,
+        preexisting_runtime_handles: frozenset[tuple[int, int]],
+    ) -> None:
+        for entry in self._scene_manager.scene_entries():
+            if entry.key.role != SceneRole.RUNTIME:
+                continue
+            if self._scene_handle_identity(entry.scene) in preexisting_runtime_handles:
+                continue
+            if not self._scene_manager.close_scene(entry.key):
+                log.error(
+                    "[GameModeModel] Failed to close Play-owned runtime scene "
+                    f"'{entry.key.identity}'"
+                )
+
+    @staticmethod
+    def _scene_handle_identity(scene) -> tuple[int, int]:
+        handle = scene.scene_handle()
+        return handle.index, handle.generation
 
     def _save_editor_viewport_camera_to_scene(self, scene) -> None:
         if self._rendering_controller is None:

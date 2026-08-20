@@ -55,7 +55,7 @@ SceneManager **не управляет** вьюпортами, дисплеям�
 
 - `create_scene(key, extensions)` — аллокация через `tc_scene_new` и строгая регистрация по identity/role;
 - `close_scene(key)` или `close_scene(handle)` — дерегистрация и освобождение через `tc_scene_free`. Перед удалением вызывает role-aware `invoke_before_scene_close()`, чтобы RenderingManager или editor успел отмонтировать точный экземпляр;
-- `copy_scene(source_key, destination_key)` — создание глубокой копии; реестр поддерживает целевую модель Play `AUTHORING(identity)` → `RUNTIME(identity)`, а перевод Editor Play с переходного `(game)` identity выполняется отдельной host-миграцией;
+- `copy_scene(source_key, destination_key)` — создание глубокой копии, в том числе Play-модель `AUTHORING(identity)` → `RUNTIME(identity)` без изменения identity;
 - `get_scene(key)` / `key_of(handle)` — однозначное разрешение в обе стороны;
 - `set_mode(key, mode)` или handle-вариант — переключение режима точного экземпляра.
 
@@ -201,7 +201,9 @@ frame-local массив примитивов принадлежат runtime-ч�
 
 **Файл:** `termin-app/termin/editor_core/game_mode_model.py`
 
-Это Python-класс без прямых знаний о C++ структурах. Он оркеструет переходы, дёргая SceneManager, RenderingManager (через RenderConnector), и EditorConnector.
+Это Python-класс без прямых знаний о C++ структурах. Он оркестрирует editor-owned
+часть перехода, а gameplay lifecycle, primary scene и безопасную смену render
+attachment оставляет `EngineCore::RuntimeSession`.
 
 ### Запуск игры (`_start_game_mode`)
 
@@ -212,47 +214,42 @@ frame-local массив примитивов принадлежат runtime-ч�
    - render state сцены (viewport_configs + render_target_configs)
      → render_connector.sync_scene_render_state()
 
-2. Создать игровую копию сцены:
-   game_scene = scene_manager.copy_scene(editor_name, editor_name + "(game)")
+2. Запустить RuntimeSession и создать игровую копию с тем же identity:
+   engine.begin_session(controller)
+   runtime_key = SceneKey(identity, RUNTIME)
+   game_scene = scene_manager.copy_scene(authoring_key, runtime_key)
 
-3. Отключить редакторскую сцену от рендера:
-   render_connector.detach_scene_from_render(editor_name, save_state=False)
+3. Привязать копию к RuntimeSession и отключить authoring-сцену от рендера:
+   engine.bind_runtime_scene(game_scene)
+   render_session.detach(authoring_key, save_state=False)
    // save_state=False — конфиги уже сохранены на шаге 1
 
-4. Подключить редактор к игровой сцене:
-   editor_connector.attach_editor_to_scene(game_name, transfer_camera_state=True)
+4. Запросить initial primary через WorldContext:
+   context.request_primary_scene(game_scene)
 
-5. Подключить игровую сцену к рендеру:
-   render_connector.attach_scene_to_render(game_name)
+5. Перевести authoring-сцену в INACTIVE. Runtime-сцена пока остаётся INACTIVE.
 
-6. Переключить режимы:
-   editor_scene → INACTIVE
-   game_scene   → PLAY
+6. На safe point следующего EngineCore tick RuntimeSession:
+   - монтирует runtime-сцену в render topology;
+   - публикует её как primary;
+   - активирует её в PLAY.
 
-7. Эмитнуть сигналы (state_changed, mode_entered)
+7. `refresh_primary_scene()` переключает editor presentation на фактически
+   committed primary и эмитит `mode_entered`.
 ```
 
 ### Остановка игры (`_stop_game_mode`)
 
 ```
-1. Отключить редактор от игровой сцены:
-   editor_connector.detach_editor_from_scene(save_state=True)
+1. Вернуть editor presentation и render session к точной AUTHORING-сцене.
 
-2. Отключить игровую сцену от рендера:
-   render_connector.detach_scene_from_render(game_name, save_state=False)
+2. Завершить RuntimeSession. EngineCore деактивирует primary, снимает gameplay
+   render attachment, отвязывает runtime-сцены и вызывает controller.stop.
 
-3. Удалить игровую сцену:
-   scene_manager.close_scene(game_name)
+3. Удалить все RUNTIME-инстансы, созданные во время этой Play-сессии. Снимок
+   handle-ов до Play отделяет session-owned сцены от существовавших ранее.
 
-4. Переключить редакторскую сцену в STOP
-
-5. Подключить редактор обратно к редакторской сцене:
-   editor_connector.attach_editor_to_scene(editor_name, restore_state=True)
-
-6. Подключить редакторскую сцену к рендеру:
-   render_connector.attach_scene_to_render(editor_name)
-
-7. Эмитнуть сигналы
+4. Восстановить исходный mode authoring-сцены и эмитить сигналы Stop.
 ```
 
 ### Зачем нужна копия сцены (copy_scene)
@@ -272,18 +269,20 @@ frame-local массив примитивов принадлежат runtime-ч�
         ▼
 GameModeModel._start_game_mode()
   ├─ sync_scene_render_state()     — сохранить viewport/render_target конфиги в сцену
-  ├─ copy_scene()                  — создать (game)-копию
-  ├─ detach_scene_from_render()    — RenderingManager::detach_scene_full()
-  │    ├─ unmount_scene со всех displays_
-  │    ├─ освободить standalone RT сцены
-  │    └─ detach_scene (пайплайны)
-  ├─ attach_editor_to_scene(game)  — editor переключается на game-сцену
-  ├─ attach_scene_to_render(game)  — RenderingManager::attach_scene_full()
-  │    ├─ восстановить render_target_configs → standalone RT
-  │    ├─ создать вьюпорты из viewport_configs → на дисплеи
-  │    └─ apply_scene_pipelines → скомпилировать, пометить managed_by
-  ├─ set_mode(editor, INACTIVE)
-  └─ set_mode(game, PLAY)
+  ├─ begin_session(controller)     — создать world-level lifecycle
+  ├─ copy_scene(AUTHORING(identity), RUNTIME(identity))
+  ├─ bind_runtime_scene(runtime)
+  ├─ detach(authoring)
+  ├─ request_primary_scene(runtime)
+  └─ set_mode(authoring, INACTIVE)
+
+EngineCore safe point
+  ├─ attach runtime render topology
+  ├─ publish primary
+  └─ activate runtime в PLAY
+
+GameModeModel.refresh_primary_scene()
+  └─ переключить editor presentation на committed primary
 
         ... игра работает ...
 
@@ -291,13 +290,12 @@ GameModeModel._start_game_mode()
         │
         ▼
 GameModeModel._stop_game_mode()
-  ├─ detach_editor_from_scene()      — сохранить состояние редактора
-  ├─ detach_scene_from_render(game)  — RenderingManager::detach_scene_full()
-  ├─ close_scene(game)               — SceneManager уничтожает сцену
-  ├─ set_mode(editor, STOP)
-  ├─ attach_editor_to_scene(editor, restore_state=True)
-  └─ attach_scene_to_render(editor)  — RenderingManager::attach_scene_full()
-       (восстанавливает редакторские вьюпорты из конфигов сцены)
+  ├─ attach editor presentation к AUTHORING(identity)
+  ├─ attach authoring render session
+  ├─ end_session()                  — deactivate/detach/unbind/controller.stop
+  ├─ reconcile authoring rendering
+  ├─ close Play-owned RUNTIME scenes
+  └─ restore authoring mode
 ```
 
 ---
@@ -307,7 +305,8 @@ GameModeModel._stop_game_mode()
 ### Разделение ответственности
 - **SceneManager** не знает про рендер. Он управляет временем жизни и режимами сцен.
 - **RenderingManager** не знает про режимы сцен (INACTIVE/STOP/PLAY). Он рендерит всё, что к нему примонтировано через `attach_scene_full`.
-- **GameModeModel** — единственное место, где эти две оси пересекаются. Он решает, *какую* сцену и *когда* монтировать/демонтировать.
+- **RuntimeSession** выполняет gameplay activation и транзакционную смену render attachment на safe point EngineCore.
+- **GameModeModel** компонует RuntimeSession с editor presentation и владеет transient runtime-сценами, созданными во время Play.
 
 ### Offscreen-first
 Рендеринг всегда идёт в offscreen-текстуры, даже если результат потом показывается на единственном дисплее. Это позволяет пайплайнам собирать вьюпорты с разных дисплеев и рендерить их в одном проходе.
