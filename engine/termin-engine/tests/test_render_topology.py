@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import termin.bootstrap
 
-from termin.engine import EngineCore, RenderTopology
+from termin.engine import EngineCore, RenderTopology, scene as engine_scene
 from termin.render_framework import render_target_new
 from termin.render import RenderLifecycleComponent
 
@@ -46,8 +46,10 @@ def test_render_engine_shader_configuration_does_not_mutate_legacy_root(tmp_path
 
 def test_engine_owned_render_topology_isolates_same_named_scene_targets() -> None:
     engine = EngineCore()
-    scene_a = engine.scene_manager.create_scene("topology-a")
-    scene_b = engine.scene_manager.create_scene("topology-b")
+    key_a = engine_scene.SceneKey("topology-a", engine_scene.SceneRole.RUNTIME)
+    key_b = engine_scene.SceneKey("topology-b", engine_scene.SceneRole.RUNTIME)
+    scene_a = engine.scene_manager.create_scene(key_a)
+    scene_b = engine.scene_manager.create_scene(key_b)
     target_a = render_target_new("SharedTarget")
     target_b = render_target_new("SharedTarget")
     target_a.scene = scene_a
@@ -71,8 +73,8 @@ def test_engine_owned_render_topology_isolates_same_named_scene_targets() -> Non
         engine.rendering_manager.unregister_managed_render_target(target_b)
         target_a.free()
         target_b.free()
-        engine.scene_manager.close_scene("topology-a")
-        engine.scene_manager.close_scene("topology-b")
+        engine.scene_manager.close_scene(key_a)
+        engine.scene_manager.close_scene(key_b)
 
 
 def test_python_render_lifecycle_context_is_scene_scoped_and_attachment_scoped() -> None:
@@ -98,8 +100,10 @@ def test_python_render_lifecycle_context_is_scene_scoped_and_attachment_scoped()
             self.detach_target = context.find_render_target("ProbeTarget")
 
     engine = EngineCore()
-    scene = engine.scene_manager.create_scene("context-probe")
-    foreign_scene = engine.scene_manager.create_scene("context-foreign")
+    scene_key = engine_scene.SceneKey("context-probe", engine_scene.SceneRole.RUNTIME)
+    foreign_scene_key = engine_scene.SceneKey("context-foreign", engine_scene.SceneRole.RUNTIME)
+    scene = engine.scene_manager.create_scene(scene_key)
+    foreign_scene = engine.scene_manager.create_scene(foreign_scene_key)
     entity = scene.create_entity("Probe")
     probe = RenderContextProbe()
     entity.add_component(probe)
@@ -130,19 +134,20 @@ def test_python_render_lifecycle_context_is_scene_scoped_and_attachment_scoped()
 
     engine.rendering_manager.unregister_managed_render_target(foreign_target)
     foreign_target.free()
-    engine.scene_manager.close_scene("context-probe")
-    engine.scene_manager.close_scene("context-foreign")
+    engine.scene_manager.close_scene(scene_key)
+    engine.scene_manager.close_scene(foreign_scene_key)
 
 
 def test_scene_manager_forces_detach_before_destroying_attached_scene() -> None:
     engine = EngineCore()
-    scene = engine.scene_manager.create_scene("mandatory-detach")
+    scene_key = engine_scene.SceneKey("mandatory-detach", engine_scene.SceneRole.RUNTIME)
+    scene = engine.scene_manager.create_scene(scene_key)
     target = render_target_new("MandatoryDetachTarget")
     target.scene = scene
     engine.rendering_manager.register_managed_render_target(target)
     engine.rendering_manager.attach_scene(scene)
 
-    engine.scene_manager.close_scene("mandatory-detach")
+    engine.scene_manager.close_scene(scene_key)
 
     assert not engine.render_topology.is_attached(scene)
     assert not engine.render_topology.managed_render_targets

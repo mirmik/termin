@@ -44,12 +44,24 @@ GameModeModel стоит над этим циклом и управляет «к
 
 SceneManager **не управляет** вьюпортами, дисплеями или рендер-таргетами. Его зона ответственности — только реестр сцен и их mode.
 
+Запись реестра адресуется строгим `SceneKey { identity, role }`. `identity`
+обозначает сцену проекта, а transient `SceneRole` различает authoring-экземпляр
+редактора и runtime-экземпляр той же сцены. Поэтому
+`AUTHORING("Scenes/Main.scene")` и `RUNTIME("Scenes/Main.scene")` могут
+существовать одновременно. Роль не сериализуется в `.scene`, а `tc_scene.name`
+остаётся диагностическим именем и не используется как ключ реестра.
+
 ### Ключевые операции
 
-- `create_scene(name, extensions)` — аллокация через `tc_scene_new`, регистрация в `_scenes`
-- `close_scene(name)` — дерегистрация и освобождение через `tc_scene_free`. Перед удалением вызывает `invoke_before_scene_close()`, чтобы RenderingManager (или editor) успел отмонтировать сцену.
-- `copy_scene(…)` — создание глубокой копии (используется GameModeModel для создания игровой сцены из редакторской)
-- `set_mode(name, mode)` — переключение режима
+- `create_scene(key, extensions)` — аллокация через `tc_scene_new` и строгая регистрация по identity/role;
+- `close_scene(key)` или `close_scene(handle)` — дерегистрация и освобождение через `tc_scene_free`. Перед удалением вызывает role-aware `invoke_before_scene_close()`, чтобы RenderingManager или editor успел отмонтировать точный экземпляр;
+- `copy_scene(source_key, destination_key)` — создание глубокой копии; реестр поддерживает целевую модель Play `AUTHORING(identity)` → `RUNTIME(identity)`, а перевод Editor Play с переходного `(game)` identity выполняется отдельной host-миграцией;
+- `get_scene(key)` / `key_of(handle)` — однозначное разрешение в обе стороны;
+- `set_mode(key, mode)` или handle-вариант — переключение режима точного экземпляра.
+
+Name-only lookup намеренно отсутствует: если обе роли одной identity загружены,
+выбор «единственной подходящей» сцены сделал бы поведение зависимым от порядка
+загрузки.
 
 ### Правила рендеринга на уровне SceneManager
 

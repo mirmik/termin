@@ -1,6 +1,7 @@
 from termin.editor_core import scene_file_controller as scene_file_controller_module
 from termin.editor_core.scene_file_controller import SceneFileController
 from termin.project.settings import ProjectSettingsManager
+from termin.engine import SceneKey, SceneRole
 
 
 class _SceneManager:
@@ -12,11 +13,11 @@ class _SceneManager:
         self.calls = calls
         self.scene_path = scene_path
 
-    def get_scene_path(self, _name: str) -> str | None:
+    def get_scene_path(self, _key: SceneKey) -> str | None:
         return self.scene_path
 
-    def save_scene(self, name: str, path: str, editor_data) -> None:
-        self.calls.append(("save", name, path, editor_data))
+    def save_scene(self, key: SceneKey, path: str, editor_data) -> None:
+        self.calls.append(("save", key, path, editor_data))
 
 
 class _ProjectSettings:
@@ -83,7 +84,7 @@ def test_save_synchronizes_live_render_state_before_scene_serialization(
 
     assert calls[:2] == [
         ("prepare", "scene4"),
-        ("save", "scene4", path, None),
+        ("save", SceneKey("scene4", SceneRole.AUTHORING), path, None),
     ]
 
 
@@ -139,7 +140,7 @@ def test_save_existing_scene_reports_success_after_persistence(
     controller.save_scene(completions.append)
 
     assert completions == [True]
-    assert ("save", "scene4", path, None) in calls
+    assert ("save", SceneKey("scene4", SceneRole.AUTHORING), path, None) in calls
 
 
 class _SaveDialog:
@@ -181,7 +182,7 @@ def test_save_as_completes_only_after_dialog_result(monkeypatch, tmp_path) -> No
     path = str(tmp_path / "saved.scene")
     dialogs.on_result(path)
     assert completions == [True]
-    assert ("save", "scene4", path, None) in calls
+    assert ("save", SceneKey("scene4", SceneRole.AUTHORING), path, None) in calls
 
 
 def test_save_as_cancellation_reports_failure(monkeypatch) -> None:

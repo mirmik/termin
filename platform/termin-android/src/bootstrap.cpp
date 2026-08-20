@@ -106,7 +106,7 @@ namespace {
         termin::runtime::RuntimePackageLoadResult player_package;
         termin::TcSceneRef player_scene;
         std::unordered_map<std::string, termin::TcDisplay> player_displays;
-        std::vector<std::string> registered_scene_names;
+        std::vector<termin::SceneKey> registered_scene_keys;
         tc_display_handle presentation_display = TC_DISPLAY_HANDLE_INVALID;
         std::vector<tc_viewport_handle> player_viewports;
         std::vector<tc_viewport_input_manager*> viewport_input_managers;
@@ -328,11 +328,11 @@ namespace {
         g_state.player_viewports.clear();
 
         if (g_state.player_engine) {
-            for (const std::string& name : g_state.registered_scene_names) {
-                g_state.player_engine->scene_manager.unregister_scene(name);
+            for (const termin::SceneKey& key : g_state.registered_scene_keys) {
+                g_state.player_engine->scene_manager.unregister_scene(key);
             }
         }
-        g_state.registered_scene_names.clear();
+        g_state.registered_scene_keys.clear();
         g_state.player_scene = termin::TcSceneRef();
         g_state.player_package.destroy();
 
@@ -489,19 +489,26 @@ namespace {
 
         termin::SceneManager& scene_manager = g_state.player_engine->scene_manager;
         for (const termin::runtime::RuntimePackageScene& packaged_scene : g_state.player_package.scenes) {
-            scene_manager.register_scene(packaged_scene.identity, packaged_scene.scene.handle());
-            scene_manager.set_scene_path(packaged_scene.identity, packaged_scene.scene.source_path());
-            scene_manager.set_mode(packaged_scene.identity, TC_SCENE_MODE_INACTIVE);
-            g_state.registered_scene_names.push_back(packaged_scene.identity);
+            const termin::SceneKey key{packaged_scene.identity, termin::SceneRole::Runtime};
+            if (!scene_manager.register_scene(key, packaged_scene.scene.handle())) {
+                tc_log_error("termin_android_player: failed to register packaged scene '%s'",
+                             packaged_scene.identity.c_str());
+                destroy_player_session_locked();
+                return false;
+            }
+            scene_manager.set_scene_path(key, packaged_scene.scene.source_path());
+            scene_manager.set_mode(key, TC_SCENE_MODE_INACTIVE);
+            g_state.registered_scene_keys.push_back(key);
         }
 
         const std::string& entry_scene_name = g_state.player_package.entry_scene_identity;
-        if (!scene_manager.has_scene(entry_scene_name)) {
+        const termin::SceneKey entry_scene_key{entry_scene_name, termin::SceneRole::Runtime};
+        if (!scene_manager.has_scene(entry_scene_key)) {
             tc_log_error("termin_android_player: entry scene '%s' was not registered", entry_scene_name.c_str());
             destroy_player_session_locked();
             return false;
         }
-        scene_manager.set_mode(entry_scene_name, TC_SCENE_MODE_PLAY);
+        scene_manager.set_mode(entry_scene_key, TC_SCENE_MODE_PLAY);
 
         termin::RenderingManager& manager = g_state.player_engine->rendering_manager;
         manager.set_display_factory([](const std::string& name) { return create_player_display_locked(name); });

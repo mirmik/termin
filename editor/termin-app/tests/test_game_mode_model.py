@@ -3,7 +3,9 @@ from pathlib import Path
 
 from termin.engine import (
     EngineCore,
+    SceneKey,
     SceneManager,
+    SceneRole,
     WorldController,
     create_world_controller,
     publish_world_controllers,
@@ -14,6 +16,14 @@ from termin.bootstrap import bootstrap_runtime
 from termin.scene import PythonComponent
 
 SceneMode = engine_scene.SceneMode
+
+
+def _authoring_key(identity: str) -> SceneKey:
+    return SceneKey(identity, SceneRole.AUTHORING)
+
+
+def _runtime_key(identity: str) -> SceneKey:
+    return SceneKey(identity, SceneRole.RUNTIME)
 
 
 def _load_source_module(name: str, relative_path: str):
@@ -170,11 +180,12 @@ class _EditorConnector:
 
     def attach_editor_to_scene(
         self,
-        scene_name: str,
+        scene_key: SceneKey,
         restore_state: bool = True,
         transfer_camera_state: bool = False,
         update_editor_scene_name: bool = True,
     ) -> bool:
+        scene_name = scene_key.identity
         self.events.append(
             (
                 "attach_editor_to_scene",
@@ -219,13 +230,15 @@ class _RenderSession:
         self._failures.remove(key)
         return True
 
-    def sync_scene_render_state(self, scene_name: str) -> bool:
+    def sync_scene_render_state(self, scene_key: SceneKey) -> bool:
+        scene_name = scene_key.identity
         self.events.append(("sync_scene_render_state", scene_name))
         if self._should_fail("sync", scene_name):
             raise RuntimeError("injected render sync failure")
         return True
 
-    def attach(self, scene_name: str) -> bool:
+    def attach(self, scene_key: SceneKey) -> bool:
+        scene_name = scene_key.identity
         self.events.append(("attach", scene_name))
         if self._should_fail("attach", scene_name):
             raise RuntimeError("injected render attach failure")
@@ -233,9 +246,10 @@ class _RenderSession:
 
     def detach(
         self,
-        scene_name: str,
+        scene_key: SceneKey,
         save_state: bool = True,
     ) -> bool:
+        scene_name = scene_key.identity
         self.events.append(("detach", scene_name, save_state))
         if self._should_fail("detach", scene_name):
             raise RuntimeError("injected render detach failure")
@@ -419,9 +433,9 @@ def _make_game_mode_model(
 def _new_game_mode_fixture():
     bootstrap_runtime()
     engine = EngineCore()
-    editor_scene = engine.scene_manager.create_scene("Editor", [])
+    editor_scene = engine.scene_manager.create_scene(_authoring_key("Editor"), [])
     assert editor_scene is not None
-    engine.scene_manager.set_mode("Editor", SceneMode.STOP)
+    engine.scene_manager.set_mode(_authoring_key("Editor"), SceneMode.STOP)
     editor_connector = _EditorConnector()
     editor_connector.attached_scene_name = "Editor"
     render_session = _RenderSession()
@@ -458,8 +472,8 @@ def test_game_mode_model_routes_play_pause_and_stop_through_engine_session():
         assert engine.has_runtime_session
         assert model.is_game_mode
         assert model.game_scene_name == "Editor(game)"
-        assert engine.scene_manager.get_mode("Editor") == SceneMode.INACTIVE
-        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode(_authoring_key("Editor")) == SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode(_runtime_key("Editor(game)")) == SceneMode.INACTIVE
         assert render_session.events == [
             ("sync_scene_render_state", "Editor"),
             ("detach", "Editor", False),
@@ -469,7 +483,7 @@ def test_game_mode_model_routes_play_pause_and_stop_through_engine_session():
         assert mode_events == []
 
         engine.tick_and_render(0.016)
-        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+        assert engine.scene_manager.get_mode(_runtime_key("Editor(game)")) == SceneMode.PLAY
         model.refresh_primary_scene()
         assert connector.attached_scene_name == "Editor(game)"
         assert render_session.events[-1] == ("reconcile", "Editor(game)")
@@ -480,17 +494,17 @@ def test_game_mode_model_routes_play_pause_and_stop_through_engine_session():
         model.toggle_pause()
         assert model.is_game_paused
         assert engine.has_runtime_session
-        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.STOP
+        assert engine.scene_manager.get_mode(_runtime_key("Editor(game)")) == SceneMode.STOP
         model.toggle_pause()
         assert not model.is_game_paused
-        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+        assert engine.scene_manager.get_mode(_runtime_key("Editor(game)")) == SceneMode.PLAY
 
         model.toggle_game_mode()
 
         assert not engine.has_runtime_session
         assert not model.is_game_mode
-        assert not engine.scene_manager.has_scene("Editor(game)")
-        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert not engine.scene_manager.has_scene(_runtime_key("Editor(game)"))
+        assert engine.scene_manager.get_mode(_authoring_key("Editor")) == SceneMode.STOP
         assert connector.attached_scene_name == "Editor"
         assert render_session.events[-2:] == [
             ("attach", "Editor"),
@@ -521,8 +535,8 @@ def test_game_mode_model_blocks_play_when_code_prepare_fails():
 
         assert not model.is_game_mode
         assert not engine.has_runtime_session
-        assert not engine.scene_manager.has_scene("Editor(game)")
-        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert not engine.scene_manager.has_scene(_runtime_key("Editor(game)"))
+        assert engine.scene_manager.get_mode(_authoring_key("Editor")) == SceneMode.STOP
         assert connector.events == []
         assert render_session.events == []
     finally:
@@ -538,11 +552,11 @@ def test_selected_controller_starts_before_runtime_copy_and_stops_before_close()
 
     class EditorDirector(WorldController):
         def start(self, _context) -> None:
-            assert not engine.scene_manager.has_scene("Editor(game)")
+            assert not engine.scene_manager.has_scene(_runtime_key("Editor(game)"))
             events.append("controller:start")
 
         def stop(self, _context) -> None:
-            assert engine.scene_manager.has_scene("Editor(game)")
+            assert engine.scene_manager.has_scene(_runtime_key("Editor(game)"))
             events.append("controller:stop")
 
     publish_world_controllers([EditorDirector], owner=owner)
@@ -590,8 +604,8 @@ def test_failed_play_setup_ends_session_and_restores_authoring_scene():
 
         assert not model.is_game_mode
         assert not engine.has_runtime_session
-        assert not engine.scene_manager.has_scene("Editor(game)")
-        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert not engine.scene_manager.has_scene(_runtime_key("Editor(game)"))
+        assert engine.scene_manager.get_mode(_authoring_key("Editor")) == SceneMode.STOP
         assert render_session.events == [
             ("sync_scene_render_state", "Editor"),
             ("detach", "Editor", False),
@@ -608,7 +622,7 @@ def test_editor_presentation_failure_does_not_roll_back_committed_primary():
 
     try:
         model.toggle_game_mode()
-        runtime_scene = engine.scene_manager.get_scene("Editor(game)")
+        runtime_scene = engine.scene_manager.get_scene(_runtime_key("Editor(game)"))
         assert runtime_scene is not None
         engine.tick_and_render(0.0)
         model.refresh_primary_scene()
@@ -616,7 +630,7 @@ def test_editor_presentation_failure_does_not_roll_back_committed_primary():
         context = model._game_session.context
         assert context.primary_scene.name == "Editor(game)"
         assert engine.rendering_manager.topology.is_attached(runtime_scene)
-        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+        assert engine.scene_manager.get_mode(_runtime_key("Editor(game)")) == SceneMode.PLAY
         assert model.is_game_mode
         assert connector.attached_scene_name == "Editor"
     finally:
@@ -634,7 +648,7 @@ def test_game_mode_model_observes_rotation_without_host_transition_binding():
         engine.tick_and_render(0.0)
         model.refresh_primary_scene()
 
-        secondary = engine.scene_manager.create_scene("Secondary(game)", [])
+        secondary = engine.scene_manager.create_scene(_runtime_key("Secondary(game)"), [])
         assert secondary is not None
         assert engine.bind_runtime_scene(secondary)
         context = model._game_session.context
@@ -646,20 +660,20 @@ def test_game_mode_model_observes_rotation_without_host_transition_binding():
         assert model.game_scene_name == "Secondary(game)"
         assert connector.attached_scene_name == "Secondary(game)"
         assert render_session.events[-1] == ("reconcile", "Secondary(game)")
-        assert engine.scene_manager.get_mode("Editor(game)") == SceneMode.INACTIVE
-        assert engine.scene_manager.get_mode("Secondary(game)") == SceneMode.PLAY
+        assert engine.scene_manager.get_mode(_runtime_key("Editor(game)")) == SceneMode.INACTIVE
+        assert engine.scene_manager.get_mode(_runtime_key("Secondary(game)")) == SceneMode.PLAY
 
         model.toggle_game_mode()
         assert not context.valid
-        assert engine.scene_manager.has_scene("Secondary(game)")
-        assert engine.scene_manager.get_mode("Secondary(game)") == SceneMode.INACTIVE
+        assert engine.scene_manager.has_scene(_runtime_key("Secondary(game)"))
+        assert engine.scene_manager.get_mode(_runtime_key("Secondary(game)")) == SceneMode.INACTIVE
     finally:
         _stop_and_shutdown(engine, model)
         if (
             secondary is not None
-            and engine.scene_manager.has_scene("Secondary(game)")
+            and engine.scene_manager.has_scene(_runtime_key("Secondary(game)"))
         ):
-            engine.scene_manager.close_scene("Secondary(game)")
+            engine.scene_manager.close_scene(_runtime_key("Secondary(game)"))
 
 
 def test_game_mode_model_supports_repeated_play_stop_cycles():
@@ -677,9 +691,9 @@ def test_game_mode_model_supports_repeated_play_stop_cycles():
             model.toggle_game_mode()
             assert not model.is_game_mode
             assert not engine.has_runtime_session
-            assert not engine.scene_manager.has_scene("Editor(game)")
+            assert not engine.scene_manager.has_scene(_runtime_key("Editor(game)"))
         assert connector.attached_scene_name == "Editor"
-        assert engine.scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert engine.scene_manager.get_mode(_authoring_key("Editor")) == SceneMode.STOP
     finally:
         _stop_and_shutdown(engine, model)
 
@@ -704,8 +718,8 @@ def test_editor_scene_attachment_reuses_editor_render_target(monkeypatch):
     monkeypatch.setattr(render_framework_native, "render_target_new", _new_render_target)
 
     scene_manager = SceneManager()
-    scene = scene_manager.create_scene("Editor", [])
-    game_scene = scene_manager.create_scene("Editor(game)", [])
+    scene = scene_manager.create_scene(_authoring_key("Editor"), [])
+    game_scene = scene_manager.create_scene(_runtime_key("Editor(game)"), [])
     assert scene is not None
     assert game_scene is not None
 
@@ -761,8 +775,8 @@ def test_editor_scene_attachment_leaves_lifecycle_notifications_to_scene_mode(
     )
 
     scene_manager = SceneManager()
-    authoring_scene = scene_manager.create_scene("Editor", [])
-    game_scene = scene_manager.create_scene("Editor(game)", [])
+    authoring_scene = scene_manager.create_scene(_authoring_key("Editor"), [])
+    game_scene = scene_manager.create_scene(_runtime_key("Editor(game)"), [])
     assert authoring_scene is not None
     assert game_scene is not None
     authoring_probe = _SceneActiveProbe()
@@ -781,12 +795,12 @@ def test_editor_scene_attachment_leaves_lifecycle_notifications_to_scene_mode(
     try:
         attachment.attach(authoring_scene, restore_state=False)
         assert authoring_probe.active_count == 0
-        scene_manager.set_mode("Editor", SceneMode.STOP)
+        scene_manager.set_mode(_authoring_key("Editor"), SceneMode.STOP)
         assert authoring_probe.active_count == 1
 
         attachment.attach(game_scene, transfer_camera_state=True)
         assert game_probe.active_count == 0
-        scene_manager.set_mode("Editor(game)", SceneMode.PLAY)
+        scene_manager.set_mode(_runtime_key("Editor(game)"), SceneMode.PLAY)
         assert game_probe.active_count == 1
 
         # Rebinding presentation while a scene stays active is not a scene
@@ -794,11 +808,11 @@ def test_editor_scene_attachment_leaves_lifecycle_notifications_to_scene_mode(
         attachment.attach(authoring_scene, restore_state=False)
         assert authoring_probe.active_count == 1
 
-        scene_manager.set_mode("Editor", SceneMode.INACTIVE)
+        scene_manager.set_mode(_authoring_key("Editor"), SceneMode.INACTIVE)
         assert authoring_probe.inactive_count == 1
         attachment.attach(authoring_scene, restore_state=False)
         assert authoring_probe.active_count == 1
-        scene_manager.set_mode("Editor", SceneMode.STOP)
+        scene_manager.set_mode(_authoring_key("Editor"), SceneMode.STOP)
         assert authoring_probe.active_count == 2
     finally:
         attachment.close(save_state=False)

@@ -817,7 +817,7 @@ namespace termin::player {
         TcSceneRef scene;
         std::string scene_name;
         WorldContext world_context;
-        std::vector<std::string> registered_scene_names;
+        std::vector<SceneKey> registered_scene_keys;
         std::vector<tc_viewport_handle> viewports;
         std::vector<tc_viewport_input_manager*> viewport_input_managers;
         std::vector<std::string> backend_attempts;
@@ -1255,10 +1255,14 @@ print(json.dumps({
         void register_scenes() {
             SceneManager* manager = &engine->scene_manager;
             for (const termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
-                manager->register_scene(packaged_scene.identity, packaged_scene.scene.handle());
-                manager->set_scene_path(packaged_scene.identity, packaged_scene.scene.source_path());
-                manager->set_mode(packaged_scene.identity, TC_SCENE_MODE_INACTIVE);
-                registered_scene_names.push_back(packaged_scene.identity);
+                const SceneKey key{packaged_scene.identity, SceneRole::Runtime};
+                if (!manager->register_scene(key, packaged_scene.scene.handle())) {
+                    throw std::runtime_error(
+                        "failed to register packaged scene '" + packaged_scene.identity + "'");
+                }
+                manager->set_scene_path(key, packaged_scene.scene.source_path());
+                manager->set_mode(key, TC_SCENE_MODE_INACTIVE);
+                registered_scene_keys.push_back(key);
             }
             for (const termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
                 if (!engine->bind_runtime_scene(packaged_scene.scene.handle())) {
@@ -1651,11 +1655,11 @@ print(json.dumps({
             display.reset();
 
             if (engine) {
-                for (const std::string& registered_name : registered_scene_names) {
-                    engine->scene_manager.unregister_scene(registered_name);
+                for (const SceneKey& registered_key : registered_scene_keys) {
+                    engine->scene_manager.unregister_scene(registered_key);
                 }
             }
-            registered_scene_names.clear();
+            registered_scene_keys.clear();
             scene = TcSceneRef();
             scene_name.clear();
             viewports.clear();

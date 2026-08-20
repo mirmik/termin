@@ -31,7 +31,7 @@ class EditorStateIO:
 
         # Save
         editor_data = state_io.collect()
-        scene_manager.save_scene(name, path, editor_data)
+        scene_manager.save_scene(scene_key, path, editor_data)
 
         # Load
         editor_data = EditorStateIO.extract_from_file(path)

@@ -1,14 +1,15 @@
 from termin.editor_core.game_mode_session_connectors import (
     EditorGameModeConnector,
 )
+from termin.engine import SceneKey, SceneRole
 
 
 class _SceneManager:
     def __init__(self, scene) -> None:
         self.scene = scene
 
-    def get_scene(self, name):
-        return self.scene if name == "Scene" else None
+    def get_scene(self, key):
+        return self.scene if key == SceneKey("Scene", SceneRole.RUNTIME) else None
 
 
 class _EditorSession:
@@ -29,7 +30,7 @@ def test_game_mode_session_connectors_preserve_transition_options() -> None:
     editor_session = _EditorSession()
     editor = EditorGameModeConnector(_SceneManager(scene), editor_session)
     assert editor.attach_editor_to_scene(
-        "Scene",
+        SceneKey("Scene", SceneRole.RUNTIME),
         restore_state=False,
         transfer_camera_state=True,
         update_editor_scene_name=False,

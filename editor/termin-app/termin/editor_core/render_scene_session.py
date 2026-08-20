@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
+from termin.engine import SceneKey
+
 
 _logger = logging.getLogger(__name__)
 
@@ -25,8 +27,8 @@ class RenderSceneSession:
         self._sync_viewports = sync_viewports
         self._request_render = request_render
 
-    def attach(self, name: str) -> bool:
-        scene = self._require_scene(name)
+    def attach(self, key: SceneKey) -> bool:
+        scene = self._require_scene(key)
         viewports = self._rendering_model.attach_scene(scene)
         try:
             for viewport in viewports:
@@ -41,17 +43,17 @@ class RenderSceneSession:
         self._publish()
         return True
 
-    def detach(self, name: str, *, save_state: bool = True) -> bool:
-        scene = self._require_scene(name)
+    def detach(self, key: SceneKey, *, save_state: bool = True) -> bool:
+        scene = self._require_scene(key)
         if save_state:
-            self.sync_scene_render_state(name)
+            self.sync_scene_render_state(key)
         emptied = self._rendering_model.detach_scene(scene)
         self._remove_empty_displays(emptied)
         self._publish()
         return True
 
-    def sync_scene_render_state(self, name: str) -> None:
-        scene = self._require_scene(name)
+    def sync_scene_render_state(self, key: SceneKey) -> None:
+        scene = self._require_scene(key)
         self._rendering_model.sync_viewport_configs_to_scene(scene)
         self._rendering_model.sync_render_target_configs_to_scene(scene)
 
@@ -80,10 +82,10 @@ class RenderSceneSession:
         self._remove_empty_displays(empty_displays)
         self._publish()
 
-    def _require_scene(self, name: str):
-        scene = self._scene_manager.get_scene(name)
+    def _require_scene(self, key: SceneKey):
+        scene = self._scene_manager.get_scene(key)
         if scene is None:
-            raise ValueError(f"scene '{name}' does not exist")
+            raise ValueError(f"scene '{key.identity}' ({key.role.name}) does not exist")
         return scene
 
     def _remove_empty_displays(self, display_handles: set[tuple[int, int]]) -> None:

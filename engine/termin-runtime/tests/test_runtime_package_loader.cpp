@@ -1125,19 +1125,22 @@ TEST_CASE("RuntimePackageLoader resolves and transitions between packaged scene 
 
     termin::SceneManager manager;
     for (const termin::runtime::RuntimePackageScene& packaged_scene : result.scenes) {
-        manager.register_scene(packaged_scene.identity, packaged_scene.scene.handle());
-        manager.set_mode(packaged_scene.identity, TC_SCENE_MODE_INACTIVE);
+        const termin::SceneKey key{packaged_scene.identity, termin::SceneRole::Runtime};
+        manager.register_scene(key, packaged_scene.scene.handle());
+        manager.set_mode(key, TC_SCENE_MODE_INACTIVE);
     }
-    manager.set_mode(result.entry_scene_identity, TC_SCENE_MODE_PLAY);
-    CHECK_EQ(manager.get_mode("Scenes/Main.scene"), TC_SCENE_MODE_PLAY);
-    CHECK_EQ(manager.get_mode("Scenes/Menu.scene"), TC_SCENE_MODE_INACTIVE);
+    const termin::SceneKey main_key{"Scenes/Main.scene", termin::SceneRole::Runtime};
+    const termin::SceneKey menu_key{"Scenes/Menu.scene", termin::SceneRole::Runtime};
+    manager.set_mode(main_key, TC_SCENE_MODE_PLAY);
+    CHECK_EQ(manager.get_mode(main_key), TC_SCENE_MODE_PLAY);
+    CHECK_EQ(manager.get_mode(menu_key), TC_SCENE_MODE_INACTIVE);
 
-    manager.set_mode("Scenes/Main.scene", TC_SCENE_MODE_INACTIVE);
-    manager.set_mode("Scenes/Menu.scene", TC_SCENE_MODE_PLAY);
-    CHECK_EQ(manager.get_mode("Scenes/Main.scene"), TC_SCENE_MODE_INACTIVE);
-    CHECK_EQ(manager.get_mode("Scenes/Menu.scene"), TC_SCENE_MODE_PLAY);
-    manager.unregister_scene("Scenes/Main.scene");
-    manager.unregister_scene("Scenes/Menu.scene");
+    manager.set_mode(main_key, TC_SCENE_MODE_INACTIVE);
+    manager.set_mode(menu_key, TC_SCENE_MODE_PLAY);
+    CHECK_EQ(manager.get_mode(main_key), TC_SCENE_MODE_INACTIVE);
+    CHECK_EQ(manager.get_mode(menu_key), TC_SCENE_MODE_PLAY);
+    manager.unregister_scene(main_key);
+    manager.unregister_scene(menu_key);
 }
 
 TEST_CASE("RuntimePackageLoader keeps package meshes alive after scene entity removal") {

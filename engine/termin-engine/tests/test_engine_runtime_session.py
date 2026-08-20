@@ -58,7 +58,11 @@ def test_engine_core_consumes_python_controller_and_preserves_context_identity()
         assert engine.begin_session(controller)
         assert not controller.valid
         assert engine.has_runtime_session
-        scene = engine.scene_manager.create_scene("python-controller-runtime-scene")
+        scene = engine.scene_manager.create_scene(
+            engine_scene.SceneKey(
+                "python-controller-runtime-scene", engine_scene.SceneRole.RUNTIME
+            )
+        )
         assert scene is not None
         assert engine.bind_runtime_scene(scene)
         scene_context = world_context(scene)
@@ -152,7 +156,10 @@ def test_null_session_context_is_transient_and_available_to_python_lifecycle() -
             )
 
     engine = EngineCore()
-    scene = engine.scene_manager.create_scene("python-null-controller-runtime-scene")
+    scene_key = engine_scene.SceneKey(
+        "python-null-controller-runtime-scene", engine_scene.SceneRole.RUNTIME
+    )
+    scene = engine.scene_manager.create_scene(scene_key)
     assert scene is not None
     entity = scene.create_entity("context-probe")
     component = SceneContextProbe()
@@ -173,14 +180,17 @@ def test_null_session_context_is_transient_and_available_to_python_lifecycle() -
     serialized = scene.serialize()
     assert "world_context" not in serialized.get("extensions", {})
     copied = engine.scene_manager.copy_scene(
-        "python-null-controller-runtime-scene",
-        "python-null-controller-runtime-scene-copy",
+        scene_key,
+        engine_scene.SceneKey(
+            "python-null-controller-runtime-scene-copy",
+            engine_scene.SceneRole.RUNTIME,
+        ),
     )
     assert copied is not None
     assert not world_context(copied).valid
 
     engine.scene_manager.set_mode(
-        "python-null-controller-runtime-scene", engine_scene.SceneMode.PLAY
+        scene_key, engine_scene.SceneMode.PLAY
     )
     assert component.active_context == retained
     assert engine.tick(0.016)
@@ -219,8 +229,12 @@ def test_python_component_requests_primary_scene_for_next_engine_tick() -> None:
                 self.target = None
 
     engine = EngineCore()
-    first = engine.scene_manager.create_scene("python-primary-first")
-    second = engine.scene_manager.create_scene("python-primary-second")
+    first = engine.scene_manager.create_scene(
+        engine_scene.SceneKey("python-primary-first", engine_scene.SceneRole.RUNTIME)
+    )
+    second = engine.scene_manager.create_scene(
+        engine_scene.SceneKey("python-primary-second", engine_scene.SceneRole.RUNTIME)
+    )
     assert first is not None
     assert second is not None
     first_entity = first.create_entity("first-probe")

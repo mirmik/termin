@@ -323,14 +323,15 @@ class PlayerRuntime:
             return False
 
         import json
-        from termin.engine import default_scene_extensions
+        from termin.engine import default_scene_extensions, scene as engine_scene
 
         with open(scene_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         # Register and bind the empty scene before deserialization so component
         # construction can resolve the active WorldContext and controller.
+        scene_key = engine_scene.SceneKey(self.scene_name, engine_scene.SceneRole.RUNTIME)
         self.scene = self._engine.scene_manager.create_scene(
-            self.scene_name,
+            scene_key,
             default_scene_extensions(),
         )
         if self.scene is None:
@@ -339,7 +340,7 @@ class PlayerRuntime:
             return False
         if not self._engine.bind_runtime_scene(self.scene):
             log.error(f"[PlayerRuntime] Failed to bind scene to RuntimeSession: {self.scene_name}")
-            self._engine.scene_manager.close_scene(self.scene_name)
+            self._engine.scene_manager.close_scene(self.scene)
             self.scene = None
             self.shutdown()
             return False
@@ -734,7 +735,7 @@ class PlayerRuntime:
         self.graphics = None
 
         if self._engine is not None and self.scene is not None and self.scene.is_alive():
-            self._engine.scene_manager.close_scene(self.scene_name)
+            self._engine.scene_manager.close_scene(self.scene)
         self.scene = None
 
         if self._owns_engine and self._engine is not None:

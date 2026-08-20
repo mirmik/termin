@@ -26,7 +26,7 @@ broader than the old `World` object and also owns rendering.
 ```text
 EngineCore
 |-- SceneManager
-|   `-- owns registered scene instances and their lifecycle/mode
+|   `-- owns role-keyed scene instances and their lifecycle/mode
 |-- RenderingManager
 |   `-- owns render topology, viewports, targets and scene attachments
 `-- optional RuntimeSession
@@ -43,6 +43,16 @@ one session for its complete run.
 
 One Play/start creates a fresh controller instance. It survives scene rotation
 inside that session and does not survive Stop.
+
+`SceneManager` keys each registered instance by `SceneKey { identity, role }`.
+`SceneRole::Authoring` and `SceneRole::Runtime` make it possible for an
+editor-owned scene and its gameplay copy to share one canonical project
+identity without string suffixes. The registry foundation is in place; moving
+Editor Play from its transitional `(game)` identity to that model is a separate
+host migration.
+The role belongs to the host registration and never crosses the serialized
+scene or runtime-package boundary. A `RuntimeSession` binds runtime handles;
+authoring instances remain outside gameplay lifecycle.
 
 ## Naming
 
