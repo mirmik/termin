@@ -1745,6 +1745,11 @@ def _compose_native_editor(
             render_scene_session=render_scene_session,
             rendering_controller=display_workspace,
             get_editor_scene_name=active_scene_name,
+            get_project_path=lambda: (
+                None
+                if project_browser_controller.root_path is None
+                else str(project_browser_controller.root_path)
+            ),
             scene_tree_controller=scene_hierarchy_controller,
             prepare_code_for_play=prepare_code_for_play,
             create_controller_for_play=create_controller_for_play,

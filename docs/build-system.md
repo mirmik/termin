@@ -869,9 +869,12 @@ package. `entry_scene` обязан присутствовать в таблиц
 и регистрирует всю таблицу. Player начинает engine-owned `RuntimeSession`,
 привязывает к ней все сцены, активирует entry scene через
 `WorldContext.transition_to(entry_scene)` и оставляет остальные сцены неактивными
-до такого же запроса из игрового кода. Сам переход выполняется только в safe
-point `EngineCore::tick_and_render()`; player не содержит отдельной машины
-состояний транзита.
+до такого же запроса из игрового кода. Включённая в package, но ещё не
+материализованная сцена может быть поднята `SceneManager`-provider'ом из
+package catalog; физическая раскладка bundle не входит в игровой API. Сам
+переход выполняется только в safe point `EngineCore::tick_and_render()`;
+player не содержит отдельной машины состояний транзита. Build profile задаёт
+только export closure и не влияет на Editor Play или source `termin play`.
 Поле `world_controller` обязательно даже при отсутствии контроллера: допустимы
 только `null` и объект ровно с непустыми нормализованными строками `module` и
 `type`. Старые schema versions не угадываются и не мигрируют в runtime.

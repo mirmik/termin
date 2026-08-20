@@ -178,12 +178,22 @@ object pointer. Python-backed controllers are exposed as weak proxies to the
 actual project object. Components can therefore use their world-level state
 without extending controller or module lifetime beyond the session. The
 projection never hands lifecycle authority or ownership to scene code.
-`transition_to` resolves only scenes already registered as `RUNTIME` and bound
-to this exact session. It records one intent; manager mutation remains at the
-`EngineCore` safe point described below. Project code therefore navigates the
-session catalog without borrowing `EngineCore`, `SceneManager`, or scene
-objects. The identity and role are revalidated when the intent commits, so a
-stale registry entry is rejected.
+`transition_to` records one identity intent; manager mutation remains at the
+`EngineCore` safe point described below. A scene already bound to the exact
+session is used directly. Otherwise `RuntimeSession` asks the EngineCore-owned
+`SceneManager` elevation callback to materialize `SceneKey(identity, RUNTIME)`
+from the current host's content source, binds the result, and then enters the
+same transition transaction. Project code therefore navigates without
+borrowing `EngineCore`, `SceneManager`, or scene objects. The identity and role
+are revalidated when the intent commits, so a stale registry entry is rejected.
+
+Elevation is an execution-host boundary, not a build-profile boundary. Editor
+Play and source `termin play` resolve canonical project-relative scene
+identities from the project filesystem. A packaged host resolves them from its
+runtime content catalog, independently of the physical package layout. Build
+profiles define export closure only and never select or constrain scenes for
+Editor Play or source execution. `SceneManager::get_scene()` remains a pure
+registry lookup; only explicit `elevate_scene()` may invoke the host callback.
 
 The context is not a string-to-pointer service dictionary. It may internally
 retain an engine-owned link, so exposing additional `EngineCore` facilities in

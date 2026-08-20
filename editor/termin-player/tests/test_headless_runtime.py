@@ -611,6 +611,10 @@ def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_pa
         json.dumps({"scene": {"entities": []}}),
         encoding="utf-8",
     )
+    (tmp_path / "Secondary.scene").write_text(
+        json.dumps({"scene": {"entities": []}}),
+        encoding="utf-8",
+    )
     runtime = HeadlessRuntime(
         tmp_path,
         "Main.scene",
@@ -624,16 +628,13 @@ def test_headless_runtime_rotates_primary_scenes_without_rendering_frames(tmp_pa
         runtime.initialize()
         engine = runtime._engine
         second_key = engine_scene.SceneKey("Secondary.scene", engine_scene.SceneRole.RUNTIME)
-        second = engine.scene_manager.create_scene(
-            second_key,
-            list(runtime.scene_extensions),
-        )
-        assert second is not None
-        assert engine.bind_runtime_scene(second)
         context = require_world_context(runtime.scene, "headless transition test")
 
         assert context.transition_to("Secondary.scene")
+        assert engine.scene_manager.get_scene(second_key) is None
         assert engine.tick(0.0)
+        second = engine.scene_manager.get_scene(second_key)
+        assert second is not None
         assert context.primary_scene.name == "Secondary.scene"
         main_key = engine_scene.SceneKey("Main.scene", engine_scene.SceneRole.RUNTIME)
         assert engine.scene_manager.get_mode(main_key) == engine_scene.SceneMode.INACTIVE

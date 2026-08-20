@@ -35,8 +35,9 @@ tc_world_context_controller(const tc_world_context* context);
 // Primary gameplay scene projection and deferred transition. A successful request
 // is either already satisfied or queued for the next EngineCore safe point; it
 // does not perform scene or rendering lifecycle work on the caller's stack.
-// The identity is resolved only inside this RuntimeSession's bound RUNTIME-scene
-// catalog. It must name a live inactive scene registered under the same identity.
+// A bound scene is resolved immediately. Otherwise RuntimeSession asks the
+// EngineCore-owned SceneManager elevation provider to materialize the RUNTIME
+// identity at the safe point before validating and committing the transition.
 TERMIN_ENGINE_API tc_scene_handle tc_world_context_primary_scene(const tc_world_context* context);
 TERMIN_ENGINE_API bool tc_world_context_transition_to(tc_world_context* context,
                                                        const char* scene_identity);

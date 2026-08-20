@@ -166,6 +166,7 @@ class PlayerRuntime:
         self._owns_engine = engine is None
         self._project_modules_runtime = None
         self._session_started = False
+        self._owned_runtime_identities: set[str] = set()
         self._bootstrap_started = False
         self._surface_size: tuple[int, int] = (0, 0)
 
@@ -315,59 +316,10 @@ class PlayerRuntime:
         )
         manager.set_display_factory(self._runtime_display_factory)
 
-        # Load scene
-        scene_path = self.project_path / self.scene_name
-        if not scene_path.exists():
-            log.error(f"[PlayerRuntime] Scene not found: {scene_path}")
-            self.shutdown()
-            return False
-
-        import json
-        from termin.engine import default_scene_extensions, scene as engine_scene
-
-        with open(scene_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        # Register and bind the empty scene before deserialization so component
-        # construction can resolve the active WorldContext and controller.
-        scene_key = engine_scene.SceneKey(self.scene_name, engine_scene.SceneRole.RUNTIME)
-        self.scene = self._engine.scene_manager.create_scene(
-            scene_key,
-            default_scene_extensions(),
-        )
+        self.scene = self._materialize_runtime_scene(self.scene_name, bind=True)
         if self.scene is None:
-            log.error(f"[PlayerRuntime] Failed to create scene: {self.scene_name}")
             self.shutdown()
             return False
-        if not self._engine.bind_runtime_scene(self.scene):
-            log.error(f"[PlayerRuntime] Failed to bind scene to RuntimeSession: {self.scene_name}")
-            self._engine.scene_manager.close_scene(self.scene)
-            self.scene = None
-            self.shutdown()
-            return False
-        self.scene.source_path = str(scene_path.resolve())
-        scene_data = data.get("scene")
-        if scene_data is None:
-            scenes = data.get("scenes")
-            if isinstance(scenes, list) and len(scenes) > 0:
-                scene_data = scenes[0]
-        if scene_data is None and ("entities" in data or "uuid" in data):
-            scene_data = data
-        try:
-            if scene_data:
-                from termin.glb_adapters.scene_animation_repair import repair_glb_animation_player_clip_refs
-
-                repair_glb_animation_player_clip_refs(scene_data)
-                self.scene.load_from_data(scene_data, context=None, update_settings=True)
-                from termin.project_modules.runtime import upgrade_scene_unknown_components
-                upgraded = upgrade_scene_unknown_components(self.scene)
-                if upgraded > 0:
-                    log.info(f"[PlayerRuntime] Upgraded {upgraded} unknown component(s)")
-        except Exception as error:
-            log.error(f"[PlayerRuntime] Failed to deserialize scene {self.scene_name}: {error}")
-            self.shutdown()
-            return False
-
-        log.info(f"[PlayerRuntime] Scene loaded: {self.scene_name}")
 
         if not self._activate_primary_scene(manager):
             self.shutdown()
@@ -567,6 +519,95 @@ class PlayerRuntime:
         if not self._engine.begin_session(controller):
             raise RuntimeError("EngineCore refused to start RuntimeSession")
         self._session_started = True
+        self._engine.scene_manager.set_scene_elevator(self._elevate_scene)
+
+    def _elevate_scene(self, key) -> bool:
+        from tcbase import log
+        from termin.engine import SceneRole
+
+        if key.role != SceneRole.RUNTIME:
+            log.error(
+                f"[PlayerRuntime] Refusing to elevate non-runtime scene '{key.identity}'"
+            )
+            return False
+        return self._materialize_runtime_scene(key.identity, bind=False) is not None
+
+    def _materialize_runtime_scene(self, identity: str, *, bind: bool):
+        import json
+
+        from tcbase import log
+        from termin.engine import default_scene_extensions, scene as engine_scene
+        from termin.project.scene_paths import project_scene_identity
+
+        scene_path = self.project_path / identity
+        try:
+            canonical_identity = project_scene_identity(self.project_path, scene_path)
+        except ValueError as error:
+            log.error(f"[PlayerRuntime] Invalid runtime scene identity '{identity}': {error}")
+            return None
+        if canonical_identity != identity:
+            log.error(
+                f"[PlayerRuntime] Runtime scene identity '{identity}' resolves as "
+                f"'{canonical_identity}'"
+            )
+            return None
+        if not scene_path.exists():
+            log.error(f"[PlayerRuntime] Scene not found: {scene_path}")
+            return None
+        try:
+            with scene_path.open("r", encoding="utf-8") as stream:
+                data = json.load(stream)
+        except Exception as error:
+            log.error(f"[PlayerRuntime] Failed to read scene {scene_path}: {error}")
+            return None
+
+        scene_key = engine_scene.SceneKey(identity, engine_scene.SceneRole.RUNTIME)
+        scene = self._engine.scene_manager.create_scene(
+            scene_key,
+            default_scene_extensions(),
+        )
+        if scene is None:
+            log.error(f"[PlayerRuntime] Failed to create scene: {identity}")
+            return None
+        bound = False
+        if bind:
+            if not self._engine.bind_runtime_scene(scene):
+                log.error(
+                    f"[PlayerRuntime] Failed to bind scene to RuntimeSession: {identity}"
+                )
+                self._engine.scene_manager.close_scene(scene_key)
+                return None
+            bound = True
+
+        scene.source_path = str(scene_path.resolve())
+        scene_data = data.get("scene")
+        if scene_data is None:
+            scenes = data.get("scenes")
+            if isinstance(scenes, list) and scenes:
+                scene_data = scenes[0]
+        if scene_data is None and ("entities" in data or "uuid" in data):
+            scene_data = data
+        try:
+            if scene_data:
+                from termin.glb_adapters.scene_animation_repair import repair_glb_animation_player_clip_refs
+
+                repair_glb_animation_player_clip_refs(scene_data)
+                scene.load_from_data(scene_data, context=None, update_settings=True)
+                from termin.project_modules.runtime import upgrade_scene_unknown_components
+
+                upgraded = upgrade_scene_unknown_components(scene)
+                if upgraded > 0:
+                    log.info(f"[PlayerRuntime] Upgraded {upgraded} unknown component(s)")
+        except Exception as error:
+            log.error(f"[PlayerRuntime] Failed to deserialize scene {identity}: {error}")
+            if bound:
+                self._engine.unbind_runtime_scene(scene)
+            self._engine.scene_manager.close_scene(scene_key)
+            return None
+
+        self._owned_runtime_identities.add(identity)
+        log.info(f"[PlayerRuntime] Scene loaded: {identity}")
+        return scene
 
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
@@ -646,6 +687,7 @@ class PlayerRuntime:
 
         if self._engine is not None:
             self._engine.tick_and_render(self.delta_time)
+            self._reconcile_primary_scene()
         self._present()
 
         # Frame rate limiting
@@ -658,6 +700,56 @@ class PlayerRuntime:
         """Present the display rendered by EngineCore."""
         if self.window is not None and self._display is not None:
             self.window.present(self._display.color_tex)
+
+    def _reconcile_primary_scene(self) -> None:
+        """Publish the RuntimeSession primary scene through the player facade."""
+        from tcbase import log
+        from termin.engine import SceneRole, require_world_context
+
+        if self._engine is None or self.scene is None:
+            return
+
+        context = require_world_context(self.scene, "PlayerRuntime primary reconciliation")
+        primary = context.primary_scene
+        if primary is None:
+            log.error("[PlayerRuntime] RuntimeSession has no primary scene after tick")
+            return
+
+        current_handle = self.scene.scene_handle()
+        primary_handle = primary.scene_handle()
+        if (
+            current_handle.index == primary_handle.index
+            and current_handle.generation == primary_handle.generation
+        ):
+            return
+
+        manager = self._engine.scene_manager
+        key = manager.key_of(primary)
+        if key is None or key.role != SceneRole.RUNTIME:
+            log.error("[PlayerRuntime] RuntimeSession published an unmanaged runtime scene")
+            return
+
+        viewports = list(self._engine.rendering_manager.topology.viewports(primary))
+        if not viewports:
+            log.error(
+                f"[PlayerRuntime] Primary scene '{key.identity}' has no runtime viewport"
+            )
+            return
+
+        if self._input_manager is not None:
+            self._input_manager.close()
+            self._input_manager = None
+
+        self.scene = primary
+        self.scene_name = key.identity
+        self._viewports = viewports
+        self._viewport = viewports[0]
+        self._disable_unrenderable_unused_render_targets(
+            self._engine.rendering_manager,
+            viewports,
+        )
+        self._setup_input()
+        log.info(f"[PlayerRuntime] Presented primary scene: {key.identity}")
 
     def _sync_surface_size(self) -> None:
         """Resize the offscreen display surface to match the window."""
@@ -710,6 +802,7 @@ class PlayerRuntime:
             if not self._engine.end_session():
                 log.error("[PlayerRuntime] RuntimeSession shutdown reported lifecycle failures")
             self._session_started = False
+            self._engine.scene_manager.set_scene_elevator(None)
 
         if manager is not None:
             manager.set_display_factory(lambda name: None)
@@ -734,8 +827,17 @@ class PlayerRuntime:
             self._display = None
         self.graphics = None
 
-        if self._engine is not None and self.scene is not None and self.scene.is_alive():
-            self._engine.scene_manager.close_scene(self.scene)
+        if self._engine is not None:
+            from termin.engine import SceneKey, SceneRole
+
+            for identity in tuple(self._owned_runtime_identities):
+                key = SceneKey(identity, SceneRole.RUNTIME)
+                if self._engine.scene_manager.has_scene(key):
+                    if not self._engine.scene_manager.close_scene(key):
+                        log.error(
+                            f"[PlayerRuntime] Failed to close runtime scene '{identity}'"
+                        )
+            self._owned_runtime_identities.clear()
         self.scene = None
 
         if self._owns_engine and self._engine is not None:

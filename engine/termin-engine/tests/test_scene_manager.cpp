@@ -83,3 +83,28 @@ TEST_CASE("SceneManager atomically rekeys a registered scene") {
         saved,
         termin::SceneKey("Scenes/Main.scene", termin::SceneRole::Runtime)));
 }
+
+TEST_CASE("SceneManager elevation is explicit, validated and recursion-safe") {
+    termin::SceneManager manager;
+    const termin::SceneKey runtime("Scenes/Lazy.scene", termin::SceneRole::Runtime);
+    int calls = 0;
+
+    CHECK_FALSE(tc_scene_handle_valid(manager.elevate_scene(runtime)));
+    manager.set_scene_elevator([&](const termin::SceneKey& key) {
+        ++calls;
+        CHECK(key == runtime);
+        return tc_scene_handle_valid(manager.create_scene(key));
+    });
+    const tc_scene_handle scene = manager.elevate_scene(runtime);
+    REQUIRE(tc_scene_handle_valid(scene));
+    CHECK_EQ(calls, 1);
+    CHECK(tc_scene_handle_eq(manager.elevate_scene(runtime), scene));
+    CHECK_EQ(calls, 1);
+
+    const termin::SceneKey recursive("Scenes/Recursive.scene", termin::SceneRole::Runtime);
+    manager.set_scene_elevator([&](const termin::SceneKey& key) {
+        CHECK_FALSE(tc_scene_handle_valid(manager.elevate_scene(key)));
+        return true;
+    });
+    CHECK_FALSE(tc_scene_handle_valid(manager.elevate_scene(recursive)));
+}

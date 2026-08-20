@@ -264,7 +264,9 @@ def test_python_component_requests_primary_scene_for_next_engine_tick() -> None:
     assert context.primary_scene is None
     assert context.scene_identities == ("python-primary-first", "python-primary-second")
     assert isinstance(context.scene_identities, tuple)
-    assert not context.transition_to("missing.scene")
+    assert context.transition_to("missing.scene")
+    engine.tick_and_render(0.0)
+    assert context.primary_scene is None
     assert context.transition_to("python-primary-first")
     assert not context.transition_to("python-primary-second")
 

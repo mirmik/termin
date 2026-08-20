@@ -301,9 +301,25 @@ namespace termin {
 
             void process_primary_scene_request() {
                 const WorldContextSceneRequest request = take_world_context_primary_request(_context);
-                const tc_scene_handle candidate = request.scene;
-                if (!tc_scene_handle_valid(candidate)) {
+                if (request.identity.empty()) {
                     return;
+                }
+                const SceneKey requested_key{request.identity, SceneRole::Runtime};
+                tc_scene_handle candidate = request.scene;
+                if (!tc_scene_handle_valid(candidate)) {
+                    candidate = _engine.scene_manager.elevate_scene(requested_key);
+                    if (!tc_scene_handle_valid(candidate)) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RuntimeSession] Dropped scene transition: runtime scene '%s' could not be elevated",
+                               request.identity.c_str());
+                        return;
+                    }
+                    if (!bind_scene(requested_key, candidate)) {
+                        tc_log(TC_LOG_ERROR,
+                               "[RuntimeSession] Dropped scene transition: elevated scene '%s' could not be bound",
+                               request.identity.c_str());
+                        return;
+                    }
                 }
                 if (!scene_is_transition_candidate(request.identity, candidate)) {
                     tc_log(TC_LOG_ERROR,

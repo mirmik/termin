@@ -118,6 +118,75 @@ def test_player_runtime_tracks_runtime_session_primary_viewports(monkeypatch):
     assert runtime._viewports == viewports
 
 
+def test_player_runtime_reconciles_elevated_primary_scene(monkeypatch):
+    import termin.engine
+
+    runtime = PlayerRuntime(".", "Main.scene")
+    old_handle = type("_SceneHandle", (), {"index": 4, "generation": 2})()
+    new_handle = type("_SceneHandle", (), {"index": 8, "generation": 3})()
+
+    class _Scene:
+        def __init__(self, handle):
+            self._handle = handle
+
+        def scene_handle(self):
+            return self._handle
+
+    old_scene = _Scene(old_handle)
+    new_scene = _Scene(new_handle)
+    runtime.scene = old_scene
+    viewports = [_Viewport("Secondary", "simple", 6, 12)]
+
+    class _Context:
+        primary_scene = new_scene
+
+    class _Topology:
+        def viewports(self, scene):
+            assert scene is new_scene
+            return viewports
+
+    class _RenderingManager:
+        managed_render_targets = []
+        topology = _Topology()
+
+    class _Manager:
+        def key_of(self, scene):
+            assert scene is new_scene
+            return termin.engine.SceneKey(
+                "Secondary.scene",
+                termin.engine.SceneRole.RUNTIME,
+            )
+
+    class _Engine:
+        scene_manager = _Manager()
+        rendering_manager = _RenderingManager()
+
+    class _InputManager:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    old_input = _InputManager()
+    runtime._engine = _Engine()
+    runtime._input_manager = old_input
+    monkeypatch.setattr(
+        termin.engine,
+        "require_world_context",
+        lambda scene, scope: _Context(),
+    )
+    monkeypatch.setattr(runtime, "_setup_input", lambda: None)
+
+    runtime._reconcile_primary_scene()
+
+    assert old_input.closed
+    assert runtime.scene is new_scene
+    assert runtime.scene_name == "Secondary.scene"
+    assert runtime._viewport is viewports[0]
+    assert runtime._viewports == viewports
+
+
 def test_player_runtime_camera_follows_presented_viewport():
     runtime = PlayerRuntime(".", "scene.json")
 

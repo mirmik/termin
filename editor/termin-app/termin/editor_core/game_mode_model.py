@@ -52,6 +52,7 @@ class GameModeModel:
         render_scene_session,
         rendering_controller,
         get_editor_scene_name: Callable[[], str | None],
+        get_project_path: Callable[[], str | None] | None = None,
         scene_tree_controller=None,
         prepare_code_for_play: Callable[[], bool] | None = None,
         create_controller_for_play: Callable[[], object | None] | None = None,
@@ -62,6 +63,7 @@ class GameModeModel:
         self._render_scene_session = render_scene_session
         self._rendering_controller = rendering_controller
         self._get_editor_scene_name = get_editor_scene_name
+        self._get_project_path = get_project_path or (lambda: None)
         self._scene_tree_controller = scene_tree_controller
         self._prepare_code_for_play = prepare_code_for_play or (lambda: True)
         self._create_controller_for_play = create_controller_for_play or (lambda: None)
@@ -221,6 +223,7 @@ class GameModeModel:
         if not self._engine.begin_session(controller):
             log.error("[GameModeModel] EngineCore refused to begin RuntimeSession")
             return
+        self._scene_manager.set_scene_elevator(self._elevate_runtime_scene)
 
         from termin.engine import require_world_context
         from termin.engine import scene as engine_scene
@@ -273,6 +276,7 @@ class GameModeModel:
             if not self._engine.end_session():
                 log.error("[GameModeModel] RuntimeSession cleanup reported a failure")
             if not self._engine.has_runtime_session:
+                self._scene_manager.set_scene_elevator(None)
                 self._close_play_owned_runtime_scenes(preexisting_runtime_handles)
             return
 
@@ -346,6 +350,7 @@ class GameModeModel:
                     "[GameModeModel] Failed to undo editor render restore after rejected Stop"
                 )
             return
+        self._scene_manager.set_scene_elevator(None)
         if not ended_cleanly:
             log.error("[GameModeModel] RuntimeSession ended with lifecycle failures")
 
@@ -402,6 +407,69 @@ class GameModeModel:
                     "[GameModeModel] Failed to close Play-owned runtime scene "
                     f"'{entry.key.identity}'"
                 )
+
+    def _elevate_runtime_scene(self, key: SceneKey) -> bool:
+        if key.role != SceneRole.RUNTIME:
+            log.error(
+                f"[GameModeModel] Refusing to elevate non-runtime scene '{key.identity}'"
+            )
+            return False
+        project_path = self._get_project_path()
+        if not project_path:
+            log.error(
+                f"[GameModeModel] Cannot elevate runtime scene '{key.identity}' "
+                "without an open project"
+            )
+            return False
+
+        import json
+        from pathlib import Path
+
+        from termin.engine import default_scene_extensions
+        from termin.glb_adapters.scene_animation_repair import (
+            extract_scene_data,
+            repair_glb_animation_player_clip_refs,
+        )
+        from termin.project.scene_paths import project_scene_identity
+        from termin.project_modules.runtime import upgrade_scene_unknown_components
+
+        scene_path = Path(project_path) / key.identity
+        scene = None
+        try:
+            canonical_identity = project_scene_identity(project_path, scene_path)
+            if canonical_identity != key.identity:
+                raise ValueError(
+                    f"requested identity resolves as '{canonical_identity}'"
+                )
+            with scene_path.open("r", encoding="utf-8") as stream:
+                file_data = json.load(stream)
+            scene_data = extract_scene_data(file_data)
+            if scene_data is not None:
+                repair_glb_animation_player_clip_refs(scene_data)
+
+            scene = self._scene_manager.create_scene(
+                key,
+                default_scene_extensions(),
+            )
+            if scene is None:
+                raise RuntimeError("SceneManager refused runtime scene creation")
+            scene.source_path = str(scene_path.resolve())
+            if scene_data is not None:
+                scene.load_from_data(scene_data, context=None, update_settings=True)
+            upgrade_scene_unknown_components(scene)
+            log.info(f"[GameModeModel] Elevated runtime scene '{key.identity}'")
+            return True
+        except Exception:
+            log.exception(
+                f"[GameModeModel] Failed to elevate runtime scene '{key.identity}'"
+            )
+            if scene is not None and scene.is_alive():
+                if not self._scene_manager.close_scene(key):
+                    log.error(
+                        f"[GameModeModel] Failed to close rejected runtime scene "
+                        f"'{key.identity}'"
+                    )
+            return False
 
     @staticmethod
     def _scene_handle_identity(scene) -> tuple[int, int]:
