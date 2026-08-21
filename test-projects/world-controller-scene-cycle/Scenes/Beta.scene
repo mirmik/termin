@@ -1,12 +1,12 @@
 {
   "version": "1.0",
   "scene": {
-    "uuid": "scene-cycle-beta",
+    "uuid": "portal-walk-blue-workshop",
     "fixed_timestep": 0.016666666666666666,
     "entities": [
       {
-        "uuid": "scene-cycle-beta-object",
-        "name": "BETA - elevated from the filesystem",
+        "uuid": "portal-walk-beta-ground",
+        "name": "Blue Workshop",
         "priority": 0.0,
         "visible": true,
         "enabled": true,
@@ -14,13 +14,102 @@
         "selectable": true,
         "layer": 0.0,
         "flags": 0.0,
-        "pose": {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.3826834, 0.9238795]},
-        "scale": [1.5, 1.5, 2.2],
-        "components": [{"source_id": "scene-cycle-beta-probe", "type": "SceneCycleProbe", "data": {"enabled": true, "label": "Beta", "next_scene": "Scenes/Gamma.scene", "delay_seconds": 2.0}}]
+        "pose": {"position": [0.0, 0.0, -0.35], "rotation": [0.0, 0.0, 0.0, 1.0]},
+        "scale": [10.0, 6.0, 0.5],
+        "components": [
+          {"source_id": "portal-walk-beta-ground-mesh", "type": "MeshComponent", "data": {"enabled": true, "mesh": {"uuid": "00000000-0000-0000-0003-000000000001", "name": "Cube", "type": "uuid", "kind": "tc_mesh"}}},
+          {"source_id": "portal-walk-beta-ground-renderer", "type": "MeshRenderer", "data": {"enabled": true, "material": {"uuid": "portal-walk-workshop-material", "name": "Workshop", "type": "uuid", "kind": "tc_material"}, "cast_shadow": false, "_override_material": false, "materials": []}}
+        ]
       },
       {
-        "uuid": "scene-cycle-beta-light",
-        "name": "Beta Key Light",
+        "uuid": "portal-walk-beta-path",
+        "name": "Workshop Walkway",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {"position": [-0.25, 0.0, -0.04], "rotation": [0.0, 0.0, 0.0, 1.0]},
+        "scale": [7.5, 1.5, 0.12],
+        "components": [
+          {"source_id": "portal-walk-beta-path-mesh", "type": "MeshComponent", "data": {"enabled": true, "mesh": {"uuid": "00000000-0000-0000-0003-000000000001", "name": "Cube", "type": "uuid", "kind": "tc_mesh"}}},
+          {"source_id": "portal-walk-beta-path-renderer", "type": "MeshRenderer", "data": {"enabled": true, "material": {"uuid": "portal-walk-path-material", "name": "Path", "type": "uuid", "kind": "tc_material"}, "cast_shadow": false, "_override_material": false, "materials": []}}
+        ]
+      },
+      {
+        "uuid": "portal-walk-beta-player",
+        "name": "Player — Return to the Left Gate",
+        "priority": 10.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {"position": [3.25, 0.0, 0.38], "rotation": [0.0, 0.0, 0.0, 1.0]},
+        "scale": [0.58, 0.58, 0.82],
+        "components": [
+          {"source_id": "portal-walk-beta-player-mesh", "type": "MeshComponent", "data": {"enabled": true, "mesh": {"uuid": "00000000-0000-0000-0003-000000000001", "name": "Cube", "type": "uuid", "kind": "tc_mesh"}}},
+          {"source_id": "portal-walk-beta-player-renderer", "type": "MeshRenderer", "data": {"enabled": true, "material": {"uuid": "portal-walk-player-material", "name": "Player", "type": "uuid", "kind": "tc_material"}, "cast_shadow": true, "_override_material": false, "materials": []}},
+          {"source_id": "portal-walk-beta-player-controller", "type": "PortalWalker", "data": {"enabled": true, "room_name": "Blue Workshop", "next_scene": "Scenes/Alpha.scene", "spawn_x": 3.25, "portal_x": -3.55, "move_speed": 3.2}}
+        ]
+      },
+      {
+        "uuid": "portal-walk-beta-gate",
+        "name": "Gate Back to Sunset Yard",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {"position": [-3.92, 0.0, 0.9], "rotation": [0.0, 0.0, 0.0, 1.0]},
+        "scale": [0.25, 2.2, 2.2],
+        "components": [
+          {"source_id": "portal-walk-beta-gate-mesh", "type": "MeshComponent", "data": {"enabled": true, "mesh": {"uuid": "00000000-0000-0000-0003-000000000001", "name": "Cube", "type": "uuid", "kind": "tc_mesh"}}},
+          {"source_id": "portal-walk-beta-gate-renderer", "type": "MeshRenderer", "data": {"enabled": true, "material": {"uuid": "portal-walk-portal-material", "name": "Portal", "type": "uuid", "kind": "tc_material"}, "cast_shadow": false, "_override_material": false, "materials": []}}
+        ]
+      },
+      {
+        "uuid": "portal-walk-beta-machine-one",
+        "name": "Workshop Machine A",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {"position": [-0.7, 2.15, 0.7], "rotation": [0.0, 0.0, -0.258819, 0.965926]},
+        "scale": [2.4, 1.1, 1.7],
+        "components": [
+          {"source_id": "portal-walk-beta-machine-one-mesh", "type": "MeshComponent", "data": {"enabled": true, "mesh": {"uuid": "00000000-0000-0000-0003-000000000001", "name": "Cube", "type": "uuid", "kind": "tc_mesh"}}},
+          {"source_id": "portal-walk-beta-machine-one-renderer", "type": "MeshRenderer", "data": {"enabled": true, "material": {"uuid": "portal-walk-prop-material", "name": "Prop", "type": "uuid", "kind": "tc_material"}, "cast_shadow": true, "_override_material": false, "materials": []}}
+        ]
+      },
+      {
+        "uuid": "portal-walk-beta-machine-two",
+        "name": "Workshop Machine B",
+        "priority": 0.0,
+        "visible": true,
+        "enabled": true,
+        "pickable": true,
+        "selectable": true,
+        "layer": 0.0,
+        "flags": 0.0,
+        "pose": {"position": [1.1, -2.15, 0.55], "rotation": [0.0, 0.0, 0.3826834, 0.9238795]},
+        "scale": [1.5, 1.2, 1.35],
+        "components": [
+          {"source_id": "portal-walk-beta-machine-two-mesh", "type": "MeshComponent", "data": {"enabled": true, "mesh": {"uuid": "00000000-0000-0000-0003-000000000001", "name": "Cube", "type": "uuid", "kind": "tc_mesh"}}},
+          {"source_id": "portal-walk-beta-machine-two-renderer", "type": "MeshRenderer", "data": {"enabled": true, "material": {"uuid": "portal-walk-prop-material", "name": "Prop", "type": "uuid", "kind": "tc_material"}, "cast_shadow": true, "_override_material": false, "materials": []}}
+        ]
+      },
+      {
+        "uuid": "portal-walk-beta-light",
+        "name": "Cold Workshop Light",
         "priority": 0.0,
         "visible": true,
         "enabled": true,
@@ -30,10 +119,10 @@
         "flags": 0.0,
         "pose": {"position": [5.0, -6.0, 12.0], "rotation": [-0.1098, -0.4342, 0.854, 0.2647]},
         "scale": [1.0, 1.0, 1.0],
-        "components": [{"source_id": "scene-cycle-beta-light-component", "type": "LightComponent", "data": {"enabled": true, "light_type": "directional", "color": [0.82, 1.0, 0.88], "intensity": 1.8, "shadows_enabled": false, "shadows_bias": 0.001, "shadows_normal_bias": 0.02, "shadows_map_resolution": 1024.0, "cascade_count": 3.0, "max_distance": 50.0, "split_lambda": 0.7, "cascade_blend": true}}]
+        "components": [{"source_id": "portal-walk-beta-light-component", "type": "LightComponent", "data": {"enabled": true, "light_type": "directional", "color": [0.48, 0.7, 1.0], "intensity": 2.3, "shadows_enabled": false, "shadows_bias": 0.001, "shadows_normal_bias": 0.02, "shadows_map_resolution": 1024.0, "cascade_count": 3.0, "max_distance": 50.0, "split_lambda": 0.7, "cascade_blend": true}}]
       },
       {
-        "uuid": "scene-cycle-beta-camera",
+        "uuid": "portal-walk-beta-camera",
         "name": "Main Camera",
         "priority": 0.0,
         "visible": true,
@@ -42,24 +131,24 @@
         "selectable": true,
         "layer": 0.0,
         "flags": 0.0,
-        "pose": {"position": [5.2, -8.5, 4.4], "rotation": [-0.150695, -0.037429, 0.238128, 0.958741]},
+        "pose": {"position": [-3.46, 6.5, 5.13], "rotation": [0.0735, -0.2864, 0.9253, -0.2376]},
         "scale": [1.0, 1.0, 1.0],
-        "components": [{"source_id": "scene-cycle-beta-camera-component", "type": "CameraComponent", "data": {"enabled": true, "near_clip": 0.1, "far_clip": 100.0, "ortho_size": 5.0, "fov_x_degrees": 60.0, "fov_y_degrees": 48.0, "fov_mode": "FixHorizontal", "layer_mask": "0xffffffffffffffff", "render_category_mask": "0xffffffffffffffff"}}]
+        "components": [{"source_id": "portal-walk-beta-camera-component", "type": "CameraComponent", "data": {"enabled": true, "near_clip": 0.1, "far_clip": 100.0, "ortho_size": 5.0, "fov_x_degrees": 64.0, "fov_y_degrees": 45.0, "fov_mode": "FixHorizontal", "layer_mask": "0xffffffffffffffff", "render_category_mask": "0xffffffffffffffff"}}]
       }
     ],
     "layer_names": {},
     "flag_names": {},
-    "metadata": {"termin": {"editor": {"entities_data": null, "viewport_camera_name": "camera"}}},
+    "metadata": {"termin": {"editor": {"entities_data": null, "viewport_camera_name": "Main Camera"}}},
     "extensions": {
       "render_mount": {
         "pipeline_templates": [],
-        "viewport_configs": [{"name": "Main Viewport", "display_name": "Main", "render_target": {"name": "Main Target"}, "region": [0.0, 0.0, 1.0, 1.0], "depth": 0.0, "input_mode": "simple", "block_input_in_editor": false, "enabled": true}],
-        "render_target_configs": [{"name": "Main Target", "camera_uuid": "scene-cycle-beta-camera", "dynamic_resolution": true, "color_format": "rgba8", "depth_format": "depth24", "clear_color": [0.01, 0.11, 0.035, 1.0], "clear_depth": 1.0, "pipeline_name": "Default", "layer_mask": 4294967295.0, "enabled": true}]
+        "viewport_configs": [{"name": "Main Viewport", "display_name": "Portal Walk", "render_target": {"name": "Main Target"}, "region": [0.0, 0.0, 1.0, 1.0], "depth": 0.0, "input_mode": "simple", "block_input_in_editor": false, "enabled": true}],
+        "render_target_configs": [{"name": "Main Target", "camera_uuid": "portal-walk-beta-camera", "dynamic_resolution": true, "color_format": "rgba8", "depth_format": "depth24", "clear_color": [0.012, 0.028, 0.11, 1.0], "clear_depth": 1.0, "pipeline_name": "Default", "layer_mask": 4294967295.0, "enabled": true}]
       },
       "render_state": {
-        "background_color": [0.01, 0.11, 0.035, 1.0],
-        "lighting": {"ambient_color": [0.12, 0.8, 0.3], "ambient_intensity": 0.32, "shadow_settings": {"method": 0.0, "softness": 1.2, "bias": 0.001}},
-        "skybox": {"type": 0.0, "color": [0.01, 0.11, 0.035], "top_color": [0.01, 0.11, 0.035], "bottom_color": [0.003, 0.035, 0.01]}
+        "background_color": [0.012, 0.028, 0.11, 1.0],
+        "lighting": {"ambient_color": [0.12, 0.35, 1.0], "ambient_intensity": 0.38, "shadow_settings": {"method": 0.0, "softness": 1.2, "bias": 0.001}},
+        "skybox": {"type": 0.0, "color": [0.012, 0.028, 0.11], "top_color": [0.018, 0.055, 0.2], "bottom_color": [0.003, 0.008, 0.035]}
       }
     }
   }
