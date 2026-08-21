@@ -12,6 +12,16 @@ from tcbase import Settings, log
 _configured = False
 
 
+def _activate_graphics_profile_resources():
+    """Activate resources when tgfx came from the standalone Graphics product."""
+    try:
+        import termin_graphics_profile
+    except ImportError:
+        return None
+    termin_graphics_profile.activate()
+    return termin_graphics_profile
+
+
 def _candidate_tool_paths(path: Path) -> tuple[Path, ...]:
     if os.name == "nt" and path.suffix == "":
         return (path.with_name(f"{path.name}.exe"), path)
@@ -92,7 +102,31 @@ def configure_default_shader_runtime(label: str = "python") -> bool:
     if _configured:
         return True
 
+    try:
+        graphics_profile = _activate_graphics_profile_resources()
+    except RuntimeError as exc:
+        log.error(f"[ShaderRuntime] invalid termin-graphics-profile installation: {exc}")
+        return False
+
     import tgfx
+
+    if (
+        graphics_profile is not None
+        and os.environ.get("TERMIN_SHADER_DEV_COMPILE") != "1"
+    ):
+        artifact_root = graphics_profile.shader_artifact_root()
+        tgfx.configure_shader_runtime(
+            artifact_root=str(artifact_root),
+            cache_root="",
+            shader_compiler="",
+            dev_compile=False,
+        )
+        _configured = True
+        log.info(
+            f"[ShaderRuntime] {label} configured from precompiled artifacts: "
+            f"artifact_root='{artifact_root}' dev_compile=False"
+        )
+        return True
 
     if tgfx.get_shader_dev_compile_enabled() and tgfx.get_shader_compiler_path():
         _configured = True
@@ -126,6 +160,7 @@ def configure_default_shader_runtime(label: str = "python") -> bool:
         )
         return False
     os.environ["TERMIN_SLANGC"] = str(slangc)
+    os.environ["TERMIN_SHADERC"] = str(compiler)
 
     tgfx.configure_shader_runtime(
         artifact_root=str(artifact_root),

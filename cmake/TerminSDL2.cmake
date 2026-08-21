@@ -25,7 +25,7 @@ macro(termin_configure_sdl2)
     set(SDL2_INCLUDE_DIRS)
     set(SDL2_DLL)
 
-    if(NOT USE_SYSTEM_SDL2)
+    if(NOT TERMIN_ENABLE_SDL)
         message(STATUS "SDL2 disabled")
     else()
         set(_termin_sdl2_source_dir "${TERMIN_SDL2_SOURCE_DIR}")

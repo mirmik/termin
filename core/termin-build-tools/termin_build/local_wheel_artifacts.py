@@ -166,14 +166,16 @@ def build_local_wheel_artifact_set(
     packages: Sequence[PackageEntry],
     run: Callable[..., int],
     clear_build_caches: Callable[[Path], None],
+    bundle_runtime_libraries: bool = False,
 ) -> int:
     wheel_dir.parent.mkdir(parents=True, exist_ok=True)
+    bundle_runtime_libraries_value = "1" if bundle_runtime_libraries else "0"
     env = os.environ.copy()
     env.update(
         {
             "TERMIN_SDK": str(sdk_prefix),
             "TERMIN_BINDINGS_DIR": str(bindings_dir),
-            "TERMIN_PIP_BUNDLE_LIBS": "0",
+            "TERMIN_PIP_BUNDLE_LIBS": bundle_runtime_libraries_value,
             "TERMIN_PIP_COPY_TO_SOURCE": "0",
         }
     )
@@ -190,7 +192,7 @@ def build_local_wheel_artifact_set(
         prepared.mkdir()
         pip_cmd = [str(build_python), "-m", "pip"]
         print("Using pip: " + " ".join(pip_cmd))
-        print("TERMIN_PIP_BUNDLE_LIBS=0")
+        print(f"TERMIN_PIP_BUNDLE_LIBS={bundle_runtime_libraries_value}")
         print("TERMIN_PIP_COPY_TO_SOURCE=0")
         print("")
         print("========================================")

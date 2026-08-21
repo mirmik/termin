@@ -7,16 +7,16 @@ capabilities.
 
 ## Сборочные режимы
 
-Обычный headless desktop профиль:
-
-```console
-task build:graphics -- --no-sdl
-```
-
-SDL-enabled window host:
+Полный desktop Graphics product:
 
 ```console
 task build:graphics -- --sdl
+```
+
+Урезанная headless SDK-конфигурация для внутренних проверок:
+
+```console
+task build:graphics -- --no-sdl
 ```
 
 D3D11-only Windows profile:
@@ -25,9 +25,9 @@ D3D11-only Windows profile:
 task build:graphics -- --no-sdl --no-vulkan --no-opengl
 ```
 
-Backend flags ортогональны профилю: `graphics` отвечает за package closure,
-а Vulkan/OpenGL/D3D11/SDL — за capabilities конкретной сборки. Не выводите
-одно из другого по имени каталога.
+Backend flags остаются ортогональны SDK-профилю. Публичный Python product при
+этом фиксирует SDL/window capability как часть своей closure; `--no-sdl`
+допустим только для внутренних SDK/platform recipes.
 
 ## От source к artifact
 
@@ -64,10 +64,11 @@ texture origin, MRT limits, sampler budget или readback support с доста
 
 ## Headless не значит «без графики»
 
-Headless profile создаёт offscreen graphics composition без native window.
-Он по-прежнему исполняет GPU/render contracts, создаёт framebuffer output и
-проверяет результат по пикселям. `--no-sdl` удаляет window dependency, а не
-превращает showcase в набор mock-объектов.
+Headless execution создаёт offscreen graphics composition без native window,
+даже когда window stack установлен. Он по-прежнему исполняет GPU/render
+contracts, создаёт framebuffer output и проверяет результат по пикселям.
+Внутренний `--no-sdl` build удаляет window capability целиком, но для этого не
+нужен отдельный публичный Python product.
 
 ## Platform builds
 

@@ -68,6 +68,10 @@ def test_build_and_publish_use_one_canonical_wheel_payload(tmp_path: Path) -> No
     )
     assert result == 0
     assert sum(1 for call in calls if isinstance(call, tuple) and len(call) == 3) == 1
+    build_call = next(
+        call for call in calls if isinstance(call, tuple) and len(call) == 3
+    )
+    assert build_call[2]["TERMIN_PIP_BUNDLE_LIBS"] == "0"
 
     publish_local_wheel_artifact_set(
         build_wheels,
@@ -88,6 +92,35 @@ def test_build_and_publish_use_one_canonical_wheel_payload(tmp_path: Path) -> No
     )
     assert published == source
     assert (public_wheels / LOCAL_WHEEL_MANIFEST_NAME).is_file()
+
+
+def test_build_can_bundle_runtime_libraries(tmp_path: Path) -> None:
+    sdk_prefix = tmp_path / "sdk"
+    _write_sdk_manifest(sdk_prefix)
+    build_env = None
+
+    def run(command, *, cwd, env):
+        nonlocal build_env
+        build_env = env
+        wheel_dir = Path(command[command.index("--wheel-dir") + 1])
+        (wheel_dir / "one-1-py3-none-any.whl").write_bytes(b"one")
+        return 0
+
+    result = build_local_wheel_artifact_set(
+        repo_root=tmp_path,
+        sdk_prefix=sdk_prefix,
+        bindings_dir=tmp_path / "bindings",
+        wheel_dir=tmp_path / "wheels",
+        build_python=tmp_path / "python",
+        packages=[PackageEntry("one", "one", (), ())],
+        run=run,
+        clear_build_caches=lambda root: None,
+        bundle_runtime_libraries=True,
+    )
+
+    assert result == 0
+    assert build_env is not None
+    assert build_env["TERMIN_PIP_BUNDLE_LIBS"] == "1"
 
 
 def test_validation_rejects_tampered_wheel(tmp_path: Path) -> None:

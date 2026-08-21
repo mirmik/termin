@@ -9,11 +9,26 @@
 #   termin_set_rpath_tool(my_sdk_executable)
 #   termin_set_rpath_relocatable_tool(my_dual_layout_executable)
 
+# Standalone Python wheels carry their native dependency closure inside each
+# package.  In that product mode no installed ELF may retain the private CMake
+# install prefix.  The option is declared by the repository root and remains
+# OFF by default so the SDK keeps its existing, prefix-aware lookup policy.
+function(_termin_select_rpath output_variable sdk_rpath wheel_rpath)
+    if(TERMIN_RELOCATABLE_PYTHON_WHEELS)
+        set(${output_variable} "${wheel_rpath}" PARENT_SCOPE)
+    else()
+        set(${output_variable} "${sdk_rpath}" PARENT_SCOPE)
+    endif()
+endfunction()
+
 # For native shared libraries (.so) installed into lib/
 function(termin_set_rpath_lib target)
     if(NOT WIN32)
+        _termin_select_rpath(_termin_rpath
+            "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
+            "$ORIGIN")
         set_target_properties(${target} PROPERTIES
-            INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
+            INSTALL_RPATH "${_termin_rpath}"
             BUILD_WITH_INSTALL_RPATH TRUE
         )
     endif()
@@ -22,8 +37,11 @@ endfunction()
 # For native executables installed into bin/.
 function(termin_set_rpath_tool target)
     if(NOT WIN32)
+        _termin_select_rpath(_termin_rpath
+            "$ORIGIN;$ORIGIN/../lib;${CMAKE_INSTALL_PREFIX}/lib"
+            "$ORIGIN;$ORIGIN/../lib")
         set_target_properties(${target} PROPERTIES
-            INSTALL_RPATH "$ORIGIN;$ORIGIN/../lib;${CMAKE_INSTALL_PREFIX}/lib"
+            INSTALL_RPATH "${_termin_rpath}"
             BUILD_WITH_INSTALL_RPATH TRUE
         )
     endif()
@@ -45,8 +63,11 @@ endfunction()
 # Includes $ORIGIN/lib for pip layout (native .so next to lib/ dir)
 function(termin_set_rpath_python target)
     if(NOT WIN32)
+        _termin_select_rpath(_termin_rpath
+            "$ORIGIN/lib;$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
+            "$ORIGIN/lib")
         set_target_properties(${target} PROPERTIES
-            INSTALL_RPATH "$ORIGIN/lib;$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib"
+            INSTALL_RPATH "${_termin_rpath}"
             BUILD_WITH_INSTALL_RPATH TRUE
         )
     endif()
@@ -55,8 +76,11 @@ endfunction()
 # For pip-installed Python modules (.so next to package's lib/ dir)
 function(termin_set_rpath_pip target)
     if(NOT WIN32)
+        _termin_select_rpath(_termin_rpath
+            "$ORIGIN/lib;${CMAKE_INSTALL_PREFIX}/lib"
+            "$ORIGIN/lib")
         set_target_properties(${target} PROPERTIES
-            INSTALL_RPATH "$ORIGIN/lib;${CMAKE_INSTALL_PREFIX}/lib"
+            INSTALL_RPATH "${_termin_rpath}"
             BUILD_WITH_INSTALL_RPATH TRUE
         )
     endif()

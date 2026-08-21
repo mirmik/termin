@@ -9,8 +9,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_GUI_NATIVE_BUILD_EXAMPLES "Build termin-gui-native examples" ${TERMIN_ENABLE_SDL})
 option(TERMIN_BUILD_PYTHON "Build termin-gui-native Python bindings" OFF)
-option(TERMIN_GUI_NATIVE_BUILD_WINDOW_INTEGRATION
-       "Build optional termin-window adapters and compatibility hosts" ${TERMIN_ENABLE_SDL})
+set(TERMIN_GUI_NATIVE_BUILD_WINDOW_INTEGRATION ${TERMIN_ENABLE_SDL})
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)

@@ -7,6 +7,9 @@ option(TERMIN_PLATFORM_WEB "Build the portable Termin WebAssembly core" OFF)
 option(TERMIN_ENABLE_OPENGL "Enable desktop OpenGL-dependent graphics/render targets" ON)
 option(TERMIN_ENABLE_WEBGL2 "Enable the WebGL 2 constrained-GL backend" ${TERMIN_PLATFORM_WEB})
 option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" OFF)
+option(TERMIN_RELOCATABLE_PYTHON_WHEELS
+    "Use prefix-independent RPATHs for the standalone Python wheel product"
+    OFF)
 option(TERMIN_BUILD_TESTS "Build C/C++ tests" OFF)
 option(TERMIN_BUILD_TGFX2_TESTS "Build tgfx2 C/C++ tests" ON)
 option(TERMIN_BUILD_WINDOW_TESTS "Build tests that require a windowing system" OFF)
@@ -156,6 +159,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(TerminDependencies)
+include(TerminRpath)
 
 if(TERMIN_BUILD_PYTHON)
     include(TerminPython)

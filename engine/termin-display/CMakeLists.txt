@@ -40,7 +40,6 @@ include(TerminRpath)
 include(TerminSDL2)
 
 # ── SDL2 (optional) ──
-option(USE_SYSTEM_SDL2 "Use system SDL2 library" ${TERMIN_ENABLE_SDL})
 set(TERMIN_DISPLAY_HAS_SDL OFF)
 
 termin_configure_sdl2()

@@ -38,7 +38,6 @@ def test_graphics_showcase_has_one_artifact_section_and_documented_registry() ->
 
     expected = {
         "native_ui",
-        "graphics_lines",
         "tcplot_sine",
         "tcplot_scatter",
         "tcplot_multi",
@@ -132,11 +131,10 @@ def test_graphics_showcase_tabbed_frontend_builds_and_renders_every_page() -> No
                 composition.graphics,
             )
             tabs, contents = _build_tabbed_showcase(application)
-            assert tabs.page_count == 14
+            assert tabs.page_count == 13
             assert [tabs.page_title(index) for index in range(tabs.page_count)] == [
                 "Overview",
                 "Native UI",
-                "Graphics Lines",
                 "Sine",
                 "Scatter",
                 "Multi Plot",

@@ -215,7 +215,7 @@ void bind_gui_native_offscreen(nb::module_& m) {
             nb::arg("slang_compiler_path") = "",
             nb::arg("shader_cache_root") = "",
             nb::arg("shader_artifact_root") = "",
-            nb::arg("enable_shader_dev_compile") = true)
+            nb::arg("enable_shader_dev_compile") = false)
         .def_prop_ro("document", &PythonOffscreenGuiComposition::document)
         .def_prop_ro(
             "graphics",

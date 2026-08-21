@@ -27,7 +27,7 @@ namespace termin::gui_native {
         std::string slang_compiler_path;
         std::string shader_cache_root;
         std::string shader_artifact_root;
-        bool enable_shader_dev_compile = true;
+        bool enable_shader_dev_compile = false;
     };
 
     class TERMIN_GUI_NATIVE_OFFSCREEN_API InMemoryDocumentPlatformServices final : public DocumentPlatformServices {

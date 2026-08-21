@@ -182,33 +182,53 @@ namespace termin::gui_native {
                                                      sdk_root / "share" / "termin" / "fonts" / "DroidSans.ttf",
                                                      "UI font")
                                             .string();
-            config.shader_compiler_path = resolve_file(config.shader_compiler_path,
-                                                       "TERMIN_SHADERC",
-                                                       sdk_root / "bin" / "termin_shaderc",
-                                                       "termin_shaderc")
-                                              .string();
-            const char* configured_slangc = std::getenv("TERMIN_SLANGC");
-            if (config.slang_compiler_path.empty() &&
-                (!configured_slangc || configured_slangc[0] == '\0') &&
-                !is_file(executable_path(sdk_root / "bin" / "slangc"))) {
-                config.slang_compiler_path = find_on_path("slangc").string();
-            }
-            config.slang_compiler_path =
-                resolve_file(config.slang_compiler_path, "TERMIN_SLANGC", sdk_root / "bin" / "slangc", "slangc")
-                    .string();
-
             const fs::path runtime_root = fs::temp_directory_path() / "termin-gui-native-offscreen";
-            const fs::path cache_root =
-                config.shader_cache_root.empty() ? runtime_root / "shader-cache" : fs::path(config.shader_cache_root);
-            const fs::path artifact_root = config.shader_artifact_root.empty() ? runtime_root / "shader-artifacts"
-                                                                               : fs::path(config.shader_artifact_root);
-            create_directory(cache_root, "shader cache");
-            create_directory(artifact_root, "shader artifact directory");
-            config.shader_cache_root = fs::absolute(cache_root).string();
-            config.shader_artifact_root = fs::absolute(artifact_root).string();
-            static std::mutex shader_environment_mutex;
-            const std::lock_guard<std::mutex> lock(shader_environment_mutex);
-            set_slang_compiler(config.slang_compiler_path);
+            if (config.shader_artifact_root.empty()) {
+                if (const char* configured = std::getenv("TERMIN_SHADER_ARTIFACT_ROOT");
+                    configured && configured[0] != '\0') {
+                    config.shader_artifact_root = configured;
+                } else if (fs::is_directory(sdk_root / "share" / "termin" / "shaders")) {
+                    config.shader_artifact_root = (sdk_root / "share" / "termin").string();
+                } else if (config.enable_shader_dev_compile) {
+                    config.shader_artifact_root = (runtime_root / "shader-artifacts").string();
+                } else {
+                    offscreen_error(
+                        "precompiled shader artifacts are unavailable; set TERMIN_SHADER_ARTIFACT_ROOT "
+                        "or enable shader developer compilation explicitly");
+                }
+            }
+            const fs::path artifact_root = fs::absolute(config.shader_artifact_root);
+            if (config.enable_shader_dev_compile) {
+                config.shader_compiler_path = resolve_file(config.shader_compiler_path,
+                                                           "TERMIN_SHADERC",
+                                                           sdk_root / "bin" / "termin_shaderc",
+                                                           "termin_shaderc")
+                                                  .string();
+                const char* configured_slangc = std::getenv("TERMIN_SLANGC");
+                if (config.slang_compiler_path.empty() &&
+                    (!configured_slangc || configured_slangc[0] == '\0') &&
+                    !is_file(executable_path(sdk_root / "bin" / "slangc"))) {
+                    config.slang_compiler_path = find_on_path("slangc").string();
+                }
+                config.slang_compiler_path = resolve_file(config.slang_compiler_path,
+                                                          "TERMIN_SLANGC",
+                                                          sdk_root / "bin" / "slangc",
+                                                          "slangc")
+                                                 .string();
+                const fs::path cache_root = config.shader_cache_root.empty()
+                                                ? runtime_root / "shader-cache"
+                                                : fs::path(config.shader_cache_root);
+                create_directory(cache_root, "shader cache");
+                create_directory(artifact_root, "shader artifact directory");
+                config.shader_cache_root = fs::absolute(cache_root).string();
+                static std::mutex shader_environment_mutex;
+                const std::lock_guard<std::mutex> lock(shader_environment_mutex);
+                set_slang_compiler(config.slang_compiler_path);
+            } else if (!fs::is_directory(artifact_root / "shaders")) {
+                offscreen_error("precompiled shader artifact root has no shaders directory: " +
+                                artifact_root.string());
+            }
+            config.shader_artifact_root = artifact_root.string();
             return termin::ShaderArtifactResolver(config.shader_artifact_root,
                                                   config.shader_cache_root,
                                                   config.shader_compiler_path,

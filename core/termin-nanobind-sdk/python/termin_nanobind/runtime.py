@@ -11,6 +11,8 @@ nanobind module so dependent shared libraries are visible to the dynamic linker.
 """
 
 import ctypes
+import importlib.util
+import json
 import logging
 import os
 import sys
@@ -99,6 +101,46 @@ def _caller_lib_dirs():
         if parent.name in {"site-packages", "dist-packages"}:
             break
     return dirs
+
+
+def _installed_product_lib_dirs():
+    """Return native-library roots owned by installed Termin product wheels."""
+    try:
+        spec = importlib.util.find_spec("termin_graphics_profile")
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return []
+    if spec is None or spec.submodule_search_locations is None:
+        return []
+    dirs = []
+    for package_root in spec.submodule_search_locations:
+        lib_dir = Path(package_root) / "lib"
+        if lib_dir.is_dir():
+            dirs.append(lib_dir)
+    return dirs
+
+
+def _installed_product_library_paths():
+    paths = []
+    for lib_dir in _installed_product_lib_dirs():
+        manifest_path = lib_dir.parent / "native-libraries.json"
+        try:
+            names = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            continue
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ImportError(
+                f"Cannot read installed Termin product native manifest: {manifest_path}: {exc}"
+            ) from exc
+        if not isinstance(names, list) or not all(
+            isinstance(name, str) and name and Path(name).name == name for name in names
+        ):
+            raise ImportError(f"Invalid installed Termin product native manifest: {manifest_path}")
+        for name in names:
+            path = lib_dir / name
+            if not path.is_file():
+                raise ImportError(f"Installed Termin product library is missing: {path}")
+            paths.append(path)
+    return paths
 
 
 def _register_windows_dll_dirs(local_dirs):
@@ -194,7 +236,12 @@ def preload_sdk_libs(*lib_names):
     os.add_dll_directory. On Windows the loader searches those directories
     directly, so explicit CDLL preloading is unnecessary.
     """
-    local_lib_dirs = _caller_lib_dirs()
+    # Every Termin extension links the shared nanobind runtime. Package-local
+    # wheels used to let the extension RPATH discover it implicitly; a
+    # centralized product library root must preload it before dlopen reaches
+    # the extension itself.
+    requested_libs = ("nanobind", *lib_names)
+    local_lib_dirs = [*_installed_product_lib_dirs(), *_caller_lib_dirs()]
 
     if sys.platform == "win32":
         _register_windows_dll_dirs(local_lib_dirs)
@@ -206,7 +253,14 @@ def preload_sdk_libs(*lib_names):
     if sdk_lib_dir is not None and sdk_lib_dir.is_dir():
         lib_dirs.append(sdk_lib_dir)
 
-    for name in lib_names:
+    for product_library in _installed_product_library_paths():
+        key = f"product:{product_library.name}"
+        if key in _preloaded:
+            continue
+        ctypes.CDLL(str(product_library), mode=ctypes.RTLD_GLOBAL)
+        _preloaded.add(key)
+
+    for name in requested_libs:
         runtime_name = _abi_runtime_library_name(name)
         if runtime_name in _preloaded:
             continue

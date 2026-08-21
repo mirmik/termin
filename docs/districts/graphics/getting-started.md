@@ -5,12 +5,12 @@ showcase собирает native UI, линии, retained 2D/3D scenes, nodegrap
 animation и plots в один проверяемый продукт, а затем оставляет после себя PNG
 и отчёт. Улики весят больше бодрого сообщения в stdout.
 
-## Собрать headless профиль
+## Собрать Graphics product
 
 Из корня репозитория:
 
 ```console
-task build:graphics -- --no-sdl
+task build:graphics -- --sdl
 ```
 
 Результат находится в `sdk-graphics/`. Запустите showcase через bundled
@@ -23,10 +23,11 @@ Python, не добавляя checkout в `PYTHONPATH`:
   --report /tmp/termin-graphics-showcase.json
 ```
 
-Headless path — обязательный baseline. Ему не нужны `termin-window`, SDL,
-Engine, Editor или PySDL2; кадр собирает
-`termin.gui_native.OffscreenGuiComposition`. Ошибка любого раздела логируется
-с его именем и завершает процесс ненулевым кодом.
+Поставка включает `termin-window` и SDL, но headless path остаётся обязательным
+baseline исполнения: он не создаёт окно, а кадр собирает
+`termin.gui_native.OffscreenGuiComposition`. Engine, Editor, `termin-display`
+и PySDL2 ему не нужны. Ошибка любого раздела логируется с его именем и
+завершает процесс ненулевым кодом.
 
 ## Что находится на плёнке
 
@@ -43,9 +44,9 @@ JSON report фиксирует exact imports, статус всех секций
 путь к артефакту. PNG рисуется самой композицией, а не достаётся заранее из
 кармана фокусника.
 
-## Добавить окно
+## Открыть окно
 
-Окно — необязательный host поверх той же графической closure:
+Оконный host входит в ту же графическую closure:
 
 ```console
 task build:graphics -- --sdl
@@ -59,7 +60,8 @@ engine-owned `termin-display` в Graphics profile не входит.
 
 ## Windows и D3D11
 
-Для D3D11-only продукта отключите SDL, Vulkan и OpenGL:
+Для внутренней D3D11-only headless диагностики можно отключить SDL, Vulkan и
+OpenGL. Это не контракт публичного Python product:
 
 ```powershell
 task build:graphics -- --no-sdl --no-vulkan --no-opengl
