@@ -114,15 +114,15 @@ typedef struct tc_plot_item3d_snapshot {
 } tc_plot_item3d_snapshot;
 
 typedef struct tc_orbit_camera3d_state {
-    float target_x;
-    float target_y;
-    float target_z;
-    float distance;
-    float azimuth;
-    float elevation;
-    float fov_y;
-    float near_clip;
-    float far_clip;
+    double target_x;
+    double target_y;
+    double target_z;
+    double distance;
+    double azimuth;
+    double elevation;
+    double fov_y;
+    double near_clip;
+    double far_clip;
 } tc_orbit_camera3d_state;
 
 TCPLOT_API tc_retained_chart3d* tc_retained_chart3d_create(void* gpu_host);

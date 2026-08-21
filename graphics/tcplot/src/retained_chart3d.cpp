@@ -7,6 +7,7 @@
 #include <exception>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -636,18 +637,14 @@ namespace {
         void fit_camera() {
             double lo[3], hi[3];
             bounds(lo, hi);
-            const termin::Vec3f scaled_lo{static_cast<float>(lo[0] * axis_scale_[0]),
-                                          static_cast<float>(lo[1] * axis_scale_[1]),
-                                          static_cast<float>(lo[2] * axis_scale_[2])};
-            const termin::Vec3f scaled_hi{static_cast<float>(hi[0] * axis_scale_[0]),
-                                          static_cast<float>(hi[1] * axis_scale_[1]),
-                                          static_cast<float>(hi[2] * axis_scale_[2])};
-            camera_.fit_bounds(termin::Vec3f{std::min(scaled_lo.x, scaled_hi.x),
-                                             std::min(scaled_lo.y, scaled_hi.y),
-                                             std::min(scaled_lo.z, scaled_hi.z)},
-                               termin::Vec3f{std::max(scaled_lo.x, scaled_hi.x),
-                                             std::max(scaled_lo.y, scaled_hi.y),
-                                             std::max(scaled_lo.z, scaled_hi.z)});
+            const termin::Vec3 scaled_lo{lo[0] * axis_scale_[0], lo[1] * axis_scale_[1], lo[2] * axis_scale_[2]};
+            const termin::Vec3 scaled_hi{hi[0] * axis_scale_[0], hi[1] * axis_scale_[1], hi[2] * axis_scale_[2]};
+            camera_.fit_bounds(termin::AABB{{std::min(scaled_lo.x, scaled_hi.x),
+                                              std::min(scaled_lo.y, scaled_hi.y),
+                                              std::min(scaled_lo.z, scaled_hi.z)},
+                                             {std::max(scaled_lo.x, scaled_hi.x),
+                                              std::max(scaled_lo.y, scaled_hi.y),
+                                              std::max(scaled_lo.z, scaled_hi.z)}});
         }
 
         void reset_camera() {
@@ -663,6 +660,16 @@ namespace {
         bool pointer_down(float x, float y, int button) {
             if (button != 0 && button != 2)
                 return false;
+            pan_gesture_.reset();
+            if (button == 2) {
+                pan_gesture_ = camera_.begin_pan(
+                    termin::Vec2{x, y},
+                    termin::Rect2{0.0, 0.0, static_cast<double>(width_), static_cast<double>(height_)});
+                if (!pan_gesture_) {
+                    tc_log_error("[tcplot] cannot begin retained 3D camera pan without a valid rendered viewport");
+                    return false;
+                }
+            }
             dragging_ = true;
             drag_button_ = button;
             drag_x_ = x;
@@ -680,12 +687,15 @@ namespace {
             if (drag_button_ == 0) {
                 camera_.orbit(-dx * 0.005f, dy * 0.005f);
             } else {
-                camera_.pan(-dx, dy);
+                if (!pan_gesture_ || !camera_.pan(*pan_gesture_, termin::Vec2{x, y})) {
+                    tc_log_error("[tcplot] failed to update retained 3D camera pan gesture");
+                }
             }
         }
 
         void pointer_up() {
             dragging_ = false;
+            pan_gesture_.reset();
         }
 
         bool wheel(float delta) {
@@ -955,6 +965,7 @@ namespace {
         int drag_button_ = 0;
         float drag_x_ = 0;
         float drag_y_ = 0;
+        std::optional<termin::OrbitCameraPan> pan_gesture_;
         tgfx::TextureHandle color_{};
         int width_ = 0;
         int height_ = 0;

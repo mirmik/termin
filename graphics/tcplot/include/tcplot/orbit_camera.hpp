@@ -7,8 +7,8 @@ namespace tcplot {
 
     class TCPLOT_API OrbitCamera : public termin::OrbitCamera {
     public:
-        float& near;
-        float& far;
+        double& near;
+        double& far;
 
         OrbitCamera()
             : termin::OrbitCamera(),

@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 from termin.geombase import OrbitCamera as _NativeOrbitCamera
-from termin.geombase import Vec3
+from termin.geombase import Rect2, Vec2, Vec3
 
 
 def _vec3(value) -> Vec3:
@@ -131,8 +131,14 @@ class OrbitCamera:
         self.far = max(self.distance * 20.0, 100.0)
         self.near = 0.01
 
-    def pan(self, dx, dy) -> None:
-        self._camera.pan(float(dx), float(dy))
+    def begin_pan(self, screen_x, screen_y, viewport_width, viewport_height):
+        return self._camera.begin_pan(
+            Vec2(float(screen_x), float(screen_y)),
+            Rect2(0.0, 0.0, float(viewport_width), float(viewport_height)),
+        )
+
+    def pan_to(self, gesture, screen_x, screen_y) -> bool:
+        return bool(self._camera.pan(gesture, Vec2(float(screen_x), float(screen_y))))
 
     def screen_axes(self):
         eye = _array3(self.eye())
@@ -192,7 +198,8 @@ class OrbitCamera:
 
     def screen_ray(self, screen_x, screen_y, width, height):
         near, direction = self._camera.screen_ray(
-            float(screen_x), float(screen_y), float(width), float(height))
+            Vec2(float(screen_x), float(screen_y)),
+            Rect2(0.0, 0.0, float(width), float(height)))
         return (
             (float(near[0]), float(near[1]), float(near[2])),
             (float(direction[0]), float(direction[1]), float(direction[2])),
@@ -200,7 +207,9 @@ class OrbitCamera:
 
     def world_point_on_z_plane(self, screen_x, screen_y, width, height, z=0.0):
         point = self._camera.world_point_on_z_plane(
-            float(screen_x), float(screen_y), float(width), float(height), float(z))
+            Vec2(float(screen_x), float(screen_y)),
+            Rect2(0.0, 0.0, float(width), float(height)),
+            float(z))
         if point is None:
             return None
         return (float(point[0]), float(point[1]), float(point[2]))

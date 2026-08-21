@@ -6,6 +6,25 @@
 
 namespace termin {
 
+    // 2D rectangle with double-precision origin and extent.
+    struct Rect2 {
+        double x = 0.0;
+        double y = 0.0;
+        double width = 0.0;
+        double height = 0.0;
+
+        Rect2() = default;
+        Rect2(double x, double y, double width, double height)
+            : x(x),
+              y(y),
+              width(width),
+              height(height) {}
+
+        Bounds2 bounds() const {
+            return {x, y, x + width, y + height};
+        }
+    };
+
     // 2D rectangle with integer origin and extent.
     struct Rect2i {
         int x = 0;

@@ -180,7 +180,7 @@ namespace tcplot {
             camera.far_clip = camera_state.far_clip;
             const float aspect = static_cast<float>(request.draw_context->viewport_width) /
                                  static_cast<float>(request.draw_context->viewport_height);
-            const termin::Mat44f mvp = camera.projection_matrix(aspect) * camera.view_matrix();
+            const termin::Mat44f mvp = (camera.projection_matrix(aspect) * camera.view_matrix()).to_float();
 
             Plot3DDrawData draw{};
             std::memcpy(draw.mvp, mvp.data, sizeof(draw.mvp));

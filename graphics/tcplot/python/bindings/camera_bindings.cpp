@@ -12,7 +12,7 @@ namespace tcplot_bindings {
     // Returning a numpy (4,4) float array is the shape callers expect from
     // the prior Python camera3d.py. Allocated in Python heap so nanobind
     // manages ownership.
-    static nb::object mat_to_ndarray(const float m[16]) {
+    static nb::object mat_to_ndarray(const double m[16]) {
         // Allocate a new float buffer in Python-managed heap and hand it to
         // nanobind as an ndarray. nanobind copies into a numpy array via
         // the ndarray->numpy() conversion.
@@ -37,7 +37,7 @@ namespace tcplot_bindings {
             .def_prop_rw(
                 "target",
                 [](const tcplot::OrbitCamera& c) { return c.target; },
-                [](tcplot::OrbitCamera& c, const termin::Vec3f& target) { c.target = target; })
+                [](tcplot::OrbitCamera& c, const termin::Vec3& target) { c.target = target; })
             .def_rw("distance", &tcplot::OrbitCamera::distance)
             .def_rw("azimuth", &tcplot::OrbitCamera::azimuth)
             .def_rw("elevation", &tcplot::OrbitCamera::elevation)
@@ -56,15 +56,15 @@ namespace tcplot_bindings {
 
             .def("view_matrix",
                  [](const tcplot::OrbitCamera& c) {
-                     float m[16];
+                     double m[16];
                      c.view_matrix(m);
                      return mat_to_ndarray(m);
                  })
 
             .def(
                 "projection_matrix",
-                [](const tcplot::OrbitCamera& c, float aspect) {
-                    float m[16];
+                [](const tcplot::OrbitCamera& c, double aspect) {
+                    double m[16];
                     c.projection_matrix(aspect, m);
                     return mat_to_ndarray(m);
                 },
@@ -72,8 +72,8 @@ namespace tcplot_bindings {
 
             .def(
                 "mvp",
-                [](const tcplot::OrbitCamera& c, float aspect) {
-                    float m[16];
+                [](const tcplot::OrbitCamera& c, double aspect) {
+                    double m[16];
                     c.mvp(aspect, m);
                     return mat_to_ndarray(m);
                 },
@@ -81,13 +81,18 @@ namespace tcplot_bindings {
 
             .def("orbit", &tcplot::OrbitCamera::orbit, nb::arg("d_azimuth"), nb::arg("d_elevation"))
             .def("zoom", &tcplot::OrbitCamera::zoom, nb::arg("factor"))
-            .def("pan", &tcplot::OrbitCamera::pan, nb::arg("dx"), nb::arg("dy"))
+            .def(
+                "pan",
+                nb::overload_cast<const termin::Vec2&, const termin::Vec2&, const termin::Rect2&>(
+                    &tcplot::OrbitCamera::pan),
+                nb::arg("from_position"),
+                nb::arg("to_position"),
+                nb::arg("viewport"))
 
             .def(
                 "fit_bounds",
-                [](tcplot::OrbitCamera& c, const termin::Vec3f& lo, const termin::Vec3f& hi) { c.fit_bounds(lo, hi); },
-                nb::arg("bounds_min"),
-                nb::arg("bounds_max"));
+                &tcplot::OrbitCamera::fit_bounds,
+                nb::arg("bounds"));
     }
 
 } // namespace tcplot_bindings

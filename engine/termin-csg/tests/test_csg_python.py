@@ -1054,6 +1054,20 @@ def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
     assert isclose(restored.camera.pitch, 0.5, abs_tol=1.0e-6)
 
 
+def test_orbit_camera_pan_gesture_keeps_initial_grabbed_point():
+    camera = OrbitCamera()
+    grabbed = Vec3(camera.target.x, camera.target.y, camera.target.z)
+    gesture = camera.begin_pan(400.0, 300.0, 800, 600)
+
+    assert gesture is not None
+    assert camera.pan_to(gesture, 525.0, 360.0)
+    projected = camera.project_world_to_screen(grabbed, 800, 600)
+
+    assert projected is not None
+    assert isclose(projected[0], 525.0, abs_tol=1.0e-8)
+    assert isclose(projected[1], 360.0, abs_tol=1.0e-8)
+
+
 def test_native_cad_file_dialogs_save_and_open_state(tmp_path):
     with _native_cad_app() as app:
         app.last_directory = tmp_path

@@ -23,7 +23,9 @@ from ._geom_native import (
     LinearColor,
     srgb_to_linear,
     linear_to_srgb,
+    Bounds2,
     Bounds2f,
+    Rect2,
     Quat,
     Mat33,
     Mat33f,
@@ -42,6 +44,7 @@ from ._geom_native import (
     Ray3,
     AABB,
     OrbitCamera,
+    OrbitCameraPan,
 )
 
 from .quaternion import deg2rad, qinv, qmul, qmul_vector, qrot, qslerp
@@ -60,7 +63,9 @@ __all__ = [
     'LinearColor',
     'srgb_to_linear',
     'linear_to_srgb',
+    'Bounds2',
     'Bounds2f',
+    'Rect2',
     'Quat',
     'Mat33',
     'Mat33f',
@@ -80,6 +85,7 @@ __all__ = [
     'Ray3',
     'AABB',
     'OrbitCamera',
+    'OrbitCameraPan',
     'TransformAABB',
     'deg2rad',
     'qinv',

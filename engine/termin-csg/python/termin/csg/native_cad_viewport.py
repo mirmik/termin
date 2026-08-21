@@ -37,6 +37,7 @@ class NativeCadViewportSurface:
         self._drag_mode = ""
         self._drag_x = 0.0
         self._drag_y = 0.0
+        self._pan_gesture = None
 
     @property
     def width(self) -> int:
@@ -59,6 +60,7 @@ class NativeCadViewportSurface:
         self._valid = False
         self._texture = None
         self._drag_mode = ""
+        self._pan_gesture = None
 
     # ViewportSurfaceHost protocol.
 
@@ -110,7 +112,10 @@ class NativeCadViewportSurface:
         if self._drag_mode == "orbit":
             self.camera.orbit(dx, dy)
         elif self._drag_mode == "pan":
-            self.camera.pan(-dx, dy)
+            if self._pan_gesture is None or not self.camera.pan_to(
+                self._pan_gesture, self._pointer_x, self._pointer_y
+            ):
+                raise RuntimeError("failed to update CSG orbital camera pan")
         self._drag_x = self._pointer_x
         self._drag_y = self._pointer_y
         self._notify_changed()
@@ -188,6 +193,14 @@ class NativeCadViewportSurface:
             self._begin_drag("orbit")
             return True
         if button == int(MouseButton.RIGHT):
+            self._pan_gesture = self.camera.begin_pan(
+                self._pointer_x,
+                self._pointer_y,
+                self._width,
+                self._height,
+            )
+            if self._pan_gesture is None:
+                return False
             self._begin_drag("pan")
             return True
         return False
@@ -203,6 +216,7 @@ class NativeCadViewportSurface:
             ):
                 self._notify_changed()
         self._drag_mode = ""
+        self._pan_gesture = None
 
     def _begin_drag(self, mode: str) -> None:
         self._drag_mode = mode

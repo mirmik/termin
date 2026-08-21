@@ -1,17 +1,20 @@
 #pragma once
 
 #include <termin/camera/camera_component.hpp>
+#include <termin/camera/orbit_camera.hpp>
 #include <termin/entity/cmp_ref.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/input_handler.hpp>
 #include <termin/export.hpp>
 #include <termin/geom/pose3.hpp>
 #include <termin/geom/quat.hpp>
+#include <termin/geom/vec2.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/input/input_events.hpp>
 
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 
 #ifndef M_PI
@@ -58,7 +61,6 @@ namespace termin {
         bool _has_last_transform = false;
         // === Control parameters ===
         double _orbit_speed = 0.2;
-        double _pan_speed = 0.005;
         double _zoom_speed = 0.5;
         double _touch_zoom_speed = 0.02;
         bool _prevent_moving = false;
@@ -66,14 +68,10 @@ namespace termin {
         struct ViewportState {
             bool orbit_active = false;
             bool pan_active = false;
-            double last_x = 0.0;
-            double last_y = 0.0;
+            Vec2 last_position{};
             bool has_last = false;
-            struct TouchPoint {
-                double x = 0.0;
-                double y = 0.0;
-            };
-            std::unordered_map<uint64_t, TouchPoint> touch_points;
+            std::optional<OrbitCameraPan> pan_gesture;
+            std::unordered_map<uint64_t, Vec2> touch_points;
         };
         std::unordered_map<uint64_t, ViewportState> _viewport_states;
         // === Camera component reference (CmpRef validates entity liveness) ===
@@ -99,11 +97,11 @@ namespace termin {
         void orbit(double delta_azimuth, double delta_elevation);
 
         /**
-         * Pan camera (move target in screen space).
-         * @param dx Horizontal offset (positive = right)
-         * @param dy Vertical offset (positive = up)
+         * Translate the target along the camera's right/up axes.
+         * This is intended for analog controls whose input is already a
+         * world-space displacement, not for screen-space pointer panning.
          */
-        void pan(double dx, double dy);
+        void translate_target(const Vec2& displacement);
 
         /**
          * Zoom camera.
@@ -178,6 +176,7 @@ namespace termin {
 
         void _ensure_camera();
         bool _event_targets_this_camera(tc_viewport_handle viewport);
+        std::optional<OrbitCameraPan> _begin_pan_gesture(tc_viewport_handle viewport, const Vec2& screen_position);
         ViewportState& _get_viewport_state(uint64_t viewport_id);
 
         // Clamp value to range

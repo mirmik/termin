@@ -14,6 +14,7 @@
 #include <tgfx2/device_factory.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 
+#include <termin/camera/orbit_camera.hpp>
 #include <termin/geom/color.hpp>
 
 #include <termin/render/builtin_passes.hpp>
@@ -75,6 +76,28 @@ namespace {
     bool same_snapshot(const tc_plot_item3d_snapshot& left, const tc_plot_item3d_snapshot& right) {
         return left.kind == right.kind && left.geometry_revision == right.geometry_revision &&
                left.style_revision == right.style_revision && left.gpu_revision == right.gpu_revision;
+    }
+
+    termin::Vec2 project_camera_point(const tc_orbit_camera3d_state& state,
+                                      const termin::Vec3& point,
+                                      double width,
+                                      double height) {
+        termin::OrbitCamera camera;
+        camera.target = {state.target_x, state.target_y, state.target_z};
+        camera.distance = state.distance;
+        camera.azimuth = state.azimuth;
+        camera.elevation = state.elevation;
+        camera.fov_y = state.fov_y;
+        camera.near_clip = state.near_clip;
+        camera.far_clip = state.far_clip;
+        const termin::Mat44 projection_view = camera.mvp(width / height);
+        const double clip_x = projection_view(0, 0) * point.x + projection_view(1, 0) * point.y +
+                             projection_view(2, 0) * point.z + projection_view(3, 0);
+        const double clip_y = projection_view(0, 1) * point.x + projection_view(1, 1) * point.y +
+                             projection_view(2, 1) * point.z + projection_view(3, 1);
+        const double clip_w = projection_view(0, 3) * point.x + projection_view(1, 3) * point.y +
+                             projection_view(2, 3) * point.z + projection_view(3, 3);
+        return {(clip_x / clip_w + 1.0) * 0.5 * width, (clip_y / clip_w + 1.0) * 0.5 * height};
     }
 
     std::vector<float> read_pixels(tcplot::GpuHost& host, uint32_t texture_id, uint32_t width, uint32_t height) {
@@ -650,6 +673,18 @@ int main() {
         }
         const uint32_t first_render_texture = tc_retained_chart3d_render(chart, 320, 240);
         require(first_render_texture != 0, "initial retained render failed");
+        tc_orbit_camera3d_state pan_before{};
+        require(tc_retained_chart3d_get_camera(chart, &pan_before) != 0, "failed to read pre-pan camera");
+        const termin::Vec3 grabbed_target{pan_before.target_x, pan_before.target_y, pan_before.target_z};
+        require(tc_retained_chart3d_pointer_down(chart, 160.0f, 120.0f, 2) != 0,
+                "failed to begin retained Chart3D pan");
+        tc_retained_chart3d_pointer_move(chart, 220.0f, 155.0f);
+        tc_retained_chart3d_pointer_up(chart, 220.0f, 155.0f, 2);
+        tc_orbit_camera3d_state pan_after{};
+        require(tc_retained_chart3d_get_camera(chart, &pan_after) != 0, "failed to read post-pan camera");
+        const termin::Vec2 projected_grab = project_camera_point(pan_after, grabbed_target, 320.0, 240.0);
+        require(std::abs(projected_grab.x - 220.0f) < 0.02f && std::abs(projected_grab.y - 155.0f) < 0.02f,
+                "retained Chart3D pan did not preserve the grabbed point");
         tgfx::TextureHandle first_render_handle{};
         first_render_handle.id = first_render_texture;
         require(host.device().texture_desc(first_render_handle).sample_count == 1,
