@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_WINDOW_BUILD_SHARED "Build termin-window as a shared library" ON)
-option(USE_SYSTEM_SDL2 "Use native SDL2 library" ${TERMIN_ENABLE_SDL})
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-window" OFF)
 if(TERMIN_BUILD_TESTS)
     include(CTest)

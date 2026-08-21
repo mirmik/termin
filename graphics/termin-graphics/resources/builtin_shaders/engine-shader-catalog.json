@@ -604,6 +604,17 @@
       }
     },
     {
+      "uuid": "termin-engine-frame-graph-presenter",
+      "name": "FrameGraphPresenterFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "termin-engine-frame-graph-presenter.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
       "uuid": "termin-engine-color-to-depth",
       "name": "ColorToDepthFS",
       "language": "slang",

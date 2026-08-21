@@ -16,6 +16,7 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         "smoke",
         "build:android",
         "build:web",
+        "package:graphics:python",
         "docs:build",
         "docs:serve",
     ):
@@ -23,9 +24,15 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
 
     assert "./scripts/build/sdk.sh" in taskfile
     assert "./scripts/build/sdk.ps1" in taskfile
+    assert "./scripts/build/graphics-python.sh" in taskfile
     assert "./scripts/test/all.sh" in taskfile
     assert "./scripts/test/all.ps1" in taskfile
     assert "\\" not in taskfile
+
+    bindings = (REPO_ROOT / "scripts" / "build" / "bindings.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "TERMIN_USE_BUNDLED_SDL2" in bindings
 
 
 def test_root_has_no_platform_launcher_scripts() -> None:
@@ -79,6 +86,27 @@ def test_native_test_graph_has_no_cached_derived_toggles() -> None:
         if option_name not in allowed_test_options
     }
     assert unexpected == {}
+
+
+def test_sdl_capability_has_no_stale_derived_cache_toggle() -> None:
+    for relative in (
+        "graphics/termin-window/CMakeLists.txt",
+        "engine/termin-display/CMakeLists.txt",
+        "editor/termin-app/cpp/CMakeLists.txt",
+    ):
+        source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        assert "option(USE_SYSTEM_SDL2" not in source
+
+    sdl_module = (REPO_ROOT / "cmake" / "TerminSDL2.cmake").read_text(
+        encoding="utf-8"
+    )
+    assert "if(NOT TERMIN_ENABLE_SDL)" in sdl_module
+
+    gui_native = (
+        REPO_ROOT / "graphics" / "termin-gui-native" / "CMakeLists.txt"
+    ).read_text(encoding="utf-8")
+    assert "set(TERMIN_GUI_NATIVE_BUILD_WINDOW_INTEGRATION ${TERMIN_ENABLE_SDL})" in gui_native
+    assert "option(TERMIN_GUI_NATIVE_BUILD_WINDOW_INTEGRATION" not in gui_native
 
 
 def test_web_toolchain_uses_a_shared_versioned_cache() -> None:

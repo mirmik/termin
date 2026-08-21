@@ -32,16 +32,8 @@ nanobind_add_module(_geom_native NB_SHARED
 
 target_link_libraries(_geom_native PRIVATE termin_base)
 
-if(NOT WIN32)
-    set_target_properties(_tcbase_native PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "$ORIGIN/lib;${CMAKE_INSTALL_PREFIX}/lib"
-    )
-    set_target_properties(_geom_native PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "$ORIGIN/lib;${CMAKE_INSTALL_PREFIX}/lib"
-    )
-endif()
+termin_set_rpath_pip(_tcbase_native)
+termin_set_rpath_pip(_geom_native)
 
 install(TARGETS _tcbase_native DESTINATION lib/python/tcbase)
 install(TARGETS _geom_native DESTINATION lib/python/tcbase)

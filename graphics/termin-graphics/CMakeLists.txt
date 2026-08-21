@@ -593,8 +593,10 @@ if(TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS)
 
     set(_termin_builtin_shader_artifact_script
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/compile_builtin_shader_artifacts.py")
+    string(REPLACE ";" "-" _termin_builtin_shader_artifact_target_key
+        "${TERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS}")
     set(_termin_builtin_shader_artifact_stamp
-        "${CMAKE_BINARY_DIR}/share/termin/.builtin_shader_artifacts.stamp")
+        "${CMAKE_BINARY_DIR}/share/termin/.builtin_shader_artifacts-${_termin_builtin_shader_artifact_target_key}.stamp")
     add_custom_command(
         OUTPUT "${_termin_builtin_shader_artifact_stamp}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/termin"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -33,7 +34,6 @@ from .animated_glb import write_animated_skinned_glb
 
 
 _REQUIRED_IMPORTS = (
-    ("termin-build-tools", "termin_build"),
     ("termin-nanobind-sdk", "termin_nanobind"),
     ("termin-base", "tcbase"),
     ("termin-dispatch", "termin.dispatch"),
@@ -48,6 +48,8 @@ _REQUIRED_IMPORTS = (
     ("termin-animation", "termin.animation"),
     ("termin-glb", "termin.glb"),
     ("termin-gui-native", "termin.gui_native"),
+    ("termin-window", "termin.window"),
+    ("termin-gui-native-window", "termin.gui_native.window"),
     ("termin-nodegraph", "tcnodegraph"),
     ("tcplot", "tcplot"),
     ("tcplot-gui-native", "tcplot_gui_native"),
@@ -73,9 +75,7 @@ def import_profile_surface() -> dict[str, object]:
         )
     return {
         "imported": imported,
-        "conditional": {
-            "termin-window": "available only in SDL-enabled graphics builds",
-        },
+        "window_host": "termin.window",
         "forbidden_modules_loaded": forbidden,
     }
 
@@ -89,165 +89,6 @@ def _native_ui(application) -> SectionContent:
             "widget_groups": sorted(showcase.widgets),
             "model_count": len(showcase.models),
         }
-    )
-
-
-def _graphics_line_gallery(application) -> SectionContent:
-    from tcbase._geom_native import LinearColor
-    from termin.geombase import OrbitCamera, Vec3
-    from tgfx import (
-        CULL_NONE,
-        LineCapStyle,
-        LineJoinStyle,
-        LinePoint3,
-        LineStyle,
-        Tgfx2Context,
-        Tgfx2PixelFormat,
-        Tgfx2ShaderStage,
-        build_line_mesh,
-    )
-
-    if application.graphics is None:
-        raise RuntimeError("graphics line gallery requires its composition GraphicsHost")
-    width, height = 1100, 620
-    context = Tgfx2Context.from_runtime(application.graphics)
-    color = context.create_color_attachment(width, height, Tgfx2PixelFormat.RGBA8_UNorm)
-    depth = context.create_depth_attachment(width, height, Tgfx2PixelFormat.D32F)
-    camera = OrbitCamera()
-    camera.target = Vec3(0.0, 0.0, 0.2)
-    camera.distance = 6.2
-    camera.fitted_radius = 2.8
-    vertex_source = """#version 450 core
-#ifdef VULKAN
-layout(push_constant) uniform PCBlock { mat4 u_mvp; vec4 u_color; } pc;
-#define U_MVP pc.u_mvp
-#else
-uniform mat4 u_mvp;
-#define U_MVP u_mvp
-#endif
-layout(location=0) in vec3 a_position;
-layout(location=1) in vec4 a_color;
-layout(location=0) out vec4 v_color;
-void main() { gl_Position = U_MVP * vec4(a_position, 1.0); v_color = a_color; }
-"""
-    fragment_source = """#version 450 core
-#ifdef VULKAN
-layout(push_constant) uniform PCBlock { mat4 u_mvp; vec4 u_color; } pc;
-#define U_COLOR pc.u_color
-#else
-uniform vec4 u_color;
-#define U_COLOR u_color
-#endif
-layout(location=0) out vec4 frag_color;
-layout(location=0) in vec4 v_color;
-void main() { frag_color = U_COLOR * v_color; }
-"""
-    vertex_shader = context.device.create_shader(Tgfx2ShaderStage.Vertex, vertex_source)
-    fragment_shader = context.device.create_shader(Tgfx2ShaderStage.Fragment, fragment_source)
-
-    colors = (
-        (0.25, 0.65, 1.0, 1.0),
-        (0.35, 0.92, 0.55, 1.0),
-        (1.0, 0.68, 0.22, 1.0),
-        (0.95, 0.32, 0.48, 1.0),
-    )
-    lines = []
-    for index, angle_degrees in enumerate((20.0, 45.0, 90.0, 145.0)):
-        angle = math.radians(angle_degrees)
-        y = 1.75 - index * 1.05
-        style = LineStyle()
-        style.width = 0.045 + index * 0.018
-        style.up_hint = LinePoint3(0.0, 0.0, 1.0)
-        style.cap = (LineCapStyle.Butt, LineCapStyle.Square, LineCapStyle.Round, LineCapStyle.Round)[index]
-        style.join = (LineJoinStyle.Bevel, LineJoinStyle.Bevel, LineJoinStyle.Round, LineJoinStyle.Round)[index]
-        style.round_segments = 18
-        points = [
-            LinePoint3(-2.2, y, 0.0),
-            LinePoint3(-0.6, y, 0.0),
-            LinePoint3(-0.6 + math.cos(angle), y + math.sin(angle), 0.0),
-            LinePoint3(1.9, y + math.sin(angle), 0.0),
-        ]
-        mesh = build_line_mesh(points, style)
-        lines.append((np.asarray(mesh.triangle_vertices, dtype=np.float32), colors[index]))
-    spiral = [
-        LinePoint3(
-            1.15 * math.cos(index / 90.0 * math.tau * 2.4),
-            1.15 * math.sin(index / 90.0 * math.tau * 2.4),
-            -1.2 + index / 90.0 * 2.4,
-        )
-        for index in range(91)
-    ]
-    spiral_style = LineStyle()
-    spiral_style.width = 0.055
-    spiral_style.up_hint = LinePoint3(0.0, 0.0, 1.0)
-    spiral_style.cap = LineCapStyle.Round
-    spiral_style.join = LineJoinStyle.Round
-    spiral_style.round_segments = 18
-    spiral_mesh = build_line_mesh(spiral, spiral_style)
-    lines.append((np.asarray(spiral_mesh.triangle_vertices, dtype=np.float32), (0.72, 0.58, 1.0, 1.0)))
-
-    try:
-        context.context.begin_frame()
-        context.context.begin_pass(
-            color,
-            depth,
-            clear_linear_color=LinearColor(0.025, 0.035, 0.055, 1.0),
-            clear_depth_enabled=True,
-            clear_depth=1.0,
-        )
-        context.context.set_viewport(0, 0, width, height)
-        context.context.set_depth_test(True)
-        context.context.set_depth_write(True)
-        context.context.set_cull(CULL_NONE)
-        context.context.bind_shader(vertex_shader, fragment_shader)
-        mvp = np.asarray(camera.mvp(width / height), dtype=np.float32)
-        for vertices, rgba in lines:
-            if vertices.size == 0:
-                continue
-            packed = np.concatenate((mvp, np.ones(4, dtype=np.float32))).view(np.uint8)
-            context.context.set_push_constants(np.ascontiguousarray(packed, dtype=np.uint8))
-            expanded = np.zeros((vertices.shape[0], 7), dtype=np.float32)
-            expanded[:, :3] = vertices
-            expanded[:, 3:] = np.asarray(rgba, dtype=np.float32)
-            context.context.draw_immediate_triangles(expanded, int(expanded.shape[0]))
-        context.context.end_pass()
-        context.context.end_frame()
-    except Exception:
-        context.device.destroy_shader(fragment_shader)
-        context.device.destroy_shader(vertex_shader)
-        context.destroy_texture(depth)
-        context.destroy_texture(color)
-        raise
-
-    canvas = application.document.create_canvas()
-    canvas.widget.preferred_size = Size(float(width), float(height))
-    canvas.set_texture(color, Size(float(width), float(height)))
-    canvas.fit_in_view()
-    if not application.document.add_root(canvas.handle):
-        canvas.clear_texture()
-        context.device.destroy_shader(fragment_shader)
-        context.device.destroy_shader(vertex_shader)
-        context.destroy_texture(depth)
-        context.destroy_texture(color)
-        raise RuntimeError("failed to add graphics line gallery root")
-
-    def cleanup() -> None:
-        canvas.clear_texture()
-        context.device.destroy_shader(fragment_shader)
-        context.device.destroy_shader(vertex_shader)
-        context.destroy_texture(depth)
-        context.destroy_texture(color)
-
-    return SectionContent(
-        root=canvas.widget,
-        cleanup=cleanup,
-        facts={
-            "renderer": "build_line_mesh",
-            "polylines": len(lines),
-            "caps": ["butt", "square", "round"],
-            "joins": ["bevel", "round"],
-            "world_width": [0.045, 0.063, 0.081, 0.099],
-        },
     )
 
 
@@ -848,12 +689,6 @@ def section_registry() -> tuple[Section, ...]:
             build=_native_ui,
         ),
         Section(
-            name="graphics_lines",
-            description="Mesh-expanded line caps, joins, widths and 3D polylines",
-            capabilities=("termin-graphics", "line-mesh", "caps", "joins"),
-            build=_graphics_line_gallery,
-        ),
-        Section(
             name="tcplot_sine",
             description="Sine, cosine and damped-sine line families",
             capabilities=("tcplot", "plot2d", "multi-line", "axes"),
@@ -924,6 +759,14 @@ def section_registry() -> tuple[Section, ...]:
 
 
 def sdk_font_path() -> Path:
+    configured = os.environ.get("TERMIN_UI_FONT")
+    if configured:
+        font = Path(configured)
+        if not font.is_file():
+            raise FileNotFoundError(
+                f"TERMIN_UI_FONT points to a missing graphics showcase font: {font}"
+            )
+        return font
     sdk_root = Path(sys.executable).resolve().parent.parent
     font = sdk_root / "share" / "termin" / "fonts" / "DroidSans.ttf"
     if not font.is_file():

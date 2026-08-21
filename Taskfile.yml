@@ -73,6 +73,12 @@ tasks:
     cmds:
       - ./scripts/build/wheels.sh {{.CLI_ARGS}}
 
+  package:graphics:python:
+    desc: Build the standalone Linux Python Graphics profile
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/graphics-python.sh {{.CLI_ARGS}}
+
   test:
     desc: Run the complete editor SDK test entry point
     cmds:

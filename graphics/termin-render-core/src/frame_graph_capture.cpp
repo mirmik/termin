@@ -2,6 +2,7 @@
 #include <termin/render/frame_pass.hpp>
 
 #include <tgfx2/descriptors.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/enums.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/pixel_format_utils.hpp>
@@ -18,7 +19,6 @@ extern "C" {
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <exception>
 #include <limits>
 #include <tuple>
@@ -217,42 +217,6 @@ namespace termin {
         captured_ = true;
     }
 
-    static const char* PRESENTER_FRAG_SRC = R"(
-#version 450 core
-layout(location = 0) in vec2 v_uv;
-layout(binding = 0) uniform sampler2D u_tex;
-struct PresenterPushData {
-    int channel_mode;
-    int highlight_hdr;
-    int _pad0;
-    int _pad1;
-};
-#ifdef VULKAN
-layout(push_constant) uniform PresenterPushBlock { PresenterPushData pc; };
-#else
-layout(std140, binding = 14) uniform PresenterPushBlock { PresenterPushData pc; };
-#endif
-layout(location = 0) out vec4 FragColor;
-void main() {
-    vec4 c = texture(u_tex, v_uv);
-    vec3 result;
-    if (pc.channel_mode == 5)      result = vec3(pow(clamp(1.0 - c.r, 0.0, 1.0), 0.25));
-    else if (pc.channel_mode == 1) result = vec3(c.r);
-    else if (pc.channel_mode == 2) result = vec3(c.g);
-    else if (pc.channel_mode == 3) result = vec3(c.b);
-    else if (pc.channel_mode == 4) result = vec3(c.a);
-    else                           result = c.rgb;
-    if (pc.highlight_hdr == 1) {
-        float max_val = max(max(c.r, c.g), c.b);
-        if (max_val > 1.0) {
-            float intensity = clamp((max_val - 1.0) / 2.0, 0.0, 1.0);
-            result = mix(result, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
-        }
-    }
-    FragColor = vec4(result, 1.0);
-}
-)";
-
     FrameGraphPresenter::~FrameGraphPresenter() {
         release_tgfx2_resources();
     }
@@ -265,25 +229,7 @@ void main() {
     void FrameGraphPresenter::ensure_fs(tgfx::IRenderDevice& device) {
         device2_ = &device;
         if (tc_shader_handle_is_invalid(shader_handle_)) {
-            shader_handle_ = tc_shader_register_static_uuid_ex(nullptr,
-                                                               PRESENTER_FRAG_SRC,
-                                                               nullptr,
-                                                               "FrameGraphPresenterFS",
-                                                               "termin-frame-graph-presenter",
-                                                               TC_SHADER_LANGUAGE_GLSL,
-                                                               TC_SHADER_ARTIFACT_OPTIONAL);
-            tc_shader* shader = tc_shader_get(shader_handle_);
-            if (shader) {
-                tc_shader_resource_binding u_tex{};
-                std::strncpy(u_tex.name, "u_tex", TC_SHADER_RESOURCE_NAME_MAX - 1);
-                u_tex.name[TC_SHADER_RESOURCE_NAME_MAX - 1] = '\0';
-                u_tex.kind = TC_SHADER_RESOURCE_TEXTURE;
-                u_tex.scope = TC_SHADER_RESOURCE_SCOPE_TRANSIENT;
-                u_tex.set = TC_SHADER_RESOURCE_SET_DEFAULT;
-                u_tex.binding = 0;
-                u_tex.stage_mask = TC_SHADER_STAGE_FRAGMENT;
-                tc_shader_set_resource_layout(shader, &u_tex, 1);
-            }
+            shader_handle_ = tgfx::register_builtin_shader_from_catalog("termin-engine-frame-graph-presenter");
         }
     }
 

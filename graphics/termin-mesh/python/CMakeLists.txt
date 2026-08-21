@@ -9,12 +9,7 @@ nanobind_add_module(_tmesh_native NB_SHARED
 target_link_libraries(_tmesh_native PRIVATE termin_mesh)
 target_include_directories(_tmesh_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-if(NOT WIN32)
-    set_target_properties(_tmesh_native PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "$ORIGIN/lib"
-    )
-endif()
+termin_set_rpath_pip(_tmesh_native)
 
 install(TARGETS _tmesh_native DESTINATION lib/python/tmesh)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmesh/

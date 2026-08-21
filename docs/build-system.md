@@ -20,6 +20,28 @@ checkout. Установочные prefixes различаются намере�
 | `graphics` | `task build:graphics` | `sdk-graphics/` |
 | `full` | `task build` | `sdk/` |
 
+Отдельно от SDK существует первоначальная Linux-операция упаковки Python
+Graphics product:
+
+```bash
+task package:graphics:python
+```
+
+Она повторно использует declarative closure профиля `graphics` (исключая
+build-only `termin-build-tools`) и единый
+корневой CMake-граф, но собирает их в собственные
+`build/products/graphics-python/{native-prefix,cmake-build,...}`. Готовый набор
+публикуется атомарно в `dist/graphics-python/` и не читает `sdk-graphics/`.
+`termin-graphics-profile` единолично владеет общей native closure (это не даёт
+разным extensions загрузить дублирующие C++ registries), font resources и
+предварительно собранными Vulkan/OpenGL shader artifacts. Продукт всегда
+включает `termin-window`, GUI window adapter и собранный из pinned submodule
+SDL2; `--no-sdl` для этой операции является ошибкой. Headless остаётся режимом
+исполнения той же поставки. `termin_shaderc`,
+`slangc` и библиотеки Slang являются только build-time inputs и в runtime wheel
+не входят. Это пока CPython 3.14t Linux x86_64
+product, а не manylinux/PyPI release.
+
 Внешний Core SDK и `--core-sdk` для обычной монорепозиторной сборки не
 требуются.
 

@@ -76,6 +76,50 @@ def test_tgfx_shader_runtime_reads_common_slang_setting(
     ) == slangc
 
 
+def test_tgfx_shader_runtime_activates_installed_graphics_profile(monkeypatch) -> None:
+    activated = []
+    monkeypatch.setitem(
+        sys.modules,
+        "termin_graphics_profile",
+        types.SimpleNamespace(activate=lambda: activated.append(True)),
+    )
+    shader_runtime = _load_shader_runtime_module(monkeypatch)
+
+    shader_runtime._activate_graphics_profile_resources()
+
+    assert activated == [True]
+
+
+def test_tgfx_shader_runtime_prefers_product_precompiled_artifacts(
+    monkeypatch, tmp_path: Path
+) -> None:
+    configured = []
+    profile = types.SimpleNamespace(
+        activate=lambda: monkeypatch.setenv("TERMIN_SHADER_DEV_COMPILE", "0"),
+        shader_artifact_root=lambda: tmp_path / "share" / "termin",
+    )
+    fake_tgfx = types.SimpleNamespace(
+        configure_shader_runtime=lambda **kwargs: configured.append(kwargs),
+    )
+    monkeypatch.setitem(sys.modules, "termin_graphics_profile", profile)
+    monkeypatch.setitem(sys.modules, "tgfx", fake_tgfx)
+    monkeypatch.delenv("TERMIN_SHADERC", raising=False)
+    monkeypatch.delenv("TERMIN_SLANGC", raising=False)
+    shader_runtime = _load_shader_runtime_module(monkeypatch)
+
+    assert shader_runtime.configure_default_shader_runtime("wheel")
+    assert configured == [
+        {
+            "artifact_root": str(tmp_path / "share" / "termin"),
+            "cache_root": "",
+            "shader_compiler": "",
+            "dev_compile": False,
+        }
+    ]
+    assert "TERMIN_SHADERC" not in os.environ
+    assert "TERMIN_SLANGC" not in os.environ
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache root uses LOCALAPPDATA")
 def test_tgfx_shader_runtime_uses_local_app_data_cache_root_on_windows(
     monkeypatch,

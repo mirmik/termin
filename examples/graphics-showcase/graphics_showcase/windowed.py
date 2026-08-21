@@ -21,7 +21,6 @@ class _WindowedApplication:
 
 _SECTION_TITLES = {
     "native_ui": "Native UI",
-    "graphics_lines": "Graphics Lines",
     "tcplot_sine": "Sine",
     "tcplot_scatter": "Scatter",
     "tcplot_multi": "Multi Plot",
@@ -104,8 +103,8 @@ def run_windowed_showcase(
     if not tgfx.configure_default_shader_runtime("graphics-profile-showcase-windowed"):
         raise RuntimeError("failed to configure the graphics SDK shader runtime")
 
-    # termin-window is a conditional member of SDL-enabled graphics SDKs. Keep
-    # these imports out of the mandatory no-SDL headless startup path.
+    # Window ownership is part of the public Graphics product. Imports remain
+    # local so offscreen consumers do not initialize the platform stack.
     from termin.gui_native.window import GuiWindowAdapter
     from termin.window import WindowManager, WindowedGraphicsSession, quit_sdl
 

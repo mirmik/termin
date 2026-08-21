@@ -223,8 +223,6 @@ else()
 endif()
 
 # ============== SDL2 (optional) ==============
-option(USE_SYSTEM_SDL2 "Use native SDL2 library" ${TERMIN_ENABLE_SDL})
-
 termin_configure_sdl2()
 
 # ============== Python bindings (nanobind) ==============

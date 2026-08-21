@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+import types
 
 import pytest
 
@@ -44,6 +46,34 @@ def test_find_library_falls_back_to_unversioned_shared_library(tmp_path) -> None
     library.write_bytes(b"unversioned runtime")
 
     assert runtime._find_library("nanobind-ft", [tmp_path]) == library
+
+
+def test_installed_graphics_product_exposes_one_shared_library_root(
+    tmp_path: Path, monkeypatch
+) -> None:
+    package_root = tmp_path / "termin_graphics_profile"
+    lib_dir = package_root / "lib"
+    lib_dir.mkdir(parents=True)
+    spec = types.SimpleNamespace(submodule_search_locations=[str(package_root)])
+    monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda name: spec)
+
+    assert runtime._installed_product_lib_dirs() == [lib_dir]
+
+
+def test_installed_graphics_product_declares_exact_runtime_paths(
+    tmp_path: Path, monkeypatch
+) -> None:
+    package_root = tmp_path / "termin_graphics_profile"
+    library = package_root / "lib" / "libtermin_graphics2.so.0"
+    library.parent.mkdir(parents=True)
+    library.write_bytes(b"runtime")
+    (package_root / "native-libraries.json").write_text(
+        '["libtermin_graphics2.so.0"]', encoding="utf-8"
+    )
+    spec = types.SimpleNamespace(submodule_search_locations=[str(package_root)])
+    monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda name: spec)
+
+    assert runtime._installed_product_library_paths() == [library]
 
 
 def test_windows_dll_directory_handles_are_retained_idempotently_and_can_close(tmp_path, monkeypatch) -> None:

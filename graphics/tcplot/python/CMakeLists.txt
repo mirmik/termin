@@ -51,12 +51,7 @@ if(TGFX2_ENABLE_OPENGL)
 endif()
 target_include_directories(_tcplot_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-if(NOT WIN32)
-    set_target_properties(_tcplot_native PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "$ORIGIN/lib;${CMAKE_INSTALL_PREFIX}/lib"
-    )
-endif()
+termin_set_rpath_pip(_tcplot_native)
 
 install(TARGETS _tcplot_native DESTINATION lib/python/tcplot)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tcplot/

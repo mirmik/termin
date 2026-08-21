@@ -16,12 +16,7 @@ if(TGFX2_ENABLE_OPENGL)
 endif()
 target_include_directories(_tgfx_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-if(NOT WIN32)
-    set_target_properties(_tgfx_native PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "$ORIGIN/lib;${CMAKE_INSTALL_PREFIX}/lib"
-    )
-endif()
+termin_set_rpath_pip(_tgfx_native)
 
 install(TARGETS _tgfx_native DESTINATION lib/python/tgfx)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tgfx/

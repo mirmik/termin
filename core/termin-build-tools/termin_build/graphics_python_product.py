@@ -1,0 +1,537 @@
+"""Build the first standalone Python distribution of the Graphics profile."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import uuid
+import zipfile
+
+from .artifact_manifest import ArtifactManifest, SDK_MANIFEST_NAME
+from .local_wheel_artifacts import (
+    build_local_wheel_artifact_set,
+    validate_local_wheel_artifact_set,
+    write_local_wheel_manifest,
+)
+from .package_manifest import load_manifest
+from .sdk import (
+    _clear_python_package_build_caches,
+    _resolve_bindings_dir,
+    _run,
+    prepare_pinned_python_build_environment,
+)
+from .sdk_profiles import load_sdk_profiles, select_python_packages
+from .wheelhouse import inspect_wheel
+
+
+PRODUCT_DISTRIBUTION = "termin-graphics-profile"
+PRODUCT_IMPORT = "termin_graphics_profile"
+PRODUCT_VERSION = "0.1.0"
+PRODUCT_MANIFEST = "termin-graphics-python-product.json"
+BUILD_ONLY_DISTRIBUTIONS = frozenset({"termin-build-tools"})
+WINDOW_EXTENSIONS = (
+    "termin.window._window_native",
+    "termin.gui_native._gui_native_window",
+)
+LINUX_BUNDLED_RUNTIME_LIBRARIES = ("libSDL2-2.0.so.0",)
+
+
+class GraphicsPythonProductError(RuntimeError):
+    """The standalone Graphics Python product could not be assembled."""
+
+
+def _record_digest(payload: bytes) -> str:
+    digest = base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).decode("ascii")
+    return digest.rstrip("=")
+
+
+def _resource_module() -> bytes:
+    source = '''"""Wheel-owned runtime resources for the Termin Graphics profile."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+
+def root() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def _required(path: Path, description: str) -> Path:
+    if not path.is_file():
+        raise RuntimeError(f"termin-graphics-profile is missing {description}: {path}")
+    return path
+
+
+def font_path() -> Path:
+    return _required(
+        root() / "share" / "termin" / "fonts" / "DroidSans.ttf",
+        "DroidSans.ttf",
+    )
+
+
+def shader_artifact_root() -> Path:
+    path = root() / "share" / "termin"
+    if not (path / "shaders").is_dir():
+        raise RuntimeError(f"termin-graphics-profile is missing compiled shaders: {path}")
+    return path
+
+
+def activate() -> None:
+    os.environ.setdefault("TERMIN_UI_FONT", str(font_path()))
+    os.environ.setdefault(
+        "TERMIN_BUILTIN_SHADER_ROOT",
+        str(root() / "share" / "termin" / "builtin_shaders"),
+    )
+    os.environ.setdefault("TERMIN_SHADER_ARTIFACT_ROOT", str(shader_artifact_root()))
+    os.environ.setdefault("TERMIN_SHADER_DEV_COMPILE", "0")
+'''
+    return source.encode("utf-8")
+
+
+def _add_payload(
+    payloads: dict[str, tuple[bytes, int]],
+    archive_name: str,
+    source: Path,
+) -> None:
+    data = source.read_bytes()
+    mode = stat.S_IMODE(source.stat().st_mode)
+    previous = payloads.get(archive_name)
+    if previous is not None and previous[0] != data:
+        raise GraphicsPythonProductError(
+            f"resource collision at {archive_name}: {source} differs from another payload"
+        )
+    payloads[archive_name] = (data, mode)
+
+
+def _add_tree(
+    payloads: dict[str, tuple[bytes, int]],
+    source_root: Path,
+    archive_root: str,
+) -> None:
+    if not source_root.is_dir():
+        raise GraphicsPythonProductError(f"required resource directory is missing: {source_root}")
+    for source in sorted(path for path in source_root.rglob("*") if path.is_file()):
+        relative = source.relative_to(source_root).as_posix()
+        _add_payload(payloads, f"{archive_root}/{relative}", source)
+
+
+def _add_named_libraries(
+    payloads: dict[str, tuple[bytes, int]],
+    source_root: Path,
+    archive_root: str,
+    names: list[str],
+) -> None:
+    for name in names:
+        if Path(name).name != name:
+            raise GraphicsPythonProductError(f"unsafe native library name: {name!r}")
+        source = source_root / name
+        if not source.is_file():
+            raise GraphicsPythonProductError(f"manifest-declared native library is missing: {source}")
+        _add_payload(payloads, f"{archive_root}/{name}", source)
+
+
+def build_resource_wheel(
+    *,
+    sdk_prefix: Path,
+    wheel_dir: Path,
+    requirements: list[tuple[str, str]],
+) -> Path:
+    """Build the binary resource/metapackage wheel for one native build."""
+    manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
+    abi = manifest.python_abi.wheel_abi_tag
+    interpreter = abi.removesuffix("t")
+    if sys.platform != "linux":
+        raise GraphicsPythonProductError("the initial Graphics Python product supports Linux only")
+    platform_tag = "linux_x86_64"
+    version = f"{PRODUCT_VERSION}+{manifest.native_build_id}"
+    dist_info = f"termin_graphics_profile-{version}.dist-info"
+    filename = f"termin_graphics_profile-{version}-{interpreter}-{abi}-{platform_tag}.whl"
+    output = wheel_dir / filename
+
+    payloads: dict[str, tuple[bytes, int]] = {
+        f"{PRODUCT_IMPORT}/__init__.py": (_resource_module(), 0o644),
+    }
+    _add_payload(
+        payloads,
+        f"{dist_info}/licenses/SDL2/LICENSE.txt",
+        sdk_prefix / "share" / "licenses" / "SDL2" / "LICENSE.txt",
+    )
+    native_library_names = sorted(
+        {
+            dependency["name"]
+            for artifact in manifest.data["artifacts"]
+            for dependency in artifact.get("runtime_dependencies", [])
+            if isinstance(dependency, dict) and isinstance(dependency.get("name"), str)
+        }
+        | set(LINUX_BUNDLED_RUNTIME_LIBRARIES)
+    )
+    payloads[f"{PRODUCT_IMPORT}/native-libraries.json"] = (
+        (json.dumps(native_library_names, indent=2) + "\n").encode("utf-8"),
+        0o644,
+    )
+    _add_named_libraries(
+        payloads,
+        sdk_prefix / "lib",
+        f"{PRODUCT_IMPORT}/lib",
+        native_library_names,
+    )
+    _add_tree(payloads, sdk_prefix / "share" / "termin", f"{PRODUCT_IMPORT}/share/termin")
+
+    requirement_lines = "".join(
+        f"Requires-Dist: {name}=={required_version}\n"
+        for name, required_version in sorted(requirements)
+    )
+    payloads[f"{dist_info}/METADATA"] = (
+        (
+            "Metadata-Version: 2.3\n"
+            f"Name: {PRODUCT_DISTRIBUTION}\n"
+            f"Version: {version}\n"
+            "Summary: Standalone runtime resources for the Termin Graphics profile\n"
+            "Requires-Python: >=3.14\n"
+            "License-File: licenses/SDL2/LICENSE.txt\n"
+            f"{requirement_lines}\n"
+        ).encode("utf-8"),
+        0o644,
+    )
+    payloads[f"{dist_info}/WHEEL"] = (
+        (
+            "Wheel-Version: 1.0\nGenerator: termin-build-tools\nRoot-Is-Purelib: false\n"
+            f"Tag: {interpreter}-{abi}-{platform_tag}\n"
+        ).encode("utf-8"),
+        0o644,
+    )
+
+    records = [
+        f"{name},sha256={_record_digest(data)},{len(data)}"
+        for name, (data, _mode) in sorted(payloads.items())
+    ]
+    record_name = f"{dist_info}/RECORD"
+    records.append(f"{record_name},,")
+    payloads[record_name] = (("\n".join(records) + "\n").encode("utf-8"), 0o644)
+
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, (data, mode) in sorted(payloads.items()):
+            info = zipfile.ZipInfo(name)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (stat.S_IFREG | mode) << 16
+            archive.writestr(info, data)
+    return output
+
+
+def _slangc_path(repo_root: Path, build_python: Path) -> Path:
+    result = subprocess.run(
+        [
+            str(build_python),
+            str(repo_root / "scripts" / "install_slang_toolchain.py"),
+            "--install-root",
+            str(repo_root / "build" / "toolchains"),
+            "--no-configure",
+            "--print-path",
+        ],
+        cwd=repo_root,
+        text=True,
+        stdout=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise GraphicsPythonProductError("failed to prepare the pinned Slang toolchain")
+    path = Path(result.stdout.strip())
+    if not path.is_file():
+        raise GraphicsPythonProductError(f"Slang installer returned a missing path: {path}")
+    return path
+
+
+def _publish(source: Path, destination: Path, product_data: dict[str, object]) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.parent / f".{destination.name}.new-{uuid.uuid4().hex}"
+    backup = destination.parent / f".{destination.name}.old-{uuid.uuid4().hex}"
+    shutil.copytree(source, temporary)
+    (temporary / PRODUCT_MANIFEST).write_text(
+        json.dumps(product_data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    had_destination = destination.exists()
+    if had_destination:
+        destination.replace(backup)
+    try:
+        temporary.replace(destination)
+    except Exception:
+        if had_destination:
+            backup.replace(destination)
+        raise
+    if backup.exists():
+        shutil.rmtree(backup)
+
+
+def _verify_relative_elf_rpaths(site_packages: Path) -> None:
+    readelf = shutil.which("readelf")
+    if readelf is None:
+        raise GraphicsPythonProductError("readelf is required to verify Linux wheel RPATHs")
+    for path in sorted(candidate for candidate in site_packages.rglob("*") if candidate.is_file()):
+        try:
+            with path.open("rb") as stream:
+                if stream.read(4) != b"\x7fELF":
+                    continue
+        except OSError as error:
+            raise GraphicsPythonProductError(f"cannot inspect installed wheel file {path}: {error}") from error
+        result = subprocess.run(
+            [readelf, "-d", str(path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise GraphicsPythonProductError(
+                f"readelf failed for installed wheel file {path}: {result.stderr.strip()}"
+            )
+        for line in result.stdout.splitlines():
+            if "RPATH" not in line and "RUNPATH" not in line:
+                continue
+            value = line.rsplit("[", 1)[-1].split("]", 1)[0]
+            absolute = [entry for entry in value.split(":") if entry.startswith("/")]
+            if absolute:
+                raise GraphicsPythonProductError(
+                    f"installed wheel ELF has absolute RPATH entries {absolute}: {path}"
+                )
+
+
+def verify_product(repo_root: Path, wheel_dir: Path, build_python: Path) -> None:
+    """Install and render the product without any SDK or checkout Python overlay."""
+    with tempfile.TemporaryDirectory(prefix="termin-graphics-python-verify-") as temporary:
+        root = Path(temporary)
+        venv = root / "venv"
+        if _run([str(build_python), "-m", "venv", str(venv)], cwd=root) != 0:
+            raise GraphicsPythonProductError("failed to create clean product verification venv")
+        python = venv / "bin" / "python"
+        external_wheels = repo_root / "build" / "python-runtime" / "external-wheels"
+        if _run(
+            [
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                "--no-index",
+                "--find-links",
+                str(wheel_dir),
+                "--find-links",
+                str(external_wheels),
+                PRODUCT_DISTRIBUTION,
+            ],
+            cwd=root,
+        ) != 0:
+            raise GraphicsPythonProductError("clean pip install of the product failed")
+        clean_env = os.environ.copy()
+        for name in (
+            "TERMIN_SDK",
+            "PYTHONPATH",
+            "PYTHONHOME",
+            "LD_LIBRARY_PATH",
+            "TERMIN_SHADERC",
+            "TERMIN_SLANGC",
+            "TERMIN_SHADER_DEV_COMPILE",
+            "TERMIN_SHADER_ARTIFACT_ROOT",
+            "TERMIN_BUILTIN_SHADER_ROOT",
+            "TERMIN_UI_FONT",
+        ):
+            clean_env.pop(name, None)
+        clean_env["XDG_CACHE_HOME"] = str(root / "cache")
+        if _run([str(python), "-m", "pip", "check"], cwd=root, env=clean_env) != 0:
+            raise GraphicsPythonProductError("pip check failed for the installed product")
+
+        site_packages = next((venv / "lib").glob("python*/site-packages"), None)
+        if site_packages is None:
+            raise GraphicsPythonProductError("verification venv has no site-packages")
+        _verify_relative_elf_rpaths(site_packages)
+        profile_root = site_packages / PRODUCT_IMPORT
+        forbidden_runtime_tools = (
+            profile_root / "bin" / "termin_shaderc",
+            profile_root / "bin" / "slangc",
+        )
+        if any(path.exists() for path in forbidden_runtime_tools) or any(
+            profile_root.joinpath("lib").glob("libslang*")
+        ):
+            raise GraphicsPythonProductError(
+                "runtime product unexpectedly contains the shader compiler toolchain"
+            )
+
+        showcase = root / "graphics-showcase"
+        shutil.copytree(repo_root / "examples" / "graphics-showcase", showcase)
+        output = root / "graphics-showcase.png"
+        report = root / "graphics-showcase.json"
+        showcase_env = clean_env.copy()
+        showcase_env["PATH"] = ""
+        if _run(
+            [
+                str(python),
+                "-I",
+                str(showcase / "main.py"),
+                "--headless",
+                "--output",
+                str(output),
+                "--report",
+                str(report),
+            ],
+            cwd=root,
+            env=showcase_env,
+        ) != 0:
+            raise GraphicsPythonProductError("clean installed graphics showcase failed")
+        if not output.is_file() or output.stat().st_size == 0 or not report.is_file():
+            raise GraphicsPythonProductError("graphics showcase did not produce its PNG and report")
+
+        window_env = showcase_env.copy()
+        window_env["SDL_VIDEODRIVER"] = "offscreen"
+        window_env["TERMIN_BACKEND"] = "opengl"
+        if _run(
+            [
+                str(python),
+                "-I",
+                str(showcase / "main.py"),
+                "--windowed",
+                "--width",
+                "640",
+                "--height",
+                "480",
+                "--frames",
+                "1",
+            ],
+            cwd=root,
+            env=window_env,
+        ) != 0:
+            raise GraphicsPythonProductError("clean installed windowed graphics showcase failed")
+
+
+def build_product(repo_root: Path, build_args: list[str]) -> int:
+    if "--no-sdl" in build_args:
+        raise GraphicsPythonProductError(
+            "the Graphics Python product always includes window support; "
+            "--no-sdl is not a supported product option"
+        )
+    profile = load_sdk_profiles(repo_root).profile("graphics")
+    profile_packages = select_python_packages(
+        profile, load_manifest(repo_root), repo_root=repo_root
+    )
+    packages = [
+        package
+        for package in profile_packages
+        if package.distribution not in BUILD_ONLY_DISTRIBUTIONS
+    ]
+    unsupported = [package.path for package in packages if package.source != "repository"]
+    if unsupported:
+        raise GraphicsPythonProductError(
+            "graphics profile contains non-repository packages: " + ", ".join(unsupported)
+        )
+
+    product_root = repo_root / "build" / "products" / "graphics-python"
+    sdk_prefix = product_root / "native-prefix"
+    build_dir = product_root / "cmake-build"
+    staging_dir = product_root / "cmake-install-staging"
+    wheel_dir = product_root / "wheels"
+    build_python = prepare_pinned_python_build_environment(repo_root)
+    slangc = _slangc_path(repo_root, build_python)
+    env = os.environ.copy()
+    env.update(
+        {
+            "SDK_PREFIX": str(sdk_prefix),
+            "BUILD_DIR": str(build_dir),
+            "TERMIN_SDK_INSTALL_STAGING_DIR": str(staging_dir),
+            "TERMIN_RELOCATABLE_PYTHON_WHEELS": "ON",
+            "TERMIN_USE_BUNDLED_SDL2": "ON",
+            "PYTHON_BIN": str(build_python),
+            "PYTHON_EXECUTABLE": str(build_python),
+            "TERMIN_SLANGC": str(slangc),
+        }
+    )
+    command = [
+        str(repo_root / "scripts" / "build" / "bindings.sh"),
+        "--profile=graphics",
+        "--sdl",
+        *build_args,
+    ]
+    if _run(command, cwd=repo_root, env=env) != 0:
+        return 1
+
+    bindings_dir = _resolve_bindings_dir(repo_root, build_dir)
+    result = build_local_wheel_artifact_set(
+        repo_root=repo_root,
+        sdk_prefix=sdk_prefix,
+        bindings_dir=bindings_dir,
+        wheel_dir=wheel_dir,
+        build_python=build_python,
+        packages=packages,
+        run=_run,
+        clear_build_caches=_clear_python_package_build_caches,
+        bundle_runtime_libraries=False,
+    )
+    if result != 0:
+        return result
+
+    requirements = [
+        (artifact.name, artifact.version)
+        for artifact in (inspect_wheel(path) for path in sorted(wheel_dir.glob("*.whl")))
+    ]
+    resource_wheel = build_resource_wheel(
+        sdk_prefix=sdk_prefix,
+        wheel_dir=wheel_dir,
+        requirements=requirements,
+    )
+    wheel_count = len(packages) + 1
+    write_local_wheel_manifest(wheel_dir, sdk_prefix=sdk_prefix, expected_wheel_count=wheel_count)
+    validate_local_wheel_artifact_set(wheel_dir, sdk_prefix=sdk_prefix, expected_wheel_count=wheel_count)
+    artifact_manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
+    missing_window_extensions = [
+        extension
+        for extension in WINDOW_EXTENSIONS
+        if not artifact_manifest.has_extension(extension)
+    ]
+    if missing_window_extensions:
+        raise GraphicsPythonProductError(
+            "window-capable Graphics product is missing native extensions: "
+            + ", ".join(missing_window_extensions)
+        )
+    verify_product(repo_root, wheel_dir, build_python)
+    destination = repo_root / "dist" / "graphics-python"
+    _publish(
+        wheel_dir,
+        destination,
+        {
+            "schema": 1,
+            "product": PRODUCT_DISTRIBUTION,
+            "profile": "graphics",
+            "native_build_id": artifact_manifest.native_build_id,
+            "python_abi": artifact_manifest.python_abi.to_dict(),
+            "resource_wheel": resource_wheel.name,
+            "wheel_count": wheel_count,
+        },
+    )
+    print(f"Graphics Python product published to {destination}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo-root", type=Path, required=True)
+    parser.add_argument("build_args", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    build_args = list(args.build_args)
+    if build_args[:1] == ["--"]:
+        build_args = build_args[1:]
+    try:
+        return build_product(args.repo_root.resolve(), build_args)
+    except (GraphicsPythonProductError, OSError, RuntimeError, ValueError) as error:
+        print(f"ERROR: failed to build Graphics Python product: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

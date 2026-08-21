@@ -14,12 +14,7 @@ target_include_directories(_visual_scene_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
-if(NOT WIN32)
-    set_target_properties(_visual_scene_native PROPERTIES
-        BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "$ORIGIN/lib;${CMAKE_INSTALL_PREFIX}/lib"
-    )
-endif()
+termin_set_rpath_pip(_visual_scene_native)
 
 install(TARGETS _visual_scene_native
     DESTINATION lib/python/termin/visual_scene)

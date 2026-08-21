@@ -5,7 +5,7 @@ profile. It deliberately uses the installed SDK as a product: run it with the
 bundled isolated Python and do not add the repository to `PYTHONPATH`.
 
 ```bash
-task build:graphics -- --no-sdl
+task build:graphics -- --sdl
 sdk-graphics/bin/termin_python -I examples/graphics-showcase/main.py \
   --headless \
   --output /tmp/termin-graphics-showcase.png \
@@ -23,17 +23,35 @@ The gate currently delegates this focused check to
 `scripts/smoke-graphics-showcase`; that path is an implementation detail, not
 a second public command interface.
 
-The headless path is the required contract and works without `termin-window`,
-SDL, `termin-display`, engine runtime, editor, or PySDL2. It uses
-`termin.gui_native.OffscreenGuiComposition`; failure of any section is logged
-with its name and makes the process fail.
+An initial pip-installable Linux product can be built independently of the SDK:
+
+```bash
+task package:graphics:python
+python3.14t -m pip install --find-links dist/graphics-python termin-graphics-profile
+```
+
+The metapackage pins the complete matching wheel set and owns precompiled
+Vulkan/OpenGL shaders and the UI font. It does not contain `slangc`, Slang
+libraries or `termin_shaderc`. Importing `tgfx` remains side-effect free;
+`tgfx.configure_default_shader_runtime()` activates the wheel artifacts with
+developer compilation disabled. Applications that intentionally compile shader
+sources must install the tools separately and opt into developer compilation.
+This prototype targets the repository's pinned CPython 3.14t ABI and the host
+Linux x86_64 platform. It has not yet been repaired or certified as a manylinux
+artifact for upload to PyPI.
+
+The product includes `termin-window`, the GUI window adapter, and Termin's
+pinned bundled SDL2. Headless execution remains a required contract: it does
+not create a window or initialize an application display host, and it still
+uses `termin.gui_native.OffscreenGuiComposition`. `termin-display`, engine
+runtime, editor, and PySDL2 remain outside the product. Failure of any section
+is logged with its name and makes the process fail.
 
 ## Feature matrix
 
 | Section | Product surface |
 |---|---|
 | `native_ui` | Retained controls, collections, text, models and layout |
-| `graphics_lines` | Mesh-expanded line caps, joins, widths and 3D polylines |
 | `tcplot_sine` | Sine, cosine and damped-sine line families |
 | `tcplot_scatter` | Three clustered scatter series and a trend line |
 | `tcplot_multi` | Polynomial and damped-oscillation plots side by side |
@@ -47,21 +65,20 @@ with its name and makes the process fail.
 | `plot_nodegraph_composition` | Plot2D and Plot3D embedded as node-body widgets |
 
 The remaining profile packages are exercised as supporting parts of those
-pages rather than represented by artificial empty tabs: `termin-mesh` builds
-the expanded line geometry, `termin-shader-runtime` compiles its shaders,
-`termin-image` writes the acceptance PNG, and `termin-base`, `termin-dispatch`,
-`termin-inspect`, `termin-tween`, the build tools and the
-nanobind SDK are verified by the isolated import boundary. `termin-window` is
-the optional interactive host described below.
+pages rather than represented by artificial empty tabs: `termin-image` writes
+the acceptance PNG, and `termin-base`, `termin-dispatch`,
+`termin-inspect`, `termin-tween` and the nanobind runtime support package are
+verified by the isolated import boundary. Build tooling is deliberately not a
+runtime dependency. `termin-window` is the canonical interactive host described
+below.
 
 The JSON report records the exact imported graphics-profile packages, every
 declared section, framebuffer coverage metrics and the final artifact path.
 The requested PNG is produced by the composition section rather than copied
 from a golden image.
 
-`termin-window` is conditional on an SDL-enabled build and is therefore not
-imported by the mandatory headless gate. An SDL-enabled graphics SDK also has
-an interactive frontend for the integration section:
+The same installed product also has an interactive frontend for the integration
+section:
 
 ```bash
 task build:graphics -- --sdl
@@ -73,7 +90,9 @@ it uses `termin.window`, while engine-level `termin.display` remains outside
 this profile. For automated checks, `--frames N` and `--seconds N` bound the
 window lifetime.
 
-On Windows, build the D3D11-only product and run the same Python entry point:
+The initial standalone Python product is Linux-only. A future Windows wheel
+must keep SDL enabled and use the bundled SDL2 DLL; the following no-SDL recipe
+is only an SDK headless diagnostic, not the public product contract:
 
 ```powershell
 task build:graphics -- --no-sdl --no-vulkan --no-opengl
