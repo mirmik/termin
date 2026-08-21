@@ -1,0 +1,12 @@
+{
+  "uuid": "portal-walk-workshop-material",
+  "shader": "CookTorrancePBR",
+  "uniforms": {
+    "u_color": [0.09, 0.15, 0.25, 1.0],
+    "u_metallic": 0.55,
+    "u_roughness": 0.72,
+    "u_emission_color": [0.025, 0.08, 0.22, 1.0],
+    "u_emission_intensity": 0.4,
+    "u_diffuse_mul": 1.0
+  }
+}

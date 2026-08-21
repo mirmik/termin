@@ -1,30 +1,35 @@
-"""WorldController multi-scene navigation acceptance components."""
+"""A tiny two-room game built around WorldController scene transitions."""
 
 from __future__ import annotations
 
-from tcbase import log
+import os
+
+from tcbase import Action, Key, log
 from termin.engine import WorldController, require_world_context, world_context
+from termin.geombase import Vec3
+from termin.input import InputComponent
 from termin.inspect import InspectField
-from termin.scene import PythonComponent
 
 
-_PREFIX = "[SceneCycleAcceptance]"
-_EXPECTED_ROUTE = ["Alpha", "Beta", "Gamma", "Alpha"]
+_PREFIX = "[PortalWalk]"
+_EXPECTED_FIRST_TRIP = ["Sunset Yard", "Blue Workshop", "Sunset Yard"]
+_AUTOPLAY_ENV = "TERMIN_PORTAL_WALK_AUTOPLAY"
 
 
 def _event(message: str) -> None:
     log.info(f"{_PREFIX} {message}")
 
 
-class SceneCycleDirector(WorldController):
-    """Persist across scene switches and verify one complete lazy cycle."""
+class PortalWalkDirector(WorldController):
+    """Keep session-wide progress while rooms become active and inactive."""
 
     def __init__(self) -> None:
         self.context = None
         self.route: list[str] = []
         self.starts: dict[str, int] = {}
-        self.completed = False
-        _event("controller:create")
+        self.first_round_trip_completed = False
+        self.autoplay = os.environ.get(_AUTOPLAY_ENV, "") == "1"
+        _event(f"controller:create autoplay={self.autoplay}")
 
     def start(self, context) -> None:
         self.context = context
@@ -32,155 +37,215 @@ class SceneCycleDirector(WorldController):
 
     def stop(self, context) -> None:
         if context != self.context:
-            raise RuntimeError("WorldController.stop received another WorldContext")
-        status = "PASS" if self.completed else "INCOMPLETE"
+            raise RuntimeError("PortalWalkDirector.stop received another WorldContext")
+        status = "PASS" if self.first_round_trip_completed else "INCOMPLETE"
         _event(f"controller:stop status={status} route={self.route}")
         self.context = None
 
-    def note_start(self, label: str) -> None:
-        count = self.starts.get(label, 0) + 1
-        self.starts[label] = count
-        _event(f"probe:{label}:start count={count}")
+    def note_start(self, room_name: str) -> None:
+        count = self.starts.get(room_name, 0) + 1
+        self.starts[room_name] = count
+        _event(f"room:{room_name}:start count={count}")
         if count != 1:
-            raise RuntimeError(f"scene '{label}' component started more than once")
+            raise RuntimeError(f"room '{room_name}' component started more than once")
 
-    def note_active(self, label: str, activation_count: int, updates: int) -> None:
+    def note_active(
+        self,
+        room_name: str,
+        activation_count: int,
+        distance_travelled: float,
+    ) -> None:
         if self.context is None:
-            raise RuntimeError("scene activated without a running WorldController")
-        primary = self.context.primary_scene
-        if primary is None:
-            raise RuntimeError(f"scene '{label}' activated without a primary scene")
+            raise RuntimeError("room activated without a running WorldController")
+        if self.context.primary_scene is None:
+            raise RuntimeError(f"room '{room_name}' activated without a primary scene")
 
-        self.route.append(label)
-        catalog = list(self.context.scene_identities)
+        self.route.append(room_name)
         _event(
-            f"probe:{label}:active activation={activation_count} "
-            f"updates={updates} catalog={catalog}"
+            f"room:{room_name}:active activation={activation_count} "
+            f"distance={distance_travelled:.2f} "
+            f"catalog={list(self.context.scene_identities)}"
         )
 
-        if len(self.route) <= len(_EXPECTED_ROUTE):
-            expected = _EXPECTED_ROUTE[: len(self.route)]
+        if len(self.route) <= len(_EXPECTED_FIRST_TRIP):
+            expected = _EXPECTED_FIRST_TRIP[: len(self.route)]
             if self.route != expected:
                 raise RuntimeError(
-                    f"unexpected scene route {self.route}; expected prefix {expected}"
+                    f"unexpected room route {self.route}; expected prefix {expected}"
                 )
 
-        if self.route == _EXPECTED_ROUTE:
+        if self.route == _EXPECTED_FIRST_TRIP:
             if activation_count != 2:
-                raise RuntimeError("Alpha did not preserve its component instance")
-            if updates <= 0:
-                raise RuntimeError("Alpha did not preserve scene-local update state")
-            if self.starts != {"Alpha": 1, "Beta": 1, "Gamma": 1}:
+                raise RuntimeError("Sunset Yard was recreated instead of reactivated")
+            if distance_travelled <= 0.0:
+                raise RuntimeError("Sunset Yard did not retain its local player state")
+            if self.starts != {"Sunset Yard": 1, "Blue Workshop": 1}:
                 raise RuntimeError(f"unexpected component starts: {self.starts}")
-            self.completed = True
+            self.first_round_trip_completed = True
             _event(
-                "PASS route=Alpha->Beta->Gamma->Alpha; "
-                "controller and Alpha scene state retained"
+                "PASS round-trip=Sunset Yard->Blue Workshop->Sunset Yard; "
+                "controller and inactive room state retained"
             )
 
-    def note_inactive(self, label: str, updates: int) -> None:
-        _event(f"probe:{label}:inactive updates={updates}")
+    def note_inactive(self, room_name: str, distance_travelled: float) -> None:
+        _event(f"room:{room_name}:inactive distance={distance_travelled:.2f}")
 
-    def advance(self, label: str, next_scene: str) -> bool:
-        if self.completed:
-            return False
+    def travel(self, room_name: str, next_scene: str) -> bool:
         if self.context is None:
-            raise RuntimeError("transition requested without a running WorldController")
+            raise RuntimeError("travel requested without a running WorldController")
         accepted = self.context.transition_to(next_scene)
         _event(
-            f"transition:{label}->{next_scene} accepted={accepted} "
+            f"portal:{room_name}->{next_scene} accepted={accepted} "
             f"catalog={list(self.context.scene_identities)}"
         )
         return accepted
 
 
-class SceneCycleProbe(PythonComponent):
-    """Request the next scene and retain local state while inactive."""
+class PortalWalker(InputComponent):
+    """Move a pawn with WASD/arrows and enter a portal at one side of a room."""
 
-    component_category = "Acceptance"
+    component_category = "Gameplay"
     inspect_fields = {
-        "label": InspectField(path="label", label="Label", kind="string"),
+        "room_name": InspectField(path="room_name", label="Room", kind="string"),
         "next_scene": InspectField(
-            path="next_scene", label="Next Scene", kind="string"
+            path="next_scene", label="Destination Scene", kind="string"
         ),
-        "delay_seconds": InspectField(
-            path="delay_seconds",
-            label="Delay Seconds",
+        "spawn_x": InspectField(
+            path="spawn_x", label="Spawn X", kind="float", step=0.1
+        ),
+        "portal_x": InspectField(
+            path="portal_x", label="Portal X", kind="float", step=0.1
+        ),
+        "move_speed": InspectField(
+            path="move_speed",
+            label="Move Speed",
             kind="float",
             min=0.1,
-            max=30.0,
+            max=20.0,
             step=0.1,
         ),
     }
 
     def __init__(self) -> None:
         super().__init__()
-        self.label = ""
+        self.room_name = ""
         self.next_scene = ""
-        self.delay_seconds = 2.0
+        self.spawn_x = 0.0
+        self.portal_x = 0.0
+        self.move_speed = 3.2
         self.activation_count = 0
-        self.total_updates = 0
-        self._active_seconds = 0.0
-        self._request_seconds = 0.0
+        self.distance_travelled = 0.0
+        self._pressed_keys: set[int] = set()
         self._transition_requested = False
-        self._timeout_reported = False
 
-    def _controller(self) -> SceneCycleDirector:
-        context = require_world_context(self.scene, f"SceneCycleProbe[{self.label}]")
+    def _controller(self) -> PortalWalkDirector:
+        context = require_world_context(self.scene, f"PortalWalker[{self.room_name}]")
         controller = context.controller
-        if controller is None:
-            raise RuntimeError("SceneCycleProbe requires SceneCycleDirector")
+        if controller is None or not isinstance(controller, PortalWalkDirector):
+            raise RuntimeError("PortalWalker requires PortalWalkDirector")
         return controller
 
     def start(self) -> None:
-        self._controller().note_start(self.label)
+        self._controller().note_start(self.room_name)
 
     def on_scene_active(self) -> None:
         context = world_context(self.scene)
         if not context.valid:
             return
         self.activation_count += 1
-        self._active_seconds = 0.0
-        self._request_seconds = 0.0
+        self._pressed_keys.clear()
         self._transition_requested = False
-        self._timeout_reported = False
+        position = self.entity.transform.local_position()
+        self.entity.transform.set_local_position(Vec3(self.spawn_x, position.y, position.z))
         self._controller().note_active(
-            self.label,
+            self.room_name,
             self.activation_count,
-            self.total_updates,
+            self.distance_travelled,
         )
 
     def on_scene_inactive(self) -> None:
         context = world_context(self.scene)
         if not context.valid:
             return
-        self._controller().note_inactive(self.label, self.total_updates)
+        self._pressed_keys.clear()
+        self._controller().note_inactive(self.room_name, self.distance_travelled)
+
+    def on_key(self, event) -> None:
+        movement_keys = {
+            Key.A.value,
+            Key.D.value,
+            Key.S.value,
+            Key.W.value,
+            Key.LEFT.value,
+            Key.RIGHT.value,
+            Key.DOWN.value,
+            Key.UP.value,
+        }
+        if event.key not in movement_keys:
+            return
+        if event.action == Action.RELEASE.value:
+            self._pressed_keys.discard(event.key)
+        else:
+            self._pressed_keys.add(event.key)
+        event.handled = True
 
     def update(self, dt: float) -> None:
-        self.total_updates += 1
-        if self._controller().completed:
-            return
         if self._transition_requested:
-            self._request_seconds += dt
-            if self._request_seconds >= 4.0 and not self._timeout_reported:
-                self._timeout_reported = True
-                log.error(
-                    f"{_PREFIX} FAIL transition from {self.label} did not commit"
-                )
             return
 
-        self._active_seconds += dt
-        if self._active_seconds < self.delay_seconds:
+        controller = self._controller()
+        if controller.autoplay and controller.first_round_trip_completed:
             return
-        self._transition_requested = self._controller().advance(
-            self.label,
-            self.next_scene,
+        x_axis = self._axis(Key.A, Key.LEFT, Key.D, Key.RIGHT)
+        y_axis = self._axis(Key.S, Key.DOWN, Key.W, Key.UP)
+        if controller.autoplay:
+            x_axis = 1.0 if self.portal_x > self.spawn_x else -1.0
+            y_axis = 0.0
+
+        length_squared = x_axis * x_axis + y_axis * y_axis
+        if length_squared > 1.0:
+            scale = length_squared ** -0.5
+            x_axis *= scale
+            y_axis *= scale
+        if x_axis == 0.0 and y_axis == 0.0:
+            return
+
+        position = self.entity.transform.local_position()
+        step = self.move_speed * max(dt, 0.0)
+        next_x = min(max(position.x + x_axis * step, -4.25), 4.25)
+        next_y = min(max(position.y + y_axis * step, -2.55), 2.55)
+        self.entity.transform.set_local_position(Vec3(next_x, next_y, position.z))
+        self.distance_travelled += (
+            (next_x - position.x) ** 2 + (next_y - position.y) ** 2
+        ) ** 0.5
+
+        reached_portal = (
+            next_x >= self.portal_x
+            if self.portal_x > self.spawn_x
+            else next_x <= self.portal_x
         )
+        if not reached_portal:
+            return
+        self._transition_requested = controller.travel(self.room_name, self.next_scene)
         if not self._transition_requested:
             log.error(
-                f"{_PREFIX} FAIL transition request "
-                f"{self.label}->{self.next_scene} was rejected"
+                f"{_PREFIX} portal transition "
+                f"{self.room_name}->{self.next_scene} was rejected"
             )
 
+    def _axis(
+        self,
+        negative: Key,
+        negative_alt: Key,
+        positive: Key,
+        positive_alt: Key,
+    ) -> float:
+        value = 0.0
+        if negative.value in self._pressed_keys or negative_alt.value in self._pressed_keys:
+            value -= 1.0
+        if positive.value in self._pressed_keys or positive_alt.value in self._pressed_keys:
+            value += 1.0
+        return value
 
-__all__ = ["SceneCycleDirector", "SceneCycleProbe"]
+
+__all__ = ["PortalWalkDirector", "PortalWalker"]

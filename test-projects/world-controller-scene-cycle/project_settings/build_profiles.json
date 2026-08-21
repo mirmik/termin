@@ -12,8 +12,7 @@
         "entry_scene": "Scenes/Alpha.scene",
         "scenes": [
           "Scenes/Alpha.scene",
-          "Scenes/Beta.scene",
-          "Scenes/Gamma.scene"
+          "Scenes/Beta.scene"
         ],
         "modules": [],
         "python": {

@@ -2,7 +2,7 @@
   "render_sync_mode": "none",
   "application": {
     "id": "org.termin.testprojects.worldcontrollerscenecycle",
-    "label": "Termin WorldController Scene Cycle",
+    "label": "Termin Portal Walk",
     "version_code": 1,
     "version_name": "0.1.0"
   },
@@ -14,6 +14,6 @@
   },
   "world_controller": {
     "module": "scene_cycle",
-    "type": "SceneCycleDirector"
+    "type": "PortalWalkDirector"
   }
 }
