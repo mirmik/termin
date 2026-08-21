@@ -46,7 +46,7 @@ namespace tcplot {
 
         const termin::OrbitCamera camera = make_camera(frame.camera);
         const float aspect = static_cast<float>(viewport_width) / static_cast<float>(viewport_height);
-        const termin::Mat44f mvp = camera.projection_matrix(aspect) * camera.view_matrix();
+        const termin::Mat44f mvp = (camera.projection_matrix(aspect) * camera.view_matrix()).to_float();
 
         const double dx = (frame.bounds_max[0] - frame.bounds_min[0]) * frame.axis_scale[0];
         const double dy = (frame.bounds_max[1] - frame.bounds_min[1]) * frame.axis_scale[1];

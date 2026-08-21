@@ -113,6 +113,42 @@ namespace termin {
         return tc_render_target_get_camera(rt) == camera->tc_component_ptr();
     }
 
+    std::optional<OrbitCameraPan>
+    OrbitCameraController::_begin_pan_gesture(tc_viewport_handle viewport, const Vec2& screen_position) {
+        _ensure_camera();
+        CameraComponent* camera = _camera.get();
+        if (!camera || !entity().valid()) {
+            tc_log_error("[OrbitCameraController] Cannot begin pan without a live camera entity");
+            return std::nullopt;
+        }
+
+        int viewport_width = 0;
+        int viewport_height = 0;
+        tc_viewport_get_pixel_rect(viewport, nullptr, nullptr, &viewport_width, &viewport_height);
+        if (viewport_width <= 0 || viewport_height <= 0) {
+            tc_log_error("[OrbitCameraController] Cannot begin pan with invalid viewport size %dx%d",
+                         viewport_width,
+                         viewport_height);
+            return std::nullopt;
+        }
+
+        const double aspect = static_cast<double>(viewport_width) / static_cast<double>(viewport_height);
+        const Vec3 eye = entity().transform().global_position();
+        std::optional<OrbitCameraPan> gesture = OrbitCameraPan::begin(camera->get_view_matrix(),
+                                                                     camera->compute_projection_matrix(aspect),
+                                                                     eye,
+                                                                     _target,
+                                                                     screen_position,
+                                                                     Rect2{0.0,
+                                                                           0.0,
+                                                                           static_cast<double>(viewport_width),
+                                                                           static_cast<double>(viewport_height)});
+        if (!gesture) {
+            tc_log_error("[OrbitCameraController] Failed to unproject orbital pan anchor");
+        }
+        return gesture;
+    }
+
     void OrbitCameraController::on_added() {
         CxxComponent::on_added();
 
@@ -180,27 +216,16 @@ namespace termin {
         // Target is position + forward * radius
         _target = pos + forward * radius;
 
-        // Compute direction from target to camera
-        Vec3 to_camera = pos - _target;
-        double dist = to_camera.norm();
-        if (dist < 1e-6) {
+        const std::optional<OrbitCameraAngles> angles = orbit_camera_angles(pos, _target);
+        if (!angles) {
             _last_position = pos;
             _last_rotation = rot;
             _has_last_transform = true;
             return;
         }
 
-        // Normalize
-        Vec3 to_camera_norm = to_camera / dist;
-
-        // Elevation: angle from XY plane (asin of Z component)
-        double z_clamped = _clamp(to_camera_norm.z, -1.0, 1.0);
-        _elevation = std::asin(z_clamped);
-
-        // Azimuth: angle in XY plane
-        // At azimuth=0, camera is behind target (-Y direction)
-        // atan2(x, -y) gives us the angle from -Y axis
-        _azimuth = std::atan2(to_camera_norm.x, -to_camera_norm.y);
+        _azimuth = angles->azimuth;
+        _elevation = angles->elevation;
 
         // Update last known position/rotation
         _last_position = pos;
@@ -220,14 +245,7 @@ namespace termin {
             return;
 
         double r = _clamp(radius, min_radius, max_radius);
-        double cos_elev = std::cos(_elevation);
-
-        // Compute eye position
-        Vec3 eye{
-            _target.x + r * std::sin(_azimuth) * cos_elev, // X - side
-            _target.y - r * std::cos(_azimuth) * cos_elev, // Y - behind target
-            _target.z + r * std::sin(_elevation)           // Z - height
-        };
+        const Vec3 eye = orbit_camera_eye(_target, r, _azimuth, _elevation);
 
         // Create pose looking at target (always zero-roll, resets fly roll)
         Pose3 pose = Pose3::looking_at(eye, _target);
@@ -239,11 +257,12 @@ namespace termin {
     }
 
     void OrbitCameraController::orbit(double delta_azimuth, double delta_elevation) {
-        _azimuth += delta_azimuth * M_PI / 180.0; // Convert degrees to radians
-
-        // Clamp elevation to avoid gimbal lock at poles
-        double new_elevation = _elevation + delta_elevation * M_PI / 180.0;
-        _elevation = _clamp(new_elevation, -89.0 * M_PI / 180.0, 89.0 * M_PI / 180.0);
+        orbit_camera_rotate(_azimuth,
+                            _elevation,
+                            delta_azimuth * M_PI / 180.0,
+                            delta_elevation * M_PI / 180.0,
+                            -89.0 * M_PI / 180.0,
+                            89.0 * M_PI / 180.0);
 
         _update_pose();
     }
@@ -261,7 +280,7 @@ namespace termin {
         }
     }
 
-    void OrbitCameraController::pan(double dx, double dy) {
+    void OrbitCameraController::translate_target(const Vec2& displacement) {
         if (!entity().valid())
             return;
 
@@ -277,7 +296,7 @@ namespace termin {
         Vec3 up{rm[2], rm[5], rm[8]};
 
         // Move target
-        _target = _target + right * dx + up * dy;
+        _target = _target + right * displacement.x + up * displacement.y;
         _update_pose();
     }
 
@@ -385,10 +404,12 @@ namespace termin {
         ViewportState& state = _get_viewport_state(viewport_key(e->viewport));
         if (e->phase == TC_POINTER_DOWN) {
             state.touch_points[e->pointer_id] = {e->x, e->y};
+            state.pan_gesture.reset();
             return;
         }
         if (e->phase == TC_POINTER_CANCEL) {
             state.touch_points.erase(e->pointer_id);
+            state.pan_gesture.reset();
             return;
         }
 
@@ -400,6 +421,7 @@ namespace termin {
         if (e->phase == TC_POINTER_MOVE) {
             if (state.touch_points.size() == 1) {
                 point->second = {e->x, e->y};
+                state.pan_gesture.reset();
                 orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
                 return;
             }
@@ -407,8 +429,7 @@ namespace termin {
             if (state.touch_points.size() == 2) {
                 auto first = state.touch_points.begin();
                 auto second = std::next(first);
-                const double old_center_x = (first->second.x + second->second.x) * 0.5;
-                const double old_center_y = (first->second.y + second->second.y) * 0.5;
+                const Vec2 old_center = (first->second + second->second) * 0.5;
                 const double old_dx = first->second.x - second->second.x;
                 const double old_dy = first->second.y - second->second.y;
                 const double old_span = std::hypot(old_dx, old_dy);
@@ -417,14 +438,25 @@ namespace termin {
 
                 first = state.touch_points.begin();
                 second = std::next(first);
-                const double new_center_x = (first->second.x + second->second.x) * 0.5;
-                const double new_center_y = (first->second.y + second->second.y) * 0.5;
+                const Vec2 new_center = (first->second + second->second) * 0.5;
                 const double new_dx = first->second.x - second->second.x;
                 const double new_dy = first->second.y - second->second.y;
                 const double new_span = std::hypot(new_dx, new_dy);
 
-                pan(-(new_center_x - old_center_x) * _pan_speed, (new_center_y - old_center_y) * _pan_speed);
+                if (!state.pan_gesture) {
+                    state.pan_gesture = _begin_pan_gesture(e->viewport, old_center);
+                }
+                if (state.pan_gesture) {
+                    const std::optional<Vec3> next_target = state.pan_gesture->target_at(new_center);
+                    if (next_target) {
+                        _target = *next_target;
+                        _update_pose();
+                    } else {
+                        tc_log_error("[OrbitCameraController] Failed to update touch pan gesture");
+                    }
+                }
                 zoom((old_span - new_span) * _touch_zoom_speed);
+                state.pan_gesture = _begin_pan_gesture(e->viewport, new_center);
                 return;
             }
 
@@ -434,6 +466,7 @@ namespace termin {
 
         if (e->phase == TC_POINTER_UP) {
             state.touch_points.erase(point);
+            state.pan_gesture.reset();
         }
     }
 
@@ -450,11 +483,22 @@ namespace termin {
             state.orbit_active = (e->action == static_cast<int>(Action::PRESS));
         } else if (e->button == pan_mouse_button) {
             state.pan_active = (e->action == static_cast<int>(Action::PRESS));
+            state.pan_gesture.reset();
+            if (state.pan_active) {
+                state.pan_gesture = _begin_pan_gesture(e->viewport, Vec2{e->x, e->y});
+                state.pan_active = state.pan_gesture.has_value();
+            }
+        }
+
+        if (e->action == static_cast<int>(Action::PRESS)) {
+            state.last_position = {e->x, e->y};
+            state.has_last = true;
         }
 
         // Reset last position on release
         if (e->action == static_cast<int>(Action::RELEASE)) {
             state.has_last = false;
+            state.pan_gesture.reset();
         }
     }
 
@@ -468,20 +512,29 @@ namespace termin {
         ViewportState& state = _get_viewport_state(vp_key);
 
         if (!state.has_last) {
-            state.last_x = e->x;
-            state.last_y = e->y;
+            state.last_position = {e->x, e->y};
             state.has_last = true;
             return;
         }
 
-        state.last_x = e->x;
-        state.last_y = e->y;
+        state.last_position = {e->x, e->y};
 
         if (state.orbit_active) {
             // Orbit: negative dx because moving mouse right should rotate left
             orbit(-e->dx * _orbit_speed, e->dy * _orbit_speed);
         } else if (state.pan_active) {
-            pan(-e->dx * _pan_speed, e->dy * _pan_speed);
+            if (!state.pan_gesture) {
+                state.pan_gesture = _begin_pan_gesture(e->viewport, Vec2{e->x - e->dx, e->y - e->dy});
+            }
+            if (state.pan_gesture) {
+                const std::optional<Vec3> next_target = state.pan_gesture->target_at(Vec2{e->x, e->y});
+                if (next_target) {
+                    _target = *next_target;
+                    _update_pose();
+                } else {
+                    tc_log_error("[OrbitCameraController] Failed to update mouse pan gesture");
+                }
+            }
         }
     }
 

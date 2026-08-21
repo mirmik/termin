@@ -6,6 +6,7 @@
 
 ## Current Notes
 
+- [Numeric types and precision](2026-08-21-numeric-types-and-precision.md) - double для долгоживущего изменяемого состояния, float на transient render boundary и семантические `Vec`/`Rect`/`AABB` вместо плоских списков координат.
 - [WorldController and EngineCore RuntimeSession](2026-08-20-game-application.md) - проектный world-level controller, минимальная per-run session, transient scene context и синхронная смена primary scene в safe point движка.
 - [District monorepo](2026-08-14-district-monorepo.md) - принятая схема единого репозитория с корневыми `core`, `graphics`, `physics`, `engine`, `editor` и `platform`, общим build orchestration и независимыми SDK-профилями.
 - [Shared 2D composition](2026-08-11-shared-2d-composition.md) - отдельные Widget и GraphicItem semantic trees поверх общего affine/clip/bounds evaluation и канонического `DrawList2D`, с невладеющими handle-based projections между ними.

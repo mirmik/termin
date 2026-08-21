@@ -14,6 +14,7 @@ import ctypes.util
 from typing import Callable
 
 from tcbase import log
+from termin.geombase import Vec2
 
 # --- libspnav ctypes bindings ---
 
@@ -291,7 +292,7 @@ class SpaceMouseController:
                 zoom_val = -zoom_val
 
             if pan_x != 0.0 or pan_y != 0.0:
-                ctrl.pan(-pan_x, pan_y)
+                ctrl.translate_target(Vec2(-pan_x, pan_y))
                 moved = True
 
             if zoom_val != 0.0:

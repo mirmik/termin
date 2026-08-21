@@ -3,6 +3,8 @@
 
 %{
 #include "termin/geom/vec3.hpp"
+#include "termin/geom/vec2.hpp"
+#include "termin/geom/rect2.hpp"
 #include "termin/geom/quat.hpp"
 #include "termin/geom/mat44.hpp"
 #include "termin/camera/camera.hpp"
@@ -211,8 +213,24 @@ typedef struct tc_component tc_component;
 // Ignore problematic operators
 %ignore operator[];
 
-// Vec3
+// Vec2 / Rect2
 namespace termin {
+
+struct Vec2 {
+    double x, y;
+
+    Vec2();
+    Vec2(double x, double y);
+};
+
+struct Rect2 {
+    double x, y, width, height;
+
+    Rect2();
+    Rect2(double x, double y, double width, double height);
+};
+
+// Vec3
 
 struct Vec3 {
     double x, y, z;
@@ -758,7 +776,7 @@ public:
 
     // Camera operations
     void orbit(double delta_azimuth, double delta_elevation);
-    void pan(double dx, double dy);
+    void translate_target(const Vec2& displacement);
     void zoom(double delta);
     void center_on(const Vec3& position);
 
@@ -1121,22 +1139,24 @@ enum class LineStyle {
 
 class OrbitCamera {
 public:
-    float distance;
-    float azimuth;
-    float elevation;
-    float fov_y;
-    float near;
-    float far;
-    float min_distance;
-    float max_distance;
-    float min_elevation;
-    float max_elevation;
+    double distance;
+    double azimuth;
+    double elevation;
+    double fov_y;
+    double near;
+    double far;
+    double min_distance;
+    double max_distance;
+    double min_elevation;
+    double max_elevation;
 
     OrbitCamera();
 
-    void orbit(float d_azimuth, float d_elevation);
-    void zoom(float factor);
-    void pan(float dx, float dy);
+    void orbit(double d_azimuth, double d_elevation);
+    void zoom(double factor);
+    bool pan(const termin::Vec2& from_position,
+             const termin::Vec2& to_position,
+             const termin::Rect2& viewport);
 };
 
 class GpuHost {

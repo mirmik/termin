@@ -108,6 +108,19 @@ namespace termin {
             return result;
         }
 
+        float determinant() const {
+            const float* m = data;
+            const float c00 = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
+                              m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+            const float c04 = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] -
+                              m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+            const float c08 = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] +
+                              m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+            const float c12 = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] -
+                              m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+            return m[0] * c00 + m[1] * c04 + m[2] * c08 + m[3] * c12;
+        }
+
         // Inverse (general 4x4 matrix inverse using cofactors)
         Mat44f inverse() const {
             Mat44f inv;
@@ -461,6 +474,19 @@ namespace termin {
             return result;
         }
 
+        double determinant() const {
+            const double* m = data;
+            const double c00 = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
+                               m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+            const double c04 = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] -
+                               m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+            const double c08 = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] +
+                               m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+            const double c12 = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] -
+                               m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+            return m[0] * c00 + m[1] * c04 + m[2] * c08 + m[3] * c12;
+        }
+
         // Inverse
         Mat44 inverse() const {
             Mat44 inv;
@@ -500,7 +526,7 @@ namespace termin {
                            m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
 
             double det = m[0] * inv.data[0] + m[1] * inv.data[4] + m[2] * inv.data[8] + m[3] * inv.data[12];
-            if (std::abs(det) < 1e-10) {
+            if (!std::isfinite(det) || det == 0.0) {
                 return identity();
             }
 

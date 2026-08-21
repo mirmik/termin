@@ -6,6 +6,7 @@
 #include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/input/input_events.hpp"
 #include <termin/bindings/entity_helpers.hpp>
+#include <termin/geom/vec2.hpp>
 #include <termin/geom/vec3.hpp>
 
 namespace nb = nanobind;
@@ -37,11 +38,10 @@ namespace termin {
                  nb::arg("delta_azimuth"),
                  nb::arg("delta_elevation"),
                  "Orbit camera around target (angles in degrees)")
-            .def("pan",
-                 &OrbitCameraController::pan,
-                 nb::arg("dx"),
-                 nb::arg("dy"),
-                 "Pan camera (move target in screen space)")
+            .def("translate_target",
+                 &OrbitCameraController::translate_target,
+                 nb::arg("displacement"),
+                 "Translate target along the camera right/up axes")
             .def("zoom", &OrbitCameraController::zoom, nb::arg("delta"), "Zoom camera (change radius or ortho_size)")
             .def("center_on", &OrbitCameraController::center_on, nb::arg("position"), "Center camera on position")
             .def("fly_move",
@@ -90,10 +90,6 @@ namespace termin {
             .def_prop_rw(
                 "_orbit_speed",
                 [](OrbitCameraController& c) { return 0.2; }, // Default
-                [](OrbitCameraController& c, double v) { /* TODO: add setter */ })
-            .def_prop_rw(
-                "_pan_speed",
-                [](OrbitCameraController& c) { return 0.005; },
                 [](OrbitCameraController& c, double v) { /* TODO: add setter */ })
             .def_prop_rw(
                 "_zoom_speed",

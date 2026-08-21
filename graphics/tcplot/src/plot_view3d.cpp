@@ -247,27 +247,27 @@ namespace tcplot {
         double lo[3], hi[3];
         engine_->data.data_bounds_3d(lo, hi);
 
-        const termin::Vec3f scaled_lo{
-            static_cast<float>(lo[0] * engine_->x_scale),
-            static_cast<float>(lo[1] * engine_->y_scale),
-            static_cast<float>(lo[2] * engine_->z_scale),
+        const termin::Vec3 scaled_lo{
+            lo[0] * engine_->x_scale,
+            lo[1] * engine_->y_scale,
+            lo[2] * engine_->z_scale,
         };
-        const termin::Vec3f scaled_hi{
-            static_cast<float>(hi[0] * engine_->x_scale),
-            static_cast<float>(hi[1] * engine_->y_scale),
-            static_cast<float>(hi[2] * engine_->z_scale),
+        const termin::Vec3 scaled_hi{
+            hi[0] * engine_->x_scale,
+            hi[1] * engine_->y_scale,
+            hi[2] * engine_->z_scale,
         };
-        const termin::Vec3f bounds_min{
+        const termin::Vec3 bounds_min{
             std::min(scaled_lo.x, scaled_hi.x),
             std::min(scaled_lo.y, scaled_hi.y),
             std::min(scaled_lo.z, scaled_hi.z),
         };
-        const termin::Vec3f bounds_max{
+        const termin::Vec3 bounds_max{
             std::max(scaled_lo.x, scaled_hi.x),
             std::max(scaled_lo.y, scaled_hi.y),
             std::max(scaled_lo.z, scaled_hi.z),
         };
-        engine_->camera.fit_bounds(bounds_min, bounds_max);
+        engine_->camera.fit_bounds(termin::AABB{bounds_min, bounds_max});
     }
 
     // ---------------------------------------------------------------------------

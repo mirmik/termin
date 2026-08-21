@@ -187,8 +187,10 @@ TEST_CASE("base geometry value types preserve simple construction semantics") {
     static_assert(std::is_standard_layout_v<termin::Size2i>);
     static_assert(std::is_standard_layout_v<termin::Size2f>);
     static_assert(std::is_standard_layout_v<termin::Bounds2i>);
+    static_assert(std::is_standard_layout_v<termin::Bounds2>);
     static_assert(std::is_standard_layout_v<termin::Bounds2f>);
     static_assert(std::is_standard_layout_v<termin::Rect2i>);
+    static_assert(std::is_standard_layout_v<termin::Rect2>);
     static_assert(std::is_standard_layout_v<termin::Rect2f>);
 
     termin::SrgbColor color = termin::SrgbColor::green();
@@ -214,6 +216,13 @@ TEST_CASE("base geometry value types preserve simple construction semantics") {
     CHECK(viewport.width == 320);
     CHECK(viewport.height == 240);
 
+    const termin::Rect2 precise_viewport{0.25, 0.5, 800.125, 600.25};
+    const termin::Bounds2 precise_bounds = precise_viewport.bounds();
+    CHECK(precise_bounds.x0 == 0.25);
+    CHECK(precise_bounds.y0 == 0.5);
+    CHECK(precise_bounds.x1 == 800.375);
+    CHECK(precise_bounds.y1 == 600.75);
+
     termin::Rect2f rect_f{1.5f, 2.0f, 3.25f, 4.5f};
     termin::Bounds2f bounds_f = rect_f.bounds();
     CHECK(bounds_f.x0 == 1.5f);
@@ -225,6 +234,23 @@ TEST_CASE("base geometry value types preserve simple construction semantics") {
 
     termin::Size2f size_f{640.0f, 480.0f};
     CHECK(size_f == termin::Size2f(640.0f, 480.0f));
+}
+
+TEST_CASE("Mat44 determinant supports double and float matrices") {
+    const termin::Mat44 matrix = termin::Mat44::translation({3.0, -2.0, 7.0}) *
+                                  termin::Mat44::scale({2.0, 3.0, 4.0});
+    CHECK(std::abs(matrix.determinant() - 24.0) < 1.0e-12);
+
+    const termin::Mat44 singular = termin::Mat44::scale({2.0, 0.0, 4.0});
+    CHECK(singular.determinant() == 0.0);
+
+    const termin::Mat44 small_but_invertible = termin::Mat44::scale({1.0e-12, 2.0, 3.0});
+    const termin::Mat44 inverse = small_but_invertible.inverse();
+    CHECK(std::abs(inverse(0, 0) - 1.0e12) < 1.0e-3);
+
+    const termin::Mat44f matrix_f = termin::Mat44f::translation(3.0f, -2.0f, 7.0f) *
+                                    termin::Mat44f::scale(termin::Vec3{2.0, 3.0, 4.0});
+    CHECK(std::abs(matrix_f.determinant() - 24.0f) < 1.0e-5f);
 }
 
 TEST_CASE("Affine2f composes arbitrary affine transforms exactly") {

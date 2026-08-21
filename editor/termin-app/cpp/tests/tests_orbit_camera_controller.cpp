@@ -18,7 +18,10 @@ extern "C" {
 
 using guard::Approx;
 using termin::CameraComponent;
+using termin::CameraProjection;
 using termin::Entity;
+using termin::MouseButtonEvent;
+using termin::MouseMoveEvent;
 using termin::OrbitCameraController;
 using termin::PointerEvent;
 using termin::ScrollEvent;
@@ -60,6 +63,15 @@ namespace {
             .pressure = 1.0f,
             .source = TC_INPUT_SOURCE_RUNTIME,
         });
+    }
+
+    termin::Vec3 project_to_screen(const CameraComponent& camera,
+                                   const termin::Vec3& point,
+                                   double width,
+                                   double height) {
+        const termin::Mat44 projection_view = camera.compute_projection_matrix(width / height) * camera.get_view_matrix();
+        const termin::Vec3 ndc = projection_view.transform_point(point);
+        return {(ndc.x + 1.0) * 0.5 * width, (ndc.y + 1.0) * 0.5 * height, ndc.z};
     }
 
 } // namespace
@@ -150,6 +162,7 @@ TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch")
     tc_viewport_handle viewport = tc_viewport_new("touch-viewport", TC_SCENE_HANDLE_INVALID);
     REQUIRE(tc_viewport_handle_valid(viewport));
     tc_viewport_set_render_target(viewport, render_target);
+    tc_viewport_set_pixel_rect(viewport, 0, 0, 800, 600);
 
     const termin::Vec3 initial_position = rig.entity.transform().global_position();
     PointerEvent first_down = make_pointer_event(viewport, 1, TC_POINTER_DOWN, 20.0, 20.0);
@@ -176,4 +189,47 @@ TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch")
     tc_render_target_free(render_target);
     tc_entity_free(rig.entity.handle());
     tc_scene_free(scene);
+}
+
+TEST_CASE("OrbitCameraController pan keeps the grabbed point under the cursor for both projections") {
+    constexpr double width = 800.0;
+    constexpr double height = 600.0;
+
+    for (const CameraProjection projection : {CameraProjection::Perspective, CameraProjection::Orthographic}) {
+        tc_scene_handle scene = tc_scene_new_named("orbit-camera-pan-test");
+        REQUIRE(tc_scene_alive(scene));
+        tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(tc_scene_entity_pool(scene));
+        REQUIRE(tc_entity_pool_handle_valid(scene_pool));
+
+        CameraRig rig = make_camera_rig("pan-camera", scene_pool);
+        rig.camera->projection_type = projection;
+        rig.camera->ortho_size = 3.0;
+        tc_render_target_handle render_target = tc_render_target_new("pan-rt");
+        REQUIRE(tc_render_target_handle_valid(render_target));
+        tc_render_target_set_scene(render_target, scene);
+        tc_render_target_set_camera(render_target, rig.camera->tc_component_ptr());
+        tc_viewport_handle viewport = tc_viewport_new("pan-viewport", TC_SCENE_HANDLE_INVALID);
+        REQUIRE(tc_viewport_handle_valid(viewport));
+        tc_viewport_set_render_target(viewport, render_target);
+        tc_viewport_set_pixel_rect(viewport, 0, 0, static_cast<int>(width), static_cast<int>(height));
+
+        const termin::Vec3 grabbed = rig.controller->target();
+        MouseButtonEvent press(viewport,
+                               width * 0.5,
+                               height * 0.5,
+                               rig.controller->pan_mouse_button,
+                               static_cast<int>(tcbase::Action::PRESS));
+        rig.controller->on_mouse_button(&press);
+        MouseMoveEvent move(viewport, 515.0, 365.0, 115.0, 65.0);
+        rig.controller->on_mouse_move(&move);
+
+        const termin::Vec3 projected = project_to_screen(*rig.camera, grabbed, width, height);
+        CHECK_EQ(projected.x, Approx(515.0).epsilon(1e-10));
+        CHECK_EQ(projected.y, Approx(365.0).epsilon(1e-10));
+
+        tc_viewport_free(viewport);
+        tc_render_target_free(render_target);
+        tc_entity_free(rig.entity.handle());
+        tc_scene_free(scene);
+    }
 }

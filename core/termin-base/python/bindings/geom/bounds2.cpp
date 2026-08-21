@@ -79,10 +79,27 @@ namespace termin {
                 });
         }
 
+        template <typename RectT, typename ScalarT> void bind_rect2_type(nb::module_& m, const char* name) {
+            nb::class_<RectT>(m, name)
+                .def(nb::init<>())
+                .def(nb::init<ScalarT, ScalarT, ScalarT, ScalarT>(),
+                     nb::arg("x"),
+                     nb::arg("y"),
+                     nb::arg("width"),
+                     nb::arg("height"))
+                .def_rw("x", &RectT::x)
+                .def_rw("y", &RectT::y)
+                .def_rw("width", &RectT::width)
+                .def_rw("height", &RectT::height)
+                .def("bounds", &RectT::bounds);
+        }
+
     } // namespace
 
     void bind_bounds2(nb::module_& m) {
+        bind_bounds2_type<Bounds2, double>(m, "Bounds2");
         bind_bounds2_type<Bounds2f, float>(m, "Bounds2f");
+        bind_rect2_type<Rect2, double>(m, "Rect2");
     }
 
 } // namespace termin

@@ -6,6 +6,32 @@
 
 namespace termin {
 
+    // 2D bounds with double-precision min/max coordinates.
+    struct Bounds2 {
+        double x0 = 0.0;
+        double y0 = 0.0;
+        double x1 = 0.0;
+        double y1 = 0.0;
+
+        Bounds2() = default;
+        Bounds2(double x0, double y0, double x1, double y1)
+            : x0(x0),
+              y0(y0),
+              x1(x1),
+              y1(y1) {}
+
+        double width() const {
+            return x1 - x0;
+        }
+        double height() const {
+            return y1 - y0;
+        }
+
+        static Bounds2 from_size(double width, double height) {
+            return {0.0, 0.0, width, height};
+        }
+    };
+
     // 2D bounds with integer min/max coordinates.
     struct Bounds2i {
         int x0 = 0;

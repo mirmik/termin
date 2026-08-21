@@ -264,9 +264,7 @@ namespace tcplot {
 
         double lo[3], hi[3];
         data.data_bounds_3d(lo, hi);
-        camera.fit_bounds(
-            termin::Vec3f{static_cast<float>(lo[0]), static_cast<float>(lo[1]), static_cast<float>(lo[2])},
-            termin::Vec3f{static_cast<float>(hi[0]), static_cast<float>(hi[1]), static_cast<float>(hi[2])});
+        camera.fit_bounds(termin::AABB{{lo[0], lo[1], lo[2]}, {hi[0], hi[1], hi[2]}});
     }
 
     void PlotEngine3D::scatter(std::vector<double> x,
@@ -279,9 +277,7 @@ namespace tcplot {
 
         double lo[3], hi[3];
         data.data_bounds_3d(lo, hi);
-        camera.fit_bounds(
-            termin::Vec3f{static_cast<float>(lo[0]), static_cast<float>(lo[1]), static_cast<float>(lo[2])},
-            termin::Vec3f{static_cast<float>(hi[0]), static_cast<float>(hi[1]), static_cast<float>(hi[2])});
+        camera.fit_bounds(termin::AABB{{lo[0], lo[1], lo[2]}, {hi[0], hi[1], hi[2]}});
     }
 
     void PlotEngine3D::surface(std::vector<double> X,
@@ -311,9 +307,7 @@ namespace tcplot {
 
         double lo[3], hi[3];
         data.data_bounds_3d(lo, hi);
-        camera.fit_bounds(
-            termin::Vec3f{static_cast<float>(lo[0]), static_cast<float>(lo[1]), static_cast<float>(lo[2])},
-            termin::Vec3f{static_cast<float>(hi[0]), static_cast<float>(hi[1]), static_cast<float>(hi[2])});
+        camera.fit_bounds(termin::AABB{{lo[0], lo[1], lo[2]}, {hi[0], hi[1], hi[2]}});
     }
 
     void PlotEngine3D::clear() {
@@ -745,7 +739,7 @@ namespace tcplot {
     // ---------------------------------------------------------------------------
 
     void PlotEngine3D::compute_mvp_(float aspect, float out16[16], bool apply_axis_scale) const {
-        const termin::Mat44f mvp = camera.projection_matrix(aspect) * camera.view_matrix();
+        const termin::Mat44f mvp = (camera.projection_matrix(aspect) * camera.view_matrix()).to_float();
 
         std::memcpy(out16, mvp.data, sizeof(mvp.data));
         if (!apply_axis_scale || (std::abs(x_scale - 1.0f) < 1e-6f && std::abs(y_scale - 1.0f) < 1e-6f &&
@@ -895,12 +889,11 @@ namespace tcplot {
         }
         // Tick labels + marker value label via Text3D.
         if (font && show_labels) {
-            float view[16];
-            camera.view_matrix(view);
+            const termin::Mat44f view = camera.view_matrix().to_float();
             // view is column-major 4x4. Row 0: world-space camera-right;
             // Row 1: world-space camera-up. Same extraction as in Python.
-            const termin::Vec3f cr{view[0 * 4 + 0], view[1 * 4 + 0], view[2 * 4 + 0]};
-            const termin::Vec3f cu{view[0 * 4 + 1], view[1 * 4 + 1], view[2 * 4 + 1]};
+            const termin::Vec3f cr{view.data[0 * 4 + 0], view.data[1 * 4 + 0], view.data[2 * 4 + 0]};
+            const termin::Vec3f cu{view.data[0 * 4 + 1], view.data[1 * 4 + 1], view.data[2 * 4 + 1]};
 
             // For Text3D we pass the UNSCALED camera MVP: label positions
             // already have z_scale baked into their world-Z (see pos[2]
@@ -1139,6 +1132,18 @@ namespace tcplot {
             return true;
         }
         if (button == tcbase::MouseButton::LEFT || button == tcbase::MouseButton::MIDDLE) {
+            pan_gesture_.reset();
+            if (button == tcbase::MouseButton::MIDDLE) {
+                pan_gesture_ = camera.begin_pan(termin::Vec2{x, y}, termin::Rect2{vx_, vy_, vw_, vh_});
+                if (!pan_gesture_) {
+                    tc_log_error("[tcplot] cannot begin 3D camera pan with viewport %.1f,%.1f %.1fx%.1f",
+                                 vx_,
+                                 vy_,
+                                 vw_,
+                                 vh_);
+                    return false;
+                }
+            }
             dragging_ = true;
             drag_button_ = button;
             drag_start_x_ = x;
@@ -1171,12 +1176,15 @@ namespace tcplot {
         if (drag_button_ == tcbase::MouseButton::LEFT) {
             camera.orbit(-dx * 0.005f, dy * 0.005f);
         } else if (drag_button_ == tcbase::MouseButton::MIDDLE) {
-            camera.pan(-dx, dy);
+            if (!pan_gesture_ || !camera.pan(*pan_gesture_, termin::Vec2{x, y})) {
+                tc_log_error("[tcplot] failed to update 3D camera pan gesture");
+            }
         }
     }
 
     void PlotEngine3D::on_mouse_up(float /*x*/, float /*y*/, tcbase::MouseButton /*button*/) {
         dragging_ = false;
+        pan_gesture_.reset();
     }
 
     bool PlotEngine3D::on_mouse_wheel(float /*x*/, float /*y*/, float dy) {

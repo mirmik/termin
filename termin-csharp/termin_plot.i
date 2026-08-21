@@ -3,6 +3,8 @@
 
 %{
 #include "tgfx2/enums.hpp"
+#include "termin/geom/rect2.hpp"
+#include "termin/geom/vec2.hpp"
 #include "tcplot/styles.hpp"
 #include "tcplot/orbit_camera.hpp"
 #include "tcplot/gpu_host.hpp"
@@ -63,6 +65,22 @@ enum class BackendType {
 };
 }
 
+namespace termin {
+struct Vec2 {
+    double x, y;
+
+    Vec2();
+    Vec2(double x, double y);
+};
+
+struct Rect2 {
+    double x, y, width, height;
+
+    Rect2();
+    Rect2(double x, double y, double width, double height);
+};
+}
+
 namespace tcplot {
 
 struct SrgbColor {
@@ -89,22 +107,24 @@ enum class LineStyle {
 
 class OrbitCamera {
 public:
-    float distance;
-    float azimuth;
-    float elevation;
-    float fov_y;
-    float near;
-    float far;
-    float min_distance;
-    float max_distance;
-    float min_elevation;
-    float max_elevation;
+    double distance;
+    double azimuth;
+    double elevation;
+    double fov_y;
+    double near;
+    double far;
+    double min_distance;
+    double max_distance;
+    double min_elevation;
+    double max_elevation;
 
     OrbitCamera();
 
-    void orbit(float d_azimuth, float d_elevation);
-    void zoom(float factor);
-    void pan(float dx, float dy);
+    void orbit(double d_azimuth, double d_elevation);
+    void zoom(double factor);
+    bool pan(const termin::Vec2& from_position,
+             const termin::Vec2& to_position,
+             const termin::Rect2& viewport);
 };
 
 class GpuHost {

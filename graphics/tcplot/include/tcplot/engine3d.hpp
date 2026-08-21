@@ -62,6 +62,7 @@ namespace tcplot {
         bool dirty_ = true, dragging_ = false;
         tcbase::MouseButton drag_button_{tcbase::MouseButton::LEFT};
         float drag_start_x_ = 0.0f, drag_start_y_ = 0.0f;
+        std::optional<termin::OrbitCameraPan> pan_gesture_;
         bool has_marker_ = false;
         double marker_x_ = 0.0, marker_y_ = 0.0, marker_z_ = 0.0;
 
