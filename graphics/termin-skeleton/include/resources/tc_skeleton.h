@@ -1,6 +1,8 @@
 // tc_skeleton.h - Skeleton data structures for skeletal animation
 #pragma once
 
+#include <geom/tc_mat44.h>
+#include <geom/tc_quat.h>
 #include <tcbase/tc_binding_types.h>
 #include <tcbase/tc_resource.h>
 #include <tcbase/tc_types.h>
@@ -26,24 +28,42 @@ typedef struct tc_bone {
     int32_t index;
     int32_t parent_index; // -1 for root bones
 
-    // 4x4 inverse bind matrix (column-major, project-wide matrix convention)
-    double inverse_bind_matrix[16];
+    // Typed values retain the historical packed binary order. The matrix is
+    // column-major, matching the project-wide tc_mat44 convention.
+    tc_mat44 inverse_bind_matrix;
 
     // Bind pose local transform
-    double bind_translation[3];
-    double bind_rotation[4]; // quaternion [x, y, z, w]
-    double bind_scale[3];
+    tc_vec3 bind_translation;
+    tc_quat bind_rotation;
+    tc_vec3 bind_scale;
 } tc_bone;
 
-// Non-owning input for transactional bulk skeleton replacement.
+// Owned transform values for transactional bulk skeleton replacement. Only
+// name is borrowed for the duration of tc_skeleton_replace_bones().
 typedef struct tc_skeleton_bone_desc {
     const char* name;
     int32_t parent_index;
-    const double* inverse_bind_matrix; // 16 column-major values
-    const double* bind_translation;    // 3 values
-    const double* bind_rotation;       // quaternion xyzw, 4 values
-    const double* bind_scale;          // 3 values
+    tc_mat44 inverse_bind_matrix;
+    tc_vec3 bind_translation;
+    tc_quat bind_rotation;
+    tc_vec3 bind_scale;
 } tc_skeleton_bone_desc;
+
+#ifdef __cplusplus
+static_assert(sizeof(tc_bone) == 280, "tc_bone packed ABI size changed");
+static_assert(alignof(tc_bone) == alignof(double), "tc_bone packed ABI alignment changed");
+static_assert(offsetof(tc_bone, inverse_bind_matrix) == 72, "tc_bone inverse-bind offset changed");
+static_assert(offsetof(tc_bone, bind_translation) == 200, "tc_bone translation offset changed");
+static_assert(offsetof(tc_bone, bind_rotation) == 224, "tc_bone rotation offset changed");
+static_assert(offsetof(tc_bone, bind_scale) == 256, "tc_bone scale offset changed");
+#else
+_Static_assert(sizeof(tc_bone) == 280, "tc_bone packed ABI size changed");
+_Static_assert(_Alignof(tc_bone) == _Alignof(double), "tc_bone packed ABI alignment changed");
+_Static_assert(offsetof(tc_bone, inverse_bind_matrix) == 72, "tc_bone inverse-bind offset changed");
+_Static_assert(offsetof(tc_bone, bind_translation) == 200, "tc_bone translation offset changed");
+_Static_assert(offsetof(tc_bone, bind_rotation) == 224, "tc_bone rotation offset changed");
+_Static_assert(offsetof(tc_bone, bind_scale) == 256, "tc_bone scale offset changed");
+#endif
 
 // ============================================================================
 // Skeleton data
@@ -52,10 +72,10 @@ typedef struct tc_skeleton_bone_desc {
 typedef struct tc_skeleton {
     tc_resource_header header; // common resource fields
 
-    tc_bone* bones; // array of bones (owned, malloc'd)
+    const tc_bone* bones; // immutable array of bones (owned, malloc'd)
     size_t bone_count;
 
-    int32_t* root_indices; // indices of root bones (owned, malloc'd)
+    const int32_t* root_indices; // immutable root indices (owned, malloc'd)
     size_t root_count;
 } tc_skeleton;
 
@@ -71,26 +91,10 @@ static inline void tc_bone_init(tc_bone* bone) {
     bone->index = 0;
     bone->parent_index = -1;
 
-    // Identity matrix
-    for (int i = 0; i < 16; i++)
-        bone->inverse_bind_matrix[i] = 0.0;
-    bone->inverse_bind_matrix[0] = 1.0;
-    bone->inverse_bind_matrix[5] = 1.0;
-    bone->inverse_bind_matrix[10] = 1.0;
-    bone->inverse_bind_matrix[15] = 1.0;
-
-    bone->bind_translation[0] = 0.0;
-    bone->bind_translation[1] = 0.0;
-    bone->bind_translation[2] = 0.0;
-
-    bone->bind_rotation[0] = 0.0;
-    bone->bind_rotation[1] = 0.0;
-    bone->bind_rotation[2] = 0.0;
-    bone->bind_rotation[3] = 1.0;
-
-    bone->bind_scale[0] = 1.0;
-    bone->bind_scale[1] = 1.0;
-    bone->bind_scale[2] = 1.0;
+    bone->inverse_bind_matrix = tc_mat44_identity();
+    bone->bind_translation = tc_vec3_zero();
+    bone->bind_rotation = tc_quat_identity();
+    bone->bind_scale = tc_vec3_one();
 }
 
 static inline bool tc_bone_is_root(const tc_bone* bone) {

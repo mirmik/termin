@@ -20,7 +20,6 @@ include(TerminRpath)
 
 set(TERMIN_SKELETON_SOURCES
     src/termin_skeleton_version.cpp
-    src/skeleton_data.cpp
     src/skeleton_instance.cpp
     src/tc_skeleton_registry.c)
 if(TERMIN_SKELETON_BUILD_SHARED)
@@ -38,13 +37,6 @@ endif()
 
 if(TERMIN_BUILD_TESTS)
     enable_testing()
-
-    add_executable(termin_skeleton_data_test tests/test_skeleton_data.cpp)
-    target_include_directories(termin_skeleton_data_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
-    )
-    target_link_libraries(termin_skeleton_data_test PRIVATE termin_skeleton)
-    add_test(NAME termin_skeleton_data_test COMMAND termin_skeleton_data_test)
 
     add_executable(termin_skeleton_instance_test tests/test_skeleton_instance.cpp)
     target_include_directories(termin_skeleton_instance_test PRIVATE

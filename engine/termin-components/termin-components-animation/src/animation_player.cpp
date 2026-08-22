@@ -169,9 +169,9 @@ namespace termin {
             return;
         }
 
-        tc_skeleton* skel = nullptr;
+        const tc_skeleton* skel = nullptr;
         if (SkeletonInstance* skel_inst = target_skeleton()) {
-            skel = skel_inst->_skeleton;
+            skel = skel_inst->skeleton();
         }
 
         if (anim->track_count > 0) {

@@ -74,7 +74,9 @@ wrappers. Их bodies либо обязаны быть видны в загол�
   `document_snapshot.hpp` — ownership, move, serialization/restore и snapshot
   lookup перенесены в `src/document.cpp` и `src/document_snapshot.cpp`.
 - `termin-skeleton/include/termin/skeleton/skeleton_data.hpp` — constructors и
-  rebuild name/root indexes перенесены в `src/skeleton_data.cpp`.
+  rebuild name/root indexes были перенесены в `src/skeleton_data.cpp`; позднее
+  эта неиспользуемая параллельная skeleton-модель удалена в пользу canonical
+  registry/runtime API.
 - `termin-lighting/include/termin/lighting/light.hpp` — runtime sampling и
   attenuation перенесены в `cpp/light.cpp`; `termin-lighting` стал exported
   shared library.

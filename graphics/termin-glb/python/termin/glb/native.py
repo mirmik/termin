@@ -496,6 +496,7 @@ class NativeGLBDocument:
         normalize_scale: bool = False,
     ):
         """Publish one prepared skin through the transactional bulk API."""
+        from termin.geombase import Mat44, Quat, Vec3
         from termin.skeleton import TcSkeleton
 
         prepared = self.prepared_rig_data(
@@ -519,10 +520,12 @@ class NativeGLBDocument:
                 {
                     "name": node["name"],
                     "parent_index": -1 if ancestor is None else joint_to_bone[ancestor],
-                    "inverse_bind_matrix": skin["inverse_bind_matrices"][bone_index].T.reshape(-1),
-                    "bind_translation": node["translation"],
-                    "bind_rotation": node["rotation"],
-                    "bind_scale": node["scale"],
+                    "inverse_bind_matrix": Mat44.from_column_major(
+                        skin["inverse_bind_matrices"][bone_index].T.reshape(-1)
+                    ),
+                    "bind_translation": Vec3(node["translation"]),
+                    "bind_rotation": Quat(node["rotation"]),
+                    "bind_scale": Vec3(node["scale"]),
                 }
             )
 

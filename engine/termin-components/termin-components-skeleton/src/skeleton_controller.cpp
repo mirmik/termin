@@ -70,7 +70,7 @@ namespace termin {
         // Ensure skeleton is loaded (trigger lazy loading if needed)
         skeleton.ensure_loaded();
 
-        tc_skeleton* skel = skeleton.get();
+        const tc_skeleton* skel = skeleton.get();
         if (_skeleton_instance == nullptr && skel != nullptr) {
             if (!bone_entities.empty()) {
                 _skeleton_instance = std::make_unique<SkeletonInstance>(skel);

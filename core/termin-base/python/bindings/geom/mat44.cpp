@@ -41,6 +41,11 @@ namespace termin {
             .def("with_translation", nb::overload_cast<double, double, double>(&Mat44::with_translation, nb::const_))
             .def_static("identity", &Mat44::identity)
             .def_static("zero", &Mat44::zero)
+            .def_static(
+                "from_column_major",
+                [](nb::object values) { return column_major_sequence_to_mat44(values); },
+                nb::arg("values"),
+                "Construct from exactly 16 flat column-major values")
             .def_static("translation", nb::overload_cast<const Vec3&>(&Mat44::translation))
             .def_static("translation", nb::overload_cast<double, double, double>(&Mat44::translation))
             .def_static("scale", nb::overload_cast<const Vec3&>(&Mat44::scale))
@@ -140,6 +145,14 @@ namespace termin {
                          for (int col = 0; col < 4; ++col)
                              data[row * 4 + col] = mat(col, row);
                      return mat44_row_tuple(data);
+                 })
+            .def("to_column_major",
+                 [](const Mat44& mat) {
+                     nb::list values;
+                     for (double value : mat.data) {
+                         values.append(value);
+                     }
+                     return values;
                  })
             .def("tolist",
                  [](const Mat44& mat) {

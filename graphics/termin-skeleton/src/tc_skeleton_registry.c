@@ -1,6 +1,5 @@
 #include "resources/tc_skeleton_registry.h"
 
-#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,11 +21,11 @@ static void skeleton_free_data(tc_skeleton* skeleton) {
     if (!skeleton)
         return;
     if (skeleton->bones) {
-        free(skeleton->bones);
+        free((void*)skeleton->bones);
         skeleton->bones = NULL;
     }
     if (skeleton->root_indices) {
-        free(skeleton->root_indices);
+        free((void*)skeleton->root_indices);
         skeleton->root_indices = NULL;
     }
     skeleton->bone_count = 0;
@@ -282,70 +281,23 @@ bool tc_skeleton_release(tc_skeleton* skeleton) {
     return false;
 }
 
-tc_bone* tc_skeleton_alloc_bones(tc_skeleton* skeleton, size_t count) {
-    if (!skeleton)
-        return NULL;
-
-    if (skeleton->bones) {
-        free(skeleton->bones);
-        skeleton->bones = NULL;
-    }
-    if (skeleton->root_indices) {
-        free(skeleton->root_indices);
-        skeleton->root_indices = NULL;
-    }
-    skeleton->bone_count = 0;
-    skeleton->root_count = 0;
-
-    if (count == 0)
-        return NULL;
-
-    skeleton->bones = (tc_bone*)calloc(count, sizeof(tc_bone));
-    if (!skeleton->bones) {
-        tc_log_error("tc_skeleton_alloc_bones: allocation failed");
-        return NULL;
-    }
-
-    skeleton->bone_count = count;
-    for (size_t i = 0; i < count; i++) {
-        tc_bone_init(&skeleton->bones[i]);
-        skeleton->bones[i].index = (int32_t)i;
-    }
-
-    skeleton->header.is_loaded = 1;
-    skeleton->header.version++;
-    return skeleton->bones;
-}
-
 static bool skeleton_desc_values_valid(const tc_skeleton_bone_desc* bone, size_t index) {
-    if (!bone->inverse_bind_matrix || !bone->bind_translation || !bone->bind_rotation || !bone->bind_scale) {
-        tc_log_error("tc_skeleton_replace_bones: bone[%zu] has incomplete transform storage", index);
+    if (!tc_mat44_is_finite(bone->inverse_bind_matrix)) {
+        tc_log_error("tc_skeleton_replace_bones: bone[%zu] inverse bind matrix is not finite", index);
         return false;
     }
-    for (size_t i = 0; i < 16; ++i) {
-        if (!isfinite(bone->inverse_bind_matrix[i])) {
-            tc_log_error("tc_skeleton_replace_bones: bone[%zu] inverse bind matrix is not finite", index);
-            return false;
-        }
-    }
-    tc_quat rotation =
-        TC_QUAT(bone->bind_rotation[0], bone->bind_rotation[1], bone->bind_rotation[2], bone->bind_rotation[3]);
-    for (size_t i = 0; i < 4; ++i) {
-        if (!isfinite(bone->bind_rotation[i])) {
-            tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation is not finite", index);
-            return false;
-        }
+    if (!tc_quat_is_finite(bone->bind_rotation)) {
+        tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation is not finite", index);
+        return false;
     }
     tc_quat normalized;
-    if (!tc_quat_try_normalized(rotation, 0.0, &normalized)) {
+    if (!tc_quat_try_normalized(bone->bind_rotation, 0.0, &normalized)) {
         tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation has zero length", index);
         return false;
     }
-    for (size_t i = 0; i < 3; ++i) {
-        if (!isfinite(bone->bind_translation[i]) || !isfinite(bone->bind_scale[i])) {
-            tc_log_error("tc_skeleton_replace_bones: bone[%zu] TRS is not finite", index);
-            return false;
-        }
+    if (!tc_vec3_is_finite(bone->bind_translation) || !tc_vec3_is_finite(bone->bind_scale)) {
+        tc_log_error("tc_skeleton_replace_bones: bone[%zu] TRS is not finite", index);
+        return false;
     }
     return true;
 }
@@ -407,28 +359,23 @@ bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_des
             strncpy(destination->name, source->name, TC_BONE_NAME_MAX - 1);
             destination->name[TC_BONE_NAME_MAX - 1] = '\0';
         }
-        memcpy(destination->inverse_bind_matrix, source->inverse_bind_matrix, 16 * sizeof(double));
-        memcpy(destination->bind_translation, source->bind_translation, 3 * sizeof(double));
+        destination->inverse_bind_matrix = source->inverse_bind_matrix;
+        destination->bind_translation = source->bind_translation;
         tc_quat normalized_rotation;
-        const tc_quat source_rotation = TC_QUAT(
-            source->bind_rotation[0], source->bind_rotation[1], source->bind_rotation[2], source->bind_rotation[3]);
-        if (!tc_quat_try_normalized(source_rotation, 0.0, &normalized_rotation)) {
+        if (!tc_quat_try_normalized(source->bind_rotation, 0.0, &normalized_rotation)) {
             tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation changed during replacement", i);
             free(replacement);
             free(roots);
             return false;
         }
-        destination->bind_rotation[0] = normalized_rotation.x;
-        destination->bind_rotation[1] = normalized_rotation.y;
-        destination->bind_rotation[2] = normalized_rotation.z;
-        destination->bind_rotation[3] = normalized_rotation.w;
-        memcpy(destination->bind_scale, source->bind_scale, 3 * sizeof(double));
+        destination->bind_rotation = normalized_rotation;
+        destination->bind_scale = source->bind_scale;
         if (source->parent_index < 0)
             roots[root_index++] = (int32_t)i;
     }
 
-    free(skeleton->bones);
-    free(skeleton->root_indices);
+    free((void*)skeleton->bones);
+    free((void*)skeleton->root_indices);
     skeleton->bones = replacement;
     skeleton->bone_count = count;
     skeleton->root_indices = roots;
@@ -436,12 +383,6 @@ bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_des
     skeleton->header.is_loaded = 1;
     skeleton->header.version++;
     return true;
-}
-
-tc_bone* tc_skeleton_get_bone(tc_skeleton* skeleton, size_t index) {
-    if (!skeleton || index >= skeleton->bone_count)
-        return NULL;
-    return &skeleton->bones[index];
 }
 
 const tc_bone* tc_skeleton_get_bone_const(const tc_skeleton* skeleton, size_t index) {
@@ -460,41 +401,6 @@ int tc_skeleton_find_bone(const tc_skeleton* skeleton, const char* name) {
         }
     }
     return -1;
-}
-
-void tc_skeleton_rebuild_roots(tc_skeleton* skeleton) {
-    if (!skeleton)
-        return;
-
-    if (skeleton->root_indices) {
-        free(skeleton->root_indices);
-        skeleton->root_indices = NULL;
-    }
-    skeleton->root_count = 0;
-
-    if (!skeleton->bones || skeleton->bone_count == 0)
-        return;
-
-    size_t root_count = 0;
-    for (size_t i = 0; i < skeleton->bone_count; i++) {
-        if (tc_bone_is_root(&skeleton->bones[i])) {
-            root_count++;
-        }
-    }
-    if (root_count == 0)
-        return;
-
-    skeleton->root_indices = (int32_t*)malloc(root_count * sizeof(int32_t));
-    if (!skeleton->root_indices)
-        return;
-
-    size_t idx = 0;
-    for (size_t i = 0; i < skeleton->bone_count; i++) {
-        if (tc_bone_is_root(&skeleton->bones[i])) {
-            skeleton->root_indices[idx++] = (int32_t)i;
-        }
-    }
-    skeleton->root_count = root_count;
 }
 
 typedef struct {

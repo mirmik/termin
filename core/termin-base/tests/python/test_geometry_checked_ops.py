@@ -153,6 +153,16 @@ def test_matrix_compose_checks_and_normalizes_rotation(matrix_type):
         matrix_type.compose(translation, zero, scale, 0.0)
 
 
+def test_mat44_named_column_major_adapter_preserves_storage_convention():
+    values = tuple(float(index + 1) for index in range(16))
+    matrix = Mat44.from_column_major(values)
+
+    assert matrix[2, 1] == 10.0
+    assert matrix.to_column_major() == list(values)
+    with pytest.raises(ValueError, match="exactly 16 components"):
+        Mat44.from_column_major(values[:-1])
+
+
 def test_affine_quaternion_factories_are_checked_at_the_python_boundary():
     unit = Quat.from_axis_angle(Vec3.unit_z(), 0.73)
     scaled = Quat(unit.x * 11.0, unit.y * 11.0, unit.z * 11.0, unit.w * 11.0)

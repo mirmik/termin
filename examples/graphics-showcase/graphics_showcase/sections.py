@@ -352,7 +352,7 @@ def _animated_skinned_glb(application) -> SectionContent:
     """Load a real GLB closure and present its sampled skeletal pose."""
 
     from termin.animation import clip_from_glb
-    from termin.geombase import SrgbColor
+    from termin.geombase import Mat44, Quat, SrgbColor, Vec3
     from termin.glb import load_glb_file
     from termin.skeleton import TcSkeleton
 
@@ -367,14 +367,14 @@ def _animated_skinned_glb(application) -> SectionContent:
             raise RuntimeError("showcase GLB lost its skin or animation")
 
         skeleton = TcSkeleton.create("ShowcaseArmature", str(uuid.uuid4()))
-        identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+        identity = Mat44.identity()
         skeleton.set_bones([
             {"name": "Root", "parent_index": -1, "inverse_bind_matrix": identity,
-             "bind_translation": (0, 0, 0), "bind_rotation": (0, 0, 0, 1),
-             "bind_scale": (1, 1, 1)},
+             "bind_translation": Vec3.zero(), "bind_rotation": Quat.identity(),
+             "bind_scale": Vec3(1, 1, 1)},
             {"name": "Tip", "parent_index": 0, "inverse_bind_matrix": identity,
-             "bind_translation": (0, 1, 0), "bind_rotation": (0, 0, 0, 1),
-             "bind_scale": (1, 1, 1)},
+             "bind_translation": Vec3(0, 1, 0), "bind_rotation": Quat.identity(),
+             "bind_scale": Vec3(1, 1, 1)},
         ])
         clip = clip_from_glb(loaded.animations[0], str(uuid.uuid4()))
         channel = loaded.animations[0].channels[0]

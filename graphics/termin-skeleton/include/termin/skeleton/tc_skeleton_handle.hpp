@@ -102,14 +102,14 @@ namespace termin {
         }
 
         // Bone access
-        tc_bone* bones() const {
+        const tc_bone* bones() const {
             tc_skeleton* s = get();
             return s ? s->bones : nullptr;
         }
 
-        tc_bone* get_bone(size_t index) const {
+        const tc_bone* get_bone(size_t index) const {
             tc_skeleton* s = get();
-            return s ? tc_skeleton_get_bone(s, index) : nullptr;
+            return s ? tc_skeleton_get_bone_const(s, index) : nullptr;
         }
 
         int find_bone(const char* bone_name) const {
@@ -128,33 +128,14 @@ namespace termin {
             return s ? s->root_count : 0;
         }
 
-        void bump_version() {
-            if (tc_skeleton* s = get()) {
-                s->header.version++;
-            }
-        }
-
         // Trigger lazy load
         bool ensure_loaded() {
             return tc_skeleton_ensure_loaded(handle);
         }
 
-        // Allocate bones
-        tc_bone* alloc_bones(size_t count) {
-            tc_skeleton* s = get();
-            return s ? tc_skeleton_alloc_bones(s, count) : nullptr;
-        }
-
         bool replace_bones(const tc_skeleton_bone_desc* bones, size_t count) {
             tc_skeleton* s = get();
             return s ? tc_skeleton_replace_bones(s, bones, count) : false;
-        }
-
-        // Rebuild root indices after modifying bones
-        void rebuild_roots() {
-            if (tc_skeleton* s = get()) {
-                tc_skeleton_rebuild_roots(s);
-            }
         }
 
         // Get by UUID from registry

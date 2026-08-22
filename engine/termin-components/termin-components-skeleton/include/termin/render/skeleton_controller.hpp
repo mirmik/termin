@@ -43,7 +43,7 @@ namespace termin {
         /**
          * Get tc_skeleton pointer.
          */
-        tc_skeleton* get_skeleton() const {
+        const tc_skeleton* get_skeleton() const {
             return skeleton.get();
         }
 

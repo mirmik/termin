@@ -4,6 +4,7 @@ import struct
 import numpy as np
 import pytest
 
+from termin.geombase import Mat44
 from termin.glb import loader as glb_loader_module
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.glb_adapters.asset import GLBAsset
@@ -304,9 +305,13 @@ def test_legacy_skeleton_publisher_uses_column_major_inverse_bind_storage():
     skeleton = TcSkeleton.create("LegacyColumnMajor")
 
     assert _populate_tc_skeleton_from_glb(skeleton, skin, [node])
-    assert skeleton.bones[0]["inverse_bind_matrix"][12:15] == pytest.approx(
-        (-2.0, -3.0, -4.0)
-    )
+    inverse_bind_matrix = skeleton.bones[0]["inverse_bind_matrix"]
+    assert isinstance(inverse_bind_matrix, Mat44)
+    assert (
+        inverse_bind_matrix[3, 0],
+        inverse_bind_matrix[3, 1],
+        inverse_bind_matrix[3, 2],
+    ) == pytest.approx((-2.0, -3.0, -4.0))
 
 
 def test_load_gltf_multi_primitive_mesh_as_submeshes(tmp_path):

@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     bones[0].parent_index = -1;
     bones[1].index = 1;
     bones[1].parent_index = 0;
-    bones[1].bind_translation[1] = 1.0;
+    bones[1].bind_translation.y = 1.0;
     tc_skeleton skeleton{};
     skeleton.bones = bones;
     skeleton.bone_count = 2;
