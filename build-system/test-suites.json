@@ -835,6 +835,14 @@
       ]
     },
     {
+      "id": "termin-mesh-tests-native",
+      "module": "termin-mesh",
+      "executor": "ctest",
+      "roots": [
+        "graphics/termin-mesh/tests"
+      ]
+    },
+    {
       "id": "termin-visual-scene-tests-native",
       "module": "termin-visual-scene",
       "executor": "ctest",

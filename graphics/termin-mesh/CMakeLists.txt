@@ -59,6 +59,24 @@ if(TERMIN_BUILD_PYTHON)
     add_subdirectory(python)
 endif()
 
+if(TERMIN_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_mesh_raycast_test
+        tests/test_tc_mesh_raycast.c
+    )
+    set_target_properties(termin_mesh_raycast_test PROPERTIES
+        LINKER_LANGUAGE CXX
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    target_include_directories(termin_mesh_raycast_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_mesh_raycast_test PRIVATE termin_mesh)
+    termin_set_rpath_test(termin_mesh_raycast_test)
+    add_test(NAME termin_mesh_raycast_test COMMAND termin_mesh_raycast_test)
+endif()
+
 include(GNUInstallDirs)
 
 install(TARGETS termin_mesh
@@ -97,3 +115,7 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_meshConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_mesh
 )
+
+if(COMMAND termin_label_tests_in_directory)
+    termin_label_tests_in_directory("termin-mesh")
+endif()

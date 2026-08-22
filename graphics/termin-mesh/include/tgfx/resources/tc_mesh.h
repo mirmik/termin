@@ -174,6 +174,11 @@ TGFX_API bool tc_mesh_get_position3f(const tc_mesh* mesh, uint32_t vertex_index,
 TGFX_API bool
 tc_mesh_get_triangle3f(const tc_mesh* mesh, uint32_t triangle_index, tc_vec3f* out_a, tc_vec3f* out_b, tc_vec3f* out_c);
 
+// Finds the nearest triangle hit in the closed [t_min, t_max] interval. The
+// direction is normalized internally, so t is a mesh-local distance. All ray
+// components and range endpoints must be finite, and the direction must be
+// non-degenerate. On false, out_hit is left unchanged; on true, all floating
+// point fields in out_hit are finite.
 TGFX_API bool tc_mesh_raycast(const tc_mesh* mesh, const tc_mesh_ray* ray, tc_mesh_hit* out_hit);
 
 // Finds the nearest boundary edge of the connected surface that contains
