@@ -32,26 +32,13 @@ namespace termin::visual::detail {
     }
 
     inline std::optional<double> ray_triangle(tc_ray3 ray, termin::Vec3f af, termin::Vec3f bf, termin::Vec3f cf) {
-        const termin::Vec3 a = af.to_double();
-        const termin::Vec3 b = bf.to_double();
-        const termin::Vec3 c = cf.to_double();
-        const termin::Vec3 edge1 = b - a;
-        const termin::Vec3 edge2 = c - a;
-        const termin::Vec3 p = ray.direction.cross(edge2);
-        const double determinant = edge1.dot(p);
-        if (std::abs(determinant) <= 1.0e-12)
+        termin::RayTriangleHit hit;
+        if (!termin::try_intersect_ray_triangle(
+                ray, af.to_double(), bf.to_double(), cf.to_double(), hit, true, 1.0e-12) ||
+            hit.ray_parameter <= 0.0) {
             return std::nullopt;
-        const double inverse = 1.0 / determinant;
-        const termin::Vec3 offset = ray.origin - a;
-        const double u = offset.dot(p) * inverse;
-        if (u < 0.0 || u > 1.0)
-            return std::nullopt;
-        const termin::Vec3 q = offset.cross(edge1);
-        const double v = ray.direction.dot(q) * inverse;
-        if (v < 0.0 || u + v > 1.0)
-            return std::nullopt;
-        const double distance = edge2.dot(q) * inverse;
-        return distance > 0.0 && std::isfinite(distance) ? std::optional<double>(distance) : std::nullopt;
+        }
+        return hit.ray_parameter;
     }
 
     template <typename Position>

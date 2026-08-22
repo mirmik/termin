@@ -325,8 +325,7 @@ namespace termin {
         return world2d_quad_bounds(rect, to_double_matrix(get_model_matrix(entity())));
     }
 
-    bool
-    SpriteRenderer2D::ray_intersects(const Vec3& ray_origin, const Vec3& ray_direction, double* out_distance) const {
+    bool SpriteRenderer2D::ray_intersects(const Ray3& ray, double* out_ray_parameter) const {
         TcSpriteAsset asset;
         World2DQuadRect rect;
         float u0 = 0.0f;
@@ -336,8 +335,7 @@ namespace termin {
         if (!resolved_quad(asset, rect, u0, v0, u1, v1)) {
             return false;
         }
-        return ray_intersects_world2d_quad(
-            ray_origin, ray_direction, rect, to_double_matrix(get_model_matrix(entity())), out_distance);
+        return ray_intersects_world2d_quad(ray, rect, to_double_matrix(get_model_matrix(entity())), out_ray_parameter);
     }
 
 } // namespace termin

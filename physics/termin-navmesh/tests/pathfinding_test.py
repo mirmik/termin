@@ -357,3 +357,15 @@ class RayTriangleIntersectTest(unittest.TestCase):
 
         t = _ray_triangle_intersect(origin, direction, v0, v1, v2)
         self.assertIsNone(t)
+
+    def test_ray_origin_on_triangle_is_rejected_as_self_hit(self):
+        """Navmesh hot loop keeps its domain-specific positive-t threshold."""
+        from termin.navmesh.pathfinding_world_component import _ray_triangle_intersect
+
+        v0 = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+        v1 = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+        v2 = np.array([0.5, 0.0, 1.0], dtype=np.float64)
+        origin = np.array([0.5, 0.0, 0.3], dtype=np.float64)
+        direction = np.array([0.0, -1.0, 0.0], dtype=np.float64)
+
+        self.assertIsNone(_ray_triangle_intersect(origin, direction, v0, v1, v2))

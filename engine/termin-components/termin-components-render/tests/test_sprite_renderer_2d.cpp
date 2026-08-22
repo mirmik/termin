@@ -75,9 +75,12 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
     CHECK_EQ(std::string(uuid->data.s), "sprite-renderer-test-sprite");
     tc_value_free(&data);
 
-    double distance = 0.0;
-    CHECK(renderer->ray_intersects({0.0, -2.0, 0.0}, {0.0, 1.0, 0.0}, &distance));
-    CHECK(std::abs(distance - 2.0) < 1.0e-6);
+    double ray_parameter = 0.0;
+    termin::Ray3 ray;
+    ray.origin = {0.0, -2.0, 0.0};
+    ray.direction = {0.0, 2.0, 0.0};
+    CHECK(renderer->ray_intersects(ray, &ray_parameter));
+    CHECK(std::abs(ray_parameter - 1.0) < 1.0e-6);
 
     scene.destroy();
     texture = {};

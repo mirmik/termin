@@ -487,6 +487,10 @@ bool tc_mesh_raycast(const tc_mesh* mesh, const tc_mesh_ray* ray, tc_mesh_hit* o
     float best_t = t_max;
     tc_mesh_hit best_hit;
     memset(&best_hit, 0, sizeof(best_hit));
+    // This stays a dedicated float C-ABI/storage specialization rather than
+    // calling the double-precision Ray3 helper per packed vertex. Besides the
+    // hot-loop representation, this API owns t_min/t_max and returns position,
+    // normal, barycentric coordinates, triangle index and source indices.
     bool found = false;
 
     const size_t triangle_count = mesh->index_count / 3;

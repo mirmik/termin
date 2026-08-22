@@ -402,38 +402,24 @@ namespace termin {
                 return best;
             }
 
-            // Möller-Trumbore for each face. RayHit::distance is the distance between
-            // the ray and collider points, so all real intersections have distance=0.
-            // Keep the ray parameter separately to return the first surface hit.
+            // Checked Möller-Trumbore for each face. RayHit::distance is the distance
+            // between the ray and collider points, so all real intersections have
+            // distance=0. Keep the ray parameter separately to return the first surface hit.
+            constexpr double triangle_epsilon = 1.0e-8;
             bool any_hit = false;
-            double best_t = std::numeric_limits<double>::max();
+            double best_ray_parameter = std::numeric_limits<double>::max();
             for (const auto& face : faces) {
-                Vec3 A = vertex_world(face.a);
-                Vec3 B = vertex_world(face.b);
-                Vec3 C = vertex_world(face.c);
+                const Vec3 a = vertex_world(face.a);
+                const Vec3 b = vertex_world(face.b);
+                const Vec3 c = vertex_world(face.c);
 
-                Vec3 AB = B - A;
-                Vec3 AC = C - A;
-                Vec3 h = ray.direction.cross(AC);
-                double det = AB.dot(h);
-                if (std::abs(det) < 1e-14)
+                RayTriangleHit triangle_hit;
+                if (!try_intersect_ray_triangle(ray, a, b, c, triangle_hit, true, triangle_epsilon))
                     continue;
 
-                double inv_det = 1.0 / det;
-                Vec3 s = ray.origin - A;
-                double u = inv_det * s.dot(h);
-                if (u < -1e-8 || u > 1.0 + 1e-8)
-                    continue;
-
-                Vec3 q = s.cross(AB);
-                double v = inv_det * ray.direction.dot(q);
-                if (v < -1e-8 || u + v > 1.0 + 1e-8)
-                    continue;
-
-                double t = inv_det * AC.dot(q);
-                if (t >= 0 && t < best_t) {
-                    best_t = t;
-                    best.point_on_ray = ray.point_at(t);
+                if (triangle_hit.ray_parameter < best_ray_parameter) {
+                    best_ray_parameter = triangle_hit.ray_parameter;
+                    best.point_on_ray = ray.point_at(triangle_hit.ray_parameter);
                     best.point_on_collider = best.point_on_ray;
                     best.distance = 0.0;
                     any_hit = true;

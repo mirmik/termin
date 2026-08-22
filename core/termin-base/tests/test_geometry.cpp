@@ -358,6 +358,118 @@ TEST_CASE("Ray3 plane intersection is checked and leaves failed output unchanged
     CHECK(point == termin::Vec3::zero());
 }
 
+TEST_CASE("Ray3 triangle intersection returns a ray parameter and closed barycentric coordinates") {
+    const termin::Vec3 a{0.0, 0.0, 0.0};
+    const termin::Vec3 b{1.0, 0.0, 0.0};
+    const termin::Vec3 c{0.0, 1.0, 0.0};
+    termin::RayTriangleHit hit{91.0, {92.0, 93.0, 94.0}, {95.0, 96.0, 97.0}};
+
+    const termin::Ray3 face_ray{{0.2, 0.3, 1.0}, {0.0, 0.0, -2.0}};
+    REQUIRE(termin::try_intersect_ray_triangle(face_ray, a, b, c, hit));
+    CHECK(std::abs(hit.ray_parameter - 1.0) < 1.0e-12);
+    CHECK((hit.barycentric - termin::Vec3{0.5, 0.2, 0.3}).norm() < 1.0e-12);
+    CHECK(hit.normal == termin::Vec3::unit_z());
+    CHECK((face_ray.point_at(hit.ray_parameter) - termin::Vec3{0.2, 0.3, 0.0}).norm() < 1.0e-12);
+
+    REQUIRE(termin::try_intersect_ray_triangle(face_ray, a, c, b, hit));
+    CHECK((hit.barycentric - termin::Vec3{0.5, 0.3, 0.2}).norm() < 1.0e-12);
+    CHECK(hit.normal == termin::Vec3::down());
+
+    REQUIRE(termin::try_intersect_ray_triangle({{0.5, 0.0, 1.0}, termin::Vec3::down()}, a, b, c, hit));
+    CHECK((hit.barycentric - termin::Vec3{0.5, 0.5, 0.0}).norm() < 1.0e-12);
+    REQUIRE(termin::try_intersect_ray_triangle({a, termin::Vec3::up()}, a, b, c, hit));
+    CHECK(hit.ray_parameter == 0.0);
+    CHECK(hit.barycentric == termin::Vec3(1.0, 0.0, 0.0));
+
+    termin::Ray3 parameterized_ray;
+    parameterized_ray.origin = {0.2, 0.3, 1.0};
+    parameterized_ray.direction = {0.0, 0.0, -0.25};
+    REQUIRE(termin::try_intersect_ray_triangle(parameterized_ray, a, b, c, hit));
+    CHECK(std::abs(hit.ray_parameter - 4.0) < 1.0e-12);
+    CHECK((parameterized_ray.point_at(hit.ray_parameter) - termin::Vec3{0.2, 0.3, 0.0}).norm() < 1.0e-12);
+
+    const termin::Ray3 behind_ray{{0.2, 0.3, -1.0}, termin::Vec3::up()};
+    const termin::Vec3 behind_a{0.0, 0.0, -2.0};
+    const termin::Vec3 behind_b{1.0, 0.0, -2.0};
+    const termin::Vec3 behind_c{0.0, 1.0, -2.0};
+    CHECK_FALSE(termin::try_intersect_ray_triangle(behind_ray, behind_a, behind_b, behind_c, hit));
+    REQUIRE(termin::try_intersect_ray_triangle(behind_ray, behind_a, behind_b, behind_c, hit, false));
+    CHECK(std::abs(hit.ray_parameter + 1.0) < 1.0e-12);
+}
+
+TEST_CASE("Ray3 triangle intersection is scale-aware and leaves failed output unchanged") {
+    const termin::RayTriangleHit sentinel{91.0, {92.0, 93.0, 94.0}, {95.0, 96.0, 97.0}};
+    termin::RayTriangleHit hit = sentinel;
+    const auto rejects_unchanged = [&](const termin::Ray3& ray,
+                                       const termin::Vec3& a,
+                                       const termin::Vec3& b,
+                                       const termin::Vec3& c,
+                                       double epsilon = 1.0e-10) {
+        hit = sentinel;
+        CHECK_FALSE(termin::try_intersect_ray_triangle(ray, a, b, c, hit, true, epsilon));
+        CHECK(hit.ray_parameter == sentinel.ray_parameter);
+        CHECK(hit.barycentric == sentinel.barycentric);
+        CHECK(hit.normal == sentinel.normal);
+    };
+
+    const termin::Vec3 a{0.0, 0.0, 0.0};
+    const termin::Vec3 b{1.0, 0.0, 0.0};
+    const termin::Vec3 c{0.0, 1.0, 0.0};
+    rejects_unchanged({{2.0, 2.0, 1.0}, termin::Vec3::down()}, a, b, c);
+    rejects_unchanged({{0.25, 0.25, 1.0}, termin::Vec3::unit_x()}, a, b, c);
+    rejects_unchanged({{0.25, 0.25, 1.0}, termin::Vec3::down()}, a, b, {2.0, 0.0, 0.0});
+    rejects_unchanged({{0.25, 0.25, 1.0}, termin::Vec3::down()}, a, b, {0.0, 1.0e-12, 0.0});
+    rejects_unchanged({{0.2, 0.3, 0.0}, {1.0, 0.0, -0.5e-6}}, a, b, c, 1.0e-6);
+    REQUIRE(termin::try_intersect_ray_triangle({{0.2, 0.3, 0.0}, {1.0, 0.0, -2.0e-6}}, a, b, c, hit, true, 1.0e-6));
+    CHECK(hit.ray_parameter == 0.0);
+
+    REQUIRE(
+        termin::try_intersect_ray_triangle({{-0.5e-6, 0.5, 1.0}, termin::Vec3::down()}, a, b, c, hit, true, 1.0e-6));
+    CHECK(hit.barycentric.y == 0.0);
+    rejects_unchanged({{-2.0e-6, 0.5, 1.0}, termin::Vec3::down()}, a, b, c, 1.0e-6);
+
+    REQUIRE(
+        termin::try_intersect_ray_triangle({{0.25, 0.25, 0.5e-6}, termin::Vec3::down()}, a, b, c, hit, true, 1.0e-6));
+    CHECK(hit.ray_parameter > 0.0);
+    CHECK(hit.ray_parameter < 1.0e-6);
+
+    termin::Ray3 invalid_ray{{0.25, 0.25, 1.0}, termin::Vec3::down()};
+    invalid_ray.direction = termin::Vec3::zero();
+    rejects_unchanged(invalid_ray, a, b, c);
+    invalid_ray.direction = {0.0, 0.0, std::numeric_limits<double>::quiet_NaN()};
+    rejects_unchanged(invalid_ray, a, b, c);
+    invalid_ray.origin = {0.25, 0.25, 1.0e-300};
+    invalid_ray.direction = {0.0, 0.0, 1.0e300};
+    rejects_unchanged(invalid_ray, a, b, c);
+    invalid_ray.direction = {0.0, 0.0, -1.0e300};
+    rejects_unchanged(invalid_ray, a, b, c);
+    invalid_ray.origin = {0.2e-20, 0.3e-20, 1.0e-20};
+    invalid_ray.direction = {0.0, 0.0, -1.0e300};
+    rejects_unchanged(invalid_ray, a, {1.0e-20, 0.0, 0.0}, {0.0, 1.0e-20, 0.0});
+    rejects_unchanged(
+        {{0.25, 0.25, 1.0}, termin::Vec3::down()}, {std::numeric_limits<double>::infinity(), 0.0, 0.0}, b, c);
+    rejects_unchanged({{0.25, 0.25, 1.0}, termin::Vec3::down()}, a, b, c, std::numeric_limits<double>::quiet_NaN());
+    rejects_unchanged({{0.25, 0.25, 1.0}, termin::Vec3::down()}, a, b, c, -1.0);
+    rejects_unchanged({{0.25, 0.25, 1.0}, termin::Vec3::down()},
+                      {std::numeric_limits<double>::max(), 0.0, 0.0},
+                      {-std::numeric_limits<double>::max(), 0.0, 0.0},
+                      c);
+
+    for (const double scale : {1.0e-120, 1.0e120}) {
+        const termin::Ray3 ray{{0.2 * scale, 0.3 * scale, scale}, termin::Vec3::down()};
+        REQUIRE(termin::try_intersect_ray_triangle(ray, a, {scale, 0.0, 0.0}, {0.0, scale, 0.0}, hit));
+        CHECK(std::abs(hit.ray_parameter / scale - 1.0) < 1.0e-12);
+        CHECK((hit.barycentric - termin::Vec3{0.5, 0.2, 0.3}).norm() < 1.0e-12);
+    }
+
+    const double world = 1.0e12;
+    const termin::Ray3 large_world_ray{{world + 1.0, world + 1.0, world + 8.0}, termin::Vec3::down()};
+    REQUIRE(termin::try_intersect_ray_triangle(
+        large_world_ray, {world, world, world}, {world + 4.0, world, world}, {world, world + 4.0, world}, hit));
+    CHECK(std::abs(hit.ray_parameter - 8.0) < 1.0e-12);
+    CHECK((hit.barycentric - termin::Vec3{0.5, 0.25, 0.25}).norm() < 1.0e-12);
+}
+
 TEST_CASE("base geometry value types preserve simple construction semantics") {
     static_assert(std::is_standard_layout_v<termin::SrgbColor>);
     static_assert(std::is_same_v<termin::Vec2f, tc_vec2f>);
