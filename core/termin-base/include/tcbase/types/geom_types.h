@@ -660,9 +660,12 @@ struct tc_ray3 {
           direction(0.0, 0.0, 1.0) {}
 
     tc_ray3(const tc_vec3& origin, const tc_vec3& dir)
-        : origin(origin) {
-        double n = dir.norm();
-        direction = (n > 1e-10) ? dir / n : tc_vec3{0.0, 0.0, 1.0};
+        : origin(origin),
+          direction(dir) {
+        const double n = std::hypot(dir.x, dir.y, dir.z);
+        if (dir.is_finite() && std::isfinite(n) && n > 1.0e-10) {
+            direction = dir / n;
+        }
     }
 
     tc_vec3 point_at(double t) const {
@@ -1107,6 +1110,7 @@ struct tc_basis3d {
 
     tc_basis3d operator*(const tc_basis3d& child) const;
     tc_vec3 transform_vector(const tc_vec3& vector) const;
+    bool try_transform_normal(const tc_vec3& normal, tc_vec3& out, double epsilon = 1.0e-12) const;
     double determinant() const;
     bool is_finite() const;
     bool try_inverse(tc_basis3d& out, double epsilon = 1.0e-12) const;
@@ -1140,6 +1144,9 @@ struct tc_affine3d {
     tc_affine3d operator*(const tc_affine3d& child) const;
     tc_vec3 transform_point(const tc_vec3& point) const;
     tc_vec3 transform_vector(const tc_vec3& vector) const;
+    bool try_transform_normal(const tc_vec3& normal, tc_vec3& out, double epsilon = 1.0e-12) const;
+    bool try_inverse_transform_point(const tc_vec3& point, tc_vec3& out, double epsilon = 1.0e-12) const;
+    bool try_inverse_transform_vector(const tc_vec3& vector, tc_vec3& out, double epsilon = 1.0e-12) const;
     double determinant() const;
     bool is_finite() const;
     bool try_inverse(tc_affine3d& out, double epsilon = 1.0e-12) const;

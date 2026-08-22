@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import sqrt
+from math import isfinite
 
 import numpy as np
 
@@ -12,6 +12,7 @@ from tcbase import log
 from termin.csg._csg_native import to_mesh3
 from termin.csg.document_eval import evaluate_document
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
+from termin.geombase import Ray3, Vec3
 
 Vec3Data = tuple[float, float, float]
 
@@ -29,12 +30,14 @@ class CsgRaycastHit:
 
 def raycast_document(
     document: ProceduralMeshDocument,
-    ray_origin: Vec3Data,
-    ray_direction: Vec3Data,
+    ray: Ray3,
 ) -> CsgRaycastHit | None:
     """Raycast all evaluated solids in document-local coordinates."""
 
-    direction = _normalized(ray_direction)
+    checked_ray = _checked_ray(ray, "document raycast")
+    if checked_ray is None:
+        return None
+
     best_hit: CsgRaycastHit | None = None
     for evaluated in evaluate_document(document):
         try:
@@ -56,125 +59,120 @@ def raycast_document(
             a = transformed[int(triangles[index])]
             b = transformed[int(triangles[index + 1])]
             c = transformed[int(triangles[index + 2])]
-            distance = _ray_triangle_distance(ray_origin, direction, a, b, c)
+            distance = _ray_triangle_distance(checked_ray, a, b, c)
             if distance is None:
                 continue
             if best_hit is not None and distance >= best_hit.distance:
                 continue
-            point = _v_add(ray_origin, _v_mul(direction, distance))
+            point = _vec3_data(checked_ray.point_at(distance))
             normal = _triangle_normal(a, b, c)
-            if _dot(normal, direction) > 0.0:
-                normal = _v_mul(normal, -1.0)
+            if normal is None:
+                continue
+            if normal.dot(checked_ray.direction) > 0.0:
+                normal = -normal
             best_hit = CsgRaycastHit(
                 operation_id=evaluated.operation_id,
                 contour_id=evaluated.contour_id,
                 triangle_index=index // 3,
                 point=point,
-                normal=normal,
+                normal=_vec3_data(normal),
                 distance=distance,
                 vertices=(a, b, c),
             )
     return best_hit
 
 
-def sketch_plane_from_hit(hit: CsgRaycastHit) -> ProceduralPlane:
+def sketch_plane_from_hit(hit: CsgRaycastHit) -> ProceduralPlane | None:
     """Build a stable sketch plane from a CSG raycast hit."""
 
     a, b, c = hit.vertices
-    normal = _normalized(hit.normal)
-    candidates = (_v_sub(b, a), _v_sub(c, b), _v_sub(a, c))
-    x_axis = (1.0, 0.0, 0.0)
+    normal = Vec3(hit.normal).try_normalized()
+    if normal is None:
+        log.error("[CsgRaycast] cannot build sketch plane: hit normal is non-finite or degenerate")
+        return None
+
+    candidates = (Vec3(b) - Vec3(a), Vec3(c) - Vec3(b), Vec3(a) - Vec3(c))
     for candidate in candidates:
-        tangent = _v_sub(candidate, _v_mul(normal, _dot(candidate, normal)))
-        if _norm(tangent) > 1.0e-6:
-            x_axis = _normalized(tangent)
-            break
-    y_axis = _normalized(_cross(normal, x_axis))
-    return ProceduralPlane(origin=hit.point, x_axis=x_axis, y_axis=y_axis)
+        x_axis = (candidate - normal * candidate.dot(normal)).try_normalized(1.0e-6)
+        if x_axis is None:
+            continue
+        y_axis = normal.cross(x_axis).try_normalized(1.0e-6)
+        if y_axis is not None:
+            return ProceduralPlane(
+                origin=hit.point,
+                x_axis=_vec3_data(x_axis),
+                y_axis=_vec3_data(y_axis),
+            )
+
+    log.error("[CsgRaycast] cannot build sketch plane: hit triangle has no reliable tangent")
+    return None
 
 
 def ray_plane_intersection(
-    ray_origin: Vec3Data,
-    ray_direction: Vec3Data,
+    ray: Ray3,
     plane: ProceduralPlane,
 ) -> Vec3Data | None:
-    normal = plane.normal
-    direction = _normalized(ray_direction)
-    denom = _dot(direction, normal)
-    if abs(denom) < 1.0e-9:
+    plane_origin = Vec3(plane.origin)
+    plane_normal = Vec3(plane.normal)
+    point = ray.try_intersect_plane(
+        plane_origin,
+        plane_normal,
+        forward_only=True,
+        epsilon=1.0e-9,
+    )
+    if point is None:
         return None
-    distance = _dot(_v_sub(plane.origin, ray_origin), normal) / denom
-    if distance < 0.0:
-        return None
-    return _v_add(ray_origin, _v_mul(direction, distance))
+    return _vec3_data(point)
 
 
 def _ray_triangle_distance(
-    origin: Vec3Data,
-    direction: Vec3Data,
+    ray: Ray3,
     a: Vec3Data,
     b: Vec3Data,
     c: Vec3Data,
 ) -> float | None:
     eps = 1.0e-8
-    edge1 = _v_sub(b, a)
-    edge2 = _v_sub(c, a)
-    pvec = _cross(direction, edge2)
-    det = _dot(edge1, pvec)
-    if abs(det) < eps:
+    vertex_a = Vec3(a)
+    vertex_b = Vec3(b)
+    vertex_c = Vec3(c)
+    if not vertex_a.is_finite() or not vertex_b.is_finite() or not vertex_c.is_finite():
+        return None
+
+    edge1 = vertex_b - vertex_a
+    edge2 = vertex_c - vertex_a
+    pvec = ray.direction.cross(edge2)
+    det = edge1.dot(pvec)
+    if not isfinite(det) or abs(det) < eps:
         return None
     inv_det = 1.0 / det
-    tvec = _v_sub(origin, a)
-    u = _dot(tvec, pvec) * inv_det
-    if u < 0.0 or u > 1.0:
+    tvec = ray.origin - vertex_a
+    u = tvec.dot(pvec) * inv_det
+    if not isfinite(u) or u < 0.0 or u > 1.0:
         return None
-    qvec = _cross(tvec, edge1)
-    v = _dot(direction, qvec) * inv_det
-    if v < 0.0 or u + v > 1.0:
+    qvec = tvec.cross(edge1)
+    v = ray.direction.dot(qvec) * inv_det
+    if not isfinite(v) or v < 0.0 or u + v > 1.0:
         return None
-    distance = _dot(edge2, qvec) * inv_det
-    if distance < eps:
+    distance = edge2.dot(qvec) * inv_det
+    if not isfinite(distance) or distance < eps:
         return None
     return distance
 
 
-def _triangle_normal(a: Vec3Data, b: Vec3Data, c: Vec3Data) -> Vec3Data:
-    return _normalized(_cross(_v_sub(b, a), _v_sub(c, a)))
+def _triangle_normal(a: Vec3Data, b: Vec3Data, c: Vec3Data) -> Vec3 | None:
+    return (Vec3(b) - Vec3(a)).cross(Vec3(c) - Vec3(a)).try_normalized()
 
 
-def _v_add(a: Vec3Data, b: Vec3Data) -> Vec3Data:
-    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+def _checked_ray(ray: Ray3, operation: str) -> Ray3 | None:
+    direction = ray.direction.try_normalized()
+    if not ray.origin.is_finite() or direction is None:
+        log.error(f"[CsgRaycast] {operation} rejected a non-finite or degenerate ray")
+        return None
+    return Ray3(ray.origin, direction)
 
 
-def _v_sub(a: Vec3Data, b: Vec3Data) -> Vec3Data:
-    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
-
-
-def _v_mul(a: Vec3Data, k: float) -> Vec3Data:
-    return (a[0] * k, a[1] * k, a[2] * k)
-
-
-def _dot(a: Vec3Data, b: Vec3Data) -> float:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
-def _cross(a: Vec3Data, b: Vec3Data) -> Vec3Data:
-    return (
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    )
-
-
-def _norm(a: Vec3Data) -> float:
-    return sqrt(_dot(a, a))
-
-
-def _normalized(a: Vec3Data) -> Vec3Data:
-    n = _norm(a)
-    if n < 1.0e-9:
-        return (0.0, 0.0, 1.0)
-    return (a[0] / n, a[1] / n, a[2] / n)
+def _vec3_data(value: Vec3) -> Vec3Data:
+    return (float(value.x), float(value.y), float(value.z))
 
 
 __all__ = [

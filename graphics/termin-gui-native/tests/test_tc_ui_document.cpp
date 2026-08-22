@@ -101,8 +101,12 @@ struct RouteWidget {
     tc_widget_handle destroy_on_leave = tc_widget_handle_invalid();
     tc_widget_handle destroy_on_focus_loss = tc_widget_handle_invalid();
     tc_widget_handle destroy_on_cancel = tc_widget_handle_invalid();
+    tc_widget_handle capture_on_cancel = tc_widget_handle_invalid();
+    tc_widget_handle remove_root_on_down = tc_widget_handle_invalid();
+    tc_widget_handle remove_root_on_enter = tc_widget_handle_invalid();
     tc_ui_pointer_event_type handled_pointer = static_cast<tc_ui_pointer_event_type>(-1);
     bool destroy_recursive = false;
+    bool cancel_pointer_on_down = false;
     bool handle_key = false;
 };
 
@@ -134,6 +138,9 @@ route_widget_pointer_event(tc_widget* widget, tc_ui_document_handle document, co
         if (!tc_widget_handle_is_invalid(self->destroy_on_cancel)) {
             tc_ui_document_destroy_widget(document, self->destroy_on_cancel);
         }
+        if (!tc_widget_handle_is_invalid(self->capture_on_cancel)) {
+            (void)tc_ui_document_set_pointer_capture(document, self->capture_on_cancel);
+        }
     }
     if (event->type == TC_UI_POINTER_DOWN && !tc_widget_handle_is_invalid(self->destroy_target)) {
         if (self->destroy_recursive) {
@@ -141,6 +148,15 @@ route_widget_pointer_event(tc_widget* widget, tc_ui_document_handle document, co
         } else {
             tc_ui_document_destroy_widget(document, self->destroy_target);
         }
+    }
+    if (event->type == TC_UI_POINTER_DOWN && self->cancel_pointer_on_down) {
+        (void)tc_ui_document_cancel_pointer_interaction(document, TC_UI_POINTER_CANCEL_EXPLICIT);
+    }
+    if (event->type == TC_UI_POINTER_DOWN && !tc_widget_handle_is_invalid(self->remove_root_on_down)) {
+        (void)tc_ui_document_remove_root(document, self->remove_root_on_down);
+    }
+    if (event->type == TC_UI_POINTER_ENTER && !tc_widget_handle_is_invalid(self->remove_root_on_enter)) {
+        (void)tc_ui_document_remove_root(document, self->remove_root_on_enter);
     }
     if (event->type == TC_UI_POINTER_LEAVE && !tc_widget_handle_is_invalid(self->destroy_on_leave)) {
         tc_ui_document_destroy_widget(document, self->destroy_on_leave);
@@ -225,6 +241,13 @@ static void test_pointer_cancel_reasons_and_callback_mutation() {
     assert(tc_ui_document_cancel_pointer_interaction(document, TC_UI_POINTER_CANCEL_WINDOW_FOCUS_LOST));
     assert((second_cancels == std::vector{TC_UI_POINTER_CANCEL_WINDOW_FOCUS_LOST}));
     assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+
+    second.capture_on_cancel = second_handle;
+    assert(tc_ui_document_set_pointer_capture(document, second_handle));
+    assert(tc_ui_document_cancel_pointer_interaction(document, TC_UI_POINTER_CANCEL_EXPLICIT));
+    assert(second_cancels.back() == TC_UI_POINTER_CANCEL_EXPLICIT);
+    assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+    second.capture_on_cancel = tc_widget_handle_invalid();
 
     assert(tc_ui_document_set_pointer_capture(document, second_handle));
     tc_widget_set_visible(&second.widget, false);
@@ -797,6 +820,137 @@ static void test_routing_snapshot_survives_destroyed_target() {
     assert(tc_ui_document_is_alive(document, root_handle));
     assert(tc_widget_handle_eq(tc_ui_document_pressed_widget(document), root_handle));
     tc_ui_document_destroy(document);
+}
+
+static void test_reentrant_pointer_cancel_does_not_restore_pressed_widget() {
+    const tc_ui_document_handle document = tc_ui_document_create();
+    RouteWidget root;
+    const tc_widget_handle root_handle = adopt_route_widget(document, root, 1);
+    root.handled_pointer = TC_UI_POINTER_DOWN;
+    root.cancel_pointer_on_down = true;
+    assert(tc_ui_document_add_root(document, root_handle));
+
+    tc_ui_pointer_event event{};
+    event.type = TC_UI_POINTER_DOWN;
+    event.x = 10.0f;
+    assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_HANDLED);
+    assert(tc_widget_handle_is_invalid(tc_ui_document_pressed_widget(document)));
+    assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+
+    tc_ui_document_destroy(document);
+}
+
+static void test_remove_root_invalidates_pending_and_active_pointer_sequences() {
+    {
+        const tc_ui_document_handle document = tc_ui_document_create();
+        RouteWidget root;
+        std::vector<int> pointer_log;
+        const tc_widget_handle root_handle = adopt_route_widget(document, root, 1);
+        root.pointer_log = &pointer_log;
+        root.remove_root_on_enter = root_handle;
+        assert(tc_ui_document_add_root(document, root_handle));
+
+        tc_ui_pointer_event event{};
+        event.type = TC_UI_POINTER_MOVE;
+        event.x = 10.0f;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_HANDLED);
+        assert(std::count(pointer_log.begin(), pointer_log.end(), 14) == 1);
+        assert(std::count(pointer_log.begin(), pointer_log.end(), 15) == 1);
+        assert(std::count(pointer_log.begin(), pointer_log.end(), 10) == 0);
+        assert(tc_ui_document_root_count(document) == 0);
+        assert(tc_widget_handle_is_invalid(tc_ui_document_hovered_widget(document)));
+        tc_ui_document_destroy(document);
+    }
+
+    {
+        const tc_ui_document_handle document = tc_ui_document_create();
+        RouteWidget root;
+        std::vector<int> pointer_log;
+        const tc_widget_handle root_handle = adopt_route_widget(document, root, 1);
+        root.pointer_log = &pointer_log;
+        root.handled_pointer = TC_UI_POINTER_DOWN;
+        root.remove_root_on_down = root_handle;
+        assert(tc_ui_document_add_root(document, root_handle));
+
+        tc_ui_pointer_event event{};
+        event.type = TC_UI_POINTER_DOWN;
+        event.x = 10.0f;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_HANDLED);
+        assert(tc_ui_document_root_count(document) == 0);
+        assert(tc_widget_handle_is_invalid(tc_ui_document_hovered_widget(document)));
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pressed_widget(document)));
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+
+        pointer_log.clear();
+        event.type = TC_UI_POINTER_MOVE;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_IGNORED);
+        event.type = TC_UI_POINTER_UP;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_IGNORED);
+        assert(pointer_log.empty());
+        tc_ui_document_destroy(document);
+    }
+
+    {
+        const tc_ui_document_handle document = tc_ui_document_create();
+        RouteWidget root;
+        std::vector<int> pointer_log;
+        std::vector<tc_ui_pointer_cancel_reason> cancel_log;
+        const tc_widget_handle root_handle = adopt_route_widget(document, root, 1);
+        root.pointer_log = &pointer_log;
+        root.cancel_log = &cancel_log;
+        root.handled_pointer = TC_UI_POINTER_DOWN;
+        root.capture_on_cancel = root_handle;
+        assert(tc_ui_document_add_root(document, root_handle));
+
+        tc_ui_pointer_event event{};
+        event.type = TC_UI_POINTER_DOWN;
+        event.x = 10.0f;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_eq(tc_ui_document_pressed_widget(document), root_handle));
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+
+        assert(tc_ui_document_remove_root(document, root_handle));
+        assert((cancel_log == std::vector{TC_UI_POINTER_CANCEL_SUBTREE_INEFFECTIVE}));
+        assert(tc_ui_document_root_count(document) == 0);
+        assert(tc_widget_handle_is_invalid(tc_ui_document_hovered_widget(document)));
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pressed_widget(document)));
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+
+        pointer_log.clear();
+        event.type = TC_UI_POINTER_MOVE;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_IGNORED);
+        event.type = TC_UI_POINTER_UP;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_IGNORED);
+        assert(pointer_log.empty());
+        tc_ui_document_destroy(document);
+    }
+
+    {
+        const tc_ui_document_handle document = tc_ui_document_create();
+        RouteWidget root;
+        RouteWidget child;
+        std::vector<int> pointer_log;
+        const tc_widget_handle root_handle = adopt_route_widget(document, root, 1);
+        const tc_widget_handle child_handle = adopt_route_widget(document, child, 2);
+        root.pointer_log = &pointer_log;
+        child.pointer_log = &pointer_log;
+        root.hit_target = child_handle;
+        root.handled_pointer = TC_UI_POINTER_DOWN;
+        child.remove_root_on_down = root_handle;
+        assert(tc_widget_append_child(&root.widget, &child.widget));
+        assert(tc_ui_document_add_root(document, root_handle));
+
+        tc_ui_pointer_event event{};
+        event.type = TC_UI_POINTER_DOWN;
+        event.x = 10.0f;
+        assert(tc_ui_document_dispatch_pointer_event(document, &event) == TC_UI_EVENT_HANDLED);
+        assert(std::count(pointer_log.begin(), pointer_log.end(), 21) == 1);
+        assert(std::count(pointer_log.begin(), pointer_log.end(), 11) == 0);
+        assert(tc_ui_document_root_count(document) == 0);
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pressed_widget(document)));
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+        tc_ui_document_destroy(document);
+    }
 }
 
 static void test_keyboard_bubbling_focus_events_and_tab_traversal() {
@@ -1413,6 +1567,8 @@ int main() {
     test_document_text_measurement_service_contract();
     test_pointer_routing_hover_pressed_and_bubbling();
     test_routing_snapshot_survives_destroyed_target();
+    test_reentrant_pointer_cancel_does_not_restore_pressed_widget();
+    test_remove_root_invalidates_pending_and_active_pointer_sequences();
     test_nested_subtree_transforms_map_hit_and_bubbling_coordinates();
     test_pointer_capture_uses_current_composed_placement();
     test_keyboard_bubbling_focus_events_and_tab_traversal();

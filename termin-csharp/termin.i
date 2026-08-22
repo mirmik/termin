@@ -594,7 +594,8 @@ namespace termin {
 %ignore termin::CameraComponent::viewport_at;
 %ignore termin::CameraComponent::clear_viewports;
 %ignore termin::CameraComponent::on_scene_inactive;
-%ignore termin::CameraComponent::screen_point_to_ray;
+%ignore termin::CameraComponent::try_screen_point_to_ray;
+%ignore termin::CameraComponent::try_project_world_point;
 
 %ignore termin::ColorPass::extra_textures;
 %ignore termin::ColorPass::entity_names;

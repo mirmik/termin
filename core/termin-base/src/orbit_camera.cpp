@@ -83,8 +83,7 @@ namespace termin {
             !target.is_finite()) {
             return std::nullopt;
         }
-        const Mat44 projection_view = projection * view;
-        if (!projection_view.is_finite()) {
+        if (!projection.is_finite() || !view.is_finite()) {
             return std::nullopt;
         }
         const Vec3 eye_to_target = target - eye;
@@ -94,9 +93,8 @@ namespace termin {
         }
 
         OrbitCameraPan result;
-        if (!projection_view.try_inverse(result.inverse_projection_view_, kEpsilon)) {
-            return std::nullopt;
-        }
+        result.projection_ = projection;
+        result.view_ = view;
         result.initial_target_ = target;
         result.plane_point_ = target;
         result.plane_normal_ = plane_normal;
@@ -114,7 +112,10 @@ namespace termin {
         if (!current) {
             return std::nullopt;
         }
-        const Vec3 target = initial_target_ + grabbed_point_ - *current;
+        // Form the cursor delta before adding the large-world target. Left-to-
+        // right `(target + grabbed) - current` would discard local precision
+        // in the intermediate value when all three points are far from origin.
+        const Vec3 target = initial_target_ + (grabbed_point_ - *current);
         return target.is_finite() ? std::optional<Vec3>(target) : std::nullopt;
     }
 
@@ -122,32 +123,23 @@ namespace termin {
         return grabbed_point_;
     }
 
-    std::optional<Vec3> OrbitCameraPan::unproject(double ndc_x, double ndc_y, double ndc_z) const {
-        Vec3 point;
-        return inverse_projection_view_.try_transform_point({ndc_x, ndc_y, ndc_z}, point, kEpsilon)
-                   ? std::optional<Vec3>(point)
+    std::optional<Ray3> OrbitCameraPan::ray_at(const Vec2& screen_position) const {
+        Ray3 ray;
+        return try_unproject_screen_ray(projection_, view_, screen_position, viewport_, ray, nullptr, kEpsilon)
+                   ? std::optional<Ray3>(ray)
                    : std::nullopt;
     }
 
     std::optional<Vec3> OrbitCameraPan::point_on_plane(const Vec2& screen_position) const {
-        if (!screen_position.is_finite()) {
+        const std::optional<Ray3> ray = ray_at(screen_position);
+        if (!ray) {
             return std::nullopt;
         }
-        const double ndc_x = ((screen_position.x - viewport_.x) / viewport_.width) * 2.0 - 1.0;
-        const double ndc_y = ((screen_position.y - viewport_.y) / viewport_.height) * 2.0 - 1.0;
-        const std::optional<Vec3> near_point = unproject(ndc_x, ndc_y, 0.0);
-        const std::optional<Vec3> far_point = unproject(ndc_x, ndc_y, 1.0);
-        if (!near_point || !far_point) {
+        Vec3 point;
+        if (!try_intersect_ray_plane(*ray, plane_point_, plane_normal_, point, false, kEpsilon)) {
             return std::nullopt;
         }
-        const Vec3 ray = *far_point - *near_point;
-        const double denominator = ray.dot(plane_normal_);
-        if (!std::isfinite(denominator) || std::abs(denominator) <= kEpsilon) {
-            return std::nullopt;
-        }
-        const double distance = (plane_point_ - *near_point).dot(plane_normal_) / denominator;
-        const Vec3 point = *near_point + ray * distance;
-        return point.is_finite() ? std::optional<Vec3>(point) : std::nullopt;
+        return point;
     }
 
     OrbitCamera::OrbitCamera()
@@ -237,49 +229,70 @@ namespace termin {
         update_clip_planes();
     }
 
-    OrbitCameraRay OrbitCamera::screen_ray(const Vec2& screen_position, const Rect2& viewport) const {
-        const double safe_width = std::max(viewport.width, 1.0);
-        const double safe_height = std::max(viewport.height, 1.0);
-        const double aspect = std::max(safe_width / safe_height, 0.001);
-        const double ndc_x = (screen_position.x - viewport.x) / safe_width * 2.0 - 1.0;
-        const double ndc_y = (screen_position.y - viewport.y) / safe_height * 2.0 - 1.0;
-        const Mat44 projection_view = mvp(aspect);
-        if (!projection_view.is_finite()) {
-            tc_log_error("[termin-base] OrbitCamera cannot build a screen ray from a non-finite projection-view matrix");
-            return {};
+    std::optional<Ray3>
+    OrbitCamera::try_screen_ray(const Vec2& screen_position, const Rect2& viewport, ScreenRayError* error) const {
+        ScreenRayError local_error = ScreenRayError::None;
+        ScreenRayError* const result_error = error != nullptr ? error : &local_error;
+
+        if (!screen_position.is_finite()) {
+            *result_error = ScreenRayError::InvalidScreenPoint;
+            tc_log_error("[termin-base] OrbitCamera screen ray failed: %s", screen_ray_error_message(*result_error));
+            return std::nullopt;
         }
-        Mat44 inverse_projection_view;
-        if (!projection_view.try_inverse(inverse_projection_view, kEpsilon)) {
-            tc_log_error("[termin-base] OrbitCamera cannot build a screen ray from a singular projection-view matrix");
-            return {};
+        if (!viewport.is_finite() || viewport.width <= 0.0 || viewport.height <= 0.0) {
+            *result_error = ScreenRayError::InvalidViewport;
+            tc_log_error("[termin-base] OrbitCamera screen ray failed: %s", screen_ray_error_message(*result_error));
+            return std::nullopt;
         }
-        Vec3 near_point;
-        Vec3 far_point;
-        if (!inverse_projection_view.try_transform_point({ndc_x, ndc_y, 0.0}, near_point, kEpsilon) ||
-            !inverse_projection_view.try_transform_point({ndc_x, ndc_y, 1.0}, far_point, kEpsilon)) {
-            tc_log_error("[termin-base] OrbitCamera produced an invalid screen ray while unprojecting clip points");
-            return {};
+
+        Ray3 ray;
+        const double aspect = viewport.width / viewport.height;
+        if (!try_unproject_screen_ray(
+                projection_matrix(aspect), view_matrix(), screen_position, viewport, ray, result_error, kEpsilon)) {
+            tc_log_error("[termin-base] OrbitCamera screen ray failed: %s", screen_ray_error_message(*result_error));
+            return std::nullopt;
         }
-        Vec3 direction;
-        if (!(far_point - near_point).try_normalized(direction, kEpsilon)) {
-            tc_log_error("[termin-base] OrbitCamera produced a degenerate screen ray");
-            return {};
+        return ray;
+    }
+
+    std::optional<ProjectedScreenPoint>
+    OrbitCamera::try_project_world_point(const Vec3& world_point, const Rect2& viewport, ScreenRayError* error) const {
+        ScreenRayError local_error = ScreenRayError::None;
+        ScreenRayError* const result_error = error != nullptr ? error : &local_error;
+        if (!viewport.is_finite() || viewport.width <= 0.0 || viewport.height <= 0.0) {
+            *result_error = ScreenRayError::InvalidViewport;
+            tc_log_error("[termin-base] OrbitCamera world projection failed: %s",
+                         screen_ray_error_message(*result_error));
+            return std::nullopt;
         }
-        return {near_point, direction};
+
+        ProjectedScreenPoint projected;
+        const double aspect = viewport.width / viewport.height;
+        if (!termin::try_project_world_point(
+                projection_matrix(aspect), view_matrix(), world_point, viewport, projected, result_error, kEpsilon)) {
+            tc_log_error("[termin-base] OrbitCamera world projection failed: %s",
+                         screen_ray_error_message(*result_error));
+            return std::nullopt;
+        }
+        return projected;
     }
 
     std::optional<Vec3> OrbitCamera::world_point_on_z_plane(const Vec2& screen_position,
                                                             const Rect2& viewport,
                                                             double z) const {
-        const OrbitCameraRay ray = screen_ray(screen_position, viewport);
-        if (std::abs(ray.direction.z) < kEpsilon) {
+        if (!std::isfinite(z)) {
+            tc_log_error("[termin-base] OrbitCamera z-plane projection failed: plane coordinate must be finite");
             return std::nullopt;
         }
-        const double distance_along_ray = (z - ray.origin.z) / ray.direction.z;
-        if (distance_along_ray < 0.0) {
+        const std::optional<Ray3> ray = try_screen_ray(screen_position, viewport);
+        if (!ray) {
             return std::nullopt;
         }
-        return ray.origin + ray.direction * distance_along_ray;
+        Vec3 point;
+        if (!try_intersect_ray_plane(*ray, {0.0, 0.0, z}, Vec3::unit_z(), point, true, kEpsilon)) {
+            return std::nullopt;
+        }
+        return point;
     }
 
     void OrbitCamera::update_clip_planes() {

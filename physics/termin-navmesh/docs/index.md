@@ -33,6 +33,11 @@ Native Recast/Detour ownership больше не находится в `termin-a
 код может подключать editor-specific визуализацию, но runtime/builder
 components и `_navmesh_native` собираются здесь.
 
+`PathfindingWorldComponent` переводит точки и лучи между world и
+local space через `Affine3d`. Обратное преобразование всегда
+checked: регион с singular или non-finite world affine логируется и
+не участвует в path queries/raycast вместо незаметной подстановки identity.
+
 Нейтральный helper `termin.navmesh.ribbon_geometry.build_line_ribbon`
 является публичной границей для построения debug-контуров. Navigation package
 не зависит от `termin-components-voxels`; voxelizer integration направлена в

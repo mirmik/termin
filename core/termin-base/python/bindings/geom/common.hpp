@@ -105,6 +105,7 @@ namespace termin {
     void bind_spatial_inertia3(nb::module_& m);
     void bind_ray3(nb::module_& m);
     void bind_aabb(nb::module_& m);
+    void bind_screen_projection(nb::module_& m);
     void bind_orbit_camera(nb::module_& m);
 
 } // namespace termin

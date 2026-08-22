@@ -38,6 +38,10 @@ inline tc_vec3 tc_basis3d::transform_vector(const tc_vec3& vector) const {
     return tc_basis3d_transform_vector(*this, vector);
 }
 
+inline bool tc_basis3d::try_transform_normal(const tc_vec3& normal, tc_vec3& out, double epsilon) const {
+    return tc_basis3d_try_transform_normal(*this, normal, epsilon, &out);
+}
+
 inline double tc_basis3d::determinant() const {
     return tc_basis3d_determinant(*this);
 }
@@ -100,6 +104,18 @@ inline tc_vec3 tc_affine3d::transform_point(const tc_vec3& point) const {
 
 inline tc_vec3 tc_affine3d::transform_vector(const tc_vec3& vector) const {
     return tc_affine3d_transform_vector(*this, vector);
+}
+
+inline bool tc_affine3d::try_transform_normal(const tc_vec3& normal, tc_vec3& out, double epsilon) const {
+    return tc_affine3d_try_transform_normal(*this, normal, epsilon, &out);
+}
+
+inline bool tc_affine3d::try_inverse_transform_point(const tc_vec3& point, tc_vec3& out, double epsilon) const {
+    return tc_affine3d_try_inverse_transform_point(*this, point, epsilon, &out);
+}
+
+inline bool tc_affine3d::try_inverse_transform_vector(const tc_vec3& vector, tc_vec3& out, double epsilon) const {
+    return tc_affine3d_try_inverse_transform_vector(*this, vector, epsilon, &out);
 }
 
 inline double tc_affine3d::determinant() const {

@@ -27,6 +27,7 @@ from termin.csg.cad_model import StandaloneCsgModel
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
+from termin.csg import document_raycast as document_raycast_module
 from termin.csg.document_tree_model import build_document_tree
 from termin.csg.document_visual_model import PATH_SELECTED_COLOR, build_document_visual_model
 from termin.csg.document_edit import (
@@ -43,7 +44,7 @@ from termin.csg.document_edit import (
 from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
 from termin.csg.sketch_point_interaction import pick_selected_sketch_point
 from termin.csg.viewer_camera import OrbitCamera
-from termin.geombase import Vec3
+from termin.geombase import Ray3, Vec3
 
 
 @contextmanager
@@ -1011,7 +1012,10 @@ def test_document_raycast_uses_evaluated_solids_in_document_space():
     operation = document.add_extrude_operation_for_sketch(sketch_id, height=2.0)
     assert operation is not None
 
-    hit = raycast_document(document, (0.0, 0.0, 5.0), (0.0, 0.0, -1.0))
+    hit = raycast_document(
+        document,
+        Ray3(Vec3(0.0, 0.0, 5.0), Vec3(0.0, 0.0, -1.0)),
+    )
 
     assert hit is not None
     assert hit.operation_id == operation.id
@@ -1025,11 +1029,49 @@ def test_document_raycast_uses_evaluated_solids_in_document_space():
 def test_ray_plane_intersection_reports_parallel_and_behind_rays():
     plane = ProceduralPlane()
 
-    assert ray_plane_intersection((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), plane) is None
-    assert ray_plane_intersection((0.0, 0.0, 1.0), (0.0, 0.0, 1.0), plane) is None
+    assert ray_plane_intersection(Ray3(Vec3(0.0, 0.0, 1.0), Vec3.unit_x()), plane) is None
+    assert ray_plane_intersection(Ray3(Vec3(0.0, 0.0, 1.0), Vec3.unit_z()), plane) is None
 
-    point = ray_plane_intersection((0.0, 0.0, 1.0), (0.0, 0.0, -2.0), plane)
+    point = ray_plane_intersection(
+        Ray3(Vec3(0.0, 0.0, 1.0), Vec3(0.0, 0.0, -2.0)),
+        plane,
+    )
     assert point == (0.0, 0.0, 0.0)
+
+
+def test_document_picking_rejects_degenerate_ray_without_axis_fallback():
+    document = ProceduralMeshDocument()
+    contour = document.add_contour_from_points(
+        [
+            (-1.0, -1.0, 0.0),
+            (1.0, -1.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (-1.0, 1.0, 0.0),
+        ]
+    )
+    assert contour is not None
+    sketch_id = document.find_sketch_id_for_contour(contour.id)
+    assert document.add_extrude_operation_for_sketch(sketch_id, height=2.0) is not None
+
+    ray = Ray3(Vec3(0.0, 0.0, -1.0), Vec3.unit_z())
+    ray.direction = Vec3.zero()
+
+    assert raycast_document(document, ray) is None
+    assert ray_plane_intersection(ray, ProceduralPlane()) is None
+
+
+def test_document_raycast_rejects_nonfinite_triangle_geometry():
+    ray = Ray3(Vec3(0.25, 0.25, 1.0), Vec3(0.0, 0.0, -1.0))
+
+    assert (
+        document_raycast_module._ray_triangle_distance(
+            ray,
+            (float("nan"), 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+        )
+        is None
+    )
 
 
 def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
@@ -1081,6 +1123,26 @@ def test_orbit_camera_pan_gesture_keeps_initial_grabbed_point():
     assert projected is not None
     assert isclose(projected[0], 525.0, abs_tol=1.0e-8)
     assert isclose(projected[1], 360.0, abs_tol=1.0e-8)
+
+
+def test_orbit_camera_screen_ray_keeps_canonical_ray_value():
+    camera = OrbitCamera()
+
+    ray = camera.screen_ray(400.0, 300.0, 800, 600)
+
+    assert isinstance(ray, Ray3)
+    assert isclose(ray.direction.norm(), 1.0)
+
+
+def test_orbit_camera_world_projection_uses_checked_semantic_result():
+    camera = OrbitCamera()
+
+    projected = camera.project_world_to_screen(camera.target, 800, 600)
+
+    assert projected is not None
+    assert isclose(projected[0], 400.0, abs_tol=1.0e-8)
+    assert isclose(projected[1], 300.0, abs_tol=1.0e-8)
+    assert camera.project_world_to_screen(camera.target, 0, 600) is None
 
 
 def test_native_cad_file_dialogs_save_and_open_state(tmp_path):

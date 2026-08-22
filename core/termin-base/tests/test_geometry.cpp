@@ -307,6 +307,55 @@ TEST_CASE("Ray3 is tc_ray3 alias and normalizes direction") {
     CHECK(std::abs(point.x - 1.0) < 1.0e-12);
     CHECK(std::abs(point.y - 2.0) < 1.0e-12);
     CHECK(std::abs(point.z - 5.0) < 1.0e-12);
+
+    const termin::Ray3 zero_direction{{1.0, 2.0, 3.0}, termin::Vec3::zero()};
+    CHECK(zero_direction.direction == termin::Vec3::zero());
+
+    const termin::Ray3 non_finite_direction{
+        {1.0, 2.0, 3.0},
+        {std::numeric_limits<double>::quiet_NaN(), 4.0, 5.0},
+    };
+    CHECK(std::isnan(non_finite_direction.direction.x));
+    CHECK(non_finite_direction.direction.y == 4.0);
+    CHECK(non_finite_direction.direction.z == 5.0);
+}
+
+TEST_CASE("Ray3 plane intersection is checked and leaves failed output unchanged") {
+    const termin::Vec3 sentinel{91.0, 92.0, 93.0};
+    termin::Vec3 point = sentinel;
+    const termin::Ray3 toward_plane{{1.0, 2.0, 3.0}, {0.0, 0.0, -2.0}};
+
+    REQUIRE(termin::try_intersect_ray_plane(toward_plane, {0.0, 0.0, 0.0}, termin::Vec3::unit_z(), point, true));
+    CHECK(point == termin::Vec3(1.0, 2.0, 0.0));
+
+    const auto rejects_unchanged = [&](const termin::Ray3& ray,
+                                       const termin::Vec3& plane_origin,
+                                       const termin::Vec3& plane_normal,
+                                       bool forward_only,
+                                       double epsilon = 1.0e-10) {
+        point = sentinel;
+        CHECK_FALSE(termin::try_intersect_ray_plane(ray, plane_origin, plane_normal, point, forward_only, epsilon));
+        CHECK(point == sentinel);
+    };
+
+    rejects_unchanged({{0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}}, {0.0, 0.0, 0.0}, termin::Vec3::unit_z(), true);
+    rejects_unchanged(toward_plane, {0.0, 0.0, 0.0}, termin::Vec3::zero(), true);
+    rejects_unchanged(toward_plane, {0.0, 0.0, 0.0}, {0.0, 0.0, std::numeric_limits<double>::quiet_NaN()}, true);
+    rejects_unchanged(toward_plane, {0.0, 0.0, std::numeric_limits<double>::infinity()}, termin::Vec3::unit_z(), true);
+    rejects_unchanged(
+        toward_plane, {0.0, 0.0, 0.0}, termin::Vec3::unit_z(), true, std::numeric_limits<double>::quiet_NaN());
+
+    termin::Ray3 invalid_ray;
+    invalid_ray.origin = {std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0};
+    rejects_unchanged(invalid_ray, {0.0, 0.0, 0.0}, termin::Vec3::unit_z(), true);
+    invalid_ray.origin = termin::Vec3::zero();
+    invalid_ray.direction = termin::Vec3::zero();
+    rejects_unchanged(invalid_ray, {0.0, 0.0, 0.0}, termin::Vec3::unit_z(), true);
+
+    const termin::Ray3 away_from_plane{{0.0, 0.0, 1.0}, termin::Vec3::unit_z()};
+    rejects_unchanged(away_from_plane, {0.0, 0.0, 0.0}, termin::Vec3::unit_z(), true);
+    REQUIRE(termin::try_intersect_ray_plane(away_from_plane, {0.0, 0.0, 0.0}, termin::Vec3::unit_z(), point, false));
+    CHECK(point == termin::Vec3::zero());
 }
 
 TEST_CASE("base geometry value types preserve simple construction semantics") {
@@ -526,6 +575,38 @@ TEST_CASE("Mat44f checked inverse validates both products at large world coordin
     }
 }
 
+TEST_CASE("Mat44 checked inverse refines large translation candidates") {
+    const termin::Mat44 large_translation = termin::Mat44::translation(termin::Vec3{1.0e12, -2.0e12, 3.0e12});
+    termin::Mat44 large_translation_inverse;
+    CHECK(large_translation.try_inverse(large_translation_inverse));
+
+    const termin::Mat44 left_identity = large_translation * large_translation_inverse;
+    const termin::Mat44 right_identity = large_translation_inverse * large_translation;
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            const double expected = column == row ? 1.0 : 0.0;
+            CHECK(left_identity(column, row) == expected);
+            CHECK(right_identity(column, row) == expected);
+        }
+    }
+}
+
+TEST_CASE("Mat44f checked inverse refines million-unit translation candidates") {
+    const termin::Mat44f large_translation = termin::Mat44f::translation(termin::Vec3{1.0e6, -2.0e6, 3.0e6});
+    termin::Mat44f large_translation_inverse;
+    CHECK(large_translation.try_inverse(large_translation_inverse));
+
+    const termin::Mat44f left_identity = large_translation * large_translation_inverse;
+    const termin::Mat44f right_identity = large_translation_inverse * large_translation;
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            const float expected = column == row ? 1.0f : 0.0f;
+            CHECK(left_identity(column, row) == expected);
+            CHECK(right_identity(column, row) == expected);
+        }
+    }
+}
+
 TEST_CASE("Affine2f composes arbitrary affine transforms exactly") {
     constexpr float half_pi = 1.57079632679489661923f;
     const termin::Affine2f parent = termin::Affine2f::translation(5.0f, -3.0f) * termin::Affine2f::scaling(2.0f, 0.5f);
@@ -601,6 +682,60 @@ namespace {
     }
 
 } // namespace
+
+TEST_CASE("Basis3d checked inverse is unit independent and normal transform is semantic") {
+    for (const double uniform_scale : {1.0e-6, 1.0e6}) {
+        const termin::Basis3d basis = termin::Basis3d::scaling(uniform_scale);
+        termin::Basis3d inverse;
+        REQUIRE(basis.try_inverse(inverse));
+        const termin::Basis3d product = basis * inverse;
+        CHECK(affine3_near_vec(product.x, termin::Vec3::unit_x(), 1.0e-12));
+        CHECK(affine3_near_vec(product.y, termin::Vec3::unit_y(), 1.0e-12));
+        CHECK(affine3_near_vec(product.z, termin::Vec3::unit_z(), 1.0e-12));
+    }
+
+    const termin::Basis3d mixed_axes =
+        termin::Basis3d::from_quat(termin::Quat::from_axis_angle(termin::Vec3::unit_z(), 0.7853981633974483));
+    const termin::Basis3d unreliable = mixed_axes * termin::Basis3d::scaling(1.0e-16, 1.0e16, 1.0) * mixed_axes;
+    termin::Basis3d unchanged{{9.0, 8.0, 7.0}, {6.0, 5.0, 4.0}, {3.0, 2.0, 1.0}};
+    const termin::Basis3d expected_unchanged = unchanged;
+    CHECK_FALSE(unreliable.try_inverse(unchanged));
+    CHECK(unchanged.x == expected_unchanged.x);
+    CHECK(unchanged.y == expected_unchanged.y);
+    CHECK(unchanged.z == expected_unchanged.z);
+    CHECK_FALSE(termin::Basis3d::identity().try_inverse(unchanged, -1.0));
+    CHECK_FALSE(termin::Basis3d::identity().try_inverse(unchanged, std::numeric_limits<double>::quiet_NaN()));
+    CHECK(unchanged.x == expected_unchanged.x);
+
+    const termin::Basis3d oriented_nonuniform =
+        termin::Basis3d::from_quat(termin::Quat::from_axis_angle(termin::Vec3{1.0, 2.0, -0.5}.normalized(), 0.71)) *
+        termin::Basis3d::scaling(2.0, 3.0, 4.0);
+    const termin::Vec3 local_tangent0{1.0, 2.0, -0.5};
+    const termin::Vec3 local_tangent1{-0.3, 0.4, 1.2};
+    const termin::Vec3 local_normal = local_tangent0.cross(local_tangent1);
+    termin::Vec3 transformed_normal{99.0, 98.0, 97.0};
+    REQUIRE(oriented_nonuniform.try_transform_normal(local_normal, transformed_normal));
+    CHECK(std::abs(transformed_normal.dot(oriented_nonuniform.transform_vector(local_tangent0))) < 1.0e-12);
+    CHECK(std::abs(transformed_normal.dot(oriented_nonuniform.transform_vector(local_tangent1))) < 1.0e-12);
+
+    const termin::Affine3d affine{oriented_nonuniform, {1.0e12, -2.0e12, 3.0e12}};
+    termin::Vec3 affine_normal;
+    REQUIRE(affine.try_transform_normal(local_normal, affine_normal));
+    CHECK(affine3_near_vec(affine_normal, transformed_normal, 1.0e-12));
+
+    termin::Vec3 raw_normal;
+    REQUIRE(termin::Basis3d::scaling(2.0, 3.0, 4.0).try_transform_normal({0.0, 0.0, 2.0}, raw_normal));
+    CHECK(raw_normal == termin::Vec3(0.0, 0.0, 0.5));
+
+    const termin::Vec3 normal_sentinel{99.0, 98.0, 97.0};
+    transformed_normal = normal_sentinel;
+    CHECK_FALSE(
+        termin::Basis3d::scaling(1.0, 0.0, 1.0).try_transform_normal(termin::Vec3::unit_z(), transformed_normal));
+    CHECK(transformed_normal == normal_sentinel);
+    CHECK_FALSE(termin::Basis3d::identity().try_transform_normal({std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0},
+                                                                 transformed_normal));
+    CHECK(transformed_normal == normal_sentinel);
+}
 
 TEST_CASE("Affine3d preserves hierarchy-generated shear exactly") {
     const termin::Affine3d parent =
@@ -713,6 +848,11 @@ TEST_CASE("Affine3d inverse and matrix import fail without modifying output") {
         1.0,
     };
     CHECK(!termin::Affine3d::try_from_matrix4(projective, unchanged));
+    CHECK(unchanged.translation == termin::Vec3(9.0, 11.0, 13.0));
+
+    projective[3] = 0.0;
+    CHECK(!termin::Affine3d::try_from_matrix4(projective, unchanged, -1.0));
+    CHECK(!termin::Affine3d::try_from_matrix4(projective, unchanged, std::numeric_limits<double>::quiet_NaN()));
     CHECK(unchanged.translation == termin::Vec3(9.0, 11.0, 13.0));
 }
 

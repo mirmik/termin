@@ -19,6 +19,17 @@ namespace termin {
             .def("__matmul__", [](const Basis3d& a, const Basis3d& b) { return a * b; })
             .def("__matmul__", [](const Basis3d& basis, const Vec3& vector) { return basis.transform_vector(vector); })
             .def("transform_vector", &Basis3d::transform_vector)
+            .def(
+                "try_transform_normal",
+                [](const Basis3d& basis, const Vec3& normal, double epsilon) -> nb::object {
+                    Vec3 result;
+                    if (!basis.try_transform_normal(normal, result, epsilon)) {
+                        return nb::none();
+                    }
+                    return nb::cast(result);
+                },
+                nb::arg("normal"),
+                nb::arg("epsilon") = 1.0e-12)
             .def("determinant", &Basis3d::determinant)
             .def("is_finite", &Basis3d::is_finite)
             .def(
@@ -80,6 +91,39 @@ namespace termin {
             .def("__matmul__", [](const Affine3d& a, const Affine3d& b) { return a * b; })
             .def("transform_point", &Affine3d::transform_point)
             .def("transform_vector", &Affine3d::transform_vector)
+            .def(
+                "try_transform_normal",
+                [](const Affine3d& affine, const Vec3& normal, double epsilon) -> nb::object {
+                    Vec3 result;
+                    if (!affine.try_transform_normal(normal, result, epsilon)) {
+                        return nb::none();
+                    }
+                    return nb::cast(result);
+                },
+                nb::arg("normal"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "try_inverse_transform_point",
+                [](const Affine3d& affine, const Vec3& point, double epsilon) -> nb::object {
+                    Vec3 result;
+                    if (!affine.try_inverse_transform_point(point, result, epsilon)) {
+                        return nb::none();
+                    }
+                    return nb::cast(result);
+                },
+                nb::arg("point"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "try_inverse_transform_vector",
+                [](const Affine3d& affine, const Vec3& vector, double epsilon) -> nb::object {
+                    Vec3 result;
+                    if (!affine.try_inverse_transform_vector(vector, result, epsilon)) {
+                        return nb::none();
+                    }
+                    return nb::cast(result);
+                },
+                nb::arg("vector"),
+                nb::arg("epsilon") = 1.0e-12)
             .def("determinant", &Affine3d::determinant)
             .def("is_finite", &Affine3d::is_finite)
             .def(

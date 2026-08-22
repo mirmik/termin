@@ -1,15 +1,16 @@
 #pragma once
 
+#include <termin/camera/screen_ray.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/export.hpp>
 #include <termin/geom/general_pose3.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/pose3.hpp>
-#include <termin/geom/ray3.hpp>
 #include <termin/viewport/tc_viewport_handle.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -78,7 +79,10 @@ namespace termin {
         void on_destroy() override;
         void on_removed() override;
         void on_scene_inactive() override;
-        Ray3 screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const;
+        std::optional<Ray3>
+        try_screen_point_to_ray(const Vec2& screen_point, const Rect2& viewport, ScreenRayError* error = nullptr) const;
+        std::optional<ProjectedScreenPoint>
+        try_project_world_point(const Vec3& world_point, const Rect2& viewport, ScreenRayError* error = nullptr) const;
     };
 
 } // namespace termin

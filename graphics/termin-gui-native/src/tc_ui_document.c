@@ -782,6 +782,7 @@ tc_ui_document_handle tc_ui_document_create(void) {
     document->pointer_capture = tc_widget_handle_invalid();
     document->pressed_widget = tc_widget_handle_invalid();
     document->focused_widget = tc_widget_handle_invalid();
+    document->pointer_interaction_revision = 1;
     document->cursor_intent = TC_UI_CURSOR_DEFAULT;
     tc_ui_theme_init_default(&document->theme);
     document->theme_revision = 1;
@@ -1422,14 +1423,35 @@ bool tc_ui_document_add_root(tc_ui_document_handle document_handle, tc_widget_ha
 }
 
 bool tc_ui_document_remove_root(tc_ui_document_handle document_handle, tc_widget_handle handle) {
-    size_t before;
+    size_t index;
+    tc_widget* root;
     tc_ui_document* document = tc_ui_internal_resolve_document_checked(document_handle, "tc_ui_document_remove_root");
     if (!document) {
         return false;
     }
-    before = document->root_count;
+    for (index = 0; index < document->root_count; ++index) {
+        if (tc_ui_internal_same_handle(document->roots[index], handle)) {
+            break;
+        }
+    }
+    if (index == document->root_count) {
+        return false;
+    }
+
+    // Removal can happen reentrantly from a Down callback, before the outer
+    // dispatcher publishes pressed_widget. Invalidate that pending commit as
+    // well as any already published subtree interaction state.
+    tc_ui_internal_advance_pointer_interaction_revision(document);
+    root = tc_ui_document_resolve_widget(document_handle, handle);
+    if (root) {
+        tc_ui_internal_invalidate_subtree_interaction_state(root, TC_UI_POINTER_CANCEL_SUBTREE_INEFFECTIVE);
+    }
+    document = tc_ui_internal_resolve_document(document_handle);
+    if (!document) {
+        return true;
+    }
     tc_ui_internal_remove_root_references(document, handle);
-    return document->root_count != before;
+    return true;
 }
 
 size_t tc_ui_document_root_count(tc_ui_document_handle document_handle) {

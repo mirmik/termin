@@ -144,7 +144,24 @@ engine shader catalog и работает внутри backend-а.
 
 Picking, raycast, camera `screen_point_to_ray`, CPU projection helpers and
 test utilities must not consume backend-native matrices. Они работают только
-с `TerminClip`.
+с `TerminClip`. Общая CPU-unprojection выполняется через
+`try_unproject_screen_ray`: экранные координаты имеют top-left/Y-down
+семантику, near/far задаются как TerminClip `z = 0/1`. Camera owners передают
+projection и affine view раздельно, чтобы homogeneous divide выполнялся в
+camera-local space без потери large-world translation. Invalid viewport,
+singular projection, non-affine view, некорректный homogeneous divide и
+degenerate direction возвращаются как явная ошибка, не как правдоподобный
+fallback-ray. Строгий overload с готовой projection-view матрицей оставлен для
+потребителей, у которых раздельных матриц нет.
+
+Depth picking and CPU world projection use the symmetric checked
+`try_unproject_screen_point` / `try_project_world_point` contract. A depth
+sample is a TerminClip Z value in `[0, 1]`; a framebuffer texel is passed at
+its pixel center (`x + 0.5`, `y + 0.5`). The projected result keeps `Vec2`
+screen coordinates, TerminClip depth and the camera-local point together, so
+owners do not repeat raw homogeneous multiplication merely to recover view
+depth or reprojection diagnostics. Projection and affine view remain separate
+on this path as well.
 
 ## Запреты
 

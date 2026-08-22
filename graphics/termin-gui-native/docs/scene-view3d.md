@@ -40,8 +40,16 @@ are mutated.
 Widget coordinates are unprojected with the current matrices using Termin's
 top-left, Y-down and Z-in-`[0, 1]` clip convention. Pointer events are then
 routed to `SceneInteraction3D`. An item hit owns that pointer sequence and the
-widget-level fallback is not called. When no item accepts the down event, an
-optional fallback may accept the sequence and implement an orbit camera:
+widget-level fallback is not called. If the viewport or camera becomes invalid
+after an item captured the pointer, the widget sends `Cancel` using the last
+valid interaction state, releases UI capture and consumes the remaining
+sequence through its terminal `Up`; the fallback never inherits half of an
+item-owned drag. Auxiliary `Wheel` and `Leave` events are consumed while the
+item owns the sequence. Replacing the borrowed scene follows the same terminal
+Cancel/release/quarantine contract, including when replacement happens
+reentrantly from the target's `Down` callback. When no item accepts the down
+event, an optional fallback may accept the sequence and implement an orbit
+camera:
 
 ```cpp
 view->set_fallback_pointer_handler(

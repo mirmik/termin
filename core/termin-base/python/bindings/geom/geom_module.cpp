@@ -23,6 +23,7 @@ namespace termin {
         bind_spatial_inertia3(m);
         bind_ray3(m);
         bind_aabb(m);
+        bind_screen_projection(m);
         bind_orbit_camera(m);
     }
 

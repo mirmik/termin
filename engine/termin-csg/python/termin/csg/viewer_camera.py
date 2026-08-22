@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 from termin.geombase import OrbitCamera as _NativeOrbitCamera
-from termin.geombase import Rect2, Vec2, Vec3
+from termin.geombase import Ray3, Rect2, Vec2, Vec3
 
 
 def _vec3(value) -> Vec3:
@@ -166,53 +166,38 @@ class OrbitCamera:
 
     def view_projection(self, width, height):
         aspect = max(float(width) / max(float(height), 1.0), 0.001)
-        flat = np.asarray(self._camera.mvp(aspect), dtype=np.float32)
-        return flat.reshape((4, 4), order="F")
+        return np.asarray(self._camera.mvp(aspect).to_rows(), dtype=np.float32)
 
     def project_world_to_screen(self, point: Vec3, width: int, height: int):
         if not isinstance(point, Vec3):
             raise TypeError("project_world_to_screen expects termin.geombase.Vec3")
-        aspect = max(float(width) / max(float(height), 1.0), 0.001)
-        m = self._camera.mvp(aspect)
-        x = float(point[0])
-        y = float(point[1])
-        z = float(point[2])
-        clip_x = float(m[0]) * x + float(m[4]) * y + float(m[8]) * z + float(m[12])
-        clip_y = float(m[1]) * x + float(m[5]) * y + float(m[9]) * z + float(m[13])
-        clip_w = float(m[3]) * x + float(m[7]) * y + float(m[11]) * z + float(m[15])
-        if clip_w <= 1.0e-8:
-            return None
-        return (
-            float((clip_x / clip_w + 1.0) * 0.5 * float(width)),
-            float((clip_y / clip_w + 1.0) * 0.5 * float(height)),
+        projected = self._camera.try_project_world_point(
+            point,
+            Rect2(0.0, 0.0, float(width), float(height)),
         )
+        if projected is None:
+            return None
+        return float(projected.screen.x), float(projected.screen.y)
 
     def view_matrix(self):
-        flat = np.asarray(self._camera.view_matrix(), dtype=np.float64)
-        return flat.reshape((4, 4), order="F")
+        return np.asarray(self._camera.view_matrix().to_rows(), dtype=np.float64)
 
     def projection_matrix(self, width, height):
         aspect = max(float(width) / max(float(height), 1.0), 0.001)
-        flat = np.asarray(self._camera.projection_matrix(aspect), dtype=np.float64)
-        return flat.reshape((4, 4), order="F")
+        return np.asarray(self._camera.projection_matrix(aspect).to_rows(), dtype=np.float64)
 
-    def screen_ray(self, screen_x, screen_y, width, height):
-        near, direction = self._camera.screen_ray(
-            Vec2(float(screen_x), float(screen_y)),
-            Rect2(0.0, 0.0, float(width), float(height)))
-        return (
-            (float(near[0]), float(near[1]), float(near[2])),
-            (float(direction[0]), float(direction[1]), float(direction[2])),
-        )
-
-    def world_point_on_z_plane(self, screen_x, screen_y, width, height, z=0.0):
-        point = self._camera.world_point_on_z_plane(
+    def screen_ray(self, screen_x, screen_y, width, height) -> Ray3:
+        return self._camera.screen_ray(
             Vec2(float(screen_x), float(screen_y)),
             Rect2(0.0, 0.0, float(width), float(height)),
-            float(z))
-        if point is None:
-            return None
-        return (float(point[0]), float(point[1]), float(point[2]))
+        )
+
+    def world_point_on_z_plane(self, screen_x, screen_y, width, height, z=0.0) -> Vec3 | None:
+        return self._camera.world_point_on_z_plane(
+            Vec2(float(screen_x), float(screen_y)),
+            Rect2(0.0, 0.0, float(width), float(height)),
+            float(z),
+        )
 
 
 __all__ = [

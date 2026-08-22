@@ -8,6 +8,7 @@
 #include <termin/camera/camera_component.hpp>
 
 #include <cmath>
+#include <optional>
 
 extern "C" {
 #include "core/tc_entity_pool.h"
@@ -147,17 +148,31 @@ TEST_CASE("OrbitCameraController center_on keeps camera offset from target") {
     tc_entity_free(rig.entity.handle());
 }
 
-TEST_CASE("CameraComponent C++ ray API returns a canonical Ray3") {
+TEST_CASE("CameraComponent C++ ray API returns an optional canonical Ray3") {
     CameraRig rig = make_camera_rig("ray-camera");
 
-    const termin::Ray3 ray = rig.camera->screen_point_to_ray(400.0, 300.0, 0, 0, 800, 600);
+    const std::optional<termin::Ray3> ray =
+        rig.camera->try_screen_point_to_ray(termin::Vec2{400.0, 300.0}, termin::Rect2{0.0, 0.0, 800.0, 600.0});
+    REQUIRE(ray.has_value());
 
-    CHECK(std::abs(ray.direction.x) <= 1.0e-12);
-    CHECK(std::abs(ray.direction.y - 1.0) <= 1.0e-12);
-    CHECK(std::abs(ray.direction.z) <= 1.0e-12);
-    CHECK_EQ(ray.direction.norm(), Approx(1.0).epsilon(1e-12));
+    CHECK(std::abs(ray->direction.x) <= 1.0e-12);
+    CHECK(std::abs(ray->direction.y - 1.0) <= 1.0e-12);
+    CHECK(std::abs(ray->direction.z) <= 1.0e-12);
+    CHECK_EQ(ray->direction.norm(), Approx(1.0).epsilon(1e-12));
+    CHECK_FALSE(rig.camera->try_screen_point_to_ray(termin::Vec2{400.0, 300.0}, termin::Rect2{0.0, 0.0, 0.0, 600.0})
+                    .has_value());
 
     tc_entity_free(rig.entity.handle());
+}
+
+TEST_CASE("CameraComponent checked ray API rejects a missing owner transform") {
+    CameraComponent camera;
+    termin::ScreenRayError error = termin::ScreenRayError::None;
+
+    CHECK_FALSE(
+        camera.try_screen_point_to_ray(termin::Vec2{400.0, 300.0}, termin::Rect2{0.0, 0.0, 800.0, 600.0}, &error)
+            .has_value());
+    CHECK(error == termin::ScreenRayError::MissingViewTransform);
 }
 
 TEST_CASE("OrbitCameraController fly_move accepts one local displacement vector") {

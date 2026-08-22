@@ -12,6 +12,8 @@
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
+#include <termin/geom/rect2.hpp>
+#include <termin/geom/vec2.hpp>
 
 namespace nb = nanobind;
 
@@ -323,21 +325,26 @@ namespace termin {
                     tc_component* cam = tc_render_target_get_camera(rt);
                     nb::object camera_obj = camera_component_from_tc(cam);
                     if (camera_obj.is_none()) {
+                        tc::Log::error("Viewport.screen_point_to_ray failed: viewport has no camera component");
                         return nb::none();
                     }
-                    try {
-                        nb::object entity = camera_obj.attr("entity");
-                        if (entity.is_none()) {
-                            return nb::none();
-                        }
-                        int px, py, pw, ph;
-                        self.get_pixel_rect(px, py, pw, ph);
-                        auto rect = std::make_tuple(px, py, pw, ph);
-                        return camera_obj.attr("screen_point_to_ray")(x, y, nb::arg("viewport_rect") = rect);
-                    } catch (const std::exception& e) {
-                        tc::Log::error("Viewport.screen_point_to_ray failed: %s", e.what());
+                    nb::object entity = camera_obj.attr("entity");
+                    if (entity.is_none()) {
+                        tc::Log::error("Viewport.screen_point_to_ray failed: camera has no entity");
                         return nb::none();
                     }
+                    int px, py, pw, ph;
+                    self.get_pixel_rect(px, py, pw, ph);
+                    const Vec2 screen_point{static_cast<double>(x), static_cast<double>(y)};
+                    const Rect2 viewport{static_cast<double>(px),
+                                         static_cast<double>(py),
+                                         static_cast<double>(pw),
+                                         static_cast<double>(ph)};
+                    nb::object ray = camera_obj.attr("try_screen_point_to_ray")(screen_point, viewport);
+                    if (ray.is_none()) {
+                        tc::Log::error("Viewport.screen_point_to_ray failed: camera rejected the screen ray");
+                    }
+                    return ray;
                 },
                 nb::arg("x"),
                 nb::arg("y"))
@@ -412,6 +419,7 @@ namespace termin {
 
 NB_MODULE(_viewport_native, m) {
     m.doc() = "Viewport native module (TcViewport)";
+    nb::module_::import_("tcbase._geom_native");
     nb::module_::import_("termin.scene._scene_native");
     termin::bind_tc_viewport_class(m);
 }

@@ -38,6 +38,7 @@ from termin.csg.procedural_document import (
     ProceduralPlane,
     SketchItemDocument,
 )
+from termin.geombase import Ray3
 
 Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
@@ -177,8 +178,7 @@ class CsgEditorController:
 
     def add_draft_point_from_ray(
         self,
-        ray_origin: Vec3Data,
-        ray_direction: Vec3Data,
+        ray: Ray3,
         fallback_point: Vec3Data | None = None,
         fallback_plane: ProceduralPlane | None = None,
         fallback_kind: str = "fallback",
@@ -186,8 +186,7 @@ class CsgEditorController:
         result = add_draft_point_from_ray(
             self.document,
             self.draft,
-            ray_origin,
-            ray_direction,
+            ray,
             fallback_point=fallback_point,
             fallback_plane=fallback_plane,
             fallback_kind=fallback_kind,

@@ -66,6 +66,7 @@ struct tc_ui_document {
     tc_widget_handle focused_widget;
     tc_ui_pointer_event last_pointer_event;
     bool has_pointer_event;
+    uint64_t pointer_interaction_revision;
     tc_ui_cursor_intent cursor_intent;
     tc_ui_cursor_changed_fn cursor_changed;
     void* cursor_changed_user_data;
@@ -138,6 +139,7 @@ TC_UI_INTERNAL tc_ui_event_result tc_ui_internal_deliver_pointer_event(tc_ui_doc
                                                                        bool require_interactive);
 TC_UI_INTERNAL bool
 tc_ui_internal_handle_is_in_subtree(tc_ui_document* document, tc_widget_handle handle, const tc_widget* root);
+TC_UI_INTERNAL void tc_ui_internal_advance_pointer_interaction_revision(tc_ui_document* document);
 TC_UI_INTERNAL bool tc_ui_internal_cancel_pointer_state(tc_ui_document* document,
                                                         bool clear_capture,
                                                         bool clear_pressed,

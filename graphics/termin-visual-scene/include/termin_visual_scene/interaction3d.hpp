@@ -115,15 +115,23 @@ namespace termin::visual {
         static std::optional<HitResult3D> hit_(const std::unordered_map<PointerId3D, HitResult3D>& values,
                                               PointerId3D pointer);
         bool dispatch_target_(const TargetPointerEvent3D& event);
-        void reconcile_(const TcVisualScene3D& scene, const PointerEvent3D& event, PointerDispatch3D& result);
+        bool reconcile_(const TcVisualScene3D& scene,
+                        const PointerEvent3D& event,
+                        PointerDispatch3D& result,
+                        std::uint64_t route_revision);
 
         std::unordered_map<PointerId3D, HitResult3D> hovered_;
         std::unordered_map<PointerId3D, HitResult3D> pressed_;
         std::unordered_map<PointerId3D, HitResult3D> captured_;
         std::unordered_map<PointerId3D, PointerEvent3D> last_events_;
+        std::unordered_map<PointerId3D, std::uint32_t> sequence_buttons_;
         std::unordered_map<HandleKey, TargetPointerHandler, HandleHash> target_pointer_handlers_;
         std::unordered_map<HandleKey, ActionHandler, HandleHash> action_handlers_;
         FallbackHandler fallback_handler_;
+        // cancel_all() is callback-safe: an in-flight route observes this
+        // revision after every user callback and stops before publishing any
+        // state derived from the invalidated scene/interaction.
+        std::uint64_t state_revision_ = 0;
     };
 
 } // namespace termin::visual
