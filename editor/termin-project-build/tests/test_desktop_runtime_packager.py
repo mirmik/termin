@@ -1566,6 +1566,7 @@ def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage
 ) -> None:
     import tgfx
     from termin.bootstrap import bootstrap_player
+    from termin.geombase import Mat44, Quat, Vec3
     from termin.materials import TcMaterial
     from termin.mesh import MeshComponent
     from termin.render_components import SkinnedMeshRenderer
@@ -1668,30 +1669,18 @@ def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage
     shader.set_artifact_policy(tgfx.ShaderArtifactPolicy.REQUIRED)
 
     skeleton = TcSkeleton.create("Skinned Depth Skeleton", skeleton_uuid)
-    skeleton.alloc_bones(1)
-    bone = skeleton.get_bone(0)
-    bone.name = "root"
-    bone.index = 0
-    bone.parent_index = -1
-    bone.inverse_bind_matrix = [
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-    ]
-    skeleton.rebuild_roots()
+    skeleton.set_bones(
+        [
+            {
+                "name": "root",
+                "parent_index": -1,
+                "inverse_bind_matrix": Mat44.identity(),
+                "bind_translation": Vec3.zero(),
+                "bind_rotation": Quat.identity(),
+                "bind_scale": Vec3(1.0, 1.0, 1.0),
+            }
+        ]
+    )
 
     scene = TcScene.create("skinned-depth-pipeline-scene")
     try:

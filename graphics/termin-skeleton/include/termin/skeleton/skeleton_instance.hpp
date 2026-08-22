@@ -24,21 +24,20 @@ namespace termin {
 
         // Non-owning resource pointer. Lifetime is managed by TcSkeleton or the
         // resource registry used by the caller.
-        tc_skeleton* _skeleton = nullptr;
-
     private:
+        const tc_skeleton* _skeleton = nullptr;
         std::vector<GeneralPose3> _local_poses;
         std::vector<Mat44> _bone_world_matrices;
         std::vector<Mat44> _bone_matrices;
 
     public:
         SkeletonInstance() = default;
-        explicit SkeletonInstance(tc_skeleton* skeleton);
+        explicit SkeletonInstance(const tc_skeleton* skeleton);
 
-        tc_skeleton* skeleton() const {
+        const tc_skeleton* skeleton() const {
             return _skeleton;
         }
-        void set_skeleton(tc_skeleton* skeleton);
+        void set_skeleton(const tc_skeleton* skeleton);
 
         void reset_to_bind_pose();
 
@@ -46,22 +45,21 @@ namespace termin {
 
         // Validate and atomically apply the supplied transform components.
         // Rotations may have any finite non-zero scale and are stored normalized.
-        bool
-        try_set_bone_transform(int bone_index, const double* translation, const double* rotation, const double* scale);
+        bool try_set_bone_transform(int bone_index, const Vec3* translation, const Quat* rotation, const Vec3* scale);
 
-        // Compatibility entry point. Invalid input is logged and leaves the
-        // current local pose unchanged.
-        void set_bone_transform(int bone_index, const double* translation, const double* rotation, const double* scale);
+        // Logging entry point. Invalid input leaves the current local pose
+        // unchanged.
+        void set_bone_transform(int bone_index, const Vec3* translation, const Quat* rotation, const Vec3* scale);
 
         bool try_set_bone_transform_by_name(const std::string& bone_name,
-                                            const double* translation,
-                                            const double* rotation,
-                                            const double* scale);
+                                            const Vec3* translation,
+                                            const Quat* rotation,
+                                            const Vec3* scale);
 
         void set_bone_transform_by_name(const std::string& bone_name,
-                                        const double* translation,
-                                        const double* rotation,
-                                        const double* scale);
+                                        const Vec3* translation,
+                                        const Quat* rotation,
+                                        const Vec3* scale);
 
         // Evaluate world and skinning matrices from the owned local pose.
         void update();
@@ -78,6 +76,7 @@ namespace termin {
 
     private:
         void resize_for_skeleton();
+        bool storage_matches_skeleton(const char* operation) const;
         bool evaluate_world_matrix(int bone_index, std::vector<unsigned char>& state);
     };
 

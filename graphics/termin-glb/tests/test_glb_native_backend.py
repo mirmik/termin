@@ -6,6 +6,7 @@ import struct
 import numpy as np
 import pytest
 
+from termin.geombase import Mat44
 from termin.glb import NativePrimitiveInfo, NativeStaticMeshDocument
 from termin.glb import _glb_native
 from termin.glb.native import NativeGLBSceneData
@@ -791,9 +792,13 @@ def test_native_skin_keeps_column_major_inverse_bind_storage(tmp_path):
         "pytest-native-column-major-skeleton",
         convert_to_z_up=False,
     )
-    assert skeleton.bones[0]["inverse_bind_matrix"][12:15] == pytest.approx(
-        (-2.0, -3.0, -4.0)
-    )
+    inverse_bind_matrix = skeleton.bones[0]["inverse_bind_matrix"]
+    assert isinstance(inverse_bind_matrix, Mat44)
+    assert (
+        inverse_bind_matrix[3, 0],
+        inverse_bind_matrix[3, 1],
+        inverse_bind_matrix[3, 2],
+    ) == pytest.approx((-2.0, -3.0, -4.0))
 
 
 def test_glb_asset_default_cgltf_backend_publishes_children_and_node_targets(

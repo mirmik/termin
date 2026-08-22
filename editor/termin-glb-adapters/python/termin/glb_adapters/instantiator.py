@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Protocol
 
 import numpy as np
 
-from termin.geombase import GeneralPose3, Quat, Vec3
+from termin.geombase import GeneralPose3, Mat44, Quat, Vec3
 from termin.animation import TcAnimationClip
 from termin.animation_components import AnimationPlayer
 from termin.skeleton import SkeletonInstance, TcSkeleton
@@ -395,12 +395,14 @@ def _populate_tc_skeleton_from_glb(tc_skel: "TcSkeleton", skin, nodes) -> bool:
             {
                 "name": node.name,
                 "parent_index": -1 if ancestor is None else joint_to_bone[ancestor],
-                # GLBSceneData uses ordinary matrix indexing; TcBone stores the
+                # GLBSceneData uses ordinary matrix indexing; tc_bone stores the
                 # corresponding flat array in project-wide column-major order.
-                "inverse_bind_matrix": inverse_bind_matrices[bone_index].T.reshape(-1),
-                "bind_translation": node.translation,
-                "bind_rotation": node.rotation,
-                "bind_scale": node.scale,
+                "inverse_bind_matrix": Mat44.from_column_major(
+                    inverse_bind_matrices[bone_index].T.reshape(-1)
+                ),
+                "bind_translation": Vec3(node.translation),
+                "bind_rotation": Quat(node.rotation),
+                "bind_scale": Vec3(node.scale),
             }
         )
 

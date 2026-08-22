@@ -4,14 +4,6 @@
 
 namespace termin {
     namespace {
-        Mat44 col_major_to_mat44(const double* source) {
-            Mat44 result;
-            for (int i = 0; i < 16; ++i) {
-                result.data[i] = source[i];
-            }
-            return result;
-        }
-
         const GeneralPose3& identity_pose() {
             static const GeneralPose3 value = GeneralPose3::identity();
             return value;
@@ -23,11 +15,11 @@ namespace termin {
         }
     } // namespace
 
-    SkeletonInstance::SkeletonInstance(tc_skeleton* skeleton) {
+    SkeletonInstance::SkeletonInstance(const tc_skeleton* skeleton) {
         set_skeleton(skeleton);
     }
 
-    void SkeletonInstance::set_skeleton(tc_skeleton* skeleton) {
+    void SkeletonInstance::set_skeleton(const tc_skeleton* skeleton) {
         _skeleton = skeleton;
         resize_for_skeleton();
         reset_to_bind_pose();
@@ -38,6 +30,23 @@ namespace termin {
         _local_poses.resize(count, GeneralPose3::identity());
         _bone_world_matrices.resize(count, Mat44::identity());
         _bone_matrices.resize(count, Mat44::identity());
+    }
+
+    bool SkeletonInstance::storage_matches_skeleton(const char* operation) const {
+        const size_t expected = _skeleton ? _skeleton->bone_count : 0;
+        if (_local_poses.size() == expected && _bone_world_matrices.size() == expected &&
+            _bone_matrices.size() == expected) {
+            return true;
+        }
+        tc::Log::error(
+            "[SkeletonInstance::%s] resource bone_count=%zu does not match local=%zu world=%zu skinning=%zu; "
+            "reset the instance after replacing the skeleton payload",
+            operation,
+            expected,
+            _local_poses.size(),
+            _bone_world_matrices.size(),
+            _bone_matrices.size());
+        return false;
     }
 
     void SkeletonInstance::reset_to_bind_pose() {
@@ -51,10 +60,7 @@ namespace termin {
         resize_for_skeleton();
         for (size_t i = 0; i < _skeleton->bone_count; ++i) {
             const tc_bone& bone = _skeleton->bones[i];
-            _local_poses[i] = GeneralPose3(
-                Quat{bone.bind_rotation[0], bone.bind_rotation[1], bone.bind_rotation[2], bone.bind_rotation[3]},
-                Vec3{bone.bind_translation[0], bone.bind_translation[1], bone.bind_translation[2]},
-                Vec3{bone.bind_scale[0], bone.bind_scale[1], bone.bind_scale[2]});
+            _local_poses[i] = GeneralPose3(bone.bind_rotation, bone.bind_translation, bone.bind_scale);
         }
         update();
     }
@@ -68,9 +74,9 @@ namespace termin {
     }
 
     bool SkeletonInstance::try_set_bone_transform(int bone_index,
-                                                  const double* translation,
-                                                  const double* rotation,
-                                                  const double* scale) {
+                                                  const Vec3* translation,
+                                                  const Quat* rotation,
+                                                  const Vec3* scale) {
         if (bone_index < 0 || bone_index >= static_cast<int>(_local_poses.size())) {
             tc::Log::warn("[SkeletonInstance::set_bone_transform] invalid bone_index=%d", bone_index);
             return false;
@@ -78,18 +84,16 @@ namespace termin {
 
         GeneralPose3 candidate = _local_poses[static_cast<size_t>(bone_index)];
         if (translation) {
-            const Vec3 value{translation[0], translation[1], translation[2]};
-            if (!value.is_finite()) {
+            if (!translation->is_finite()) {
                 tc::Log::warn("[SkeletonInstance::set_bone_transform] translation for bone_index=%d is not finite",
                               bone_index);
                 return false;
             }
-            candidate.lin = value;
+            candidate.lin = *translation;
         }
         if (rotation) {
-            const Quat value{rotation[0], rotation[1], rotation[2], rotation[3]};
             Quat normalized;
-            if (!value.try_normalized(normalized, 0.0)) {
+            if (!rotation->try_normalized(normalized, 0.0)) {
                 tc::Log::warn(
                     "[SkeletonInstance::set_bone_transform] rotation for bone_index=%d must be finite and non-zero",
                     bone_index);
@@ -98,13 +102,12 @@ namespace termin {
             candidate.ang = normalized;
         }
         if (scale) {
-            const Vec3 value{scale[0], scale[1], scale[2]};
-            if (!value.is_finite()) {
+            if (!scale->is_finite()) {
                 tc::Log::warn("[SkeletonInstance::set_bone_transform] scale for bone_index=%d is not finite",
                               bone_index);
                 return false;
             }
-            candidate.scale = value;
+            candidate.scale = *scale;
         }
 
         _local_poses[static_cast<size_t>(bone_index)] = candidate;
@@ -112,16 +115,16 @@ namespace termin {
     }
 
     void SkeletonInstance::set_bone_transform(int bone_index,
-                                              const double* translation,
-                                              const double* rotation,
-                                              const double* scale) {
+                                              const Vec3* translation,
+                                              const Quat* rotation,
+                                              const Vec3* scale) {
         (void)try_set_bone_transform(bone_index, translation, rotation, scale);
     }
 
     bool SkeletonInstance::try_set_bone_transform_by_name(const std::string& bone_name,
-                                                          const double* translation,
-                                                          const double* rotation,
-                                                          const double* scale) {
+                                                          const Vec3* translation,
+                                                          const Quat* rotation,
+                                                          const Vec3* scale) {
         if (!_skeleton) {
             tc::Log::warn("[SkeletonInstance::set_bone_transform_by_name] skeleton is null");
             return false;
@@ -135,9 +138,9 @@ namespace termin {
     }
 
     void SkeletonInstance::set_bone_transform_by_name(const std::string& bone_name,
-                                                      const double* translation,
-                                                      const double* rotation,
-                                                      const double* scale) {
+                                                      const Vec3* translation,
+                                                      const Quat* rotation,
+                                                      const Vec3* scale) {
         (void)try_set_bone_transform_by_name(bone_name, translation, rotation, scale);
     }
 
@@ -156,9 +159,8 @@ namespace termin {
         }
         state[index] = 1;
 
-        double local_data[16];
-        _local_poses[index].matrix4(local_data);
-        const Mat44 local = col_major_to_mat44(local_data);
+        const GeneralPose3& local_pose = _local_poses[index];
+        const Mat44 local = Mat44::compose(local_pose.lin, local_pose.ang, local_pose.scale);
         const int parent_index = _skeleton->bones[index].parent_index;
         if (parent_index >= 0) {
             if (!evaluate_world_matrix(parent_index, state)) {
@@ -177,10 +179,7 @@ namespace termin {
         if (!_skeleton || !_skeleton->bones) {
             return;
         }
-        if (_local_poses.size() != _skeleton->bone_count) {
-            tc::Log::error("[SkeletonInstance::update] pose size=%zu does not match bone_count=%zu",
-                           _local_poses.size(),
-                           _skeleton->bone_count);
+        if (!storage_matches_skeleton("update")) {
             return;
         }
 
@@ -191,7 +190,7 @@ namespace termin {
             }
         }
         for (size_t i = 0; i < _skeleton->bone_count; ++i) {
-            _bone_matrices[i] = _bone_world_matrices[i] * col_major_to_mat44(_skeleton->bones[i].inverse_bind_matrix);
+            _bone_matrices[i] = _bone_world_matrices[i] * Mat44::from_tc_mat44(_skeleton->bones[i].inverse_bind_matrix);
         }
     }
 
@@ -199,6 +198,9 @@ namespace termin {
                                                       const std::vector<Mat44>& bone_world_matrices) {
         if (!_skeleton || !_skeleton->bones) {
             tc::Log::error("[SkeletonInstance::update_from_world_matrices] skeleton is null");
+            return false;
+        }
+        if (!storage_matches_skeleton("update_from_world_matrices")) {
             return false;
         }
         if (bone_world_matrices.size() != _skeleton->bone_count) {
@@ -213,7 +215,7 @@ namespace termin {
         const Mat44 root_inverse = skinning_root_world.inverse();
         for (size_t i = 0; i < _skeleton->bone_count; ++i) {
             _bone_matrices[i] =
-                root_inverse * _bone_world_matrices[i] * col_major_to_mat44(_skeleton->bones[i].inverse_bind_matrix);
+                root_inverse * _bone_world_matrices[i] * Mat44::from_tc_mat44(_skeleton->bones[i].inverse_bind_matrix);
         }
         return true;
     }
@@ -221,6 +223,9 @@ namespace termin {
     void SkeletonInstance::get_bone_matrices_float(float* out) const {
         if (!out) {
             tc::Log::error("[SkeletonInstance::get_bone_matrices_float] output is null");
+            return;
+        }
+        if (!storage_matches_skeleton("get_bone_matrices_float")) {
             return;
         }
         for (size_t i = 0; i < _bone_matrices.size(); ++i) {

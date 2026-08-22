@@ -3,6 +3,7 @@
 #include <random>
 #include <type_traits>
 
+#include <geom/tc_mat44.h>
 #include <geom/tc_quat.h>
 #include <tcbase/tc_types.h>
 #include <termin/geom/aabb.hpp>
@@ -1017,6 +1018,18 @@ TEST_CASE("Mat44 checked transforms and inverse preserve output on failure") {
     CHECK(matrix_f.try_inverse(inverse_f));
     CHECK((inverse_f.transform_point(matrix_f.transform_point({1.0f, 2.0f, 3.0f})) - termin::Vec3f{1.0f, 2.0f, 3.0f})
               .norm() < 1.0e-5f);
+}
+
+TEST_CASE("tc_mat44 C helpers construct identity and classify finite values") {
+    const tc_mat44 c_identity = tc_mat44_identity();
+    CHECK(tc_mat44_is_finite(c_identity));
+    CHECK(c_identity.m[0] == 1.0);
+    CHECK(c_identity.m[5] == 1.0);
+    CHECK(c_identity.m[10] == 1.0);
+    CHECK(c_identity.m[15] == 1.0);
+    tc_mat44 c_non_finite = c_identity;
+    c_non_finite.m[7] = std::numeric_limits<double>::infinity();
+    CHECK(!tc_mat44_is_finite(c_non_finite));
 }
 
 TEST_CASE("Mat44 checked inverse uses relative scale and raw bridges stay explicit") {

@@ -6,6 +6,7 @@ import struct
 import numpy as np
 import pytest
 
+from termin.geombase import Mat44, Quat, Vec3
 from termin.glb import (
     GLBSceneData,
     NativeGLBSceneData,
@@ -318,10 +319,14 @@ def test_native_arthur_skinned_geometry_and_bulk_rig_reference():
         while ancestor is not None and ancestor not in joint_to_bone:
             ancestor = converted["nodes"][ancestor]["parent_index"]
         expected_parent = -1 if ancestor is None else joint_to_bone[ancestor]
-        assert skeleton.bones[bone_index]["parent_index"] == expected_parent
-        assert skeleton.bones[bone_index]["bind_scale"] == pytest.approx(
-            converted["nodes"][node_index]["scale"]
-        )
+        bone = skeleton.bones[bone_index]
+        assert bone["parent_index"] == expected_parent
+        assert isinstance(bone["inverse_bind_matrix"], Mat44)
+        assert isinstance(bone["bind_translation"], Vec3)
+        assert isinstance(bone["bind_rotation"], Quat)
+        bind_scale = bone["bind_scale"]
+        assert isinstance(bind_scale, Vec3)
+        assert tuple(bind_scale) == pytest.approx(converted["nodes"][node_index]["scale"])
 
     blender_prepared = document.prepared_rig_data(
         convert_to_z_up=True,

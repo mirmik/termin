@@ -1,11 +1,10 @@
-#include <iostream>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
-#include <nanobind/stl/array.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include "termin/geom/mat44.hpp"
 #include "termin/geom/quat.hpp"
 #include "termin/geom/vec3.hpp"
 #include "termin/inspect/tc_kind.hpp"
@@ -16,69 +15,31 @@
 namespace nb = nanobind;
 
 namespace {
+    [[noreturn]] void throw_bone_field_type_error(size_t bone_index, const char* field, const char* expected_type) {
+        const std::string message =
+            "skeleton bone " + std::to_string(bone_index) + " field '" + field + "' must be " + expected_type;
+        throw nb::type_error(message.c_str());
+    }
 
-    void bind_tc_bone(nb::module_& m) {
-        nb::class_<tc_bone>(m, "TcBone")
-            .def_prop_rw(
-                "name",
-                [](const tc_bone& b) { return std::string(b.name); },
-                [](tc_bone& b, const std::string& name) {
-                    size_t len = std::min(name.size(), (size_t)(TC_BONE_NAME_MAX - 1));
-                    std::memcpy(b.name, name.c_str(), len);
-                    b.name[len] = '\0';
-                })
-            .def_rw("index", &tc_bone::index)
-            .def_rw("parent_index", &tc_bone::parent_index)
-            .def_prop_rw(
-                "inverse_bind_matrix",
-                [](const tc_bone& b) {
-                    nb::list result;
-                    for (int i = 0; i < 16; ++i) {
-                        result.append(b.inverse_bind_matrix[i]);
-                    }
-                    return result;
-                },
-                [](tc_bone& b, nb::sequence seq) {
-                    for (int i = 0; i < 16 && i < nb::len(seq); ++i) {
-                        b.inverse_bind_matrix[i] = nb::cast<double>(seq[i]);
-                    }
-                })
-            .def_prop_rw(
-                "bind_translation",
-                [](const tc_bone& b) {
-                    return nb::make_tuple(b.bind_translation[0], b.bind_translation[1], b.bind_translation[2]);
-                },
-                [](tc_bone& b, nb::sequence seq) {
-                    if (nb::len(seq) >= 3) {
-                        b.bind_translation[0] = nb::cast<double>(seq[0]);
-                        b.bind_translation[1] = nb::cast<double>(seq[1]);
-                        b.bind_translation[2] = nb::cast<double>(seq[2]);
-                    }
-                })
-            .def_prop_rw(
-                "bind_rotation",
-                [](const tc_bone& b) {
-                    return nb::make_tuple(
-                        b.bind_rotation[0], b.bind_rotation[1], b.bind_rotation[2], b.bind_rotation[3]);
-                },
-                [](tc_bone& b, nb::sequence seq) {
-                    if (nb::len(seq) >= 4) {
-                        b.bind_rotation[0] = nb::cast<double>(seq[0]);
-                        b.bind_rotation[1] = nb::cast<double>(seq[1]);
-                        b.bind_rotation[2] = nb::cast<double>(seq[2]);
-                        b.bind_rotation[3] = nb::cast<double>(seq[3]);
-                    }
-                })
-            .def_prop_rw(
-                "bind_scale",
-                [](const tc_bone& b) { return nb::make_tuple(b.bind_scale[0], b.bind_scale[1], b.bind_scale[2]); },
-                [](tc_bone& b, nb::sequence seq) {
-                    if (nb::len(seq) >= 3) {
-                        b.bind_scale[0] = nb::cast<double>(seq[0]);
-                        b.bind_scale[1] = nb::cast<double>(seq[1]);
-                        b.bind_scale[2] = nb::cast<double>(seq[2]);
-                    }
-                });
+    template <typename T>
+    T require_bone_field(const nb::dict& data, size_t bone_index, const char* field, const char* expected_type) {
+        nb::handle value = data[field];
+        if (!nb::isinstance<T>(value))
+            throw_bone_field_type_error(bone_index, field, expected_type);
+        return nb::cast<T>(value);
+    }
+
+    int32_t require_bone_parent_index(const nb::dict& data, size_t bone_index) {
+        nb::handle value = data["parent_index"];
+        if (!nb::isinstance<nb::int_>(value) || nb::isinstance<nb::bool_>(value))
+            throw_bone_field_type_error(bone_index, "parent_index", "an integer");
+        try {
+            return nb::cast<int32_t>(value);
+        } catch (const nb::cast_error&) {
+            const std::string message = "skeleton bone " + std::to_string(bone_index) +
+                                        " field 'parent_index' must fit the signed 32-bit range";
+            throw nb::value_error(message.c_str());
+        }
     }
 
     void bind_tc_skeleton_struct(nb::module_& m) {
@@ -104,53 +65,46 @@ namespace {
             .def_prop_ro("bone_count", &termin::TcSkeleton::bone_count)
             .def_prop_ro("root_count", &termin::TcSkeleton::root_count)
             .def("find_bone", &termin::TcSkeleton::find_bone, nb::arg("bone_name"))
-            .def("bump_version", &termin::TcSkeleton::bump_version)
             .def("ensure_loaded", &termin::TcSkeleton::ensure_loaded)
-            .def("rebuild_roots", &termin::TcSkeleton::rebuild_roots)
             .def("get", &termin::TcSkeleton::get, nb::rv_policy::reference)
-            .def("get_bone", &termin::TcSkeleton::get_bone, nb::arg("index"), nb::rv_policy::reference)
-            .def("alloc_bones", &termin::TcSkeleton::alloc_bones, nb::arg("count"), nb::rv_policy::reference)
-            .def_prop_ro(
-                "bones",
-                [](const termin::TcSkeleton& self) {
-                    nb::list result;
-                    tc_skeleton* skeleton = self.get();
-                    if (!skeleton)
-                        return result;
-                    for (size_t i = 0; i < skeleton->bone_count; ++i) {
-                        const tc_bone& bone = skeleton->bones[i];
-                        nb::dict data;
-                        data["name"] = bone.name;
-                        data["parent_index"] = bone.parent_index;
-                        nb::list inverse_bind;
-                        for (double value : bone.inverse_bind_matrix)
-                            inverse_bind.append(value);
-                        data["inverse_bind_matrix"] = std::move(inverse_bind);
-                        data["bind_translation"] = nb::make_tuple(
-                            bone.bind_translation[0], bone.bind_translation[1], bone.bind_translation[2]);
-                        data["bind_rotation"] = nb::make_tuple(
-                            bone.bind_rotation[0], bone.bind_rotation[1], bone.bind_rotation[2], bone.bind_rotation[3]);
-                        data["bind_scale"] = nb::make_tuple(bone.bind_scale[0], bone.bind_scale[1], bone.bind_scale[2]);
-                        result.append(std::move(data));
-                    }
-                    return result;
-                })
+            .def_prop_ro("bones",
+                         [](const termin::TcSkeleton& self) {
+                             nb::list result;
+                             const tc_skeleton* skeleton = self.get();
+                             if (!skeleton)
+                                 return result;
+                             for (size_t i = 0; i < skeleton->bone_count; ++i) {
+                                 const tc_bone& bone = skeleton->bones[i];
+                                 nb::dict data;
+                                 data["name"] = bone.name;
+                                 data["parent_index"] = bone.parent_index;
+                                 data["inverse_bind_matrix"] = termin::Mat44::from_tc_mat44(bone.inverse_bind_matrix);
+                                 data["bind_translation"] = bone.bind_translation;
+                                 data["bind_rotation"] = bone.bind_rotation;
+                                 data["bind_scale"] = bone.bind_scale;
+                                 result.append(std::move(data));
+                             }
+                             return result;
+                         })
             .def(
                 "set_bones",
                 [](termin::TcSkeleton& self, nb::list bone_data) {
                     struct PendingBone {
                         std::string name;
                         int32_t parent_index = -1;
-                        std::array<double, 16> inverse_bind{};
-                        std::array<double, 3> translation{};
-                        std::array<double, 4> rotation{};
-                        std::array<double, 3> scale{};
+                        termin::Mat44 inverse_bind = termin::Mat44::identity();
+                        termin::Vec3 translation = termin::Vec3::zero();
+                        termin::Quat rotation = termin::Quat::identity();
+                        termin::Vec3 scale{1.0, 1.0, 1.0};
                     };
 
                     std::vector<PendingBone> pending;
                     pending.reserve(nb::len(bone_data));
                     for (size_t i = 0; i < nb::len(bone_data); ++i) {
-                        nb::dict data = nb::cast<nb::dict>(bone_data[i]);
+                        nb::handle item = bone_data[i];
+                        if (!nb::isinstance<nb::dict>(item))
+                            throw_bone_field_type_error(i, "payload", "a dict");
+                        nb::dict data = nb::borrow<nb::dict>(item);
                         const char* required[] = {"name",
                                                   "parent_index",
                                                   "inverse_bind_matrix",
@@ -162,12 +116,14 @@ namespace {
                                 throw std::invalid_argument(std::string("skeleton bone is missing '") + field + "'");
                         }
                         PendingBone bone;
+                        if (!nb::isinstance<nb::str>(data["name"]))
+                            throw_bone_field_type_error(i, "name", "a string");
                         bone.name = nb::cast<std::string>(data["name"]);
-                        bone.parent_index = nb::cast<int32_t>(data["parent_index"]);
-                        bone.inverse_bind = nb::cast<std::array<double, 16>>(data["inverse_bind_matrix"]);
-                        bone.translation = nb::cast<std::array<double, 3>>(data["bind_translation"]);
-                        bone.rotation = nb::cast<std::array<double, 4>>(data["bind_rotation"]);
-                        bone.scale = nb::cast<std::array<double, 3>>(data["bind_scale"]);
+                        bone.parent_index = require_bone_parent_index(data, i);
+                        bone.inverse_bind = require_bone_field<termin::Mat44>(data, i, "inverse_bind_matrix", "Mat44");
+                        bone.translation = require_bone_field<termin::Vec3>(data, i, "bind_translation", "Vec3");
+                        bone.rotation = require_bone_field<termin::Quat>(data, i, "bind_rotation", "Quat");
+                        bone.scale = require_bone_field<termin::Vec3>(data, i, "bind_scale", "Vec3");
                         pending.push_back(std::move(bone));
                     }
 
@@ -176,10 +132,10 @@ namespace {
                     for (PendingBone& bone : pending) {
                         descriptors.push_back({bone.name.c_str(),
                                                bone.parent_index,
-                                               bone.inverse_bind.data(),
-                                               bone.translation.data(),
-                                               bone.rotation.data(),
-                                               bone.scale.data()});
+                                               bone.inverse_bind.to_tc_mat44(),
+                                               bone.translation,
+                                               bone.rotation,
+                                               bone.scale});
                     }
                     if (!self.replace_bones(descriptors.data(), descriptors.size()))
                         throw std::runtime_error("skeleton replacement failed; previous payload was preserved");
@@ -292,11 +248,10 @@ namespace {
     void bind_skeleton_instance(nb::module_& m) {
         nb::class_<termin::SkeletonInstance>(m, "SkeletonInstance")
             .def(nb::init<>())
-            .def_prop_rw(
-                "skeleton",
-                [](const termin::SkeletonInstance& si) { return si._skeleton; },
-                [](termin::SkeletonInstance& si, tc_skeleton* skel) { si.set_skeleton(skel); },
-                nb::rv_policy::reference)
+            .def_prop_rw("skeleton",
+                         &termin::SkeletonInstance::skeleton,
+                         &termin::SkeletonInstance::set_skeleton,
+                         nb::rv_policy::reference)
             .def("reset_to_bind_pose", &termin::SkeletonInstance::reset_to_bind_pose)
             .def(
                 "set_bone_transform",
@@ -305,10 +260,10 @@ namespace {
                    std::optional<termin::Vec3> translation,
                    std::optional<termin::Quat> rotation,
                    std::optional<termin::Vec3> scale) {
-                    const double* t_ptr = translation ? &translation->x : nullptr;
-                    const double* r_ptr = rotation ? &rotation->x : nullptr;
-                    const double* s_ptr = scale ? &scale->x : nullptr;
-                    if (!si.try_set_bone_transform(bone_index, t_ptr, r_ptr, s_ptr)) {
+                    if (!si.try_set_bone_transform(bone_index,
+                                                   translation ? &*translation : nullptr,
+                                                   rotation ? &*rotation : nullptr,
+                                                   scale ? &*scale : nullptr)) {
                         throw nb::value_error(
                             "bone transform requires a valid index, finite vectors, and a finite non-zero rotation");
                     }
@@ -324,10 +279,10 @@ namespace {
                    std::optional<termin::Vec3> translation,
                    std::optional<termin::Quat> rotation,
                    std::optional<termin::Vec3> scale) {
-                    const double* t_ptr = translation ? &translation->x : nullptr;
-                    const double* r_ptr = rotation ? &rotation->x : nullptr;
-                    const double* s_ptr = scale ? &scale->x : nullptr;
-                    return si.try_set_bone_transform(bone_index, t_ptr, r_ptr, s_ptr);
+                    return si.try_set_bone_transform(bone_index,
+                                                     translation ? &*translation : nullptr,
+                                                     rotation ? &*rotation : nullptr,
+                                                     scale ? &*scale : nullptr);
                 },
                 nb::arg("bone_index"),
                 nb::arg("translation") = nb::none(),
@@ -340,10 +295,10 @@ namespace {
                    std::optional<termin::Vec3> translation,
                    std::optional<termin::Quat> rotation,
                    std::optional<termin::Vec3> scale) {
-                    const double* t_ptr = translation ? &translation->x : nullptr;
-                    const double* r_ptr = rotation ? &rotation->x : nullptr;
-                    const double* s_ptr = scale ? &scale->x : nullptr;
-                    if (!si.try_set_bone_transform_by_name(bone_name, t_ptr, r_ptr, s_ptr)) {
+                    if (!si.try_set_bone_transform_by_name(bone_name,
+                                                           translation ? &*translation : nullptr,
+                                                           rotation ? &*rotation : nullptr,
+                                                           scale ? &*scale : nullptr)) {
                         throw nb::value_error(
                             "bone transform requires a known bone, finite vectors, and a finite non-zero rotation");
                     }
@@ -359,10 +314,10 @@ namespace {
                    std::optional<termin::Vec3> translation,
                    std::optional<termin::Quat> rotation,
                    std::optional<termin::Vec3> scale) {
-                    const double* t_ptr = translation ? &translation->x : nullptr;
-                    const double* r_ptr = rotation ? &rotation->x : nullptr;
-                    const double* s_ptr = scale ? &scale->x : nullptr;
-                    return si.try_set_bone_transform_by_name(bone_name, t_ptr, r_ptr, s_ptr);
+                    return si.try_set_bone_transform_by_name(bone_name,
+                                                             translation ? &*translation : nullptr,
+                                                             rotation ? &*rotation : nullptr,
+                                                             scale ? &*scale : nullptr);
                 },
                 nb::arg("bone_name"),
                 nb::arg("translation") = nb::none(),
@@ -413,8 +368,9 @@ namespace {
 NB_MODULE(_skeleton_native, m) {
     m.doc() = "Native C++ skeleton module (TcSkeleton, SkeletonInstance)";
 
+    nb::module_::import_("tcbase._geom_native");
+
     // Bind types
-    bind_tc_bone(m);
     bind_tc_skeleton_struct(m);
     bind_tc_skeleton(m);
     bind_skeleton_instance(m);

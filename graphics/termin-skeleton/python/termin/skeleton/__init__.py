@@ -2,7 +2,12 @@
 
 from termin_nanobind.runtime import preload_sdk_libs
 
-preload_sdk_libs("termin_skeleton")
+preload_sdk_libs(
+    "termin_base",
+    "termin_inspect",
+    "termin_inspect_python",
+    "termin_skeleton",
+)
 
 from termin.skeleton._skeleton_native import (
     TcSkeleton,

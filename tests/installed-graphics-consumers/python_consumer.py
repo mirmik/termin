@@ -95,6 +95,7 @@ def main() -> int:
     write_animated_skinned_glb(glb_path)
 
     from termin.animation import clip_from_glb
+    from termin.geombase import Mat44, Quat, Vec3
     from termin.glb import load_glb_file
     from termin.graphics.mcp import capture_texture_screenshot
     from termin.materials import parse_shader_text
@@ -104,12 +105,14 @@ def main() -> int:
     assert len(scene.meshes) == len(scene.skins) == len(scene.animations) == 1
     assert scene.meshes[0].is_skinned
     skeleton = TcSkeleton.create("InstalledGLB", str(uuid.uuid4()))
-    identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+    identity = Mat44.identity()
     skeleton.set_bones([
         {"name": "Root", "parent_index": -1, "inverse_bind_matrix": identity,
-         "bind_translation": (0, 0, 0), "bind_rotation": (0, 0, 0, 1), "bind_scale": (1, 1, 1)},
+         "bind_translation": Vec3.zero(), "bind_rotation": Quat.identity(),
+         "bind_scale": Vec3(1, 1, 1)},
         {"name": "Tip", "parent_index": 0, "inverse_bind_matrix": identity,
-         "bind_translation": (0, 1, 0), "bind_rotation": (0, 0, 0, 1), "bind_scale": (1, 1, 1)},
+         "bind_translation": Vec3(0, 1, 0), "bind_rotation": Quat.identity(),
+         "bind_scale": Vec3(1, 1, 1)},
     ])
     clip = clip_from_glb(scene.animations[0], str(uuid.uuid4()))
     assert skeleton.bone_count == 2 and clip.duration == 1.0

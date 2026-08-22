@@ -58,24 +58,17 @@ TC_API bool tc_skeleton_ensure_loaded(tc_skeleton_handle h);
 // Skeleton data operations
 // ============================================================================
 
-// Allocate bones array (frees existing if any)
-// Returns pointer to first bone, or NULL on failure
-TC_API tc_bone* tc_skeleton_alloc_bones(tc_skeleton* skeleton, size_t count);
-
 // Validate, allocate, and atomically replace the complete bone/root payload.
 // Finite non-zero bind rotations are normalized before storage.
 // On failure the existing skeleton and its version remain unchanged.
 TC_API bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_desc* bones, size_t count);
 
-// Get bone by index
-TC_API tc_bone* tc_skeleton_get_bone(tc_skeleton* skeleton, size_t index);
+// Read immutable bone data by index. Bone payloads are published only through
+// tc_skeleton_replace_bones().
 TC_API const tc_bone* tc_skeleton_get_bone_const(const tc_skeleton* skeleton, size_t index);
 
 // Find bone index by name (-1 if not found)
 TC_API int tc_skeleton_find_bone(const tc_skeleton* skeleton, const char* name);
-
-// Rebuild root indices (call after modifying bones)
-TC_API void tc_skeleton_rebuild_roots(tc_skeleton* skeleton);
 
 // ============================================================================
 // Skeleton info for debugging/inspection

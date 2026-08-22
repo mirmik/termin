@@ -8,7 +8,7 @@ from termin.bootstrap import bootstrap_player
 
 bootstrap_player()
 
-from termin.geombase import SrgbColor, Vec3, Vec4
+from termin.geombase import Mat44, Quat, SrgbColor, Vec3, Vec4
 from termin.materials import TcMaterial
 from termin.render_components import (
     Camera,
@@ -185,18 +185,25 @@ def test_skinned_mesh_renderer_computes_bones_in_renderer_space():
     from termin.skeleton_components import SkeletonController
 
     skeleton = TcSkeleton.create("Renderer Space Skeleton", f"renderer-space-skeleton-{uuid4()}")
-    skeleton.alloc_bones(1)
-    bone = skeleton.get_bone(0)
-    bone.name = "root"
-    bone.index = 0
-    bone.parent_index = -1
-    bone.inverse_bind_matrix = [
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        -1.0, 0.0, 0.0, 1.0,
-    ]
-    skeleton.rebuild_roots()
+    skeleton.set_bones(
+        [
+            {
+                "name": "root",
+                "parent_index": -1,
+                "inverse_bind_matrix": Mat44.from_column_major(
+                    [
+                        1.0, 0.0, 0.0, 0.0,
+                        0.0, 1.0, 0.0, 0.0,
+                        0.0, 0.0, 1.0, 0.0,
+                        -1.0, 0.0, 0.0, 1.0,
+                    ]
+                ),
+                "bind_translation": Vec3.zero(),
+                "bind_rotation": Quat.identity(),
+                "bind_scale": Vec3(1.0, 1.0, 1.0),
+            }
+        ]
+    )
 
     scene = TcScene.create("skinned-renderer-space")
     try:
@@ -221,7 +228,7 @@ def test_skinned_mesh_renderer_computes_bones_in_renderer_space():
         matrix = renderer.get_bone_matrices_flat().reshape(-1)
         assert renderer._bone_count == 1
         # bone(5) relative to mesh(2), then inverse-bind translation(-1).
-        # Translation at flat index 12 pins the column-major TcBone ABI.
+        # Translation at flat index 12 pins the column-major tc_bone ABI.
         assert matrix[12] == pytest.approx(2.0)
         assert matrix[13] == pytest.approx(0.0)
         assert matrix[14] == pytest.approx(0.0)
@@ -236,18 +243,18 @@ def test_skinned_mesh_renderer_resolves_skeleton_controller_from_ancestor():
     from termin.skeleton_components import SkeletonController
 
     skeleton = TcSkeleton.create("Ancestor Skeleton", f"ancestor-skeleton-{uuid4()}")
-    skeleton.alloc_bones(1)
-    bone = skeleton.get_bone(0)
-    bone.name = "root"
-    bone.index = 0
-    bone.parent_index = -1
-    bone.inverse_bind_matrix = [
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-    ]
-    skeleton.rebuild_roots()
+    skeleton.set_bones(
+        [
+            {
+                "name": "root",
+                "parent_index": -1,
+                "inverse_bind_matrix": Mat44.identity(),
+                "bind_translation": Vec3.zero(),
+                "bind_rotation": Quat.identity(),
+                "bind_scale": Vec3(1.0, 1.0, 1.0),
+            }
+        ]
+    )
 
     scene = TcScene.create("skinned-renderer-ancestor-controller")
     try:

@@ -54,6 +54,15 @@ namespace termin {
         };
     }
 
+    inline Mat44 column_major_sequence_to_mat44(nb::handle obj) {
+        nb::sequence seq = fixed_component_sequence(obj, 16, "Mat44 column-major data");
+        double values[16];
+        for (size_t index = 0; index < 16; ++index) {
+            values[index] = nb::cast<double>(seq[index]);
+        }
+        return Mat44::from_column_major(values);
+    }
+
     inline Vec4 sequence_to_vec4(nb::handle obj) {
         nb::sequence seq = fixed_component_sequence(obj, 4, "Vec4");
         return Vec4{
