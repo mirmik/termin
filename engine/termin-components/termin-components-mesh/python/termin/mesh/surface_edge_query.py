@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tcbase import log
-from tcbase._geom_native import Vec3
+from tcbase._geom_native import Mat44f, Vec3
 
 
 @dataclass(frozen=True)
@@ -121,14 +121,16 @@ def _find_surface_edge_for_entity(
 
 
 def _world_point_to_mesh_local(transform, inverse_mesh_offset, point: Vec3) -> Vec3:
-    return inverse_mesh_offset.transform_point(
-        transform.transform_point_inverse(point)
+    return _mat44f_transform_point(
+        inverse_mesh_offset,
+        transform.transform_point_inverse(point),
     )
 
 
 def _world_vector_to_mesh_local(transform, inverse_mesh_offset, vector: Vec3) -> Vec3:
-    return inverse_mesh_offset.transform_direction(
-        transform.transform_vector_inverse(vector)
+    return _mat44f_transform_direction(
+        inverse_mesh_offset,
+        transform.transform_vector_inverse(vector),
     )
 
 
@@ -160,16 +162,26 @@ def _surface_edge_axis_length_metric(transform, mesh_offset) -> Vec3:
 def _mesh_world_basis_axes(transform, mesh_offset) -> tuple[Vec3, Vec3, Vec3]:
     return (
         transform.transform_vector(
-            mesh_offset.transform_direction(Vec3.unit_x())
+            _mat44f_transform_direction(mesh_offset, Vec3.unit_x())
         ),
         transform.transform_vector(
-            mesh_offset.transform_direction(Vec3.unit_y())
+            _mat44f_transform_direction(mesh_offset, Vec3.unit_y())
         ),
         transform.transform_vector(
-            mesh_offset.transform_direction(Vec3.unit_z())
+            _mat44f_transform_direction(mesh_offset, Vec3.unit_z())
         ),
     )
 
 
 def _mesh_point_to_world(transform, mesh_offset, point: Vec3) -> Vec3:
-    return transform.transform_point(mesh_offset.transform_point(point))
+    return transform.transform_point(_mat44f_transform_point(mesh_offset, point))
+
+
+def _mat44f_transform_point(matrix: Mat44f, point: Vec3) -> Vec3:
+    """Cross the float matrix boundary without leaking Vec3f into scene math."""
+    return matrix.transform_point(point.to_float()).to_double()
+
+
+def _mat44f_transform_direction(matrix: Mat44f, vector: Vec3) -> Vec3:
+    """Cross the float matrix boundary without leaking Vec3f into scene math."""
+    return matrix.transform_direction(vector.to_float()).to_double()

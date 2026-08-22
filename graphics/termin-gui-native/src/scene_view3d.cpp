@@ -59,30 +59,14 @@ namespace termin::gui_native {
             return layout;
         }
 
-        bool finite_matrix(const tc_mat44& matrix) {
-            return std::all_of(
-                std::begin(matrix.m), std::end(matrix.m), [](double value) { return std::isfinite(value); });
-        }
-
         bool finite_camera(const SceneView3DCamera& camera) {
-            return finite_matrix(camera.view_matrix) && finite_matrix(camera.projection_matrix) &&
-                   std::isfinite(camera.world_position.x) && std::isfinite(camera.world_position.y) &&
-                   std::isfinite(camera.world_position.z);
-        }
-
-        termin::Mat44 to_matrix(const tc_mat44& source) {
-            termin::Mat44 result;
-            std::copy(std::begin(source.m), std::end(source.m), std::begin(result.data));
-            return result;
+            return termin::Mat44::from_tc_mat44(camera.view_matrix).is_finite() &&
+                   termin::Mat44::from_tc_mat44(camera.projection_matrix).is_finite() &&
+                   camera.world_position.is_finite();
         }
 
         tc_mat44 identity_matrix() {
-            tc_mat44 result{};
-            result.m[0] = 1.0;
-            result.m[5] = 1.0;
-            result.m[10] = 1.0;
-            result.m[15] = 1.0;
-            return result;
+            return termin::Mat44::identity().to_tc_mat44();
         }
 
         bool same_camera(const SceneView3DCamera& left, const SceneView3DCamera& right) {
@@ -101,62 +85,6 @@ namespace termin::gui_native {
             }
             const double maximum = static_cast<double>(std::numeric_limits<int>::max());
             return {static_cast<int>(std::min(width, maximum)), static_cast<int>(std::min(height, maximum))};
-        }
-
-        bool invert_matrix(const termin::Mat44& matrix, termin::Mat44& inverse) {
-            double rows[4][8]{};
-            for (int row = 0; row < 4; ++row) {
-                for (int column = 0; column < 4; ++column) {
-                    rows[row][column] = matrix(column, row);
-                }
-                rows[row][row + 4] = 1.0;
-            }
-            for (int pivot = 0; pivot < 4; ++pivot) {
-                int selected = pivot;
-                for (int row = pivot + 1; row < 4; ++row) {
-                    if (std::abs(rows[row][pivot]) > std::abs(rows[selected][pivot])) {
-                        selected = row;
-                    }
-                }
-                if (!std::isfinite(rows[selected][pivot]) || std::abs(rows[selected][pivot]) <= 1.0e-12) {
-                    return false;
-                }
-                if (selected != pivot) {
-                    for (int column = 0; column < 8; ++column) {
-                        std::swap(rows[selected][column], rows[pivot][column]);
-                    }
-                }
-                const double divisor = rows[pivot][pivot];
-                for (double& value : rows[pivot]) {
-                    value /= divisor;
-                }
-                for (int row = 0; row < 4; ++row) {
-                    if (row == pivot)
-                        continue;
-                    const double factor = rows[row][pivot];
-                    for (int column = 0; column < 8; ++column) {
-                        rows[row][column] -= factor * rows[pivot][column];
-                    }
-                }
-            }
-            for (int row = 0; row < 4; ++row) {
-                for (int column = 0; column < 4; ++column) {
-                    inverse(column, row) = rows[row][column + 4];
-                }
-            }
-            return true;
-        }
-
-        bool unproject(const termin::Mat44& inverse, double x, double y, double z, termin::Vec3& result) {
-            const double px = inverse(0, 0) * x + inverse(1, 0) * y + inverse(2, 0) * z + inverse(3, 0);
-            const double py = inverse(0, 1) * x + inverse(1, 1) * y + inverse(2, 1) * z + inverse(3, 1);
-            const double pz = inverse(0, 2) * x + inverse(1, 2) * y + inverse(2, 2) * z + inverse(3, 2);
-            const double pw = inverse(0, 3) * x + inverse(1, 3) * y + inverse(2, 3) * z + inverse(3, 3);
-            if (!std::isfinite(pw) || std::abs(pw) <= 1.0e-12) {
-                return false;
-            }
-            result = {px / pw, py / pw, pz / pw};
-            return std::isfinite(result.x) && std::isfinite(result.y) && std::isfinite(result.z);
         }
 
         struct CollectedDraw {
@@ -342,23 +270,25 @@ namespace termin::gui_native {
         const double ndc_x = pixel_x / requested_size_.width * 2.0 - 1.0;
         const double ndc_y = pixel_y / requested_size_.height * 2.0 - 1.0;
         termin::Mat44 inverse;
-        if (!invert_matrix(to_matrix(camera_.projection_matrix) * to_matrix(camera_.view_matrix), inverse)) {
+        const termin::Mat44 projection_view = termin::Mat44::from_tc_mat44(camera_.projection_matrix) *
+                                               termin::Mat44::from_tc_mat44(camera_.view_matrix);
+        if (!projection_view.try_inverse(inverse, 1.0e-12)) {
             tc_log_error("[termin-gui-native] SceneView3D cannot unproject through a singular camera");
             return std::nullopt;
         }
         termin::Vec3 near_point;
         termin::Vec3 far_point;
-        if (!unproject(inverse, ndc_x, ndc_y, 0.0, near_point) || !unproject(inverse, ndc_x, ndc_y, 1.0, far_point)) {
+        if (!inverse.try_transform_point({ndc_x, ndc_y, 0.0}, near_point, 1.0e-12) ||
+            !inverse.try_transform_point({ndc_x, ndc_y, 1.0}, far_point, 1.0e-12)) {
             tc_log_error("[termin-gui-native] SceneView3D produced an invalid world ray");
             return std::nullopt;
         }
-        const termin::Vec3 delta = far_point - near_point;
-        const double length = delta.norm();
-        if (!std::isfinite(length) || length <= 1.0e-12) {
+        termin::Vec3 direction;
+        if (!(far_point - near_point).try_normalized(direction, 1.0e-12)) {
             tc_log_error("[termin-gui-native] SceneView3D produced a degenerate world ray");
             return std::nullopt;
         }
-        return termin::Ray3{near_point, delta / length};
+        return termin::Ray3{near_point, direction};
     }
 
     termin::visual::SceneInteraction3D& SceneView3D::interaction() {
@@ -617,8 +547,8 @@ namespace termin::gui_native {
 
         context.begin_pass(state.color, state.depth, &clear_color_, 1.0f, true);
         context.set_viewport(0, 0, requested_size_.width, requested_size_.height);
-        const termin::Mat44 view_matrix = to_matrix(camera_.view_matrix);
-        const termin::Mat44 projection_matrix = to_matrix(camera_.projection_matrix);
+        const termin::Mat44 view_matrix = termin::Mat44::from_tc_mat44(camera_.view_matrix);
+        const termin::Mat44 projection_matrix = termin::Mat44::from_tc_mat44(camera_.projection_matrix);
         const termin::Mat44 view_projection = projection_matrix * view_matrix;
         std::array<float, 16> view_projection_float{};
         for (size_t index = 0; index < view_projection_float.size(); ++index)

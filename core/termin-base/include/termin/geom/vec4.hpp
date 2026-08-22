@@ -2,8 +2,12 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstddef>
+#include <type_traits>
 
 namespace termin {
+
+    struct Vec4f;
 
     // ============================================================================
     // Vec4 (double)
@@ -99,6 +103,29 @@ namespace termin {
             double n = norm();
             return n > 1e-10 ? *this / n : Vec4{0, 0, 0, 1};
         }
+
+        bool is_finite() const noexcept {
+            return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
+        }
+        bool try_normalized(Vec4& out, double epsilon = 1.0e-10) const noexcept {
+            const double n = std::hypot(std::hypot(x, y), std::hypot(z, w));
+            if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0 || n <= epsilon) {
+                return false;
+            }
+            out = *this / n;
+            return true;
+        }
+        Vec4 normalized_or(const Vec4& fallback, double epsilon = 1.0e-10) const noexcept {
+            Vec4 result;
+            return try_normalized(result, epsilon) ? result : fallback;
+        }
+        double* ptr() noexcept {
+            return &x;
+        }
+        const double* ptr() const noexcept {
+            return &x;
+        }
+        Vec4f to_float() const noexcept;
 
         static Vec4 zero() {
             return {0, 0, 0, 0};
@@ -221,6 +248,28 @@ namespace termin {
             return n > 1e-6f ? *this / n : Vec4f{0, 0, 0, 1};
         }
 
+        bool is_finite() const noexcept {
+            return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
+        }
+        bool try_normalized(Vec4f& out, float epsilon = 1.0e-6f) const noexcept {
+            const float n = std::hypot(std::hypot(x, y), std::hypot(z, w));
+            if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0f || n <= epsilon) {
+                return false;
+            }
+            out = *this / n;
+            return true;
+        }
+        Vec4f normalized_or(const Vec4f& fallback, float epsilon = 1.0e-6f) const noexcept {
+            Vec4f result;
+            return try_normalized(result, epsilon) ? result : fallback;
+        }
+        float* ptr() noexcept {
+            return &x;
+        }
+        const float* ptr() const noexcept {
+            return &x;
+        }
+
         Vec4 to_double() const {
             return {x, y, z, w};
         }
@@ -245,6 +294,21 @@ namespace termin {
     inline Vec4f operator*(float s, const Vec4f& v) {
         return v * s;
     }
+
+    inline Vec4f Vec4::to_float() const noexcept {
+        return Vec4f{static_cast<float>(x), static_cast<float>(y), static_cast<float>(z), static_cast<float>(w)};
+    }
+
+    static_assert(std::is_standard_layout<Vec4>::value, "Vec4 must stay standard layout");
+    static_assert(std::is_trivially_copyable<Vec4>::value, "Vec4 must stay trivially copyable");
+    static_assert(sizeof(Vec4) == sizeof(double) * 4, "Vec4 must stay packed");
+    static_assert(offsetof(Vec4, x) == 0, "Vec4.x offset changed");
+    static_assert(offsetof(Vec4, w) == sizeof(double) * 3, "Vec4.w offset changed");
+    static_assert(std::is_standard_layout<Vec4f>::value, "Vec4f must stay standard layout");
+    static_assert(std::is_trivially_copyable<Vec4f>::value, "Vec4f must stay trivially copyable");
+    static_assert(sizeof(Vec4f) == sizeof(float) * 4, "Vec4f must stay packed");
+    static_assert(offsetof(Vec4f, x) == 0, "Vec4f.x offset changed");
+    static_assert(offsetof(Vec4f, w) == sizeof(float) * 3, "Vec4f.w offset changed");
 
     // ============================================================================
     // Vec4i (int)

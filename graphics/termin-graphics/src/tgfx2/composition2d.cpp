@@ -9,15 +9,6 @@
 
 namespace {
 
-    bool finite(tc_vec2f value) {
-        return std::isfinite(value.x) && std::isfinite(value.y);
-    }
-
-    bool valid_bounds(tc_bounds2f value) {
-        return std::isfinite(value.x0) && std::isfinite(value.y0) && std::isfinite(value.x1) &&
-               std::isfinite(value.y1) && value.x0 <= value.x1 && value.y0 <= value.y1;
-    }
-
     bool valid_rule(tgfx::FillRule rule) {
         return rule == tgfx::FillRule::NonZero || rule == tgfx::FillRule::EvenOdd;
     }
@@ -77,12 +68,13 @@ extern "C" {
     bool tgfx2_composition_state2d_map_point_to_world(const tgfx2_composition_state2d* state,
                                                       tc_vec2f local_point,
                                                       tc_vec2f* out_world_point) {
-        if (!state || !out_world_point || !tc_affine2f_is_finite(state->local_to_world) || !finite(local_point)) {
+        if (!state || !out_world_point || !tc_affine2f_is_finite(state->local_to_world) ||
+            !local_point.is_finite()) {
             tc_log_error("[Composition2D] cannot map invalid local point or state");
             return false;
         }
         const tc_vec2f result = tc_affine2f_transform_point(state->local_to_world, local_point);
-        if (!finite(result)) {
+        if (!result.is_finite()) {
             tc_log_error("[Composition2D] local-to-world point mapping overflowed");
             return false;
         }
@@ -94,12 +86,12 @@ extern "C" {
                                                         tc_vec2f world_point,
                                                         tc_vec2f* out_local_point) {
         if (!state || !out_local_point || !state->invertible || !tc_affine2f_is_finite(state->world_to_local) ||
-            !finite(world_point)) {
+            !world_point.is_finite()) {
             tc_log_error("[Composition2D] cannot map world point through singular or invalid state");
             return false;
         }
         const tc_vec2f result = tc_affine2f_transform_point(state->world_to_local, world_point);
-        if (!finite(result)) {
+        if (!result.is_finite()) {
             tc_log_error("[Composition2D] world-to-local point mapping overflowed");
             return false;
         }
@@ -111,12 +103,12 @@ extern "C" {
                                                        tc_bounds2f local_bounds,
                                                        tc_bounds2f* out_world_bounds) {
         if (!state || !out_world_bounds || !tc_affine2f_is_finite(state->local_to_world) ||
-            !valid_bounds(local_bounds)) {
+            !local_bounds.is_valid()) {
             tc_log_error("[Composition2D] cannot map invalid local bounds or state");
             return false;
         }
         const tc_bounds2f result = tc_affine2f_transform_bounds(state->local_to_world, local_bounds);
-        if (!valid_bounds(result)) {
+        if (!result.is_valid()) {
             tc_log_error("[Composition2D] local-to-world bounds mapping overflowed");
             return false;
         }
@@ -319,7 +311,7 @@ namespace tgfx {
     }
 
     bool CompositionEvaluator2D::clips_contain(termin::Vec2f world_point) const {
-        if (!finite(world_point)) {
+        if (!world_point.is_finite()) {
             tc_log_error("[Composition2D] cannot clip-test non-finite point");
             return false;
         }

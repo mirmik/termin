@@ -10,7 +10,7 @@ namespace termin {
     // coordinate * coordinate_scale, composed with the origin pose.
     //
     // Usage:
-    //   rotator.set_axis(0, 0, 1);
+    //   rotator.set_axis({0, 0, 1});
     //   rotator.set_coordinate_scale(M_PI / 180.0);
     //   rotator.set_coordinate(90);
     class ENTITY_API RotatorComponent : public KinematicUnitComponent {

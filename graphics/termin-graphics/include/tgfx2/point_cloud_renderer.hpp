@@ -6,8 +6,8 @@
 #include <span>
 #include <type_traits>
 
+#include <termin/geom/aabb.hpp>
 #include <termin/geom/color.hpp>
-#include <termin/geom/vec3.hpp>
 
 #include "tgfx2/handles.hpp"
 #include "tgfx2/tgfx2_api.h"
@@ -82,8 +82,7 @@ namespace tgfx {
         IRenderDevice* device_ = nullptr;
         uint64_t capacity_bytes_ = 0;
         uint32_t point_count_ = 0;
-        termin::Vec3f bounds_min_{};
-        termin::Vec3f bounds_max_{};
+        termin::AABBf bounds_{};
         bool has_bounds_ = false;
 
     public:
@@ -109,11 +108,14 @@ namespace tgfx {
         bool has_bounds() const noexcept {
             return has_bounds_;
         }
+        const termin::AABBf& bounds() const noexcept {
+            return bounds_;
+        }
         termin::Vec3f bounds_min() const noexcept {
-            return bounds_min_;
+            return bounds_.min_point;
         }
         termin::Vec3f bounds_max() const noexcept {
-            return bounds_max_;
+            return bounds_.max_point;
         }
 
     private:

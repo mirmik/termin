@@ -85,7 +85,7 @@ namespace {
         Entity joint_a_entity = result.root.create_child("Hip Joint");
         result.joint_a = new RotatorComponent();
         joint_a_entity.add_component(result.joint_a);
-        result.joint_a->set_axis(0.0, 1.0, 0.0);
+        result.joint_a->set_axis({0.0, 1.0, 0.0});
         result.joint_a->set_coordinate_scale(1.0);
         result.joint_a->coordinate = 0.7;
         result.joint_a->origin_position = {0.0, 0.0, 0.0};
@@ -101,7 +101,7 @@ namespace {
         Entity joint_b_entity = body_a_entity.create_child("Knee Joint");
         result.joint_b = new RotatorComponent();
         joint_b_entity.add_component(result.joint_b);
-        result.joint_b->set_axis(0.0, 1.0, 0.0);
+        result.joint_b->set_axis({0.0, 1.0, 0.0});
         result.joint_b->set_coordinate_scale(1.0);
         result.joint_b->coordinate = -0.4;
         result.joint_b->origin_position = {0.0, 0.0, -1.0};
@@ -159,7 +159,7 @@ namespace {
             Entity joint_entity = result.root.create_child(joint_name);
             joint = new RotatorComponent();
             joint_entity.add_component(joint);
-            joint->set_axis(0.0, 1.0, 0.0);
+            joint->set_axis({0.0, 1.0, 0.0});
             joint->origin_position = {x, 0.0, 0.0};
             joint->apply();
 
@@ -256,7 +256,7 @@ namespace {
         const auto add_servo = [&result](Entity joint_entity, std::size_t index, double target) {
             result.joints[index] = new RotatorComponent();
             joint_entity.add_component(result.joints[index]);
-            result.joints[index]->set_axis(0.0, 1.0, 0.0);
+            result.joints[index]->set_axis({0.0, 1.0, 0.0});
             result.joints[index]->set_coordinate_scale(std::numbers::pi_v<double> / 180.0);
             result.joints[index]->coordinate = target;
 
@@ -342,7 +342,7 @@ namespace {
         Entity joint_entity = root.create_child("Servo Joint");
         result.joint = new RotatorComponent();
         joint_entity.add_component(result.joint);
-        result.joint->set_axis(0.0, 4.0, 0.0);
+        result.joint->set_axis({0.0, 4.0, 0.0});
         result.joint->set_coordinate(15.0);
 
         result.motor = new FEMArticulationMotorComponent();
@@ -437,7 +437,7 @@ namespace {
         result.unit->mass = 1.0;
         result.unit->inertia_diagonal = {0.2, 0.2, 0.2};
         result.unit_entity.add_component(result.unit);
-        result.unit->set_axis(0.0, 1.0, 0.0);
+        result.unit->set_axis({0.0, 1.0, 0.0});
         return result;
     }
 
@@ -522,7 +522,7 @@ TEST_CASE("FEM borrows ArticulationComponent model and accepts HQP efforts") {
 
     Entity shoulder_entity = root.create_child("Shoulder");
     auto* shoulder = new RotatorComponent();
-    shoulder->set_axis(0.0, 1.0, 0.0);
+    shoulder->set_axis({0.0, 1.0, 0.0});
     shoulder->mass = 1.0;
     shoulder->inertia_diagonal = {0.2, 0.2, 0.1};
     shoulder_entity.add_component(shoulder);
@@ -532,7 +532,7 @@ TEST_CASE("FEM borrows ArticulationComponent model and accepts HQP efforts") {
 
     Entity elbow_entity = shoulder_entity.create_child("Elbow");
     auto* elbow = new RotatorComponent();
-    elbow->set_axis(0.0, 1.0, 0.0);
+    elbow->set_axis({0.0, 1.0, 0.0});
     elbow->origin_position = {0.8, 0.0, 0.0};
     elbow->mass = 0.7;
     elbow->inertia_diagonal = {0.1, 0.1, 0.05};
@@ -606,7 +606,7 @@ TEST_CASE("rotator attachment distinguishes fresh and deserialized state") {
     CHECK((fresh_entity.transform().local_scale() - Vec3{2.0, 3.0, 4.0}).norm() < 1.0e-12);
 
     RotatorComponent authored;
-    authored.set_axis(0.0, 1.0, 0.0);
+    authored.set_axis({0.0, 1.0, 0.0});
     authored.set_coordinate_scale(1.0);
     authored.coordinate = 0.8;
     authored.origin_position = {4.0, 5.0, 6.0};
@@ -641,7 +641,7 @@ TEST_CASE("kinematic axes are unit directions with an explicit coordinate scale"
     using namespace termin;
 
     RotatorComponent rotator;
-    rotator.set_axis(0.0, 4.0, 0.0);
+    rotator.set_axis({0.0, 4.0, 0.0});
     rotator.set_coordinate_scale(std::numbers::pi_v<double> / 180.0);
     rotator.set_coordinate(90.0);
 
@@ -1232,7 +1232,7 @@ TEST_CASE("FEM articulation contact supplies the expected generalized support") 
     Entity joint_entity = root.create_child("Support Joint");
     auto* joint = new RotatorComponent();
     joint_entity.add_component(joint);
-    joint->set_axis(0.0, 1.0, 0.0);
+    joint->set_axis({0.0, 1.0, 0.0});
     joint->set_coordinate_scale(1.0);
     joint->set_coordinate(0.0);
     Entity link_entity = joint_entity.create_child("Supported Link");
@@ -1302,7 +1302,7 @@ TEST_CASE("FEM routes a CollisionWorld patch to an articulation unit") {
     Entity joint_entity = root.create_child("Joint");
     auto* joint = new RotatorComponent();
     joint_entity.add_component(joint);
-    joint->set_axis(0.0, 1.0, 0.0);
+    joint->set_axis({0.0, 1.0, 0.0});
     joint->set_coordinate_scale(1.0);
     joint->set_coordinate(0.0);
     Entity link_entity = joint_entity.create_child("Contact Link");
@@ -1468,7 +1468,7 @@ TEST_CASE("FEM filters adjacent direct shared units unless enabled") {
     child->mass = 1.0;
     child->inertia_diagonal = {0.2, 0.2, 0.2};
     child_entity.add_component(child);
-    child->set_axis(0.0, 1.0, 0.0);
+    child->set_axis({0.0, 1.0, 0.0});
     add_sphere_collider(child_entity, "Child Collider", {0.45, 0.0, 0.5});
 
     collision::CollisionWorld* collision_world = collision::CollisionWorld::from_scene(scene.handle());

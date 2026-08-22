@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <memory>
 
+#include <termin/geom/mat44.hpp>
 #include <termin_visual_scene/items/primitive_item3d.hpp>
 
 using namespace termin::gui_native;
@@ -18,9 +19,7 @@ using namespace termin::visual;
 namespace {
 
     tc_mat44 identity_matrix() {
-        tc_mat44 result{};
-        result.m[0] = result.m[5] = result.m[10] = result.m[15] = 1.0;
-        return result;
+        return termin::Mat44::identity().to_tc_mat44();
     }
 
     SceneView3DCamera identity_camera(double x = 0.0) {
@@ -91,6 +90,23 @@ namespace {
         assert(tc_ui_document_destroy_widget(document_handle, right_handle));
         tc_visual_scene3d_destroy(left_scene_handle);
         tc_visual_scene3d_destroy(right_scene_handle);
+        tc_ui_document_destroy(document_handle);
+    }
+
+    void test_singular_camera_rejects_world_ray() {
+        const tc_ui_document_handle document_handle = tc_ui_document_create();
+        TcDocument document(document_handle);
+        auto* view = new SceneView3D();
+        const tc_widget_handle view_handle = document.adopt(view);
+        assert(document.add_root(*view));
+        view->layout(document_handle, {0.0f, 0.0f, 100.0f, 100.0f});
+
+        SceneView3DCamera camera = identity_camera();
+        camera.projection_matrix = {};
+        view->set_camera(camera);
+        assert(!view->world_ray(50.0f, 50.0f));
+
+        assert(tc_ui_document_destroy_widget(document_handle, view_handle));
         tc_ui_document_destroy(document_handle);
     }
 
@@ -182,6 +198,7 @@ namespace {
 
 int main() {
     test_independent_views_resize_and_ray_projection();
+    test_singular_camera_rejects_world_ray();
     test_item_capture_is_local_and_fallback_receives_only_unhandled_pointer();
     test_destroy_cancels_capture_and_releases_callbacks_without_owning_scene();
     return EXIT_SUCCESS;

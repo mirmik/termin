@@ -4,6 +4,7 @@
 
 #include "geom/tc_pose.h"
 #include "geom/tc_vec3.h"
+#include "geom/tc_vec3f.h"
 #include <math.h>
 #include <tcbase/tc_types.h>
 
@@ -12,9 +13,17 @@
     tc_aabb {                                                                                                          \
         min_, max_                                                                                                     \
     }
+#define TC_AABBF(min_, max_)                                                                                           \
+    tc_aabbf {                                                                                                         \
+        min_, max_                                                                                                     \
+    }
 #else
 #define TC_AABB(min_, max_)                                                                                            \
     (tc_aabb) {                                                                                                        \
+        min_, max_                                                                                                     \
+    }
+#define TC_AABBF(min_, max_)                                                                                           \
+    (tc_aabbf) {                                                                                                       \
         min_, max_                                                                                                     \
     }
 #endif
@@ -77,6 +86,20 @@ TC_C_STATIC_INLINE tc_vec3 tc_aabb_project_point(tc_aabb box, tc_vec3 point) {
                    fmin(fmax(point.z, box.min_point.z), box.max_point.z));
 }
 
+TC_C_STATIC_INLINE bool tc_aabb_is_finite(tc_aabb box) {
+    return tc_vec3_is_finite(box.min_point) && tc_vec3_is_finite(box.max_point);
+}
+
+TC_C_STATIC_INLINE bool tc_aabb_is_valid(tc_aabb box) {
+    return tc_aabb_is_finite(box) && box.min_point.x <= box.max_point.x && box.min_point.y <= box.max_point.y &&
+           box.min_point.z <= box.max_point.z;
+}
+
+TC_C_STATIC_INLINE tc_aabb tc_aabb_expanded(tc_aabb box, double amount) {
+    tc_vec3 padding = TC_VEC3(amount, amount, amount);
+    return tc_aabb_new(tc_vec3_sub(box.min_point, padding), tc_vec3_add(box.max_point, padding));
+}
+
 TC_C_STATIC_INLINE double tc_aabb_surface_area(tc_aabb box) {
     tc_vec3 d = tc_aabb_size(box);
     return 2.0 * (d.x * d.y + d.y * d.z + d.z * d.x);
@@ -127,6 +150,74 @@ TC_C_STATIC_INLINE tc_aabb tc_aabb_transform_by_gpose(tc_aabb box, tc_general_po
         tc_aabb_new(tc_gpose_transform_point(pose, corners[0]), tc_gpose_transform_point(pose, corners[0]));
     for (size_t i = 1; i < 8; ++i) {
         tc_aabb_extend(&result, tc_gpose_transform_point(pose, corners[i]));
+    }
+    return result;
+}
+
+TC_C_STATIC_INLINE tc_aabbf tc_aabbf_new(tc_vec3f min_point, tc_vec3f max_point) {
+    return TC_AABBF(min_point, max_point);
+}
+
+TC_C_STATIC_INLINE tc_aabbf tc_aabbf_zero(void) {
+    return tc_aabbf_new(tc_vec3f_zero(), tc_vec3f_zero());
+}
+
+TC_C_STATIC_INLINE void tc_aabbf_extend(tc_aabbf* box, tc_vec3f point) {
+    box->min_point = tc_vec3f_min(box->min_point, point);
+    box->max_point = tc_vec3f_max(box->max_point, point);
+}
+
+TC_C_STATIC_INLINE bool tc_aabbf_intersects(tc_aabbf a, tc_aabbf b) {
+    return a.max_point.x >= b.min_point.x && b.max_point.x >= a.min_point.x && a.max_point.y >= b.min_point.y &&
+           b.max_point.y >= a.min_point.y && a.max_point.z >= b.min_point.z && b.max_point.z >= a.min_point.z;
+}
+
+TC_C_STATIC_INLINE bool tc_aabbf_contains(tc_aabbf box, tc_vec3f point) {
+    return point.x >= box.min_point.x && point.x <= box.max_point.x && point.y >= box.min_point.y &&
+           point.y <= box.max_point.y && point.z >= box.min_point.z && point.z <= box.max_point.z;
+}
+
+TC_C_STATIC_INLINE tc_aabbf tc_aabbf_merge(tc_aabbf a, tc_aabbf b) {
+    return tc_aabbf_new(tc_vec3f_min(a.min_point, b.min_point), tc_vec3f_max(a.max_point, b.max_point));
+}
+
+TC_C_STATIC_INLINE tc_vec3f tc_aabbf_center(tc_aabbf box) {
+    return tc_vec3f_scale(tc_vec3f_add(box.min_point, box.max_point), 0.5f);
+}
+
+TC_C_STATIC_INLINE tc_vec3f tc_aabbf_size(tc_aabbf box) {
+    return tc_vec3f_sub(box.max_point, box.min_point);
+}
+
+TC_C_STATIC_INLINE tc_vec3f tc_aabbf_half_size(tc_aabbf box) {
+    return tc_vec3f_scale(tc_aabbf_size(box), 0.5f);
+}
+
+TC_C_STATIC_INLINE tc_vec3f tc_aabbf_project_point(tc_aabbf box, tc_vec3f point) {
+    return tc_vec3f_clamp(point, box.min_point, box.max_point);
+}
+
+TC_C_STATIC_INLINE bool tc_aabbf_is_finite(tc_aabbf box) {
+    return tc_vec3f_is_finite(box.min_point) && tc_vec3f_is_finite(box.max_point);
+}
+
+TC_C_STATIC_INLINE bool tc_aabbf_is_valid(tc_aabbf box) {
+    return tc_aabbf_is_finite(box) && box.min_point.x <= box.max_point.x && box.min_point.y <= box.max_point.y &&
+           box.min_point.z <= box.max_point.z;
+}
+
+TC_C_STATIC_INLINE tc_aabbf tc_aabbf_expanded(tc_aabbf box, float amount) {
+    tc_vec3f padding = TC_VEC3F(amount, amount, amount);
+    return tc_aabbf_new(tc_vec3f_sub(box.min_point, padding), tc_vec3f_add(box.max_point, padding));
+}
+
+TC_C_STATIC_INLINE tc_aabbf tc_aabbf_from_points(const tc_vec3f* points, size_t count) {
+    if (count == 0) {
+        return tc_aabbf_zero();
+    }
+    tc_aabbf result = tc_aabbf_new(points[0], points[0]);
+    for (size_t i = 1; i < count; ++i) {
+        tc_aabbf_extend(&result, points[i]);
     }
     return result;
 }

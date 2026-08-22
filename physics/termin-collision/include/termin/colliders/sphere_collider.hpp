@@ -191,13 +191,11 @@ namespace termin {
 
             // Bounds в unscaled пространстве (inverse_transform_point уже применил inverse scale)
             Vec3 half = box.half_size;
-            Vec3 box_min = Vec3(-half.x, -half.y, -half.z);
-            Vec3 box_max = Vec3(+half.x, +half.y, +half.z);
+            Vec3 box_min = -half;
+            Vec3 box_max = half;
 
             // Ближайшая точка на box
-            Vec3 closest(std::clamp(local.x, box_min.x, box_max.x),
-                         std::clamp(local.y, box_min.y, box_max.y),
-                         std::clamp(local.z, box_min.z, box_max.z));
+            Vec3 closest = local.clamped(box_min, box_max);
 
             Vec3 closest_world = box.transform.transform_point(closest);
 

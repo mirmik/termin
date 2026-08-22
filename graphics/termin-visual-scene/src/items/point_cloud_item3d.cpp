@@ -12,7 +12,7 @@ namespace termin::visual {
         bool valid_cloud(const PointCloudData3D& cloud) {
             return !cloud.points.empty() &&
                    std::all_of(cloud.points.begin(), cloud.points.end(), [](const auto& point) {
-                       return detail::finite(point.position) && detail::finite(point.color) &&
+                       return point.position.is_finite() && detail::finite(point.color) &&
                               std::isfinite(point.size_scale) && point.size_scale > 0.0f;
                    });
         }
@@ -75,9 +75,7 @@ namespace termin::visual {
                 return left.size_scale < right.size_scale;
             });
         const double radius = pick_radius_ * largest->size_scale;
-        bounds->min -= termin::Vec3{radius, radius, radius};
-        bounds->max += termin::Vec3{radius, radius, radius};
-        return bounds;
+        return detail::to_visual_bounds(bounds->expanded(radius));
     }
 
     std::optional<HitCandidate3D> PointCloudItem3D::hit_test(const HitTestContext3D& context) const {

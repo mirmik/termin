@@ -270,10 +270,7 @@ namespace tgfx {
                     result.bounds = {p.x, p.y, p.x, p.y};
                     result.empty = false;
                 } else {
-                    result.bounds.x0 = std::min(result.bounds.x0, p.x);
-                    result.bounds.y0 = std::min(result.bounds.y0, p.y);
-                    result.bounds.x1 = std::max(result.bounds.x1, p.x);
-                    result.bounds.y1 = std::max(result.bounds.y1, p.y);
+                    result.bounds.extend(p);
                 }
             }
         }
@@ -293,11 +290,7 @@ namespace tgfx {
         if (flat.empty || !stroke.validate())
             return flat.bounds;
         const float extent = stroke.width * 0.5f * std::max(1.0f, stroke.miter_limit);
-        flat.bounds.x0 -= extent;
-        flat.bounds.y0 -= extent;
-        flat.bounds.x1 += extent;
-        flat.bounds.y1 += extent;
-        return flat.bounds;
+        return flat.bounds.expanded(extent);
     }
 
     bool FlattenedPath2f::contains(termin::Vec2f p, FillRule rule) const noexcept {

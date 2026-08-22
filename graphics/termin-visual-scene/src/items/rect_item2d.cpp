@@ -1,7 +1,5 @@
 #include "termin_visual_scene/items/rect_item2d.hpp"
 
-#include "item_geometry2d_internal.hpp"
-
 #include <stdexcept>
 
 #include <tcbase/tc_log.hpp>
@@ -11,7 +9,7 @@ namespace termin::visual {
 
         void
         validate(termin::Rect2f rect, const tgfx::FillPaint& fill, const std::optional<tgfx::StrokePaint>& stroke) {
-            if (!detail::valid_rect(rect) || !fill.validate() || (stroke && !stroke->validate())) {
+            if (!rect.is_valid() || !fill.validate() || (stroke && !stroke->validate())) {
                 throw std::invalid_argument("invalid RectItem2D state");
             }
         }
@@ -45,12 +43,12 @@ namespace termin::visual {
     }
 
     std::optional<termin::Bounds2f> RectItem2D::local_bounds() const {
-        auto result = detail::rect_bounds(rect_);
-        return stroke_ ? detail::expanded(result, stroke_->width * 0.5f) : result;
+        const auto result = rect_.bounds();
+        return stroke_ ? result.expanded(stroke_->width * 0.5f) : result;
     }
 
     bool RectItem2D::hit_test(termin::Vec2f point, float) const {
-        return detail::rect_contains(rect_, point);
+        return rect_.contains_closed(point);
     }
 
     bool RectItem2D::paint(GraphicItemPaintContext2D& context) const {

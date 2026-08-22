@@ -74,7 +74,7 @@ namespace termin {
 
             void clear();
 
-            size_t add_box(double sx, double sy, double sz, double mass, const Pose3& pose, bool is_static = false);
+            size_t add_box(const Vec3& size, double mass, const Pose3& pose, bool is_static = false);
 
             size_t add_sphere(double radius, double mass, const Pose3& pose, bool is_static = false);
 

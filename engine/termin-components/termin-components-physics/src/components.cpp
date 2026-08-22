@@ -161,7 +161,7 @@ namespace termin {
 
         collider_component_ = entity().get_component<ColliderComponent>();
         if (collider_component_ == nullptr) {
-            body = physics::RigidBody::create_box(scale.x, scale.y, scale.z, mass, pose, is_static);
+            body = physics::RigidBody::create_box(scale, mass, pose, is_static);
             return true;
         }
         const colliders::ColliderPrimitive* primitive = collider_component_->collider();

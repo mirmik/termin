@@ -44,12 +44,15 @@ namespace termin {
                  "Translate target along the camera right/up axes")
             .def("zoom", &OrbitCameraController::zoom, nb::arg("delta"), "Zoom camera (change radius or ortho_size)")
             .def("center_on", &OrbitCameraController::center_on, nb::arg("position"), "Center camera on position")
-            .def("fly_move",
-                 &OrbitCameraController::fly_move,
-                 nb::arg("right"),
-                 nb::arg("forward"),
-                 nb::arg("up"),
-                 "Translate camera along local axes")
+            .def(
+                "fly_move",
+                [](OrbitCameraController& controller, double right, double forward, double up) {
+                    controller.fly_move(Vec3{right, forward, up});
+                },
+                nb::arg("right"),
+                nb::arg("forward"),
+                nb::arg("up"),
+                "Translate camera along local axes")
             .def("fly_forward",
                  &OrbitCameraController::fly_forward,
                  nb::arg("delta"),

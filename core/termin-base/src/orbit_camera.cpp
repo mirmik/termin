@@ -2,27 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
+
+#include <tcbase/tc_log.h>
 
 namespace termin {
     namespace {
         constexpr double kPi = 3.14159265358979323846;
         constexpr double kDegToRad = kPi / 180.0;
         constexpr double kEpsilon = 1.0e-12;
-
-        bool finite(const Vec3& value) {
-            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-        }
-
-        bool finite(const Mat44& value) {
-            return std::all_of(std::begin(value.data), std::end(value.data), [](double item) {
-                return std::isfinite(item);
-            });
-        }
-
-        void copy_mat(const Mat44& source, double out[16]) {
-            std::memcpy(out, source.data, sizeof(source.data));
-        }
 
         Mat44 look_at_negative_z(const Vec3& eye, const Vec3& target, const Vec3& up) {
             const Vec3 forward = (target - eye).normalized();
@@ -56,17 +43,6 @@ namespace termin {
             return matrix;
         }
 
-        std::optional<Vec3> transform_clip_point(const Mat44& matrix, double x, double y, double z) {
-            const double tx = matrix(0, 0) * x + matrix(1, 0) * y + matrix(2, 0) * z + matrix(3, 0);
-            const double ty = matrix(0, 1) * x + matrix(1, 1) * y + matrix(2, 1) * z + matrix(3, 1);
-            const double tz = matrix(0, 2) * x + matrix(1, 2) * y + matrix(2, 2) * z + matrix(3, 2);
-            const double tw = matrix(0, 3) * x + matrix(1, 3) * y + matrix(2, 3) * z + matrix(3, 3);
-            if (!std::isfinite(tw) || std::abs(tw) <= kEpsilon) {
-                return std::nullopt;
-            }
-            const Vec3 point{tx / tw, ty / tw, tz / tw};
-            return finite(point) ? std::optional<Vec3>(point) : std::nullopt;
-        }
     } // namespace
 
     Vec3 orbit_camera_eye(const Vec3& target, double distance, double azimuth, double elevation) {
@@ -103,29 +79,27 @@ namespace termin {
                                                         const Vec3& target,
                                                         const Vec2& screen_position,
                                                         const Rect2& viewport) {
-        if (!std::isfinite(viewport.x) || !std::isfinite(viewport.y) || !std::isfinite(viewport.width) ||
-            !std::isfinite(viewport.height) || viewport.width <= 0.0 || viewport.height <= 0.0 || !finite(eye) ||
-            !finite(target)) {
+        if (!viewport.is_finite() || viewport.width <= 0.0 || viewport.height <= 0.0 || !eye.is_finite() ||
+            !target.is_finite()) {
             return std::nullopt;
         }
         const Mat44 projection_view = projection * view;
-        const double determinant = projection_view.determinant();
-        if (!finite(projection_view) || !std::isfinite(determinant) || determinant == 0.0) {
+        if (!projection_view.is_finite()) {
             return std::nullopt;
         }
         const Vec3 eye_to_target = target - eye;
-        if (eye_to_target.norm() <= kEpsilon) {
+        Vec3 plane_normal;
+        if (!eye_to_target.try_normalized(plane_normal, kEpsilon)) {
             return std::nullopt;
         }
 
         OrbitCameraPan result;
-        result.inverse_projection_view_ = projection_view.inverse();
-        if (!finite(result.inverse_projection_view_)) {
+        if (!projection_view.try_inverse(result.inverse_projection_view_, kEpsilon)) {
             return std::nullopt;
         }
         result.initial_target_ = target;
         result.plane_point_ = target;
-        result.plane_normal_ = eye_to_target.normalized();
+        result.plane_normal_ = plane_normal;
         result.viewport_ = viewport;
         const std::optional<Vec3> grabbed = result.point_on_plane(screen_position);
         if (!grabbed) {
@@ -141,7 +115,7 @@ namespace termin {
             return std::nullopt;
         }
         const Vec3 target = initial_target_ + grabbed_point_ - *current;
-        return finite(target) ? std::optional<Vec3>(target) : std::nullopt;
+        return target.is_finite() ? std::optional<Vec3>(target) : std::nullopt;
     }
 
     const Vec3& OrbitCameraPan::grabbed_point() const {
@@ -149,11 +123,14 @@ namespace termin {
     }
 
     std::optional<Vec3> OrbitCameraPan::unproject(double ndc_x, double ndc_y, double ndc_z) const {
-        return transform_clip_point(inverse_projection_view_, ndc_x, ndc_y, ndc_z);
+        Vec3 point;
+        return inverse_projection_view_.try_transform_point({ndc_x, ndc_y, ndc_z}, point, kEpsilon)
+                   ? std::optional<Vec3>(point)
+                   : std::nullopt;
     }
 
     std::optional<Vec3> OrbitCameraPan::point_on_plane(const Vec2& screen_position) const {
-        if (!std::isfinite(screen_position.x) || !std::isfinite(screen_position.y)) {
+        if (!screen_position.is_finite()) {
             return std::nullopt;
         }
         const double ndc_x = ((screen_position.x - viewport_.x) / viewport_.width) * 2.0 - 1.0;
@@ -170,7 +147,7 @@ namespace termin {
         }
         const double distance = (plane_point_ - *near_point).dot(plane_normal_) / denominator;
         const Vec3 point = *near_point + ray * distance;
-        return finite(point) ? std::optional<Vec3>(point) : std::nullopt;
+        return point.is_finite() ? std::optional<Vec3>(point) : std::nullopt;
     }
 
     OrbitCamera::OrbitCamera()
@@ -204,15 +181,15 @@ namespace termin {
     }
 
     void OrbitCamera::view_matrix(double out[16]) const {
-        copy_mat(view_matrix(), out);
+        view_matrix().copy_column_major_to(out);
     }
 
     void OrbitCamera::projection_matrix(double aspect, double out[16]) const {
-        copy_mat(projection_matrix(aspect), out);
+        projection_matrix(aspect).copy_column_major_to(out);
     }
 
     void OrbitCamera::mvp(double aspect, double out[16]) const {
-        copy_mat(mvp(aspect), out);
+        mvp(aspect).copy_column_major_to(out);
     }
 
     void OrbitCamera::orbit(double delta_azimuth, double delta_elevation) {
@@ -266,13 +243,29 @@ namespace termin {
         const double aspect = std::max(safe_width / safe_height, 0.001);
         const double ndc_x = (screen_position.x - viewport.x) / safe_width * 2.0 - 1.0;
         const double ndc_y = (screen_position.y - viewport.y) / safe_height * 2.0 - 1.0;
-        const Mat44 inverse_projection_view = mvp(aspect).inverse();
-        const std::optional<Vec3> near_point = transform_clip_point(inverse_projection_view, ndc_x, ndc_y, 0.0);
-        const std::optional<Vec3> far_point = transform_clip_point(inverse_projection_view, ndc_x, ndc_y, 1.0);
-        if (!near_point || !far_point) {
+        const Mat44 projection_view = mvp(aspect);
+        if (!projection_view.is_finite()) {
+            tc_log_error("[termin-base] OrbitCamera cannot build a screen ray from a non-finite projection-view matrix");
             return {};
         }
-        return {*near_point, (*far_point - *near_point).normalized()};
+        Mat44 inverse_projection_view;
+        if (!projection_view.try_inverse(inverse_projection_view, kEpsilon)) {
+            tc_log_error("[termin-base] OrbitCamera cannot build a screen ray from a singular projection-view matrix");
+            return {};
+        }
+        Vec3 near_point;
+        Vec3 far_point;
+        if (!inverse_projection_view.try_transform_point({ndc_x, ndc_y, 0.0}, near_point, kEpsilon) ||
+            !inverse_projection_view.try_transform_point({ndc_x, ndc_y, 1.0}, far_point, kEpsilon)) {
+            tc_log_error("[termin-base] OrbitCamera produced an invalid screen ray while unprojecting clip points");
+            return {};
+        }
+        Vec3 direction;
+        if (!(far_point - near_point).try_normalized(direction, kEpsilon)) {
+            tc_log_error("[termin-base] OrbitCamera produced a degenerate screen ray");
+            return {};
+        }
+        return {near_point, direction};
     }
 
     std::optional<Vec3> OrbitCamera::world_point_on_z_plane(const Vec2& screen_position,

@@ -10,8 +10,14 @@
 #include <limits>
 
 namespace termin {
+    struct Bounds2;
     struct Mat44;
+    struct Rect2;
 }
+
+struct tc_rect2f;
+struct tc_vec2f;
+struct tc_vec3f;
 #endif
 
 #ifdef __cplusplus
@@ -25,77 +31,125 @@ struct tc_vec2 {
         : x(x),
           y(y) {}
 
-    double& operator[](int i) {
+    double& operator[](int i) noexcept {
         assert(i >= 0 && i < 2);
         return i == 0 ? x : y;
     }
-    double operator[](int i) const {
+    double operator[](int i) const noexcept {
         assert(i >= 0 && i < 2);
         return i == 0 ? x : y;
     }
 
-    tc_vec2 operator+(const tc_vec2& v) const {
+    tc_vec2 operator+(const tc_vec2& v) const noexcept {
         return {x + v.x, y + v.y};
     }
-    tc_vec2 operator-(const tc_vec2& v) const {
+    tc_vec2 operator-(const tc_vec2& v) const noexcept {
         return {x - v.x, y - v.y};
     }
-    tc_vec2 operator*(double s) const {
+    tc_vec2 operator*(double s) const noexcept {
         return {x * s, y * s};
     }
-    tc_vec2 operator/(double s) const {
+    tc_vec2 operator/(double s) const noexcept {
         return {x / s, y / s};
     }
-    tc_vec2 operator-() const {
+    tc_vec2 operator-() const noexcept {
         return {-x, -y};
     }
 
-    tc_vec2& operator+=(const tc_vec2& v) {
+    tc_vec2& operator+=(const tc_vec2& v) noexcept {
         x += v.x;
         y += v.y;
         return *this;
     }
-    tc_vec2& operator-=(const tc_vec2& v) {
+    tc_vec2& operator-=(const tc_vec2& v) noexcept {
         x -= v.x;
         y -= v.y;
         return *this;
     }
-    tc_vec2& operator*=(double s) {
+    tc_vec2& operator*=(double s) noexcept {
         x *= s;
         y *= s;
         return *this;
     }
-    tc_vec2& operator/=(double s) {
+    tc_vec2& operator/=(double s) noexcept {
         x /= s;
         y /= s;
         return *this;
     }
 
-    bool operator==(const tc_vec2& v) const {
+    bool operator==(const tc_vec2& v) const noexcept {
         return x == v.x && y == v.y;
     }
-    bool operator!=(const tc_vec2& v) const {
+    bool operator!=(const tc_vec2& v) const noexcept {
         return !(*this == v);
     }
 
-    double dot(const tc_vec2& v) const {
+    double dot(const tc_vec2& v) const noexcept {
         return x * v.x + y * v.y;
     }
-    double cross(const tc_vec2& v) const {
+    double cross(const tc_vec2& v) const noexcept {
         return x * v.y - y * v.x;
     }
 
-    double norm() const {
+    double norm() const noexcept {
         return std::sqrt(x * x + y * y);
     }
-    double norm_squared() const {
+    double norm_squared() const noexcept {
         return x * x + y * y;
     }
 
-    tc_vec2 normalized() const {
+    tc_vec2 normalized() const noexcept {
         double n = norm();
         return n > 1e-10 ? *this / n : tc_vec2{1.0, 0.0};
     }
+
+    bool is_finite() const noexcept {
+        return std::isfinite(x) && std::isfinite(y);
+    }
+    bool try_normalized(tc_vec2& out, double epsilon = 1.0e-10) const noexcept {
+        const double n = std::hypot(x, y);
+        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0 || n <= epsilon) {
+            return false;
+        }
+        out = *this / n;
+        return true;
+    }
+    tc_vec2 normalized_or(const tc_vec2& fallback, double epsilon = 1.0e-10) const noexcept {
+        tc_vec2 result;
+        return try_normalized(result, epsilon) ? result : fallback;
+    }
+    double* ptr() noexcept {
+        return &x;
+    }
+    const double* ptr() const noexcept {
+        return &x;
+    }
+    tc_vec2 cwise_product(const tc_vec2& v) const noexcept {
+        return {x * v.x, y * v.y};
+    }
+    tc_vec2 cwise_quotient(const tc_vec2& v) const noexcept {
+        return {x / v.x, y / v.y};
+    }
+    tc_vec2 cwise_min(const tc_vec2& v) const noexcept {
+        return {x < v.x ? x : v.x, y < v.y ? y : v.y};
+    }
+    tc_vec2 cwise_max(const tc_vec2& v) const noexcept {
+        return {x > v.x ? x : v.x, y > v.y ? y : v.y};
+    }
+    tc_vec2 clamped(const tc_vec2& minimum, const tc_vec2& maximum) const noexcept {
+        return {x < minimum.x ? minimum.x : (x > maximum.x ? maximum.x : x),
+                y < minimum.y ? minimum.y : (y > maximum.y ? maximum.y : y)};
+    }
+    tc_vec2 cwise_abs() const noexcept {
+        return {std::abs(x), std::abs(y)};
+    }
+    double min_component() const noexcept {
+        return x < y ? x : y;
+    }
+    double max_component() const noexcept {
+        return x > y ? x : y;
+    }
+    tc_vec2f to_float() const noexcept;
 
     static tc_vec2 zero() {
         return {0.0, 0.0};
@@ -109,7 +163,7 @@ struct tc_vec2 {
 };
 
 extern "C++" {
-inline tc_vec2 operator*(double s, const tc_vec2& v) {
+inline tc_vec2 operator*(double s, const tc_vec2& v) noexcept {
     return v * s;
 }
 }
@@ -122,83 +176,130 @@ struct tc_vec2f {
     constexpr tc_vec2f(float x, float y) noexcept
         : x(x),
           y(y) {}
-    explicit tc_vec2f(const tc_vec2& v)
+    explicit tc_vec2f(const tc_vec2& v) noexcept
         : x(static_cast<float>(v.x)),
           y(static_cast<float>(v.y)) {}
 
-    float& operator[](int i) {
+    float& operator[](int i) noexcept {
         assert(i >= 0 && i < 2);
         return i == 0 ? x : y;
     }
-    float operator[](int i) const {
+    float operator[](int i) const noexcept {
         assert(i >= 0 && i < 2);
         return i == 0 ? x : y;
     }
 
-    tc_vec2f operator+(const tc_vec2f& v) const {
+    tc_vec2f operator+(const tc_vec2f& v) const noexcept {
         return {x + v.x, y + v.y};
     }
-    tc_vec2f operator-(const tc_vec2f& v) const {
+    tc_vec2f operator-(const tc_vec2f& v) const noexcept {
         return {x - v.x, y - v.y};
     }
-    tc_vec2f operator*(float s) const {
+    tc_vec2f operator*(float s) const noexcept {
         return {x * s, y * s};
     }
-    tc_vec2f operator/(float s) const {
+    tc_vec2f operator/(float s) const noexcept {
         return {x / s, y / s};
     }
-    tc_vec2f operator-() const {
+    tc_vec2f operator-() const noexcept {
         return {-x, -y};
     }
 
-    tc_vec2f& operator+=(const tc_vec2f& v) {
+    tc_vec2f& operator+=(const tc_vec2f& v) noexcept {
         x += v.x;
         y += v.y;
         return *this;
     }
-    tc_vec2f& operator-=(const tc_vec2f& v) {
+    tc_vec2f& operator-=(const tc_vec2f& v) noexcept {
         x -= v.x;
         y -= v.y;
         return *this;
     }
-    tc_vec2f& operator*=(float s) {
+    tc_vec2f& operator*=(float s) noexcept {
         x *= s;
         y *= s;
         return *this;
     }
-    tc_vec2f& operator/=(float s) {
+    tc_vec2f& operator/=(float s) noexcept {
         x /= s;
         y /= s;
         return *this;
     }
 
-    bool operator==(const tc_vec2f& v) const {
+    bool operator==(const tc_vec2f& v) const noexcept {
         return x == v.x && y == v.y;
     }
-    bool operator!=(const tc_vec2f& v) const {
+    bool operator!=(const tc_vec2f& v) const noexcept {
         return !(*this == v);
     }
 
-    float dot(const tc_vec2f& v) const {
+    float dot(const tc_vec2f& v) const noexcept {
         return x * v.x + y * v.y;
     }
-    float cross(const tc_vec2f& v) const {
+    float cross(const tc_vec2f& v) const noexcept {
         return x * v.y - y * v.x;
     }
 
-    float norm() const {
+    float norm() const noexcept {
         return std::sqrt(x * x + y * y);
     }
-    float norm_squared() const {
+    float norm_squared() const noexcept {
         return x * x + y * y;
     }
 
-    tc_vec2f normalized() const {
+    tc_vec2f normalized() const noexcept {
         float n = norm();
         return n > 1e-6f ? *this / n : tc_vec2f{1.0f, 0.0f};
     }
 
-    tc_vec2 to_double() const {
+    bool is_finite() const noexcept {
+        return std::isfinite(x) && std::isfinite(y);
+    }
+    bool try_normalized(tc_vec2f& out, float epsilon = 1.0e-6f) const noexcept {
+        const float n = std::hypot(x, y);
+        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0f || n <= epsilon) {
+            return false;
+        }
+        out = *this / n;
+        return true;
+    }
+    tc_vec2f normalized_or(const tc_vec2f& fallback, float epsilon = 1.0e-6f) const noexcept {
+        tc_vec2f result;
+        return try_normalized(result, epsilon) ? result : fallback;
+    }
+    float* ptr() noexcept {
+        return &x;
+    }
+    const float* ptr() const noexcept {
+        return &x;
+    }
+    tc_vec2f cwise_product(const tc_vec2f& v) const noexcept {
+        return {x * v.x, y * v.y};
+    }
+    tc_vec2f cwise_quotient(const tc_vec2f& v) const noexcept {
+        return {x / v.x, y / v.y};
+    }
+    tc_vec2f cwise_min(const tc_vec2f& v) const noexcept {
+        return {x < v.x ? x : v.x, y < v.y ? y : v.y};
+    }
+    tc_vec2f cwise_max(const tc_vec2f& v) const noexcept {
+        return {x > v.x ? x : v.x, y > v.y ? y : v.y};
+    }
+    tc_vec2f clamped(const tc_vec2f& minimum, const tc_vec2f& maximum) const noexcept {
+        return {x < minimum.x ? minimum.x : (x > maximum.x ? maximum.x : x),
+                y < minimum.y ? minimum.y : (y > maximum.y ? maximum.y : y)};
+    }
+    tc_vec2f cwise_abs() const noexcept {
+        return {std::abs(x), std::abs(y)};
+    }
+    float min_component() const noexcept {
+        return x < y ? x : y;
+    }
+    float max_component() const noexcept {
+        return x > y ? x : y;
+    }
+
+    tc_vec2 to_double() const noexcept {
         return {x, y};
     }
 
@@ -214,9 +315,13 @@ struct tc_vec2f {
 };
 
 extern "C++" {
-inline tc_vec2f operator*(float s, const tc_vec2f& v) {
+inline tc_vec2f operator*(float s, const tc_vec2f& v) noexcept {
     return v * s;
 }
+}
+
+inline tc_vec2f tc_vec2::to_float() const noexcept {
+    return tc_vec2f{static_cast<float>(x), static_cast<float>(y)};
 }
 
 struct tc_size2f {
@@ -249,12 +354,63 @@ struct tc_bounds2f {
           x1(x1),
           y1(y1) {}
 
-    float width() const {
+    float width() const noexcept {
         return x1 - x0;
     }
-    float height() const {
+    float height() const noexcept {
         return y1 - y0;
     }
+    bool is_finite() const noexcept {
+        return std::isfinite(x0) && std::isfinite(y0) && std::isfinite(x1) && std::isfinite(y1);
+    }
+    bool is_valid() const noexcept {
+        return is_finite() && x0 <= x1 && y0 <= y1;
+    }
+    tc_vec2f min() const noexcept {
+        return {x0, y0};
+    }
+    tc_vec2f max() const noexcept {
+        return {x1, y1};
+    }
+    tc_vec2f center() const noexcept {
+        return {(x0 + x1) * 0.5f, (y0 + y1) * 0.5f};
+    }
+    void extend(const tc_vec2f& point) noexcept {
+        x0 = x0 < point.x ? x0 : point.x;
+        y0 = y0 < point.y ? y0 : point.y;
+        x1 = x1 > point.x ? x1 : point.x;
+        y1 = y1 > point.y ? y1 : point.y;
+    }
+    bool contains_closed(const tc_vec2f& point) const noexcept {
+        return point.x >= x0 && point.x <= x1 && point.y >= y0 && point.y <= y1;
+    }
+    bool contains_half_open(const tc_vec2f& point) const noexcept {
+        return point.x >= x0 && point.x < x1 && point.y >= y0 && point.y < y1;
+    }
+    tc_bounds2f expanded(float amount) const noexcept {
+        return {x0 - amount, y0 - amount, x1 + amount, y1 + amount};
+    }
+    tc_bounds2f merged(const tc_bounds2f& other) const noexcept {
+        return {x0 < other.x0 ? x0 : other.x0,
+                y0 < other.y0 ? y0 : other.y0,
+                x1 > other.x1 ? x1 : other.x1,
+                y1 > other.y1 ? y1 : other.y1};
+    }
+    bool try_intersection(const tc_bounds2f& other, tc_bounds2f& out) const noexcept {
+        const tc_bounds2f result{
+            x0 > other.x0 ? x0 : other.x0,
+            y0 > other.y0 ? y0 : other.y0,
+            x1 < other.x1 ? x1 : other.x1,
+            y1 < other.y1 ? y1 : other.y1,
+        };
+        if (!result.is_valid()) {
+            return false;
+        }
+        out = result;
+        return true;
+    }
+    tc_rect2f to_rect() const noexcept;
+    termin::Bounds2 to_double() const noexcept;
 };
 
 struct tc_rect2f {
@@ -270,10 +426,42 @@ struct tc_rect2f {
           width(width),
           height(height) {}
 
-    tc_bounds2f bounds() const {
+    bool is_finite() const noexcept {
+        return std::isfinite(x) && std::isfinite(y) && std::isfinite(width) && std::isfinite(height);
+    }
+    bool is_valid() const noexcept {
+        return is_finite() && width >= 0.0f && height >= 0.0f;
+    }
+    tc_vec2f origin() const noexcept {
+        return {x, y};
+    }
+    tc_vec2f size() const noexcept {
+        return {width, height};
+    }
+    tc_vec2f center() const noexcept {
+        return {x + width * 0.5f, y + height * 0.5f};
+    }
+    tc_vec2f min() const noexcept {
+        return {x, y};
+    }
+    tc_vec2f max() const noexcept {
+        return {x + width, y + height};
+    }
+    bool contains_closed(const tc_vec2f& point) const noexcept {
+        return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height;
+    }
+    bool contains_half_open(const tc_vec2f& point) const noexcept {
+        return point.x >= x && point.x < x + width && point.y >= y && point.y < y + height;
+    }
+    tc_bounds2f bounds() const noexcept {
         return {x, y, x + width, y + height};
     }
+    termin::Rect2 to_double() const noexcept;
 };
+
+inline tc_rect2f tc_bounds2f::to_rect() const noexcept {
+    return {x0, y0, width(), height()};
+}
 
 struct tc_vec3 {
     double x = 0.0;
@@ -286,86 +474,134 @@ struct tc_vec3 {
           y(y),
           z(z) {}
 
-    double& operator[](int i) {
+    double& operator[](int i) noexcept {
         assert(i >= 0 && i < 3);
         return i == 0 ? x : (i == 1 ? y : z);
     }
-    double operator[](int i) const {
+    double operator[](int i) const noexcept {
         assert(i >= 0 && i < 3);
         return i == 0 ? x : (i == 1 ? y : z);
     }
 
-    tc_vec3 operator+(const tc_vec3& v) const {
+    tc_vec3 operator+(const tc_vec3& v) const noexcept {
         return {x + v.x, y + v.y, z + v.z};
     }
-    tc_vec3 operator-(const tc_vec3& v) const {
+    tc_vec3 operator-(const tc_vec3& v) const noexcept {
         return {x - v.x, y - v.y, z - v.z};
     }
-    tc_vec3 operator*(double s) const {
+    tc_vec3 operator*(double s) const noexcept {
         return {x * s, y * s, z * s};
     }
-    tc_vec3 operator/(double s) const {
+    tc_vec3 operator/(double s) const noexcept {
         return {x / s, y / s, z / s};
     }
-    tc_vec3 operator-() const {
+    tc_vec3 operator-() const noexcept {
         return {-x, -y, -z};
     }
 
-    tc_vec3& operator+=(const tc_vec3& v) {
+    tc_vec3& operator+=(const tc_vec3& v) noexcept {
         x += v.x;
         y += v.y;
         z += v.z;
         return *this;
     }
-    tc_vec3& operator-=(const tc_vec3& v) {
+    tc_vec3& operator-=(const tc_vec3& v) noexcept {
         x -= v.x;
         y -= v.y;
         z -= v.z;
         return *this;
     }
-    tc_vec3& operator*=(double s) {
+    tc_vec3& operator*=(double s) noexcept {
         x *= s;
         y *= s;
         z *= s;
         return *this;
     }
-    tc_vec3& operator/=(double s) {
+    tc_vec3& operator/=(double s) noexcept {
         x /= s;
         y /= s;
         z /= s;
         return *this;
     }
 
-    bool operator==(const tc_vec3& v) const {
+    bool operator==(const tc_vec3& v) const noexcept {
         return x == v.x && y == v.y && z == v.z;
     }
-    bool operator!=(const tc_vec3& v) const {
+    bool operator!=(const tc_vec3& v) const noexcept {
         return !(*this == v);
     }
 
-    double dot(const tc_vec3& v) const {
+    double dot(const tc_vec3& v) const noexcept {
         return x * v.x + y * v.y + z * v.z;
     }
 
-    tc_vec3 cross(const tc_vec3& v) const {
+    tc_vec3 cross(const tc_vec3& v) const noexcept {
         return {y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x};
     }
 
-    double norm() const {
+    double norm() const noexcept {
         return std::sqrt(x * x + y * y + z * z);
     }
-    double norm_squared() const {
+    double norm_squared() const noexcept {
         return x * x + y * y + z * z;
     }
-    bool is_finite() const {
+    bool is_finite() const noexcept {
         return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
     }
 
-    tc_vec3 normalized() const {
+    tc_vec3 normalized() const noexcept {
         double n = norm();
         double nan = std::numeric_limits<double>::quiet_NaN();
         return n > 1e-10 ? *this / n : tc_vec3{nan, nan, nan};
     }
+
+    bool try_normalized(tc_vec3& out, double epsilon = 1.0e-10) const noexcept {
+        const double n = std::hypot(x, y, z);
+        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0 || n <= epsilon) {
+            return false;
+        }
+        out = *this / n;
+        return true;
+    }
+    tc_vec3 normalized_or(const tc_vec3& fallback, double epsilon = 1.0e-10) const noexcept {
+        tc_vec3 result;
+        return try_normalized(result, epsilon) ? result : fallback;
+    }
+    double* ptr() noexcept {
+        return &x;
+    }
+    const double* ptr() const noexcept {
+        return &x;
+    }
+    tc_vec3 cwise_product(const tc_vec3& v) const noexcept {
+        return {x * v.x, y * v.y, z * v.z};
+    }
+    tc_vec3 cwise_quotient(const tc_vec3& v) const noexcept {
+        return {x / v.x, y / v.y, z / v.z};
+    }
+    tc_vec3 cwise_min(const tc_vec3& v) const noexcept {
+        return {x < v.x ? x : v.x, y < v.y ? y : v.y, z < v.z ? z : v.z};
+    }
+    tc_vec3 cwise_max(const tc_vec3& v) const noexcept {
+        return {x > v.x ? x : v.x, y > v.y ? y : v.y, z > v.z ? z : v.z};
+    }
+    tc_vec3 clamped(const tc_vec3& minimum, const tc_vec3& maximum) const noexcept {
+        return {x < minimum.x ? minimum.x : (x > maximum.x ? maximum.x : x),
+                y < minimum.y ? minimum.y : (y > maximum.y ? maximum.y : y),
+                z < minimum.z ? minimum.z : (z > maximum.z ? maximum.z : z)};
+    }
+    tc_vec3 cwise_abs() const noexcept {
+        return {std::abs(x), std::abs(y), std::abs(z)};
+    }
+    double min_component() const noexcept {
+        const double yz = y < z ? y : z;
+        return x < yz ? x : yz;
+    }
+    double max_component() const noexcept {
+        const double yz = y > z ? y : z;
+        return x > yz ? x : yz;
+    }
+    tc_vec3f to_float() const noexcept;
 
     static double angle(const tc_vec3& a, const tc_vec3& b) {
         double d = a.normalized().dot(b.normalized());
@@ -410,7 +646,7 @@ struct tc_vec3 {
 };
 
 extern "C++" {
-inline tc_vec3 operator*(double s, const tc_vec3& v) {
+inline tc_vec3 operator*(double s, const tc_vec3& v) noexcept {
     return v * s;
 }
 }
@@ -590,89 +826,139 @@ struct tc_vec3f {
         : x(x),
           y(y),
           z(z) {}
-    explicit tc_vec3f(const tc_vec3& v)
+    explicit tc_vec3f(const tc_vec3& v) noexcept
         : x(static_cast<float>(v.x)),
           y(static_cast<float>(v.y)),
           z(static_cast<float>(v.z)) {}
 
-    float& operator[](int i) {
+    float& operator[](int i) noexcept {
         assert(i >= 0 && i < 3);
         return i == 0 ? x : (i == 1 ? y : z);
     }
-    float operator[](int i) const {
+    float operator[](int i) const noexcept {
         assert(i >= 0 && i < 3);
         return i == 0 ? x : (i == 1 ? y : z);
     }
 
-    tc_vec3f operator+(const tc_vec3f& v) const {
+    tc_vec3f operator+(const tc_vec3f& v) const noexcept {
         return {x + v.x, y + v.y, z + v.z};
     }
-    tc_vec3f operator-(const tc_vec3f& v) const {
+    tc_vec3f operator-(const tc_vec3f& v) const noexcept {
         return {x - v.x, y - v.y, z - v.z};
     }
-    tc_vec3f operator*(float s) const {
+    tc_vec3f operator*(float s) const noexcept {
         return {x * s, y * s, z * s};
     }
-    tc_vec3f operator/(float s) const {
+    tc_vec3f operator/(float s) const noexcept {
         return {x / s, y / s, z / s};
     }
-    tc_vec3f operator-() const {
+    tc_vec3f operator-() const noexcept {
         return {-x, -y, -z};
     }
 
-    tc_vec3f& operator+=(const tc_vec3f& v) {
+    tc_vec3f& operator+=(const tc_vec3f& v) noexcept {
         x += v.x;
         y += v.y;
         z += v.z;
         return *this;
     }
-    tc_vec3f& operator-=(const tc_vec3f& v) {
+    tc_vec3f& operator-=(const tc_vec3f& v) noexcept {
         x -= v.x;
         y -= v.y;
         z -= v.z;
         return *this;
     }
-    tc_vec3f& operator*=(float s) {
+    tc_vec3f& operator*=(float s) noexcept {
         x *= s;
         y *= s;
         z *= s;
         return *this;
     }
-    tc_vec3f& operator/=(float s) {
+    tc_vec3f& operator/=(float s) noexcept {
         x /= s;
         y /= s;
         z /= s;
         return *this;
     }
 
-    bool operator==(const tc_vec3f& v) const {
+    bool operator==(const tc_vec3f& v) const noexcept {
         return x == v.x && y == v.y && z == v.z;
     }
-    bool operator!=(const tc_vec3f& v) const {
+    bool operator!=(const tc_vec3f& v) const noexcept {
         return !(*this == v);
     }
 
-    float dot(const tc_vec3f& v) const {
+    float dot(const tc_vec3f& v) const noexcept {
         return x * v.x + y * v.y + z * v.z;
     }
 
-    tc_vec3f cross(const tc_vec3f& v) const {
+    tc_vec3f cross(const tc_vec3f& v) const noexcept {
         return {y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x};
     }
 
-    float norm() const {
+    float norm() const noexcept {
         return std::sqrt(x * x + y * y + z * z);
     }
-    float norm_squared() const {
+    float norm_squared() const noexcept {
         return x * x + y * y + z * z;
     }
 
-    tc_vec3f normalized() const {
+    tc_vec3f normalized() const noexcept {
         float n = norm();
         return n > 1e-6f ? *this / n : tc_vec3f{0, 0, 1};
     }
 
-    tc_vec3 to_double() const {
+    bool is_finite() const noexcept {
+        return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
+    }
+    bool try_normalized(tc_vec3f& out, float epsilon = 1.0e-6f) const noexcept {
+        const float n = std::hypot(x, y, z);
+        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0f || n <= epsilon) {
+            return false;
+        }
+        out = *this / n;
+        return true;
+    }
+    tc_vec3f normalized_or(const tc_vec3f& fallback, float epsilon = 1.0e-6f) const noexcept {
+        tc_vec3f result;
+        return try_normalized(result, epsilon) ? result : fallback;
+    }
+    float* ptr() noexcept {
+        return &x;
+    }
+    const float* ptr() const noexcept {
+        return &x;
+    }
+    tc_vec3f cwise_product(const tc_vec3f& v) const noexcept {
+        return {x * v.x, y * v.y, z * v.z};
+    }
+    tc_vec3f cwise_quotient(const tc_vec3f& v) const noexcept {
+        return {x / v.x, y / v.y, z / v.z};
+    }
+    tc_vec3f cwise_min(const tc_vec3f& v) const noexcept {
+        return {x < v.x ? x : v.x, y < v.y ? y : v.y, z < v.z ? z : v.z};
+    }
+    tc_vec3f cwise_max(const tc_vec3f& v) const noexcept {
+        return {x > v.x ? x : v.x, y > v.y ? y : v.y, z > v.z ? z : v.z};
+    }
+    tc_vec3f clamped(const tc_vec3f& minimum, const tc_vec3f& maximum) const noexcept {
+        return {x < minimum.x ? minimum.x : (x > maximum.x ? maximum.x : x),
+                y < minimum.y ? minimum.y : (y > maximum.y ? maximum.y : y),
+                z < minimum.z ? minimum.z : (z > maximum.z ? maximum.z : z)};
+    }
+    tc_vec3f cwise_abs() const noexcept {
+        return {std::abs(x), std::abs(y), std::abs(z)};
+    }
+    float min_component() const noexcept {
+        const float yz = y < z ? y : z;
+        return x < yz ? x : yz;
+    }
+    float max_component() const noexcept {
+        const float yz = y > z ? y : z;
+        return x > yz ? x : yz;
+    }
+
+    tc_vec3 to_double() const noexcept {
         return {x, y, z};
     }
 
@@ -709,9 +995,13 @@ struct tc_vec3f {
 };
 
 extern "C++" {
-inline tc_vec3f operator*(float s, const tc_vec3f& v) {
+inline tc_vec3f operator*(float s, const tc_vec3f& v) noexcept {
     return v * s;
 }
+}
+
+inline tc_vec3f tc_vec3::to_float() const noexcept {
+    return tc_vec3f{static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)};
 }
 
 struct tc_quatf {
@@ -1122,6 +1412,9 @@ struct tc_aabb {
     tc_vec3 size() const;
     tc_vec3 half_size() const;
     tc_vec3 project_point(const tc_vec3& point) const;
+    bool is_finite() const;
+    bool is_valid() const;
+    tc_aabb expanded(double amount) const;
     double surface_area() const;
     double volume() const;
     static tc_aabb from_points(const tc_vec3* points, size_t count);
@@ -1129,6 +1422,29 @@ struct tc_aabb {
     tc_aabb transformed_by(const tc_pose3& pose) const;
     tc_aabb transformed_by(const tc_general_pose3& pose) const;
     void get_corners(tc_vec3* out_corners) const;
+};
+
+struct tc_aabbf {
+    tc_vec3f min_point;
+    tc_vec3f max_point;
+
+    constexpr tc_aabbf() noexcept = default;
+    constexpr tc_aabbf(const tc_vec3f& min_pt, const tc_vec3f& max_pt) noexcept
+        : min_point(min_pt),
+          max_point(max_pt) {}
+
+    void extend(const tc_vec3f& point) noexcept;
+    bool intersects(const tc_aabbf& other) const noexcept;
+    bool contains(const tc_vec3f& point) const noexcept;
+    tc_aabbf merge(const tc_aabbf& other) const noexcept;
+    tc_vec3f center() const noexcept;
+    tc_vec3f size() const noexcept;
+    tc_vec3f half_size() const noexcept;
+    tc_vec3f project_point(const tc_vec3f& point) const noexcept;
+    bool is_finite() const noexcept;
+    bool is_valid() const noexcept;
+    tc_aabbf expanded(float amount) const noexcept;
+    static tc_aabbf from_points(const tc_vec3f* points, size_t count) noexcept;
 };
 
 struct tc_mat44 {
@@ -1225,6 +1541,11 @@ typedef struct tc_aabb {
     tc_vec3 min_point;
     tc_vec3 max_point;
 } tc_aabb;
+
+typedef struct tc_aabbf {
+    tc_vec3f min_point;
+    tc_vec3f max_point;
+} tc_aabbf;
 
 typedef struct tc_mat44 {
     double m[16]; // column-major (OpenGL convention)

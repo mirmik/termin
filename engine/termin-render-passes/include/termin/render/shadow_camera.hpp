@@ -32,7 +32,7 @@ namespace termin {
                            float n = 0.1f,
                            float f = 100.0f,
                            const Vec3& c = Vec3{0, 0, 0})
-            : light_direction(light_dir.normalized()),
+            : light_direction(light_dir.normalized_or(Vec3::unit_y(), 1.0e-6)),
               ortho_bounds(std::move(bounds)),
               ortho_size(ortho_sz),
               near(n),
@@ -41,13 +41,16 @@ namespace termin {
     };
 
     struct TERMIN_RENDER_PASSES_API ShadowCascadeFitRequest {
-        Mat44f view_matrix;
-        Mat44f projection_matrix;
+        Mat44 view_matrix;
+        Mat44 projection_matrix;
+        // Required domain: 0 < camera_near < camera_far.
         float camera_near = 0.1f;
         float camera_far = 100.0f;
         Vec3 light_direction{0.0, 1.0, 0.0};
+        // Required domain: [cascade_near, cascade_far] is a non-empty subset of the camera range.
         float cascade_near = 0.1f;
         float cascade_far = 100.0f;
+        // Required domain: positive resolution and finite, non-negative caster offset.
         int shadow_map_resolution = 1024;
         float caster_offset = 50.0f;
     };
@@ -94,15 +97,16 @@ namespace termin {
     /**
      * Compute 8 corners of view frustum in world space.
      *
-     * The frustum in clip space is a cube [-1,1]^3. This function inverts
-     * the VP matrix and transforms all 8 corners back to world space.
+     * The frustum in clip space spans [-1,1] in X/Y and [0,1] in Z. This
+     * function inverts the VP matrix and transforms all 8 corners back to
+     * world space.
      *
      * @param view_matrix 4x4 view matrix
      * @param projection_matrix 4x4 projection matrix
-     * @return 8 corners in world space
+     * @return 8 corners in world space, or nullopt when the VP transform cannot be inverted/projected
      */
-    TERMIN_RENDER_PASSES_API std::array<Vec3, 8> compute_frustum_corners(const Mat44f& view_matrix,
-                                                                         const Mat44f& projection_matrix);
+    TERMIN_RENDER_PASSES_API std::optional<std::array<Vec3, 8>>
+    compute_frustum_corners(const Mat44& view_matrix, const Mat44& projection_matrix);
 
     /**
      * Fit shadow camera to view frustum.
@@ -116,20 +120,21 @@ namespace termin {
      *
      * @param view_matrix Camera view matrix
      * @param projection_matrix Camera projection matrix (may be modified for max distance)
-     * @param light_direction Normalized light direction
-     * @param padding Extra padding around frustum
-     * @param shadow_map_resolution Resolution for texel snapping
+     * @param light_direction Finite, non-zero light direction
+     * @param padding Finite, non-negative padding around frustum
+     * @param shadow_map_resolution Positive resolution for texel snapping
      * @param stabilize Enable texel snapping for jitter prevention
-     * @param caster_offset Distance behind camera for shadow casters
-     * @return Fitted shadow camera parameters
+     * @param caster_offset Finite, non-negative distance behind camera for shadow casters
+     * @return Fitted shadow camera parameters, or nullopt for an invalid transform, parameter domain, or result
      */
-    TERMIN_RENDER_PASSES_API ShadowCameraParams fit_shadow_frustum_to_camera(const Mat44f& view_matrix,
-                                                                             const Mat44f& projection_matrix,
-                                                                             const Vec3& light_direction,
-                                                                             float padding = 1.0f,
-                                                                             int shadow_map_resolution = 1024,
-                                                                             bool stabilize = true,
-                                                                             float caster_offset = 50.0f);
+    TERMIN_RENDER_PASSES_API std::optional<ShadowCameraParams>
+    fit_shadow_frustum_to_camera(const Mat44& view_matrix,
+                                 const Mat44& projection_matrix,
+                                 const Vec3& light_direction,
+                                 float padding = 1.0f,
+                                 int shadow_map_resolution = 1024,
+                                 bool stabilize = true,
+                                 float caster_offset = 50.0f);
 
     /**
      * Build light-space rotation matrix (no translation).
@@ -156,14 +161,15 @@ namespace termin {
     compute_cascade_splits(float near, float far, int cascade_count, float lambda = 0.5f);
 
     /**
-     * Fit shadow frustum for a specific cascade.
+     * Try to fit a shadow frustum for a specific cascade.
      *
      * Creates a tight-fitting orthographic frustum for the cascade's portion
      * of the camera frustum.
      *
-     * @param request Camera, cascade split, light, and shadow-map parameters.
-     * @return Fitted shadow camera parameters for this cascade
+     * @param request Camera, contained non-empty cascade split, finite light, and positive shadow-map parameters.
+     * @return Fitted shadow camera parameters for this cascade, or nullopt for an invalid input or result
      */
-    TERMIN_RENDER_PASSES_API ShadowCameraParams fit_shadow_frustum_for_cascade(const ShadowCascadeFitRequest& request);
+    TERMIN_RENDER_PASSES_API std::optional<ShadowCameraParams>
+    try_fit_shadow_frustum_for_cascade(const ShadowCascadeFitRequest& request);
 
 } // namespace termin

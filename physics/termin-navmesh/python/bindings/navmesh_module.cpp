@@ -322,9 +322,18 @@ namespace termin {
 
         nb::class_<DetourQuerySession>(m, "DetourQuerySession")
             .def(nb::init<>())
-            .def_rw("query_extent_x", &DetourQuerySession::query_extent_x)
-            .def_rw("query_extent_y", &DetourQuerySession::query_extent_y)
-            .def_rw("query_extent_z", &DetourQuerySession::query_extent_z)
+            .def_prop_rw(
+                "query_extent_x",
+                [](const DetourQuerySession& self) { return self.query_extents.x; },
+                [](DetourQuerySession& self, float value) { self.query_extents.x = value; })
+            .def_prop_rw(
+                "query_extent_y",
+                [](const DetourQuerySession& self) { return self.query_extents.y; },
+                [](DetourQuerySession& self, float value) { self.query_extents.y = value; })
+            .def_prop_rw(
+                "query_extent_z",
+                [](const DetourQuerySession& self) { return self.query_extents.z; },
+                [](DetourQuerySession& self, float value) { self.query_extents.z = value; })
             .def_rw("max_polys", &DetourQuerySession::max_polys)
             .def_rw("max_straight_path", &DetourQuerySession::max_straight_path)
             .def(
@@ -398,9 +407,18 @@ namespace termin {
         nb::class_<DetourPathfindingWorldComponent, CxxComponent>(m, "DetourPathfindingWorldComponent")
             .def("__init__", [](nb::handle self) { cxx_component_init<DetourPathfindingWorldComponent>(self); })
             .def_rw("navmesh_uuid", &DetourPathfindingWorldComponent::navmesh_uuid)
-            .def_rw("query_extent_x", &DetourPathfindingWorldComponent::query_extent_x)
-            .def_rw("query_extent_y", &DetourPathfindingWorldComponent::query_extent_y)
-            .def_rw("query_extent_z", &DetourPathfindingWorldComponent::query_extent_z)
+            .def_prop_rw(
+                "query_extent_x",
+                [](const DetourPathfindingWorldComponent& self) { return self.query_extents.x; },
+                [](DetourPathfindingWorldComponent& self, float value) { self.query_extents.x = value; })
+            .def_prop_rw(
+                "query_extent_y",
+                [](const DetourPathfindingWorldComponent& self) { return self.query_extents.y; },
+                [](DetourPathfindingWorldComponent& self, float value) { self.query_extents.y = value; })
+            .def_prop_rw(
+                "query_extent_z",
+                [](const DetourPathfindingWorldComponent& self) { return self.query_extents.z; },
+                [](DetourPathfindingWorldComponent& self, float value) { self.query_extents.z = value; })
             .def_rw("max_polys", &DetourPathfindingWorldComponent::max_polys)
             .def_rw("max_straight_path", &DetourPathfindingWorldComponent::max_straight_path)
             .def_prop_rw(

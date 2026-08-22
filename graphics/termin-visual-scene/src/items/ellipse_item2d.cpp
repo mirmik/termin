@@ -11,7 +11,7 @@ namespace termin::visual {
 
         void
         validate(termin::Rect2f bounds, const tgfx::FillPaint& fill, const std::optional<tgfx::StrokePaint>& stroke) {
-            if (!detail::valid_rect(bounds) || !fill.validate() || (stroke && !stroke->validate())) {
+            if (!bounds.is_valid() || !fill.validate() || (stroke && !stroke->validate())) {
                 throw std::invalid_argument("invalid EllipseItem2D state");
             }
         }
@@ -45,8 +45,8 @@ namespace termin::visual {
     }
 
     std::optional<termin::Bounds2f> EllipseItem2D::local_bounds() const {
-        auto result = detail::rect_bounds(bounds_);
-        return stroke_ ? detail::expanded(result, stroke_->width * 0.5f) : result;
+        const auto result = bounds_.bounds();
+        return stroke_ ? result.expanded(stroke_->width * 0.5f) : result;
     }
 
     bool EllipseItem2D::hit_test(termin::Vec2f point, float) const {

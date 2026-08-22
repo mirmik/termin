@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <tcbase/tc_log.hpp>
+#include <termin/geom/vec4.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/world2d_ordering.hpp>
@@ -35,54 +36,38 @@ namespace termin {
         static_assert(offsetof(World2DVertex, uv) == sizeof(float) * 3);
         static_assert(offsetof(World2DVertex, tint) == sizeof(float) * 5);
 
-        struct ClipPoint {
-            float x;
-            float y;
-            float z;
-            float w;
-        };
-
-        ClipPoint transform_clip(const Mat44f& matrix, float x, float y, float z) {
-            return {
-                matrix(0, 0) * x + matrix(1, 0) * y + matrix(2, 0) * z + matrix(3, 0),
-                matrix(0, 1) * x + matrix(1, 1) * y + matrix(2, 1) * z + matrix(3, 1),
-                matrix(0, 2) * x + matrix(1, 2) * y + matrix(2, 2) * z + matrix(3, 2),
-                matrix(0, 3) * x + matrix(1, 3) * y + matrix(2, 3) * z + matrix(3, 3),
-            };
-        }
-
         bool quad_outside_frustum(const tc_render_item_world_quad_payload& quad, const Mat44f& model_view_projection) {
-            const std::array<ClipPoint, 4> corners{{
-                transform_clip(model_view_projection, quad.min_x, 0.0f, quad.min_z),
-                transform_clip(model_view_projection, quad.min_x, 0.0f, quad.max_z),
-                transform_clip(model_view_projection, quad.max_x, 0.0f, quad.max_z),
-                transform_clip(model_view_projection, quad.max_x, 0.0f, quad.min_z),
+            const std::array<Vec4f, 4> corners{{
+                model_view_projection.transform_homogeneous({quad.min_x, 0.0f, quad.min_z, 1.0f}),
+                model_view_projection.transform_homogeneous({quad.min_x, 0.0f, quad.max_z, 1.0f}),
+                model_view_projection.transform_homogeneous({quad.max_x, 0.0f, quad.max_z, 1.0f}),
+                model_view_projection.transform_homogeneous({quad.max_x, 0.0f, quad.min_z, 1.0f}),
             }};
             const auto all = [&corners](auto predicate) {
                 return std::all_of(corners.begin(), corners.end(), predicate);
             };
-            return all([](const ClipPoint& p) { return p.x < -p.w; }) ||
-                   all([](const ClipPoint& p) { return p.x > p.w; }) ||
-                   all([](const ClipPoint& p) { return p.y < -p.w; }) ||
-                   all([](const ClipPoint& p) { return p.y > p.w; }) ||
-                   all([](const ClipPoint& p) { return p.z < 0.0f; }) ||
-                   all([](const ClipPoint& p) { return p.z > p.w; });
+            return all([](const Vec4f& p) { return p.x < -p.w; }) ||
+                   all([](const Vec4f& p) { return p.x > p.w; }) ||
+                   all([](const Vec4f& p) { return p.y < -p.w; }) ||
+                   all([](const Vec4f& p) { return p.y > p.w; }) ||
+                   all([](const Vec4f& p) { return p.z < 0.0f; }) ||
+                   all([](const Vec4f& p) { return p.z > p.w; });
         }
 
-        Vec3 transform_world(const Mat44f& model, float x, float z) {
-            return model.transform_point({x, 0.0, z});
+        Vec3f transform_world(const Mat44f& model, float x, float z) {
+            return model.transform_point(Vec3f{x, 0.0f, z});
         }
 
         void append_vertex(std::vector<World2DVertex>& vertices,
-                           const Vec3& position,
+                           const Vec3f& position,
                            float u,
                            float v,
                            const tc_render_item_vec4& tint) {
             vertices.push_back({
                 {
-                    static_cast<float>(position.x),
-                    static_cast<float>(position.y),
-                    static_cast<float>(position.z),
+                    position.x,
+                    position.y,
+                    position.z,
                 },
                 {u, v},
                 {
@@ -98,10 +83,10 @@ namespace termin {
             Mat44f model{};
             std::memcpy(model.data, item.model_matrix, sizeof(model.data));
             const auto& q = item.payload.world_quad;
-            const Vec3 bottom_left = transform_world(model, q.min_x, q.min_z);
-            const Vec3 top_left = transform_world(model, q.min_x, q.max_z);
-            const Vec3 top_right = transform_world(model, q.max_x, q.max_z);
-            const Vec3 bottom_right = transform_world(model, q.max_x, q.min_z);
+            const Vec3f bottom_left = transform_world(model, q.min_x, q.min_z);
+            const Vec3f top_left = transform_world(model, q.min_x, q.max_z);
+            const Vec3f top_right = transform_world(model, q.max_x, q.max_z);
+            const Vec3f bottom_right = transform_world(model, q.max_x, q.min_z);
 
             append_vertex(vertices, bottom_left, q.u0, q.v1, q.tint);
             append_vertex(vertices, top_left, q.u0, q.v0, q.tint);

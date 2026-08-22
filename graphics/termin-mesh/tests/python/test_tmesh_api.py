@@ -77,6 +77,33 @@ def test_mesh3_from_numpy_arrays():
     assert mesh.name == "tri"
 
 
+def test_mesh3_transforms_use_vector_geometry_internally():
+    vertices = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
+    mesh = tmesh.Mesh3(vertices=vertices, triangles=np.empty((0, 3), dtype=np.uint32))
+
+    mesh.translate(2.0, -1.0, 0.5)
+    mesh.scale(2.0, 3.0, 4.0)
+
+    np.testing.assert_allclose(mesh.vertices, [[6.0, 3.0, 14.0]])
+
+
+def test_mesh3_nonuniform_scale_refreshes_existing_normals():
+    vertices = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 1.0, 1.0]],
+        dtype=np.float32,
+    )
+    triangles = np.array([[0, 1, 2]], dtype=np.uint32)
+    mesh = tmesh.Mesh3(vertices=vertices, triangles=triangles)
+    mesh.compute_normals()
+
+    mesh.scale(2.0, 1.0, 0.5)
+
+    edges = mesh.vertices[mesh.triangles[0, 1:]] - mesh.vertices[mesh.triangles[0, 0]]
+    expected = np.cross(edges[0], edges[1])
+    expected /= np.linalg.norm(expected)
+    np.testing.assert_allclose(mesh.vertex_normals, np.tile(expected, (3, 1)), atol=1e-6)
+
+
 @pytest.mark.parametrize("meridians, parallels", [(16, 16), (3, 2), (5, 3)])
 def test_uv_sphere_has_non_degenerate_outward_faces_and_finite_vertex_data(
     meridians: int,

@@ -1,5 +1,7 @@
 #include "termin/voxels/voxel_grid.hpp"
 
+#include <termin/geom/aabb.hpp>
+
 #include <algorithm>
 #include <array>
 #include <climits>
@@ -16,6 +18,13 @@ namespace termin::voxels {
     }
 
     namespace detail {
+
+        AABB triangle_bounds(const Vec3& a, const Vec3& b, const Vec3& c, double padding = 0.0) {
+            AABB bounds(a, a);
+            bounds.extend(b);
+            bounds.extend(c);
+            return bounds.expanded(padding);
+        }
 
         bool axis_test_x(const Vec3& edge, const Vec3& va, const Vec3& vb, double hy, double hz) {
             double p0 = -edge.z * va.y + edge.y * va.z;
@@ -43,14 +52,12 @@ namespace termin::voxels {
         v2 = v2 - box_center;
         Vec3 e0 = v1 - v0, e1 = v2 - v1, e2 = v0 - v2;
         double hx = box_half_size.x, hy = box_half_size.y, hz = box_half_size.z;
-        double min_x = std::min({v0.x, v1.x, v2.x}), max_x = std::max({v0.x, v1.x, v2.x});
-        if (min_x > hx + detail::EPSILON || max_x < -hx - detail::EPSILON)
+        const AABB triangle = detail::triangle_bounds(v0, v1, v2);
+        if (triangle.min_point.x > hx + detail::EPSILON || triangle.max_point.x < -hx - detail::EPSILON)
             return false;
-        double min_y = std::min({v0.y, v1.y, v2.y}), max_y = std::max({v0.y, v1.y, v2.y});
-        if (min_y > hy + detail::EPSILON || max_y < -hy - detail::EPSILON)
+        if (triangle.min_point.y > hy + detail::EPSILON || triangle.max_point.y < -hy - detail::EPSILON)
             return false;
-        double min_z = std::min({v0.z, v1.z, v2.z}), max_z = std::max({v0.z, v1.z, v2.z});
-        if (min_z > hz + detail::EPSILON || max_z < -hz - detail::EPSILON)
+        if (triangle.min_point.z > hz + detail::EPSILON || triangle.max_point.z < -hz - detail::EPSILON)
             return false;
         Vec3 normal = e0.cross(e1);
         double d = -normal.dot(v0);
@@ -168,14 +175,9 @@ namespace termin::voxels {
         int n = 0;
         for (const auto& t : triangles) {
             Vec3 a = vertices[std::get<0>(t)], b = vertices[std::get<1>(t)], c = vertices[std::get<2>(t)];
-            Vec3 mn(std::min({a.x, b.x, c.x}) - epsilon,
-                    std::min({a.y, b.y, c.y}) - epsilon,
-                    std::min({a.z, b.z, c.z}) - epsilon),
-                mx(std::max({a.x, b.x, c.x}) + epsilon,
-                   std::max({a.y, b.y, c.y}) + epsilon,
-                   std::max({a.z, b.z, c.z}) + epsilon);
-            auto [x0, y0, z0] = world_to_voxel(mn);
-            auto [x1, y1, z1] = world_to_voxel(mx);
+            const AABB triangle = detail::triangle_bounds(a, b, c, epsilon);
+            auto [x0, y0, z0] = world_to_voxel(triangle.min_point);
+            auto [x1, y1, z1] = world_to_voxel(triangle.max_point);
             for (int x = x0; x <= x1; x++)
                 for (int y = y0; y <= y1; y++)
                     for (int z = z0; z <= z1; z++)
@@ -278,14 +280,9 @@ namespace termin::voxels {
         for (const auto& t : triangles) {
             Vec3 a = vertices[std::get<0>(t)], b = vertices[std::get<1>(t)], c = vertices[std::get<2>(t)],
                  normal = compute_triangle_normal(a, b, c);
-            Vec3 mn(std::min({a.x, b.x, c.x}) - epsilon,
-                    std::min({a.y, b.y, c.y}) - epsilon,
-                    std::min({a.z, b.z, c.z}) - epsilon),
-                mx(std::max({a.x, b.x, c.x}) + epsilon,
-                   std::max({a.y, b.y, c.y}) + epsilon,
-                   std::max({a.z, b.z, c.z}) + epsilon);
-            auto [x0, y0, z0] = world_to_voxel(mn);
-            auto [x1, y1, z1] = world_to_voxel(mx);
+            const AABB triangle = detail::triangle_bounds(a, b, c, epsilon);
+            auto [x0, y0, z0] = world_to_voxel(triangle.min_point);
+            auto [x1, y1, z1] = world_to_voxel(triangle.max_point);
             for (int x = x0; x <= x1; x++)
                 for (int y = y0; y <= y1; y++)
                     for (int z = z0; z <= z1; z++) {
@@ -363,9 +360,14 @@ namespace termin::voxels {
         if (!b)
             return std::nullopt;
         auto [mn, mx] = *b;
-        return std::make_pair(origin_ + Vec3(std::get<0>(mn), std::get<1>(mn), std::get<2>(mn)) * cell_size_,
-                              origin_ +
-                                  Vec3(std::get<0>(mx) + 1, std::get<1>(mx) + 1, std::get<2>(mx) + 1) * cell_size_);
+        const Vec3 voxel_min{static_cast<double>(std::get<0>(mn)),
+                             static_cast<double>(std::get<1>(mn)),
+                             static_cast<double>(std::get<2>(mn))};
+        const Vec3 voxel_max_exclusive{static_cast<double>(std::get<0>(mx) + 1),
+                                       static_cast<double>(std::get<1>(mx) + 1),
+                                       static_cast<double>(std::get<2>(mx) + 1)};
+        const AABB world_bounds{origin_ + voxel_min * cell_size_, origin_ + voxel_max_exclusive * cell_size_};
+        return std::make_pair(world_bounds.min_point, world_bounds.max_point);
     }
     VoxelGrid VoxelGrid::extract_surface(uint8_t value) const {
         VoxelGrid r(cell_size_, origin_, name_.empty() ? "surface" : name_ + "_surface");

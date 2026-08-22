@@ -1,10 +1,14 @@
 #include <termin/foliage/foliage_file.hpp>
 
+#include "foliage_bounds_internal.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <new>
+#include <stdexcept>
 
 #include <tcbase/tc_log.h>
 
@@ -35,6 +39,7 @@ namespace termin {
 
         static_assert(sizeof(FoliageInstance) == FOLIAGE_INSTANCE_STRIDE);
         static_assert(sizeof(FoliageFileHeader) == FOLIAGE_HEADER_SIZE);
+        static_assert(offsetof(FoliageFileHeader, instance_count) == 32);
         static_assert(offsetof(FoliageFileHeader, bounds_min) == 40);
         static_assert(offsetof(FoliageFileHeader, bounds_max) == 52);
 
@@ -93,23 +98,83 @@ namespace termin {
         if (header.instance_count > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
             return fail_result("foliage instance count does not fit size_t: " + std::to_string(header.instance_count));
         }
+        if (header.instance_count > std::numeric_limits<uint64_t>::max() / FOLIAGE_INSTANCE_STRIDE) {
+            return fail_result("foliage instance byte count overflows uint64: " + std::to_string(header.instance_count));
+        }
+
+        const uint64_t byte_count = header.instance_count * FOLIAGE_INSTANCE_STRIDE;
+        if (byte_count > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
+            return fail_result("foliage instance block is too large: " + path.string());
+        }
+
+        in.seekg(0, std::ios::end);
+        const std::streampos end_position = in.tellg();
+        if (end_position == std::streampos{-1}) {
+            return fail_result("failed to determine foliage file size: " + path.string());
+        }
+        const auto end_offset = static_cast<std::streamoff>(end_position);
+        if (end_offset < 0) {
+            return fail_result("invalid foliage file size: " + path.string());
+        }
+        const uint64_t file_size = static_cast<uint64_t>(end_offset);
+        const uint64_t payload_offset = header.header_size;
+        if (payload_offset > file_size || byte_count > file_size - payload_offset) {
+            return fail_result("foliage instance block is truncated: " + path.string());
+        }
+        if (payload_offset > static_cast<uint64_t>(std::numeric_limits<std::streamoff>::max())) {
+            return fail_result("foliage header offset is too large: " + path.string());
+        }
+        in.seekg(static_cast<std::streamoff>(payload_offset), std::ios::beg);
+        if (!in.good()) {
+            return fail_result("failed to seek to foliage instances: " + path.string());
+        }
+
+        const AABBf serialized_bounds{
+            {header.bounds_min[0], header.bounds_min[1], header.bounds_min[2]},
+            {header.bounds_max[0], header.bounds_max[1], header.bounds_max[2]},
+        };
+        if (!serialized_bounds.is_valid()) {
+            return fail_result("foliage header contains invalid bounds: " + path.string());
+        }
 
         std::vector<FoliageInstance> instances;
-        instances.resize(static_cast<size_t>(header.instance_count));
-        const uint64_t byte_count = header.instance_count * FOLIAGE_INSTANCE_STRIDE;
+        if (header.instance_count > static_cast<uint64_t>(instances.max_size())) {
+            return fail_result("foliage instance count exceeds container capacity: " +
+                               std::to_string(header.instance_count));
+        }
+        try {
+            instances.resize(static_cast<size_t>(header.instance_count));
+        } catch (const std::length_error&) {
+            return fail_result("foliage instance count exceeds container capacity: " +
+                               std::to_string(header.instance_count));
+        } catch (const std::bad_alloc&) {
+            return fail_result("failed to allocate foliage instance block: " + path.string());
+        }
         if (byte_count > 0) {
-            if (byte_count > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
-                return fail_result("foliage instance block is too large: " + path.string());
-            }
             if (!read_exact(in, instances.data(), static_cast<std::streamsize>(byte_count))) {
                 return fail_result("failed to read foliage instances: " + path.string());
             }
         }
 
+        const foliage_detail::BoundsComputation computed = foliage_detail::compute_bounds(instances);
+        if (!computed.valid) {
+            return fail_result("foliage instance " + std::to_string(computed.invalid_instance) +
+                               " contains non-finite geometry: " + path.string());
+        }
+        if (computed.has_bounds != (header.instance_count > 0)) {
+            return fail_result("foliage instance count and computed bounds state disagree: " + path.string());
+        }
+        if (computed.has_bounds) {
+            if (!foliage_detail::bounds_equal(serialized_bounds, computed.bounds)) {
+                return fail_result("foliage header bounds do not match instance geometry: " + path.string());
+            }
+        } else if (!foliage_detail::bounds_equal(serialized_bounds, AABBf{})) {
+            return fail_result("empty foliage file must encode zero bounds: " + path.string());
+        }
+
         out.instances = std::move(instances);
-        out.local_bounds.min = {header.bounds_min[0], header.bounds_min[1], header.bounds_min[2]};
-        out.local_bounds.max = {header.bounds_max[0], header.bounds_max[1], header.bounds_max[2]};
-        out.local_bounds.valid = header.instance_count > 0;
+        out.local_bounds = computed.bounds;
+        out.has_local_bounds = computed.has_bounds;
         out.source_path = path.string();
         out.loaded = true;
         ++out.version;
@@ -121,16 +186,31 @@ namespace termin {
             return fail_result("big-endian hosts are not supported by .tfoliage v1");
         }
 
+        const foliage_detail::BoundsComputation computed = foliage_detail::compute_bounds(data.instances);
+        if (!computed.valid) {
+            return fail_result("cannot save non-finite foliage instance " + std::to_string(computed.invalid_instance));
+        }
+        if (data.has_local_bounds != computed.has_bounds) {
+            return fail_result("foliage bounds state does not match instance count");
+        }
+        if (computed.has_bounds &&
+            (!data.local_bounds.is_valid() || !foliage_detail::bounds_equal(data.local_bounds, computed.bounds))) {
+            return fail_result("foliage bounds do not match instance geometry");
+        }
+        if (data.instances.size() > std::numeric_limits<uint64_t>::max() / FOLIAGE_INSTANCE_STRIDE) {
+            return fail_result("foliage instance byte count overflows uint64");
+        }
+
         FoliageFileHeader header;
         std::memcpy(header.magic, FOLIAGE_MAGIC.data(), FOLIAGE_MAGIC.size());
         header.instance_count = static_cast<uint64_t>(data.instances.size());
-        if (data.local_bounds.valid) {
-            header.bounds_min[0] = data.local_bounds.min.x;
-            header.bounds_min[1] = data.local_bounds.min.y;
-            header.bounds_min[2] = data.local_bounds.min.z;
-            header.bounds_max[0] = data.local_bounds.max.x;
-            header.bounds_max[1] = data.local_bounds.max.y;
-            header.bounds_max[2] = data.local_bounds.max.z;
+        if (computed.has_bounds) {
+            header.bounds_min[0] = computed.bounds.min_point.x;
+            header.bounds_min[1] = computed.bounds.min_point.y;
+            header.bounds_min[2] = computed.bounds.min_point.z;
+            header.bounds_max[0] = computed.bounds.max_point.x;
+            header.bounds_max[1] = computed.bounds.max_point.y;
+            header.bounds_max[2] = computed.bounds.max_point.z;
         }
 
         std::ofstream out(path, std::ios::binary | std::ios::trunc);

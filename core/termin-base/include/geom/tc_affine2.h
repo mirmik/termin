@@ -4,16 +4,13 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <geom/tc_vec2f.h>
 #include <tcbase/tc_types.h>
 
 #ifdef __cplusplus
 #define TC_AFFINE2F(m00_, m01_, m10_, m11_, tx_, ty_)                                                                  \
     tc_affine2f {                                                                                                      \
         m00_, m01_, m10_, m11_, tx_, ty_                                                                               \
-    }
-#define TC_VEC2F(x_, y_)                                                                                               \
-    tc_vec2f {                                                                                                         \
-        x_, y_                                                                                                         \
     }
 #define TC_BOUNDS2F(x0_, y0_, x1_, y1_)                                                                                \
     tc_bounds2f {                                                                                                      \
@@ -23,10 +20,6 @@
 #define TC_AFFINE2F(m00_, m01_, m10_, m11_, tx_, ty_)                                                                  \
     (tc_affine2f) {                                                                                                    \
         m00_, m01_, m10_, m11_, tx_, ty_                                                                               \
-    }
-#define TC_VEC2F(x_, y_)                                                                                               \
-    (tc_vec2f) {                                                                                                       \
-        x_, y_                                                                                                         \
     }
 #define TC_BOUNDS2F(x0_, y0_, x1_, y1_)                                                                                \
     (tc_bounds2f) {                                                                                                    \

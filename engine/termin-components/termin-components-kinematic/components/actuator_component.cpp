@@ -33,38 +33,33 @@ namespace termin {
 
         // local = origin * Translation(axis * coordinate)
         const Vec3 axis = get_axis();
-        Vec3 origin_position_value{origin_position.x, origin_position.y, origin_position.z};
-        Quat origin_rotation_value{origin_rotation.x, origin_rotation.y, origin_rotation.z, origin_rotation.w};
 
         // offset.position = axis * coordinate
-        Vec3 offset_pos = axis * physical_coordinate();
-        Vec3 new_position = origin_position_value + origin_rotation_value.rotate(offset_pos);
+        const Vec3 offset_pos = axis * physical_coordinate();
+        const Vec3 new_position = origin_position + origin_rotation.rotate(offset_pos);
 
-        // Set position
-        double xyz[3] = {new_position.x, new_position.y, new_position.z};
-        ent.set_local_position(xyz);
-
-        // Rotation comes from the zero-coordinate frame. Scale remains
-        // untouched.
-        double rot[4] = {
-            origin_rotation_value.x, origin_rotation_value.y, origin_rotation_value.z, origin_rotation_value.w};
-        ent.set_local_rotation(rot);
+        GeneralTransform3 transform = ent.transform();
+        transform.set_local_position(new_position);
+        // Rotation comes from the zero-coordinate frame. Scale remains untouched.
+        transform.set_local_rotation(origin_rotation);
     }
 
     void ActuatorComponent::recalculate_origin() {
-        double pos[3], rot[4];
-        if (!read_entity_transform(pos, rot))
+        const Entity ent = entity();
+        if (!ent.valid()) {
             return;
+        }
+        const GeneralTransform3 transform = ent.transform();
+        const Vec3 current_position = transform.local_position();
 
         // An actuator never changes its entity rotation.
-        origin_rotation = {rot[0], rot[1], rot[2], rot[3]};
+        origin_rotation = transform.local_rotation();
 
         // Reverse: origin_pos = current_pos - origin_rot.rotate(axis * coord)
-        Quat origin_rotation_value{rot[0], rot[1], rot[2], rot[3]};
-        Vec3 offset_pos = get_axis() * physical_coordinate();
-        Vec3 rotated = origin_rotation_value.rotate(offset_pos);
+        const Vec3 offset_pos = get_axis() * physical_coordinate();
+        const Vec3 rotated = origin_rotation.rotate(offset_pos);
 
-        origin_position = {pos[0] - rotated.x, pos[1] - rotated.y, pos[2] - rotated.z};
+        origin_position = current_position - rotated;
     }
 
     namespace {

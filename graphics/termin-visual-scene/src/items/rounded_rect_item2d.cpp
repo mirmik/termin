@@ -14,7 +14,7 @@ namespace termin::visual {
                       float radius,
                       const tgfx::FillPaint& fill,
                       const std::optional<tgfx::StrokePaint>& stroke) {
-            if (!detail::valid_rect(rect) || !std::isfinite(radius) || radius < 0.0f || !fill.validate() ||
+            if (!rect.is_valid() || !std::isfinite(radius) || radius < 0.0f || !fill.validate() ||
                 (stroke && !stroke->validate())) {
                 throw std::invalid_argument("invalid RoundedRectItem2D state");
             }
@@ -58,8 +58,8 @@ namespace termin::visual {
     }
 
     std::optional<termin::Bounds2f> RoundedRectItem2D::local_bounds() const {
-        auto result = detail::rect_bounds(rect_);
-        return stroke_ ? detail::expanded(result, stroke_->width * 0.5f) : result;
+        const auto result = rect_.bounds();
+        return stroke_ ? result.expanded(stroke_->width * 0.5f) : result;
     }
 
     bool RoundedRectItem2D::hit_test(termin::Vec2f point, float) const {

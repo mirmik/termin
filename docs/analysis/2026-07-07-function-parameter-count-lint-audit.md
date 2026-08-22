@@ -89,10 +89,10 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   Python and C# binding call shapes compatible.
 - Updated `LightingUBO::update_from_lights` to take `std::span<const Light>` so
   render-pass execute data can carry non-owning light views.
-- Updated `fit_shadow_frustum_for_cascade` to take a typed
+- Updated `try_fit_shadow_frustum_for_cascade` to take a typed
   `ShadowCascadeFitRequest`.
 - Updated `ShadowPass::execute_shadow_pass_tgfx2` to take a typed
-  `ShadowPassExecuteData` with non-owning light views.
+  `ShadowPassExecuteRequest` with non-owning light views.
 - C++ repository-owned diagnostics dropped from 64 to 9.
 
 2026-07-08:

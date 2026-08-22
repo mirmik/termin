@@ -38,6 +38,22 @@ namespace {
 } // namespace
 
 int main() {
+    RectItem2D closed_rect(
+        termin::Rect2f{1.0f, 2.0f, 3.0f, 4.0f}, tgfx::FillPaint{}, std::nullopt);
+    assert(closed_rect.hit_test({1.0f, 2.0f}, 0.0f));
+    assert(closed_rect.hit_test({4.0f, 6.0f}, 0.0f));
+    assert(!closed_rect.hit_test({4.001f, 6.0f}, 0.0f));
+
+    EllipseItem2D closed_ellipse(
+        termin::Rect2f{1.0f, 2.0f, 4.0f, 6.0f}, tgfx::FillPaint{}, std::nullopt);
+    assert(closed_ellipse.hit_test({5.0f, 5.0f}, 0.0f));
+    assert(!closed_ellipse.hit_test({5.001f, 5.0f}, 0.0f));
+
+    RoundedRectItem2D closed_rounded(
+        termin::Rect2f{0.0f, 0.0f, 4.0f, 4.0f}, 1.0f, tgfx::FillPaint{}, std::nullopt);
+    assert(closed_rounded.hit_test({1.0f, 0.0f}, 0.0f));
+    assert(!closed_rounded.hit_test({0.0f, 0.0f}, 0.0f));
+
     const auto scene_handle = tc_visual_scene_create();
     TcVisualScene scene{scene_handle};
 

@@ -47,9 +47,7 @@ namespace termin {
     }
 
     void DetourPathfindingWorldComponent::sync_query_settings() {
-        _query_session.query_extent_x = query_extent_x;
-        _query_session.query_extent_y = query_extent_y;
-        _query_session.query_extent_z = query_extent_z;
+        _query_session.query_extents = query_extents;
         _query_session.max_polys = max_polys;
         _query_session.max_straight_path = max_straight_path;
     }
@@ -211,24 +209,27 @@ namespace termin {
                         self->clear();
                     }
                 });
-            tc::stage_inspect_field(inspect,
-                                    &DetourPathfindingWorldComponent::query_extent_x,
-                                    "DetourPathfindingWorldComponent",
-                                    "query_extent_x",
-                                    "Query Extent X",
-                                    "float");
-            tc::stage_inspect_field(inspect,
-                                    &DetourPathfindingWorldComponent::query_extent_y,
-                                    "DetourPathfindingWorldComponent",
-                                    "query_extent_y",
-                                    "Query Extent Y",
-                                    "float");
-            tc::stage_inspect_field(inspect,
-                                    &DetourPathfindingWorldComponent::query_extent_z,
-                                    "DetourPathfindingWorldComponent",
-                                    "query_extent_z",
-                                    "Query Extent Z",
-                                    "float");
+            inspect.add_with_accessors<DetourPathfindingWorldComponent, float>(
+                "DetourPathfindingWorldComponent",
+                "query_extent_x",
+                "Query Extent X",
+                "float",
+                [](DetourPathfindingWorldComponent* self) { return self->query_extents.x; },
+                [](DetourPathfindingWorldComponent* self, float value) { self->query_extents.x = value; });
+            inspect.add_with_accessors<DetourPathfindingWorldComponent, float>(
+                "DetourPathfindingWorldComponent",
+                "query_extent_y",
+                "Query Extent Y",
+                "float",
+                [](DetourPathfindingWorldComponent* self) { return self->query_extents.y; },
+                [](DetourPathfindingWorldComponent* self, float value) { self->query_extents.y = value; });
+            inspect.add_with_accessors<DetourPathfindingWorldComponent, float>(
+                "DetourPathfindingWorldComponent",
+                "query_extent_z",
+                "Query Extent Z",
+                "float",
+                [](DetourPathfindingWorldComponent* self) { return self->query_extents.z; },
+                [](DetourPathfindingWorldComponent* self, float value) { self->query_extents.z = value; });
             tc::stage_inspect_field(inspect,
                                     &DetourPathfindingWorldComponent::max_polys,
                                     "DetourPathfindingWorldComponent",

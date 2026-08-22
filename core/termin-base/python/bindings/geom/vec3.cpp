@@ -1,6 +1,7 @@
 #include "common.hpp"
 
 #include <cmath>
+#include <optional>
 #include <string>
 
 namespace termin {
@@ -28,6 +29,27 @@ namespace termin {
             .def("norm", &Vec3::norm)
             .def("norm_squared", &Vec3::norm_squared)
             .def("normalized", &Vec3::normalized)
+            .def(
+                "try_normalized",
+                [](const Vec3& value, double epsilon) -> std::optional<Vec3> {
+                    Vec3 normalized;
+                    if (!value.try_normalized(normalized, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return normalized;
+                },
+                nb::arg("epsilon") = 1.0e-10)
+            .def("normalized_or", &Vec3::normalized_or, nb::arg("fallback"), nb::arg("epsilon") = 1.0e-10)
+            .def("is_finite", &Vec3::is_finite)
+            .def("cwise_product", &Vec3::cwise_product)
+            .def("cwise_quotient", &Vec3::cwise_quotient)
+            .def("cwise_min", &Vec3::cwise_min)
+            .def("cwise_max", &Vec3::cwise_max)
+            .def("clamped", &Vec3::clamped)
+            .def("cwise_abs", &Vec3::cwise_abs)
+            .def("min_component", &Vec3::min_component)
+            .def("max_component", &Vec3::max_component)
+            .def("to_float", &Vec3::to_float)
             .def_static("zero", &Vec3::zero)
             .def_static("unit_x", &Vec3::unit_x)
             .def_static("unit_y", &Vec3::unit_y)
@@ -88,6 +110,26 @@ namespace termin {
             .def("norm", &Vec3f::norm)
             .def("norm_squared", &Vec3f::norm_squared)
             .def("normalized", &Vec3f::normalized)
+            .def(
+                "try_normalized",
+                [](const Vec3f& value, float epsilon) -> std::optional<Vec3f> {
+                    Vec3f normalized;
+                    if (!value.try_normalized(normalized, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return normalized;
+                },
+                nb::arg("epsilon") = 1.0e-6f)
+            .def("normalized_or", &Vec3f::normalized_or, nb::arg("fallback"), nb::arg("epsilon") = 1.0e-6f)
+            .def("is_finite", &Vec3f::is_finite)
+            .def("cwise_product", &Vec3f::cwise_product)
+            .def("cwise_quotient", &Vec3f::cwise_quotient)
+            .def("cwise_min", &Vec3f::cwise_min)
+            .def("cwise_max", &Vec3f::cwise_max)
+            .def("clamped", &Vec3f::clamped)
+            .def("cwise_abs", &Vec3f::cwise_abs)
+            .def("min_component", &Vec3f::min_component)
+            .def("max_component", &Vec3f::max_component)
             .def("to_double", &Vec3f::to_double)
             .def_static("zero", &Vec3f::zero)
             .def_static("unit_x", &Vec3f::unit_x)

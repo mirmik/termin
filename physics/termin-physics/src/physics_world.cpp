@@ -39,9 +39,9 @@ namespace termin::physics {
         body_to_collider_.clear();
         contacts_.clear();
     }
-    size_t PhysicsWorld::add_box(double sx, double sy, double sz, double mass, const Pose3& p, bool stat) {
-        size_t i = add_body(RigidBody::create_box(sx, sy, sz, mass, p, stat));
-        auto c = std::make_shared<BoxCollider>(Vec3(sx / 2, sy / 2, sz / 2), GeneralPose3(p.ang, p.lin));
+    size_t PhysicsWorld::add_box(const Vec3& size, double mass, const Pose3& p, bool stat) {
+        size_t i = add_body(RigidBody::create_box(size, mass, p, stat));
+        auto c = std::make_shared<BoxCollider>(size * 0.5, GeneralPose3(p.ang, p.lin));
         owned_colliders_.push_back(c);
         Collider* raw = c.get();
         ensure_collision_world()->add(raw);

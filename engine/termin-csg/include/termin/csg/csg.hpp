@@ -7,15 +7,13 @@
 #include <tgfx/tgfx_mesh_handle.hpp>
 
 #include <termin/csg/termin_csg_api.hpp>
+#include <termin/geom/vec2.hpp>
+#include <termin/geom/vec3.hpp>
 
 namespace termin::csg {
 
-    struct Point2 {
-        double x = 0.0;
-        double y = 0.0;
-    };
-
-    using Polygon2 = std::vector<Point2>;
+    using Point2 = Vec2;
+    using Polygon2 = std::vector<Vec2>;
 
     class TERMIN_CSG_API Solid {
     private:
@@ -36,14 +34,14 @@ namespace termin::csg {
         double volume() const;
         const char* status_string() const;
 
-        Solid translated(double x, double y, double z) const;
-        Solid scaled(double x, double y, double z) const;
-        Solid rotated(double x_degrees, double y_degrees, double z_degrees) const;
+        Solid translated(const Vec3& offset) const;
+        Solid scaled(const Vec3& factors) const;
+        Solid rotated(const Vec3& euler_degrees) const;
 
     private:
         explicit Solid(Impl impl);
 
-        friend TERMIN_CSG_API Solid make_box(double, double, double, bool);
+        friend TERMIN_CSG_API Solid make_box(const Vec3&, bool);
         friend TERMIN_CSG_API Solid make_sphere(double, int);
         friend TERMIN_CSG_API Solid make_cylinder(double, double, int, bool);
         friend TERMIN_CSG_API Solid make_cone(double, double, double, int, bool);
@@ -55,7 +53,7 @@ namespace termin::csg {
         friend TERMIN_CSG_API Mesh3 to_mesh3(const Solid&, const std::string&, const std::string&, bool);
     };
 
-    TERMIN_CSG_API Solid make_box(double x, double y, double z, bool centered = true);
+    TERMIN_CSG_API Solid make_box(const Vec3& size, bool centered = true);
     TERMIN_CSG_API Solid make_sphere(double radius, int circular_segments = 0);
     TERMIN_CSG_API Solid make_cylinder(double radius, double height, int circular_segments = 0, bool centered = true);
     TERMIN_CSG_API Solid

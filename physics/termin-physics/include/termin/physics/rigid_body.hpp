@@ -10,6 +10,7 @@
 //
 // Угловая динамика учитывает гироскопический момент: tau_gyro = omega x (I·omega)
 
+#include <termin/geom/mat33.hpp>
 #include <termin/geom/pose3.hpp>
 #include <termin/geom/quat.hpp>
 #include <termin/geom/vec3.hpp>
@@ -49,9 +50,9 @@ namespace termin {
             RigidBody() = default;
 
             // Создать тело с инерцией параллелепипеда.
-            // @param sx, sy, sz - полные размеры (не half)
+            // @param size - полные размеры (не half)
             static RigidBody
-            create_box(double sx, double sy, double sz, double m, const Pose3& p = Pose3(), bool stat = false);
+            create_box(const Vec3& size, double m, const Pose3& p = Pose3(), bool stat = false);
 
             // Создать тело с инерцией сферы.
             static RigidBody create_sphere(double radius, double m, const Pose3& p = Pose3(), bool stat = false);
@@ -75,7 +76,7 @@ namespace termin {
             Vec3 position() const;
 
             // I_world^-1 = R_principal * diag(I^-1) * R_principal^T
-            void world_inertia_inv(double* Iinv) const;
+            Mat33 world_inertia_inv() const;
 
             Vec3 apply_inv_inertia_world(const Vec3& v) const;
 

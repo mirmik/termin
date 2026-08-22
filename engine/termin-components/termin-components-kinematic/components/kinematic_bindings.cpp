@@ -58,7 +58,7 @@ NB_MODULE(_components_kinematic_native, m) {
                 return nb::make_tuple(axis.x, axis.y, axis.z);
             },
             [](KinematicUnitComponent& c, nb::tuple v) {
-                c.set_axis(nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2]));
+                c.set_axis({nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2])});
             })
         .def_prop_rw("coordinate", &KinematicUnitComponent::get_coordinate, &KinematicUnitComponent::set_coordinate)
         .def_prop_rw("coordinate_scale",

@@ -13,14 +13,10 @@ namespace {
     termin::Vec2 project_to_screen(const termin::Mat44& projection_view,
                                    const termin::Vec3& point,
                                    const termin::Rect2& viewport) {
-        const double clip_x = projection_view(0, 0) * point.x + projection_view(1, 0) * point.y +
-                             projection_view(2, 0) * point.z + projection_view(3, 0);
-        const double clip_y = projection_view(0, 1) * point.x + projection_view(1, 1) * point.y +
-                             projection_view(2, 1) * point.z + projection_view(3, 1);
-        const double clip_w = projection_view(0, 3) * point.x + projection_view(1, 3) * point.y +
-                             projection_view(2, 3) * point.z + projection_view(3, 3);
-        return {viewport.x + (clip_x / clip_w + 1.0) * 0.5 * viewport.width,
-                viewport.y + (clip_y / clip_w + 1.0) * 0.5 * viewport.height};
+        termin::Vec3 ndc;
+        REQUIRE(projection_view.try_transform_point(point, ndc));
+        return {viewport.x + (ndc.x + 1.0) * 0.5 * viewport.width,
+                viewport.y + (ndc.y + 1.0) * 0.5 * viewport.height};
     }
 
 } // namespace

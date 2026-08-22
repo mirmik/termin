@@ -97,3 +97,58 @@ TEST_CASE("TransformGizmo cancel restores the captured target without committing
 
     tc_entity_pool_registry_destroy(pool);
 }
+
+TEST_CASE("TransformGizmo rotates around an oriented local axis") {
+    const tc_entity_pool_handle pool = tc_entity_pool_registry_create(4);
+    REQUIRE(tc_entity_pool_handle_valid(pool));
+
+    termin::Entity target = termin::Entity::create(pool, "target");
+    const termin::Quat start_orientation = rotation_z(0.5 * std::acos(-1.0));
+    target.transform().relocate(termin::Pose3{start_orientation, termin::Vec3::zero()});
+
+    termin::TransformGizmo gizmo;
+    gizmo.set_target(target);
+    gizmo.set_orientation_mode("local");
+
+    const int rotate_x_id = static_cast<int>(termin::TransformElement::ROTATE_X);
+    const termin::Vec3f start_hit{1.0f, 0.0f, 0.0f};
+    const termin::Vec3f end_hit{0.0f, 0.0f, -1.0f};
+    gizmo.on_click(rotate_x_id, &start_hit);
+    gizmo.on_drag(rotate_x_id, end_hit, termin::Vec3f::zero());
+    gizmo.on_release(rotate_x_id);
+
+    const termin::Quat expected_orientation =
+        (termin::Quat::from_axis_angle(termin::Vec3::unit_y(), 0.5 * std::acos(-1.0)) * start_orientation).normalized();
+    CHECK(quat_near(target.transform().global_rotation(), expected_orientation));
+
+    tc_entity_pool_registry_destroy(pool);
+}
+
+TEST_CASE("TransformGizmo preserves quaternion precision through a zero-angle drag") {
+    const tc_entity_pool_handle pool = tc_entity_pool_registry_create(4);
+    REQUIRE(tc_entity_pool_handle_valid(pool));
+
+    termin::Entity target = termin::Entity::create(pool, "target");
+    const termin::Quat authored_orientation =
+        termin::Quat{0.1234567890123, -0.2345678901234, 0.3456789012345, 0.9012345678901}.normalized();
+    target.transform().relocate(termin::Pose3{authored_orientation, termin::Vec3::zero()});
+    const termin::Quat start_orientation = target.transform().global_rotation();
+
+    termin::TransformGizmo gizmo;
+    gizmo.set_target(target);
+    gizmo.set_orientation_mode("world");
+
+    const int rotate_z_id = static_cast<int>(termin::TransformElement::ROTATE_Z);
+    const termin::Vec3f hit{1.0f, 0.0f, 0.0f};
+    gizmo.on_click(rotate_z_id, &hit);
+    gizmo.on_drag(rotate_z_id, hit, termin::Vec3f::zero());
+    gizmo.on_release(rotate_z_id);
+
+    const termin::Quat actual_orientation = target.transform().global_rotation();
+    CHECK(near(actual_orientation.x, start_orientation.x, 1.0e-12));
+    CHECK(near(actual_orientation.y, start_orientation.y, 1.0e-12));
+    CHECK(near(actual_orientation.z, start_orientation.z, 1.0e-12));
+    CHECK(near(actual_orientation.w, start_orientation.w, 1.0e-12));
+
+    tc_entity_pool_registry_destroy(pool);
+}

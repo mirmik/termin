@@ -16,14 +16,6 @@ namespace termin {
 
     namespace {
 
-        Mat44 mat44_from_mat44f(const Mat44f& value) {
-            Mat44 result;
-            for (int i = 0; i < 16; ++i) {
-                result.data[i] = static_cast<double>(value.data[i]);
-            }
-            return result;
-        }
-
         Vec3 termin_bake_to_recast(const Vec3& point) {
             return Vec3{point.x, point.z, point.y};
         }
@@ -56,7 +48,7 @@ namespace termin {
             Mat44 world;
             std::memcpy(world.ptr(), world_data, sizeof(world_data));
             Mat44 local_to_bake = context.world_to_bake * world;
-            Mat44 mesh_to_bake = local_to_bake * mat44_from_mat44f(mesh_component.get_mesh_offset_matrix());
+            Mat44 mesh_to_bake = local_to_bake * mesh_component.get_mesh_offset_matrix().to_double();
 
             tc_log_info("[NavMesh] Processing mesh source entity: %s", entity_debug_name(entity).c_str());
 

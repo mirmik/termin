@@ -472,14 +472,12 @@ struct VertexInput {
         tc_scene_foreach_drawable(scene, collect_shadow_drawable_shader_usages, &data, TC_SCENE_FILTER_NONE, 0);
     }
 
-    ShadowCameraParams
-    ShadowPass::build_shadow_params(const Light& light, const Mat44f& camera_view, const Mat44f& camera_projection) {
-        Vec3 light_dir = light.direction.normalized();
-
+    std::optional<ShadowCameraParams>
+    ShadowPass::build_shadow_params(const Light& light, const Mat44& camera_view, const Mat44& camera_projection) {
         // Use frustum fitting for better shadow quality
         return fit_shadow_frustum_to_camera(camera_view,
                                             camera_projection,
-                                            light_dir,
+                                            light.direction,
                                             1.0f, // padding
                                             light.shadows.map_resolution,
                                             true, // stabilize (texel snapping)
@@ -496,7 +494,7 @@ struct VertexInput {
     // Drawables that cannot expose a tc_mesh* cast shadows through typed
     // RenderItems and pass-specific encoders.
     std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(ExecuteContext& ctx,
-                                                                       const ShadowPassExecuteData& data) {
+                                                                       const ShadowPassExecuteRequest& request) {
         std::vector<ShadowMapResult> results;
 
         if (!ctx.ctx2) {
@@ -515,8 +513,8 @@ struct VertexInput {
 
         // Find directional lights that cast shadows.
         std::vector<std::pair<int, const Light*>> shadow_lights;
-        for (size_t i = 0; i < data.lights.size(); ++i) {
-            const Light& light = data.lights[i];
+        for (size_t i = 0; i < request.lights.size(); ++i) {
+            const Light& light = request.lights[i];
             if (light.type == LightType::Directional && light.shadows.enabled) {
                 shadow_lights.push_back({static_cast<int>(i), &light});
             }
@@ -529,7 +527,7 @@ struct VertexInput {
         if (!scene_items) {
             return results;
         }
-        collect_shadow_casters(data.scene, data.layer_mask, data.render_category_mask, *scene_items);
+        collect_shadow_casters(request.scene, request.layer_mask, request.render_category_mask, *scene_items);
 
         const MaterialPipelinePassContract task_shader_contract = shadow_material_pass_contract();
         RenderItemTaskPlanningContract task_planning_contract =
@@ -580,8 +578,8 @@ struct VertexInput {
             task.draw_context.phase = TC_PHASE_SHADOW;
             task.draw_context.pass_contract = task_shader_contract;
             task.draw_context.current_tc_shader = TcShader(task.final_shader);
-            task.draw_context.layer_mask = data.layer_mask;
-            task.draw_context.render_category_mask = data.render_category_mask;
+            task.draw_context.layer_mask = request.layer_mask;
+            task.draw_context.render_category_mask = request.render_category_mask;
         }
 
         // Keep the owned task storage stable and sort only non-owning submission
@@ -604,33 +602,49 @@ struct VertexInput {
             }
         }
 
-        float camera_near = data.camera_near;
-        float camera_far = data.camera_far;
-        if (camera_near < 0.001f) {
-            camera_near = 0.1f;
-        }
-        if (camera_far <= camera_near + 0.001f) {
-            camera_far = camera_near + 100.0f;
+        const float camera_near = request.camera_near;
+        const float camera_far = request.camera_far;
+        if (!std::isfinite(camera_near) || !std::isfinite(camera_far) || camera_near <= 0.0f ||
+            camera_far <= camera_near) {
+            tc::Log::error("ShadowPass/tgfx2: camera range must be finite and satisfy 0 < near < far");
+            return results;
         }
 
         int fbo_index = 0;
         for (auto [light_index, light] : shadow_lights) {
             int resolution = light->shadows.map_resolution;
             int cascade_count = std::max(1, std::min(4, light->shadows.cascade_count));
-            float max_distance = std::min(light->shadows.max_distance, camera_far);
-            if (max_distance <= camera_near + 0.001f) {
-                max_distance = camera_far;
+            const float max_distance = std::min(light->shadows.max_distance, camera_far);
+            if (!std::isfinite(max_distance) || max_distance <= camera_near) {
+                tc::Log::error(
+                    "ShadowPass/tgfx2: light %d shadow range must be finite and extend beyond camera near", light_index);
+                continue;
             }
             float split_lambda = light->shadows.split_lambda;
             float depth_bias_slope = static_cast<float>(light->shadows.normal_bias);
 
             std::vector<float> splits = compute_cascade_splits(camera_near, max_distance, cascade_count, split_lambda);
 
-            Vec3 light_dir = light->direction.normalized();
-
             for (int c = 0; c < cascade_count; ++c) {
                 float cascade_near = splits[c];
                 float cascade_far = splits[c + 1];
+
+                ShadowCascadeFitRequest fit_request;
+                fit_request.view_matrix = request.camera_view;
+                fit_request.projection_matrix = request.camera_projection;
+                fit_request.camera_near = camera_near;
+                fit_request.camera_far = camera_far;
+                fit_request.light_direction = light->direction;
+                fit_request.cascade_near = cascade_near;
+                fit_request.cascade_far = cascade_far;
+                fit_request.shadow_map_resolution = resolution;
+                fit_request.caster_offset = caster_offset;
+                const auto fitted_params = try_fit_shadow_frustum_for_cascade(fit_request);
+                if (!fitted_params.has_value()) {
+                    tc::Log::error("ShadowPass/tgfx2: cannot fit shadow camera for cascade %d", c);
+                    continue;
+                }
+                const ShadowCameraParams& params = *fitted_params;
 
                 tgfx::TextureHandle depth_tex2 = get_or_create_depth_tex2(ctx.ctx2->device(), resolution, fbo_index);
                 fbo_index++;
@@ -639,17 +653,6 @@ struct VertexInput {
                     continue;
                 }
 
-                ShadowCascadeFitRequest fit_request;
-                fit_request.view_matrix = data.camera_view;
-                fit_request.projection_matrix = data.camera_projection;
-                fit_request.camera_near = camera_near;
-                fit_request.camera_far = camera_far;
-                fit_request.light_direction = light_dir;
-                fit_request.cascade_near = cascade_near;
-                fit_request.cascade_far = cascade_far;
-                fit_request.shadow_map_resolution = resolution;
-                fit_request.caster_offset = caster_offset;
-                ShadowCameraParams params = fit_shadow_frustum_for_cascade(fit_request);
                 Mat44f view_matrix = build_shadow_view_matrix(params);
                 Mat44f proj_matrix = build_shadow_projection_matrix(params);
                 Mat44f light_space_matrix = compute_light_space_matrix(params);
@@ -853,10 +856,8 @@ struct VertexInput {
         }
 
         // Get camera matrices
-        Mat44 view_d = primary_view->get_view_matrix();
-        Mat44 proj_d = primary_view->get_projection_matrix();
-        Mat44f camera_view = view_d.to_float();
-        Mat44f camera_projection = proj_d.to_float();
+        const Mat44 camera_view = primary_view->get_view_matrix();
+        const Mat44 camera_projection = primary_view->get_projection_matrix();
         float camera_near = static_cast<float>(primary_view->near_clip);
         float camera_far = static_cast<float>(primary_view->far_clip);
 
@@ -867,16 +868,16 @@ struct VertexInput {
             return;
         }
 
-        ShadowPassExecuteData data;
-        data.scene = services->scene.handle();
-        data.lights = services->lights;
-        data.camera_view = camera_view;
-        data.camera_projection = camera_projection;
-        data.camera_near = camera_near;
-        data.camera_far = camera_far;
-        data.layer_mask = services->layer_mask;
-        data.render_category_mask = services->render_category_mask;
-        std::vector<ShadowMapResult> results = execute_shadow_pass_tgfx2(ctx, data);
+        ShadowPassExecuteRequest request;
+        request.scene = services->scene.handle();
+        request.lights = services->lights;
+        request.camera_view = camera_view;
+        request.camera_projection = camera_projection;
+        request.camera_near = camera_near;
+        request.camera_far = camera_far;
+        request.layer_mask = services->layer_mask;
+        request.render_category_mask = services->render_category_mask;
+        std::vector<ShadowMapResult> results = execute_shadow_pass_tgfx2(ctx, request);
 
         // Add results to shadow array
         for (const auto& result : results) {

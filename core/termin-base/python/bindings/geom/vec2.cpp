@@ -1,13 +1,16 @@
 #include "common.hpp"
 
+#include <optional>
 #include <string>
+#include <type_traits>
 
 namespace termin {
 
     namespace {
 
         template <typename VecT, typename ScalarT> void bind_vec2_type(nb::module_& m, const char* name) {
-            nb::class_<VecT>(m, name)
+            auto binding = nb::class_<VecT>(m, name);
+            binding
                 .def(nb::init<>())
                 .def(nb::init<ScalarT, ScalarT>())
                 .def_rw("x", &VecT::x)
@@ -27,6 +30,31 @@ namespace termin {
                 .def("norm", &VecT::norm)
                 .def("norm_squared", &VecT::norm_squared)
                 .def("normalized", &VecT::normalized)
+                .def(
+                    "try_normalized",
+                    [](const VecT& value, ScalarT epsilon) -> std::optional<VecT> {
+                        VecT normalized;
+                        if (!value.try_normalized(normalized, epsilon)) {
+                            return std::nullopt;
+                        }
+                        return normalized;
+                    },
+                    nb::arg("epsilon") =
+                        (std::is_same_v<ScalarT, float> ? ScalarT{1.0e-6f} : ScalarT{1.0e-10}))
+                .def("normalized_or",
+                     &VecT::normalized_or,
+                     nb::arg("fallback"),
+                     nb::arg("epsilon") =
+                         (std::is_same_v<ScalarT, float> ? ScalarT{1.0e-6f} : ScalarT{1.0e-10}))
+                .def("is_finite", &VecT::is_finite)
+                .def("cwise_product", &VecT::cwise_product)
+                .def("cwise_quotient", &VecT::cwise_quotient)
+                .def("cwise_min", &VecT::cwise_min)
+                .def("cwise_max", &VecT::cwise_max)
+                .def("clamped", &VecT::clamped)
+                .def("cwise_abs", &VecT::cwise_abs)
+                .def("min_component", &VecT::min_component)
+                .def("max_component", &VecT::max_component)
                 .def_static("zero", &VecT::zero)
                 .def_static("unit_x", &VecT::unit_x)
                 .def_static("unit_y", &VecT::unit_y)
@@ -43,6 +71,11 @@ namespace termin {
                 .def("__repr__", [name](const VecT& v) {
                     return std::string(name) + "(" + std::to_string(v.x) + ", " + std::to_string(v.y) + ")";
                 });
+            if constexpr (std::is_same_v<ScalarT, float>) {
+                binding.def("to_double", &VecT::to_double);
+            } else {
+                binding.def("to_float", &VecT::to_float);
+            }
         }
 
         template <typename VecT> void bind_vec2i_type(nb::module_& m, const char* name) {

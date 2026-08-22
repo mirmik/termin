@@ -13,7 +13,7 @@ namespace {
 } // namespace
 
 TEST_CASE("termin-csg basic primitives and conversions") {
-    termin::csg::Solid box = termin::csg::make_box(2.0, 3.0, 4.0);
+    termin::csg::Solid box = termin::csg::make_box({2.0, 3.0, 4.0});
     CHECK_FALSE(box.is_empty());
     CHECK_EQ(box.triangle_count(), 12u);
     CHECK(near(box.volume(), 24.0));
@@ -22,7 +22,7 @@ TEST_CASE("termin-csg basic primitives and conversions") {
     CHECK_FALSE(sphere.is_empty());
     CHECK_GT(sphere.triangle_count(), box.triangle_count());
 
-    termin::csg::Solid cut = termin::csg::make_box(1.0, 1.0, 6.0).translated(0.0, 0.0, 0.0);
+    termin::csg::Solid cut = termin::csg::make_box({1.0, 1.0, 6.0}).translated({0.0, 0.0, 0.0});
     termin::csg::Solid difference = termin::csg::subtract(box, cut);
     CHECK_FALSE(difference.is_empty());
     CHECK_GT(difference.triangle_count(), box.triangle_count());

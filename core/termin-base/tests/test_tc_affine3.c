@@ -1,4 +1,5 @@
 #include <geom/tc_affine3.h>
+#include <geom/tc_aabb.h>
 #include <geom/tc_quat.h>
 
 #include "guard_c.h"
@@ -22,6 +23,20 @@ int main(void) {
     GUARD_C_CHECK(sizeof(tc_affine3d) == sizeof(double) * 12);
     GUARD_C_CHECK(offsetof(tc_affine3d, basis) == sizeof(double) * 0);
     GUARD_C_CHECK(offsetof(tc_affine3d, translation) == sizeof(double) * 9);
+    GUARD_C_CHECK(sizeof(tc_aabbf) == sizeof(float) * 6);
+
+    tc_vec3f checked_normalized = TC_VEC3F(9.0f, 8.0f, 7.0f);
+    GUARD_C_CHECK(!tc_vec3f_try_normalized(tc_vec3f_zero(), 1.0e-6f, &checked_normalized));
+    GUARD_C_CHECK(checked_normalized.x == 9.0f && checked_normalized.y == 8.0f && checked_normalized.z == 7.0f);
+    GUARD_C_CHECK(tc_vec3f_try_normalized(TC_VEC3F(0.0f, 3.0f, 4.0f), 1.0e-6f, &checked_normalized));
+
+    tc_aabbf float_bounds = tc_aabbf_zero();
+    GUARD_C_CHECK(tc_aabbf_is_valid(float_bounds));
+    tc_aabbf_extend(&float_bounds, TC_VEC3F(-2.0f, 3.0f, -4.0f));
+    tc_aabbf_extend(&float_bounds, TC_VEC3F(5.0f, 6.0f, 7.0f));
+    GUARD_C_CHECK(float_bounds.min_point.x == -2.0f);
+    GUARD_C_CHECK(float_bounds.max_point.z == 7.0f);
+    GUARD_C_CHECK(tc_aabbf_contains(float_bounds, TC_VEC3F(0.0f, 1.0f, 2.0f)));
 
     tc_quat child_rotation = tc_quat_from_axis_angle(tc_vec3_unit_z(), 0.63);
     tc_affine3d parent = tc_affine3d_mul(tc_affine3d_translation(5.0, -3.0, 2.0), tc_affine3d_scaling(2.0, 0.5, 1.25));

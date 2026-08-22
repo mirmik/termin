@@ -122,8 +122,8 @@ namespace termin {
         // After each call, _sync_from_transform() updates azimuth/elevation.
         // Roll is preserved between fly calls but resets on orbit/_update_pose.
 
-        // Translate camera along its local axes (right, forward, up).
-        void fly_move(double right, double forward, double up);
+        // Translate camera along its local axes (X = right, Y = forward, Z = up).
+        void fly_move(const Vec3& local_displacement);
 
         // Move forward/backward. If horizon_lock, projected onto XY plane.
         void fly_forward(double delta);

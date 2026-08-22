@@ -107,3 +107,14 @@ def test_recast_builder_preserves_triangle_area_ids_in_detour_tile() -> None:
 
     assert detailed_path
     assert {point["area"] for point in detailed_path if point["poly_ref"]} == {9}
+
+
+def test_query_extent_scalar_properties_adapt_semantic_vector_state():
+    query = DetourQuerySession()
+    query.query_extent_x = 3.0
+    query.query_extent_y = 5.0
+    query.query_extent_z = 7.0
+
+    assert query.query_extent_x == 3.0
+    assert query.query_extent_y == 5.0
+    assert query.query_extent_z == 7.0

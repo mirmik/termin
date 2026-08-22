@@ -32,4 +32,5 @@ TEST_CASE("point cloud defaults are directly drawable") {
     CHECK(cloud.empty());
     CHECK_EQ(cloud.point_count(), 0u);
     CHECK_FALSE(cloud.has_bounds());
+    CHECK(cloud.bounds().is_valid());
 }

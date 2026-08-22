@@ -210,13 +210,7 @@ namespace termin {
 
         // Local orientation: rotate by target's rotation.
         const Quat orientation = _target->global_orientation();
-        float q[4] = {static_cast<float>(orientation.x),
-                      static_cast<float>(orientation.y),
-                      static_cast<float>(orientation.z),
-                      static_cast<float>(orientation.w)};
-        Vec3f result;
-        _quat_rotate(q, base, result);
-        return result;
+        return orientation.rotate(base.to_double()).to_float();
     }
 
     SrgbColor TransformGizmo::_get_color(const std::string& axis, TransformElement element) {
@@ -475,13 +469,8 @@ namespace termin {
         // Rotation
         if (_is_rotate_element(element)) {
             if (_has_target()) {
-                const Quat orientation = _target->global_orientation();
-                _rot_start_quat[0] = static_cast<float>(orientation.x);
-                _rot_start_quat[1] = static_cast<float>(orientation.y);
-                _rot_start_quat[2] = static_cast<float>(orientation.z);
-                _rot_start_quat[3] = static_cast<float>(orientation.w);
+                _rot_start_quat = _target->global_orientation();
             }
-            _rot_start_angle = 0.0f;
 
             std::string axis = _get_axis_for_element(element);
             _rot_axis = _get_world_axis(axis);
@@ -592,27 +581,8 @@ namespace termin {
 
         float angle = std::atan2(sin_angle, dot) * sign;
 
-        // Build rotation quaternion
-        float half = angle * 0.5f;
-        float s = std::sin(half);
-        float c = std::cos(half);
-        float dq[4] = {axis_dir.x * s, axis_dir.y * s, axis_dir.z * s, c};
-
-        // Apply to start rotation
-        float new_quat[4];
-        _quat_mul(dq, _rot_start_quat, new_quat);
-
-        // Normalize
-        float norm_q = std::sqrt(new_quat[0] * new_quat[0] + new_quat[1] * new_quat[1] + new_quat[2] * new_quat[2] +
-                                 new_quat[3] * new_quat[3]);
-        if (norm_q > 0.0f) {
-            new_quat[0] /= norm_q;
-            new_quat[1] /= norm_q;
-            new_quat[2] /= norm_q;
-            new_quat[3] /= norm_q;
-        }
-
-        _target->set_global_orientation(Quat{new_quat[0], new_quat[1], new_quat[2], new_quat[3]});
+        const Quat delta_rotation = Quat::from_axis_angle(axis_dir.to_double(), static_cast<double>(angle));
+        _target->set_global_orientation((delta_rotation * _rot_start_quat).normalized());
     }
 
     bool TransformGizmo::_is_translate_element(TransformElement e) {
@@ -643,32 +613,6 @@ namespace termin {
         default:
             return "x";
         }
-    }
-
-    void TransformGizmo::_quat_rotate(const float* q, const Vec3f& v, Vec3f& out) {
-        // Rotate vector by quaternion (x, y, z, w)
-        float qx = q[0], qy = q[1], qz = q[2], qw = q[3];
-
-        // t = 2 * cross(q.xyz, v)
-        float tx = 2.0f * (qy * v.z - qz * v.y);
-        float ty = 2.0f * (qz * v.x - qx * v.z);
-        float tz = 2.0f * (qx * v.y - qy * v.x);
-
-        // out = v + qw * t + cross(q.xyz, t)
-        out.x = v.x + qw * tx + (qy * tz - qz * ty);
-        out.y = v.y + qw * ty + (qz * tx - qx * tz);
-        out.z = v.z + qw * tz + (qx * ty - qy * tx);
-    }
-
-    void TransformGizmo::_quat_mul(const float* q1, const float* q2, float* out) {
-        // Multiply two quaternions (x, y, z, w)
-        float x1 = q1[0], y1 = q1[1], z1 = q1[2], w1 = q1[3];
-        float x2 = q2[0], y2 = q2[1], z2 = q2[2], w2 = q2[3];
-
-        out[0] = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2;
-        out[1] = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
-        out[2] = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
-        out[3] = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2;
     }
 
 } // namespace termin

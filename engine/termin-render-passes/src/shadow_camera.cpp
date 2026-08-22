@@ -1,5 +1,6 @@
 #include "termin/render/shadow_camera.hpp"
 #include <tcbase/tc_log.hpp>
+#include <termin/geom/aabb.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -9,13 +10,87 @@ namespace termin {
 
     namespace {
 
-        // Normalize vector, return default if length is near zero
-        Vec3 safe_normalize(const Vec3& v, const Vec3& fallback = Vec3{0, 1, 0}) {
-            float len = static_cast<float>(v.norm());
-            if (len < 1e-6f) {
-                return fallback;
+        constexpr double kLightDirectionEpsilon = 0.0;
+
+        struct LightBasis {
+            Vec3 direction;
+            Vec3 right;
+            Vec3 up;
+        };
+
+        LightBasis make_light_basis(const Vec3& light_direction) {
+            const Vec3 direction = light_direction.normalized_or(Vec3::unit_y(), 1.0e-6);
+            const Vec3 world_up = std::abs(direction.dot(Vec3::unit_z())) > 0.99 ? Vec3::unit_y() : Vec3::unit_z();
+            const Vec3 right = direction.cross(world_up).normalized_or(Vec3::unit_x(), 1.0e-6);
+            const Vec3 up = right.cross(direction).normalized_or(Vec3::unit_z(), 1.0e-6);
+            return {direction, right, up};
+        }
+
+        Mat44f rotation_matrix(const LightBasis& basis) {
+            Mat44f view = Mat44f::identity();
+            view(0, 0) = static_cast<float>(basis.right.x);
+            view(1, 0) = static_cast<float>(basis.right.y);
+            view(2, 0) = static_cast<float>(basis.right.z);
+            view(0, 1) = static_cast<float>(basis.up.x);
+            view(1, 1) = static_cast<float>(basis.up.y);
+            view(2, 1) = static_cast<float>(basis.up.z);
+            view(0, 2) = static_cast<float>(-basis.direction.x);
+            view(1, 2) = static_cast<float>(-basis.direction.y);
+            view(2, 2) = static_cast<float>(-basis.direction.z);
+            return view;
+        }
+
+        bool validate_fit_domain(const Vec3& light_direction,
+                                 float padding,
+                                 int shadow_map_resolution,
+                                 float caster_offset,
+                                 const char* operation,
+                                 Vec3& normalized_light_direction) {
+            if (!light_direction.try_normalized(normalized_light_direction, kLightDirectionEpsilon)) {
+                tc::Log::error("[ShadowCamera] %s: light_direction must be finite and non-zero", operation);
+                return false;
             }
-            return v / len;
+            if (!std::isfinite(padding) || padding < 0.0f) {
+                tc::Log::error("[ShadowCamera] %s: padding must be finite and non-negative", operation);
+                return false;
+            }
+            if (shadow_map_resolution <= 0) {
+                tc::Log::error("[ShadowCamera] %s: shadow_map_resolution must be positive", operation);
+                return false;
+            }
+            if (!std::isfinite(caster_offset) || caster_offset < 0.0f) {
+                tc::Log::error("[ShadowCamera] %s: caster_offset must be finite and non-negative", operation);
+                return false;
+            }
+            return true;
+        }
+
+        bool validate_cascade_range(const ShadowCascadeFitRequest& request) {
+            if (!std::isfinite(request.camera_near) || !std::isfinite(request.camera_far) ||
+                !std::isfinite(request.cascade_near) || !std::isfinite(request.cascade_far)) {
+                tc::Log::error(
+                    "[ShadowCamera] try_fit_shadow_frustum_for_cascade: camera and cascade ranges must be finite");
+                return false;
+            }
+            if (request.camera_near <= 0.0f || request.camera_far <= request.camera_near) {
+                tc::Log::error(
+                    "[ShadowCamera] try_fit_shadow_frustum_for_cascade: camera range must satisfy 0 < near < far");
+                return false;
+            }
+            if (request.cascade_near < request.camera_near || request.cascade_far > request.camera_far ||
+                request.cascade_far <= request.cascade_near) {
+                tc::Log::error("[ShadowCamera] try_fit_shadow_frustum_for_cascade: cascade range must be non-empty "
+                               "and contained in the camera range");
+                return false;
+            }
+            return true;
+        }
+
+        bool has_finite_area(const Bounds2f& bounds) {
+            const float width = bounds.width();
+            const float height = bounds.height();
+            return bounds.is_valid() && std::isfinite(width) && std::isfinite(height) && width > 0.0f &&
+                   height > 0.0f;
         }
 
         std::array<Vec3, 8> slice_frustum_corners(const std::array<Vec3, 8>& full_frustum_corners,
@@ -23,11 +98,7 @@ namespace termin {
                                                   float camera_far,
                                                   float slice_near,
                                                   float slice_far) {
-            float depth_range = camera_far - camera_near;
-            if (depth_range < 1e-6f) {
-                depth_range = 1.0f;
-            }
-
+            const float depth_range = camera_far - camera_near;
             float near_t = (slice_near - camera_near) / depth_range;
             float far_t = (slice_far - camera_near) / depth_range;
             near_t = std::clamp(near_t, 0.0f, 1.0f);
@@ -44,94 +115,129 @@ namespace termin {
             return slice_corners;
         }
 
+        std::optional<ShadowCameraParams> fit_shadow_corners(const std::array<Vec3, 8>& frustum_corners,
+                                                            const Vec3& normalized_light_direction,
+                                                            float padding,
+                                                            int shadow_map_resolution,
+                                                            bool stabilize,
+                                                            float caster_offset) {
+            Vec3 center = Vec3::zero();
+            for (const Vec3& corner : frustum_corners) {
+                if (!corner.is_finite()) {
+                    tc::Log::error("[ShadowCamera] cannot fit shadow corners: frustum contains a non-finite point");
+                    return std::nullopt;
+                }
+                center += corner;
+            }
+            center /= static_cast<double>(frustum_corners.size());
+            if (!center.is_finite()) {
+                tc::Log::error("[ShadowCamera] cannot fit shadow corners: frustum center is non-finite");
+                return std::nullopt;
+            }
+
+            const Mat44f light_rotation = build_light_rotation_matrix(normalized_light_direction);
+            AABBf light_bounds;
+            bool has_light_bounds = false;
+            for (const Vec3& corner : frustum_corners) {
+                const Vec3f centered = (corner - center).to_float();
+                const Vec3f light_corner = light_rotation.transform_direction(centered);
+                if (!light_corner.is_finite()) {
+                    tc::Log::error(
+                        "[ShadowCamera] cannot fit shadow corners: light-space point exceeds the float render domain");
+                    return std::nullopt;
+                }
+                if (!has_light_bounds) {
+                    light_bounds = AABBf{light_corner, light_corner};
+                    has_light_bounds = true;
+                } else {
+                    light_bounds.extend(light_corner);
+                }
+            }
+            if (!has_light_bounds || !light_bounds.is_valid()) {
+                tc::Log::error("[ShadowCamera] cannot fit shadow corners: light-space bounds are invalid");
+                return std::nullopt;
+            }
+
+            float left = light_bounds.min_point.x - padding;
+            float right = light_bounds.max_point.x + padding;
+            float bottom = light_bounds.min_point.y - padding;
+            float top = light_bounds.max_point.y + padding;
+            Bounds2f ortho_bounds{left, bottom, right, top};
+            if (!has_finite_area(ortho_bounds)) {
+                tc::Log::error("[ShadowCamera] cannot fit shadow corners: orthographic bounds are invalid or empty");
+                return std::nullopt;
+            }
+
+            if (stabilize) {
+                const float world_units_per_texel_x = (right - left) / shadow_map_resolution;
+                const float world_units_per_texel_y = (top - bottom) / shadow_map_resolution;
+                if (!std::isfinite(world_units_per_texel_x) || !std::isfinite(world_units_per_texel_y) ||
+                    world_units_per_texel_x <= 0.0f || world_units_per_texel_y <= 0.0f) {
+                    tc::Log::error("[ShadowCamera] cannot fit shadow corners: texel scale is invalid");
+                    return std::nullopt;
+                }
+
+                left = std::floor(left / world_units_per_texel_x) * world_units_per_texel_x;
+                right = std::ceil(right / world_units_per_texel_x) * world_units_per_texel_x;
+                bottom = std::floor(bottom / world_units_per_texel_y) * world_units_per_texel_y;
+                top = std::ceil(top / world_units_per_texel_y) * world_units_per_texel_y;
+
+                Vec3f center_light = light_rotation.transform_direction(center.to_float());
+                if (!center_light.is_finite()) {
+                    tc::Log::error(
+                        "[ShadowCamera] cannot fit shadow corners: center exceeds the float render domain");
+                    return std::nullopt;
+                }
+                center_light.x = std::floor(center_light.x / world_units_per_texel_x) * world_units_per_texel_x;
+                center_light.y = std::floor(center_light.y / world_units_per_texel_y) * world_units_per_texel_y;
+                center = light_rotation.transposed().transform_direction(center_light).to_double();
+                if (!center.is_finite()) {
+                    tc::Log::error("[ShadowCamera] cannot fit shadow corners: stabilized center is non-finite");
+                    return std::nullopt;
+                }
+
+                ortho_bounds = Bounds2f{left, bottom, right, top};
+                if (!has_finite_area(ortho_bounds)) {
+                    tc::Log::error("[ShadowCamera] cannot fit shadow corners: stabilized bounds are invalid or empty");
+                    return std::nullopt;
+                }
+            }
+
+            const float z_near = light_bounds.min_point.z - caster_offset;
+            const float z_far = light_bounds.max_point.z + padding;
+            const float near = std::max(-z_far, 0.1f);
+            const float far = -z_near;
+            if (!std::isfinite(near) || !std::isfinite(far) || far <= near) {
+                tc::Log::error("[ShadowCamera] cannot fit shadow corners: depth range is invalid or empty");
+                return std::nullopt;
+            }
+
+            return ShadowCameraParams{
+                normalized_light_direction, ortho_bounds, 20.0f, near, far, center};
+        }
+
     } // anonymous namespace
 
     Mat44f build_light_rotation_matrix(const Vec3& light_direction) {
-        Vec3 direction = safe_normalize(light_direction, Vec3{0, 1, 0});
-
-        // Up vector (Z-up in this engine)
-        Vec3 world_up{0.0, 0.0, 1.0};
-        if (std::abs(direction.dot(world_up)) > 0.99f) {
-            // Light looks along Z — use Y as temporary up
-            world_up = Vec3{0.0, 1.0, 0.0};
-        }
-
-        Vec3 right = direction.cross(world_up).normalized();
-        Vec3 up = right.cross(direction).normalized();
-
-        // View matrix (rotation only, no translation)
-        // Mat44f uses column-major: m(col, row)
-        Mat44f view = Mat44f::identity();
-
-        // Row 0: right vector
-        view(0, 0) = static_cast<float>(right.x);
-        view(1, 0) = static_cast<float>(right.y);
-        view(2, 0) = static_cast<float>(right.z);
-
-        // Row 1: up vector
-        view(0, 1) = static_cast<float>(up.x);
-        view(1, 1) = static_cast<float>(up.y);
-        view(2, 1) = static_cast<float>(up.z);
-
-        // Row 2: -direction (camera looks along -Z in its own space)
-        view(0, 2) = static_cast<float>(-direction.x);
-        view(1, 2) = static_cast<float>(-direction.y);
-        view(2, 2) = static_cast<float>(-direction.z);
-
-        return view;
+        return rotation_matrix(make_light_basis(light_direction));
     }
 
     Mat44f build_shadow_view_matrix(const ShadowCameraParams& params) {
-        Vec3 direction = safe_normalize(params.light_direction, Vec3{0, 1, 0});
-
-        // Position camera so scene center is roughly between near and far
-        Vec3 eye = shadow_camera_position(params);
-
-        // Choose up vector orthogonal to direction
-        // Coordinate system: X-right, Y-forward, Z-up
-        Vec3 world_up{0.0, 0.0, 1.0};
-        if (std::abs(direction.dot(world_up)) > 0.99f) {
-            // Light looks along Z — use Y as temporary up
-            world_up = Vec3{0.0, 1.0, 0.0};
-        }
-
-        // Right vector
-        Vec3 right = direction.cross(world_up).normalized();
-
-        // True up
-        Vec3 up = right.cross(direction).normalized();
-
-        // Build view matrix (look-at)
-        // View = R * T, where R is rotation, T is translation
-        // Mat44f uses column-major: m(col, row)
-        Mat44f view = Mat44f::identity();
-
-        // Row 0: right vector
-        view(0, 0) = static_cast<float>(right.x);
-        view(1, 0) = static_cast<float>(right.y);
-        view(2, 0) = static_cast<float>(right.z);
-
-        // Row 1: up vector
-        view(0, 1) = static_cast<float>(up.x);
-        view(1, 1) = static_cast<float>(up.y);
-        view(2, 1) = static_cast<float>(up.z);
-
-        // Row 2: -direction (camera looks along -Z in its own space)
-        view(0, 2) = static_cast<float>(-direction.x);
-        view(1, 2) = static_cast<float>(-direction.y);
-        view(2, 2) = static_cast<float>(-direction.z);
+        const LightBasis basis = make_light_basis(params.light_direction);
+        const Vec3 eye = shadow_camera_position(params);
+        Mat44f view = rotation_matrix(basis);
 
         // Translation (column 3)
-        view(3, 0) = static_cast<float>(-right.dot(eye));
-        view(3, 1) = static_cast<float>(-up.dot(eye));
-        view(3, 2) = static_cast<float>(direction.dot(eye));
+        view(3, 0) = static_cast<float>(-basis.right.dot(eye));
+        view(3, 1) = static_cast<float>(-basis.up.dot(eye));
+        view(3, 2) = static_cast<float>(basis.direction.dot(eye));
 
         return view;
     }
 
     Vec3 shadow_camera_position(const ShadowCameraParams& params) {
-        Vec3 direction = safe_normalize(params.light_direction, Vec3{0, 1, 0});
-        float camera_distance = (params.near + params.far) / 2.0f;
+        const Vec3 direction = params.light_direction.normalized_or(Vec3::unit_y(), 1.0e-6);
+        const float camera_distance = (params.near + params.far) / 2.0f;
         return params.center - direction * camera_distance;
     }
 
@@ -179,170 +285,67 @@ namespace termin {
         return proj * view;
     }
 
-    std::array<Vec3, 8> compute_frustum_corners(const Mat44f& view_matrix, const Mat44f& projection_matrix) {
+    std::optional<std::array<Vec3, 8>>
+    compute_frustum_corners(const Mat44& view_matrix, const Mat44& projection_matrix) {
         // NDC cube corners — Z ∈ [0, 1] (near=0, far=1) to match the
         // Vulkan-native projection convention used everywhere.
-        static const float ndc_corners[8][3] = {
-            {-1, -1, 0}, // near bottom left
-            {1, -1, 0},  // near bottom right
-            {1, 1, 0},   // near top right
-            {-1, 1, 0},  // near top left
-            {-1, -1, 1}, // far bottom left
-            {1, -1, 1},  // far bottom right
-            {1, 1, 1},   // far top right
-            {-1, 1, 1},  // far top left
-        };
+        static constexpr std::array<Vec3, 8> ndc_corners{{
+            {-1.0, -1.0, 0.0},
+            {1.0, -1.0, 0.0},
+            {1.0, 1.0, 0.0},
+            {-1.0, 1.0, 0.0},
+            {-1.0, -1.0, 1.0},
+            {1.0, -1.0, 1.0},
+            {1.0, 1.0, 1.0},
+            {-1.0, 1.0, 1.0},
+        }};
 
-        // Inverse view-projection matrix
-        Mat44f vp = projection_matrix * view_matrix;
-        Mat44f inv_vp = vp.inverse();
+        const Mat44 view_projection = projection_matrix * view_matrix;
+        Mat44 inverse_view_projection;
+        if (!view_projection.try_inverse(inverse_view_projection)) {
+            tc::Log::error("[ShadowCamera] cannot compute frustum corners: view-projection matrix is singular");
+            return std::nullopt;
+        }
 
         std::array<Vec3, 8> world_corners;
-
-        for (int i = 0; i < 8; ++i) {
-            Vec3 ndc{ndc_corners[i][0], ndc_corners[i][1], ndc_corners[i][2]};
-
-            // Transform by inverse VP with w=1
-            float x = inv_vp(0, 0) * static_cast<float>(ndc.x) + inv_vp(1, 0) * static_cast<float>(ndc.y) +
-                      inv_vp(2, 0) * static_cast<float>(ndc.z) + inv_vp(3, 0);
-            float y = inv_vp(0, 1) * static_cast<float>(ndc.x) + inv_vp(1, 1) * static_cast<float>(ndc.y) +
-                      inv_vp(2, 1) * static_cast<float>(ndc.z) + inv_vp(3, 1);
-            float z = inv_vp(0, 2) * static_cast<float>(ndc.x) + inv_vp(1, 2) * static_cast<float>(ndc.y) +
-                      inv_vp(2, 2) * static_cast<float>(ndc.z) + inv_vp(3, 2);
-            float w = inv_vp(0, 3) * static_cast<float>(ndc.x) + inv_vp(1, 3) * static_cast<float>(ndc.y) +
-                      inv_vp(2, 3) * static_cast<float>(ndc.z) + inv_vp(3, 3);
-
-            // Perspective divide
-            world_corners[i] = Vec3{x / w, y / w, z / w};
+        for (size_t i = 0; i < ndc_corners.size(); ++i) {
+            Vec3 world_corner;
+            if (!inverse_view_projection.try_transform_point(ndc_corners[i], world_corner)) {
+                tc::Log::error("[ShadowCamera] cannot compute frustum corner %zu: homogeneous w is invalid", i);
+                return std::nullopt;
+            }
+            world_corners[i] = world_corner;
         }
 
         return world_corners;
     }
 
-    ShadowCameraParams fit_shadow_frustum_to_camera(const Mat44f& view_matrix,
-                                                    const Mat44f& projection_matrix,
-                                                    const Vec3& light_direction,
-                                                    float padding,
-                                                    int shadow_map_resolution,
-                                                    bool stabilize,
-                                                    float caster_offset) {
-        Vec3 light_dir = safe_normalize(light_direction, Vec3{0, 1, 0});
-
-        // 1. Get camera frustum corners in world space
-        std::array<Vec3, 8> frustum_corners = compute_frustum_corners(view_matrix, projection_matrix);
-
-        // 2. Compute frustum center
-        Vec3 center{0, 0, 0};
-        for (const auto& corner : frustum_corners) {
-            center = center + corner;
+    std::optional<ShadowCameraParams> fit_shadow_frustum_to_camera(const Mat44& view_matrix,
+                                                                   const Mat44& projection_matrix,
+                                                                   const Vec3& light_direction,
+                                                                   float padding,
+                                                                   int shadow_map_resolution,
+                                                                   bool stabilize,
+                                                                   float caster_offset) {
+        Vec3 normalized_light_direction;
+        if (!validate_fit_domain(light_direction,
+                                 padding,
+                                 shadow_map_resolution,
+                                 caster_offset,
+                                 "fit_shadow_frustum_to_camera",
+                                 normalized_light_direction)) {
+            return std::nullopt;
         }
-        center = center / 8.0;
-
-        // 3. Build light-space rotation matrix
-        Mat44f light_rotation = build_light_rotation_matrix(light_dir);
-
-        // 4. Transform CENTERED frustum corners to light space
-        std::array<Vec3, 8> light_space_corners;
-        for (int i = 0; i < 8; ++i) {
-            Vec3 centered = frustum_corners[i] - center;
-
-            // Transform by light rotation (only rotation part, no translation)
-            float x = light_rotation(0, 0) * static_cast<float>(centered.x) +
-                      light_rotation(1, 0) * static_cast<float>(centered.y) +
-                      light_rotation(2, 0) * static_cast<float>(centered.z);
-            float y = light_rotation(0, 1) * static_cast<float>(centered.x) +
-                      light_rotation(1, 1) * static_cast<float>(centered.y) +
-                      light_rotation(2, 1) * static_cast<float>(centered.z);
-            float z = light_rotation(0, 2) * static_cast<float>(centered.x) +
-                      light_rotation(1, 2) * static_cast<float>(centered.y) +
-                      light_rotation(2, 2) * static_cast<float>(centered.z);
-
-            light_space_corners[i] = Vec3{x, y, z};
+        const auto frustum_corners = compute_frustum_corners(view_matrix, projection_matrix);
+        if (!frustum_corners.has_value()) {
+            return std::nullopt;
         }
-
-        // 5. Compute AABB in light space
-        Vec3 min_bounds = light_space_corners[0];
-        Vec3 max_bounds = light_space_corners[0];
-
-        for (int i = 1; i < 8; ++i) {
-            min_bounds.x = std::min(min_bounds.x, light_space_corners[i].x);
-            min_bounds.y = std::min(min_bounds.y, light_space_corners[i].y);
-            min_bounds.z = std::min(min_bounds.z, light_space_corners[i].z);
-
-            max_bounds.x = std::max(max_bounds.x, light_space_corners[i].x);
-            max_bounds.y = std::max(max_bounds.y, light_space_corners[i].y);
-            max_bounds.z = std::max(max_bounds.z, light_space_corners[i].z);
-        }
-
-        // X, Y — ortho bounds; Z — near/far
-        float left = static_cast<float>(min_bounds.x) - padding;
-        float right = static_cast<float>(max_bounds.x) + padding;
-        float bottom = static_cast<float>(min_bounds.y) - padding;
-        float top = static_cast<float>(max_bounds.y) + padding;
-
-        // 6. Stabilization (Texel Snapping) to prevent shadow jitter
-        if (stabilize && shadow_map_resolution > 0) {
-            // Size of ortho box
-            float world_units_per_texel_x = (right - left) / shadow_map_resolution;
-            float world_units_per_texel_y = (top - bottom) / shadow_map_resolution;
-
-            // Round bounds to texel size
-            // This prevents subpixel shift when camera moves
-            left = std::floor(left / world_units_per_texel_x) * world_units_per_texel_x;
-            right = std::ceil(right / world_units_per_texel_x) * world_units_per_texel_x;
-            bottom = std::floor(bottom / world_units_per_texel_y) * world_units_per_texel_y;
-            top = std::ceil(top / world_units_per_texel_y) * world_units_per_texel_y;
-
-            // Also stabilize center in light space
-            float center_light_x = light_rotation(0, 0) * static_cast<float>(center.x) +
-                                   light_rotation(1, 0) * static_cast<float>(center.y) +
-                                   light_rotation(2, 0) * static_cast<float>(center.z);
-            float center_light_y = light_rotation(0, 1) * static_cast<float>(center.x) +
-                                   light_rotation(1, 1) * static_cast<float>(center.y) +
-                                   light_rotation(2, 1) * static_cast<float>(center.z);
-            float center_light_z = light_rotation(0, 2) * static_cast<float>(center.x) +
-                                   light_rotation(1, 2) * static_cast<float>(center.y) +
-                                   light_rotation(2, 2) * static_cast<float>(center.z);
-
-            // Snap center in light space to texels
-            center_light_x = std::floor(center_light_x / world_units_per_texel_x) * world_units_per_texel_x;
-            center_light_y = std::floor(center_light_y / world_units_per_texel_y) * world_units_per_texel_y;
-
-            // Transform back to world space
-            // Inverse of rotation-only matrix is its transpose
-            // For column-major: inv_rot(col, row) = rot(row, col)
-            center.x = light_rotation(0, 0) * center_light_x + light_rotation(0, 1) * center_light_y +
-                       light_rotation(0, 2) * center_light_z;
-            center.y = light_rotation(1, 0) * center_light_x + light_rotation(1, 1) * center_light_y +
-                       light_rotation(1, 2) * center_light_z;
-            center.z = light_rotation(2, 0) * center_light_x + light_rotation(2, 1) * center_light_y +
-                       light_rotation(2, 2) * center_light_z;
-        }
-
-        // Z in light space: min is closer to light, max is farther
-        // caster_offset — distance behind camera for shadow casters
-        float z_near = static_cast<float>(min_bounds.z) - caster_offset;
-        float z_far = static_cast<float>(max_bounds.z) + padding;
-
-        // near/far must be positive for orthographic projection
-        // In our system camera looks along -Z, so invert
-        float near = -z_far;
-        float far = -z_near;
-
-        // Protection against degenerate cases
-        if (near < 0.1f) {
-            near = 0.1f;
-        }
-        if (far <= near) {
-            far = near + 100.0f;
-        }
-
-        return ShadowCameraParams(light_dir,
-                                  Bounds2f{left, bottom, right, top},
-                                  20.0f, // ortho_size (not used when ortho_bounds is set)
-                                  near,
-                                  far,
-                                  center);
+        return fit_shadow_corners(*frustum_corners,
+                                  normalized_light_direction,
+                                  padding,
+                                  shadow_map_resolution,
+                                  stabilize,
+                                  caster_offset);
     }
 
     std::vector<float> compute_cascade_splits(float near, float far, int cascade_count, float lambda) {
@@ -380,111 +383,32 @@ namespace termin {
         return splits;
     }
 
-    ShadowCameraParams fit_shadow_frustum_for_cascade(const ShadowCascadeFitRequest& request) {
-        Vec3 light_dir = safe_normalize(request.light_direction, Vec3{0, 1, 0});
-
+    std::optional<ShadowCameraParams> try_fit_shadow_frustum_for_cascade(const ShadowCascadeFitRequest& request) {
+        Vec3 normalized_light_direction;
+        if (!validate_fit_domain(request.light_direction,
+                                 1.0f,
+                                 request.shadow_map_resolution,
+                                 request.caster_offset,
+                                 "try_fit_shadow_frustum_for_cascade",
+                                 normalized_light_direction) ||
+            !validate_cascade_range(request)) {
+            return std::nullopt;
+        }
         // Use the real camera frustum and slice it along its rays. Rebuilding a
         // symmetric projection from FOV/aspect loses asymmetric XR projection
         // offsets and clips visible shadow coverage near the view edges.
-        std::array<Vec3, 8> full_frustum_corners =
-            compute_frustum_corners(request.view_matrix, request.projection_matrix);
-        std::array<Vec3, 8> frustum_corners = slice_frustum_corners(
-            full_frustum_corners, request.camera_near, request.camera_far, request.cascade_near, request.cascade_far);
-
-        // Compute frustum center
-        Vec3 center{0, 0, 0};
-        for (const auto& corner : frustum_corners) {
-            center = center + corner;
+        const auto full_frustum_corners = compute_frustum_corners(request.view_matrix, request.projection_matrix);
+        if (!full_frustum_corners.has_value()) {
+            return std::nullopt;
         }
-        center = center / 8.0;
-
-        // Build light-space rotation matrix
-        Mat44f light_rotation = build_light_rotation_matrix(light_dir);
-
-        // Transform centered frustum corners to light space
-        std::array<Vec3, 8> light_space_corners;
-        for (int i = 0; i < 8; ++i) {
-            Vec3 centered = frustum_corners[i] - center;
-
-            float x = light_rotation(0, 0) * static_cast<float>(centered.x) +
-                      light_rotation(1, 0) * static_cast<float>(centered.y) +
-                      light_rotation(2, 0) * static_cast<float>(centered.z);
-            float y = light_rotation(0, 1) * static_cast<float>(centered.x) +
-                      light_rotation(1, 1) * static_cast<float>(centered.y) +
-                      light_rotation(2, 1) * static_cast<float>(centered.z);
-            float z = light_rotation(0, 2) * static_cast<float>(centered.x) +
-                      light_rotation(1, 2) * static_cast<float>(centered.y) +
-                      light_rotation(2, 2) * static_cast<float>(centered.z);
-
-            light_space_corners[i] = Vec3{x, y, z};
-        }
-
-        // Compute AABB in light space
-        Vec3 min_bounds = light_space_corners[0];
-        Vec3 max_bounds = light_space_corners[0];
-
-        for (int i = 1; i < 8; ++i) {
-            min_bounds.x = std::min(min_bounds.x, light_space_corners[i].x);
-            min_bounds.y = std::min(min_bounds.y, light_space_corners[i].y);
-            min_bounds.z = std::min(min_bounds.z, light_space_corners[i].z);
-
-            max_bounds.x = std::max(max_bounds.x, light_space_corners[i].x);
-            max_bounds.y = std::max(max_bounds.y, light_space_corners[i].y);
-            max_bounds.z = std::max(max_bounds.z, light_space_corners[i].z);
-        }
-
-        float padding = 1.0f;
-        float left = static_cast<float>(min_bounds.x) - padding;
-        float right = static_cast<float>(max_bounds.x) + padding;
-        float bottom = static_cast<float>(min_bounds.y) - padding;
-        float top = static_cast<float>(max_bounds.y) + padding;
-
-        // Texel snapping for cascade stability
-        if (request.shadow_map_resolution > 0) {
-            float world_units_per_texel_x = (right - left) / request.shadow_map_resolution;
-            float world_units_per_texel_y = (top - bottom) / request.shadow_map_resolution;
-
-            left = std::floor(left / world_units_per_texel_x) * world_units_per_texel_x;
-            right = std::ceil(right / world_units_per_texel_x) * world_units_per_texel_x;
-            bottom = std::floor(bottom / world_units_per_texel_y) * world_units_per_texel_y;
-            top = std::ceil(top / world_units_per_texel_y) * world_units_per_texel_y;
-
-            // Snap center
-            float center_light_x = light_rotation(0, 0) * static_cast<float>(center.x) +
-                                   light_rotation(1, 0) * static_cast<float>(center.y) +
-                                   light_rotation(2, 0) * static_cast<float>(center.z);
-            float center_light_y = light_rotation(0, 1) * static_cast<float>(center.x) +
-                                   light_rotation(1, 1) * static_cast<float>(center.y) +
-                                   light_rotation(2, 1) * static_cast<float>(center.z);
-            float center_light_z = light_rotation(0, 2) * static_cast<float>(center.x) +
-                                   light_rotation(1, 2) * static_cast<float>(center.y) +
-                                   light_rotation(2, 2) * static_cast<float>(center.z);
-
-            center_light_x = std::floor(center_light_x / world_units_per_texel_x) * world_units_per_texel_x;
-            center_light_y = std::floor(center_light_y / world_units_per_texel_y) * world_units_per_texel_y;
-
-            // Transform back to world space
-            center.x = light_rotation(0, 0) * center_light_x + light_rotation(0, 1) * center_light_y +
-                       light_rotation(0, 2) * center_light_z;
-            center.y = light_rotation(1, 0) * center_light_x + light_rotation(1, 1) * center_light_y +
-                       light_rotation(1, 2) * center_light_z;
-            center.z = light_rotation(2, 0) * center_light_x + light_rotation(2, 1) * center_light_y +
-                       light_rotation(2, 2) * center_light_z;
-        }
-
-        // Compute near/far for shadow ortho
-        float z_near = static_cast<float>(min_bounds.z) - request.caster_offset;
-        float z_far = static_cast<float>(max_bounds.z) + padding;
-
-        float near = -z_far;
-        float far = -z_near;
-
-        if (near < 0.1f)
-            near = 0.1f;
-        if (far <= near)
-            far = near + 100.0f;
-
-        return ShadowCameraParams(light_dir, Bounds2f{left, bottom, right, top}, 20.0f, near, far, center);
+        const std::array<Vec3, 8> frustum_corners = slice_frustum_corners(
+            *full_frustum_corners, request.camera_near, request.camera_far, request.cascade_near, request.cascade_far);
+        return fit_shadow_corners(frustum_corners,
+                                  normalized_light_direction,
+                                  1.0f,
+                                  request.shadow_map_resolution,
+                                  true,
+                                  request.caster_offset);
     }
 
 } // namespace termin

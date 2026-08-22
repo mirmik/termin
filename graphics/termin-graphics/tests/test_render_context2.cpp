@@ -691,8 +691,8 @@ static void test_point_cloud_depth_and_circle(tgfx::IRenderDevice& device, tgfx:
     CHECK(cloud.upload(ctx, points), "point-cloud instances uploaded");
     CHECK(cloud.point_count() == 2, "point-cloud count retained");
     CHECK(cloud.has_bounds(), "point-cloud bounds calculated");
-    CHECK(std::abs(cloud.bounds_min().z - 0.25f) < 1.0e-6f &&
-              std::abs(cloud.bounds_max().z - 0.75f) < 1.0e-6f,
+    CHECK(std::abs(cloud.bounds().min_point.z - 0.25f) < 1.0e-6f &&
+              std::abs(cloud.bounds().max_point.z - 0.75f) < 1.0e-6f,
           "point-cloud bounds cover all points");
 
     tgfx::PointCloudRenderer renderer;

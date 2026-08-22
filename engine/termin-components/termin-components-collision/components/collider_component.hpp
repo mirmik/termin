@@ -9,6 +9,7 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
+#include <termin/geom/vec3.hpp>
 #include <termin/render/render_lifecycle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
@@ -32,12 +33,12 @@ namespace termin {
         std::string collider_type = "Box";
 
         // Box size in local coordinates (multiplied by entity scale)
-        tc_vec3 box_size = {1.0, 1.0, 1.0};
+        Vec3 box_size = {1.0, 1.0, 1.0};
 
         // Collider offset (local space, relative to entity origin)
         bool collider_offset_enabled = false;
-        tc_vec3 collider_offset_position = {0, 0, 0};
-        tc_vec3 collider_offset_euler = {0, 0, 0}; // Euler degrees (XYZ)
+        Vec3 collider_offset_position = {0, 0, 0};
+        Vec3 collider_offset_euler = {0, 0, 0}; // Euler degrees (XYZ)
 
         // Source mesh for ConvexHull collider
         // "Field" uses convex_hull_mesh. "MeshComponent" uses the sibling MeshComponent mesh.
@@ -105,12 +106,9 @@ namespace termin {
         void set_collider_type(const std::string& type);
 
         // Set box size (full size, not half-size)
-        void set_box_size(const tc_vec3& size);
-        void set_box_size(double x, double y, double z) {
-            set_box_size(tc_vec3{x, y, z});
-        }
+        void set_box_size(const Vec3& size);
         Vec3 get_box_size() const {
-            return Vec3{box_size.x, box_size.y, box_size.z};
+            return box_size;
         }
         void set_convex_hull_mesh_source(const std::string& source);
         void set_convex_hull_mesh(const TcMesh& mesh);

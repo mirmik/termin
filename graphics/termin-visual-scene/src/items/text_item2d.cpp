@@ -1,7 +1,5 @@
 #include "termin_visual_scene/items/text_item2d.hpp"
 
-#include "item_geometry2d_internal.hpp"
-
 #include <cmath>
 #include <stdexcept>
 
@@ -20,8 +18,8 @@ namespace termin::visual {
                       termin::SrgbColor color,
                       termin::Bounds2f layout_bounds,
                       std::optional<float> coverage_gamma) {
-            if (text.empty() || font_uri.empty() || !detail::valid_point(origin) || !std::isfinite(size_px) ||
-                size_px <= 0.0f || !finite_color(color) || !detail::valid_bounds(layout_bounds) ||
+            if (text.empty() || font_uri.empty() || !origin.is_finite() || !std::isfinite(size_px) ||
+                size_px <= 0.0f || !finite_color(color) || !layout_bounds.is_valid() ||
                 (coverage_gamma.has_value() && (!std::isfinite(*coverage_gamma) || *coverage_gamma <= 0.0f))) {
                 tc::Log::error("TextItem2D state is invalid");
                 throw std::invalid_argument("invalid TextItem2D state");
@@ -117,7 +115,7 @@ namespace termin::visual {
     }
 
     bool TextItem2D::hit_test(termin::Vec2f point, float) const {
-        return detail::bounds_contains(layout_bounds_, point);
+        return layout_bounds_.contains_closed(point);
     }
 
     bool TextItem2D::paint(GraphicItemPaintContext2D& context) const {

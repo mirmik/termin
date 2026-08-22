@@ -192,13 +192,19 @@ namespace tmesh_bindings {
 
             .def(
                 "translate",
-                [](Mesh3& m, float x, float y, float z) { m.translate(x, y, z); },
+                [](Mesh3& m, float x, float y, float z) { m.translate({x, y, z}); },
                 nb::arg("x"),
                 nb::arg("y"),
                 nb::arg("z"))
 
             .def(
                 "scale", [](Mesh3& m, float factor) { m.scale(factor); }, nb::arg("factor"))
+            .def(
+                "scale",
+                [](Mesh3& m, float x, float y, float z) { m.scale({x, y, z}); },
+                nb::arg("x"),
+                nb::arg("y"),
+                nb::arg("z"))
 
             .def("copy", &Mesh3::copy, nb::arg("new_name") = "")
 

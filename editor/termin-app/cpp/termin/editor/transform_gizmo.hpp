@@ -7,6 +7,7 @@
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_pose3.hpp>
 #include <termin/geom/mat44.hpp>
+#include <termin/geom/quat.hpp>
 
 #include <functional>
 #include <memory>
@@ -160,8 +161,7 @@ namespace termin {
         Vec3f _drag_center{0.0f, 0.0f, 0.0f};
 
         // Rotation drag state
-        float _rot_start_angle = 0.0f;
-        float _rot_start_quat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        Quat _rot_start_quat = Quat::identity();
         Vec3f _rot_vec0{0.0f, 0.0f, 0.0f};
         bool _has_rot_vec0 = false;
         Vec3f _rot_axis{0.0f, 0.0f, 0.0f};
@@ -242,10 +242,6 @@ namespace termin {
         static bool _is_plane_element(TransformElement e);
         static bool _is_rotate_element(TransformElement e);
         static std::string _get_axis_for_element(TransformElement e);
-
-        // Quaternion helpers
-        static void _quat_rotate(const float* q, const Vec3f& v, Vec3f& out);
-        static void _quat_mul(const float* q1, const float* q2, float* out);
     };
 
 } // namespace termin

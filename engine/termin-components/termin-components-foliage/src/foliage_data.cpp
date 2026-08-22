@@ -1,9 +1,13 @@
 #include <termin/foliage/foliage_data.hpp>
 
+#include "foliage_bounds_internal.hpp"
+
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <utility>
 
+#include <tcbase/tc_log.h>
 #include <termin/foliage/foliage_file.hpp>
 
 namespace termin {
@@ -25,34 +29,42 @@ namespace termin {
 
     void FoliageData::clear() {
         instances.clear();
-        local_bounds = FoliageBounds3f{};
+        local_bounds = {};
+        has_local_bounds = false;
         loaded = true;
         ++version;
     }
 
-    void FoliageData::set_instances(std::vector<FoliageInstance> value) {
+    bool FoliageData::set_instances(std::vector<FoliageInstance> value) {
+        const foliage_detail::BoundsComputation computed = foliage_detail::compute_bounds(value);
+        if (!computed.valid) {
+            tc_log_error("[FoliageData] rejected non-finite foliage instance at index %zu", computed.invalid_instance);
+            return false;
+        }
         instances = std::move(value);
-        recompute_bounds();
+        local_bounds = computed.bounds;
+        has_local_bounds = computed.has_bounds;
         loaded = true;
         ++version;
+        return true;
     }
 
-    void FoliageData::add_instance(const FoliageInstance& instance) {
+    bool FoliageData::add_instance(const FoliageInstance& instance) {
+        if (!instance.is_finite()) {
+            tc_log_error("[FoliageData] rejected non-finite foliage instance");
+            return false;
+        }
+        const Vec3f position = instance.position();
         instances.push_back(instance);
-        if (!local_bounds.valid) {
-            local_bounds.min = {instance.px, instance.py, instance.pz};
-            local_bounds.max = local_bounds.min;
-            local_bounds.valid = true;
+        if (!has_local_bounds) {
+            local_bounds = {position, position};
+            has_local_bounds = true;
         } else {
-            local_bounds.min.x = std::min(local_bounds.min.x, instance.px);
-            local_bounds.min.y = std::min(local_bounds.min.y, instance.py);
-            local_bounds.min.z = std::min(local_bounds.min.z, instance.pz);
-            local_bounds.max.x = std::max(local_bounds.max.x, instance.px);
-            local_bounds.max.y = std::max(local_bounds.max.y, instance.py);
-            local_bounds.max.z = std::max(local_bounds.max.z, instance.pz);
+            local_bounds.extend(position);
         }
         loaded = true;
         ++version;
+        return true;
     }
 
     void FoliageData::remove_instance_at(size_t index) {
@@ -66,19 +78,30 @@ namespace termin {
     }
 
     size_t FoliageData::remove_instances_in_radius(const Vec3f& center, float radius) {
-        if (radius < 0.0f || instances.empty()) {
+        if (!center.is_finite() || !std::isfinite(radius) || radius < 0.0f) {
+            tc_log_error("[FoliageData] rejected non-finite center or invalid removal radius");
+            return 0;
+        }
+        if (instances.empty()) {
             return 0;
         }
 
+        const foliage_detail::BoundsComputation current = foliage_detail::compute_bounds(instances);
+        if (!current.valid) {
+            tc_log_error("[FoliageData] cannot remove by radius: non-finite instance at index %zu",
+                         current.invalid_instance);
+            return 0;
+        }
         const size_t before = instances.size();
         const float radius_sq = radius * radius;
+        if (!std::isfinite(radius_sq)) {
+            tc_log_error("[FoliageData] removal radius is too large");
+            return 0;
+        }
         instances.erase(std::remove_if(instances.begin(),
                                        instances.end(),
                                        [&](const FoliageInstance& instance) {
-                                           const float dx = instance.px - center.x;
-                                           const float dy = instance.py - center.y;
-                                           const float dz = instance.pz - center.z;
-                                           return dx * dx + dy * dy + dz * dz <= radius_sq;
+                                           return (instance.position() - center).norm_squared() <= radius_sq;
                                        }),
                         instances.end());
 
@@ -91,24 +114,18 @@ namespace termin {
         return removed;
     }
 
-    void FoliageData::recompute_bounds() {
-        local_bounds = FoliageBounds3f{};
-        if (instances.empty()) {
-            return;
+    bool FoliageData::recompute_bounds() {
+        const foliage_detail::BoundsComputation computed = foliage_detail::compute_bounds(instances);
+        if (!computed.valid) {
+            local_bounds = {};
+            has_local_bounds = false;
+            tc_log_error("[FoliageData] cannot compute bounds: non-finite instance at index %zu",
+                         computed.invalid_instance);
+            return false;
         }
-
-        const FoliageInstance& first = instances.front();
-        local_bounds.min = {first.px, first.py, first.pz};
-        local_bounds.max = local_bounds.min;
-        local_bounds.valid = true;
-        for (const FoliageInstance& instance : instances) {
-            local_bounds.min.x = std::min(local_bounds.min.x, instance.px);
-            local_bounds.min.y = std::min(local_bounds.min.y, instance.py);
-            local_bounds.min.z = std::min(local_bounds.min.z, instance.pz);
-            local_bounds.max.x = std::max(local_bounds.max.x, instance.px);
-            local_bounds.max.y = std::max(local_bounds.max.y, instance.py);
-            local_bounds.max.z = std::max(local_bounds.max.z, instance.pz);
-        }
+        local_bounds = computed.bounds;
+        has_local_bounds = computed.has_bounds;
+        return true;
     }
 
     size_t FoliageData::instance_count() const {

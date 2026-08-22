@@ -43,6 +43,18 @@ namespace termin {
             self->set_language_body(wrapper.ptr(), TC_LANGUAGE_PYTHON);
         }
 
+        using Matrix4dView = nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu>;
+
+        Mat44 mat44_from_numpy(const Matrix4dView& values) {
+            Mat44 result;
+            for (int row = 0; row < 4; ++row) {
+                for (int column = 0; column < 4; ++column) {
+                    result(column, row) = values(row, column);
+                }
+            }
+            return result;
+        }
+
     } // namespace
 
     void bind_shadow_camera_helpers(nb::module_& m) {
@@ -142,23 +154,20 @@ namespace termin {
 
         m.def(
             "compute_frustum_corners",
-            [](nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> view,
-               nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> proj) {
-                Mat44f view_mat, proj_mat;
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        view_mat.data[col * 4 + row] = static_cast<float>(view(row, col));
-                        proj_mat.data[col * 4 + row] = static_cast<float>(proj(row, col));
-                    }
-                }
+            [](Matrix4dView view, Matrix4dView proj) {
+                const Mat44 view_mat = mat44_from_numpy(view);
+                const Mat44 proj_mat = mat44_from_numpy(proj);
 
-                auto corners = compute_frustum_corners(view_mat, proj_mat);
+                const auto corners = compute_frustum_corners(view_mat, proj_mat);
+                if (!corners.has_value()) {
+                    throw nb::value_error("view-projection matrix cannot be inverted into finite frustum corners");
+                }
 
                 double* data = new double[24];
                 for (int i = 0; i < 8; ++i) {
-                    data[i * 3 + 0] = corners[i].x;
-                    data[i * 3 + 1] = corners[i].y;
-                    data[i * 3 + 2] = corners[i].z;
+                    data[i * 3 + 0] = (*corners)[i].x;
+                    data[i * 3 + 1] = (*corners)[i].y;
+                    data[i * 3 + 2] = (*corners)[i].z;
                 }
                 nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
                 return nb::ndarray<nb::numpy, double, nb::shape<8, 3>>(data, {8, 3}, owner);
@@ -169,28 +178,28 @@ namespace termin {
 
         m.def(
             "fit_shadow_frustum_to_camera",
-            [](nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> view,
-               nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> proj,
+            [](Matrix4dView view,
+               Matrix4dView proj,
                const Vec3& light_direction,
                double padding,
                int shadow_map_resolution,
                bool stabilize,
                double caster_offset) {
-                Mat44f view_mat, proj_mat;
-                for (int row = 0; row < 4; ++row) {
-                    for (int col = 0; col < 4; ++col) {
-                        view_mat.data[col * 4 + row] = static_cast<float>(view(row, col));
-                        proj_mat.data[col * 4 + row] = static_cast<float>(proj(row, col));
-                    }
-                }
+                const Mat44 view_mat = mat44_from_numpy(view);
+                const Mat44 proj_mat = mat44_from_numpy(proj);
 
-                return fit_shadow_frustum_to_camera(view_mat,
-                                                    proj_mat,
-                                                    light_direction,
-                                                    static_cast<float>(padding),
-                                                    shadow_map_resolution,
-                                                    stabilize,
-                                                    static_cast<float>(caster_offset));
+                const auto params = fit_shadow_frustum_to_camera(view_mat,
+                                                                 proj_mat,
+                                                                 light_direction,
+                                                                 static_cast<float>(padding),
+                                                                 shadow_map_resolution,
+                                                                 stabilize,
+                                                                 static_cast<float>(caster_offset));
+                if (!params.has_value()) {
+                    throw nb::value_error(
+                        "shadow frustum cannot be fitted from the supplied matrices and parameters");
+                }
+                return *params;
             },
             nb::arg("view_matrix"),
             nb::arg("projection_matrix"),

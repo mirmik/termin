@@ -222,8 +222,8 @@ namespace termin {
         case colliders::ColliderType::ConvexHull: {
             const auto* hull = static_cast<const colliders::ConvexHullCollider*>(_collider.get());
             for (const auto& [first, second] : hull->edges) {
-                drawer.line(world.transform_point(hull->vertices[first]),
-                            world.transform_point(hull->vertices[second]),
+                drawer.line(world.transform_point(hull->vertices[first].to_float()).to_double(),
+                            world.transform_point(hull->vertices[second].to_float()).to_double(),
                             collider_debug_color,
                             false);
             }
@@ -364,7 +364,7 @@ namespace termin {
         }
     }
 
-    void ColliderComponent::set_box_size(const tc_vec3& size) {
+    void ColliderComponent::set_box_size(const Vec3& size) {
         box_size = size;
         _rebuild_collider(true);
     }
@@ -392,12 +392,11 @@ namespace termin {
 
         if (collider_type == "Box") {
             // Box uses box_size as local size (entity scale applied via transform)
-            Vec3 half_size{box_size.x / 2.0, box_size.y / 2.0, box_size.z / 2.0};
-            return std::make_unique<colliders::BoxCollider>(half_size);
+            return std::make_unique<colliders::BoxCollider>(box_size * 0.5);
         } else if (collider_type == "Sphere") {
             // Sphere uses uniform component of size as diameter
             // radius = min(size.x, size.y, size.z) / 2
-            double uniform_size = std::min({box_size.x, box_size.y, box_size.z});
+            const double uniform_size = box_size.min_component();
             return std::make_unique<colliders::SphereCollider>(uniform_size / 2.0);
         } else if (collider_type == "Capsule") {
             // Capsule: height = size.z, radius = min(size.x, size.y) / 2
@@ -452,11 +451,12 @@ namespace termin {
 
             for (size_t i = 0; i < m->vertex_count; ++i) {
                 const float* pos = reinterpret_cast<const float*>(raw + i * stride + offset);
-                Vec3 point{pos[0], pos[1], pos[2]};
+                const Vec3f mesh_point{pos[0], pos[1], pos[2]};
+                Vec3 point;
                 if (from_mesh_component) {
-                    point = mesh_offset.transform_point(point);
+                    point = mesh_offset.transform_point(mesh_point).to_double();
                 } else {
-                    point = Vec3(point.x * box_size.x, point.y * box_size.y, point.z * box_size.z);
+                    point = mesh_point.to_double().cwise_product(box_size);
                 }
                 points.push_back(point);
             }
