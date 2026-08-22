@@ -187,11 +187,15 @@ TGFX_API bool tc_mesh_raycast(const tc_mesh* mesh, const tc_mesh_ray* ray, tc_me
 // Parameters are expressed in mesh-local coordinates:
 // - point: query point on/near the target surface.
 // - normal: surface normal at point; used to flood-fill adjacent triangles with
-//   a compatible normal and plane.
+//   a compatible normal and plane. Under a metric M it is transformed as a
+//   covector by inverse-transpose M^-T.
 // - up: application up direction; used only to compute the diagnostic side.
 //
 // Distance is measured in the default unit metric (1,1,1). The returned point
 // and edge vertex indices are in the original, unmodified mesh-local space.
+// point must be finite; normal and up must be finite and non-degenerate.
+// Invalid public input is logged. An ordinary miss is not logged. On false,
+// out_hit is left unchanged; on true, all floating-point hit fields are finite.
 TGFX_API bool tc_mesh_find_surface_edge(const tc_mesh* mesh,
                                         uint32_t start_triangle,
                                         tc_vec3f point,
@@ -205,10 +209,15 @@ TGFX_API bool tc_mesh_find_surface_edge(const tc_mesh* mesh,
 // metric is not written back to the mesh and does not change returned
 // coordinates. It is interpreted as per-axis length multipliers for measurement
 // only. For example, metric=(0.5, 2, 1) means X distances count half as much and
-// Y distances count twice as much while choosing the nearest edge.
+// Y distances count twice as much while choosing the nearest edge. Points, up,
+// and edge directions are transformed by M; normals are transformed by M^-T.
+// Direction-like inputs are normalized before and after transformation, so
+// their input magnitudes do not affect the query.
 //
 // The returned point remains in the original unscaled mesh-local space so it can
-// be transformed by the entity pose as usual.
+// be transformed by the entity pose as usual. metric must be finite. A zero
+// metric selects the unit metric; finite component magnitudes below the metric
+// floor retain the existing floor semantics.
 TGFX_API bool tc_mesh_find_surface_edge_metric(const tc_mesh* mesh,
                                                uint32_t start_triangle,
                                                tc_vec3f point,
@@ -218,7 +227,9 @@ TGFX_API bool tc_mesh_find_surface_edge_metric(const tc_mesh* mesh,
                                                tc_mesh_surface_edge_hit* out_hit);
 
 // General surface edge query. Use this for metric-aware aligned searches or
-// when passing the query through typed API boundaries.
+// when passing the query through typed API boundaries. When the direction
+// filter is enabled, edge_direction must be finite and non-degenerate and
+// max_angle_degrees must be finite. Finite angles are clamped to [0, 90].
 TGFX_API bool tc_mesh_find_surface_edge_query(const tc_mesh* mesh,
                                               const tc_mesh_surface_edge_query* query,
                                               tc_mesh_surface_edge_hit* out_hit);
@@ -237,7 +248,9 @@ TGFX_API bool tc_mesh_find_surface_edge_aligned(const tc_mesh* mesh,
 // Convenience query for callers that only have a point. It first finds the
 // nearest triangle to point, derives its normal, and then runs
 // tc_mesh_find_surface_edge. This is slower than passing start_triangle from a
-// raycast/picking result.
+// raycast/picking result. point must be finite and up must be finite and
+// non-degenerate. It has the same logging and transactional output contract as
+// the explicit surface-edge queries.
 TGFX_API bool
 tc_mesh_find_nearest_surface_edge(const tc_mesh* mesh, tc_vec3f point, tc_vec3f up, tc_mesh_surface_edge_hit* out_hit);
 

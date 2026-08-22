@@ -48,6 +48,14 @@ namespace termin {
         std::array<uint32_t, 3> indices{};
     };
 
+    /** Rich result of a mesh-local surface-edge query. */
+    struct TcMeshSurfaceEdgeHit {
+        Vec3 point{};
+        std::array<uint32_t, 2> indices{};
+        double distance = 0.0;
+        int32_t side = 0;
+    };
+
     // TcMesh - GPU-ready mesh wrapper
     // Stores handle (index + generation) instead of raw pointer
     class TGFX_API TcMesh {
@@ -295,6 +303,36 @@ namespace termin {
          */
         [[nodiscard]] std::optional<TcMeshRayHit>
         raycast(const Ray3& ray, double min_distance = 0.0, double max_distance = 1000000.0) const;
+
+        /**
+         * Finds the nearest boundary edge of the connected surface containing
+         * start_triangle. Direction magnitudes are ignored; metric contains
+         * finite per-axis distance multipliers no smaller than 1e-8. Invalid
+         * inputs are logged and return no hit. Points and tangent directions
+         * transform by metric; normals transform by its inverse transpose.
+         */
+        [[nodiscard]] std::optional<TcMeshSurfaceEdgeHit>
+        find_surface_edge(uint32_t start_triangle,
+                          const Vec3& point,
+                          const Vec3& normal,
+                          std::optional<Vec3> up = std::nullopt,
+                          std::optional<Vec3> metric = std::nullopt) const;
+
+        /** Same query, restricted to unoriented edge directions within [0, 90] degrees. */
+        [[nodiscard]] std::optional<TcMeshSurfaceEdgeHit>
+        find_surface_edge_aligned(uint32_t start_triangle,
+                                  const Vec3& point,
+                                  const Vec3& normal,
+                                  const Vec3& edge_direction,
+                                  double max_angle_degrees,
+                                  std::optional<Vec3> up = std::nullopt,
+                                  std::optional<Vec3> metric = std::nullopt) const;
+
+        /** Finds the nearest surface first when no starting triangle is available. */
+        [[nodiscard]] std::optional<TcMeshSurfaceEdgeHit>
+        find_nearest_surface_edge(const Vec3& point,
+                                  std::optional<Vec3> up = std::nullopt,
+                                  std::optional<Vec3> metric = std::nullopt) const;
 
         // Create TcMesh from Mesh3 (CPU mesh)
         static TcMesh from_mesh3(const Mesh3& mesh,

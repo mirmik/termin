@@ -1,4 +1,4 @@
-"""Mesh module — Mesh3, TcMesh, ray hits, and mesh components."""
+"""Mesh module — Mesh3, TcMesh, query hits, and mesh components."""
 
 from pkgutil import extend_path
 
@@ -8,7 +8,7 @@ __path__ = extend_path(__path__, __name__)
 
 preload_sdk_libs("nanobind", "termin_components_mesh")
 
-from tmesh import Mesh3, TcMesh, TcMeshRayHit
+from tmesh import Mesh3, TcMesh, TcMeshRayHit, TcMeshSurfaceEdgeHit
 from termin.mesh.mesh_component import MeshComponent
 from termin.mesh.procedural_mesh_component import ProceduralMeshComponent
 from termin.mesh.script_mesh_component import ScriptMeshComponent
@@ -33,6 +33,7 @@ __all__ = [
     "Mesh3",
     "TcMesh",
     "TcMeshRayHit",
+    "TcMeshSurfaceEdgeHit",
     "MeshComponent",
     "ProceduralMeshComponent",
     "ScriptMeshComponent",
