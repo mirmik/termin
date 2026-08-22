@@ -169,9 +169,9 @@ namespace termin {
             return;
         }
 
-        const tc_skeleton* skel = nullptr;
+        TcSkeleton skeleton_owner;
         if (SkeletonInstance* skel_inst = target_skeleton()) {
-            skel = skel_inst->skeleton();
+            skeleton_owner = skel_inst->skeleton();
         }
 
         if (anim->track_count > 0) {
@@ -218,6 +218,7 @@ namespace termin {
         for (size_t i = 0; i < anim->channel_count; i++) {
             const char* target_name = anim->channels[i].target_name;
             const bool has_target_name = target_name && target_name[0] != '\0';
+            const tc_skeleton* skel = skeleton_owner.get();
             int bone_idx = (skel && has_target_name) ? tc_skeleton_find_bone(skel, target_name) : -1;
             _channel_mappings[i].bone_index = bone_idx;
             if (bone_idx < 0) {

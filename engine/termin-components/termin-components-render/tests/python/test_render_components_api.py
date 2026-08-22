@@ -62,37 +62,63 @@ def _line_points() -> list[Vec3]:
     return [Vec3(0, 0, 0), Vec3(1, 0, 0)]
 
 
+def _skeleton_bone(
+    name: str,
+    parent_index: int = -1,
+    *,
+    inverse_bind_matrix: Mat44 | None = None,
+    translation: Vec3 | None = None,
+) -> dict[str, object]:
+    return {
+        "name": name,
+        "parent_index": parent_index,
+        "inverse_bind_matrix": Mat44.identity() if inverse_bind_matrix is None else inverse_bind_matrix,
+        "bind_translation": Vec3.zero() if translation is None else translation,
+        "bind_rotation": Quat.identity(),
+        "bind_scale": Vec3(1.0, 1.0, 1.0),
+    }
+
+
 def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMaterial:
     material = TcMaterial.create("LineRendererShadowPhaseTest", "")
     assert material.is_valid
-    assert material.add_phase_from_sources(
-        VERTEX,
-        FRAGMENT,
-        "",
-        "LineRendererShadowPhaseTestShader",
-        "opaque",
-        0,
-        language=ShaderLanguage.GLSL.value,
-    ) is not None
-    assert material.add_phase_from_sources(
-        VERTEX,
-        FRAGMENT,
-        "",
-        "LineRendererShadowPhaseTestShadowShader",
-        "shadow",
-        0,
-        language=ShaderLanguage.GLSL.value,
-    ) is not None
-    for phase_mark in extra_phase_marks:
-        assert material.add_phase_from_sources(
+    assert (
+        material.add_phase_from_sources(
             VERTEX,
             FRAGMENT,
             "",
-            f"LineRendererShadowPhaseTest{phase_mark.title()}Shader",
-            phase_mark,
+            "LineRendererShadowPhaseTestShader",
+            "opaque",
             0,
             language=ShaderLanguage.GLSL.value,
-        ) is not None
+        )
+        is not None
+    )
+    assert (
+        material.add_phase_from_sources(
+            VERTEX,
+            FRAGMENT,
+            "",
+            "LineRendererShadowPhaseTestShadowShader",
+            "shadow",
+            0,
+            language=ShaderLanguage.GLSL.value,
+        )
+        is not None
+    )
+    for phase_mark in extra_phase_marks:
+        assert (
+            material.add_phase_from_sources(
+                VERTEX,
+                FRAGMENT,
+                "",
+                f"LineRendererShadowPhaseTest{phase_mark.title()}Shader",
+                phase_mark,
+                0,
+                language=ShaderLanguage.GLSL.value,
+            )
+            is not None
+        )
     return material
 
 
@@ -159,9 +185,7 @@ def test_orbit_camera_controller_horizon_lock_survives_scene_roundtrip(horizon_l
 
         hierarchy = entity.serialize_hierarchy()
         component_data = next(
-            item["data"]
-            for item in hierarchy["components"]
-            if item["type"] == "OrbitCameraController"
+            item["data"] for item in hierarchy["components"] if item["type"] == "OrbitCameraController"
         )
         assert component_data["horizon_lock"] is horizon_lock
 
@@ -192,10 +216,22 @@ def test_skinned_mesh_renderer_computes_bones_in_renderer_space():
                 "parent_index": -1,
                 "inverse_bind_matrix": Mat44.from_column_major(
                     [
-                        1.0, 0.0, 0.0, 0.0,
-                        0.0, 1.0, 0.0, 0.0,
-                        0.0, 0.0, 1.0, 0.0,
-                        -1.0, 0.0, 0.0, 1.0,
+                        1.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        -1.0,
+                        0.0,
+                        0.0,
+                        1.0,
                     ]
                 ),
                 "bind_translation": Vec3.zero(),
@@ -283,6 +319,97 @@ def test_skinned_mesh_renderer_resolves_skeleton_controller_from_ancestor():
         assert matrix[12] == pytest.approx(3.0)
     finally:
         scene.destroy()
+
+
+def test_skinned_mesh_renderer_reconciles_live_skeleton_mapping_changes():
+    from termin.scene import TcScene
+    from termin.skeleton import TcSkeleton
+    from termin.skeleton_components import SkeletonController
+
+    skeleton = TcSkeleton.create("Live Skeleton", f"live-skeleton-{uuid4()}")
+    skeleton.set_bones([_skeleton_bone("root")])
+
+    scene = TcScene.create("skinned-renderer-live-skeleton")
+    try:
+        armature = scene.create_entity("Armature")
+        root_bone = scene.create_entity("root")
+        root_bone.transform.set_local_position(Vec3(5.0, 0.0, 0.0))
+        root_bone.set_parent(armature)
+
+        mesh_entity = scene.create_entity("Body")
+        mesh_entity.transform.set_local_position(Vec3(2.0, 0.0, 0.0))
+        mesh_entity.set_parent(armature)
+
+        controller = SkeletonController(skeleton, [root_bone])
+        armature.add_component(controller)
+        renderer = SkinnedMeshRenderer(None, controller, True)
+        mesh_entity.add_component(renderer)
+
+        retained_instance = controller.skeleton_instance
+        renderer.update_bone_matrices()
+        assert renderer._bone_count == 1
+        assert renderer.get_bone_matrices_flat().reshape(-1)[12] == pytest.approx(3.0)
+
+        inverse_bind = Mat44.identity()
+        inverse_bind[3, 0] = -1.0
+        skeleton.set_bones([_skeleton_bone("root", inverse_bind_matrix=inverse_bind)])
+
+        renderer.update_bone_matrices()
+        assert renderer._bone_count == 1
+        assert renderer.get_bone_matrices_flat().reshape(-1)[12] == pytest.approx(2.0)
+        assert retained_instance.skeleton.uuid == skeleton.uuid
+
+        # Positional entity mappings cannot be reused when bone identity changes,
+        # even if the count is unchanged.
+        skeleton.set_bones([_skeleton_bone("renamed", inverse_bind_matrix=inverse_bind)])
+        renderer.update_bone_matrices()
+        assert renderer._bone_count == 0
+
+        controller.bone_entities = [root_bone]
+        renderer.update_bone_matrices()
+        assert renderer._bone_count == 1
+
+        child_bone = scene.create_entity("child")
+        child_bone.transform.set_local_position(Vec3(0.0, 3.0, 0.0))
+        child_bone.set_parent(root_bone)
+        skeleton.set_bones(
+            [
+                _skeleton_bone("renamed", inverse_bind_matrix=inverse_bind),
+                _skeleton_bone("child", 0),
+            ]
+        )
+
+        renderer.update_bone_matrices()
+        assert renderer._bone_count == 0
+
+        controller.bone_entities = [root_bone, child_bone]
+        renderer.update_bone_matrices()
+        assert renderer._bone_count == 2
+        assert retained_instance.bone_count() == 2
+    finally:
+        scene.destroy()
+
+
+def test_skeleton_controller_rebinds_retained_instance_in_place():
+    from termin.skeleton import TcSkeleton
+    from termin.skeleton_components import SkeletonController
+
+    first = TcSkeleton.create("First Skeleton", f"first-skeleton-{uuid4()}")
+    first.set_bones([])
+    second = TcSkeleton.create("Second Skeleton", f"second-skeleton-{uuid4()}")
+    second.set_bones([])
+    controller = SkeletonController(first, [])
+    retained_instance = controller.skeleton_instance
+
+    controller.skeleton = second
+
+    assert retained_instance.skeleton is not None
+    assert retained_instance.skeleton.uuid == second.uuid
+    assert controller.skeleton_instance is retained_instance
+
+    controller.skeleton = None
+    assert retained_instance.skeleton is None
+    assert retained_instance.bone_count() == 0
 
 
 def test_depth_and_normal_passes_expose_explicit_phase_mark():
@@ -431,9 +558,7 @@ def test_line_renderer_cast_shadow_enables_shadow_material_phase():
 def test_line_renderer_cast_shadow_uses_default_shadow_phase_when_material_lacks_one():
     renderer = LineRenderer(points=_line_points(), cast_shadow=True)
 
-    assert renderer.phase_mask == (
-        RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID | RENDER_PHASE_SHADOW
-    )
+    assert renderer.phase_mask == (RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID | RENDER_PHASE_SHADOW)
 
 
 def test_mesh_renderer_get_phases_for_mark_returns_non_owning_phase_refs():
@@ -446,6 +571,8 @@ def test_mesh_renderer_get_phases_for_mark_returns_non_owning_phase_refs():
     assert [phase.phase_mark for phase in opaque] == ["opaque"]
     assert [phase.phase_mark for phase in shadow] == ["shadow"]
     assert material.phases[0].phase_mark == "opaque"
+
+
 def test_mesh_renderer_material_slots_serialize_data_roundtrip():
     legacy_material = create_unique_test_material("MeshRendererSlotLegacy")
     slot0_material = create_unique_test_material("MeshRendererSlot0")
@@ -522,9 +649,7 @@ def test_mesh_renderer_preconfigured_component_survives_entity_add_component():
 
         entity.add_component(renderer)
         hierarchy = entity.serialize_hierarchy()
-        component_data = next(
-            item["data"] for item in hierarchy["components"] if item["type"] == "MeshRenderer"
-        )
+        component_data = next(item["data"] for item in hierarchy["components"] if item["type"] == "MeshRenderer")
 
         assert component_data["material"]["uuid"] == legacy_material.uuid
         assert component_data["cast_shadow"] is False
@@ -715,11 +840,7 @@ def test_world_text_component_is_inspectable():
 
 
 def test_depth_conversion_passes_bind_textures_by_reflected_name():
-    source = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "depth_pass.cpp"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[2] / "src" / "depth_pass.cpp").read_text(encoding="utf-8")
 
     assert 'bind_texture("u_depth_tex", depth_tex)' in source
     assert 'bind_texture("u_color_tex", color_tex)' in source

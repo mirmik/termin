@@ -101,13 +101,6 @@ static inline bool tc_bone_is_root(const tc_bone* bone) {
     return bone && bone->parent_index < 0;
 }
 
-// ============================================================================
-// Reference counting
-// ============================================================================
-
-TC_API void tc_skeleton_add_ref(tc_skeleton* skeleton);
-TC_API bool tc_skeleton_release(tc_skeleton* skeleton);
-
 #ifdef __cplusplus
 }
 #endif

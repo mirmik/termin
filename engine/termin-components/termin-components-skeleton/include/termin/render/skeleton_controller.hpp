@@ -31,8 +31,24 @@ namespace termin {
         Entity skeleton_root;
 
     private:
-        // Cached skeleton instance (created lazily)
+        // Cached skeleton instance (created lazily and kept at a stable address
+        // for the lifetime of this controller).
         std::unique_ptr<SkeletonInstance> _skeleton_instance;
+
+        // Bone mappings are positional. Keep the skeleton name/order signature
+        // that bone_entities was published against so live resource replacement
+        // cannot silently apply entity transforms to different bones.
+        std::vector<std::string> _bone_mapping_signature;
+        tc_skeleton_handle _bone_mapping_skeleton = tc_skeleton_handle_invalid();
+        uint32_t _bone_mapping_version = 0;
+        bool _has_bone_mapping_signature = false;
+        bool _bone_mapping_requires_republish = false;
+        bool _bone_mapping_error_reported = false;
+
+        bool ensure_skeleton_ready(const char* operation);
+        void synchronize_cached_instance_resource();
+        bool try_publish_bone_mapping(const char* operation, bool report_count_mismatch);
+        bool validate_bone_mapping(const char* operation);
 
     public:
         SkeletonController();
@@ -41,31 +57,35 @@ namespace termin {
         static void register_type();
 
         /**
-         * Get tc_skeleton pointer.
+         * Get a borrowed tc_skeleton pointer.
+         *
+         * The pointer is valid only until the next skeleton registry mutation
+         * and must never be cached.
          */
         const tc_skeleton* get_skeleton() const {
             return skeleton.get();
         }
 
         /**
-         * Set skeleton. Invalidates cached instance.
+         * Set skeleton and rebind an already-created instance in place.
          */
         void set_skeleton(const TcSkeleton& skel);
 
         /**
-         * Set bone entities. Invalidates cached instance.
+         * Publish bone entities for the current skeleton name/order mapping.
          */
         void set_bone_entities(std::vector<Entity> entities);
 
         /**
-         * Set skeleton root entity. Invalidates cached instance.
+         * Set skeleton root entity without replacing the cached instance.
          */
         void set_skeleton_root(Entity root);
 
         /**
          * Get or create SkeletonInstance.
          *
-         * Creates instance lazily on first access using:
+         * Creates the instance lazily on first access and keeps its address
+         * stable until controller destruction. Uses:
          * - skeleton
          * - bone_entities
          * - skeleton_root if valid, otherwise this->entity as skeleton root
@@ -79,12 +99,6 @@ namespace termin {
         bool update_skeleton_instance(Entity skinning_root);
 
         Entity bone_entity(int bone_index) const;
-
-        /**
-         * Invalidate cached skeleton instance.
-         * Call when bone transforms change structurally.
-         */
-        void invalidate_instance();
 
         /**
          * Component lifecycle: check skeleton state after deserialization.

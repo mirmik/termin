@@ -1,3 +1,4 @@
+import gc
 import sys
 import uuid
 
@@ -146,9 +147,127 @@ def test_bulk_bones_reject_out_of_range_parent_index_transactionally(parent_inde
 def _skeleton_instance() -> tuple[SkeletonInstance, TcSkeleton]:
     skeleton = TcSkeleton.create("Instance", str(uuid.uuid4()))
     skeleton.set_bones([_bone("Root")])
-    instance = SkeletonInstance()
-    instance.skeleton = skeleton.get()
+    instance = SkeletonInstance(skeleton)
     return instance, skeleton
+
+
+def _temporary_instance(skeleton_uuid: str) -> SkeletonInstance:
+    skeleton = TcSkeleton.create("Temporary", skeleton_uuid)
+    skeleton.set_bones([_bone("Root", translation=Vec3(2.0, 0.0, 0.0))])
+    return SkeletonInstance(skeleton)
+
+
+def test_skeleton_instance_strongly_owns_temporary_resource() -> None:
+    skeleton_uuid = str(uuid.uuid4())
+    instance = _temporary_instance(skeleton_uuid)
+
+    gc.collect()
+
+    assert instance.skeleton is not None
+    assert instance.skeleton.is_valid
+    assert instance.skeleton.uuid == skeleton_uuid
+    assert instance.bone_count() == 1
+    assert np.asarray(instance.get_bone_matrices()).shape == (1, 4, 4)
+
+
+def test_skeleton_instance_getter_returns_an_owning_resource_copy() -> None:
+    skeleton_uuid = str(uuid.uuid4())
+    instance = _temporary_instance(skeleton_uuid)
+    resource = instance.skeleton
+    assert resource is not None
+
+    instance.skeleton = None
+    del instance
+    gc.collect()
+
+    assert resource.is_valid
+    assert resource.uuid == skeleton_uuid
+    assert TcSkeleton.from_uuid(skeleton_uuid).is_valid
+
+
+def test_skeleton_instance_none_reset_and_typed_boundary() -> None:
+    instance, skeleton = _skeleton_instance()
+    instance.skeleton = None
+
+    assert instance.skeleton is None
+    assert instance.bone_count() == 0
+    assert np.asarray(instance.get_bone_matrices()).shape == (0, 4, 4)
+
+    with pytest.raises(ValueError, match="live skeleton resource"):
+        instance.skeleton = TcSkeleton()
+    with pytest.raises(TypeError, match="TcSkeleton or None"):
+        instance.skeleton = object()
+    with pytest.raises(ValueError, match="live skeleton resource"):
+        SkeletonInstance(TcSkeleton())
+    with pytest.raises(TypeError, match="TcSkeleton or None"):
+        SkeletonInstance(object())
+
+    instance.skeleton = skeleton
+    assert instance.bone_count() == 1
+
+
+def test_skeleton_instance_survives_registry_pool_growth() -> None:
+    skeleton_uuid = str(uuid.uuid4())
+    instance = _temporary_instance(skeleton_uuid)
+
+    resources = [TcSkeleton.create(f"Growth {index}", str(uuid.uuid4())) for index in range(40)]
+
+    assert all(resource.is_valid for resource in resources)
+    assert instance.skeleton is not None
+    assert instance.skeleton.uuid == skeleton_uuid
+    assert instance.bone_count() == 1
+    np.testing.assert_allclose(np.asarray(instance.get_bone_world_matrix(0))[:3, 3], (2.0, 0.0, 0.0))
+
+
+def test_skeleton_instance_refreshes_same_count_replacement_from_bind_pose() -> None:
+    instance, skeleton = _skeleton_instance()
+    instance.set_bone_transform(0, translation=Vec3(9.0, 0.0, 0.0))
+    instance.update()
+    assert np.asarray(instance.get_bone_world_matrix(0))[0, 3] == pytest.approx(9.0)
+    previous_version = skeleton.version
+
+    inverse_bind = Mat44.identity()
+    inverse_bind[3, 0] = -1.0
+    skeleton.set_bones(
+        [
+            _bone(
+                "Root",
+                inverse_bind_matrix=inverse_bind,
+                translation=Vec3(4.0, 0.0, 0.0),
+            )
+        ]
+    )
+
+    assert skeleton.version == previous_version + 1
+    assert instance.bone_count() == 1
+    assert np.asarray(instance.get_bone_world_matrix(0))[0, 3] == pytest.approx(4.0)
+    assert np.asarray(instance.get_bone_matrices())[0, 0, 3] == pytest.approx(3.0)
+
+
+def test_skeleton_instance_refreshes_count_changing_replacement() -> None:
+    instance, skeleton = _skeleton_instance()
+
+    skeleton.set_bones([_bone("Root"), _bone("Child", 0, translation=Vec3(0.0, 3.0, 0.0))])
+
+    assert instance.bone_count() == 2
+    matrices = np.asarray(instance.get_bone_matrices())
+    assert matrices.shape == (2, 4, 4)
+    assert np.asarray(instance.get_bone_world_matrix(1))[1, 3] == pytest.approx(3.0)
+
+
+def test_failed_skeleton_replacement_preserves_runtime_override() -> None:
+    instance, skeleton = _skeleton_instance()
+    instance.set_bone_transform(0, translation=Vec3(7.0, 0.0, 0.0))
+    instance.update()
+    before = np.array(instance.get_bone_world_matrix(0), copy=True)
+    previous_version = skeleton.version
+
+    with pytest.raises(RuntimeError, match="previous payload was preserved"):
+        skeleton.set_bones([_bone("Cycle", 0)])
+
+    assert skeleton.version == previous_version
+    instance.update()
+    np.testing.assert_array_equal(instance.get_bone_world_matrix(0), before)
 
 
 def test_skeleton_instance_normalizes_full_range_rotation() -> None:

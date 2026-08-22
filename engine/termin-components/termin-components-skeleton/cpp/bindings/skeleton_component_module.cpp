@@ -13,6 +13,40 @@ namespace nb = nanobind;
 namespace termin {
     namespace {
 
+        void set_controller_skeleton(SkeletonController& controller, nb::handle value) {
+            if (value.is_none()) {
+                controller.set_skeleton(TcSkeleton());
+                return;
+            }
+            if (!nb::isinstance<TcSkeleton>(value)) {
+                throw nb::type_error("skeleton must be a TcSkeleton or None");
+            }
+
+            TcSkeleton skeleton = nb::cast<TcSkeleton>(value);
+            if (!skeleton.is_valid()) {
+                throw nb::value_error("skeleton must reference a live skeleton resource");
+            }
+            controller.set_skeleton(skeleton);
+        }
+
+        nb::object get_controller_skeleton(const SkeletonController& controller) {
+            if (!controller.skeleton.has_handle()) {
+                return nb::none();
+            }
+            return nb::cast(TcSkeleton(controller.skeleton));
+        }
+
+        std::vector<Entity> entity_mapping_from_python(nb::list values) {
+            std::vector<Entity> entities;
+            entities.reserve(nb::len(values));
+            for (nb::handle value : values) {
+                // None represents an invalid mapping entry. Keep the slot so
+                // later entries cannot silently shift to different bones.
+                entities.push_back(value.is_none() ? Entity() : nb::cast<Entity>(value));
+            }
+            return entities;
+        }
+
         void bind_skeleton_controller(nb::module_& m) {
             nb::class_<termin::SkeletonController, termin::Component>(m, "SkeletonController")
                 .def("__init__", [](nb::handle self) { termin::cxx_component_init<termin::SkeletonController>(self); })
@@ -22,25 +56,12 @@ namespace termin {
                         termin::cxx_component_init<termin::SkeletonController>(self);
                         auto* cpp = nb::inst_ptr<termin::SkeletonController>(self);
 
-                        if (!skeleton_arg.is_none() && nb::isinstance<termin::TcSkeleton>(skeleton_arg)) {
-                            cpp->skeleton = nb::cast<termin::TcSkeleton>(skeleton_arg);
-                        }
-
-                        std::vector<termin::Entity> entities;
-                        for (auto item : bone_entities_list) {
-                            if (!item.is_none()) {
-                                entities.push_back(nb::cast<termin::Entity>(item));
-                            }
-                        }
-                        cpp->set_bone_entities(std::move(entities));
+                        set_controller_skeleton(*cpp, skeleton_arg);
+                        cpp->set_bone_entities(entity_mapping_from_python(bone_entities_list));
                     },
-                    nb::arg("skeleton") = nb::none(),
+                    nb::arg("skeleton").none() = nb::none(),
                     nb::arg("bone_entities") = nb::list())
-                .def_rw("skeleton", &termin::SkeletonController::skeleton)
-                .def_prop_ro(
-                    "skeleton_data",
-                    [](const termin::SkeletonController& self) { return self.skeleton.get(); },
-                    nb::rv_policy::reference)
+                .def_prop_rw("skeleton", &get_controller_skeleton, &set_controller_skeleton, nb::arg().none())
                 .def_prop_rw(
                     "bone_entities",
                     [](const termin::SkeletonController& self) {
@@ -55,13 +76,7 @@ namespace termin {
                         return result;
                     },
                     [](termin::SkeletonController& self, nb::list entities) {
-                        std::vector<termin::Entity> vec;
-                        for (auto item : entities) {
-                            if (!item.is_none()) {
-                                vec.push_back(nb::cast<termin::Entity>(item));
-                            }
-                        }
-                        self.set_bone_entities(std::move(vec));
+                        self.set_bone_entities(entity_mapping_from_python(entities));
                     })
                 .def_prop_rw(
                     "skeleton_root",
@@ -75,21 +90,15 @@ namespace termin {
                         self.set_skeleton_root(root.is_none() ? termin::Entity() : nb::cast<termin::Entity>(root));
                     },
                     nb::arg().none())
-                .def_prop_ro(
-                    "skeleton_instance", &termin::SkeletonController::skeleton_instance, nb::rv_policy::reference)
-                .def("set_skeleton", &termin::SkeletonController::set_skeleton)
+                .def_prop_ro("skeleton_instance",
+                             &termin::SkeletonController::skeleton_instance,
+                             nb::rv_policy::reference_internal)
+                .def("set_skeleton", &set_controller_skeleton, nb::arg("skeleton").none())
                 .def("set_bone_entities",
                      [](termin::SkeletonController& self, nb::list entities) {
-                         std::vector<termin::Entity> vec;
-                         for (auto item : entities) {
-                             if (!item.is_none()) {
-                                 vec.push_back(nb::cast<termin::Entity>(item));
-                             }
-                         }
-                         self.set_bone_entities(std::move(vec));
+                         self.set_bone_entities(entity_mapping_from_python(entities));
                      })
-                .def("set_skeleton_root", &termin::SkeletonController::set_skeleton_root)
-                .def("invalidate_instance", &termin::SkeletonController::invalidate_instance);
+                .def("set_skeleton_root", &termin::SkeletonController::set_skeleton_root);
         }
 
     } // namespace

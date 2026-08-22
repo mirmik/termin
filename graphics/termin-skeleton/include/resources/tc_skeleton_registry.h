@@ -39,7 +39,14 @@ TC_API tc_skeleton* tc_skeleton_get(tc_skeleton_handle h);
 // Check if handle is valid
 TC_API bool tc_skeleton_is_valid(tc_skeleton_handle h);
 
-// Destroy skeleton by handle
+// Acquire/release a strong handle reference. Strong references keep the slot
+// alive, but callers must still resolve the handle for each access because
+// pool growth may relocate storage.
+TC_API bool tc_skeleton_handle_retain(tc_skeleton_handle h);
+TC_API bool tc_skeleton_handle_release(tc_skeleton_handle h);
+
+// Destroy an unreferenced skeleton by handle. Returns false and logs when
+// strong references still exist.
 TC_API bool tc_skeleton_destroy(tc_skeleton_handle h);
 
 // Check if skeleton exists by UUID

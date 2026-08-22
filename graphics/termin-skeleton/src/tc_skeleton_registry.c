@@ -32,6 +32,14 @@ static void skeleton_free_data(tc_skeleton* skeleton) {
     skeleton->root_count = 0;
 }
 
+static bool skeleton_destroy_unreferenced(tc_skeleton_handle h, tc_skeleton* skeleton) {
+    if (!skeleton)
+        return false;
+    tc_resource_map_remove(g_uuid_to_index, skeleton->header.uuid);
+    skeleton_free_data(skeleton);
+    return tc_pool_free_slot(&g_skeleton_pool, h);
+}
+
 void tc_skeleton_init(void) {
     TC_REGISTRY_INIT_GUARD(g_initialized, "tc_skeleton");
 
@@ -74,17 +82,16 @@ tc_skeleton_handle tc_skeleton_create(const char* uuid) {
     }
 
     char uuid_buf[TC_UUID_SIZE];
-    const char* final_uuid;
-
     if (uuid && uuid[0] != '\0') {
-        if (tc_skeleton_contains(uuid)) {
-            tc_log_warn("tc_skeleton_create: uuid '%s' already exists", uuid);
+        // Normalize (and report truncation) before acquiring a movable pool
+        // address: logging may invoke user code that grows this registry.
+        tc_resource_copy_uuid(uuid_buf, sizeof(uuid_buf), uuid, "tc_skeleton_create");
+        if (tc_skeleton_contains(uuid_buf)) {
+            tc_log_warn("tc_skeleton_create: uuid '%s' already exists", uuid_buf);
             return tc_skeleton_handle_invalid();
         }
-        final_uuid = uuid;
     } else {
         tc_generate_prefixed_uuid(uuid_buf, sizeof(uuid_buf), "skel", &g_next_uuid);
-        final_uuid = uuid_buf;
     }
 
     tc_handle h = tc_pool_alloc(&g_skeleton_pool);
@@ -95,7 +102,7 @@ tc_skeleton_handle tc_skeleton_create(const char* uuid) {
 
     tc_skeleton* skeleton = (tc_skeleton*)tc_pool_get(&g_skeleton_pool, h);
     memset(skeleton, 0, sizeof(tc_skeleton));
-    tc_resource_header_set_uuid(&skeleton->header, final_uuid, "tc_skeleton_create");
+    tc_resource_header_set_uuid(&skeleton->header, uuid_buf, "tc_skeleton_create");
     skeleton->header.version = 1;
     skeleton->header.ref_count = 0;
     skeleton->header.is_loaded = 1;
@@ -114,7 +121,9 @@ tc_skeleton_handle tc_skeleton_find(const char* uuid) {
         return tc_skeleton_handle_invalid();
     }
 
-    void* ptr = tc_resource_map_get(g_uuid_to_index, uuid);
+    char normalized_uuid[TC_UUID_SIZE];
+    tc_resource_copy_uuid(normalized_uuid, sizeof(normalized_uuid), uuid, "tc_skeleton_find");
+    void* ptr = tc_resource_map_get(g_uuid_to_index, normalized_uuid);
     if (!tc_has_index(ptr)) {
         return tc_skeleton_handle_invalid();
     }
@@ -160,12 +169,14 @@ tc_skeleton_handle tc_skeleton_get_or_create(const char* uuid) {
         return tc_skeleton_handle_invalid();
     }
 
-    tc_skeleton_handle h = tc_skeleton_find(uuid);
+    char normalized_uuid[TC_UUID_SIZE];
+    tc_resource_copy_uuid(normalized_uuid, sizeof(normalized_uuid), uuid, "tc_skeleton_get_or_create");
+    tc_skeleton_handle h = tc_skeleton_find(normalized_uuid);
     if (!tc_skeleton_handle_is_invalid(h)) {
         return h;
     }
 
-    return tc_skeleton_create(uuid);
+    return tc_skeleton_create(normalized_uuid);
 }
 
 tc_skeleton_handle tc_skeleton_declare(const char* uuid, const char* name) {
@@ -173,7 +184,13 @@ tc_skeleton_handle tc_skeleton_declare(const char* uuid, const char* name) {
         tc_skeleton_init();
     }
 
-    tc_skeleton_handle existing = tc_skeleton_find(uuid);
+    // Both operations may log. Complete them before taking a pointer into the
+    // skeleton pool so a reentrant callback cannot invalidate that pointer.
+    char normalized_uuid[TC_UUID_SIZE];
+    tc_resource_copy_uuid(normalized_uuid, sizeof(normalized_uuid), uuid, "tc_skeleton_declare");
+    const char* interned_name = name && name[0] != '\0' ? tc_intern_string(name) : NULL;
+
+    tc_skeleton_handle existing = tc_skeleton_find(normalized_uuid);
     if (!tc_skeleton_handle_is_invalid(existing)) {
         return existing;
     }
@@ -186,14 +203,12 @@ tc_skeleton_handle tc_skeleton_declare(const char* uuid, const char* name) {
 
     tc_skeleton* skeleton = (tc_skeleton*)tc_pool_get(&g_skeleton_pool, h);
     memset(skeleton, 0, sizeof(tc_skeleton));
-    tc_resource_header_set_uuid(&skeleton->header, uuid, "tc_skeleton_declare");
+    tc_resource_header_set_uuid(&skeleton->header, normalized_uuid, "tc_skeleton_declare");
     skeleton->header.version = 0;
     skeleton->header.ref_count = 0;
     skeleton->header.is_loaded = 0;
 
-    if (name && name[0] != '\0') {
-        skeleton->header.name = tc_intern_string(name);
-    }
+    skeleton->header.name = interned_name;
 
     if (!tc_resource_map_add(g_uuid_to_index, skeleton->header.uuid, tc_pack_index(h.index))) {
         tc_log_error("tc_skeleton_declare: failed to add to uuid map");
@@ -216,6 +231,35 @@ bool tc_skeleton_is_valid(tc_skeleton_handle h) {
     return tc_pool_is_valid(&g_skeleton_pool, h);
 }
 
+bool tc_skeleton_handle_retain(tc_skeleton_handle h) {
+    if (!g_initialized || !tc_pool_is_valid(&g_skeleton_pool, h))
+        return false;
+
+    tc_skeleton* skeleton = (tc_skeleton*)tc_pool_get(&g_skeleton_pool, h);
+    if (skeleton->header.ref_count == UINT32_MAX) {
+        tc_log_error("tc_skeleton_handle_retain: refcount overflow for '%s'", skeleton->header.uuid);
+        return false;
+    }
+    skeleton->header.ref_count++;
+    return true;
+}
+
+bool tc_skeleton_handle_release(tc_skeleton_handle h) {
+    if (!g_initialized || !tc_pool_is_valid(&g_skeleton_pool, h))
+        return false;
+
+    tc_skeleton* skeleton = (tc_skeleton*)tc_pool_get(&g_skeleton_pool, h);
+    if (skeleton->header.ref_count == 0) {
+        tc_log_error("tc_skeleton_handle_release: resource '%s' has no strong references", skeleton->header.uuid);
+        return false;
+    }
+
+    skeleton->header.ref_count--;
+    if (skeleton->header.ref_count == 0)
+        return skeleton_destroy_unreferenced(h, skeleton);
+    return true;
+}
+
 bool tc_skeleton_destroy(tc_skeleton_handle h) {
     if (!g_initialized)
         return false;
@@ -223,16 +267,21 @@ bool tc_skeleton_destroy(tc_skeleton_handle h) {
     tc_skeleton* skeleton = tc_skeleton_get(h);
     if (!skeleton)
         return false;
-
-    tc_resource_map_remove(g_uuid_to_index, skeleton->header.uuid);
-    skeleton_free_data(skeleton);
-    return tc_pool_free_slot(&g_skeleton_pool, h);
+    if (skeleton->header.ref_count != 0) {
+        tc_log_error("tc_skeleton_destroy: resource '%s' still has %u strong reference(s)",
+                     skeleton->header.uuid,
+                     skeleton->header.ref_count);
+        return false;
+    }
+    return skeleton_destroy_unreferenced(h, skeleton);
 }
 
 bool tc_skeleton_contains(const char* uuid) {
     if (!g_initialized || !uuid)
         return false;
-    return tc_resource_map_contains(g_uuid_to_index, uuid);
+    char normalized_uuid[TC_UUID_SIZE];
+    tc_resource_copy_uuid(normalized_uuid, sizeof(normalized_uuid), uuid, "tc_skeleton_contains");
+    return tc_resource_map_contains(g_uuid_to_index, normalized_uuid);
 }
 
 size_t tc_skeleton_count(void) {
@@ -252,33 +301,26 @@ bool tc_skeleton_ensure_loaded(tc_skeleton_handle h) {
     tc_skeleton* skeleton = tc_skeleton_get(h);
     if (!skeleton)
         return false;
+    if (skeleton->header.is_loaded)
+        return true;
 
-    bool success = tc_resource_header_ensure_loaded(&skeleton->header);
-    if (!success) {
-        tc_log_error("tc_skeleton_ensure_loaded: resource loader failed for '%s'", skeleton->header.uuid);
-    }
-    return success;
-}
-
-void tc_skeleton_add_ref(tc_skeleton* skeleton) {
-    if (skeleton) {
-        skeleton->header.ref_count++;
-    }
-}
-
-bool tc_skeleton_release(tc_skeleton* skeleton) {
-    if (!skeleton || skeleton->header.ref_count == 0)
+    // The loader may create more skeleton resources and grow this pool. Keep
+    // only the stable UUID/handle across the callback, then resolve the slot
+    // again before committing load state.
+    char uuid[TC_UUID_SIZE];
+    tc_resource_copy_uuid(uuid, sizeof(uuid), skeleton->header.uuid, "tc_skeleton_ensure_loaded");
+    if (!tc_resource_request_load(uuid)) {
+        tc_log_error("tc_skeleton_ensure_loaded: resource loader failed for '%s'", uuid);
         return false;
-
-    skeleton->header.ref_count--;
-    if (skeleton->header.ref_count == 0) {
-        tc_skeleton_handle h = tc_skeleton_find(skeleton->header.uuid);
-        if (!tc_skeleton_handle_is_invalid(h)) {
-            tc_skeleton_destroy(h);
-            return true;
-        }
     }
-    return false;
+
+    skeleton = tc_skeleton_get(h);
+    if (!skeleton) {
+        tc_log_error("tc_skeleton_ensure_loaded: resource '%s' disappeared while its loader was running", uuid);
+        return false;
+    }
+    skeleton->header.is_loaded = 1;
+    return true;
 }
 
 static bool skeleton_desc_values_valid(const tc_skeleton_bone_desc* bone, size_t index) {
@@ -345,6 +387,7 @@ bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_des
     }
 
     size_t root_index = 0;
+    size_t truncated_name_count = 0;
     for (size_t i = 0; i < count; ++i) {
         tc_bone* destination = &replacement[i];
         const tc_skeleton_bone_desc* source = &bones[i];
@@ -352,10 +395,8 @@ bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_des
         destination->index = (int32_t)i;
         destination->parent_index = source->parent_index;
         if (source->name) {
-            if (strlen(source->name) >= TC_BONE_NAME_MAX) {
-                tc_log_warn(
-                    "tc_skeleton_replace_bones: bone[%zu] name is truncated to %d bytes", i, TC_BONE_NAME_MAX - 1);
-            }
+            if (strlen(source->name) >= TC_BONE_NAME_MAX)
+                ++truncated_name_count;
             strncpy(destination->name, source->name, TC_BONE_NAME_MAX - 1);
             destination->name[TC_BONE_NAME_MAX - 1] = '\0';
         }
@@ -382,6 +423,15 @@ bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_des
     skeleton->root_count = root_count;
     skeleton->header.is_loaded = 1;
     skeleton->header.version++;
+
+    // Logging can invoke user code and mutate a registry pool. Emit the
+    // successful-replacement diagnostic only after the borrowed skeleton
+    // pointer is no longer needed.
+    if (truncated_name_count > 0) {
+        tc_log_warn("tc_skeleton_replace_bones: truncated %zu bone name(s) to %d bytes",
+                    truncated_name_count,
+                    TC_BONE_NAME_MAX - 1);
+    }
     return true;
 }
 

@@ -42,17 +42,17 @@ namespace {
         }
     }
 
-    void bind_tc_skeleton_struct(nb::module_& m) {
-        // Bind tc_skeleton C struct for low-level access
-        nb::class_<tc_skeleton>(m, "tc_skeleton_struct")
-            .def_prop_rw(
-                "is_loaded",
-                [](const tc_skeleton& s) { return s.header.is_loaded != 0; },
-                [](tc_skeleton& s, bool loaded) { s.header.is_loaded = loaded ? 1 : 0; })
-            .def_prop_ro("uuid", [](const tc_skeleton& s) { return std::string(s.header.uuid); })
-            .def_prop_ro("name", [](const tc_skeleton& s) { return s.header.name ? std::string(s.header.name) : ""; })
-            .def_prop_ro("bone_count", [](const tc_skeleton& s) { return s.bone_count; })
-            .def_prop_ro("root_count", [](const tc_skeleton& s) { return s.root_count; });
+    termin::TcSkeleton require_valid_skeleton(nb::handle value, const char* target) {
+        if (!nb::isinstance<termin::TcSkeleton>(value)) {
+            const std::string message = std::string(target) + " must be a TcSkeleton or None";
+            throw nb::type_error(message.c_str());
+        }
+        termin::TcSkeleton skeleton = nb::cast<termin::TcSkeleton>(value);
+        if (!skeleton.is_valid()) {
+            const std::string message = std::string(target) + " must reference a live skeleton resource";
+            throw nb::value_error(message.c_str());
+        }
+        return skeleton;
     }
 
     void bind_tc_skeleton(nb::module_& m) {
@@ -62,11 +62,11 @@ namespace {
             .def_prop_ro("uuid", [](const termin::TcSkeleton& s) { return std::string(s.uuid()); })
             .def_prop_ro("name", [](const termin::TcSkeleton& s) { return std::string(s.name()); })
             .def_prop_ro("version", &termin::TcSkeleton::version)
+            .def_prop_ro("is_loaded", &termin::TcSkeleton::is_loaded)
             .def_prop_ro("bone_count", &termin::TcSkeleton::bone_count)
             .def_prop_ro("root_count", &termin::TcSkeleton::root_count)
             .def("find_bone", &termin::TcSkeleton::find_bone, nb::arg("bone_name"))
             .def("ensure_loaded", &termin::TcSkeleton::ensure_loaded)
-            .def("get", &termin::TcSkeleton::get, nb::rv_policy::reference)
             .def_prop_ro("bones",
                          [](const termin::TcSkeleton& self) {
                              nb::list result;
@@ -247,12 +247,36 @@ namespace {
 
     void bind_skeleton_instance(nb::module_& m) {
         nb::class_<termin::SkeletonInstance>(m, "SkeletonInstance")
-            .def(nb::init<>())
-            .def_prop_rw("skeleton",
-                         &termin::SkeletonInstance::skeleton,
-                         &termin::SkeletonInstance::set_skeleton,
-                         nb::rv_policy::reference)
-            .def("reset_to_bind_pose", &termin::SkeletonInstance::reset_to_bind_pose)
+            .def(
+                "__init__",
+                [](termin::SkeletonInstance* self, nb::object skeleton) {
+                    if (skeleton.is_none()) {
+                        new (self) termin::SkeletonInstance();
+                        return;
+                    }
+                    new (self) termin::SkeletonInstance(require_valid_skeleton(skeleton, "skeleton"));
+                },
+                nb::arg("skeleton").none() = nb::none())
+            .def_prop_rw(
+                "skeleton",
+                [](const termin::SkeletonInstance& self) -> nb::object {
+                    if (!self.skeleton_resource().has_handle())
+                        return nb::none();
+                    return nb::cast(self.skeleton());
+                },
+                [](termin::SkeletonInstance& self, nb::object skeleton) {
+                    if (skeleton.is_none()) {
+                        self.set_skeleton(termin::TcSkeleton());
+                        return;
+                    }
+                    self.set_skeleton(require_valid_skeleton(skeleton, "SkeletonInstance.skeleton"));
+                },
+                nb::arg().none())
+            .def("reset_to_bind_pose",
+                 [](termin::SkeletonInstance& si) {
+                     if (!si.reset_to_bind_pose())
+                         throw std::runtime_error("cannot reset a SkeletonInstance whose resource handle is stale");
+                 })
             .def(
                 "set_bone_transform",
                 [](termin::SkeletonInstance& si,
@@ -323,10 +347,16 @@ namespace {
                 nb::arg("translation") = nb::none(),
                 nb::arg("rotation") = nb::none(),
                 nb::arg("scale") = nb::none())
-            .def("update", [](termin::SkeletonInstance& si) { si.update(); })
+            .def("update",
+                 [](termin::SkeletonInstance& si) {
+                     if (!si.update())
+                         throw std::runtime_error("cannot update a SkeletonInstance whose resource handle is stale");
+                 })
             .def("get_bone_matrices",
                  [](termin::SkeletonInstance& si) {
-                     si.update();
+                     if (!si.update())
+                         throw std::runtime_error(
+                             "cannot read matrices from a SkeletonInstance whose resource handle is stale");
                      int n = si.bone_count();
                      float* buf = new float[n * 16];
                      for (int i = 0; i < n; ++i) {
@@ -342,10 +372,19 @@ namespace {
                      size_t shape[3] = {static_cast<size_t>(n), 4, 4};
                      return nb::ndarray<nb::numpy, float>(buf, 3, shape, owner);
                  })
-            .def("bone_count", &termin::SkeletonInstance::bone_count)
+            .def("bone_count",
+                 [](termin::SkeletonInstance& si) {
+                     if (!si.synchronize())
+                         throw std::runtime_error(
+                             "cannot read bone_count from a SkeletonInstance whose resource handle is stale");
+                     return si.bone_count();
+                 })
             .def(
                 "get_bone_world_matrix",
-                [](const termin::SkeletonInstance& si, int bone_index) {
+                [](termin::SkeletonInstance& si, int bone_index) {
+                    if (!si.synchronize())
+                        throw std::runtime_error(
+                            "cannot read matrices from a SkeletonInstance whose resource handle is stale");
                     termin::Mat44 m = si.get_bone_world_matrix(bone_index);
                     float* buf = new float[16];
                     for (int row = 0; row < 4; ++row) {
@@ -358,7 +397,7 @@ namespace {
                     return nb::ndarray<nb::numpy, float>(buf, 2, shape, owner);
                 },
                 nb::arg("bone_index"))
-            .def("__repr__", [](const termin::SkeletonInstance& si) {
+            .def("__repr__", [](termin::SkeletonInstance& si) {
                 return "<SkeletonInstance bones=" + std::to_string(si.bone_count()) + ">";
             });
     }
@@ -371,7 +410,6 @@ NB_MODULE(_skeleton_native, m) {
     nb::module_::import_("tcbase._geom_native");
 
     // Bind types
-    bind_tc_skeleton_struct(m);
     bind_tc_skeleton(m);
     bind_skeleton_instance(m);
 
@@ -390,7 +428,7 @@ NB_MODULE(_skeleton_native, m) {
 
     m.def(
         "tc_skeleton_is_loaded",
-        [](termin::TcSkeleton& handle) { return tc_skeleton_is_loaded(handle.handle); },
+        [](const termin::TcSkeleton& handle) { return handle.is_loaded(); },
         nb::arg("handle"),
         "Check if skeleton data is loaded");
 

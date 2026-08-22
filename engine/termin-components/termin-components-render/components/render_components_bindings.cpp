@@ -688,7 +688,6 @@ NB_MODULE(_components_render_native, m) {
                      &SkinnedMeshRenderer::skeleton_controller,
                      &SkinnedMeshRenderer::set_skeleton_controller,
                      nb::rv_policy::reference)
-        .def_prop_ro("skeleton_instance", &SkinnedMeshRenderer::skeleton_instance, nb::rv_policy::reference)
         .def("update_bone_matrices", &SkinnedMeshRenderer::update_bone_matrices)
         .def_ro("_bone_count", &SkinnedMeshRenderer::_bone_count)
         .def("get_bone_matrices_flat", [](SkinnedMeshRenderer& self) {
