@@ -34,14 +34,14 @@ namespace termin {
 
         // Fixed parent-to-kinematic-frame pose. Scale belongs to the entity
         // and is never part of a kinematic coordinate transform.
-        tc_vec3 origin_position = {0, 0, 0};
-        tc_quat origin_rotation = {0, 0, 0, 1};
+        Vec3 origin_position = {0, 0, 0};
+        Quat origin_rotation = {0, 0, 0, 1};
 
         // Spatial inertia rigidly attached to this unit's moving output frame.
         // These are model data, not a separate body/link object.
         double mass = 1.0;
-        tc_vec3 inertia_diagonal = {0.1, 0.1, 0.1};
-        tc_vec3 center_of_mass = {0.0, 0.0, 0.0};
+        Vec3 inertia_diagonal = {0.1, 0.1, 0.1};
+        Vec3 center_of_mass = {0.0, 0.0, 0.0};
 
     public:
         ~KinematicUnitComponent() override = default;
@@ -53,7 +53,7 @@ namespace termin {
         void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
 
         // Axis
-        void set_axis(double x, double y, double z);
+        void set_axis(const Vec3& axis);
         [[nodiscard]] Vec3 get_axis() const noexcept;
 
         // Physical displacement per authored coordinate unit. Rotators use
@@ -78,9 +78,6 @@ namespace termin {
 
     protected:
         KinematicUnitComponent(const char* type_name, Vec3 default_axis, double default_coordinate_scale);
-
-        // Helper: read current entity local rigid pose.
-        bool read_entity_transform(double pos[3], double rot[4]) const;
 
     private:
         Vec3 axis_ = Vec3{0.0, 0.0, 1.0};

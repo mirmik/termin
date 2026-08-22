@@ -135,7 +135,7 @@ TEST_CASE("collider rebuild replaces rigid-body collision mapping") {
     REQUIRE(old_collider != nullptr);
     const std::uint64_t old_revision = fixture.box_collider->collider_revision();
 
-    fixture.box_collider->set_box_size(0.5, 0.5, 0.5);
+    fixture.box_collider->set_box_size({0.5, 0.5, 0.5});
     colliders::Collider* new_collider = fixture.box_collider->attached_collider();
     REQUIRE(new_collider != nullptr);
     CHECK(fixture.box_collider->collider_revision() > old_revision);

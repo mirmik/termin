@@ -8,6 +8,7 @@ from termin.gui_native import TreeDropPosition
 from termin.csg import (
     CsgEditorController,
     OPERATION_KIND_WALL,
+    Point2,
     ProceduralMeshDocument,
     document_to_mesh3,
     document_to_tc_mesh,
@@ -113,6 +114,20 @@ def test_native_primitives_and_extrude_are_importable_from_python():
     result_mesh = to_mesh3(extruded, "python-extrude")
     assert result_mesh.is_valid()
     assert result_mesh.has_normals()
+
+
+def test_point2_reuses_canonical_vec2_binding_for_native_extrude():
+    profile = [
+        Point2(0.0, 0.0),
+        Point2(2.0, 0.0),
+        Point2(2.0, 3.0),
+        Point2(0.0, 3.0),
+    ]
+
+    solid = extrude(profile, 4.0)
+
+    assert solid.status == "No Error"
+    assert isclose(solid.volume, 24.0)
 
 
 def test_script_cad_layer_composes_profiles_and_solids():

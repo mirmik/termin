@@ -13,7 +13,7 @@ namespace termin::visual {
             if (mesh.vertices.empty() || mesh.triangles.empty() || mesh.triangles.size() % 3 != 0)
                 return false;
             if (!std::all_of(mesh.vertices.begin(), mesh.vertices.end(), [](termin::Vec3f vertex) {
-                    return detail::finite(vertex);
+                    return vertex.is_finite();
                 }))
                 return false;
             return std::all_of(mesh.triangles.begin(), mesh.triangles.end(), [&](std::uint32_t index) {
@@ -81,7 +81,9 @@ namespace termin::visual {
     }
 
     std::optional<VisualBounds3D> StaticMeshItem3D::local_bounds() const {
-        return detail::bounds_of(mesh_->vertices.size(), [&](std::size_t index) { return mesh_->vertices[index]; });
+        const auto bounds =
+            detail::bounds_of(mesh_->vertices.size(), [&](std::size_t index) { return mesh_->vertices[index]; });
+        return bounds ? std::optional<VisualBounds3D>(detail::to_visual_bounds(*bounds)) : std::nullopt;
     }
 
     std::optional<HitCandidate3D> StaticMeshItem3D::hit_test(const HitTestContext3D& context) const {

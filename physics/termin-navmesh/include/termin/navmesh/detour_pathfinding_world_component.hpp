@@ -19,9 +19,7 @@ namespace termin {
 
     public:
         std::string navmesh_uuid;
-        float query_extent_x = 2.0f;
-        float query_extent_y = 4.0f;
-        float query_extent_z = 2.0f;
+        Vec3f query_extents{2.0f, 4.0f, 2.0f};
         int max_polys = 256;
         int max_straight_path = 256;
 

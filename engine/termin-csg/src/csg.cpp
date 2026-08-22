@@ -16,6 +16,10 @@ namespace termin::csg {
         using manifold::vec2;
         using manifold::vec3;
 
+        vec3 to_manifold(const Vec3& value) {
+            return {value.x, value.y, value.z};
+        }
+
         Polygons make_polygons(const Polygon2& outer, const std::vector<Polygon2>& holes) {
             Polygons polygons;
             polygons.reserve(1 + holes.size());
@@ -174,29 +178,29 @@ namespace termin::csg {
         return status_to_string(impl_->manifold.Status());
     }
 
-    Solid Solid::translated(double x, double y, double z) const {
+    Solid Solid::translated(const Vec3& offset) const {
         if (!impl_) {
             return Solid();
         }
-        return Solid(Impl(impl_->manifold.Translate(vec3(x, y, z))));
+        return Solid(Impl(impl_->manifold.Translate(to_manifold(offset))));
     }
 
-    Solid Solid::scaled(double x, double y, double z) const {
+    Solid Solid::scaled(const Vec3& factors) const {
         if (!impl_) {
             return Solid();
         }
-        return Solid(Impl(impl_->manifold.Scale(vec3(x, y, z))));
+        return Solid(Impl(impl_->manifold.Scale(to_manifold(factors))));
     }
 
-    Solid Solid::rotated(double x_degrees, double y_degrees, double z_degrees) const {
+    Solid Solid::rotated(const Vec3& euler_degrees) const {
         if (!impl_) {
             return Solid();
         }
-        return Solid(Impl(impl_->manifold.Rotate(x_degrees, y_degrees, z_degrees)));
+        return Solid(Impl(impl_->manifold.Rotate(euler_degrees.x, euler_degrees.y, euler_degrees.z)));
     }
 
-    Solid make_box(double x, double y, double z, bool centered) {
-        return Solid(Solid::Impl(Manifold::Cube(vec3(x, y, z), centered)));
+    Solid make_box(const Vec3& size, bool centered) {
+        return Solid(Solid::Impl(Manifold::Cube(to_manifold(size), centered)));
     }
 
     Solid make_sphere(double radius, int circular_segments) {

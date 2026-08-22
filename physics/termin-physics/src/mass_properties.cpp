@@ -23,20 +23,12 @@ namespace termin::physics {
             return std::isfinite(value);
         }
 
-        bool finite(const Vec3& value) {
-            return value.is_finite();
-        }
-
-        Vec3 componentwise_product(const Vec3& a, const Vec3& b) {
-            return {a.x * b.x, a.y * b.y, a.z * b.z};
-        }
-
         Vec3 scaled_local_offset(const colliders::ColliderPrimitive& collider, const Vec3& entity_scale) {
-            return componentwise_product(entity_scale, collider.transform.lin);
+            return entity_scale.cwise_product(collider.transform.lin);
         }
 
         Vec3 combined_scale(const colliders::ColliderPrimitive& collider, const Vec3& entity_scale) {
-            return componentwise_product(entity_scale, collider.transform.scale);
+            return entity_scale.cwise_product(collider.transform.scale);
         }
 
         bool valid_inputs(const Vec3& scale, double mass, std::string& diagnostic) {
@@ -44,7 +36,7 @@ namespace termin::physics {
                 diagnostic = "mass must be finite and positive";
                 return false;
             }
-            if (!finite(scale) || scale.x <= 0.0 || scale.y <= 0.0 || scale.z <= 0.0) {
+            if (!scale.is_finite() || scale.x <= 0.0 || scale.y <= 0.0 || scale.z <= 0.0) {
                 diagnostic = "entity and collider scale must be finite and positive";
                 return false;
             }
@@ -148,7 +140,7 @@ namespace termin::physics {
             }
 
             moments = Vec3(values[0], values[1], values[2]);
-            if (!finite(moments) || moments.x <= kGeometryEpsilon || moments.y <= kGeometryEpsilon ||
+            if (!moments.is_finite() || moments.x <= kGeometryEpsilon || moments.y <= kGeometryEpsilon ||
                 moments.z <= kGeometryEpsilon) {
                 diagnostic = "principal moments are non-finite or non-positive";
                 return false;
@@ -166,7 +158,7 @@ namespace termin::physics {
                 vectors[2].z,
             };
             orientation = Quat::from_rotation_matrix(rotation);
-            return finite(orientation.x) && finite(orientation.y) && finite(orientation.z) && finite(orientation.w);
+            return orientation.is_finite();
         }
 
         bool convex_hull_properties(const colliders::ConvexHullCollider& hull,
@@ -182,7 +174,7 @@ namespace termin::physics {
             const Vec3 scale = combined_scale(hull, entity_scale);
             const Vec3 offset = scaled_local_offset(hull, entity_scale);
             auto transformed_vertex = [&](int index) {
-                const Vec3 vertex = componentwise_product(hull.vertices[index], scale);
+                const Vec3 vertex = hull.vertices[index].cwise_product(scale);
                 return offset + hull.transform.ang.rotate(vertex);
             };
 
@@ -237,7 +229,7 @@ namespace termin::physics {
             }
 
             const Vec3 center = first_moment / volume;
-            if (!finite(center)) {
+            if (!center.is_finite()) {
                 diagnostic = "convex hull center of mass is non-finite";
                 return false;
             }
@@ -275,7 +267,7 @@ namespace termin::physics {
 
         const Vec3 center = scaled_local_offset(collider, entity_scale);
         if (const auto* box = dynamic_cast<const colliders::BoxCollider*>(&collider)) {
-            const Vec3 size = componentwise_product(box->half_size * 2.0, scale);
+            const Vec3 size = (box->half_size * 2.0).cwise_product(scale);
             if (size.x <= kGeometryEpsilon || size.y <= kGeometryEpsilon || size.z <= kGeometryEpsilon) {
                 diagnostic = "box dimensions must be positive";
                 return false;
@@ -288,7 +280,7 @@ namespace termin::physics {
         }
 
         if (const auto* sphere = dynamic_cast<const colliders::SphereCollider*>(&collider)) {
-            const double radius = sphere->radius * std::min({scale.x, scale.y, scale.z});
+            const double radius = sphere->radius * scale.min_component();
             if (!finite(radius) || radius <= kGeometryEpsilon) {
                 diagnostic = "sphere radius must be finite and positive";
                 return false;

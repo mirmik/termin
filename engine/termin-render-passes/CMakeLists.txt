@@ -258,6 +258,26 @@ if(TERMIN_BUILD_TESTS)
         COMMAND termin_render_passes_shadow_resource_contract_test
     )
 
+    add_executable(termin_render_passes_shadow_camera_validation_test
+        tests/test_shadow_camera_validation.cpp
+    )
+    target_include_directories(
+        termin_render_passes_shadow_camera_validation_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(
+        termin_render_passes_shadow_camera_validation_test PRIVATE
+        termin_render_passes
+    )
+    set_target_properties(
+        termin_render_passes_shadow_camera_validation_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_shadow_camera_validation_test
+        COMMAND termin_render_passes_shadow_camera_validation_test
+    )
+
     add_executable(termin_render_passes_ui_widget_pass_test
         tests/test_ui_widget_pass.cpp
     )

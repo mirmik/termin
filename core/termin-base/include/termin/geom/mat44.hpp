@@ -2,10 +2,169 @@
 
 #include "quat.hpp"
 #include "vec3.hpp"
+#include "vec4.hpp"
 #include <cmath>
+#include <cstddef>
 #include <cstring>
+#include <limits>
+#include <type_traits>
 
 namespace termin {
+
+    namespace detail {
+
+        template <typename Scalar>
+        bool mat44_inverse_products_are_reliable(const Scalar* input,
+                                                 const Scalar* inverse,
+                                                 Scalar epsilon) noexcept {
+            // An inverse is useful only when it behaves as an inverse in the
+            // matrix's storage precision. Requiring both products catches the
+            // asymmetric cancellation common in projective matrices with large
+            // translations. sqrt(machine epsilon) is the conventional
+            // half-precision reliability boundary; callers may request a looser
+            // absolute residual through epsilon, but not an unrealistically
+            // tighter one for the scalar type.
+            const Scalar precision_floor = std::sqrt(std::numeric_limits<Scalar>::epsilon());
+            const Scalar tolerance = epsilon > precision_floor ? epsilon : precision_floor;
+
+            for (int product = 0; product < 2; ++product) {
+                const Scalar* left = product == 0 ? input : inverse;
+                const Scalar* right = product == 0 ? inverse : input;
+                for (int column = 0; column < 4; ++column) {
+                    for (int row = 0; row < 4; ++row) {
+                        Scalar value = Scalar{0};
+                        for (int k = 0; k < 4; ++k) {
+                            value += left[k * 4 + row] * right[column * 4 + k];
+                        }
+                        const Scalar expected = column == row ? Scalar{1} : Scalar{0};
+                        if (!std::isfinite(value) || std::abs(value - expected) > tolerance) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        template <typename Scalar>
+        bool try_inverse_mat44(const Scalar* input,
+                               Scalar* output,
+                               Scalar epsilon) noexcept {
+            if (input == nullptr || output == nullptr || !std::isfinite(epsilon) || epsilon < Scalar{0}) {
+                return false;
+            }
+
+            // Two-sided equilibration reduces sensitivity to world units and
+            // non-uniform scale. It cannot make an inverse representable when
+            // the input is ill-conditioned at Scalar precision, so the final
+            // candidate is validated separately in both multiplication orders.
+            Scalar column_scale[4]{};
+            for (int column = 0; column < 4; ++column) {
+                for (int row = 0; row < 4; ++row) {
+                    const Scalar value = input[column * 4 + row];
+                    if (!std::isfinite(value)) {
+                        return false;
+                    }
+                    const Scalar absolute = std::abs(value);
+                    if (absolute > column_scale[column]) {
+                        column_scale[column] = absolute;
+                    }
+                }
+                if (column_scale[column] == Scalar{0} || !std::isfinite(column_scale[column])) {
+                    return false;
+                }
+            }
+
+            Scalar row_scale[4]{};
+            for (int row = 0; row < 4; ++row) {
+                for (int column = 0; column < 4; ++column) {
+                    const Scalar scaled = std::abs(input[column * 4 + row] / column_scale[column]);
+                    if (scaled > row_scale[row]) {
+                        row_scale[row] = scaled;
+                    }
+                }
+                if (row_scale[row] == Scalar{0} || !std::isfinite(row_scale[row])) {
+                    return false;
+                }
+            }
+
+            Scalar augmented[4][8]{};
+            for (int row = 0; row < 4; ++row) {
+                for (int column = 0; column < 4; ++column) {
+                    augmented[row][column] = input[column * 4 + row] / column_scale[column] / row_scale[row];
+                    augmented[row][column + 4] = row == column ? Scalar{1} : Scalar{0};
+                }
+            }
+
+            for (int pivot_column = 0; pivot_column < 4; ++pivot_column) {
+                int pivot_row = pivot_column;
+                Scalar pivot_abs = std::abs(augmented[pivot_row][pivot_column]);
+                for (int row = pivot_column + 1; row < 4; ++row) {
+                    const Scalar candidate_abs = std::abs(augmented[row][pivot_column]);
+                    if (candidate_abs > pivot_abs) {
+                        pivot_abs = candidate_abs;
+                        pivot_row = row;
+                    }
+                }
+                // The equilibrated matrix is dimensionless with entries bounded
+                // near one. A pivot below one storage-precision ULP is not
+                // distinguishable reliably from rank deficiency. epsilon is
+                // intentionally not used here: a world translation can make a
+                // valid projective pivot small without proving by itself that
+                // the stored inverse will be unreliable.
+                if (pivot_abs <= std::numeric_limits<Scalar>::epsilon()) {
+                    return false;
+                }
+                if (pivot_row != pivot_column) {
+                    for (int column = 0; column < 8; ++column) {
+                        const Scalar temporary = augmented[pivot_column][column];
+                        augmented[pivot_column][column] = augmented[pivot_row][column];
+                        augmented[pivot_row][column] = temporary;
+                    }
+                }
+
+                const Scalar pivot = augmented[pivot_column][pivot_column];
+                for (int column = 0; column < 8; ++column) {
+                    augmented[pivot_column][column] /= pivot;
+                    if (!std::isfinite(augmented[pivot_column][column])) {
+                        return false;
+                    }
+                }
+
+                for (int row = 0; row < 4; ++row) {
+                    if (row == pivot_column) {
+                        continue;
+                    }
+                    const Scalar factor = augmented[row][pivot_column];
+                    for (int column = 0; column < 8; ++column) {
+                        augmented[row][column] -= factor * augmented[pivot_column][column];
+                        if (!std::isfinite(augmented[row][column])) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            Scalar result[16];
+            for (int row = 0; row < 4; ++row) {
+                for (int column = 0; column < 4; ++column) {
+                    // A = R * E * C, therefore A^-1 = C^-1 * E^-1 * R^-1.
+                    const Scalar value =
+                        augmented[row][column + 4] / column_scale[row] / row_scale[column];
+                    if (!std::isfinite(value)) {
+                        return false;
+                    }
+                    result[column * 4 + row] = value;
+                }
+            }
+            if (!mat44_inverse_products_are_reliable(input, result, epsilon)) {
+                return false;
+            }
+            std::memcpy(output, result, sizeof(result));
+            return true;
+        }
+
+    } // namespace detail
 
     // ============================================================================
     // Mat44f (float) - 4x4 Matrix in column-major order (OpenGL convention)
@@ -27,6 +186,26 @@ namespace termin {
         Mat44f() {
             std::memset(data, 0, sizeof(data));
         }
+        explicit Mat44f(const float* column_major_16) noexcept {
+            std::memcpy(data, column_major_16, sizeof(data));
+        }
+
+        static Mat44f from_column_major(const float* column_major_16) noexcept {
+            return Mat44f(column_major_16);
+        }
+        static Mat44f from_column_major_f32(const float* column_major_16) noexcept {
+            return Mat44f(column_major_16);
+        }
+        static Mat44f from_column_major_f64(const double* column_major_16) noexcept {
+            Mat44f result;
+            for (int i = 0; i < 16; ++i) {
+                result.data[i] = static_cast<float>(column_major_16[i]);
+            }
+            return result;
+        }
+        void copy_column_major_to(float* out_column_major_16) const noexcept {
+            std::memcpy(out_column_major_16, data, sizeof(data));
+        }
 
         // Access by column and row: m(col, row)
         float& operator()(int col, int row) {
@@ -42,6 +221,15 @@ namespace termin {
         }
         const float* ptr() const {
             return data;
+        }
+
+        bool is_finite() const noexcept {
+            for (float value : data) {
+                if (!std::isfinite(value)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         // Identity matrix
@@ -74,28 +262,56 @@ namespace termin {
             return result;
         }
 
-        // Transform point (w=1)
-        Vec3 transform_point(const Vec3& p) const {
-            float x = (*this)(0, 0) * static_cast<float>(p.x) + (*this)(1, 0) * static_cast<float>(p.y) +
-                      (*this)(2, 0) * static_cast<float>(p.z) + (*this)(3, 0);
-            float y = (*this)(0, 1) * static_cast<float>(p.x) + (*this)(1, 1) * static_cast<float>(p.y) +
-                      (*this)(2, 1) * static_cast<float>(p.z) + (*this)(3, 1);
-            float z = (*this)(0, 2) * static_cast<float>(p.x) + (*this)(1, 2) * static_cast<float>(p.y) +
-                      (*this)(2, 2) * static_cast<float>(p.z) + (*this)(3, 2);
-            float w = (*this)(0, 3) * static_cast<float>(p.x) + (*this)(1, 3) * static_cast<float>(p.y) +
-                      (*this)(2, 3) * static_cast<float>(p.z) + (*this)(3, 3);
+        Vec4f transform_homogeneous(const Vec4f& value) const noexcept {
+            return {
+                (*this)(0, 0) * value.x + (*this)(1, 0) * value.y + (*this)(2, 0) * value.z +
+                    (*this)(3, 0) * value.w,
+                (*this)(0, 1) * value.x + (*this)(1, 1) * value.y + (*this)(2, 1) * value.z +
+                    (*this)(3, 1) * value.w,
+                (*this)(0, 2) * value.x + (*this)(1, 2) * value.y + (*this)(2, 2) * value.z +
+                    (*this)(3, 2) * value.w,
+                (*this)(0, 3) * value.x + (*this)(1, 3) * value.y + (*this)(2, 3) * value.z +
+                    (*this)(3, 3) * value.w,
+            };
+        }
+
+        // Transform point (w=1). The legacy unchecked fallback for near-zero w is preserved.
+        Vec3f transform_point(const Vec3f& p) const noexcept {
+            const Vec4f transformed = transform_homogeneous({p.x, p.y, p.z, 1.0f});
+            const float x = transformed.x;
+            const float y = transformed.y;
+            const float z = transformed.z;
+            const float w = transformed.w;
             if (std::abs(w) > 1e-6f) {
                 return {x / w, y / w, z / w};
             }
             return {x, y, z};
         }
 
+        bool try_transform_point(const Vec3f& point, Vec3f& out, float epsilon = 1.0e-6f) const noexcept {
+            if (!point.is_finite() || !std::isfinite(epsilon) || epsilon < 0.0f) {
+                return false;
+            }
+            const Vec4f transformed = transform_homogeneous({point.x, point.y, point.z, 1.0f});
+            if (!transformed.is_finite() || std::abs(transformed.w) <= epsilon) {
+                return false;
+            }
+            const Vec3f result{transformed.x / transformed.w, transformed.y / transformed.w, transformed.z / transformed.w};
+            if (!result.is_finite()) {
+                return false;
+            }
+            out = result;
+            return true;
+        }
+
         // Transform direction (w=0)
-        Vec3 transform_direction(const Vec3& d) const {
+        Vec3f transform_direction(const Vec3f& d) const noexcept {
             return {(*this)(0, 0) * d.x + (*this)(1, 0) * d.y + (*this)(2, 0) * d.z,
                     (*this)(0, 1) * d.x + (*this)(1, 1) * d.y + (*this)(2, 1) * d.z,
                     (*this)(0, 2) * d.x + (*this)(1, 2) * d.y + (*this)(2, 2) * d.z};
         }
+
+        Mat44 to_double() const noexcept;
 
         // Transpose
         Mat44f transposed() const {
@@ -121,54 +337,16 @@ namespace termin {
             return m[0] * c00 + m[1] * c04 + m[2] * c08 + m[3] * c12;
         }
 
-        // Inverse (general 4x4 matrix inverse using cofactors)
+        // Checked inverse: succeeds only when both products with the candidate
+        // are close to identity at float precision.
+        bool try_inverse(Mat44f& out, float epsilon = 1.0e-6f) const noexcept {
+            return detail::try_inverse_mat44(data, out.data, epsilon);
+        }
+
+        // Legacy API: singular or non-finite matrices still fall back to identity.
         Mat44f inverse() const {
-            Mat44f inv;
-            const float* m = data;
-
-            inv.data[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] +
-                          m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
-            inv.data[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] -
-                          m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
-            inv.data[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] +
-                          m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
-            inv.data[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] -
-                           m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
-            inv.data[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] -
-                          m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
-            inv.data[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] +
-                          m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
-            inv.data[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] -
-                          m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
-            inv.data[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] +
-                           m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
-            inv.data[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] +
-                          m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
-            inv.data[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] -
-                          m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
-            inv.data[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] +
-                           m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
-            inv.data[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] -
-                           m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
-            inv.data[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] -
-                          m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
-            inv.data[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] +
-                          m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
-            inv.data[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] -
-                           m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
-            inv.data[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] +
-                           m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
-
-            float det = m[0] * inv.data[0] + m[1] * inv.data[4] + m[2] * inv.data[8] + m[3] * inv.data[12];
-            if (std::abs(det) < 1e-6f) {
-                return identity(); // Singular matrix
-            }
-
-            float inv_det = 1.0f / det;
-            for (int i = 0; i < 16; ++i) {
-                inv.data[i] *= inv_det;
-            }
-            return inv;
+            Mat44f result;
+            return try_inverse(result) ? result : identity();
         }
 
         // ========== Construction from components ==========
@@ -400,6 +578,36 @@ namespace termin {
         Mat44() {
             std::memset(data, 0, sizeof(data));
         }
+        explicit Mat44(const double* column_major_16) noexcept {
+            std::memcpy(data, column_major_16, sizeof(data));
+        }
+        explicit Mat44(const tc_mat44& value) noexcept
+            : Mat44(value.m) {}
+
+        static Mat44 from_column_major(const double* column_major_16) noexcept {
+            return Mat44(column_major_16);
+        }
+        static Mat44 from_column_major_f64(const double* column_major_16) noexcept {
+            return Mat44(column_major_16);
+        }
+        static Mat44 from_column_major_f32(const float* column_major_16) noexcept {
+            Mat44 result;
+            for (int i = 0; i < 16; ++i) {
+                result.data[i] = static_cast<double>(column_major_16[i]);
+            }
+            return result;
+        }
+        static Mat44 from_tc_mat44(const tc_mat44& value) noexcept {
+            return Mat44(value);
+        }
+        void copy_column_major_to(double* out_column_major_16) const noexcept {
+            std::memcpy(out_column_major_16, data, sizeof(data));
+        }
+        tc_mat44 to_tc_mat44() const noexcept {
+            tc_mat44 result;
+            copy_column_major_to(result.m);
+            return result;
+        }
 
         // Access by column and row: m(col, row)
         double& operator()(int col, int row) {
@@ -414,6 +622,15 @@ namespace termin {
         }
         const double* ptr() const {
             return data;
+        }
+
+        bool is_finite() const noexcept {
+            for (double value : data) {
+                if (!std::isfinite(value)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         static Mat44 identity() {
@@ -444,20 +661,50 @@ namespace termin {
             return result;
         }
 
-        // Transform point (w=1)
-        Vec3 transform_point(const Vec3& p) const {
-            double x = (*this)(0, 0) * p.x + (*this)(1, 0) * p.y + (*this)(2, 0) * p.z + (*this)(3, 0);
-            double y = (*this)(0, 1) * p.x + (*this)(1, 1) * p.y + (*this)(2, 1) * p.z + (*this)(3, 1);
-            double z = (*this)(0, 2) * p.x + (*this)(1, 2) * p.y + (*this)(2, 2) * p.z + (*this)(3, 2);
-            double w = (*this)(0, 3) * p.x + (*this)(1, 3) * p.y + (*this)(2, 3) * p.z + (*this)(3, 3);
+        Vec4 transform_homogeneous(const Vec4& value) const noexcept {
+            return {
+                (*this)(0, 0) * value.x + (*this)(1, 0) * value.y + (*this)(2, 0) * value.z +
+                    (*this)(3, 0) * value.w,
+                (*this)(0, 1) * value.x + (*this)(1, 1) * value.y + (*this)(2, 1) * value.z +
+                    (*this)(3, 1) * value.w,
+                (*this)(0, 2) * value.x + (*this)(1, 2) * value.y + (*this)(2, 2) * value.z +
+                    (*this)(3, 2) * value.w,
+                (*this)(0, 3) * value.x + (*this)(1, 3) * value.y + (*this)(2, 3) * value.z +
+                    (*this)(3, 3) * value.w,
+            };
+        }
+
+        // Transform point (w=1). The legacy unchecked fallback for near-zero w is preserved.
+        Vec3 transform_point(const Vec3& p) const noexcept {
+            const Vec4 transformed = transform_homogeneous({p.x, p.y, p.z, 1.0});
+            const double x = transformed.x;
+            const double y = transformed.y;
+            const double z = transformed.z;
+            const double w = transformed.w;
             if (std::abs(w) > 1e-10) {
                 return {x / w, y / w, z / w};
             }
             return {x, y, z};
         }
 
+        bool try_transform_point(const Vec3& point, Vec3& out, double epsilon = 1.0e-10) const noexcept {
+            if (!point.is_finite() || !std::isfinite(epsilon) || epsilon < 0.0) {
+                return false;
+            }
+            const Vec4 transformed = transform_homogeneous({point.x, point.y, point.z, 1.0});
+            if (!transformed.is_finite() || std::abs(transformed.w) <= epsilon) {
+                return false;
+            }
+            const Vec3 result{transformed.x / transformed.w, transformed.y / transformed.w, transformed.z / transformed.w};
+            if (!result.is_finite()) {
+                return false;
+            }
+            out = result;
+            return true;
+        }
+
         // Transform direction (w=0)
-        Vec3 transform_direction(const Vec3& d) const {
+        Vec3 transform_direction(const Vec3& d) const noexcept {
             return {(*this)(0, 0) * d.x + (*this)(1, 0) * d.y + (*this)(2, 0) * d.z,
                     (*this)(0, 1) * d.x + (*this)(1, 1) * d.y + (*this)(2, 1) * d.z,
                     (*this)(0, 2) * d.x + (*this)(1, 2) * d.y + (*this)(2, 2) * d.z};
@@ -487,54 +734,15 @@ namespace termin {
             return m[0] * c00 + m[1] * c04 + m[2] * c08 + m[3] * c12;
         }
 
-        // Inverse
+        // Checked inverse with the same two-sided reliability contract as Mat44f.
+        bool try_inverse(Mat44& out, double epsilon = 1.0e-12) const noexcept {
+            return detail::try_inverse_mat44(data, out.data, epsilon);
+        }
+
+        // Legacy API: singular or non-finite matrices still fall back to identity.
         Mat44 inverse() const {
-            Mat44 inv;
-            const double* m = data;
-
-            inv.data[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] +
-                          m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
-            inv.data[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] -
-                          m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
-            inv.data[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] +
-                          m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
-            inv.data[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] -
-                           m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
-            inv.data[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] -
-                          m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
-            inv.data[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] +
-                          m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
-            inv.data[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] -
-                          m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
-            inv.data[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] +
-                           m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
-            inv.data[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] +
-                          m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
-            inv.data[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] -
-                          m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
-            inv.data[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] +
-                           m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
-            inv.data[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] -
-                           m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
-            inv.data[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] -
-                          m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
-            inv.data[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] +
-                          m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
-            inv.data[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] -
-                           m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
-            inv.data[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] +
-                           m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
-
-            double det = m[0] * inv.data[0] + m[1] * inv.data[4] + m[2] * inv.data[8] + m[3] * inv.data[12];
-            if (!std::isfinite(det) || det == 0.0) {
-                return identity();
-            }
-
-            double inv_det = 1.0 / det;
-            for (int i = 0; i < 16; ++i) {
-                inv.data[i] *= inv_det;
-            }
-            return inv;
+            Mat44 result;
+            return try_inverse(result, 0.0) ? result : identity();
         }
 
         // Conversion to float
@@ -698,5 +906,22 @@ namespace termin {
             return with_translation(Vec3{x, y, z});
         }
     };
+
+    inline Mat44 Mat44f::to_double() const noexcept {
+        Mat44 result;
+        for (int i = 0; i < 16; ++i) {
+            result.data[i] = static_cast<double>(data[i]);
+        }
+        return result;
+    }
+
+    static_assert(std::is_standard_layout<Mat44>::value, "Mat44 must stay standard layout");
+    static_assert(std::is_trivially_copyable<Mat44>::value, "Mat44 must stay trivially copyable");
+    static_assert(sizeof(Mat44) == sizeof(double) * 16, "Mat44 must stay a packed column-major matrix");
+    static_assert(offsetof(Mat44, data) == 0, "Mat44.data offset changed");
+    static_assert(std::is_standard_layout<Mat44f>::value, "Mat44f must stay standard layout");
+    static_assert(std::is_trivially_copyable<Mat44f>::value, "Mat44f must stay trivially copyable");
+    static_assert(sizeof(Mat44f) == sizeof(float) * 16, "Mat44f must stay a packed column-major matrix");
+    static_assert(offsetof(Mat44f, data) == 0, "Mat44f.data offset changed");
 
 } // namespace termin

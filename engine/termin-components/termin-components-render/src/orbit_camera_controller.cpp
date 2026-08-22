@@ -204,14 +204,7 @@ namespace termin {
         Vec3 pos = entity().transform().global_position();
         Quat rot = entity().transform().global_rotation();
 
-        // Get rotation matrix
-        double rm[9];
-        rot.to_matrix(rm);
-
-        // Forward direction (Y column of rotation matrix)
-        // rm is row-major: rm[0,1,2] = row0, rm[3,4,5] = row1, rm[6,7,8] = row2
-        // Column 1 (Y): rm[1], rm[4], rm[7]
-        Vec3 forward{rm[1], rm[4], rm[7]};
+        const Vec3 forward = rot.rotate(Vec3::unit_y());
 
         // Target is position + forward * radius
         _target = pos + forward * radius;
@@ -284,16 +277,9 @@ namespace termin {
         if (!entity().valid())
             return;
 
-        // Get rotation matrix for local axes
-        Quat rot = entity().transform().global_rotation();
-        double rm[9];
-        rot.to_matrix(rm);
-
-        // Right direction (X column): rm[0], rm[3], rm[6]
-        Vec3 right{rm[0], rm[3], rm[6]};
-
-        // Up direction (Z column in Y-forward convention): rm[2], rm[5], rm[8]
-        Vec3 up{rm[2], rm[5], rm[8]};
+        const Quat rot = entity().transform().global_rotation();
+        const Vec3 right = rot.rotate(Vec3::unit_x());
+        const Vec3 up = rot.rotate(Vec3::unit_z());
 
         // Move target
         _target = _target + right * displacement.x + up * displacement.y;
@@ -305,22 +291,15 @@ namespace termin {
         _update_pose();
     }
 
-    void OrbitCameraController::fly_move(double right, double forward, double up) {
+    void OrbitCameraController::fly_move(const Vec3& local_displacement) {
         // Translate camera along its local axes. Does not change rotation.
         if (!entity().valid())
             return;
 
-        Quat rot = entity().transform().global_rotation();
-        double rm[9];
-        rot.to_matrix(rm);
-
-        // Local axes from rotation matrix columns
-        Vec3 axis_right{rm[0], rm[3], rm[6]};
-        Vec3 axis_forward{rm[1], rm[4], rm[7]};
-        Vec3 axis_up{rm[2], rm[5], rm[8]};
+        const Quat rot = entity().transform().global_rotation();
 
         Vec3 pos = entity().transform().global_position();
-        pos = pos + axis_right * right + axis_forward * forward + axis_up * up;
+        pos += rot.rotate(local_displacement);
 
         entity().transform().relocate(Pose3{rot, pos});
         _sync_from_transform();
@@ -331,10 +310,8 @@ namespace termin {
         if (!entity().valid())
             return;
 
-        Quat rot = entity().transform().global_rotation();
-        double rm[9];
-        rot.to_matrix(rm);
-        Vec3 forward{rm[1], rm[4], rm[7]};
+        const Quat rot = entity().transform().global_rotation();
+        Vec3 forward = rot.rotate(Vec3::unit_y());
 
         if (horizon_lock) {
             forward.z = 0.0;
@@ -357,12 +334,9 @@ namespace termin {
             return;
 
         Vec3 eye = entity().transform().global_position();
-        Quat rot = entity().transform().global_rotation();
-        double rm[9];
-        rot.to_matrix(rm);
-
-        Vec3 axis_right{rm[0], rm[3], rm[6]};
-        Vec3 axis_forward{rm[1], rm[4], rm[7]};
+        const Quat rot = entity().transform().global_rotation();
+        const Vec3 axis_right = rot.rotate(Vec3::unit_x());
+        const Vec3 axis_forward = rot.rotate(Vec3::unit_y());
 
         // Build incremental rotation quaternions
         Quat yaw_q = Quat::from_axis_angle(Vec3{0, 0, 1}, yaw * M_PI / 180.0);
@@ -375,9 +349,7 @@ namespace termin {
         // If horizon_lock, reconstruct rotation from forward direction via looking_at
         // This removes any accumulated roll, keeping the horizon level
         if (horizon_lock) {
-            double nm[9];
-            new_rot.to_matrix(nm);
-            Vec3 new_forward{nm[1], nm[4], nm[7]};
+            const Vec3 new_forward = new_rot.rotate(Vec3::unit_y());
             Pose3 level_pose = Pose3::looking_at(eye, eye + new_forward);
             new_rot = level_pose.ang;
         }

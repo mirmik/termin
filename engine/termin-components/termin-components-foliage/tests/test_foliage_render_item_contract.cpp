@@ -2,10 +2,16 @@
 
 GUARD_TEST_MAIN();
 
+#include <chrono>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <limits>
+#include <system_error>
 #include <vector>
 
 #include <termin/foliage/foliage_data_registry.hpp>
+#include <termin/foliage/foliage_file.hpp>
 #include <termin/foliage/foliage_layer_component.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
@@ -19,6 +25,21 @@ extern "C" {
 }
 
 namespace {
+
+    struct ScopedTempFile {
+        std::filesystem::path path;
+
+        ~ScopedTempFile() {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    };
+
+    ScopedTempFile foliage_temp_file(const char* label) {
+        const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+        return {std::filesystem::temp_directory_path() /
+                (std::string("termin-foliage-") + label + "-" + std::to_string(unique) + ".tfoliage")};
+    }
 
     termin::TcMesh make_test_mesh() {
         const float vertices[] = {
@@ -36,6 +57,118 @@ namespace {
     }
 
 } // namespace
+
+TEST_CASE("FoliageData keeps canonical bounds separate from empty state") {
+    termin::FoliageData data;
+    CHECK_FALSE(data.has_local_bounds);
+    CHECK(data.local_bounds.is_valid());
+
+    data.add_instance(termin::FoliageInstance{.px = 2.0f, .py = -3.0f, .pz = 5.0f});
+    data.add_instance(termin::FoliageInstance{.px = -4.0f, .py = 7.0f, .pz = 1.0f});
+    REQUIRE(data.has_local_bounds);
+    CHECK(data.local_bounds.min_point == (termin::Vec3f{-4.0f, -3.0f, 1.0f}));
+    CHECK(data.local_bounds.max_point == (termin::Vec3f{2.0f, 7.0f, 5.0f}));
+
+    CHECK_EQ(data.remove_instances_in_radius({2.0f, -3.0f, 5.0f}, 0.0f), 1u);
+    REQUIRE(data.has_local_bounds);
+    CHECK(data.local_bounds.min_point == (termin::Vec3f{-4.0f, 7.0f, 1.0f}));
+    CHECK(data.local_bounds.max_point == data.local_bounds.min_point);
+
+    data.clear();
+    CHECK_FALSE(data.has_local_bounds);
+    CHECK(data.local_bounds.is_valid());
+}
+
+TEST_CASE("FoliageData rejects non-finite instance geometry transactionally") {
+    termin::FoliageData data;
+    const uint32_t initial_version = data.version;
+
+    termin::FoliageInstance invalid;
+    invalid.px = std::numeric_limits<float>::quiet_NaN();
+    CHECK_FALSE(data.add_instance(invalid));
+    CHECK(data.instances.empty());
+    CHECK_FALSE(data.has_local_bounds);
+    CHECK_EQ(data.version, initial_version);
+
+    CHECK_FALSE(data.set_instances({termin::FoliageInstance{.px = 1.0f}, invalid}));
+    CHECK(data.instances.empty());
+    CHECK_FALSE(data.has_local_bounds);
+    CHECK_EQ(data.version, initial_version);
+}
+
+TEST_CASE("Foliage file round-trips canonical non-empty and empty bounds") {
+    const ScopedTempFile populated_file = foliage_temp_file("populated");
+    termin::FoliageData source;
+    REQUIRE(source.set_instances({
+        termin::FoliageInstance{.px = -4.0f, .py = 2.0f, .pz = 8.0f},
+        termin::FoliageInstance{.px = 3.0f, .py = -5.0f, .pz = 1.0f},
+    }));
+    REQUIRE(source.save_to_file(populated_file.path));
+
+    termin::FoliageData loaded;
+    REQUIRE(loaded.load_from_file(populated_file.path));
+    REQUIRE(loaded.has_local_bounds);
+    CHECK_EQ(loaded.instances.size(), 2u);
+    CHECK(loaded.local_bounds.min_point == (termin::Vec3f{-4.0f, -5.0f, 1.0f}));
+    CHECK(loaded.local_bounds.max_point == (termin::Vec3f{3.0f, 2.0f, 8.0f}));
+
+    const ScopedTempFile empty_file = foliage_temp_file("empty");
+    source.clear();
+    REQUIRE(source.save_to_file(empty_file.path));
+    REQUIRE(loaded.load_from_file(empty_file.path));
+    CHECK(loaded.instances.empty());
+    CHECK_FALSE(loaded.has_local_bounds);
+    CHECK(loaded.local_bounds.min_point == termin::Vec3f{});
+    CHECK(loaded.local_bounds.max_point == termin::Vec3f{});
+}
+
+TEST_CASE("Foliage loader rejects invalid serialized bounds without mutating output") {
+    const ScopedTempFile file = foliage_temp_file("invalid-bounds");
+    termin::FoliageData source;
+    REQUIRE(source.add_instance(termin::FoliageInstance{.px = 1.0f, .py = 2.0f, .pz = 3.0f}));
+    REQUIRE(source.save_to_file(file.path));
+
+    std::fstream stream(file.path, std::ios::binary | std::ios::in | std::ios::out);
+    REQUIRE(stream.good());
+    stream.seekp(40);
+    const float invalid_min = std::numeric_limits<float>::quiet_NaN();
+    stream.write(reinterpret_cast<const char*>(&invalid_min), sizeof(invalid_min));
+    stream.close();
+
+    termin::FoliageData destination;
+    REQUIRE(destination.add_instance(termin::FoliageInstance{.px = 9.0f, .py = 8.0f, .pz = 7.0f}));
+    const uint32_t previous_version = destination.version;
+    CHECK_FALSE(destination.load_from_file(file.path));
+    CHECK_EQ(destination.instances.size(), 1u);
+    CHECK(destination.instances.front().position() == (termin::Vec3f{9.0f, 8.0f, 7.0f}));
+    CHECK_EQ(destination.version, previous_version);
+}
+
+TEST_CASE("Foliage loader rejects a truncated instance block before mutating output") {
+    const ScopedTempFile file = foliage_temp_file("truncated-instances");
+    termin::FoliageData source;
+    REQUIRE(source.save_to_file(file.path));
+
+    std::fstream stream(file.path, std::ios::binary | std::ios::in | std::ios::out);
+    REQUIRE(stream.good());
+    constexpr std::streamoff instance_count_offset = 32;
+    constexpr uint64_t oversized_instance_count = 1'000'000;
+    stream.seekp(instance_count_offset);
+    stream.write(reinterpret_cast<const char*>(&oversized_instance_count), sizeof(oversized_instance_count));
+    stream.close();
+
+    termin::FoliageData destination;
+    REQUIRE(destination.add_instance(termin::FoliageInstance{.px = 9.0f, .py = 8.0f, .pz = 7.0f}));
+    const uint32_t previous_version = destination.version;
+
+    const termin::FoliageFileResult result = termin::load_foliage_file(file.path, destination);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.message.find("truncated") != std::string::npos);
+    CHECK_EQ(destination.instances.size(), 1u);
+    CHECK(destination.instances.front().position() == (termin::Vec3f{9.0f, 8.0f, 7.0f}));
+    CHECK_EQ(destination.version, previous_version);
+}
 
 TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned asset id") {
     tc_material_init();

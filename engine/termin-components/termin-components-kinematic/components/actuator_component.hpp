@@ -10,7 +10,7 @@ namespace termin {
     // axis * coordinate * coordinate_scale, composed with the origin pose.
     //
     // Usage:
-    //   actuator.set_axis(1, 0, 0);
+    //   actuator.set_axis({1, 0, 0});
     //   actuator.set_coordinate_scale(0.01); // coordinate is centimetres
     //   actuator.set_coordinate(100);       // Move 1 metre along X
     class ENTITY_API ActuatorComponent : public KinematicUnitComponent {

@@ -5,6 +5,7 @@
 #define TC_VEC3_H
 
 #include <math.h>
+#include <stddef.h>
 #include <tcbase/tc_types.h>
 
 // C/C++ compatible struct initialization
@@ -91,6 +92,11 @@ TC_C_STATIC_INLINE tc_vec3 tc_vec3_down(void) {
     return TC_VEC3(0, 0, -1);
 }
 
+TC_C_STATIC_INLINE tc_vec3f tc_vec3_to_float(tc_vec3 v) {
+    tc_vec3f result = {(float)v.x, (float)v.y, (float)v.z};
+    return result;
+}
+
 /// @}
 
 /// @name Арифметика
@@ -143,6 +149,32 @@ TC_C_STATIC_INLINE tc_vec3 tc_vec3_neg(tc_vec3 v) {
     return TC_VEC3(-v.x, -v.y, -v.z);
 }
 
+TC_C_STATIC_INLINE tc_vec3 tc_vec3_min(tc_vec3 a, tc_vec3 b) {
+    return TC_VEC3(fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z));
+}
+
+TC_C_STATIC_INLINE tc_vec3 tc_vec3_max(tc_vec3 a, tc_vec3 b) {
+    return TC_VEC3(fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z));
+}
+
+TC_C_STATIC_INLINE tc_vec3 tc_vec3_clamp(tc_vec3 v, tc_vec3 minimum, tc_vec3 maximum) {
+    return TC_VEC3(fmin(fmax(v.x, minimum.x), maximum.x),
+                   fmin(fmax(v.y, minimum.y), maximum.y),
+                   fmin(fmax(v.z, minimum.z), maximum.z));
+}
+
+TC_C_STATIC_INLINE tc_vec3 tc_vec3_abs(tc_vec3 v) {
+    return TC_VEC3(fabs(v.x), fabs(v.y), fabs(v.z));
+}
+
+TC_C_STATIC_INLINE double tc_vec3_min_component(tc_vec3 v) {
+    return fmin(v.x, fmin(v.y, v.z));
+}
+
+TC_C_STATIC_INLINE double tc_vec3_max_component(tc_vec3 v) {
+    return fmax(v.x, fmax(v.y, v.z));
+}
+
 /// @}
 
 /// @name Произведения
@@ -181,6 +213,25 @@ TC_C_STATIC_INLINE double tc_vec3_length_sq(tc_vec3 v) {
 /// @return |v|
 TC_C_STATIC_INLINE double tc_vec3_length(tc_vec3 v) {
     return sqrt(tc_vec3_length_sq(v));
+}
+
+TC_C_STATIC_INLINE bool tc_vec3_is_finite(tc_vec3 v) {
+    return isfinite(v.x) && isfinite(v.y) && isfinite(v.z);
+}
+
+TC_C_STATIC_INLINE bool tc_vec3_try_normalized(tc_vec3 v, double epsilon, tc_vec3* out_normalized) {
+    double length = hypot(hypot(v.x, v.y), v.z);
+    if (out_normalized == NULL || !tc_vec3_is_finite(v) || !isfinite(length) || !isfinite(epsilon) || epsilon < 0.0 ||
+        length <= epsilon) {
+        return false;
+    }
+    *out_normalized = tc_vec3_scale(v, 1.0 / length);
+    return true;
+}
+
+TC_C_STATIC_INLINE tc_vec3 tc_vec3_normalized_or(tc_vec3 v, tc_vec3 fallback, double epsilon) {
+    tc_vec3 result;
+    return tc_vec3_try_normalized(v, epsilon, &result) ? result : fallback;
 }
 
 /// Нормализует вектор

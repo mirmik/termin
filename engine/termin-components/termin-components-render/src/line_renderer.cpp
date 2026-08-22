@@ -56,12 +56,7 @@ namespace termin {
         }
 
         tgfx::LinePoint3 transform_line_point(const Mat44f& model, const tc_vec3& point) {
-            Vec3 world = model.transform_point(Vec3{point.x, point.y, point.z});
-            return {
-                static_cast<float>(world.x),
-                static_cast<float>(world.y),
-                static_cast<float>(world.z),
-            };
+            return model.transform_point(point.to_float());
         }
 
         tc_material_phase* find_phase(tc_material* material, tc_phase_mask requested_phase) {

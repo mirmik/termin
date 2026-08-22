@@ -37,7 +37,7 @@ namespace termin {
 
             // Создать из полного размера
             static BoxCollider from_size(const Vec3& size, const GeneralPose3& t = GeneralPose3()) {
-                return BoxCollider(Vec3(size.x / 2, size.y / 2, size.z / 2), t);
+                return BoxCollider(size * 0.5, t);
             }
 
             // ==================== Эффективные размеры ====================
@@ -46,8 +46,7 @@ namespace termin {
              * Половинные размеры с учётом scale.
              */
             Vec3 effective_half_size() const {
-                return Vec3(
-                    half_size.x * transform.scale.x, half_size.y * transform.scale.y, half_size.z * transform.scale.z);
+                return half_size.cwise_product(transform.scale);
             }
 
             // ==================== Интерфейс Collider ====================
@@ -135,8 +134,8 @@ namespace termin {
              * AABB bounds в локальных координатах (БЕЗ scale, т.к. to_local уже применяет inverse scale).
              */
             void local_bounds(Vec3& min_pt, Vec3& max_pt) const {
-                min_pt = Vec3(-half_size.x, -half_size.y, -half_size.z);
-                max_pt = Vec3(+half_size.x, +half_size.y, +half_size.z);
+                min_pt = -half_size;
+                max_pt = half_size;
             }
         };
 
@@ -214,9 +213,7 @@ namespace termin {
                 Vec3 p_ray_local = O_local + D_local * t;
 
                 // Clamp to box
-                Vec3 p_box_local(std::clamp(p_ray_local.x, box_min.x, box_max.x),
-                                 std::clamp(p_ray_local.y, box_min.y, box_max.y),
-                                 std::clamp(p_ray_local.z, box_min.z, box_max.z));
+                Vec3 p_box_local = p_ray_local.clamped(box_min, box_max);
 
                 double dist = (p_box_local - p_ray_local).norm();
                 if (dist < best_dist) {
@@ -226,9 +223,7 @@ namespace termin {
             }
 
             Vec3 p_ray_local = O_local + D_local * best_t;
-            Vec3 p_box_local(std::clamp(p_ray_local.x, box_min.x, box_max.x),
-                             std::clamp(p_ray_local.y, box_min.y, box_max.y),
-                             std::clamp(p_ray_local.z, box_min.z, box_max.z));
+            Vec3 p_box_local = p_ray_local.clamped(box_min, box_max);
             // Преобразуем обе точки из локальных в мировые координаты
             result.point_on_ray = transform.transform_point(p_ray_local);
             result.point_on_collider = transform.transform_point(p_box_local);

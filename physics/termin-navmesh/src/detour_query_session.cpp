@@ -4,7 +4,6 @@
 #include <DetourNavMeshQuery.h>
 #include <DetourStatus.h>
 #include <algorithm>
-#include <cmath>
 #include <sstream>
 #include <tcbase/tc_log.hpp>
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
@@ -95,10 +94,7 @@ namespace termin {
         }
 
         float point_distance(const Vec3f& a, const Vec3f& b) {
-            const float dx = a[0] - b[0];
-            const float dy = a[1] - b[1];
-            const float dz = a[2] - b[2];
-            return std::sqrt(dx * dx + dy * dy + dz * dz);
+            return (a - b).norm();
         }
 
         const float* vec3_ptr(const Vec3f& value) {
@@ -256,7 +252,9 @@ namespace termin {
         }
 
         const Vec3f rc_point = termin_to_recast(point);
-        const float extents[3] = {query_extent_x, query_extent_z, query_extent_y};
+        // Detour is Y-up; Termin is Z-up. Keep the axis permutation at this
+        // external API boundary and retain semantic XYZ storage internally.
+        const float extents[3] = {query_extents.x, query_extents.z, query_extents.y};
         dtQueryFilter filter;
         filter.setIncludeFlags(0xffff);
         filter.setExcludeFlags(0);
@@ -342,9 +340,9 @@ namespace termin {
                     end[0],
                     end[1],
                     end[2],
-                    query_extent_x,
-                    query_extent_y,
-                    query_extent_z,
+                    query_extents.x,
+                    query_extents.y,
+                    query_extents.z,
                     max_polys,
                     max_straight_path);
 

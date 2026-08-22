@@ -1,7 +1,5 @@
 #include "termin_visual_scene/items/path_item2d.hpp"
 
-#include "item_geometry2d_internal.hpp"
-
 #include <stdexcept>
 
 #include <tcbase/tc_log.hpp>
@@ -49,7 +47,7 @@ namespace termin::visual {
 
     std::optional<termin::Bounds2f> PathItem2D::local_bounds() const {
         auto result = path_.bounds();
-        return stroke_ ? detail::merged(result, path_.stroke_bounds(*stroke_)) : result;
+        return stroke_ ? result.merged(path_.stroke_bounds(*stroke_)) : result;
     }
 
     bool PathItem2D::hit_test(termin::Vec2f point, float) const {

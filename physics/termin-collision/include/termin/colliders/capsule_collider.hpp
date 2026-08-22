@@ -93,8 +93,8 @@ namespace termin {
                 Vec3 b = world_b();
                 double r = effective_radius();
                 Vec3 rv(r, r, r);
-                Vec3 min_pt(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z));
-                Vec3 max_pt(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z));
+                Vec3 min_pt = a.cwise_min(b);
+                Vec3 max_pt = a.cwise_max(b);
                 return AABB(min_pt - rv, max_pt + rv);
             }
 
@@ -403,8 +403,8 @@ namespace termin {
             double R = effective_radius();
 
             Vec3 half = box.effective_half_size();
-            Vec3 box_min(-half.x, -half.y, -half.z);
-            Vec3 box_max(+half.x, +half.y, +half.z);
+            Vec3 box_min = -half;
+            Vec3 box_max = half;
 
             // Ближайшая точка на оси капсулы
             // Для каждой точки на оси ищем ближайшую точку на box
@@ -419,9 +419,7 @@ namespace termin {
                 Vec3 axis_pt = A + (B - A) * t;
 
                 // Clamp to box
-                Vec3 box_pt(std::clamp(axis_pt.x, box_min.x, box_max.x),
-                            std::clamp(axis_pt.y, box_min.y, box_max.y),
-                            std::clamp(axis_pt.z, box_min.z, box_max.z));
+                Vec3 box_pt = axis_pt.clamped(box_min, box_max);
 
                 double dist = (axis_pt - box_pt).norm();
                 if (dist < best_dist) {
@@ -436,9 +434,7 @@ namespace termin {
             double t = project_to_segment(box.transform.inverse_transform_point(closest_box_world), A, B);
             Vec3 axis_pt = A + (B - A) * t;
 
-            Vec3 box_pt(std::clamp(axis_pt.x, box_min.x, box_max.x),
-                        std::clamp(axis_pt.y, box_min.y, box_max.y),
-                        std::clamp(axis_pt.z, box_min.z, box_max.z));
+            Vec3 box_pt = axis_pt.clamped(box_min, box_max);
 
             double dist = (axis_pt - box_pt).norm();
             if (dist < best_dist) {

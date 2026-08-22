@@ -831,7 +831,7 @@ public:
     void set_collider_type(const std::string& type);
 
     // Set box size (calls rebuild_collider)
-    void set_box_size(double x, double y, double z);
+    void set_box_size(const Vec3& size);
     Vec3 get_box_size() const;
 
     // Rebuild collider after type/size change
@@ -849,7 +849,7 @@ public:
 class KinematicUnitComponent {
 public:
     // Set DOF axis
-    void set_axis(double x, double y, double z);
+    void set_axis(const Vec3& axis);
     Vec3 get_axis() const;
 
     void set_coordinate_scale(double value);

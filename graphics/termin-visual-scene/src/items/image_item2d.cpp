@@ -1,7 +1,5 @@
 #include "termin_visual_scene/items/image_item2d.hpp"
 
-#include "item_geometry2d_internal.hpp"
-
 #include <stdexcept>
 #include <cmath>
 
@@ -18,7 +16,7 @@ namespace termin::visual {
                       termin::Rect2f uv,
                       termin::SrgbColor tint,
                       tgfx::DrawTextureSampling2D sampling) {
-            if (uri.empty() || !detail::valid_rect(rect) || !detail::valid_rect(uv) || !finite_color(tint) ||
+            if (uri.empty() || !rect.is_valid() || !uv.is_valid() || !finite_color(tint) ||
                 (sampling != tgfx::DrawTextureSampling2D::Linear && sampling != tgfx::DrawTextureSampling2D::Nearest)) {
                 throw std::invalid_argument("invalid ImageItem2D state");
             }
@@ -69,11 +67,11 @@ namespace termin::visual {
     }
 
     std::optional<termin::Bounds2f> ImageItem2D::local_bounds() const {
-        return detail::rect_bounds(rect_);
+        return rect_.bounds();
     }
 
     bool ImageItem2D::hit_test(termin::Vec2f point, float) const {
-        return detail::rect_contains(rect_, point);
+        return rect_.contains_closed(point);
     }
 
     bool ImageItem2D::paint(GraphicItemPaintContext2D& context) const {

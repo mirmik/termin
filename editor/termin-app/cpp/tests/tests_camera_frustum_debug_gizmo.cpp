@@ -5,8 +5,6 @@
 #include <termin/camera/camera_component.hpp>
 #include <termin/entity/entity.hpp>
 
-#include <cmath>
-
 using termin::CameraComponent;
 using termin::CameraFrustumCorners;
 using termin::Entity;
@@ -17,10 +15,8 @@ namespace {
         tc_camera_data data = {};
         termin::Mat44 view = camera.get_view_matrix();
         termin::Mat44 projection = camera.get_projection_matrix();
-        for (int i = 0; i < 16; ++i) {
-            data.view[i] = view.data[i];
-            data.projection[i] = projection.data[i];
-        }
+        view.copy_column_major_to(data.view);
+        projection.copy_column_major_to(data.projection);
         termin::Vec3 position = camera.get_position();
         data.position[0] = position.x;
         data.position[1] = position.y;
@@ -48,9 +44,7 @@ TEST_CASE("Camera frustum debug computes finite perspective corners") {
     CHECK(error.empty());
 
     for (const termin::Vec3& point : corners.points) {
-        CHECK(std::isfinite(point.x));
-        CHECK(std::isfinite(point.y));
-        CHECK(std::isfinite(point.z));
+        CHECK(point.is_finite());
     }
 
     tc_entity_free(camera_entity.handle());
@@ -64,7 +58,13 @@ TEST_CASE("Camera frustum debug rejects singular projection-view matrices") {
     }
 
     CameraFrustumCorners corners;
+    for (termin::Vec3& point : corners.points) {
+        point = {17.0, 18.0, 19.0};
+    }
     std::string error;
     CHECK(!termin::compute_camera_frustum_corners(data, corners, &error));
     CHECK(!error.empty());
+    for (const termin::Vec3& point : corners.points) {
+        CHECK((point == termin::Vec3{17.0, 18.0, 19.0}));
+    }
 }

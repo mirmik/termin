@@ -50,6 +50,16 @@ namespace termin {
         };
     }
 
+    inline Vec4f sequence_to_vec4f(nb::handle obj) {
+        nb::sequence seq = nb::cast<nb::sequence>(obj);
+        return Vec4f{
+            nb::cast<float>(seq[0]),
+            nb::cast<float>(seq[1]),
+            nb::cast<float>(seq[2]),
+            nb::cast<float>(seq[3]),
+        };
+    }
+
     inline nb::tuple vec3_tuple(const Vec3& v) {
         return nb::make_tuple(v.x, v.y, v.z);
     }

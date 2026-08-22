@@ -42,8 +42,7 @@ namespace {
         if (!data) {
             return false;
         }
-        data->add_instance(instance);
-        return true;
+        return data->add_instance(instance);
     }
 
     size_t remove_instances_in_radius(TcFoliageData& handle, float x, float y, float z, float radius) {

@@ -13,15 +13,6 @@
 namespace termin::visual {
     namespace {
 
-        termin::Bounds2f merged(termin::Bounds2f left, termin::Bounds2f right) {
-            return {
-                std::min(left.x0, right.x0),
-                std::min(left.y0, right.y0),
-                std::max(left.x1, right.x1),
-                std::max(left.y1, right.y1),
-            };
-        }
-
         bool visual_less(const tc_graphic_item* left, const tc_graphic_item* right) {
             if (left->z_order != right->z_order) {
                 return left->z_order < right->z_order;
@@ -189,7 +180,7 @@ namespace termin::visual {
                 return false;
             if (!child_bounds)
                 continue;
-            result = result ? std::optional<termin::Bounds2f>(merged(*result, *child_bounds)) : child_bounds;
+            result = result ? std::optional<termin::Bounds2f>(result->merged(*child_bounds)) : child_bounds;
         }
         out_bounds = result;
         return true;

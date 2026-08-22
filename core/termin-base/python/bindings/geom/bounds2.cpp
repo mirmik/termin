@@ -1,12 +1,14 @@
 #include "common.hpp"
 
 #include <string>
+#include <type_traits>
 
 namespace termin {
     namespace {
 
         template <typename BoundsT, typename ScalarT> void bind_bounds2_type(nb::module_& m, const char* name) {
-            nb::class_<BoundsT>(m, name)
+            auto binding = nb::class_<BoundsT>(m, name);
+            binding
                 .def(nb::init<>())
                 .def(nb::init<ScalarT, ScalarT, ScalarT, ScalarT>(),
                      nb::arg("x0"),
@@ -19,6 +21,27 @@ namespace termin {
                 .def_rw("y1", &BoundsT::y1)
                 .def("width", &BoundsT::width)
                 .def("height", &BoundsT::height)
+                .def("is_finite", &BoundsT::is_finite)
+                .def("is_valid", &BoundsT::is_valid)
+                .def("min", &BoundsT::min)
+                .def("max", &BoundsT::max)
+                .def("center", &BoundsT::center)
+                .def("extend", &BoundsT::extend, nb::arg("point"))
+                .def("contains_closed", &BoundsT::contains_closed)
+                .def("contains_half_open", &BoundsT::contains_half_open)
+                .def("expanded", &BoundsT::expanded)
+                .def("merged", &BoundsT::merged)
+                .def(
+                    "try_intersection",
+                    [](const BoundsT& bounds, const BoundsT& other) -> nb::object {
+                        BoundsT intersection;
+                        if (!bounds.try_intersection(other, intersection)) {
+                            return nb::none();
+                        }
+                        return nb::cast(intersection);
+                    },
+                    nb::arg("other"))
+                .def("to_rect", &BoundsT::to_rect)
                 .def("__getitem__",
                      [](const BoundsT& b, int i) {
                          switch (i) {
@@ -77,10 +100,16 @@ namespace termin {
                     return std::string(name) + "(" + std::to_string(b.x0) + ", " + std::to_string(b.y0) + ", " +
                            std::to_string(b.x1) + ", " + std::to_string(b.y1) + ")";
                 });
+            if constexpr (std::is_same_v<ScalarT, float>) {
+                binding.def("to_double", &BoundsT::to_double);
+            } else {
+                binding.def("to_float", &BoundsT::to_float);
+            }
         }
 
         template <typename RectT, typename ScalarT> void bind_rect2_type(nb::module_& m, const char* name) {
-            nb::class_<RectT>(m, name)
+            auto binding = nb::class_<RectT>(m, name);
+            binding
                 .def(nb::init<>())
                 .def(nb::init<ScalarT, ScalarT, ScalarT, ScalarT>(),
                      nb::arg("x"),
@@ -91,7 +120,21 @@ namespace termin {
                 .def_rw("y", &RectT::y)
                 .def_rw("width", &RectT::width)
                 .def_rw("height", &RectT::height)
+                .def("is_finite", &RectT::is_finite)
+                .def("is_valid", &RectT::is_valid)
+                .def("origin", &RectT::origin)
+                .def("size", &RectT::size)
+                .def("center", &RectT::center)
+                .def("min", &RectT::min)
+                .def("max", &RectT::max)
+                .def("contains_closed", &RectT::contains_closed)
+                .def("contains_half_open", &RectT::contains_half_open)
                 .def("bounds", &RectT::bounds);
+            if constexpr (std::is_same_v<ScalarT, float>) {
+                binding.def("to_double", &RectT::to_double);
+            } else {
+                binding.def("to_float", &RectT::to_float);
+            }
         }
 
     } // namespace
@@ -100,6 +143,7 @@ namespace termin {
         bind_bounds2_type<Bounds2, double>(m, "Bounds2");
         bind_bounds2_type<Bounds2f, float>(m, "Bounds2f");
         bind_rect2_type<Rect2, double>(m, "Rect2");
+        bind_rect2_type<Rect2f, float>(m, "Rect2f");
     }
 
 } // namespace termin

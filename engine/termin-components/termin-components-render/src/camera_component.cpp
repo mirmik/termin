@@ -213,8 +213,7 @@ namespace termin {
         clear_viewports();
     }
 
-    std::pair<Vec3, Vec3>
-    CameraComponent::screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const {
+    Ray3 CameraComponent::screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const {
         double vp_aspect = static_cast<double>(vp_w) / std::max(1, vp_h);
         double nx = ((x - vp_x) / vp_w) * 2.0 - 1.0;
         double ny = ((y - vp_y) / vp_h) * 2.0 - 1.0;
@@ -223,8 +222,7 @@ namespace termin {
         Mat44 inv_pv = pv.inverse();
         Vec3 p_near = inv_pv.transform_point(Vec3{nx, ny, 0.0});
         Vec3 p_far = inv_pv.transform_point(Vec3{nx, ny, 1.0});
-        Vec3 direction = (p_far - p_near).normalized();
-        return {p_near, direction};
+        return {p_near, p_far - p_near};
     }
 
     namespace {

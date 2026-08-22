@@ -147,6 +147,40 @@ TEST_CASE("OrbitCameraController center_on keeps camera offset from target") {
     tc_entity_free(rig.entity.handle());
 }
 
+TEST_CASE("CameraComponent C++ ray API returns a canonical Ray3") {
+    CameraRig rig = make_camera_rig("ray-camera");
+
+    const termin::Ray3 ray = rig.camera->screen_point_to_ray(400.0, 300.0, 0, 0, 800, 600);
+
+    CHECK(std::abs(ray.direction.x) <= 1.0e-12);
+    CHECK(std::abs(ray.direction.y - 1.0) <= 1.0e-12);
+    CHECK(std::abs(ray.direction.z) <= 1.0e-12);
+    CHECK_EQ(ray.direction.norm(), Approx(1.0).epsilon(1e-12));
+
+    tc_entity_free(rig.entity.handle());
+}
+
+TEST_CASE("OrbitCameraController fly_move accepts one local displacement vector") {
+    CameraRig rig = make_camera_rig("fly-camera");
+    const termin::Quat rotation = termin::Quat::from_axis_angle(termin::Vec3::unit_z(), 0.5 * std::acos(-1.0));
+    rig.entity.transform().relocate(termin::Pose3{rotation, {10.0, -4.0, 2.0}});
+
+    rig.controller->fly_move({1.0, 2.0, 3.0});
+
+    const termin::Vec3 position = rig.entity.transform().global_position();
+    CHECK(std::abs(position.x - 8.0) <= 1.0e-12);
+    CHECK(std::abs(position.y + 3.0) <= 1.0e-12);
+    CHECK(std::abs(position.z - 5.0) <= 1.0e-12);
+
+    const termin::Quat actual_rotation = rig.entity.transform().global_rotation();
+    CHECK(std::abs(actual_rotation.x - rotation.x) <= 1.0e-12);
+    CHECK(std::abs(actual_rotation.y - rotation.y) <= 1.0e-12);
+    CHECK(std::abs(actual_rotation.z - rotation.z) <= 1.0e-12);
+    CHECK(std::abs(actual_rotation.w - rotation.w) <= 1.0e-12);
+
+    tc_entity_free(rig.entity.handle());
+}
+
 TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch") {
     tc_scene_handle scene = tc_scene_new_named("orbit-camera-touch-test");
     REQUIRE(tc_scene_alive(scene));

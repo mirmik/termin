@@ -22,6 +22,14 @@ int main(void) {
     GUARD_C_CHECK(offsetof(tc_affine2f, tx) == sizeof(float) * 4);
     GUARD_C_CHECK(offsetof(tc_affine2f, ty) == sizeof(float) * 5);
 
+    tc_vec2f checked_normalized = TC_VEC2F(9.0f, 8.0f);
+    GUARD_C_CHECK(!tc_vec2f_try_normalized(tc_vec2f_zero(), 1.0e-6f, &checked_normalized));
+    GUARD_C_CHECK(checked_normalized.x == 9.0f && checked_normalized.y == 8.0f);
+    GUARD_C_CHECK(tc_vec2f_try_normalized(TC_VEC2F(3.0f, 4.0f), 1.0e-6f, &checked_normalized));
+    GUARD_C_CHECK(nearf(checked_normalized.x, 0.6f, 1.0e-6f));
+    GUARD_C_CHECK(nearf(checked_normalized.y, 0.8f, 1.0e-6f));
+    GUARD_C_CHECK(tc_vec2f_mul(TC_VEC2F(2.0f, 3.0f), TC_VEC2F(4.0f, 5.0f)).y == 15.0f);
+
     tc_affine2f parent = tc_affine2f_mul(tc_affine2f_translation(5.0f, -3.0f), tc_affine2f_scaling(2.0f, 0.5f));
     tc_affine2f child = tc_affine2f_mul(tc_affine2f_rotation(0.6f), tc_affine2f_shear(0.25f, -0.4f));
     tc_vec2f point = TC_VEC2F(3.0f, -2.0f);

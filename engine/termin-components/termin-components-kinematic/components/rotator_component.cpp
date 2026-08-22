@@ -33,36 +33,31 @@ namespace termin {
         const double angle = physical_coordinate();
 
         // local = origin * Rotation(axis, angle)
-        Quat coord_rot = Quat::from_axis_angle(axis, angle);
-        Quat origin{origin_rotation.x, origin_rotation.y, origin_rotation.z, origin_rotation.w};
-
-        Quat final_rotation = origin * coord_rot;
-
-        // Set rotation
-        double xyzw[4] = {final_rotation.x, final_rotation.y, final_rotation.z, final_rotation.w};
-        ent.set_local_rotation(xyzw);
+        const Quat coord_rot = Quat::from_axis_angle(axis, angle);
+        const Quat final_rotation = origin_rotation * coord_rot;
 
         // Position comes from the zero-coordinate frame. Scale is not part of
         // the kinematic transform and remains untouched.
-        double xyz[3] = {origin_position.x, origin_position.y, origin_position.z};
-        ent.set_local_position(xyz);
+        GeneralTransform3 transform = ent.transform();
+        transform.set_local_rotation(final_rotation);
+        transform.set_local_position(origin_position);
     }
 
     void RotatorComponent::recalculate_origin() {
-        double pos[3], rot[4];
-        if (!read_entity_transform(pos, rot))
+        const Entity ent = entity();
+        if (!ent.valid()) {
             return;
+        }
+        const GeneralTransform3 transform = ent.transform();
 
         // A rotator never changes its entity origin.
-        origin_position = {pos[0], pos[1], pos[2]};
+        origin_position = transform.local_position();
 
         // Reverse: origin_rot = current_rot * coord_rot.inverse()
         // Since current_rot = origin_rot * coord_rot
         const Quat coord_rot = Quat::from_axis_angle(get_axis(), physical_coordinate());
 
-        Quat current_rot{rot[0], rot[1], rot[2], rot[3]};
-        Quat origin = current_rot * coord_rot.inverse();
-        origin_rotation = {origin.x, origin.y, origin.z, origin.w};
+        origin_rotation = transform.local_rotation() * coord_rot.inverse();
     }
 
     namespace {

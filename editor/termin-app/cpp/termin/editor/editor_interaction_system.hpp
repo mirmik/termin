@@ -12,12 +12,14 @@
 #include "termin/editor/transform_gizmo.hpp"
 #include "termin/input/input_events.hpp"
 #include <termin/geom/general_pose3.hpp>
+#include <termin/geom/ray3.hpp>
 #include <termin/geom/vec2.hpp>
 #include <termin/geom/vec3.hpp>
 
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -176,11 +178,8 @@ namespace termin {
         void _process_pending_hover();
         bool _dispatch_entity_click(Vec2f screen, const SurfacePickResult& pick);
         bool _dispatch_viewport_pointer(const ViewportPointerEvent& event);
-        bool _route_overlay_pointer(visual::PointerEventKind3D kind,
-                                    Vec2f screen,
-                                    int button,
-                                    tc_viewport_handle viewport,
-                                    tc_display_handle display);
+        bool
+        _route_overlay_pointer(visual::PointerEventKind3D kind, Vec2f screen, int button, tc_viewport_handle viewport);
         bool _start_async_entity_pick(Vec2f screen, tc_viewport_handle vp, tc_display_handle display);
         bool _start_async_surface_pick(Vec2f screen, tc_viewport_handle vp, tc_display_handle display);
         void _poll_async_hover_pick();
@@ -197,8 +196,7 @@ namespace termin {
         _surface_from_pick_color_depth(const float color[4], float depth, Vec2i fbo, tc_viewport_handle viewport);
 
         // Get ray from screen coordinates
-        bool
-        _screen_to_ray(Vec2f screen, tc_viewport_handle vp, tc_display_handle display, Vec3f& origin, Vec3f& direction);
+        std::optional<Ray3> _screen_to_ray(Vec2f screen, tc_viewport_handle vp);
 
         void _request_update();
     };

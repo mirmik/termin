@@ -3,14 +3,14 @@
 
 namespace termin::physics {
 
-    RigidBody RigidBody::create_box(double sx, double sy, double sz, double m, const Pose3& p, bool stat) {
+    RigidBody RigidBody::create_box(const Vec3& size, double m, const Pose3& p, bool stat) {
         RigidBody body;
         body.pose = p;
         body.mass = m;
         body.is_static = stat;
-        body.inertia.x = (m / 12.0) * (sy * sy + sz * sz);
-        body.inertia.y = (m / 12.0) * (sx * sx + sz * sz);
-        body.inertia.z = (m / 12.0) * (sx * sx + sy * sy);
+        body.inertia.x = (m / 12.0) * (size.y * size.y + size.z * size.z);
+        body.inertia.y = (m / 12.0) * (size.x * size.x + size.z * size.z);
+        body.inertia.z = (m / 12.0) * (size.x * size.x + size.y * size.y);
         return body;
     }
 
@@ -57,26 +57,12 @@ namespace termin::physics {
     Vec3 RigidBody::position() const {
         return pose.lin;
     }
-    void RigidBody::world_inertia_inv(double* Iinv) const {
-        if (is_static || is_kinematic) {
-            for (int i = 0; i < 9; ++i)
-                Iinv[i] = 0.0;
-            return;
-        }
-        double R[9];
-        (pose.ang * inertia_frame_local.ang).to_matrix(R);
-        Vec3 d = inv_inertia();
-        for (int i = 0; i < 3; ++i)
-            for (int j = 0; j < 3; ++j)
-                Iinv[i * 3 + j] =
-                    R[i * 3] * d.x * R[j * 3] + R[i * 3 + 1] * d.y * R[j * 3 + 1] + R[i * 3 + 2] * d.z * R[j * 3 + 2];
+    Mat33 RigidBody::world_inertia_inv() const {
+        const Mat33 principal_rotation = Mat33::rotation(pose.ang * inertia_frame_local.ang);
+        return principal_rotation * Mat33::scale(inv_inertia()) * principal_rotation.transposed();
     }
     Vec3 RigidBody::apply_inv_inertia_world(const Vec3& v) const {
-        double m[9];
-        world_inertia_inv(m);
-        return Vec3(m[0] * v.x + m[1] * v.y + m[2] * v.z,
-                    m[3] * v.x + m[4] * v.y + m[5] * v.z,
-                    m[6] * v.x + m[7] * v.y + m[8] * v.z);
+        return world_inertia_inv().transform(v);
     }
     Vec3 RigidBody::point_velocity(const Vec3& p) const {
         return linear_velocity + angular_velocity.cross(p - pose.lin);
@@ -116,16 +102,12 @@ namespace termin::physics {
             return;
         }
         linear_velocity += (gravity + force * inv_mass()) * dt;
-        double R[9];
-        (pose.ang * inertia_frame_local.ang).to_matrix(R);
-        Vec3 wb(R[0] * angular_velocity.x + R[3] * angular_velocity.y + R[6] * angular_velocity.z,
-                R[1] * angular_velocity.x + R[4] * angular_velocity.y + R[7] * angular_velocity.z,
-                R[2] * angular_velocity.x + R[5] * angular_velocity.y + R[8] * angular_velocity.z);
-        Vec3 lb(inertia.x * wb.x, inertia.y * wb.y, inertia.z * wb.z);
-        Vec3 lw(R[0] * lb.x + R[1] * lb.y + R[2] * lb.z,
-                R[3] * lb.x + R[4] * lb.y + R[5] * lb.z,
-                R[6] * lb.x + R[7] * lb.y + R[8] * lb.z);
-        angular_velocity += apply_inv_inertia_world(torque - angular_velocity.cross(lw)) * dt;
+        const Mat33 principal_rotation = Mat33::rotation(pose.ang * inertia_frame_local.ang);
+        const Vec3 body_angular_velocity = principal_rotation.transposed().transform(angular_velocity);
+        const Vec3 world_angular_momentum =
+            principal_rotation.transform(inertia.cwise_product(body_angular_velocity));
+        angular_velocity +=
+            apply_inv_inertia_world(torque - angular_velocity.cross(world_angular_momentum)) * dt;
         linear_velocity *= 1.0 - linear_damping * dt;
         angular_velocity *= 1.0 - angular_damping * dt;
         force = Vec3();

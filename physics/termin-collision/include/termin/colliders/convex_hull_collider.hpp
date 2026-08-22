@@ -50,10 +50,10 @@ namespace termin {
                     return AABB(center(), center());
                 Pose3 p = pose();
                 Vec3 s = transform.scale;
-                Vec3 v0 = p.transform_point(Vec3(vertices[0].x * s.x, vertices[0].y * s.y, vertices[0].z * s.z));
+                Vec3 v0 = p.transform_point(vertices[0].cwise_product(s));
                 AABB result(v0, v0);
                 for (int i = 1; i < (int)vertices.size(); ++i) {
-                    Vec3 scaled(vertices[i].x * s.x, vertices[i].y * s.y, vertices[i].z * s.z);
+                    Vec3 scaled = vertices[i].cwise_product(s);
                     result.extend(p.transform_point(scaled));
                 }
                 return result;
@@ -74,15 +74,14 @@ namespace termin {
                 int best_idx = 0;
                 for (int i = 0; i < (int)vertices.size(); ++i) {
                     // Scaled vertex dot with local_dir
-                    double d = (vertices[i].x * s.x) * local_dir.x + (vertices[i].y * s.y) * local_dir.y +
-                               (vertices[i].z * s.z) * local_dir.z;
+                    double d = vertices[i].cwise_product(s).dot(local_dir);
                     if (d > best_dot) {
                         best_dot = d;
                         best_idx = i;
                     }
                 }
 
-                Vec3 scaled(vertices[best_idx].x * s.x, vertices[best_idx].y * s.y, vertices[best_idx].z * s.z);
+                Vec3 scaled = vertices[best_idx].cwise_product(s);
                 return transform.ang.rotate(scaled) + transform.lin;
             }
 
@@ -124,7 +123,7 @@ namespace termin {
             // Transform vertex to world space
             Vec3 vertex_world(int idx) const {
                 Vec3 s = transform.scale;
-                Vec3 scaled(vertices[idx].x * s.x, vertices[idx].y * s.y, vertices[idx].z * s.z);
+                Vec3 scaled = vertices[idx].cwise_product(s);
                 return transform.ang.rotate(scaled) + transform.lin;
             }
         };

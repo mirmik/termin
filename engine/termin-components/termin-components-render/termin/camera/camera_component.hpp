@@ -6,11 +6,11 @@
 #include <termin/geom/general_pose3.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/pose3.hpp>
+#include <termin/geom/ray3.hpp>
 #include <termin/viewport/tc_viewport_handle.hpp>
 
 #include <cstdint>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <termin/camera/camera.hpp>
@@ -78,7 +78,7 @@ namespace termin {
         void on_destroy() override;
         void on_removed() override;
         void on_scene_inactive() override;
-        std::pair<Vec3, Vec3> screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const;
+        Ray3 screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const;
     };
 
 } // namespace termin

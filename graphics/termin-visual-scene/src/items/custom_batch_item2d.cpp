@@ -1,7 +1,5 @@
 #include "termin_visual_scene/items/custom_batch_item2d.hpp"
 
-#include "item_geometry2d_internal.hpp"
-
 #include <stdexcept>
 
 #include <tcbase/tc_log.hpp>
@@ -10,7 +8,7 @@ namespace termin::visual {
     namespace {
 
         void validate(const std::string& key, termin::Bounds2f bounds) {
-            if (key.empty() || !detail::valid_bounds(bounds)) {
+            if (key.empty() || !bounds.is_valid()) {
                 throw std::invalid_argument("invalid CustomBatchItem2D state");
             }
         }
@@ -38,11 +36,11 @@ namespace termin::visual {
     }
 
     std::optional<termin::Bounds2f> CustomBatchItem2D::local_bounds() const {
-        return detail::valid_bounds(local_bounds_) ? std::optional<termin::Bounds2f>(local_bounds_) : std::nullopt;
+        return local_bounds_.is_valid() ? std::optional<termin::Bounds2f>(local_bounds_) : std::nullopt;
     }
 
     bool CustomBatchItem2D::hit_test(termin::Vec2f point, float) const {
-        return detail::bounds_contains(local_bounds_, point);
+        return local_bounds_.contains_closed(point);
     }
 
     bool CustomBatchItem2D::paint(GraphicItemPaintContext2D& context) const {

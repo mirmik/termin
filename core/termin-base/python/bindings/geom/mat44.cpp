@@ -3,24 +3,6 @@
 
 namespace termin {
 
-    static Vec4 mat44_transform_vec4(const Mat44& m, const Vec4& v) {
-        return Vec4{
-            m(0, 0) * v.x + m(1, 0) * v.y + m(2, 0) * v.z + m(3, 0) * v.w,
-            m(0, 1) * v.x + m(1, 1) * v.y + m(2, 1) * v.z + m(3, 1) * v.w,
-            m(0, 2) * v.x + m(1, 2) * v.y + m(2, 2) * v.z + m(3, 2) * v.w,
-            m(0, 3) * v.x + m(1, 3) * v.y + m(2, 3) * v.z + m(3, 3) * v.w,
-        };
-    }
-
-    static Vec4 mat44f_transform_vec4(const Mat44f& m, const Vec4& v) {
-        return Vec4{
-            m(0, 0) * v.x + m(1, 0) * v.y + m(2, 0) * v.z + m(3, 0) * v.w,
-            m(0, 1) * v.x + m(1, 1) * v.y + m(2, 1) * v.z + m(3, 1) * v.w,
-            m(0, 2) * v.x + m(1, 2) * v.y + m(2, 2) * v.z + m(3, 2) * v.w,
-            m(0, 3) * v.x + m(1, 3) * v.y + m(2, 3) * v.z + m(3, 3) * v.w,
-        };
-    }
-
     void bind_mat44(nb::module_& m) {
         nb::class_<Mat44>(m, "Mat44")
             .def(nb::init<>())
@@ -30,10 +12,27 @@ namespace termin {
             .def(nb::self * nb::self)
             .def("__matmul__", [](const Mat44& a, const Mat44& b) { return a * b; })
             .def("__matmul__", [](const Mat44& m, const Vec3& v) { return m.transform_point(v); })
-            .def("__matmul__", [](const Mat44& m, const Vec4& v) { return mat44_transform_vec4(m, v); })
+            .def("__matmul__", [](const Mat44& m, const Vec4& v) { return m.transform_homogeneous(v); })
             .def("transform_point", &Mat44::transform_point)
             .def("transform_direction", &Mat44::transform_direction)
-            .def("transform_vec4", &mat44_transform_vec4)
+            .def("transform_homogeneous", &Mat44::transform_homogeneous)
+            .def("transform_vec4", &Mat44::transform_homogeneous)
+            .def("is_finite", &Mat44::is_finite)
+            .def(
+                "try_transform_point",
+                [](const Mat44& matrix, const Vec3& point, double epsilon) -> nb::object {
+                    Vec3 transformed;
+                    return matrix.try_transform_point(point, transformed, epsilon) ? nb::cast(transformed) : nb::none();
+                },
+                nb::arg("point"),
+                nb::arg("epsilon") = 1.0e-10)
+            .def(
+                "try_inverse",
+                [](const Mat44& matrix, double epsilon) -> nb::object {
+                    Mat44 inverse;
+                    return matrix.try_inverse(inverse, epsilon) ? nb::cast(inverse) : nb::none();
+                },
+                nb::arg("epsilon") = 1.0e-12)
             .def("transposed", &Mat44::transposed)
             .def("inverse", &Mat44::inverse)
             .def("get_translation", &Mat44::get_translation)
@@ -106,11 +105,28 @@ namespace termin {
             .def("__setitem__", [](Mat44f& m, std::pair<int, int> idx, float val) { m(idx.first, idx.second) = val; })
             .def(nb::self * nb::self)
             .def("__matmul__", [](const Mat44f& a, const Mat44f& b) { return a * b; })
-            .def("__matmul__", [](const Mat44f& m, const Vec3& v) { return m.transform_point(v); })
-            .def("__matmul__", [](const Mat44f& m, const Vec4& v) { return mat44f_transform_vec4(m, v); })
+            .def("__matmul__", [](const Mat44f& m, const Vec3f& v) { return m.transform_point(v); })
+            .def("__matmul__", [](const Mat44f& m, const Vec4f& v) { return m.transform_homogeneous(v); })
             .def("transform_point", &Mat44f::transform_point)
             .def("transform_direction", &Mat44f::transform_direction)
-            .def("transform_vec4", &mat44f_transform_vec4)
+            .def("transform_homogeneous", &Mat44f::transform_homogeneous)
+            .def("transform_vec4", &Mat44f::transform_homogeneous)
+            .def("is_finite", &Mat44f::is_finite)
+            .def(
+                "try_transform_point",
+                [](const Mat44f& matrix, const Vec3f& point, float epsilon) -> nb::object {
+                    Vec3f transformed;
+                    return matrix.try_transform_point(point, transformed, epsilon) ? nb::cast(transformed) : nb::none();
+                },
+                nb::arg("point"),
+                nb::arg("epsilon") = 1.0e-6f)
+            .def(
+                "try_inverse",
+                [](const Mat44f& matrix, float epsilon) -> nb::object {
+                    Mat44f inverse;
+                    return matrix.try_inverse(inverse, epsilon) ? nb::cast(inverse) : nb::none();
+                },
+                nb::arg("epsilon") = 1.0e-6f)
             .def("transposed", &Mat44f::transposed)
             .def("inverse", &Mat44f::inverse)
             .def("get_translation", &Mat44f::get_translation)
@@ -164,7 +180,8 @@ namespace termin {
                              data[row * 4 + col] = mat(col, row);
                      return mat44_row_tuple(data);
                  })
-            .def("__repr__", [](const Mat44f& m) { return "<Mat44f>"; });
+            .def("__repr__", [](const Mat44f& m) { return "<Mat44f>"; })
+            .def("to_double", &Mat44f::to_double);
     }
 
 } // namespace termin

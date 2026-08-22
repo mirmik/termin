@@ -64,7 +64,7 @@ NB_MODULE(_physics_native, m) {
         .def_static(
             "create_box",
             [](double sx, double sy, double sz, double mass, std::optional<Pose3> pose, bool is_static) {
-                return RigidBody::create_box(sx, sy, sz, mass, pose.value_or(Pose3{}), is_static);
+                return RigidBody::create_box({sx, sy, sz}, mass, pose.value_or(Pose3{}), is_static);
             },
             nb::arg("sx"),
             nb::arg("sy"),
@@ -116,7 +116,15 @@ NB_MODULE(_physics_native, m) {
         .def("body_count", &PhysicsWorld::body_count)
         .def("clear", &PhysicsWorld::clear)
         .def("add_box",
-             &PhysicsWorld::add_box,
+             [](PhysicsWorld& world,
+                double sx,
+                double sy,
+                double sz,
+                double mass,
+                const Pose3& pose,
+                bool is_static) {
+                 return world.add_box({sx, sy, sz}, mass, pose, is_static);
+             },
              nb::arg("sx"),
              nb::arg("sy"),
              nb::arg("sz"),

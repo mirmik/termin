@@ -127,6 +127,23 @@ def test_orbit_camera_controller_exposes_target_as_vec3():
     assert controller._target == Vec3(4.0, 5.0, 6.0)
 
 
+def test_orbit_camera_controller_keeps_scalar_python_fly_move_boundary():
+    from termin.scene import TcScene
+
+    scene = TcScene.create("orbit-camera-fly-move")
+    try:
+        entity = scene.create_entity("camera")
+        entity.add_component(CameraComponent())
+        controller = OrbitCameraController()
+        entity.add_component(controller)
+
+        controller.fly_move(1.0, 2.0, 3.0)
+
+        assert tuple(entity.transform.global_position) == pytest.approx((1.0, 2.0, 3.0))
+    finally:
+        scene.destroy()
+
+
 @pytest.mark.parametrize("horizon_lock", [True, False])
 def test_orbit_camera_controller_horizon_lock_survives_scene_roundtrip(horizon_lock):
     from termin.scene import Entity, TcScene

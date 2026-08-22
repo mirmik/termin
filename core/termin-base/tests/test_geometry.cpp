@@ -1,10 +1,12 @@
 #include <cmath>
+#include <limits>
 #include <random>
 #include <type_traits>
 
 #include <tcbase/tc_types.h>
 #include <termin/geom/affine2.hpp>
 #include <termin/geom/affine3.hpp>
+#include <termin/geom/aabb.hpp>
 #include <termin/geom/bounds2.hpp>
 #include <termin/geom/color.hpp>
 #include <termin/geom/mat44.hpp>
@@ -160,6 +162,138 @@ TEST_CASE("tc_vec3 normalized non-zero vector remains unit length") {
     CHECK(std::abs(normalized.z) < 1.0e-12);
 }
 
+TEST_CASE("canonical vectors provide checked normalization and component operations") {
+    const termin::Vec2 left2{-2.0, 8.0};
+    const termin::Vec2 right2{4.0, 2.0};
+    CHECK(left2.cwise_product(right2) == termin::Vec2(-8.0, 16.0));
+    CHECK(left2.cwise_quotient(right2) == termin::Vec2(-0.5, 4.0));
+    CHECK(left2.cwise_min(right2) == termin::Vec2(-2.0, 2.0));
+    CHECK(left2.cwise_max(right2) == termin::Vec2(4.0, 8.0));
+    CHECK(left2.clamped({-1.0, 3.0}, {2.0, 5.0}) == termin::Vec2(-1.0, 5.0));
+    CHECK(left2.cwise_abs() == termin::Vec2(2.0, 8.0));
+    CHECK(left2.min_component() == -2.0);
+    CHECK(left2.max_component() == 8.0);
+    CHECK(left2.ptr()[1] == 8.0);
+
+    const termin::Vec2f left2f{-2.0f, 8.0f};
+    CHECK(left2f.cwise_product({4.0f, 2.0f}) == termin::Vec2f(-8.0f, 16.0f));
+    CHECK(left2f.clamped({-1.0f, 3.0f}, {2.0f, 5.0f}) == termin::Vec2f(-1.0f, 5.0f));
+    termin::Vec2f vec2f_out{7.0f, 8.0f};
+    CHECK(!termin::Vec2f::zero().try_normalized(vec2f_out));
+    CHECK(vec2f_out == termin::Vec2f(7.0f, 8.0f));
+    CHECK(left2f.to_double().to_float() == left2f);
+
+    termin::Vec3 unchanged{7.0, 8.0, 9.0};
+    CHECK(!termin::Vec3::zero().try_normalized(unchanged));
+    CHECK(unchanged == termin::Vec3(7.0, 8.0, 9.0));
+    CHECK((!termin::Vec3{std::numeric_limits<double>::infinity(), 0.0, 0.0}.try_normalized(unchanged)));
+    CHECK(unchanged == termin::Vec3(7.0, 8.0, 9.0));
+    CHECK(termin::Vec3::zero().normalized_or(termin::Vec3::unit_y()) == termin::Vec3::unit_y());
+
+    termin::Vec3 normalized;
+    CHECK((termin::Vec3{0.0, 3.0, 4.0}.try_normalized(normalized)));
+    CHECK((normalized - termin::Vec3{0.0, 0.6, 0.8}).norm() < 1.0e-12);
+    CHECK((termin::Vec3{-2.0, 4.0, -8.0}.cwise_abs() == termin::Vec3(2.0, 4.0, 8.0)));
+    CHECK((termin::Vec3{2.0, 4.0, 8.0}.cwise_quotient({2.0, 2.0, 4.0}) == termin::Vec3(1.0, 2.0, 2.0)));
+    CHECK((termin::Vec3{1.25, -2.5, 3.75}.to_float().to_double() == termin::Vec3(1.25, -2.5, 3.75)));
+
+    termin::Vec3f vec3f_out{7.0f, 8.0f, 9.0f};
+    CHECK(!termin::Vec3f::zero().try_normalized(vec3f_out));
+    CHECK(vec3f_out == termin::Vec3f(7.0f, 8.0f, 9.0f));
+    CHECK((termin::Vec3f{0.0f, 3.0f, 4.0f}.try_normalized(vec3f_out)));
+    CHECK((vec3f_out - termin::Vec3f{0.0f, 0.6f, 0.8f}).norm() < 1.0e-6f);
+    CHECK((termin::Vec3f{-2.0f, 4.0f, -8.0f}.cwise_abs() == termin::Vec3f(2.0f, 4.0f, 8.0f)));
+
+    termin::Vec4 vec4_out{9.0, 8.0, 7.0, 6.0};
+    CHECK(!termin::Vec4::zero().try_normalized(vec4_out));
+    CHECK(vec4_out == termin::Vec4(9.0, 8.0, 7.0, 6.0));
+    CHECK((termin::Vec4{1.0, 2.0, 3.0, 4.0}.ptr()[2] == 3.0));
+    CHECK((termin::Vec4{1.0, 2.0, 3.0, 4.0}.to_float().to_double() == termin::Vec4(1.0, 2.0, 3.0, 4.0)));
+
+    termin::Vec4f vec4f_out{9.0f, 8.0f, 7.0f, 6.0f};
+    CHECK(!termin::Vec4f::zero().try_normalized(vec4f_out));
+    CHECK(vec4f_out == termin::Vec4f(9.0f, 8.0f, 7.0f, 6.0f));
+    CHECK(termin::Vec4f::zero().normalized_or(termin::Vec4f::unit_w()) == termin::Vec4f::unit_w());
+}
+
+TEST_CASE("Bounds2 and Rect2 make validity and edge inclusion explicit") {
+    const termin::Bounds2 bounds{1.0, 2.0, 5.0, 8.0};
+    CHECK(bounds.is_valid());
+    CHECK(bounds.min() == termin::Vec2(1.0, 2.0));
+    CHECK(bounds.max() == termin::Vec2(5.0, 8.0));
+    CHECK(bounds.center() == termin::Vec2(3.0, 5.0));
+    CHECK(bounds.contains_closed({5.0, 8.0}));
+    CHECK(!bounds.contains_half_open({5.0, 8.0}));
+    CHECK(bounds.expanded(1.0).min() == termin::Vec2(0.0, 1.0));
+    termin::Bounds2 extended = bounds;
+    extended.extend({-2.0, 10.0});
+    CHECK(extended.min() == termin::Vec2(-2.0, 2.0));
+    CHECK(extended.max() == termin::Vec2(5.0, 10.0));
+
+    termin::Bounds2 intersection{20.0, 21.0, 22.0, 23.0};
+    CHECK(bounds.try_intersection({4.0, 0.0, 10.0, 4.0}, intersection));
+    CHECK(intersection.min() == termin::Vec2(4.0, 2.0));
+    CHECK(intersection.max() == termin::Vec2(5.0, 4.0));
+    const termin::Bounds2 previous = intersection;
+    CHECK(!bounds.try_intersection({6.0, 9.0, 10.0, 12.0}, intersection));
+    CHECK(intersection.min() == previous.min());
+    CHECK(intersection.max() == previous.max());
+
+    const termin::Rect2 rect = bounds.to_rect();
+    CHECK(rect.is_valid());
+    CHECK(rect.origin() == bounds.min());
+    CHECK(rect.size() == termin::Vec2(4.0, 6.0));
+    CHECK(rect.bounds().min() == bounds.min());
+    CHECK(rect.contains_closed({5.0, 8.0}));
+    CHECK(!rect.contains_half_open({5.0, 8.0}));
+    CHECK(termin::Bounds2(bounds.to_float()).min() == bounds.min());
+    CHECK(termin::Rect2(rect.to_float()).size() == rect.size());
+    CHECK((!termin::Bounds2{2.0, 0.0, 1.0, 1.0}.is_valid()));
+    CHECK((!termin::Rect2{0.0, 0.0, -1.0, 1.0}.is_valid()));
+
+    const termin::Bounds2f bounds_f = bounds.to_float();
+    CHECK(bounds_f.is_valid());
+    CHECK(bounds_f.center() == termin::Vec2f(3.0f, 5.0f));
+    CHECK(bounds_f.contains_closed({5.0f, 8.0f}));
+    CHECK(!bounds_f.contains_half_open({5.0f, 8.0f}));
+    termin::Bounds2f extended_f = bounds_f;
+    extended_f.extend({-2.0f, 10.0f});
+    CHECK(extended_f.min() == termin::Vec2f(-2.0f, 2.0f));
+    CHECK(extended_f.max() == termin::Vec2f(5.0f, 10.0f));
+    termin::Bounds2f intersection_f{20.0f, 21.0f, 22.0f, 23.0f};
+    CHECK(bounds_f.try_intersection({4.0f, 0.0f, 10.0f, 4.0f}, intersection_f));
+    CHECK(intersection_f.min() == termin::Vec2f(4.0f, 2.0f));
+    CHECK(termin::Rect2f(rect.to_float()).bounds().min() == bounds_f.min());
+    CHECK(termin::Rect2f(rect.to_float()).bounds().max() == bounds_f.max());
+}
+
+TEST_CASE("AABBf is a packed valid-by-default float bounds type") {
+    static_assert(std::is_same_v<termin::AABBf, tc_aabbf>);
+    static_assert(std::is_standard_layout_v<termin::AABBf>);
+    static_assert(std::is_trivially_copyable_v<termin::AABBf>);
+
+    termin::AABBf bounds;
+    CHECK(bounds.is_valid());
+    CHECK(bounds.min_point == termin::Vec3f::zero());
+    CHECK(bounds.max_point == termin::Vec3f::zero());
+    bounds.extend({-2.0f, 3.0f, -4.0f});
+    bounds.extend({5.0f, 6.0f, 7.0f});
+    CHECK(bounds.min_point == termin::Vec3f(-2.0f, 0.0f, -4.0f));
+    CHECK(bounds.max_point == termin::Vec3f(5.0f, 6.0f, 7.0f));
+    CHECK(bounds.contains({0.0f, 1.0f, 2.0f}));
+    CHECK(bounds.project_point({20.0f, -3.0f, 2.0f}) == termin::Vec3f(5.0f, 0.0f, 2.0f));
+    CHECK(bounds.expanded(1.0f).min_point == termin::Vec3f(-3.0f, -1.0f, -5.0f));
+    const termin::Vec3f points[] = {{2.0f, 3.0f, 4.0f}, {-1.0f, 8.0f, 0.0f}};
+    const termin::AABBf from_points = termin::AABBf::from_points(points, 2);
+    CHECK(from_points.min_point == termin::Vec3f(-1.0f, 3.0f, 0.0f));
+    CHECK(from_points.max_point == termin::Vec3f(2.0f, 8.0f, 4.0f));
+
+    const termin::AABB invalid{{1.0, 0.0, 0.0}, {0.0, 1.0, 1.0}};
+    CHECK(!invalid.is_valid());
+    CHECK((termin::AABB{{0.0, 0.0, 0.0}, {1.0, 2.0, 3.0}}.expanded(2.0).max_point ==
+           termin::Vec3(3.0, 4.0, 5.0)));
+}
+
 TEST_CASE("Ray3 is tc_ray3 alias and normalizes direction") {
     static_assert(std::is_same_v<termin::Ray3, tc_ray3>);
 
@@ -251,6 +385,145 @@ TEST_CASE("Mat44 determinant supports double and float matrices") {
     const termin::Mat44f matrix_f = termin::Mat44f::translation(3.0f, -2.0f, 7.0f) *
                                     termin::Mat44f::scale(termin::Vec3{2.0, 3.0, 4.0});
     CHECK(std::abs(matrix_f.determinant() - 24.0f) < 1.0e-5f);
+}
+
+TEST_CASE("Mat44 checked transforms and inverse preserve output on failure") {
+    const termin::Mat44 matrix = termin::Mat44::translation({3.0, -2.0, 7.0}) * termin::Mat44::scale({2.0, 3.0, 4.0});
+    const termin::Vec4 homogeneous = matrix.transform_homogeneous({1.0, 2.0, 3.0, 1.0});
+    CHECK(homogeneous == termin::Vec4(5.0, 4.0, 19.0, 1.0));
+
+    termin::Vec3 transformed{9.0, 8.0, 7.0};
+    CHECK(termin::Mat44::identity().try_transform_point({1.0, 2.0, 3.0}, transformed));
+    CHECK(transformed == termin::Vec3(1.0, 2.0, 3.0));
+    const termin::Vec3 previous = transformed;
+    CHECK(!termin::Mat44::zero().try_transform_point({1.0, 2.0, 3.0}, transformed));
+    CHECK(transformed == previous);
+
+    termin::Mat44 inverse = termin::Mat44::translation({9.0, 8.0, 7.0});
+    CHECK(!termin::Mat44::scale({1.0, 0.0, 1.0}).try_inverse(inverse));
+    CHECK(inverse.get_translation() == termin::Vec3(9.0, 8.0, 7.0));
+
+    termin::Mat44 non_finite = termin::Mat44::identity();
+    non_finite(2, 1) = std::numeric_limits<double>::infinity();
+    CHECK(!non_finite.is_finite());
+    CHECK(!non_finite.try_inverse(inverse));
+    CHECK(inverse.get_translation() == termin::Vec3(9.0, 8.0, 7.0));
+
+    const termin::Mat44f matrix_f = matrix.to_float();
+    CHECK(matrix_f.transform_homogeneous({1.0f, 2.0f, 3.0f, 1.0f}) == termin::Vec4f(5.0f, 4.0f, 19.0f, 1.0f));
+    termin::Vec3f transformed_f{9.0f, 8.0f, 7.0f};
+    CHECK(termin::Mat44f::identity().try_transform_point({1.0f, 2.0f, 3.0f}, transformed_f));
+    CHECK(transformed_f == termin::Vec3f(1.0f, 2.0f, 3.0f));
+    const termin::Vec3f previous_f = transformed_f;
+    CHECK(!termin::Mat44f::zero().try_transform_point({1.0f, 2.0f, 3.0f}, transformed_f));
+    CHECK(transformed_f == previous_f);
+
+    termin::Mat44f inverse_f = termin::Mat44f::translation(9.0f, 8.0f, 7.0f);
+    CHECK(!termin::Mat44f::scale(termin::Vec3{1.0, 0.0, 1.0}).try_inverse(inverse_f));
+    CHECK(inverse_f.get_translation() == termin::Vec3(9.0, 8.0, 7.0));
+    CHECK(matrix_f.try_inverse(inverse_f));
+    CHECK((inverse_f.transform_point(matrix_f.transform_point({1.0f, 2.0f, 3.0f})) -
+           termin::Vec3f{1.0f, 2.0f, 3.0f})
+              .norm() < 1.0e-5f);
+}
+
+TEST_CASE("Mat44 checked inverse uses relative scale and raw bridges stay explicit") {
+    termin::Mat44 uniformly_small = termin::Mat44::zero();
+    uniformly_small(0, 0) = 1.0e-20;
+    uniformly_small(1, 1) = 2.0e-20;
+    uniformly_small(2, 2) = 3.0e-20;
+    uniformly_small(3, 3) = 4.0e-20;
+    termin::Mat44 uniformly_small_inverse;
+    CHECK(uniformly_small.try_inverse(uniformly_small_inverse));
+    const termin::Mat44 product = uniformly_small * uniformly_small_inverse;
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            CHECK(std::abs(product(column, row) - (column == row ? 1.0 : 0.0)) < 1.0e-12);
+        }
+    }
+
+    const double raw64[16] = {
+        1.0, 2.0, 3.0, 4.0,
+        5.0, 6.0, 7.0, 8.0,
+        9.0, 10.0, 11.0, 12.0,
+        13.0, 14.0, 15.0, 16.0,
+    };
+    const termin::Mat44 from64 = termin::Mat44::from_column_major_f64(raw64);
+    CHECK(from64(2, 1) == 10.0);
+    double copied[16]{};
+    from64.copy_column_major_to(copied);
+    CHECK(copied[9] == 10.0);
+
+    const tc_mat44 c_matrix = from64.to_tc_mat44();
+    CHECK(c_matrix.m[9] == 10.0);
+    CHECK(termin::Mat44::from_tc_mat44(c_matrix)(2, 1) == 10.0);
+
+    const float raw32[16] = {
+        1.0f, 2.0f, 3.0f, 4.0f,
+        5.0f, 6.0f, 7.0f, 8.0f,
+        9.0f, 10.0f, 11.0f, 12.0f,
+        13.0f, 14.0f, 15.0f, 16.0f,
+    };
+    CHECK(termin::Mat44::from_column_major_f32(raw32)(2, 1) == 10.0);
+    const termin::Mat44f from32 = termin::Mat44f::from_column_major_f32(raw32);
+    CHECK(from32.transform_homogeneous({1.0f, 0.0f, 0.0f, 0.0f}) == termin::Vec4f(1.0f, 2.0f, 3.0f, 4.0f));
+    CHECK(from32.to_double()(2, 1) == 10.0);
+
+    const termin::Mat44 large_world_view_projection =
+        termin::Mat44::perspective(1.1, 16.0 / 9.0, 0.1, 5000.0) *
+        termin::Mat44::translation({-1.0e6, 2.0e6, -3.0e6});
+    termin::Mat44 large_world_inverse;
+    CHECK(large_world_view_projection.try_inverse(large_world_inverse));
+    const termin::Vec3 world_point{1.0e6 + 2.0, -2.0e6 + 10.0, 3.0e6 - 4.0};
+    const termin::Vec3 projected = large_world_view_projection.transform_point(world_point);
+    const termin::Vec3 round_trip = large_world_inverse.transform_point(projected);
+    CHECK((round_trip - world_point).norm() < 1.0e-5);
+}
+
+TEST_CASE("Mat44f checked inverse validates both products at large world coordinates") {
+    const termin::Mat44f large_translation =
+        termin::Mat44f::translation(termin::Vec3{-30000.0, 60000.0, -90000.0});
+    termin::Mat44f large_translation_inverse;
+    CHECK(large_translation.try_inverse(large_translation_inverse));
+
+    const termin::Mat44f translation_left_identity = large_translation * large_translation_inverse;
+    const termin::Mat44f translation_right_identity = large_translation_inverse * large_translation;
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            const float expected = column == row ? 1.0f : 0.0f;
+            CHECK(std::abs(translation_left_identity(column, row) - expected) < 1.0e-6f);
+            CHECK(std::abs(translation_right_identity(column, row) - expected) < 1.0e-6f);
+        }
+    }
+
+    const termin::Mat44f ill_conditioned =
+        termin::Mat44f::perspective(1.1f, 16.0f / 9.0f, 0.1f, 5000.0f) * large_translation;
+    termin::Mat44f unchanged = termin::Mat44f::translation(7.0f, 8.0f, 9.0f);
+    const termin::Mat44f expected_unchanged = unchanged;
+    CHECK(!ill_conditioned.try_inverse(unchanged));
+    for (int i = 0; i < 16; ++i) {
+        CHECK(unchanged.data[i] == expected_unchanged.data[i]);
+    }
+
+    CHECK(!termin::Mat44f::scale(termin::Vec3{1.0, 0.0, 1.0}).try_inverse(unchanged));
+    for (int i = 0; i < 16; ++i) {
+        CHECK(unchanged.data[i] == expected_unchanged.data[i]);
+    }
+
+    const termin::Mat44 double_precision =
+        termin::Mat44::perspective(1.1, 16.0 / 9.0, 0.1, 5000.0) *
+        termin::Mat44::translation(termin::Vec3{-30000.0, 60000.0, -90000.0});
+    termin::Mat44 double_inverse;
+    CHECK(double_precision.try_inverse(double_inverse));
+    const termin::Mat44 double_left_identity = double_precision * double_inverse;
+    const termin::Mat44 double_right_identity = double_inverse * double_precision;
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            const double expected = column == row ? 1.0 : 0.0;
+            CHECK(std::abs(double_left_identity(column, row) - expected) < 1.0e-8);
+            CHECK(std::abs(double_right_identity(column, row) - expected) < 1.0e-8);
+        }
+    }
 }
 
 TEST_CASE("Affine2f composes arbitrary affine transforms exactly") {
@@ -542,10 +815,10 @@ TEST_CASE("look_at preserves the Y-forward Z-up camera convention") {
     CHECK((up_view - termin::Vec3{0.0, 2.0, 1.0}).norm() < 1.0e-12);
 
     const termin::Mat44f view_f = termin::Mat44f::look_at(eye, target, world_up);
-    const termin::Vec3 target_view_f = view_f.transform_point(target);
-    const termin::Vec3 up_view_f = view_f.transform_point(target + world_up);
-    CHECK((target_view_f - termin::Vec3{0.0, 2.0, 0.0}).norm() < 1.0e-6);
-    CHECK((up_view_f - termin::Vec3{0.0, 2.0, 1.0}).norm() < 1.0e-6);
+    const termin::Vec3f target_view_f = view_f.transform_point(target.to_float());
+    const termin::Vec3f up_view_f = view_f.transform_point((target + world_up).to_float());
+    CHECK((target_view_f - termin::Vec3f{0.0f, 2.0f, 0.0f}).norm() < 1.0e-6f);
+    CHECK((up_view_f - termin::Vec3f{0.0f, 2.0f, 1.0f}).norm() < 1.0e-6f);
 }
 
 TEST_CASE("world2d positive angle is counter-clockwise in the visible XZ plane") {

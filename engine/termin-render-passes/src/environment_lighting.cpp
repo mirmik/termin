@@ -1,6 +1,7 @@
 #include <termin/lighting/environment_lighting.hpp>
 
 #include <termin/geom/color.hpp>
+#include <termin/geom/vec3.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_graph_resource_registry.hpp>
 #include <termin/render/scene_render_services.hpp>
@@ -36,50 +37,11 @@ namespace termin {
         constexpr uint32_t kBrdfSamples = 128;
         constexpr float kPi = 3.14159265358979323846f;
 
-        struct Float3 {
-            float x = 0.0f;
-            float y = 0.0f;
-            float z = 0.0f;
-        };
-
-        Float3 operator+(Float3 a, Float3 b) {
-            return {a.x + b.x, a.y + b.y, a.z + b.z};
-        }
-
-        Float3 operator-(Float3 a, Float3 b) {
-            return {a.x - b.x, a.y - b.y, a.z - b.z};
-        }
-
-        Float3 operator*(Float3 value, float scalar) {
-            return {value.x * scalar, value.y * scalar, value.z * scalar};
-        }
-
-        Float3& operator+=(Float3& a, Float3 b) {
-            a = a + b;
-            return a;
-        }
-
-        float dot(Float3 a, Float3 b) {
-            return a.x * b.x + a.y * b.y + a.z * b.z;
-        }
-
-        Float3 cross(Float3 a, Float3 b) {
-            return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
-        }
-
-        Float3 normalize(Float3 value) {
-            const float length_squared = dot(value, value);
-            if (length_squared <= 1.0e-20f) {
-                return {0.0f, 0.0f, 1.0f};
-            }
-            return value * (1.0f / std::sqrt(length_squared));
-        }
-
         float sign_not_zero(float value) {
             return value < 0.0f ? -1.0f : 1.0f;
         }
 
-        Float3 octahedral_decode(float u, float v) {
+        Vec3f octahedral_decode(float u, float v) {
             float x = u * 2.0f - 1.0f;
             float y = v * 2.0f - 1.0f;
             const float z = 1.0f - std::abs(x) - std::abs(y);
@@ -88,7 +50,7 @@ namespace termin {
                 x = (1.0f - std::abs(y)) * sign_not_zero(old_x);
                 y = (1.0f - std::abs(old_x)) * sign_not_zero(y);
             }
-            return normalize({x, y, z});
+            return Vec3f{x, y, z}.normalized_or(Vec3f::unit_z(), 1.0e-10f);
         }
 
         float radical_inverse_vdc(uint32_t bits) {
@@ -104,21 +66,21 @@ namespace termin {
             return {static_cast<float>(index) / static_cast<float>(count), radical_inverse_vdc(index)};
         }
 
-        void make_basis(Float3 normal, Float3& tangent, Float3& bitangent) {
-            const Float3 up = std::abs(normal.z) < 0.999f ? Float3{0.0f, 0.0f, 1.0f}
-                                                         : Float3{1.0f, 0.0f, 0.0f};
-            tangent = normalize(cross(up, normal));
-            bitangent = cross(normal, tangent);
+        void make_basis(const Vec3f& normal, Vec3f& tangent, Vec3f& bitangent) {
+            const Vec3f up = std::abs(normal.z) < 0.999f ? Vec3f::unit_z() : Vec3f::unit_x();
+            tangent = up.cross(normal).normalized_or(Vec3f::unit_z(), 1.0e-10f);
+            bitangent = normal.cross(tangent);
         }
 
-        Float3 tangent_to_world(Float3 local, Float3 normal) {
-            Float3 tangent;
-            Float3 bitangent;
+        Vec3f tangent_to_world(const Vec3f& local, const Vec3f& normal) {
+            Vec3f tangent;
+            Vec3f bitangent;
             make_basis(normal, tangent, bitangent);
-            return normalize(tangent * local.x + bitangent * local.y + normal * local.z);
+            return (tangent * local.x + bitangent * local.y + normal * local.z)
+                .normalized_or(Vec3f::unit_z(), 1.0e-10f);
         }
 
-        Float3 cosine_sample_hemisphere(std::array<float, 2> xi, Float3 normal) {
+        Vec3f cosine_sample_hemisphere(std::array<float, 2> xi, const Vec3f& normal) {
             const float radius = std::sqrt(xi[0]);
             const float phi = 2.0f * kPi * xi[1];
             return tangent_to_world(
@@ -126,7 +88,7 @@ namespace termin {
                 normal);
         }
 
-        Float3 importance_sample_ggx(std::array<float, 2> xi, Float3 normal, float roughness) {
+        Vec3f importance_sample_ggx(std::array<float, 2> xi, const Vec3f& normal, float roughness) {
             const float alpha = roughness * roughness;
             const float alpha_squared = alpha * alpha;
             const float phi = 2.0f * kPi * xi[0];
@@ -135,17 +97,17 @@ namespace termin {
             return tangent_to_world({std::cos(phi) * sine, std::sin(phi) * sine, cosine}, normal);
         }
 
-        Float3 sample_environment(const std::array<float, 16>& signature, Float3 direction) {
+        Vec3f sample_environment(const std::array<float, 16>& signature, const Vec3f& direction) {
             const int skybox_type = static_cast<int>(signature[0]);
-            const Float3 solid{signature[1], signature[2], signature[3]};
-            const Float3 top{signature[4], signature[5], signature[6]};
-            const Float3 horizon{signature[7], signature[8], signature[9]};
-            const Float3 bottom{signature[10], signature[11], signature[12]};
+            const Vec3f solid{signature[1], signature[2], signature[3]};
+            const Vec3f top{signature[4], signature[5], signature[6]};
+            const Vec3f horizon{signature[7], signature[8], signature[9]};
+            const Vec3f bottom{signature[10], signature[11], signature[12]};
             const float top_exponent = std::max(signature[13], 0.001f);
             const float bottom_exponent = std::max(signature[14], 0.001f);
             const float intensity = std::max(0.0f, signature[15]);
 
-            Float3 radiance;
+            Vec3f radiance;
             if (skybox_type == TC_SKYBOX_GRADIENT) {
                 const float height = std::clamp(direction.z, -1.0f, 1.0f);
                 if (height >= 0.0f) {
@@ -167,14 +129,14 @@ namespace termin {
             std::vector<float> pixels(kDiffuseSize * kDiffuseSize * 4u);
             for (uint32_t y = 0; y < kDiffuseSize; ++y) {
                 for (uint32_t x = 0; x < kDiffuseSize; ++x) {
-                    const Float3 normal = octahedral_decode((x + 0.5f) / kDiffuseSize, (y + 0.5f) / kDiffuseSize);
-                    Float3 average{};
+                    const Vec3f normal = octahedral_decode((x + 0.5f) / kDiffuseSize, (y + 0.5f) / kDiffuseSize);
+                    Vec3f average{};
                     for (uint32_t sample = 0; sample < kDiffuseSamples; ++sample) {
                         average += sample_environment(signature,
                                                       cosine_sample_hemisphere(hammersley(sample, kDiffuseSamples),
                                                                                normal));
                     }
-                    const Float3 irradiance = average * (kPi / static_cast<float>(kDiffuseSamples));
+                    const Vec3f irradiance = average * (kPi / static_cast<float>(kDiffuseSamples));
                     const size_t offset = (static_cast<size_t>(y) * kDiffuseSize + x) * 4u;
                     pixels[offset + 0] = irradiance.x;
                     pixels[offset + 1] = irradiance.y;
@@ -194,18 +156,20 @@ namespace termin {
                 std::vector<float> pixels(size * size * 4u);
                 for (uint32_t y = 0; y < size; ++y) {
                     for (uint32_t x = 0; x < size; ++x) {
-                        const Float3 normal = octahedral_decode((x + 0.5f) / size, (y + 0.5f) / size);
-                        Float3 filtered{};
+                        const Vec3f normal = octahedral_decode((x + 0.5f) / size, (y + 0.5f) / size);
+                        Vec3f filtered{};
                         float total_weight = 0.0f;
                         if (mip == 0) {
                             filtered = sample_environment(signature, normal);
                             total_weight = 1.0f;
                         } else {
                             for (uint32_t sample = 0; sample < kSpecularSamples; ++sample) {
-                                const Float3 half_vector = importance_sample_ggx(
+                                const Vec3f half_vector = importance_sample_ggx(
                                     hammersley(sample, kSpecularSamples), normal, roughness);
-                                const Float3 light = normalize(half_vector * (2.0f * dot(normal, half_vector)) - normal);
-                                const float weight = std::max(dot(normal, light), 0.0f);
+                                const Vec3f light =
+                                    (half_vector * (2.0f * normal.dot(half_vector)) - normal)
+                                        .normalized_or(Vec3f::unit_z(), 1.0e-10f);
+                                const float weight = std::max(normal.dot(light), 0.0f);
                                 if (weight > 0.0f) {
                                     filtered += sample_environment(signature, light) * weight;
                                     total_weight += weight;
@@ -232,23 +196,24 @@ namespace termin {
 
         std::vector<float> build_brdf_lut() {
             std::vector<float> pixels(kBrdfSize * kBrdfSize * 2u);
-            const Float3 normal{0.0f, 0.0f, 1.0f};
+            const Vec3f normal = Vec3f::unit_z();
             for (uint32_t y = 0; y < kBrdfSize; ++y) {
                 const float roughness = (y + 0.5f) / kBrdfSize;
                 for (uint32_t x = 0; x < kBrdfSize; ++x) {
                     const float normal_dot_view = std::max((x + 0.5f) / kBrdfSize, 1.0e-4f);
-                    const Float3 view{std::sqrt(std::max(0.0f, 1.0f - normal_dot_view * normal_dot_view)),
-                                      0.0f,
-                                      normal_dot_view};
+                    const Vec3f view{std::sqrt(std::max(0.0f, 1.0f - normal_dot_view * normal_dot_view)),
+                                     0.0f,
+                                     normal_dot_view};
                     float scale = 0.0f;
                     float bias = 0.0f;
                     for (uint32_t sample = 0; sample < kBrdfSamples; ++sample) {
-                        const Float3 half_vector =
+                        const Vec3f half_vector =
                             importance_sample_ggx(hammersley(sample, kBrdfSamples), normal, roughness);
-                        const Float3 light = normalize(half_vector * (2.0f * dot(view, half_vector)) - view);
+                        const Vec3f light = (half_vector * (2.0f * view.dot(half_vector)) - view)
+                                                .normalized_or(Vec3f::unit_z(), 1.0e-10f);
                         const float normal_dot_light = std::max(light.z, 0.0f);
                         const float normal_dot_half = std::max(half_vector.z, 0.0f);
-                        const float view_dot_half = std::max(dot(view, half_vector), 0.0f);
+                        const float view_dot_half = std::max(view.dot(half_vector), 0.0f);
                         if (normal_dot_light <= 0.0f) {
                             continue;
                         }
@@ -368,7 +333,7 @@ namespace termin {
                                                                lighting->ambient_color.g,
                                                                lighting->ambient_color.b,
                                                                1.0f});
-            const Float3 ambient_tint{ambient_linear.r, ambient_linear.g, ambient_linear.b};
+            const Vec3f ambient_tint{ambient_linear.r, ambient_linear.g, ambient_linear.b};
             const float intensity = std::max(0.0f, lighting->ambient_intensity);
             signature[1] *= ambient_tint.x;
             signature[2] *= ambient_tint.y;

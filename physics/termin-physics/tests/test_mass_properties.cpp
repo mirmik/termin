@@ -119,6 +119,20 @@ TEST_CASE("Asymmetric hull keeps a stable local center and principal frame") {
     CHECK(std::abs(quaternion_dot) == Approx(1.0));
 }
 
+TEST_CASE("Rigid body exposes world inverse inertia as a semantic matrix") {
+    RigidBody body;
+    body.inertia = {2.0, 4.0, 8.0};
+    body.pose.ang = Quat::from_axis_angle(Vec3::unit_z(), 3.14159265358979323846 / 2.0);
+
+    const auto inverse_inertia = body.world_inertia_inv();
+    CHECK((inverse_inertia.transform(Vec3::unit_x()) - Vec3{0.25, 0.0, 0.0}).norm() < 1.0e-12);
+    CHECK((inverse_inertia.transform(Vec3::unit_y()) - Vec3{0.0, 0.5, 0.0}).norm() < 1.0e-12);
+    CHECK((body.apply_inv_inertia_world(Vec3::unit_z()) - Vec3{0.0, 0.0, 0.125}).norm() < 1.0e-12);
+
+    body.is_static = true;
+    CHECK(body.world_inertia_inv().transform(Vec3{1.0, 2.0, 3.0}).norm() == Approx(0.0));
+}
+
 TEST_CASE("Degenerate convex hull mass properties fail explicitly") {
     const ConvexHullCollider hull = ConvexHullCollider::from_points({
         {0.0, 0.0, 0.0},

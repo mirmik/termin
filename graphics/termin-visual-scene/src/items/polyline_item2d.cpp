@@ -1,7 +1,5 @@
 #include "termin_visual_scene/items/polyline_item2d.hpp"
 
-#include "item_geometry2d_internal.hpp"
-
 #include <algorithm>
 #include <stdexcept>
 
@@ -12,7 +10,7 @@ namespace termin::visual {
 
         void validate(const std::vector<termin::Vec2f>& points, const tgfx::StrokePaint& stroke) {
             if (points.size() < 2 || !stroke.validate() ||
-                !std::all_of(points.begin(), points.end(), detail::valid_point)) {
+                !std::all_of(points.begin(), points.end(), [](termin::Vec2f point) { return point.is_finite(); })) {
                 throw std::invalid_argument("invalid PolylineItem2D state");
             }
         }
@@ -62,19 +60,13 @@ namespace termin::visual {
     std::optional<termin::Bounds2f> PolylineItem2D::local_bounds() const {
         if (points_.empty())
             return std::nullopt;
-        termin::Bounds2f result{
-            points_.front().x,
-            points_.front().y,
-            points_.front().x,
-            points_.front().y,
-        };
+        termin::Vec2f minimum = points_.front();
+        termin::Vec2f maximum = points_.front();
         for (const auto point : points_) {
-            result.x0 = std::min(result.x0, point.x);
-            result.y0 = std::min(result.y0, point.y);
-            result.x1 = std::max(result.x1, point.x);
-            result.y1 = std::max(result.y1, point.y);
+            minimum = minimum.cwise_min(point);
+            maximum = maximum.cwise_max(point);
         }
-        return detail::expanded(result, stroke_.width * 0.5f);
+        return termin::Bounds2f{minimum.x, minimum.y, maximum.x, maximum.y}.expanded(stroke_.width * 0.5f);
     }
 
     bool PolylineItem2D::hit_test(termin::Vec2f point, float) const {

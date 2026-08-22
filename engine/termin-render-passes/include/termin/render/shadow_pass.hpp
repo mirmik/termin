@@ -84,11 +84,17 @@ namespace termin {
               cascade_split_far(split_far) {}
     };
 
-    struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
+    /**
+     * CPU-side request for shadow-map rendering.
+     *
+     * Camera matrices stay double precision through frustum fitting. Conversion
+     * to Mat44f happens only for the resulting GPU view/projection payloads.
+     */
+    struct TERMIN_RENDER_PASSES_API ShadowPassExecuteRequest {
         tc_scene_handle scene = {};
         std::span<const Light> lights;
-        Mat44f camera_view;
-        Mat44f camera_projection;
+        Mat44 camera_view;
+        Mat44 camera_projection;
         float camera_near = 0.1f;
         float camera_far = 100.0f;
         uint64_t layer_mask = 0;
@@ -169,7 +175,8 @@ namespace termin {
 
         // Execute shadow pass, rendering shadow maps for all lights
         // through a tgfx2 RenderContext2. Requires ctx.ctx2 to be non-null.
-        std::vector<ShadowMapResult> execute_shadow_pass_tgfx2(ExecuteContext& ctx, const ShadowPassExecuteData& data);
+        std::vector<ShadowMapResult>
+        execute_shadow_pass_tgfx2(ExecuteContext& ctx, const ShadowPassExecuteRequest& request);
 
         std::vector<ResourceSpec> get_resource_specs() const override;
 
@@ -200,8 +207,8 @@ namespace termin {
                                     const RenderItemSnapshot& snapshot);
 
         // Build shadow camera params for a light
-        ShadowCameraParams
-        build_shadow_params(const Light& light, const Mat44f& camera_view, const Mat44f& camera_projection);
+        std::optional<ShadowCameraParams>
+        build_shadow_params(const Light& light, const Mat44& camera_view, const Mat44& camera_projection);
     };
 
 } // namespace termin

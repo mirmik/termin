@@ -15,7 +15,7 @@ namespace termin::visual {
                 return false;
             }
             for (const auto& vertex : geometry.vertices) {
-                if (!detail::finite(vertex.position) || !detail::finite(vertex.color))
+                if (!vertex.position.is_finite() || !detail::finite(vertex.color))
                     return false;
             }
             return std::all_of(geometry.triangles.begin(), geometry.triangles.end(), [&](std::uint32_t index) {
@@ -44,8 +44,9 @@ namespace termin::visual {
     }
 
     std::optional<VisualBounds3D> PrimitiveItem3D::local_bounds() const {
-        return detail::bounds_of(geometry_->vertices.size(),
-                                 [&](std::size_t index) { return geometry_->vertices[index].position; });
+        const auto bounds = detail::bounds_of(geometry_->vertices.size(),
+                                              [&](std::size_t index) { return geometry_->vertices[index].position; });
+        return bounds ? std::optional<VisualBounds3D>(detail::to_visual_bounds(*bounds)) : std::nullopt;
     }
 
     std::optional<HitCandidate3D> PrimitiveItem3D::hit_test(const HitTestContext3D& context) const {

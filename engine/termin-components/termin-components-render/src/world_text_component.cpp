@@ -80,54 +80,40 @@ namespace termin {
 
         Vec3f extract_view_row3(const Mat44f& view, int row) {
             return Vec3f{
-                static_cast<float>(view(0, row)),
-                static_cast<float>(view(1, row)),
-                static_cast<float>(view(2, row)),
+                view(0, row),
+                view(1, row),
+                view(2, row),
             };
         }
 
-        Vec3 normalized_or(const Vec3& value, const Vec3& fallback) {
-            const double len = value.norm();
-            if (len <= 1.0e-8) {
-                return fallback;
-            }
-            return value / len;
-        }
-
-        bool make_fixed_text_basis(const Vec3& plane_normal,
-                                   const Vec3& text_up_source,
+        bool make_fixed_text_basis(const Vec3f& plane_normal,
+                                   const Vec3f& text_up_source,
                                    const Mat44f& model,
                                    Vec3f& text_right,
                                    Vec3f& text_up) {
-            const Vec3 transformed_normal = model.transform_direction(plane_normal);
-            Vec3 normal = normalized_or(transformed_normal, Vec3::unit_z());
+            constexpr float kBasisEpsilon = 1.0e-8f;
+            const Vec3f normal =
+                model.transform_direction(plane_normal).normalized_or(Vec3f::unit_z(), kBasisEpsilon);
 
-            const Vec3 transformed_up = model.transform_direction(text_up_source);
-            Vec3 up = transformed_up - normal * transformed_up.dot(normal);
-            if (up.norm() <= 1.0e-8) {
+            const Vec3f transformed_up = model.transform_direction(text_up_source);
+            Vec3f up_source = transformed_up - normal * transformed_up.dot(normal);
+            Vec3f up;
+            if (!up_source.try_normalized(up, kBasisEpsilon)) {
                 tc::Log::error("[WorldTextComponent] text_up is parallel to plane_normal; using fallback basis");
-                const Vec3 fallback = std::abs(normal.dot(Vec3::unit_z())) < 0.99 ? Vec3::unit_z() : Vec3::unit_y();
-                up = fallback - normal * fallback.dot(normal);
+                const Vec3f fallback =
+                    std::abs(normal.dot(Vec3f::unit_z())) < 0.99f ? Vec3f::unit_z() : Vec3f::unit_y();
+                up_source = fallback - normal * fallback.dot(normal);
+                up = up_source.normalized_or(Vec3f::unit_y(), kBasisEpsilon);
             }
-            up = normalized_or(up, Vec3::unit_y());
 
-            Vec3 right = up.cross(normal);
-            if (right.norm() <= 1.0e-8) {
+            Vec3f right;
+            if (!up.cross(normal).try_normalized(right, kBasisEpsilon)) {
                 tc::Log::error("[WorldTextComponent] failed to build fixed text basis");
                 return false;
             }
-            right = right.normalized();
 
-            text_right = Vec3f{
-                static_cast<float>(right.x),
-                static_cast<float>(right.y),
-                static_cast<float>(right.z),
-            };
-            text_up = Vec3f{
-                static_cast<float>(up.x),
-                static_cast<float>(up.y),
-                static_cast<float>(up.z),
-            };
+            text_right = right;
+            text_up = up;
             return true;
         }
 
@@ -159,8 +145,12 @@ namespace termin {
             return false;
         }
 
-        Vec3 vec3_from_payload(const tc_render_item_vec3& value) {
-            return Vec3{value.x, value.y, value.z};
+        Vec3f vec3f_from_payload(const tc_render_item_vec3& value) {
+            return Vec3f{
+                static_cast<float>(value.x),
+                static_cast<float>(value.y),
+                static_cast<float>(value.z),
+            };
         }
 
         bool world_text_render_item_draw_encoder(tgfx::RenderContext2& ctx,
@@ -667,8 +657,8 @@ namespace termin {
             return false;
         }
         if (decoded_orientation == WorldTextOrientation::Fixed) {
-            if (!make_fixed_text_basis(vec3_from_payload(item.payload.text_batch.plane_normal),
-                                       vec3_from_payload(item.payload.text_batch.text_up),
+            if (!make_fixed_text_basis(vec3f_from_payload(item.payload.text_batch.plane_normal),
+                                       vec3f_from_payload(item.payload.text_batch.text_up),
                                        context.model,
                                        text_right,
                                        text_up_basis)) {
@@ -679,7 +669,8 @@ namespace termin {
             text_up_basis = extract_view_row3(context.view, 2);
         }
 
-        Vec3 world_pos = context.model.transform_point(vec3_from_payload(item.payload.text_batch.local_offset));
+        const Vec3f world_pos =
+            context.model.transform_point(vec3f_from_payload(item.payload.text_batch.local_offset));
 
         tc_render_item_vec4 payload_color = item.payload.text_batch.color;
         if (context.has_override_color) {
@@ -697,11 +688,7 @@ namespace termin {
         renderer_->begin(&ctx2, mvp.data, text_right, text_up_basis, font);
         renderer_->draw(item.payload.text_batch.text,
                         tgfx::Text3DRenderer::DrawOptions{
-                            Vec3f{
-                                static_cast<float>(world_pos.x),
-                                static_cast<float>(world_pos.y),
-                                static_cast<float>(world_pos.z),
-                            },
+                            world_pos,
                             LinearColor{
                                 static_cast<float>(payload_color.x),
                                 static_cast<float>(payload_color.y),

@@ -270,7 +270,7 @@ namespace termin {
                                                   tc_display_handle display) {
         const auto overlay_kind = action == TC_INPUT_PRESS ? visual::PointerEventKind3D::Down
                                                            : visual::PointerEventKind3D::Up;
-        if (_route_overlay_pointer(overlay_kind, Vec2f{x, y}, button, vp, display)) {
+        if (_route_overlay_pointer(overlay_kind, Vec2f{x, y}, button, vp)) {
             _request_update();
             return;
         }
@@ -299,7 +299,7 @@ namespace termin {
 
     void EditorInteractionSystem::on_mouse_move(
         float x, float y, float dx, float dy, tc_viewport_handle vp, tc_display_handle display) {
-        if (_route_overlay_pointer(visual::PointerEventKind3D::Move, Vec2f{x, y}, 0, vp, display)) {
+        if (_route_overlay_pointer(visual::PointerEventKind3D::Move, Vec2f{x, y}, 0, vp)) {
             _request_update();
             return;
         }
@@ -517,20 +517,15 @@ namespace termin {
     }
 
     bool EditorInteractionSystem::_route_overlay_pointer(visual::PointerEventKind3D kind,
-                                                          Vec2f screen,
-                                                          int button,
-                                                          tc_viewport_handle viewport,
-                                                          tc_display_handle display) {
+                                                         Vec2f screen,
+                                                         int button,
+                                                         tc_viewport_handle viewport) {
         if (!tc_viewport_handle_valid(viewport))
             return false;
-        Vec3f origin;
-        Vec3f direction;
-        if (!_screen_to_ray(screen, viewport, display, origin, direction))
+        const std::optional<Ray3> ray = _screen_to_ray(screen, viewport);
+        if (!ray)
             return false;
-        return _overlay_scene.route_pointer(kind,
-                                            Ray3{{origin.x, origin.y, origin.z},
-                                                 {direction.x, direction.y, direction.z}},
-                                            static_cast<std::uint32_t>(std::max(button, 0)));
+        return _overlay_scene.route_pointer(kind, *ray, static_cast<std::uint32_t>(std::max(button, 0)));
     }
 
     bool
@@ -1176,31 +1171,22 @@ namespace termin {
             Vec3 world_direction = (world - camera_position).normalized();
             Vec3 entity_local_origin = transform.transform_point_inverse(camera_position);
             Vec3 entity_local_direction = transform.transform_vector_inverse(world_direction).normalized();
-            Vec3 local_origin = inverse_mesh_offset.transform_point(entity_local_origin);
-            Vec3 local_direction = inverse_mesh_offset.transform_direction(entity_local_direction).normalized();
+            const Vec3f local_origin = inverse_mesh_offset.transform_point(entity_local_origin.to_float());
+            const Vec3f local_direction =
+                inverse_mesh_offset.transform_direction(entity_local_direction.to_float()).normalized();
 
             tc_mesh_ray ray;
-            ray.origin = tc_vec3f{static_cast<float>(local_origin.x),
-                                  static_cast<float>(local_origin.y),
-                                  static_cast<float>(local_origin.z)};
-            ray.direction = tc_vec3f{static_cast<float>(local_direction.x),
-                                     static_cast<float>(local_direction.y),
-                                     static_cast<float>(local_direction.z)};
+            ray.origin = local_origin;
+            ray.direction = local_direction;
             ray.t_min = 0.0f;
             ray.t_max = 1000000.0f;
 
             tc_mesh_hit hit;
             if (tc_mesh_raycast(mesh, &ray, &hit)) {
-                Vec3 local_hit(static_cast<double>(hit.position.x),
-                               static_cast<double>(hit.position.y),
-                               static_cast<double>(hit.position.z));
-                Vec3 local_normal(static_cast<double>(hit.normal.x),
-                                  static_cast<double>(hit.normal.y),
-                                  static_cast<double>(hit.normal.z));
-                Vec3 entity_local_hit = mesh_offset.transform_point(local_hit);
-                Vec3 entity_local_normal = mesh_offset.transform_direction(local_normal).normalized();
-                Vec3 world_hit = transform.transform_point(entity_local_hit);
-                Vec3 world_normal = transform.transform_normal(entity_local_normal).normalized();
+                const Vec3f entity_local_hit = mesh_offset.transform_point(hit.position);
+                const Vec3f entity_local_normal = mesh_offset.transform_direction(hit.normal).normalized();
+                Vec3 world_hit = transform.transform_point(entity_local_hit.to_double());
+                Vec3 world_normal = transform.transform_normal(entity_local_normal.to_double()).normalized();
 
                 result.has_mesh_hit = true;
                 result.mesh_point = world_hit;
@@ -1253,28 +1239,22 @@ namespace termin {
     // Ray casting
     // ============================================================================
 
-    bool EditorInteractionSystem::_screen_to_ray(
-        Vec2f screen, tc_viewport_handle vp, tc_display_handle display, Vec3f& origin, Vec3f& direction) {
-        (void)display;
-
+    std::optional<Ray3> EditorInteractionSystem::_screen_to_ray(Vec2f screen, tc_viewport_handle vp) {
         tc_render_target_handle rt = tc_viewport_get_render_target(vp);
         tc_component* cam_comp = tc_render_target_get_camera(rt);
         if (!cam_comp)
-            return false;
+            return std::nullopt;
 
         CxxComponent* cxx = CxxComponent::from_tc(cam_comp);
         if (!cxx)
-            return false;
+            return std::nullopt;
 
         auto* camera = static_cast<CameraComponent*>(cxx);
 
         int vp_x, vp_y, vp_w, vp_h;
         tc_viewport_get_pixel_rect(vp, &vp_x, &vp_y, &vp_w, &vp_h);
 
-        auto [orig, dir] = camera->screen_point_to_ray(screen.x, screen.y, vp_x, vp_y, vp_w, vp_h);
-        origin = Vec3f{(float)orig.x, (float)orig.y, (float)orig.z};
-        direction = Vec3f{(float)dir.x, (float)dir.y, (float)dir.z};
-        return true;
+        return camera->screen_point_to_ray(screen.x, screen.y, vp_x, vp_y, vp_w, vp_h);
     }
 
     // ============================================================================

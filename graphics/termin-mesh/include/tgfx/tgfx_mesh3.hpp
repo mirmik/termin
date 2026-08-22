@@ -176,27 +176,31 @@ namespace termin {
         }
 
         // Transformations
-        void translate(float dx, float dy, float dz) {
+        void translate(const Vec3f& offset) {
             for (auto& v : vertices) {
-                v.x += dx;
-                v.y += dy;
-                v.z += dz;
+                v += offset;
             }
         }
 
         void scale(float factor) {
-            for (auto& v : vertices) {
-                v.x *= factor;
-                v.y *= factor;
-                v.z *= factor;
-            }
+            scale(Vec3f{factor, factor, factor});
         }
 
-        void scale(float sx, float sy, float sz) {
+        void scale(const Vec3f& factors) {
+            const bool update_normals = has_normals();
+            const bool update_tangents = has_tangents();
             for (auto& v : vertices) {
-                v.x *= sx;
-                v.y *= sy;
-                v.z *= sz;
+                v = v.cwise_product(factors);
+            }
+            if (update_normals) {
+                compute_normals();
+            }
+            if (update_tangents) {
+                if (has_uvs()) {
+                    compute_tangents();
+                } else {
+                    tangents.clear();
+                }
             }
         }
 

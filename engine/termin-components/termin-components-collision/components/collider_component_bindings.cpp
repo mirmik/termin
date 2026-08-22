@@ -27,7 +27,8 @@ NB_MODULE(_components_collision_native, m) {
             "box_size",
             [](ColliderComponent& c) { return nb::make_tuple(c.box_size.x, c.box_size.y, c.box_size.z); },
             [](ColliderComponent& c, nb::tuple v) {
-                c.set_box_size(nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2]));
+                c.set_box_size(
+                    {nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2])});
             })
         .def_prop_rw(
             "collider_offset_enabled",

@@ -75,8 +75,7 @@ namespace tgfx {
         }
 
         bool finite_point(const PointCloudPoint& point) {
-            return std::isfinite(point.position.x) && std::isfinite(point.position.y) &&
-                   std::isfinite(point.position.z) && std::isfinite(point.size_scale) && point.size_scale >= 0.0f &&
+            return point.position.is_finite() && std::isfinite(point.size_scale) && point.size_scale >= 0.0f &&
                    std::isfinite(point.color.r) && std::isfinite(point.color.g) && std::isfinite(point.color.b) &&
                    std::isfinite(point.color.a);
         }
@@ -110,19 +109,13 @@ namespace tgfx {
             return true;
         }
 
-        termin::Vec3f min_point = points.front().position;
-        termin::Vec3f max_point = points.front().position;
+        termin::AABBf bounds{points.front().position, points.front().position};
         for (const PointCloudPoint& point : points) {
             if (!finite_point(point)) {
                 tc::Log::error("PointCloud::upload: point data contains non-finite values or a negative size");
                 return false;
             }
-            min_point.x = std::min(min_point.x, point.position.x);
-            min_point.y = std::min(min_point.y, point.position.y);
-            min_point.z = std::min(min_point.z, point.position.z);
-            max_point.x = std::max(max_point.x, point.position.x);
-            max_point.y = std::max(max_point.y, point.position.y);
-            max_point.z = std::max(max_point.z, point.position.z);
+            bounds.extend(point.position);
         }
 
         const uint64_t byte_size = points.size_bytes();
@@ -148,16 +141,14 @@ namespace tgfx {
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(points.data()), points.size_bytes()));
         device_ = &device;
         point_count_ = static_cast<uint32_t>(points.size());
-        bounds_min_ = min_point;
-        bounds_max_ = max_point;
+        bounds_ = bounds;
         has_bounds_ = true;
         return true;
     }
 
     void PointCloud::clear() noexcept {
         point_count_ = 0;
-        bounds_min_ = {};
-        bounds_max_ = {};
+        bounds_ = {};
         has_bounds_ = false;
     }
 

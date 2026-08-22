@@ -64,7 +64,7 @@ namespace termin {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 tc_vec3 v;
                 if (tc_value_to_vec3(value, v)) {
-                    c->set_axis(v.x, v.y, v.z);
+                    c->set_axis(v);
                     return true;
                 }
                 return false;
@@ -151,8 +151,7 @@ namespace termin {
             info.step = 0.1;
             info.getter = [](void* obj) -> tc_value {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                Quat q{c->origin_rotation.x, c->origin_rotation.y, c->origin_rotation.z, c->origin_rotation.w};
-                Pose3 p{q, Vec3::zero()};
+                Pose3 p{c->origin_rotation, Vec3::zero()};
                 Vec3 euler = p.to_euler();
                 tc_value list = tc_value_list_new();
                 tc_value_list_push(&list, tc_value_double(degrees(euler.x)));
@@ -165,7 +164,7 @@ namespace termin {
                 tc_vec3 v;
                 if (tc_value_to_vec3(value, v)) {
                     Pose3 p = Pose3::from_euler(radians(v.x), radians(v.y), radians(v.z));
-                    c->origin_rotation = {p.ang.x, p.ang.y, p.ang.z, p.ang.w};
+                    c->origin_rotation = p.ang;
                     c->apply();
                     return true;
                 }
@@ -211,9 +210,9 @@ namespace termin {
                                                    Vec3 default_axis,
                                                    double default_coordinate_scale)
         : CxxComponent(type_name) {
-        const double length = default_axis.norm();
-        if (default_axis.is_finite() && length > 1.0e-12) {
-            axis_ = default_axis / length;
+        Vec3 normalized_axis;
+        if (default_axis.try_normalized(normalized_axis, 1.0e-12)) {
+            axis_ = normalized_axis;
         }
         if (std::isfinite(default_coordinate_scale) && default_coordinate_scale > 0.0) {
             coordinate_scale_ = default_coordinate_scale;
@@ -234,15 +233,14 @@ namespace termin {
         deserialized_state_ = true;
     }
 
-    void KinematicUnitComponent::set_axis(double x, double y, double z) {
-        const Vec3 value{x, y, z};
-        const double length = value.norm();
-        if (!value.is_finite() || length <= 1.0e-12) {
+    void KinematicUnitComponent::set_axis(const Vec3& value) {
+        Vec3 normalized_axis;
+        if (!value.try_normalized(normalized_axis, 1.0e-12)) {
             tc::Log::error("[KinematicUnitComponent] rejected non-finite or "
                            "degenerate axis");
             return;
         }
-        axis_ = value / length;
+        axis_ = normalized_axis;
         apply();
     }
 
@@ -270,8 +268,8 @@ namespace termin {
     SpatialInertia3 KinematicUnitComponent::spatial_inertia() const noexcept {
         return {
             mass,
-            {inertia_diagonal.x, inertia_diagonal.y, inertia_diagonal.z},
-            Pose3::translation(center_of_mass.x, center_of_mass.y, center_of_mass.z),
+            inertia_diagonal,
+            Pose3::translation(center_of_mass),
         };
     }
 
@@ -286,22 +284,14 @@ namespace termin {
 
     void KinematicUnitComponent::recalculate_origin() {
         // Default: use the current transform as the origin pose.
-        double pos[3], rot[4];
-        if (!read_entity_transform(pos, rot))
+        const Entity ent = entity();
+        if (!ent.valid()) {
             return;
+        }
 
-        origin_position = {pos[0], pos[1], pos[2]};
-        origin_rotation = {rot[0], rot[1], rot[2], rot[3]};
-    }
-
-    bool KinematicUnitComponent::read_entity_transform(double pos[3], double rot[4]) const {
-        Entity ent = entity();
-        if (!ent.valid())
-            return false;
-
-        ent.get_local_position(pos);
-        ent.get_local_rotation(rot);
-        return true;
+        const GeneralTransform3 transform = ent.transform();
+        origin_position = transform.local_position();
+        origin_rotation = transform.local_rotation();
     }
 
 } // namespace termin

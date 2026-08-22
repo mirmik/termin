@@ -57,7 +57,7 @@ namespace tcplot {
         constexpr float kAxisLabelSizePx = 16.0f;
         const termin::SrgbColor label_color{0.8f, 0.8f, 0.8f, 1.0f};
         const auto project = [&](const termin::Vec3f& world) {
-            const termin::Vec3 clip = mvp.transform_point({world.x, world.y, world.z});
+            const termin::Vec3f clip = mvp.transform_point(world);
             const detail::PlotScene3DCanvasPoint canvas =
                 detail::termin_clip_ndc_to_canvas(clip.x, clip.y, viewport_width, viewport_height);
             return tgfx::CanvasVec2{canvas.x, canvas.y};
