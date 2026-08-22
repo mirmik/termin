@@ -37,11 +37,15 @@ int main(void) {
     GUARD_C_CHECK(tc_vec3f_try_normalized(TC_VEC3F(0.0f, 3.0f, 4.0f), 1.0e-6f, &checked_normalized));
     GUARD_C_CHECK(tc_vec3f_try_normalized(TC_VEC3F(FLT_MAX, 0.0f, 0.0f), 0.0f, &checked_normalized));
     GUARD_C_CHECK(checked_normalized.x == 1.0f && checked_normalized.y == 0.0f && checked_normalized.z == 0.0f);
+    GUARD_C_CHECK(tc_vec3f_try_normalized(TC_VEC3F(FLT_MAX, FLT_MAX, FLT_MAX), 0.0f, &checked_normalized));
+    GUARD_C_CHECK(fabsf(tc_vec3f_dot(checked_normalized, checked_normalized) - 1.0f) < 2.0e-6f);
 
     tc_vec3 checked_normalized_double = TC_VEC3(9.0, 8.0, 7.0);
     GUARD_C_CHECK(tc_vec3_try_normalized(TC_VEC3(DBL_MAX, 0.0, 0.0), 0.0, &checked_normalized_double));
     GUARD_C_CHECK(checked_normalized_double.x == 1.0 && checked_normalized_double.y == 0.0 &&
                   checked_normalized_double.z == 0.0);
+    GUARD_C_CHECK(tc_vec3_try_normalized(TC_VEC3(DBL_MAX, DBL_MAX, DBL_MAX), 0.0, &checked_normalized_double));
+    GUARD_C_CHECK(fabs(tc_vec3_dot(checked_normalized_double, checked_normalized_double) - 1.0) < 2.0e-15);
 
     tc_aabbf float_bounds = tc_aabbf_zero();
     GUARD_C_CHECK(tc_aabbf_is_valid(float_bounds));
@@ -65,9 +69,10 @@ int main(void) {
     double xy_dot = tc_vec3_dot(composed_affine.basis.x, composed_affine.basis.y);
     GUARD_C_CHECK(fabs(xy_dot) > 1.0e-3);
 
-    tc_affine3d reflection = tc_affine3d_mul(tc_affine3d_translation(7.0, -5.0, 3.0),
-                                             tc_affine3d_mul(tc_affine3d_rotation(tc_quat_from_euler(TC_VEC3(0.2, -0.4, 0.7))),
-                                                             tc_affine3d_scaling(-2.0, 0.75, 1.5)));
+    tc_affine3d reflection =
+        tc_affine3d_mul(tc_affine3d_translation(7.0, -5.0, 3.0),
+                        tc_affine3d_mul(tc_affine3d_rotation(tc_quat_from_euler(TC_VEC3(0.2, -0.4, 0.7))),
+                                        tc_affine3d_scaling(-2.0, 0.75, 1.5)));
     tc_affine3d inverse = tc_affine3d_identity();
     GUARD_C_CHECK(tc_affine3d_try_inverse(reflection, 1.0e-12, &inverse));
     tc_vec3 round_trip = tc_affine3d_transform_point(inverse, tc_affine3d_transform_point(reflection, point));

@@ -2,6 +2,7 @@
 #ifndef TC_VEC3F_H
 #define TC_VEC3F_H
 
+#include <geom/tc_checked_normalization.h>
 #include <math.h>
 #include <stddef.h>
 #include <tcbase/tc_types.h>
@@ -123,15 +124,13 @@ TC_C_STATIC_INLINE bool tc_vec3f_is_finite(tc_vec3f v) {
 
 // Computes a finite component-wise product without losing a non-zero
 // component entirely to underflow. On failure, out_product is unchanged.
-TC_C_STATIC_INLINE bool
-tc_vec3f_try_cwise_product(tc_vec3f lhs, tc_vec3f rhs, tc_vec3f* out_product) {
+TC_C_STATIC_INLINE bool tc_vec3f_try_cwise_product(tc_vec3f lhs, tc_vec3f rhs, tc_vec3f* out_product) {
     if (out_product == NULL || !tc_vec3f_is_finite(lhs) || !tc_vec3f_is_finite(rhs)) {
         return false;
     }
 
     tc_vec3f product = tc_vec3f_mul(lhs, rhs);
-    if (!tc_vec3f_is_finite(product) ||
-        (lhs.x != 0.0f && rhs.x != 0.0f && product.x == 0.0f) ||
+    if (!tc_vec3f_is_finite(product) || (lhs.x != 0.0f && rhs.x != 0.0f && product.x == 0.0f) ||
         (lhs.y != 0.0f && rhs.y != 0.0f && product.y == 0.0f) ||
         (lhs.z != 0.0f && rhs.z != 0.0f && product.z == 0.0f)) {
         return false;
@@ -142,18 +141,15 @@ tc_vec3f_try_cwise_product(tc_vec3f lhs, tc_vec3f rhs, tc_vec3f* out_product) {
 }
 
 TC_C_STATIC_INLINE bool tc_vec3f_try_normalized(tc_vec3f v, float epsilon, tc_vec3f* out_normalized) {
-    float length = hypotf(hypotf(v.x, v.y), v.z);
-    if (out_normalized == NULL || !tc_vec3f_is_finite(v) || !isfinite(length) || !isfinite(epsilon) ||
-        epsilon < 0.0f || length <= epsilon) {
+    if (out_normalized == NULL) {
         return false;
     }
-    // Component-wise division avoids a subnormal reciprocal that FTZ/DAZ modes
-    // may flush to zero for large finite vectors.
-    tc_vec3f normalized = TC_VEC3F(v.x / length, v.y / length, v.z / length);
-    if (!tc_vec3f_is_finite(normalized)) {
+    const float input[3] = {v.x, v.y, v.z};
+    float output[3];
+    if (!tc_detail_try_normalize_f32_components(input, 3, epsilon, output)) {
         return false;
     }
-    *out_normalized = normalized;
+    *out_normalized = TC_VEC3F(output[0], output[1], output[2]);
     return true;
 }
 

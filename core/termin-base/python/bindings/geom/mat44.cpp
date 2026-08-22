@@ -45,8 +45,41 @@ namespace termin {
             .def_static("translation", nb::overload_cast<double, double, double>(&Mat44::translation))
             .def_static("scale", nb::overload_cast<const Vec3&>(&Mat44::scale))
             .def_static("scale", nb::overload_cast<double>(&Mat44::scale))
-            .def_static("rotation", &Mat44::rotation)
-            .def_static("rotation_axis_angle", &Mat44::rotation_axis_angle)
+            .def_static(
+                "try_rotation",
+                [](const Quat& orientation, double epsilon) -> std::optional<Mat44> {
+                    Mat44 result;
+                    if (!Mat44::try_rotation(orientation, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "rotation",
+                [](const Quat& orientation, double epsilon) {
+                    Mat44 result;
+                    if (!Mat44::try_rotation(orientation, result, epsilon)) {
+                        throw nb::value_error("Quaternion cannot be converted to a Mat44 rotation matrix");
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "rotation_axis_angle",
+                [](const Vec3& axis, double angle, double epsilon) {
+                    Mat44 result;
+                    if (!Mat44::try_rotation_axis_angle(axis, angle, result, epsilon)) {
+                        throw nb::value_error(
+                            "Mat44 axis-angle rotation requires a finite non-degenerate axis and angle");
+                    }
+                    return result;
+                },
+                nb::arg("axis"),
+                nb::arg("angle"),
+                nb::arg("epsilon") = 1.0e-12)
             .def_static("perspective",
                         &Mat44::perspective,
                         nb::arg("fov_y"),
@@ -72,12 +105,34 @@ namespace termin {
                 nb::arg("target"),
                 nb::arg("up").none() = nb::none(),
                 "Look-at view matrix (Y-forward, Z-up)")
-            .def_static("compose",
-                        &Mat44::compose,
-                        nb::arg("translation"),
-                        nb::arg("rotation"),
-                        nb::arg("scale"),
-                        "Compose TRS matrix")
+            .def_static(
+                "try_compose",
+                [](const Vec3& translation, const Quat& rotation, const Vec3& scale, double epsilon)
+                    -> std::optional<Mat44> {
+                    Quat unit_rotation;
+                    if (!rotation.try_normalized(unit_rotation, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return Mat44::compose(translation, unit_rotation, scale);
+                },
+                nb::arg("translation"),
+                nb::arg("rotation"),
+                nb::arg("scale"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "compose",
+                [](const Vec3& translation, const Quat& rotation, const Vec3& scale, double epsilon) {
+                    Quat unit_rotation;
+                    if (!rotation.try_normalized(unit_rotation, epsilon)) {
+                        throw nb::value_error("Mat44 composition requires a finite non-degenerate rotation");
+                    }
+                    return Mat44::compose(translation, unit_rotation, scale);
+                },
+                nb::arg("translation"),
+                nb::arg("rotation"),
+                nb::arg("scale"),
+                nb::arg("epsilon") = 1.0e-12,
+                "Compose TRS matrix")
             .def("to_rows",
                  [](const Mat44& mat) {
                      double data[16];
@@ -139,8 +194,41 @@ namespace termin {
             .def_static("translation", nb::overload_cast<float, float, float>(&Mat44f::translation))
             .def_static("scale", nb::overload_cast<const Vec3&>(&Mat44f::scale))
             .def_static("scale", nb::overload_cast<float>(&Mat44f::scale))
-            .def_static("rotation", &Mat44f::rotation)
-            .def_static("rotation_axis_angle", &Mat44f::rotation_axis_angle)
+            .def_static(
+                "try_rotation",
+                [](const Quat& orientation, double epsilon) -> std::optional<Mat44f> {
+                    Mat44f result;
+                    if (!Mat44f::try_rotation(orientation, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "rotation",
+                [](const Quat& orientation, double epsilon) {
+                    Mat44f result;
+                    if (!Mat44f::try_rotation(orientation, result, epsilon)) {
+                        throw nb::value_error("Quaternion cannot be converted to a Mat44f rotation matrix");
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "rotation_axis_angle",
+                [](const Vec3& axis, float angle, double epsilon) {
+                    Mat44f result;
+                    if (!Mat44f::try_rotation_axis_angle(axis, angle, result, epsilon)) {
+                        throw nb::value_error(
+                            "Mat44f axis-angle rotation requires a finite non-degenerate axis and angle");
+                    }
+                    return result;
+                },
+                nb::arg("axis"),
+                nb::arg("angle"),
+                nb::arg("epsilon") = 1.0e-12)
             .def_static("perspective",
                         &Mat44f::perspective,
                         nb::arg("fov_y"),
@@ -163,7 +251,33 @@ namespace termin {
                 nb::arg("eye"),
                 nb::arg("target"),
                 nb::arg("up").none() = nb::none())
-            .def_static("compose", &Mat44f::compose, nb::arg("translation"), nb::arg("rotation"), nb::arg("scale"))
+            .def_static(
+                "try_compose",
+                [](const Vec3& translation, const Quat& rotation, const Vec3& scale, double epsilon)
+                    -> std::optional<Mat44f> {
+                    Quat unit_rotation;
+                    if (!rotation.try_normalized(unit_rotation, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return Mat44f::compose(translation, unit_rotation, scale);
+                },
+                nb::arg("translation"),
+                nb::arg("rotation"),
+                nb::arg("scale"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "compose",
+                [](const Vec3& translation, const Quat& rotation, const Vec3& scale, double epsilon) {
+                    Quat unit_rotation;
+                    if (!rotation.try_normalized(unit_rotation, epsilon)) {
+                        throw nb::value_error("Mat44f composition requires a finite non-degenerate rotation");
+                    }
+                    return Mat44f::compose(translation, unit_rotation, scale);
+                },
+                nb::arg("translation"),
+                nb::arg("rotation"),
+                nb::arg("scale"),
+                nb::arg("epsilon") = 1.0e-12)
             .def("to_rows",
                  [](const Mat44f& mat) {
                      double data[16];

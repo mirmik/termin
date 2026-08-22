@@ -77,6 +77,25 @@ def test_quat_inverse_is_true_for_non_unit_values() -> None:
     assert inverse is not None
     assert _components(partial_underflow * inverse) == pytest.approx((0.0, 0.0, 0.0, 1.0), abs=1.0e-15)
 
+    smallest_subnormal = float.fromhex("0x0.0000000000001p-1022")
+    subnormal = Quat(smallest_subnormal, 0.0, 0.0, 0.0)
+    assert _components(subnormal.normalized(0.0)) == (1.0, 0.0, 0.0, 0.0)
+    assert subnormal.try_inverse(0.0) is None
+    with pytest.raises(ValueError):
+        subnormal.inverse(0.0)
+
+    largest = float.fromhex("0x1.fffffffffffffp+1023")
+    multi_max = Quat(largest, largest, largest, largest)
+    multi_normalized = multi_max.try_normalized(0.0)
+    assert multi_normalized is not None
+    assert _components(multi_normalized) == (0.5, 0.5, 0.5, 0.5)
+    assert math.isinf(multi_max.norm())
+    assert math.isinf(multi_max.norm_squared())
+    multi_inverse = multi_max.try_inverse(0.0)
+    assert multi_inverse is not None
+    assert all(math.isfinite(component) for component in _components(multi_inverse))
+    assert _components(multi_max * multi_inverse) == pytest.approx((0.0, 0.0, 0.0, 1.0), abs=2.0e-15)
+
 
 @pytest.mark.parametrize(
     ("value", "epsilon"),
@@ -93,6 +112,121 @@ def test_quat_checked_inverse_rejects_invalid_values(value: Quat, epsilon: float
     assert value.try_inverse(epsilon) is None
     with pytest.raises(ValueError):
         value.inverse(epsilon)
+
+
+def test_checked_rotate_inverse_rotate_and_matrix_accept_scaled_quaternions() -> None:
+    quarter_turn = Quat.from_axis_angle(Vec3(0.0, 0.0, 7.0), math.pi / 2.0)
+    scaled = Quat(
+        quarter_turn.x * 9.0,
+        quarter_turn.y * 9.0,
+        quarter_turn.z * 9.0,
+        quarter_turn.w * 9.0,
+    )
+    vector = Vec3(2.0, -3.0, 4.0)
+
+    rotated = scaled.try_rotate(vector)
+    assert rotated is not None
+    assert tuple(rotated) == pytest.approx((3.0, 2.0, 4.0), abs=1.0e-14)
+    assert tuple(scaled.rotate(vector)) == pytest.approx(tuple(rotated), abs=1.0e-14)
+
+    recovered = scaled.try_inverse_rotate(rotated)
+    assert recovered is not None
+    assert tuple(recovered) == pytest.approx(tuple(vector), abs=1.0e-14)
+    assert tuple(scaled.inverse_rotate(rotated)) == pytest.approx(tuple(vector), abs=1.0e-14)
+
+    matrix = scaled.try_to_matrix()
+    assert matrix is not None
+    assert tuple(matrix.transform(vector)) == pytest.approx(tuple(rotated), abs=1.0e-14)
+    assert tuple(scaled.to_matrix().transform(vector)) == pytest.approx(tuple(rotated), abs=1.0e-14)
+
+    largest = float.fromhex("0x1.fffffffffffffp+1023")
+    multi_max = Quat(largest, largest, largest, largest)
+    max_rotated = multi_max.try_rotate(vector, 0.0)
+    max_matrix = multi_max.try_to_matrix(0.0)
+    assert max_rotated is not None
+    assert max_matrix is not None
+    assert tuple(max_matrix.transform(vector)) == pytest.approx(tuple(max_rotated), abs=1.0e-14)
+
+    half_turn_z = Quat(0.0, 0.0, 1.0, 0.0)
+    largest_vector = Vec3(largest, 0.0, 0.0)
+    largest_rotated = half_turn_z.try_rotate(largest_vector, 0.0)
+    largest_inverse_rotated = half_turn_z.try_inverse_rotate(largest_vector, 0.0)
+    assert largest_rotated is not None
+    assert largest_inverse_rotated is not None
+    assert tuple(largest_rotated) == (-largest, 0.0, 0.0)
+    assert tuple(largest_inverse_rotated) == (-largest, 0.0, 0.0)
+
+
+@pytest.mark.parametrize(
+    ("value", "vector", "epsilon"),
+    [
+        (Quat(0.0, 0.0, 0.0, 0.0), Vec3(1.0, 2.0, 3.0), 0.0),
+        (Quat(math.nan, 0.0, 0.0, 1.0), Vec3(1.0, 2.0, 3.0), 0.0),
+        (Quat(0.0, math.inf, 0.0, 1.0), Vec3(1.0, 2.0, 3.0), 0.0),
+        (Quat.identity(), Vec3(1.0, 2.0, 3.0), -1.0),
+        (Quat.identity(), Vec3(1.0, 2.0, 3.0), math.nan),
+        (Quat.identity(), Vec3(1.0, 2.0, 3.0), 1.0),
+    ],
+)
+def test_checked_rotate_and_matrix_reject_invalid_values(value: Quat, vector: Vec3, epsilon: float) -> None:
+    assert value.try_rotate(vector, epsilon) is None
+    assert value.try_inverse_rotate(vector, epsilon) is None
+    assert value.try_to_matrix(epsilon) is None
+    with pytest.raises(ValueError):
+        value.rotate(vector, epsilon)
+    with pytest.raises(ValueError):
+        value.inverse_rotate(vector, epsilon)
+    with pytest.raises(ValueError):
+        value.to_matrix(epsilon)
+
+
+def test_checked_rotate_rejects_invalid_vector_without_affecting_matrix() -> None:
+    value = Quat.identity()
+    vector = Vec3(math.nan, 0.0, 0.0)
+
+    assert value.try_rotate(vector, 0.0) is None
+    assert value.try_inverse_rotate(vector, 0.0) is None
+    assert value.try_to_matrix(0.0) is not None
+    with pytest.raises(ValueError):
+        value.rotate(vector, 0.0)
+    with pytest.raises(ValueError):
+        value.inverse_rotate(vector, 0.0)
+    value.to_matrix(0.0)
+
+
+def test_checked_rotate_rejects_unrepresentable_result_transactionally() -> None:
+    largest = float.fromhex("0x1.fffffffffffffp+1023")
+    value = Quat.from_axis_angle(Vec3.unit_z(), math.pi / 4.0)
+    vector = Vec3(largest, largest, 0.0)
+
+    assert value.try_rotate(vector, 0.0) is None
+    assert value.try_inverse_rotate(vector, 0.0) is None
+    with pytest.raises(ValueError):
+        value.rotate(vector, 0.0)
+    with pytest.raises(ValueError):
+        value.inverse_rotate(vector, 0.0)
+
+
+def test_axis_angle_normalizes_full_range_axes_and_rejects_invalid_values() -> None:
+    largest = float.fromhex("0x1.fffffffffffffp+1023")
+    large_axis = Quat.try_from_axis_angle(Vec3(largest, largest, 0.0), 0.73, 0.0)
+    assert large_axis is not None
+    assert large_axis.norm() == pytest.approx(1.0, abs=1.0e-15)
+    assert _same_rotation(large_axis, Quat.from_axis_angle(Vec3(7.0, 7.0, 0.0), 0.73))
+
+    invalid_cases = [
+        (Vec3.zero(), 0.5, 0.0),
+        (Vec3(math.nan, 0.0, 0.0), 0.5, 0.0),
+        (Vec3(0.0, math.inf, 0.0), 0.5, 0.0),
+        (Vec3.unit_x(), math.nan, 0.0),
+        (Vec3.unit_x(), math.inf, 0.0),
+        (Vec3.unit_x(), 0.5, -1.0),
+        (Vec3.unit_x(), 0.5, math.nan),
+    ]
+    for axis, angle, epsilon in invalid_cases:
+        assert Quat.try_from_axis_angle(axis, angle, epsilon) is None
+        with pytest.raises(ValueError):
+            Quat.from_axis_angle(axis, angle, epsilon)
 
 
 def test_slerp_normalizes_inputs_uses_shortest_path_and_allows_extrapolation() -> None:

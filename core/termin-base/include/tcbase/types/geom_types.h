@@ -7,13 +7,16 @@
 #ifdef __cplusplus
 #include <cassert>
 #include <cmath>
+#include <geom/tc_checked_normalization.h>
+#include <geom/tc_lerp_detail.h>
+#include <geom/tc_quat_detail.h>
 #include <limits>
 
 namespace termin {
     struct Bounds2;
     struct Mat44;
     struct Rect2;
-}
+} // namespace termin
 
 struct tc_rect2f;
 struct tc_vec2f;
@@ -107,11 +110,12 @@ struct tc_vec2 {
         return std::isfinite(x) && std::isfinite(y);
     }
     bool try_normalized(tc_vec2& out, double epsilon = 1.0e-10) const noexcept {
-        const double n = std::hypot(x, y);
-        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0 || n <= epsilon) {
+        const double input[2] = {x, y};
+        double output[2];
+        if (!tc_detail_try_normalize_f64_components(input, 2, epsilon, output)) {
             return false;
         }
-        out = *this / n;
+        out = {output[0], output[1]};
         return true;
     }
     tc_vec2 normalized_or(const tc_vec2& fallback, double epsilon = 1.0e-10) const noexcept {
@@ -256,11 +260,12 @@ struct tc_vec2f {
         return std::isfinite(x) && std::isfinite(y);
     }
     bool try_normalized(tc_vec2f& out, float epsilon = 1.0e-6f) const noexcept {
-        const float n = std::hypot(x, y);
-        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0f || n <= epsilon) {
+        const float input[2] = {x, y};
+        float output[2];
+        if (!tc_detail_try_normalize_f32_components(input, 2, epsilon, output)) {
             return false;
         }
-        out = *this / n;
+        out = {output[0], output[1]};
         return true;
     }
     tc_vec2f normalized_or(const tc_vec2f& fallback, float epsilon = 1.0e-6f) const noexcept {
@@ -556,16 +561,22 @@ struct tc_vec3 {
     }
 
     bool try_normalized(tc_vec3& out, double epsilon = 1.0e-10) const noexcept {
-        const double n = std::hypot(x, y, z);
-        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0 || n <= epsilon) {
+        const double input[3] = {x, y, z};
+        double output[3];
+        if (!tc_detail_try_normalize_f64_components(input, 3, epsilon, output)) {
             return false;
         }
-        out = *this / n;
+        out = {output[0], output[1], output[2]};
         return true;
     }
     tc_vec3 normalized_or(const tc_vec3& fallback, double epsilon = 1.0e-10) const noexcept {
         tc_vec3 result;
         return try_normalized(result, epsilon) ? result : fallback;
+    }
+    static tc_vec3 lerp(const tc_vec3& a, const tc_vec3& b, double t) noexcept {
+        return {tc_detail_lerp_f64_component(a.x, b.x, t),
+                tc_detail_lerp_f64_component(a.y, b.y, t),
+                tc_detail_lerp_f64_component(a.z, b.z, t)};
     }
     double* ptr() noexcept {
         return &x;
@@ -677,6 +688,9 @@ struct tc_ray3 {
 };
 
 struct tc_quat {
+    // Raw packed xyzw coefficients. rotate/inverse_rotate/to_matrix are finite
+    // unit-quaternion fast paths; use their try_ counterparts for uncertain
+    // runtime input.
     double x = 0.0;
     double y = 0.0;
     double z = 0.0;
@@ -727,17 +741,12 @@ struct tc_quat {
     }
 
     bool try_normalized(tc_quat& out, double epsilon = 1.0e-12) const noexcept {
-        const double length = norm();
-        if (!is_finite() || !std::isfinite(length) || !std::isfinite(epsilon) || epsilon < 0.0 ||
-            length <= epsilon) {
+        const double input[4] = {x, y, z, w};
+        double output[4];
+        if (!tc_detail_try_normalize_f64_components(input, 4, epsilon, output)) {
             return false;
         }
-
-        const tc_quat result{x / length, y / length, z / length, w / length};
-        if (!result.is_finite()) {
-            return false;
-        }
-        out = result;
+        out = {output[0], output[1], output[2], output[3]};
         return true;
     }
 
@@ -756,19 +765,12 @@ struct tc_quat {
     }
 
     bool try_inverse(tc_quat& out, double epsilon = 1.0e-12) const noexcept {
-        const double length = norm();
-        if (!is_finite() || !std::isfinite(length) || !std::isfinite(epsilon) || epsilon < 0.0 ||
-            length <= epsilon) {
+        const double input[4] = {x, y, z, w};
+        double result[4];
+        if (!tc_detail_try_inverse_quat_f64_components(input, epsilon, result)) {
             return false;
         }
-
-        // Divide in two stages instead of forming norm_squared: this remains
-        // useful for finite quaternions whose squared norm overflows.
-        const tc_quat result{-x / length / length, -y / length / length, -z / length / length, w / length / length};
-        if (!result.is_finite()) {
-            return false;
-        }
-        out = result;
+        out = {result[0], result[1], result[2], result[3]};
         return true;
     }
 
@@ -781,7 +783,9 @@ struct tc_quat {
         return {nan, nan, nan, nan};
     }
 
-    tc_vec3 rotate(const tc_vec3& v) const {
+    // Fast path: both the quaternion and vector must be finite and the
+    // quaternion must have unit norm. Use try_rotate for uncertain input.
+    tc_vec3 rotate(const tc_vec3& v) const noexcept {
         double tx = 2.0 * (y * v.z - z * v.y);
         double ty = 2.0 * (z * v.x - x * v.z);
         double tz = 2.0 * (x * v.y - y * v.x);
@@ -789,15 +793,59 @@ struct tc_quat {
         return {v.x + w * tx + y * tz - z * ty, v.y + w * ty + z * tx - x * tz, v.z + w * tz + x * ty - y * tx};
     }
 
-    tc_vec3 inverse_rotate(const tc_vec3& v) const {
+    // Fast path with the same finite unit-quaternion precondition as rotate.
+    tc_vec3 inverse_rotate(const tc_vec3& v) const noexcept {
         return conjugate().rotate(v);
     }
 
+    bool try_rotate(const tc_vec3& v, tc_vec3& out, double epsilon = 1.0e-12) const noexcept {
+        tc_quat unit;
+        if (!try_normalized(unit, epsilon)) {
+            return false;
+        }
+        const double quat[4] = {unit.x, unit.y, unit.z, unit.w};
+        const double vector[3] = {v.x, v.y, v.z};
+        double result[3];
+        if (!tc_detail_try_rotate_unit_quat_f64_components(quat, vector, false, result)) {
+            return false;
+        }
+        out = {result[0], result[1], result[2]};
+        return true;
+    }
+
+    bool try_inverse_rotate(const tc_vec3& v, tc_vec3& out, double epsilon = 1.0e-12) const noexcept {
+        tc_quat unit;
+        if (!try_normalized(unit, epsilon)) {
+            return false;
+        }
+        const double quat[4] = {unit.x, unit.y, unit.z, unit.w};
+        const double vector[3] = {v.x, v.y, v.z};
+        double result[3];
+        if (!tc_detail_try_rotate_unit_quat_f64_components(quat, vector, true, result)) {
+            return false;
+        }
+        out = {result[0], result[1], result[2]};
+        return true;
+    }
+
+    static bool
+    try_from_axis_angle(const tc_vec3& axis, double angle, tc_quat& out, double epsilon = 1.0e-12) noexcept {
+        const double axis_components[3] = {axis.x, axis.y, axis.z};
+        double result[4];
+        if (!tc_detail_try_quat_from_axis_angle_f64_components(axis_components, angle, epsilon, result)) {
+            return false;
+        }
+        out = {result[0], result[1], result[2], result[3]};
+        return true;
+    }
+
     static tc_quat from_axis_angle(const tc_vec3& axis, double angle) {
-        double half = angle * 0.5;
-        double s = std::sin(half);
-        tc_vec3 n = axis.normalized();
-        return {n.x * s, n.y * s, n.z * s, std::cos(half)};
+        tc_quat result;
+        if (try_from_axis_angle(axis, angle, result)) {
+            return result;
+        }
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return {nan, nan, nan, nan};
     }
 
     static tc_quat look_rotation(const tc_vec3& forward, const tc_vec3& up = tc_vec3::unit_z()) {
@@ -809,11 +857,8 @@ struct tc_quat {
         return from_rotation_matrix(m);
     }
 
-    static bool try_slerp(const tc_quat& a,
-                          const tc_quat& b,
-                          double t,
-                          tc_quat& out,
-                          double epsilon = 1.0e-12) noexcept {
+    static bool
+    try_slerp(const tc_quat& a, const tc_quat& b, double t, tc_quat& out, double epsilon = 1.0e-12) noexcept {
         if (!std::isfinite(t) || !std::isfinite(epsilon) || epsilon < 0.0) {
             return false;
         }
@@ -847,8 +892,8 @@ struct tc_quat {
             const double sin_theta = std::sin(theta);
             const double from_angle = (1.0 - t) * theta;
             const double to_angle = t * theta;
-            if (!std::isfinite(theta) || !std::isfinite(sin_theta) || sin_theta == 0.0 ||
-                !std::isfinite(from_angle) || !std::isfinite(to_angle)) {
+            if (!std::isfinite(theta) || !std::isfinite(sin_theta) || sin_theta == 0.0 || !std::isfinite(from_angle) ||
+                !std::isfinite(to_angle)) {
                 return false;
             }
             const double from_weight = std::sin(from_angle) / sin_theta;
@@ -867,10 +912,7 @@ struct tc_quat {
         return true;
     }
 
-    static tc_quat slerp(const tc_quat& a,
-                         const tc_quat& b,
-                         double t,
-                         double epsilon = 1.0e-12) noexcept {
+    static tc_quat slerp(const tc_quat& a, const tc_quat& b, double t, double epsilon = 1.0e-12) noexcept {
         tc_quat result;
         if (try_slerp(a, b, t, result, epsilon)) {
             return result;
@@ -930,14 +972,11 @@ struct tc_quat {
             // observable combined Z rotation in yaw.
             result.x = 0.0;
             result.y = std::copysign(0.5 * 3.14159265358979323846, sin_pitch);
-            result.z = std::atan2(2.0 * (q.w * q.z - q.x * q.y),
-                                  1.0 - 2.0 * (q.x * q.x + q.z * q.z));
+            result.z = std::atan2(2.0 * (q.w * q.z - q.x * q.y), 1.0 - 2.0 * (q.x * q.x + q.z * q.z));
         } else {
-            result.x = std::atan2(2.0 * (q.w * q.x + q.y * q.z),
-                                  1.0 - 2.0 * (q.x * q.x + q.y * q.y));
+            result.x = std::atan2(2.0 * (q.w * q.x + q.y * q.z), 1.0 - 2.0 * (q.x * q.x + q.y * q.y));
             result.y = std::asin(sin_pitch);
-            result.z = std::atan2(2.0 * (q.w * q.z + q.x * q.y),
-                                  1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+            result.z = std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
         }
         if (!result.is_finite()) {
             return false;
@@ -988,20 +1027,32 @@ struct tc_quat {
         return tc_quat{x, y, z, w}.normalized();
     }
 
-    void to_matrix(double* m) const {
-        double xx = x * x, yy = y * y, zz = z * z;
-        double xy = x * y, xz = x * z, yz = y * z;
-        double wx = w * x, wy = w * y, wz = w * z;
+    bool try_to_matrix(double* out_row_major_9, double epsilon = 1.0e-12) const noexcept {
+        if (out_row_major_9 == nullptr) {
+            return false;
+        }
+        tc_quat unit;
+        if (!try_normalized(unit, epsilon)) {
+            return false;
+        }
+        double result[9];
+        unit.to_matrix(result);
+        for (double coefficient : result) {
+            if (!std::isfinite(coefficient)) {
+                return false;
+            }
+        }
+        for (int i = 0; i < 9; ++i) {
+            out_row_major_9[i] = result[i];
+        }
+        return true;
+    }
 
-        m[0] = 1 - 2 * (yy + zz);
-        m[1] = 2 * (xy - wz);
-        m[2] = 2 * (xz + wy);
-        m[3] = 2 * (xy + wz);
-        m[4] = 1 - 2 * (xx + zz);
-        m[5] = 2 * (yz - wx);
-        m[6] = 2 * (xz - wy);
-        m[7] = 2 * (yz + wx);
-        m[8] = 1 - 2 * (xx + yy);
+    // Fast row-major 3x3 conversion. The quaternion must be finite and unit;
+    // use try_to_matrix for uncertain input.
+    void to_matrix(double* m) const noexcept {
+        const double quat[4] = {x, y, z, w};
+        tc_detail_unit_quat_to_matrix3_row_major_f64(quat, m);
     }
 };
 
@@ -1101,11 +1152,12 @@ struct tc_vec3f {
         return std::isfinite(x) && std::isfinite(y) && std::isfinite(z);
     }
     bool try_normalized(tc_vec3f& out, float epsilon = 1.0e-6f) const noexcept {
-        const float n = std::hypot(x, y, z);
-        if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0f || n <= epsilon) {
+        const float input[3] = {x, y, z};
+        float output[3];
+        if (!tc_detail_try_normalize_f32_components(input, 3, epsilon, output)) {
             return false;
         }
-        out = *this / n;
+        out = {output[0], output[1], output[2]};
         return true;
     }
     tc_vec3f normalized_or(const tc_vec3f& fallback, float epsilon = 1.0e-6f) const noexcept {
@@ -1357,6 +1409,9 @@ struct tc_affine3d {
 };
 
 struct tc_pose3 {
+    // Raw ABI-friendly pose value. Native transform/composition/inverse/matrix
+    // methods require ang to be finite and unit; owning boundaries normalize
+    // uncertain input before storing or applying the pose.
     tc_quat ang;
     tc_vec3 lin;
 
@@ -1421,6 +1476,8 @@ struct tc_pose3 {
 };
 
 struct tc_general_pose3 {
+    // The same finite unit-quaternion precondition as tc_pose3 applies to all
+    // native transform/composition/inverse/matrix methods.
     tc_quat ang;
     tc_vec3 lin;
     tc_vec3 scale = {1.0, 1.0, 1.0};

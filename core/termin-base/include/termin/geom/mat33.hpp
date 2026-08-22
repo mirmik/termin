@@ -133,6 +133,37 @@ namespace termin {
             return m;
         }
 
+        // Fast path: orientation must be a finite unit quaternion. Use
+        // try_rotation when the quaternion comes from an unchecked boundary.
+        static Mat33f rotation(const Quat& orientation) noexcept {
+            double row_major[9];
+            orientation.to_matrix(row_major);
+
+            Mat33f result;
+            for (int row = 0; row < 3; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    result(column, row) = static_cast<float>(row_major[row * 3 + column]);
+                }
+            }
+            return result;
+        }
+
+        static bool try_rotation(const Quat& orientation, Mat33f& out, double epsilon = 1.0e-12) noexcept {
+            double row_major[9];
+            if (!orientation.try_to_matrix(row_major, epsilon)) {
+                return false;
+            }
+
+            Mat33f result;
+            for (int row = 0; row < 3; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    result(column, row) = static_cast<float>(row_major[row * 3 + column]);
+                }
+            }
+            out = result;
+            return true;
+        }
+
         // Rotation around axis (angle in radians)
         static Mat33f rotation_x(float angle) {
             float c = std::cos(angle), s = std::sin(angle);
@@ -164,25 +195,21 @@ namespace termin {
             return m;
         }
 
-        static Mat33f rotation_axis_angle(const Vec3f& axis, float angle) {
-            Vec3f a = axis.normalized();
-            float c = std::cos(angle), s = std::sin(angle);
-            float t = 1.0f - c;
+        static bool
+        try_rotation_axis_angle(const Vec3f& axis, float angle, Mat33f& out, double epsilon = 1.0e-12) noexcept {
+            Quat orientation;
+            if (!Quat::try_from_axis_angle(axis.to_double(), static_cast<double>(angle), orientation, epsilon)) {
+                return false;
+            }
+            // epsilon belongs to the source-axis magnitude contract. The
+            // quaternion produced above is already checked and normalized.
+            return try_rotation(orientation, out, 0.0);
+        }
 
-            Mat33f m;
-            m(0, 0) = t * a.x * a.x + c;
-            m(0, 1) = t * a.x * a.y + s * a.z;
-            m(0, 2) = t * a.x * a.z - s * a.y;
-
-            m(1, 0) = t * a.x * a.y - s * a.z;
-            m(1, 1) = t * a.y * a.y + c;
-            m(1, 2) = t * a.y * a.z + s * a.x;
-
-            m(2, 0) = t * a.x * a.z + s * a.y;
-            m(2, 1) = t * a.y * a.z - s * a.x;
-            m(2, 2) = t * a.z * a.z + c;
-
-            return m;
+        // Invalid axis-angle input is represented by a non-finite matrix. Use
+        // try_rotation_axis_angle at unchecked boundaries.
+        static Mat33f rotation_axis_angle(const Vec3f& axis, float angle) noexcept {
+            return rotation(Quat::from_axis_angle(axis.to_double(), static_cast<double>(angle)));
         }
     };
 
@@ -315,9 +342,11 @@ namespace termin {
             return m;
         }
 
-        static Mat33 rotation(const Quat& orientation) {
+        // Fast path: orientation must be a finite unit quaternion. Use
+        // try_rotation when the quaternion comes from an unchecked boundary.
+        static Mat33 rotation(const Quat& orientation) noexcept {
             double row_major[9];
-            orientation.normalized().to_matrix(row_major);
+            orientation.to_matrix(row_major);
             Mat33 result;
             for (int row = 0; row < 3; ++row) {
                 for (int column = 0; column < 3; ++column) {
@@ -325,6 +354,22 @@ namespace termin {
                 }
             }
             return result;
+        }
+
+        static bool try_rotation(const Quat& orientation, Mat33& out, double epsilon = 1.0e-12) noexcept {
+            double row_major[9];
+            if (!orientation.try_to_matrix(row_major, epsilon)) {
+                return false;
+            }
+
+            Mat33 result;
+            for (int row = 0; row < 3; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    result(column, row) = row_major[row * 3 + column];
+                }
+            }
+            out = result;
+            return true;
         }
 
         // Matrix [value]x such that cross_product(value) * v == value.cross(v).
@@ -370,25 +415,21 @@ namespace termin {
             return m;
         }
 
-        static Mat33 rotation_axis_angle(const Vec3& axis, double angle) {
-            Vec3 a = axis.normalized();
-            double c = std::cos(angle), s = std::sin(angle);
-            double t = 1.0 - c;
+        static bool
+        try_rotation_axis_angle(const Vec3& axis, double angle, Mat33& out, double epsilon = 1.0e-12) noexcept {
+            Quat orientation;
+            if (!Quat::try_from_axis_angle(axis, angle, orientation, epsilon)) {
+                return false;
+            }
+            // epsilon belongs to the source-axis magnitude contract. The
+            // quaternion produced above is already checked and normalized.
+            return try_rotation(orientation, out, 0.0);
+        }
 
-            Mat33 m;
-            m(0, 0) = t * a.x * a.x + c;
-            m(0, 1) = t * a.x * a.y + s * a.z;
-            m(0, 2) = t * a.x * a.z - s * a.y;
-
-            m(1, 0) = t * a.x * a.y - s * a.z;
-            m(1, 1) = t * a.y * a.y + c;
-            m(1, 2) = t * a.y * a.z + s * a.x;
-
-            m(2, 0) = t * a.x * a.z + s * a.y;
-            m(2, 1) = t * a.y * a.z - s * a.x;
-            m(2, 2) = t * a.z * a.z + c;
-
-            return m;
+        // Invalid axis-angle input is represented by a non-finite matrix. Use
+        // try_rotation_axis_angle at unchecked boundaries.
+        static Mat33 rotation_axis_angle(const Vec3& axis, double angle) noexcept {
+            return rotation(Quat::from_axis_angle(axis, angle));
         }
     };
 

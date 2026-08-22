@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from termin.geombase import GeneralPose3, Pose3, Vec3, Quat
+from termin.geombase._geom_native import lerp_general_pose3
 
 
 def assert_vec3_approx(actual: Vec3, expected: tuple, eps=1e-6):
@@ -12,6 +13,13 @@ def assert_vec3_approx(actual: Vec3, expected: tuple, eps=1e-6):
     assert abs(actual.x - expected[0]) < eps, f"x: {actual.x} != {expected[0]}"
     assert abs(actual.y - expected[1]) < eps, f"y: {actual.y} != {expected[1]}"
     assert abs(actual.z - expected[2]) < eps, f"z: {actual.z} != {expected[2]}"
+
+
+def assert_quat_approx(actual: Quat, expected: Quat, eps=1e-6):
+    assert actual.x == pytest.approx(expected.x, abs=eps)
+    assert actual.y == pytest.approx(expected.y, abs=eps)
+    assert actual.z == pytest.approx(expected.z, abs=eps)
+    assert actual.w == pytest.approx(expected.w, abs=eps)
 
 
 class TestGeneralPose3Basics:
@@ -33,11 +41,7 @@ class TestGeneralPose3Basics:
         assert_vec3_approx(gp.scale, (1, 1, 1))
 
     def test_constructor_with_scale(self):
-        gp = GeneralPose3(
-            lin=Vec3(1, 2, 3),
-            ang=Quat(0, 0, 0, 1),
-            scale=Vec3(2, 3, 4)
-        )
+        gp = GeneralPose3(lin=Vec3(1, 2, 3), ang=Quat(0, 0, 0, 1), scale=Vec3(2, 3, 4))
         assert_vec3_approx(gp.lin, (1, 2, 3))
         assert_vec3_approx(gp.scale, (2, 3, 4))
 
@@ -48,10 +52,7 @@ class TestGeneralPose3Basics:
             gp.normalized()
 
     def test_copy(self):
-        gp = GeneralPose3(
-            lin=Vec3(1, 2, 3),
-            scale=Vec3(2, 2, 2)
-        )
+        gp = GeneralPose3(lin=Vec3(1, 2, 3), scale=Vec3(2, 2, 2))
         gp_copy = gp.copy()
 
         # Check copy has same values
@@ -62,17 +63,160 @@ class TestGeneralPose3Basics:
         assert gp_copy.ang.w == pytest.approx(1)
         assert_vec3_approx(gp_copy.scale, (2, 2, 2))
 
+    def test_semantic_operations_accept_scaled_rotation_without_mutating_pose(self):
+        unit_rotation = GeneralPose3.rotate_z(math.pi / 2).ang
+        factor = 1.0e300
+        scaled_rotation = Quat(
+            unit_rotation.x * factor,
+            unit_rotation.y * factor,
+            unit_rotation.z * factor,
+            unit_rotation.w * factor,
+        )
+        pose = GeneralPose3(
+            ang=scaled_rotation,
+            lin=Vec3(1.0, 2.0, 3.0),
+            scale=Vec3(2.0, 3.0, 4.0),
+        )
+        reference = GeneralPose3(ang=unit_rotation, lin=pose.lin, scale=pose.scale)
+        point = Vec3(2.0, -1.0, 0.5)
+
+        transformed = reference.transform_point(point)
+        assert_vec3_approx(
+            pose.transform_point(point),
+            (transformed.x, transformed.y, transformed.z),
+        )
+        recovered = pose.inverse_transform_point(transformed)
+        assert_vec3_approx(recovered, (point.x, point.y, point.z))
+        direction = pose.transform_direction(Vec3.unit_x())
+        reference_direction = reference.transform_direction(Vec3.unit_x())
+        assert_vec3_approx(
+            direction,
+            (reference_direction.x, reference_direction.y, reference_direction.z),
+        )
+
+        inverse = pose.inverse_trs_projected()
+        reference_inverse = reference.inverse_trs_projected()
+        assert_quat_approx(inverse.ang, reference_inverse.ang)
+        assert_vec3_approx(
+            inverse.lin,
+            (reference_inverse.lin.x, reference_inverse.lin.y, reference_inverse.lin.z),
+        )
+        assert_vec3_approx(
+            inverse.scale,
+            (reference_inverse.scale.x, reference_inverse.scale.y, reference_inverse.scale.z),
+        )
+
+        np.testing.assert_allclose(pose.rotation_matrix(), reference.rotation_matrix())
+        np.testing.assert_allclose(pose.as_matrix(), reference.as_matrix())
+        np.testing.assert_allclose(pose.inverse_matrix(), reference.inverse_matrix())
+
+        assert pose.ang.x == scaled_rotation.x
+        assert pose.ang.y == scaled_rotation.y
+        assert pose.ang.z == scaled_rotation.z
+        assert pose.ang.w == scaled_rotation.w
+
+    def test_semantic_operations_reject_invalid_rotations(self):
+        invalid_rotations = (
+            Quat(0.0, 0.0, 0.0, 0.0),
+            Quat(math.nan, 0.0, 0.0, 1.0),
+            Quat(math.inf, 0.0, 0.0, 1.0),
+        )
+        for rotation in invalid_rotations:
+            pose = GeneralPose3(ang=rotation)
+            operations = (
+                pose.inverse_trs_projected,
+                lambda pose=pose: pose.transform_point(Vec3.unit_x()),
+                lambda pose=pose: pose.transform_direction(Vec3.unit_x()),
+                pose.rotation_matrix,
+                pose.as_matrix,
+                pose.inverse_matrix,
+                lambda pose=pose: pose.compose_trs_projected(GeneralPose3.identity()),
+            )
+            for operation in operations:
+                with pytest.raises(ValueError, match="GeneralPose3 rotation"):
+                    operation()
+
+    def test_axis_angle_factories_reject_invalid_inputs(self):
+        with pytest.raises(ValueError, match="GeneralPose3 axis"):
+            GeneralPose3.rotation(Vec3.zero(), 0.5)
+        with pytest.raises(ValueError, match="GeneralPose3 axis"):
+            GeneralPose3.rotation(Vec3.unit_z(), math.nan)
+        with pytest.raises(ValueError, match="GeneralPose3 axis"):
+            GeneralPose3.rotate_x(math.inf)
+
+    def test_semantic_operations_cover_full_range_rotation_intermediates(self):
+        largest = float.fromhex("0x1.fffffffffffffp+1023")
+        rotation = Quat(0.0, 0.0, largest, 0.0)
+        pose = GeneralPose3(ang=rotation, scale=Vec3(1.0, 1.0, 1.0))
+        vector = Vec3(largest, 0.0, 0.0)
+
+        assert_vec3_approx(pose.transform_vector(vector), (-largest, 0.0, 0.0))
+        assert_vec3_approx(pose.inverse_transform_vector(vector), (-largest, 0.0, 0.0))
+        assert_vec3_approx(pose.right_in_global(largest), (-largest, 0.0, 0.0))
+        assert_vec3_approx(pose.global_right_in_local(largest), (-largest, 0.0, 0.0))
+
+        child = GeneralPose3(lin=vector)
+        composed = pose.compose_trs_projected(child)
+        assert_vec3_approx(composed.lin, (-largest, 0.0, 0.0))
+
+        inverse = GeneralPose3(ang=rotation, lin=vector).inverse_trs_projected()
+        assert_vec3_approx(inverse.lin, (largest, 0.0, 0.0))
+
+        with pytest.raises(ValueError, match="distance must be finite"):
+            pose.right_in_global(math.inf)
+        with pytest.raises(ValueError, match="GeneralPose3 rotation"):
+            GeneralPose3(ang=Quat(0.0, 0.0, 0.0, 0.0)).right_in_global()
+
 
 class TestGeneralPose3Composition:
     """Test explicitly projected TRS composition with scale."""
 
+    def test_composition_accepts_scaled_parent_and_child_rotations(self):
+        parent_rotation = GeneralPose3.rotate_x(0.25).ang
+        child_rotation = GeneralPose3.rotate_z(-0.5).ang
+        parent = GeneralPose3(
+            ang=Quat(
+                parent_rotation.x * 8.0,
+                parent_rotation.y * 8.0,
+                parent_rotation.z * 8.0,
+                parent_rotation.w * 8.0,
+            ),
+            lin=Vec3(1.0, 2.0, 3.0),
+            scale=Vec3(2.0, 3.0, 4.0),
+        )
+        child = GeneralPose3(
+            ang=Quat(
+                child_rotation.x * 3.0,
+                child_rotation.y * 3.0,
+                child_rotation.z * 3.0,
+                child_rotation.w * 3.0,
+            ),
+            lin=Vec3(-2.0, 1.0, 0.5),
+            scale=Vec3(0.5, 2.0, 1.5),
+        )
+        reference_parent = GeneralPose3(ang=parent_rotation, lin=parent.lin, scale=parent.scale)
+        reference_child = GeneralPose3(ang=child_rotation, lin=child.lin, scale=child.scale)
+
+        actual = parent.compose_trs_projected(child)
+        expected = reference_parent.compose_trs_projected(reference_child)
+        assert_quat_approx(actual.ang, expected.ang)
+        assert_vec3_approx(actual.lin, (expected.lin.x, expected.lin.y, expected.lin.z))
+        assert_vec3_approx(actual.scale, (expected.scale.x, expected.scale.y, expected.scale.z))
+
+        pose_child = Pose3(ang=child.ang, lin=child.lin)
+        reference_pose_child = Pose3(ang=child_rotation, lin=child.lin)
+        actual_pose_child = parent.compose_trs_projected(pose_child)
+        expected_pose_child = reference_parent.compose_trs_projected(reference_pose_child)
+        assert_quat_approx(actual_pose_child.ang, expected_pose_child.ang)
+        assert_vec3_approx(
+            actual_pose_child.lin,
+            (expected_pose_child.lin.x, expected_pose_child.lin.y, expected_pose_child.lin.z),
+        )
+
     def test_composition_identity(self):
         """Identity * pose = pose."""
         identity = GeneralPose3.identity()
-        gp = GeneralPose3(
-            lin=Vec3(1, 2, 3),
-            scale=Vec3(2, 2, 2)
-        )
+        gp = GeneralPose3(lin=Vec3(1, 2, 3), scale=Vec3(2, 2, 2))
         result = identity.compose_trs_projected(gp)
         assert_vec3_approx(result.lin, (1, 2, 3))
         assert_vec3_approx(result.scale, (2, 2, 2))
@@ -132,11 +276,7 @@ class TestGeneralPose3Composition:
 
     def test_composition_full_transform(self):
         """Full transform: translation + rotation + scale."""
-        parent = GeneralPose3(
-            lin=Vec3(10, 0, 0),
-            ang=GeneralPose3.rotateZ(math.pi / 2).ang,
-            scale=Vec3(2, 2, 2)
-        )
+        parent = GeneralPose3(lin=Vec3(10, 0, 0), ang=GeneralPose3.rotateZ(math.pi / 2).ang, scale=Vec3(2, 2, 2))
         child = GeneralPose3(lin=Vec3(1, 0, 0))
 
         result = parent.compose_trs_projected(child)
@@ -151,9 +291,7 @@ class TestGeneralPose3Composition:
         level2 = GeneralPose3(lin=Vec3(1, 0, 0), scale=Vec3(3, 3, 3))
         level3 = GeneralPose3(lin=Vec3(1, 0, 0))
 
-        result = level1.compose_trs_projected(
-            level2.compose_trs_projected(level3)
-        )
+        result = level1.compose_trs_projected(level2.compose_trs_projected(level3))
 
         # level3 [1,0,0] scaled by level2 scale [3,3,3] -> [3,0,0]
         # level2 position [1,0,0] + [3,0,0] = [4,0,0]
@@ -187,7 +325,7 @@ class TestGeneralPose3ProjectedInverse:
         gp = GeneralPose3(
             lin=Vec3(1, 2, 3),
             ang=GeneralPose3.rotateZ(0.5).ang,
-            scale=Vec3(2, 3, 4)  # non-uniform scale OK for right multiplication
+            scale=Vec3(2, 3, 4),  # non-uniform scale OK for right multiplication
         )
         result = gp.compose_trs_projected(gp.inverse_trs_projected())
 
@@ -204,7 +342,7 @@ class TestGeneralPose3ProjectedInverse:
         gp = GeneralPose3(
             lin=Vec3(1, 2, 3),
             ang=GeneralPose3.rotateZ(0.5).ang,
-            scale=Vec3(2, 2, 2)  # uniform scale
+            scale=Vec3(2, 2, 2),  # uniform scale
         )
         result = gp.inverse_trs_projected().compose_trs_projected(gp)
 
@@ -218,7 +356,7 @@ class TestGeneralPose3ProjectedInverse:
         """
         gp = GeneralPose3(
             lin=Vec3(1, 2, 3),
-            scale=Vec3(2, 3, 4)  # non-uniform, but no rotation
+            scale=Vec3(2, 3, 4),  # non-uniform, but no rotation
         )
         result = gp.inverse_trs_projected().compose_trs_projected(gp)
 
@@ -269,21 +407,14 @@ class TestGeneralPose3TransformPoint:
         assert_vec3_approx(gp.forward_in_global(2.0), (0, 2, 0))
 
     def test_transform_point_translation_and_scale(self):
-        gp = GeneralPose3(
-            lin=Vec3(10, 20, 30),
-            scale=Vec3(2, 2, 2)
-        )
+        gp = GeneralPose3(lin=Vec3(10, 20, 30), scale=Vec3(2, 2, 2))
         point = Vec3(1, 1, 1)
         result = gp.transform_point(point)
         # scale first: [2,2,2], then translate: [12, 22, 32]
         assert_vec3_approx(result, (12, 22, 32))
 
     def test_inverse_transform_point_roundtrip(self):
-        gp = GeneralPose3(
-            lin=Vec3(1, 2, 3),
-            ang=GeneralPose3.rotateZ(0.5).ang,
-            scale=Vec3(2, 3, 4)
-        )
+        gp = GeneralPose3(lin=Vec3(1, 2, 3), ang=GeneralPose3.rotateZ(0.5).ang, scale=Vec3(2, 3, 4))
         point = Vec3(5, 6, 7)
 
         transformed = gp.transform_point(point)
@@ -297,6 +428,7 @@ class TestGeneralPose3Matrix:
 
     def test_as_matrix_identity(self):
         import numpy as np
+
         gp = GeneralPose3.identity()
         mat = np.asarray(gp.as_matrix())
         expected = np.eye(4)
@@ -322,11 +454,7 @@ class TestGeneralPose3Matrix:
         assert_vec3_approx(gp.scale, (2, 3, 4))
 
     def test_matrix_roundtrip(self):
-        gp = GeneralPose3(
-            lin=Vec3(1, 2, 3),
-            ang=GeneralPose3.rotateZ(0.5).ang,
-            scale=Vec3(2, 3, 4)
-        )
+        gp = GeneralPose3(lin=Vec3(1, 2, 3), ang=GeneralPose3.rotateZ(0.5).ang, scale=Vec3(2, 3, 4))
         gp2 = GeneralPose3.from_matrix(gp.as_mat44())
 
         assert_vec3_approx(gp2.lin, (gp.lin.x, gp.lin.y, gp.lin.z), eps=1e-5)
@@ -340,11 +468,7 @@ class TestGeneralPose3ToPose3:
     """Test conversion to Pose3."""
 
     def test_to_pose3_drops_scale(self):
-        gp = GeneralPose3(
-            lin=Vec3(1, 2, 3),
-            ang=Quat(0, 0, 0, 1),
-            scale=Vec3(2, 3, 4)
-        )
+        gp = GeneralPose3(lin=Vec3(1, 2, 3), ang=Quat(0, 0, 0, 1), scale=Vec3(2, 3, 4))
         pose = gp.to_pose3()
 
         assert isinstance(pose, Pose3)
@@ -355,10 +479,7 @@ class TestGeneralPose3ToPose3:
         assert pose.ang.w == pytest.approx(1)
 
     def test_pose3_to_general_pose3_roundtrip(self):
-        pose = Pose3(
-            lin=Vec3(1, 2, 3),
-            ang=Pose3.rotateZ(0.5).ang
-        )
+        pose = Pose3(lin=Vec3(1, 2, 3), ang=Pose3.rotateZ(0.5).ang)
         gp = pose.to_general_pose3(scale=Vec3(2, 2, 2))
         pose2 = gp.to_pose3()
 
@@ -399,3 +520,87 @@ class TestGeneralPose3Lerp:
         assert_vec3_approx(result0.scale, (1, 1, 1))
         assert_vec3_approx(result1.lin, (10, 10, 10))
         assert_vec3_approx(result1.scale, (2, 2, 2))
+
+    def test_lerp_preserves_full_range_endpoints_and_midpoint(self):
+        largest = float.fromhex("0x1.fffffffffffffp+1023")
+        first = GeneralPose3(
+            lin=Vec3(-largest, largest, -largest),
+            scale=Vec3(-largest, largest, -largest),
+        )
+        second = GeneralPose3(
+            lin=Vec3(largest, -largest, largest),
+            scale=Vec3(largest, -largest, largest),
+        )
+
+        for interpolate in (GeneralPose3.lerp, lerp_general_pose3):
+            at_first = interpolate(first, second, 0.0)
+            at_second = interpolate(first, second, 1.0)
+            midpoint = interpolate(first, second, 0.5)
+
+            assert (at_first.lin.x, at_first.lin.y, at_first.lin.z) == (-largest, largest, -largest)
+            assert (at_first.scale.x, at_first.scale.y, at_first.scale.z) == (-largest, largest, -largest)
+            assert (at_second.lin.x, at_second.lin.y, at_second.lin.z) == (largest, -largest, largest)
+            assert (at_second.scale.x, at_second.scale.y, at_second.scale.z) == (largest, -largest, largest)
+            assert (midpoint.lin.x, midpoint.lin.y, midpoint.lin.z) == (0.0, 0.0, 0.0)
+            assert (midpoint.scale.x, midpoint.scale.y, midpoint.scale.z) == (0.0, 0.0, 0.0)
+
+    def test_lerp_accepts_scaled_rotations(self):
+        first_rotation = GeneralPose3.rotate_x(0.25).ang
+        second_rotation = GeneralPose3.rotate_z(-0.5).ang
+        first = GeneralPose3(
+            ang=Quat(
+                first_rotation.x * 8.0,
+                first_rotation.y * 8.0,
+                first_rotation.z * 8.0,
+                first_rotation.w * 8.0,
+            ),
+            lin=Vec3(1.0, 2.0, 3.0),
+            scale=Vec3(2.0, 3.0, 4.0),
+        )
+        second = GeneralPose3(
+            ang=Quat(
+                second_rotation.x * 3.0,
+                second_rotation.y * 3.0,
+                second_rotation.z * 3.0,
+                second_rotation.w * 3.0,
+            ),
+            lin=Vec3(-2.0, 1.0, 0.5),
+            scale=Vec3(0.5, 2.0, 1.5),
+        )
+        reference_first = GeneralPose3(ang=first_rotation, lin=first.lin, scale=first.scale)
+        reference_second = GeneralPose3(ang=second_rotation, lin=second.lin, scale=second.scale)
+        expected = GeneralPose3.lerp(reference_first, reference_second, 0.35)
+
+        for actual in (
+            GeneralPose3.lerp(first, second, 0.35),
+            lerp_general_pose3(first, second, 0.35),
+        ):
+            assert_quat_approx(actual.ang, expected.ang)
+            assert_vec3_approx(actual.lin, (expected.lin.x, expected.lin.y, expected.lin.z))
+            assert_vec3_approx(actual.scale, (expected.scale.x, expected.scale.y, expected.scale.z))
+
+    def test_lerp_rejects_invalid_rotation_and_factor(self):
+        invalid = GeneralPose3(ang=Quat(0.0, 0.0, 0.0, 0.0))
+        valid = GeneralPose3.identity()
+
+        for interpolate in (GeneralPose3.lerp, lerp_general_pose3):
+            with pytest.raises(ValueError, match="GeneralPose3 rotation"):
+                interpolate(invalid, valid, 0.5)
+            with pytest.raises(ValueError, match="GeneralPose3 interpolation factor"):
+                interpolate(valid, valid, math.nan)
+            with pytest.raises(ValueError, match="GeneralPose3 interpolation translations"):
+                interpolate(GeneralPose3(lin=Vec3(math.inf, 0.0, 0.0)), valid, 0.0)
+            with pytest.raises(ValueError, match="GeneralPose3 interpolation scales"):
+                interpolate(GeneralPose3(scale=Vec3(math.inf, 1.0, 1.0)), valid, 0.0)
+
+
+def test_inverse_operations_reject_nonfinite_scale():
+    pose = GeneralPose3(scale=Vec3(math.inf, 1.0, 1.0))
+
+    for operation in (
+        pose.inverse_trs_projected,
+        lambda: pose.inverse_transform_point(Vec3(1.0, 2.0, 3.0)),
+        lambda: pose.inverse_transform_vector(Vec3(1.0, 2.0, 3.0)),
+    ):
+        with pytest.raises(ValueError, match="GeneralPose3 scale must be finite"):
+            operation()

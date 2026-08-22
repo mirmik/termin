@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include <geom/tc_quat.h>
 #include <geom/tc_vec3.h>
 #include <tcbase/tc_types.h>
 
@@ -44,19 +45,11 @@ TC_C_STATIC_INLINE tc_basis3d tc_basis3d_identity(void) {
 
 // rotation must be a unit quaternion, matching the existing Pose3 contract.
 TC_C_STATIC_INLINE tc_basis3d tc_basis3d_from_quat(tc_quat rotation) {
-    double xx = rotation.x * rotation.x;
-    double yy = rotation.y * rotation.y;
-    double zz = rotation.z * rotation.z;
-    double xy = rotation.x * rotation.y;
-    double xz = rotation.x * rotation.z;
-    double yz = rotation.y * rotation.z;
-    double wx = rotation.w * rotation.x;
-    double wy = rotation.w * rotation.y;
-    double wz = rotation.w * rotation.z;
-
-    return TC_BASIS3D(TC_VEC3(1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz), 2.0 * (xz - wy)),
-                      TC_VEC3(2.0 * (xy - wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx)),
-                      TC_VEC3(2.0 * (xz + wy), 2.0 * (yz - wx), 1.0 - 2.0 * (xx + yy)));
+    double row_major[9];
+    tc_quat_to_matrix3_row_major(rotation, row_major);
+    return TC_BASIS3D(TC_VEC3(row_major[0], row_major[3], row_major[6]),
+                      TC_VEC3(row_major[1], row_major[4], row_major[7]),
+                      TC_VEC3(row_major[2], row_major[5], row_major[8]));
 }
 
 TC_C_STATIC_INLINE tc_basis3d tc_basis3d_scaling(double sx, double sy, double sz) {

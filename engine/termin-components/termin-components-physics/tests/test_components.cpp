@@ -3,16 +3,37 @@
 GUARD_TEST_MAIN();
 
 #include <cmath>
+#include <limits>
 
 #include <components/collider_component.hpp>
 #include <inspect/tc_inspect_component_adapter.h>
 #include <inspect/tc_inspect_init.h>
+#include <tcbase/tc_log.h>
 #include <termin/physics_components/components.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin_collision/termin_collision.h>
 #include <termin_scene/internal/tc_scene_extension_registry.h>
 
 namespace {
+
+    int captured_error_count = 0;
+
+    void capture_log(tc_log_level level, const char*) {
+        if (level == TC_LOG_ERROR) {
+            ++captured_error_count;
+        }
+    }
+
+    struct LogCapture {
+        LogCapture() {
+            captured_error_count = 0;
+            tc_log_set_callback(capture_log);
+        }
+
+        ~LogCapture() {
+            tc_log_set_callback(nullptr);
+        }
+    };
 
     void initialize_runtime() {
         static const bool initialized = [] {
@@ -143,6 +164,46 @@ TEST_CASE("scaled quaternion cannot hide an external orientation change") {
     REQUIRE(requested.ang.try_normalized(expected_rotation, 1.0e-12));
     REQUIRE(fixture.body->rigid_body()->shape_pose().ang.try_normalized(actual_rotation, 1.0e-12));
     CHECK(std::abs(actual_rotation.dot(expected_rotation)) >= 1.0 - 1.0e-10);
+    CHECK(std::abs(fixture.body->rigid_body()->shape_pose().ang.norm() - 1.0) <= 1.0e-12);
+
+    fixture.scene.destroy();
+}
+
+TEST_CASE("physics pose boundary normalizes full-range rotations and rejects invalid ones transactionally") {
+    using namespace termin;
+
+    initialize_runtime();
+    FallingBoxScene fixture = make_falling_box_scene();
+    const double largest = std::numeric_limits<double>::max();
+
+    Pose3 requested{Quat{largest, largest, largest, largest}, Vec3{1.0, -2.0, 3.0}};
+    fixture.box_entity.transform().set_global_pose(requested);
+    REQUIRE(fixture.body->sync_to_physics());
+    const Pose3 normalized_body_pose = fixture.body->rigid_body()->shape_pose();
+    CHECK(normalized_body_pose.ang.x == 0.5);
+    CHECK(normalized_body_pose.ang.y == 0.5);
+    CHECK(normalized_body_pose.ang.z == 0.5);
+    CHECK(normalized_body_pose.ang.w == 0.5);
+
+    const Pose3 body_sentinel = normalized_body_pose;
+    const Quat invalid_rotations[] = {
+        Quat{0.0, 0.0, 0.0, 0.0},
+        Quat{std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0, 1.0},
+        Quat{0.0, std::numeric_limits<double>::infinity(), 0.0, 1.0},
+    };
+    for (const Quat& invalid : invalid_rotations) {
+        LogCapture logs;
+        fixture.box_entity.transform().set_global_pose(Pose3{invalid, Vec3{9.0, 8.0, 7.0}});
+        CHECK_FALSE(fixture.body->sync_to_physics());
+        CHECK(captured_error_count > 0);
+
+        const Pose3 unchanged = fixture.body->rigid_body()->shape_pose();
+        CHECK(unchanged.ang.x == body_sentinel.ang.x);
+        CHECK(unchanged.ang.y == body_sentinel.ang.y);
+        CHECK(unchanged.ang.z == body_sentinel.ang.z);
+        CHECK(unchanged.ang.w == body_sentinel.ang.w);
+        CHECK(unchanged.lin == body_sentinel.lin);
+    }
 
     fixture.scene.destroy();
 }

@@ -2,6 +2,7 @@
 #ifndef TC_QUAT_H
 #define TC_QUAT_H
 
+#include "geom/tc_quat_detail.h"
 #include "geom/tc_vec3.h"
 #include <math.h>
 #include <tcbase/tc_types.h>
@@ -39,11 +40,22 @@ TC_C_STATIC_INLINE tc_quat tc_quat_identity(void) {
     return TC_QUAT(0, 0, 0, 1);
 }
 
-// From axis-angle (axis should be normalized)
+TC_C_STATIC_INLINE bool tc_quat_try_from_axis_angle(tc_vec3 axis, double angle, double epsilon, tc_quat* out_quat) {
+    if (out_quat == NULL) {
+        return false;
+    }
+    const double axis_components[3] = {axis.x, axis.y, axis.z};
+    double result[4];
+    if (!tc_detail_try_quat_from_axis_angle_f64_components(axis_components, angle, epsilon, result)) {
+        return false;
+    }
+    *out_quat = TC_QUAT(result[0], result[1], result[2], result[3]);
+    return true;
+}
+
 TC_C_STATIC_INLINE tc_quat tc_quat_from_axis_angle(tc_vec3 axis, double angle) {
-    double half = angle * 0.5;
-    double s = sin(half);
-    return TC_QUAT(axis.x * s, axis.y * s, axis.z * s, cos(half));
+    tc_quat result;
+    return tc_quat_try_from_axis_angle(axis, angle, 1.0e-12, &result) ? result : TC_QUAT(NAN, NAN, NAN, NAN);
 }
 
 // ============================================================================
@@ -96,17 +108,15 @@ TC_C_STATIC_INLINE tc_quat tc_quat_non_finite(void) {
 }
 
 TC_C_STATIC_INLINE bool tc_quat_try_normalized(tc_quat q, double epsilon, tc_quat* out_normalized) {
-    double length = tc_quat_norm(q);
-    if (out_normalized == NULL || !tc_quat_is_finite(q) || !isfinite(length) || !isfinite(epsilon) || epsilon < 0.0 ||
-        length <= epsilon) {
+    if (out_normalized == NULL) {
         return false;
     }
-
-    tc_quat result = TC_QUAT(q.x / length, q.y / length, q.z / length, q.w / length);
-    if (!tc_quat_is_finite(result)) {
+    const double input[4] = {q.x, q.y, q.z, q.w};
+    double output[4];
+    if (!tc_detail_try_normalize_f64_components(input, 4, epsilon, output)) {
         return false;
     }
-    *out_normalized = result;
+    *out_normalized = TC_QUAT(output[0], output[1], output[2], output[3]);
     return true;
 }
 
@@ -121,20 +131,15 @@ TC_C_STATIC_INLINE tc_quat tc_quat_normalize(tc_quat q) {
 }
 
 TC_C_STATIC_INLINE bool tc_quat_try_inverse(tc_quat q, double epsilon, tc_quat* out_inverse) {
-    double length = tc_quat_norm(q);
-    if (out_inverse == NULL || !tc_quat_is_finite(q) || !isfinite(length) || !isfinite(epsilon) || epsilon < 0.0 ||
-        length <= epsilon) {
+    if (out_inverse == NULL) {
         return false;
     }
-
-    // Avoid forming norm_squared, which may overflow for an otherwise valid
-    // finite quaternion.
-    tc_quat result =
-        TC_QUAT(-q.x / length / length, -q.y / length / length, -q.z / length / length, q.w / length / length);
-    if (!tc_quat_is_finite(result)) {
+    const double input[4] = {q.x, q.y, q.z, q.w};
+    double result[4];
+    if (!tc_detail_try_inverse_quat_f64_components(input, epsilon, result)) {
         return false;
     }
-    *out_inverse = result;
+    *out_inverse = TC_QUAT(result[0], result[1], result[2], result[3]);
     return true;
 }
 
@@ -144,8 +149,8 @@ TC_C_STATIC_INLINE tc_quat tc_quat_inverse(tc_quat q) {
 }
 
 // ============================================================================
-// Rotate vector by a finite unit quaternion. tc_quat is a raw xyzw value, so
-// callers with uncertain input must normalize it explicitly first.
+// Fast rotation by a finite unit quaternion. tc_quat is a raw xyzw value, so
+// callers with uncertain input must use the checked functions below.
 // ============================================================================
 
 TC_C_STATIC_INLINE tc_vec3 tc_quat_rotate(tc_quat q, tc_vec3 v) {
@@ -157,6 +162,46 @@ TC_C_STATIC_INLINE tc_vec3 tc_quat_rotate(tc_quat q, tc_vec3 v) {
     tc_vec3 uuv = tc_vec3_cross(u, uv);
 
     return tc_vec3_add(v, tc_vec3_add(tc_vec3_scale(uv, 2.0 * s), tc_vec3_scale(uuv, 2.0)));
+}
+
+TC_C_STATIC_INLINE tc_vec3 tc_quat_inverse_rotate(tc_quat q, tc_vec3 v) {
+    return tc_quat_rotate(tc_quat_conjugate(q), v);
+}
+
+TC_C_STATIC_INLINE bool tc_quat_try_rotate(tc_quat q, tc_vec3 v, double epsilon, tc_vec3* out_rotated) {
+    if (out_rotated == NULL) {
+        return false;
+    }
+    tc_quat unit;
+    if (!tc_quat_try_normalized(q, epsilon, &unit)) {
+        return false;
+    }
+    const double quat[4] = {unit.x, unit.y, unit.z, unit.w};
+    const double vector[3] = {v.x, v.y, v.z};
+    double result[3];
+    if (!tc_detail_try_rotate_unit_quat_f64_components(quat, vector, false, result)) {
+        return false;
+    }
+    *out_rotated = TC_VEC3(result[0], result[1], result[2]);
+    return true;
+}
+
+TC_C_STATIC_INLINE bool tc_quat_try_inverse_rotate(tc_quat q, tc_vec3 v, double epsilon, tc_vec3* out_rotated) {
+    if (out_rotated == NULL) {
+        return false;
+    }
+    tc_quat unit;
+    if (!tc_quat_try_normalized(q, epsilon, &unit)) {
+        return false;
+    }
+    const double quat[4] = {unit.x, unit.y, unit.z, unit.w};
+    const double vector[3] = {v.x, v.y, v.z};
+    double result[3];
+    if (!tc_detail_try_rotate_unit_quat_f64_components(quat, vector, true, result)) {
+        return false;
+    }
+    *out_rotated = TC_VEC3(result[0], result[1], result[2]);
+    return true;
 }
 
 // ============================================================================
@@ -172,8 +217,7 @@ TC_C_STATIC_INLINE tc_quat tc_quat_nlerp(tc_quat a, tc_quat b, double t) {
     tc_quat from;
     tc_quat to;
     tc_quat result;
-    if (!isfinite(t) || !tc_quat_try_normalized(a, 1.0e-12, &from) ||
-        !tc_quat_try_normalized(b, 1.0e-12, &to)) {
+    if (!isfinite(t) || !tc_quat_try_normalized(a, 1.0e-12, &from) || !tc_quat_try_normalized(b, 1.0e-12, &to)) {
         return tc_quat_non_finite();
     }
     double dot = tc_quat_dot(from, to);
@@ -243,6 +287,33 @@ TC_C_STATIC_INLINE tc_quat tc_quat_slerp(tc_quat a, tc_quat b, double t) {
 // ============================================================================
 // Conversion
 // ============================================================================
+
+// Fast row-major 3x3 conversion. q must be finite and unit.
+TC_C_STATIC_INLINE void tc_quat_to_matrix3_row_major(tc_quat q, double* out_row_major_9) {
+    const double quat[4] = {q.x, q.y, q.z, q.w};
+    tc_detail_unit_quat_to_matrix3_row_major_f64(quat, out_row_major_9);
+}
+
+TC_C_STATIC_INLINE bool tc_quat_try_to_matrix3_row_major(tc_quat q, double epsilon, double* out_row_major_9) {
+    if (out_row_major_9 == NULL) {
+        return false;
+    }
+    tc_quat unit;
+    if (!tc_quat_try_normalized(q, epsilon, &unit)) {
+        return false;
+    }
+    double result[9];
+    tc_quat_to_matrix3_row_major(unit, result);
+    for (int i = 0; i < 9; ++i) {
+        if (!isfinite(result[i])) {
+            return false;
+        }
+    }
+    for (int i = 0; i < 9; ++i) {
+        out_row_major_9[i] = result[i];
+    }
+    return true;
+}
 
 // Euler angles are an XYZ vector in radians. Composition matches
 // qz(yaw) * qy(pitch) * qx(roll).

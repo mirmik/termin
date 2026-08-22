@@ -14,9 +14,7 @@ namespace termin {
     namespace detail {
 
         template <typename Scalar>
-        bool mat44_inverse_products_are_reliable(const Scalar* input,
-                                                 const Scalar* inverse,
-                                                 Scalar epsilon) noexcept {
+        bool mat44_inverse_products_are_reliable(const Scalar* input, const Scalar* inverse, Scalar epsilon) noexcept {
             // An inverse is useful only when it behaves as an inverse in the
             // matrix's storage precision. Requiring both products catches the
             // asymmetric cancellation common in projective matrices with large
@@ -47,9 +45,7 @@ namespace termin {
         }
 
         template <typename Scalar>
-        bool try_inverse_mat44(const Scalar* input,
-                               Scalar* output,
-                               Scalar epsilon) noexcept {
+        bool try_inverse_mat44(const Scalar* input, Scalar* output, Scalar epsilon) noexcept {
             if (input == nullptr || output == nullptr || !std::isfinite(epsilon) || epsilon < Scalar{0}) {
                 return false;
             }
@@ -149,8 +145,7 @@ namespace termin {
             for (int row = 0; row < 4; ++row) {
                 for (int column = 0; column < 4; ++column) {
                     // A = R * E * C, therefore A^-1 = C^-1 * E^-1 * R^-1.
-                    const Scalar value =
-                        augmented[row][column + 4] / column_scale[row] / row_scale[column];
+                    const Scalar value = augmented[row][column + 4] / column_scale[row] / row_scale[column];
                     if (!std::isfinite(value)) {
                         return false;
                     }
@@ -324,14 +319,10 @@ namespace termin {
 
         Vec4f transform_homogeneous(const Vec4f& value) const noexcept {
             return {
-                (*this)(0, 0) * value.x + (*this)(1, 0) * value.y + (*this)(2, 0) * value.z +
-                    (*this)(3, 0) * value.w,
-                (*this)(0, 1) * value.x + (*this)(1, 1) * value.y + (*this)(2, 1) * value.z +
-                    (*this)(3, 1) * value.w,
-                (*this)(0, 2) * value.x + (*this)(1, 2) * value.y + (*this)(2, 2) * value.z +
-                    (*this)(3, 2) * value.w,
-                (*this)(0, 3) * value.x + (*this)(1, 3) * value.y + (*this)(2, 3) * value.z +
-                    (*this)(3, 3) * value.w,
+                (*this)(0, 0) * value.x + (*this)(1, 0) * value.y + (*this)(2, 0) * value.z + (*this)(3, 0) * value.w,
+                (*this)(0, 1) * value.x + (*this)(1, 1) * value.y + (*this)(2, 1) * value.z + (*this)(3, 1) * value.w,
+                (*this)(0, 2) * value.x + (*this)(1, 2) * value.y + (*this)(2, 2) * value.z + (*this)(3, 2) * value.w,
+                (*this)(0, 3) * value.x + (*this)(1, 3) * value.y + (*this)(2, 3) * value.z + (*this)(3, 3) * value.w,
             };
         }
 
@@ -356,7 +347,8 @@ namespace termin {
             if (!transformed.is_finite() || std::abs(transformed.w) <= epsilon) {
                 return false;
             }
-            const Vec3f result{transformed.x / transformed.w, transformed.y / transformed.w, transformed.z / transformed.w};
+            const Vec3f result{
+                transformed.x / transformed.w, transformed.y / transformed.w, transformed.z / transformed.w};
             if (!result.is_finite()) {
                 return false;
             }
@@ -386,14 +378,14 @@ namespace termin {
 
         float determinant() const {
             const float* m = data;
-            const float c00 = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
-                              m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
-            const float c04 = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] -
-                              m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
-            const float c08 = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] +
-                              m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
-            const float c12 = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] -
-                              m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+            const float c00 = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] +
+                              m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+            const float c04 = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] -
+                              m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+            const float c08 = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] +
+                              m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+            const float c12 = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] -
+                              m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
             return m[0] * c00 + m[1] * c04 + m[2] * c08 + m[3] * c12;
         }
 
@@ -438,31 +430,53 @@ namespace termin {
             return scale(Vec3{s, s, s});
         }
 
-        // Rotation matrix from quaternion
-        static Mat44f rotation(const Quat& q) {
-            Mat44f m = identity();
-            float xx = static_cast<float>(q.x * q.x), yy = static_cast<float>(q.y * q.y),
-                  zz = static_cast<float>(q.z * q.z);
-            float xy = static_cast<float>(q.x * q.y), xz = static_cast<float>(q.x * q.z),
-                  yz = static_cast<float>(q.y * q.z);
-            float wx = static_cast<float>(q.w * q.x), wy = static_cast<float>(q.w * q.y),
-                  wz = static_cast<float>(q.w * q.z);
+        // Fast path: q must be a finite unit quaternion. Use try_rotation when
+        // the quaternion comes from an unchecked boundary.
+        static Mat44f rotation(const Quat& q) noexcept {
+            double row_major[9];
+            q.to_matrix(row_major);
 
-            m(0, 0) = 1 - 2 * (yy + zz);
-            m(1, 0) = 2 * (xy - wz);
-            m(2, 0) = 2 * (xz + wy);
-            m(0, 1) = 2 * (xy + wz);
-            m(1, 1) = 1 - 2 * (xx + zz);
-            m(2, 1) = 2 * (yz - wx);
-            m(0, 2) = 2 * (xz - wy);
-            m(1, 2) = 2 * (yz + wx);
-            m(2, 2) = 1 - 2 * (xx + yy);
+            Mat44f m = identity();
+            for (int row = 0; row < 3; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    m(column, row) = static_cast<float>(row_major[row * 3 + column]);
+                }
+            }
             return m;
         }
 
+        static bool try_rotation(const Quat& q, Mat44f& out, double epsilon = 1.0e-12) noexcept {
+            double row_major[9];
+            if (!q.try_to_matrix(row_major, epsilon)) {
+                return false;
+            }
+
+            Mat44f result = identity();
+            for (int row = 0; row < 3; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    result(column, row) = static_cast<float>(row_major[row * 3 + column]);
+                }
+            }
+            out = result;
+            return true;
+        }
+
         // Rotation around axis
-        static Mat44f rotation_axis_angle(const Vec3& axis, float angle) {
-            return rotation(Quat::from_axis_angle(axis, angle));
+        static bool
+        try_rotation_axis_angle(const Vec3& axis, float angle, Mat44f& out, double epsilon = 1.0e-12) noexcept {
+            Quat orientation;
+            if (!Quat::try_from_axis_angle(axis, static_cast<double>(angle), orientation, epsilon)) {
+                return false;
+            }
+            // epsilon belongs to the source-axis magnitude contract. The
+            // quaternion produced above is already checked and normalized.
+            return try_rotation(orientation, out, 0.0);
+        }
+
+        // Invalid axis-angle input is represented by a non-finite matrix. Use
+        // try_rotation_axis_angle at unchecked boundaries.
+        static Mat44f rotation_axis_angle(const Vec3& axis, float angle) noexcept {
+            return rotation(Quat::from_axis_angle(axis, static_cast<double>(angle)));
         }
 
         // ========== Projection matrices (Vulkan-native NDC) ==========
@@ -723,14 +737,10 @@ namespace termin {
 
         Vec4 transform_homogeneous(const Vec4& value) const noexcept {
             return {
-                (*this)(0, 0) * value.x + (*this)(1, 0) * value.y + (*this)(2, 0) * value.z +
-                    (*this)(3, 0) * value.w,
-                (*this)(0, 1) * value.x + (*this)(1, 1) * value.y + (*this)(2, 1) * value.z +
-                    (*this)(3, 1) * value.w,
-                (*this)(0, 2) * value.x + (*this)(1, 2) * value.y + (*this)(2, 2) * value.z +
-                    (*this)(3, 2) * value.w,
-                (*this)(0, 3) * value.x + (*this)(1, 3) * value.y + (*this)(2, 3) * value.z +
-                    (*this)(3, 3) * value.w,
+                (*this)(0, 0) * value.x + (*this)(1, 0) * value.y + (*this)(2, 0) * value.z + (*this)(3, 0) * value.w,
+                (*this)(0, 1) * value.x + (*this)(1, 1) * value.y + (*this)(2, 1) * value.z + (*this)(3, 1) * value.w,
+                (*this)(0, 2) * value.x + (*this)(1, 2) * value.y + (*this)(2, 2) * value.z + (*this)(3, 2) * value.w,
+                (*this)(0, 3) * value.x + (*this)(1, 3) * value.y + (*this)(2, 3) * value.z + (*this)(3, 3) * value.w,
             };
         }
 
@@ -755,7 +765,8 @@ namespace termin {
             if (!transformed.is_finite() || std::abs(transformed.w) <= epsilon) {
                 return false;
             }
-            const Vec3 result{transformed.x / transformed.w, transformed.y / transformed.w, transformed.z / transformed.w};
+            const Vec3 result{
+                transformed.x / transformed.w, transformed.y / transformed.w, transformed.z / transformed.w};
             if (!result.is_finite()) {
                 return false;
             }
@@ -783,14 +794,14 @@ namespace termin {
 
         double determinant() const {
             const double* m = data;
-            const double c00 = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
-                               m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+            const double c00 = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] +
+                               m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
             const double c04 = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] -
                                m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
-            const double c08 = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] +
-                               m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
-            const double c12 = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] -
-                               m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+            const double c08 = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] +
+                               m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+            const double c12 = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] -
+                               m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
             return m[0] * c00 + m[1] * c04 + m[2] * c08 + m[3] * c12;
         }
 
@@ -841,25 +852,51 @@ namespace termin {
             return scale(Vec3{s, s, s});
         }
 
-        static Mat44 rotation(const Quat& q) {
-            Mat44 m = identity();
-            double xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
-            double xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
-            double wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+        // Fast path: q must be a finite unit quaternion. Use try_rotation when
+        // the quaternion comes from an unchecked boundary.
+        static Mat44 rotation(const Quat& q) noexcept {
+            double row_major[9];
+            q.to_matrix(row_major);
 
-            m(0, 0) = 1 - 2 * (yy + zz);
-            m(1, 0) = 2 * (xy - wz);
-            m(2, 0) = 2 * (xz + wy);
-            m(0, 1) = 2 * (xy + wz);
-            m(1, 1) = 1 - 2 * (xx + zz);
-            m(2, 1) = 2 * (yz - wx);
-            m(0, 2) = 2 * (xz - wy);
-            m(1, 2) = 2 * (yz + wx);
-            m(2, 2) = 1 - 2 * (xx + yy);
+            Mat44 m = identity();
+            for (int row = 0; row < 3; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    m(column, row) = row_major[row * 3 + column];
+                }
+            }
             return m;
         }
 
-        static Mat44 rotation_axis_angle(const Vec3& axis, double angle) {
+        static bool try_rotation(const Quat& q, Mat44& out, double epsilon = 1.0e-12) noexcept {
+            double row_major[9];
+            if (!q.try_to_matrix(row_major, epsilon)) {
+                return false;
+            }
+
+            Mat44 result = identity();
+            for (int row = 0; row < 3; ++row) {
+                for (int column = 0; column < 3; ++column) {
+                    result(column, row) = row_major[row * 3 + column];
+                }
+            }
+            out = result;
+            return true;
+        }
+
+        static bool
+        try_rotation_axis_angle(const Vec3& axis, double angle, Mat44& out, double epsilon = 1.0e-12) noexcept {
+            Quat orientation;
+            if (!Quat::try_from_axis_angle(axis, angle, orientation, epsilon)) {
+                return false;
+            }
+            // epsilon belongs to the source-axis magnitude contract. The
+            // quaternion produced above is already checked and normalized.
+            return try_rotation(orientation, out, 0.0);
+        }
+
+        // Invalid axis-angle input is represented by a non-finite matrix. Use
+        // try_rotation_axis_angle at unchecked boundaries.
+        static Mat44 rotation_axis_angle(const Vec3& axis, double angle) noexcept {
             return rotation(Quat::from_axis_angle(axis, angle));
         }
 

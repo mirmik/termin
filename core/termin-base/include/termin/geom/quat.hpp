@@ -8,8 +8,9 @@ namespace termin {
 
     // Quat is a raw xyzw value: construction and multiplication do not impose
     // a unit-length invariant. Callers of legacy rotate/matrix helpers retain
-    // their unit-quaternion precondition; use try_normalized when the input is
-    // not already known to be a valid rotation.
+    // their finite unit-quaternion precondition; use try_rotate,
+    // try_inverse_rotate or try_to_matrix when the input is not already known
+    // to be a valid rotation. Checked normalization is full-range scale-by-max.
     using Quat = ::tc_quat;
 
     static_assert(std::is_same<Quat, ::tc_quat>::value, "termin::Quat must alias tc_quat");

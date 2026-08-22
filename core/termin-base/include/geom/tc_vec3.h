@@ -4,6 +4,8 @@
 #ifndef TC_VEC3_H
 #define TC_VEC3_H
 
+#include <geom/tc_checked_normalization.h>
+#include <geom/tc_lerp_detail.h>
 #include <math.h>
 #include <stddef.h>
 #include <tcbase/tc_types.h>
@@ -220,18 +222,15 @@ TC_C_STATIC_INLINE bool tc_vec3_is_finite(tc_vec3 v) {
 }
 
 TC_C_STATIC_INLINE bool tc_vec3_try_normalized(tc_vec3 v, double epsilon, tc_vec3* out_normalized) {
-    double length = hypot(hypot(v.x, v.y), v.z);
-    if (out_normalized == NULL || !tc_vec3_is_finite(v) || !isfinite(length) || !isfinite(epsilon) || epsilon < 0.0 ||
-        length <= epsilon) {
+    if (out_normalized == NULL) {
         return false;
     }
-    // Component-wise division avoids a subnormal reciprocal that FTZ/DAZ modes
-    // may flush to zero for large finite vectors.
-    tc_vec3 normalized = TC_VEC3(v.x / length, v.y / length, v.z / length);
-    if (!tc_vec3_is_finite(normalized)) {
+    const double input[3] = {v.x, v.y, v.z};
+    double output[3];
+    if (!tc_detail_try_normalize_f64_components(input, 3, epsilon, output)) {
         return false;
     }
-    *out_normalized = normalized;
+    *out_normalized = TC_VEC3(output[0], output[1], output[2]);
     return true;
 }
 
@@ -267,9 +266,12 @@ TC_C_STATIC_INLINE double tc_vec3_distance(tc_vec3 a, tc_vec3 b) {
 /// @param a Начальный вектор (t=0)
 /// @param b Конечный вектор (t=1)
 /// @param t Параметр интерполяции [0, 1]
-/// @return a + (b - a) * t
+/// @return Component-wise interpolation. Finite inputs remain representable
+///         across the full double range when t is in [0, 1].
 TC_C_STATIC_INLINE tc_vec3 tc_vec3_lerp(tc_vec3 a, tc_vec3 b, double t) {
-    return TC_VEC3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
+    return TC_VEC3(tc_detail_lerp_f64_component(a.x, b.x, t),
+                   tc_detail_lerp_f64_component(a.y, b.y, t),
+                   tc_detail_lerp_f64_component(a.z, b.z, t));
 }
 
 /// @}

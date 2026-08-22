@@ -8,7 +8,10 @@ from termin.geombase import (
     Basis3d,
     Bounds2,
     Bounds2f,
+    Mat33,
+    Mat33f,
     Mat44,
+    Mat44f,
     Quat,
     Ray3,
     RayTriangleHit,
@@ -56,6 +59,130 @@ def test_vector_component_and_checked_operations():
     assert Vec2(0.0, 0.0).normalized_or(Vec2(0.0, 1.0), 1.0e-10) == Vec2(0.0, 1.0)
     assert not Vec4(math.inf, 0.0, 0.0, 0.0).is_finite()
     assert Vec4f(1.0, 2.0, 3.0, 4.0).to_double() == Vec4(1.0, 2.0, 3.0, 4.0)
+
+
+def test_vector_checked_normalization_accepts_multi_component_finite_maxima():
+    largest = float.fromhex("0x1.fffffffffffffp+1023")
+    largest_float = float.fromhex("0x1.fffffep+127")
+
+    vec2 = Vec2(largest, largest).try_normalized(0.0)
+    assert vec2 is not None
+    assert tuple(vec2) == pytest.approx((math.sqrt(0.5), math.sqrt(0.5)), abs=1.0e-15)
+
+    vec3 = Vec3(largest, largest, largest).try_normalized(0.0)
+    assert vec3 is not None
+    assert vec3.norm_squared() == pytest.approx(1.0, abs=2.0e-15)
+
+    vec4 = Vec4(largest, largest, largest, largest).try_normalized(0.0)
+    assert vec4 is not None
+    assert tuple(vec4) == (0.5, 0.5, 0.5, 0.5)
+
+    vec2f = Vec2f(largest_float, largest_float).try_normalized(0.0)
+    assert vec2f is not None
+    assert tuple(vec2f) == pytest.approx((math.sqrt(0.5), math.sqrt(0.5)), abs=2.0e-7)
+
+    vec3f = Vec3f(largest_float, largest_float, largest_float).try_normalized(0.0)
+    assert vec3f is not None
+    assert vec3f.norm_squared() == pytest.approx(1.0, abs=2.0e-6)
+
+    vec4f = Vec4f(largest_float, largest_float, largest_float, largest_float).try_normalized(0.0)
+    assert vec4f is not None
+    assert tuple(vec4f) == (0.5, 0.5, 0.5, 0.5)
+
+
+def _transform_by_rotation_block(matrix, vector):
+    rows = matrix.to_rows()
+    components = tuple(vector)
+    return tuple(sum(rows[row][column] * components[column] for column in range(3)) for row in range(3))
+
+
+@pytest.mark.parametrize(
+    ("matrix_type", "axis"),
+    [
+        (Mat33, Vec3(0.0, 0.0, 7.0)),
+        (Mat33f, Vec3f(0.0, 0.0, 7.0)),
+        (Mat44, Vec3(0.0, 0.0, 7.0)),
+        (Mat44f, Vec3(0.0, 0.0, 7.0)),
+    ],
+)
+def test_typed_matrix_rotation_factories_are_checked(matrix_type, axis):
+    unit = Quat.from_axis_angle(Vec3.unit_z(), math.pi / 2.0)
+    scaled = Quat(unit.x * 9.0, unit.y * 9.0, unit.z * 9.0, unit.w * 9.0)
+    vector = Vec3(2.0, -3.0, 4.0)
+    expected = tuple(scaled.rotate(vector))
+
+    checked = matrix_type.try_rotation(scaled)
+    assert checked is not None
+    assert _transform_by_rotation_block(checked, vector) == pytest.approx(expected, abs=1.0e-6)
+    assert _transform_by_rotation_block(matrix_type.rotation(scaled), vector) == pytest.approx(expected, abs=1.0e-6)
+    assert _transform_by_rotation_block(matrix_type.rotation_axis_angle(axis, math.pi / 2.0), vector) == pytest.approx(
+        expected,
+        abs=1.0e-6,
+    )
+    largest = float.fromhex("0x1.fffffep+127") if isinstance(axis, Vec3f) else float.fromhex("0x1.fffffffffffffp+1023")
+    matrix_type.rotation_axis_angle(type(axis)(largest, 0.0, 0.0), 0.73, 2.0)
+
+    zero = Quat(0.0, 0.0, 0.0, 0.0)
+    assert matrix_type.try_rotation(zero, 0.0) is None
+    assert matrix_type.try_rotation(Quat.identity(), -1.0) is None
+    with pytest.raises(ValueError):
+        matrix_type.rotation(zero, 0.0)
+    with pytest.raises(ValueError):
+        matrix_type.rotation_axis_angle(type(axis).zero(), math.pi / 2.0, 0.0)
+
+
+@pytest.mark.parametrize("matrix_type", [Mat44, Mat44f])
+def test_matrix_compose_checks_and_normalizes_rotation(matrix_type):
+    translation = Vec3(1.0, -2.0, 3.0)
+    scale = Vec3(2.0, 3.0, 4.0)
+    unit = Quat.from_axis_angle(Vec3.unit_z(), 0.73)
+    scaled = Quat(unit.x * 11.0, unit.y * 11.0, unit.z * 11.0, unit.w * 11.0)
+
+    checked = matrix_type.try_compose(translation, scaled, scale)
+    assert checked is not None
+    expected = matrix_type.compose(translation, unit, scale)
+    assert tuple(value for row in checked.to_rows() for value in row) == pytest.approx(
+        tuple(value for row in expected.to_rows() for value in row),
+        abs=1.0e-6,
+    )
+
+    zero = Quat(0.0, 0.0, 0.0, 0.0)
+    assert matrix_type.try_compose(translation, zero, scale, 0.0) is None
+    assert matrix_type.try_compose(translation, Quat.identity(), scale, -1.0) is None
+    with pytest.raises(ValueError):
+        matrix_type.compose(translation, zero, scale, 0.0)
+
+
+def test_affine_quaternion_factories_are_checked_at_the_python_boundary():
+    unit = Quat.from_axis_angle(Vec3.unit_z(), 0.73)
+    scaled = Quat(unit.x * 11.0, unit.y * 11.0, unit.z * 11.0, unit.w * 11.0)
+    vector = Vec3(2.0, -3.0, 4.0)
+    expected = scaled.rotate(vector)
+
+    basis = Basis3d.try_from_quat(scaled)
+    assert basis is not None
+    assert tuple(basis.transform_vector(vector)) == pytest.approx(tuple(expected), abs=1.0e-14)
+    assert tuple(Basis3d.from_quat(scaled).transform_vector(vector)) == pytest.approx(tuple(expected), abs=1.0e-14)
+
+    affine = Affine3d.try_rotation(scaled)
+    assert affine is not None
+    assert tuple(affine.transform_vector(vector)) == pytest.approx(tuple(expected), abs=1.0e-14)
+    assert tuple(Affine3d.rotation(scaled).transform_vector(vector)) == pytest.approx(tuple(expected), abs=1.0e-14)
+
+    trs = Affine3d.try_trs(Vec3(1.0, 2.0, 3.0), scaled, Vec3(2.0, 3.0, 4.0))
+    assert trs is not None
+    assert trs.is_finite()
+
+    zero = Quat(0.0, 0.0, 0.0, 0.0)
+    assert Basis3d.try_from_quat(zero, 0.0) is None
+    assert Affine3d.try_rotation(zero, 0.0) is None
+    assert Affine3d.try_trs(Vec3.zero(), zero, Vec3(1.0, 1.0, 1.0), 0.0) is None
+    with pytest.raises(ValueError):
+        Basis3d.from_quat(zero, 0.0)
+    with pytest.raises(ValueError):
+        Affine3d.rotation(zero, 0.0)
+    with pytest.raises(ValueError):
+        Affine3d.trs(Vec3.zero(), zero, Vec3(1.0, 1.0, 1.0), 0.0)
 
 
 def test_ray_plane_intersection_binding_rejects_invalid_parallel_and_behind_geometry():
