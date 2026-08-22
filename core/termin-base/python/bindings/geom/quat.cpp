@@ -87,10 +87,107 @@ namespace termin {
                     return result;
                 },
                 nb::arg("epsilon") = 1.0e-12)
-            .def("rotate", &Quat::rotate)
-            .def("inverse_rotate", &Quat::inverse_rotate)
+            .def(
+                "try_rotate",
+                [](const Quat& value, const Vec3& vector, double epsilon) -> std::optional<Vec3> {
+                    Vec3 result;
+                    if (!value.try_rotate(vector, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("vector"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "rotate",
+                [](const Quat& value, const Vec3& vector, double epsilon) {
+                    Vec3 result;
+                    if (!value.try_rotate(vector, result, epsilon)) {
+                        throw nb::value_error("Quaternion cannot rotate this vector");
+                    }
+                    return result;
+                },
+                nb::arg("vector"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "try_inverse_rotate",
+                [](const Quat& value, const Vec3& vector, double epsilon) -> std::optional<Vec3> {
+                    Vec3 result;
+                    if (!value.try_inverse_rotate(vector, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("vector"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "inverse_rotate",
+                [](const Quat& value, const Vec3& vector, double epsilon) {
+                    Vec3 result;
+                    if (!value.try_inverse_rotate(vector, result, epsilon)) {
+                        throw nb::value_error("Quaternion cannot inverse-rotate this vector");
+                    }
+                    return result;
+                },
+                nb::arg("vector"),
+                nb::arg("epsilon") = 1.0e-12)
             .def_static("identity", &Quat::identity)
-            .def_static("from_axis_angle", &Quat::from_axis_angle)
+            .def_static(
+                "try_from_axis_angle",
+                [](const Vec3& axis, double angle, double epsilon) -> std::optional<Quat> {
+                    Quat result;
+                    if (!Quat::try_from_axis_angle(axis, angle, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("axis"),
+                nb::arg("angle"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "from_axis_angle",
+                [](const Vec3& axis, double angle, double epsilon) {
+                    Quat result;
+                    if (!Quat::try_from_axis_angle(axis, angle, result, epsilon)) {
+                        throw nb::value_error("Axis-angle rotation requires a finite non-degenerate axis and angle");
+                    }
+                    return result;
+                },
+                nb::arg("axis"),
+                nb::arg("angle"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "try_to_matrix",
+                [](const Quat& value, double epsilon) -> std::optional<Mat33> {
+                    double row_major[9];
+                    if (!value.try_to_matrix(row_major, epsilon)) {
+                        return std::nullopt;
+                    }
+                    Mat33 result;
+                    for (int row = 0; row < 3; ++row) {
+                        for (int column = 0; column < 3; ++column) {
+                            result(column, row) = row_major[row * 3 + column];
+                        }
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "to_matrix",
+                [](const Quat& value, double epsilon) {
+                    double row_major[9];
+                    if (!value.try_to_matrix(row_major, epsilon)) {
+                        throw nb::value_error("Quaternion cannot be converted to a rotation matrix");
+                    }
+                    Mat33 result;
+                    for (int row = 0; row < 3; ++row) {
+                        for (int column = 0; column < 3; ++column) {
+                            result(column, row) = row_major[row * 3 + column];
+                        }
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
             .def_static(
                 "try_from_euler",
                 [](const Vec3& euler_xyz) -> std::optional<Quat> {

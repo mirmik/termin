@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <geom/tc_checked_normalization.h>
 #include <type_traits>
 
 namespace termin {
@@ -108,11 +109,12 @@ namespace termin {
             return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
         }
         bool try_normalized(Vec4& out, double epsilon = 1.0e-10) const noexcept {
-            const double n = std::hypot(std::hypot(x, y), std::hypot(z, w));
-            if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0 || n <= epsilon) {
+            const double input[4] = {x, y, z, w};
+            double output[4];
+            if (!tc_detail_try_normalize_f64_components(input, 4, epsilon, output)) {
                 return false;
             }
-            out = *this / n;
+            out = {output[0], output[1], output[2], output[3]};
             return true;
         }
         Vec4 normalized_or(const Vec4& fallback, double epsilon = 1.0e-10) const noexcept {
@@ -252,11 +254,12 @@ namespace termin {
             return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
         }
         bool try_normalized(Vec4f& out, float epsilon = 1.0e-6f) const noexcept {
-            const float n = std::hypot(std::hypot(x, y), std::hypot(z, w));
-            if (!is_finite() || !std::isfinite(n) || !std::isfinite(epsilon) || epsilon < 0.0f || n <= epsilon) {
+            const float input[4] = {x, y, z, w};
+            float output[4];
+            if (!tc_detail_try_normalize_f32_components(input, 4, epsilon, output)) {
                 return false;
             }
-            out = *this / n;
+            out = {output[0], output[1], output[2], output[3]};
             return true;
         }
         Vec4f normalized_or(const Vec4f& fallback, float epsilon = 1.0e-6f) const noexcept {

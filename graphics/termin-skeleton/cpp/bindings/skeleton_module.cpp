@@ -128,12 +128,9 @@ namespace {
                         data["inverse_bind_matrix"] = std::move(inverse_bind);
                         data["bind_translation"] = nb::make_tuple(
                             bone.bind_translation[0], bone.bind_translation[1], bone.bind_translation[2]);
-                        data["bind_rotation"] = nb::make_tuple(bone.bind_rotation[0],
-                                                                 bone.bind_rotation[1],
-                                                                 bone.bind_rotation[2],
-                                                                 bone.bind_rotation[3]);
-                        data["bind_scale"] =
-                            nb::make_tuple(bone.bind_scale[0], bone.bind_scale[1], bone.bind_scale[2]);
+                        data["bind_rotation"] = nb::make_tuple(
+                            bone.bind_rotation[0], bone.bind_rotation[1], bone.bind_rotation[2], bone.bind_rotation[3]);
+                        data["bind_scale"] = nb::make_tuple(bone.bind_scale[0], bone.bind_scale[1], bone.bind_scale[2]);
                         result.append(std::move(data));
                     }
                     return result;
@@ -311,7 +308,26 @@ namespace {
                     const double* t_ptr = translation ? &translation->x : nullptr;
                     const double* r_ptr = rotation ? &rotation->x : nullptr;
                     const double* s_ptr = scale ? &scale->x : nullptr;
-                    si.set_bone_transform(bone_index, t_ptr, r_ptr, s_ptr);
+                    if (!si.try_set_bone_transform(bone_index, t_ptr, r_ptr, s_ptr)) {
+                        throw nb::value_error(
+                            "bone transform requires a valid index, finite vectors, and a finite non-zero rotation");
+                    }
+                },
+                nb::arg("bone_index"),
+                nb::arg("translation") = nb::none(),
+                nb::arg("rotation") = nb::none(),
+                nb::arg("scale") = nb::none())
+            .def(
+                "try_set_bone_transform",
+                [](termin::SkeletonInstance& si,
+                   int bone_index,
+                   std::optional<termin::Vec3> translation,
+                   std::optional<termin::Quat> rotation,
+                   std::optional<termin::Vec3> scale) {
+                    const double* t_ptr = translation ? &translation->x : nullptr;
+                    const double* r_ptr = rotation ? &rotation->x : nullptr;
+                    const double* s_ptr = scale ? &scale->x : nullptr;
+                    return si.try_set_bone_transform(bone_index, t_ptr, r_ptr, s_ptr);
                 },
                 nb::arg("bone_index"),
                 nb::arg("translation") = nb::none(),
@@ -327,7 +343,26 @@ namespace {
                     const double* t_ptr = translation ? &translation->x : nullptr;
                     const double* r_ptr = rotation ? &rotation->x : nullptr;
                     const double* s_ptr = scale ? &scale->x : nullptr;
-                    si.set_bone_transform_by_name(bone_name, t_ptr, r_ptr, s_ptr);
+                    if (!si.try_set_bone_transform_by_name(bone_name, t_ptr, r_ptr, s_ptr)) {
+                        throw nb::value_error(
+                            "bone transform requires a known bone, finite vectors, and a finite non-zero rotation");
+                    }
+                },
+                nb::arg("bone_name"),
+                nb::arg("translation") = nb::none(),
+                nb::arg("rotation") = nb::none(),
+                nb::arg("scale") = nb::none())
+            .def(
+                "try_set_bone_transform_by_name",
+                [](termin::SkeletonInstance& si,
+                   const std::string& bone_name,
+                   std::optional<termin::Vec3> translation,
+                   std::optional<termin::Quat> rotation,
+                   std::optional<termin::Vec3> scale) {
+                    const double* t_ptr = translation ? &translation->x : nullptr;
+                    const double* r_ptr = rotation ? &rotation->x : nullptr;
+                    const double* s_ptr = scale ? &scale->x : nullptr;
+                    return si.try_set_bone_transform_by_name(bone_name, t_ptr, r_ptr, s_ptr);
                 },
                 nb::arg("bone_name"),
                 nb::arg("translation") = nb::none(),

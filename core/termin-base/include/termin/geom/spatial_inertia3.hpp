@@ -30,7 +30,7 @@ namespace termin {
         }
 
         [[nodiscard]] Mat33 central_inertia() const noexcept {
-            const Mat33 rotation = Mat33::rotation(inertia_frame.ang);
+            const Mat33 rotation = Mat33::rotation(inertia_frame.ang.normalized());
             return rotation * Mat33::scale(principal_moments) * rotation.transposed();
         }
 

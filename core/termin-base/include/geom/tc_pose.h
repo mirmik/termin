@@ -35,6 +35,9 @@ extern "C" {
 // ============================================================================
 // Pose3 (ang + lin, no scale)
 // ============================================================================
+// Pose values store raw quaternion coefficients for ABI compatibility. All
+// transform, composition, inverse and matrix fast paths below require ang to
+// be finite and unit; validate and normalize at the owning input boundary.
 
 TC_C_STATIC_INLINE tc_pose3 tc_pose3_identity(void) {
     return TC_POSE3(tc_quat_identity(), tc_vec3_zero());
@@ -128,32 +131,25 @@ TC_C_STATIC_INLINE tc_vec3 tc_gpose_transform_vector(tc_general_pose3 p, tc_vec3
 
 // Fill 4x4 column-major matrix from Pose3 (no scale)
 TC_C_STATIC_INLINE void tc_pose3_to_matrix(tc_pose3 p, double* out) {
-    double xx = p.ang.x * p.ang.x;
-    double yy = p.ang.y * p.ang.y;
-    double zz = p.ang.z * p.ang.z;
-    double xy = p.ang.x * p.ang.y;
-    double xz = p.ang.x * p.ang.z;
-    double yz = p.ang.y * p.ang.z;
-    double wx = p.ang.w * p.ang.x;
-    double wy = p.ang.w * p.ang.y;
-    double wz = p.ang.w * p.ang.z;
+    double rotation[9];
+    tc_quat_to_matrix3_row_major(p.ang, rotation);
 
     // Column 0
-    out[0] = 1.0 - 2.0 * (yy + zz);
-    out[1] = 2.0 * (xy + wz);
-    out[2] = 2.0 * (xz - wy);
+    out[0] = rotation[0];
+    out[1] = rotation[3];
+    out[2] = rotation[6];
     out[3] = 0.0;
 
     // Column 1
-    out[4] = 2.0 * (xy - wz);
-    out[5] = 1.0 - 2.0 * (xx + zz);
-    out[6] = 2.0 * (yz + wx);
+    out[4] = rotation[1];
+    out[5] = rotation[4];
+    out[6] = rotation[7];
     out[7] = 0.0;
 
     // Column 2
-    out[8] = 2.0 * (xz + wy);
-    out[9] = 2.0 * (yz - wx);
-    out[10] = 1.0 - 2.0 * (xx + yy);
+    out[8] = rotation[2];
+    out[9] = rotation[5];
+    out[10] = rotation[8];
     out[11] = 0.0;
 
     // Column 3 (translation)
@@ -165,34 +161,27 @@ TC_C_STATIC_INLINE void tc_pose3_to_matrix(tc_pose3 p, double* out) {
 
 // Fill 4x4 column-major matrix from GeneralPose3
 TC_C_STATIC_INLINE void tc_gpose_to_mat44(tc_general_pose3 p, tc_mat44* out) {
-    double xx = p.ang.x * p.ang.x;
-    double yy = p.ang.y * p.ang.y;
-    double zz = p.ang.z * p.ang.z;
-    double xy = p.ang.x * p.ang.y;
-    double xz = p.ang.x * p.ang.z;
-    double yz = p.ang.y * p.ang.z;
-    double wx = p.ang.w * p.ang.x;
-    double wy = p.ang.w * p.ang.y;
-    double wz = p.ang.w * p.ang.z;
+    double rotation[9];
+    tc_quat_to_matrix3_row_major(p.ang, rotation);
 
     double sx = p.scale.x, sy = p.scale.y, sz = p.scale.z;
 
     // Column 0
-    out->m[0] = sx * (1.0 - 2.0 * (yy + zz));
-    out->m[1] = sx * 2.0 * (xy + wz);
-    out->m[2] = sx * 2.0 * (xz - wy);
+    out->m[0] = sx * rotation[0];
+    out->m[1] = sx * rotation[3];
+    out->m[2] = sx * rotation[6];
     out->m[3] = 0.0;
 
     // Column 1
-    out->m[4] = sy * 2.0 * (xy - wz);
-    out->m[5] = sy * (1.0 - 2.0 * (xx + zz));
-    out->m[6] = sy * 2.0 * (yz + wx);
+    out->m[4] = sy * rotation[1];
+    out->m[5] = sy * rotation[4];
+    out->m[6] = sy * rotation[7];
     out->m[7] = 0.0;
 
     // Column 2
-    out->m[8] = sz * 2.0 * (xz + wy);
-    out->m[9] = sz * 2.0 * (yz - wx);
-    out->m[10] = sz * (1.0 - 2.0 * (xx + yy));
+    out->m[8] = sz * rotation[2];
+    out->m[9] = sz * rotation[5];
+    out->m[10] = sz * rotation[8];
     out->m[11] = 0.0;
 
     // Column 3 (translation)

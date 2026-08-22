@@ -1,10 +1,11 @@
 #include "resources/tc_skeleton_registry.h"
 
-#include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
+#include <geom/tc_quat.h>
 #include <tcbase/tc_log.h>
 #include <tcbase/tc_pool.h>
 #include <tcbase/tc_registry_utils.h>
@@ -316,7 +317,7 @@ tc_bone* tc_skeleton_alloc_bones(tc_skeleton* skeleton, size_t count) {
     return skeleton->bones;
 }
 
-static bool skeleton_desc_values_finite(const tc_skeleton_bone_desc* bone, size_t index) {
+static bool skeleton_desc_values_valid(const tc_skeleton_bone_desc* bone, size_t index) {
     if (!bone->inverse_bind_matrix || !bone->bind_translation || !bone->bind_rotation || !bone->bind_scale) {
         tc_log_error("tc_skeleton_replace_bones: bone[%zu] has incomplete transform storage", index);
         return false;
@@ -327,20 +328,17 @@ static bool skeleton_desc_values_finite(const tc_skeleton_bone_desc* bone, size_
             return false;
         }
     }
-    double rotation_norm = 0.0;
+    tc_quat rotation =
+        TC_QUAT(bone->bind_rotation[0], bone->bind_rotation[1], bone->bind_rotation[2], bone->bind_rotation[3]);
     for (size_t i = 0; i < 4; ++i) {
         if (!isfinite(bone->bind_rotation[i])) {
             tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation is not finite", index);
             return false;
         }
-        rotation_norm += bone->bind_rotation[i] * bone->bind_rotation[i];
     }
-    if (rotation_norm <= 1.0e-16) {
+    tc_quat normalized;
+    if (!tc_quat_try_normalized(rotation, 0.0, &normalized)) {
         tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation has zero length", index);
-        return false;
-    }
-    if (fabs(rotation_norm - 1.0) > 1.0e-3) {
-        tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation must be normalized", index);
         return false;
     }
     for (size_t i = 0; i < 3; ++i) {
@@ -352,9 +350,7 @@ static bool skeleton_desc_values_finite(const tc_skeleton_bone_desc* bone, size_
     return true;
 }
 
-bool tc_skeleton_replace_bones(tc_skeleton* skeleton,
-                               const tc_skeleton_bone_desc* bones,
-                               size_t count) {
+bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_desc* bones, size_t count) {
     if (!skeleton || (count > 0 && !bones)) {
         tc_log_error("tc_skeleton_replace_bones: skeleton and descriptors are required");
         return false;
@@ -370,7 +366,7 @@ bool tc_skeleton_replace_bones(tc_skeleton* skeleton,
             tc_log_error("tc_skeleton_replace_bones: bone[%zu] has invalid parent=%d", i, parent);
             return false;
         }
-        if (!skeleton_desc_values_finite(&bones[i], i))
+        if (!skeleton_desc_values_valid(&bones[i], i))
             return false;
         if (parent < 0)
             ++root_count;
@@ -405,16 +401,27 @@ bool tc_skeleton_replace_bones(tc_skeleton* skeleton,
         destination->parent_index = source->parent_index;
         if (source->name) {
             if (strlen(source->name) >= TC_BONE_NAME_MAX) {
-                tc_log_warn("tc_skeleton_replace_bones: bone[%zu] name is truncated to %d bytes",
-                            i,
-                            TC_BONE_NAME_MAX - 1);
+                tc_log_warn(
+                    "tc_skeleton_replace_bones: bone[%zu] name is truncated to %d bytes", i, TC_BONE_NAME_MAX - 1);
             }
             strncpy(destination->name, source->name, TC_BONE_NAME_MAX - 1);
             destination->name[TC_BONE_NAME_MAX - 1] = '\0';
         }
         memcpy(destination->inverse_bind_matrix, source->inverse_bind_matrix, 16 * sizeof(double));
         memcpy(destination->bind_translation, source->bind_translation, 3 * sizeof(double));
-        memcpy(destination->bind_rotation, source->bind_rotation, 4 * sizeof(double));
+        tc_quat normalized_rotation;
+        const tc_quat source_rotation = TC_QUAT(
+            source->bind_rotation[0], source->bind_rotation[1], source->bind_rotation[2], source->bind_rotation[3]);
+        if (!tc_quat_try_normalized(source_rotation, 0.0, &normalized_rotation)) {
+            tc_log_error("tc_skeleton_replace_bones: bone[%zu] rotation changed during replacement", i);
+            free(replacement);
+            free(roots);
+            return false;
+        }
+        destination->bind_rotation[0] = normalized_rotation.x;
+        destination->bind_rotation[1] = normalized_rotation.y;
+        destination->bind_rotation[2] = normalized_rotation.z;
+        destination->bind_rotation[3] = normalized_rotation.w;
         memcpy(destination->bind_scale, source->bind_scale, 3 * sizeof(double));
         if (source->parent_index < 0)
             roots[root_index++] = (int32_t)i;

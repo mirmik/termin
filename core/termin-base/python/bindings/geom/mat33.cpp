@@ -20,10 +20,44 @@ namespace termin {
             .def_static("zero", &Mat33::zero)
             .def_static("scale", nb::overload_cast<double>(&Mat33::scale))
             .def_static("scale", nb::overload_cast<const Vec3&>(&Mat33::scale))
+            .def_static(
+                "try_rotation",
+                [](const Quat& orientation, double epsilon) -> std::optional<Mat33> {
+                    Mat33 result;
+                    if (!Mat33::try_rotation(orientation, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "rotation",
+                [](const Quat& orientation, double epsilon) {
+                    Mat33 result;
+                    if (!Mat33::try_rotation(orientation, result, epsilon)) {
+                        throw nb::value_error("Quaternion cannot be converted to a Mat33 rotation matrix");
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
             .def_static("rotation_x", &Mat33::rotation_x)
             .def_static("rotation_y", &Mat33::rotation_y)
             .def_static("rotation_z", &Mat33::rotation_z)
-            .def_static("rotation_axis_angle", &Mat33::rotation_axis_angle)
+            .def_static(
+                "rotation_axis_angle",
+                [](const Vec3& axis, double angle, double epsilon) {
+                    Mat33 result;
+                    if (!Mat33::try_rotation_axis_angle(axis, angle, result, epsilon)) {
+                        throw nb::value_error(
+                            "Mat33 axis-angle rotation requires a finite non-degenerate axis and angle");
+                    }
+                    return result;
+                },
+                nb::arg("axis"),
+                nb::arg("angle"),
+                nb::arg("epsilon") = 1.0e-12)
             .def("to_rows",
                  [](const Mat33& mat) {
                      double data[9];
@@ -61,10 +95,44 @@ namespace termin {
             .def_static("zero", &Mat33f::zero)
             .def_static("scale", nb::overload_cast<float>(&Mat33f::scale))
             .def_static("scale", nb::overload_cast<const Vec3f&>(&Mat33f::scale))
+            .def_static(
+                "try_rotation",
+                [](const Quat& orientation, double epsilon) -> std::optional<Mat33f> {
+                    Mat33f result;
+                    if (!Mat33f::try_rotation(orientation, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "rotation",
+                [](const Quat& orientation, double epsilon) {
+                    Mat33f result;
+                    if (!Mat33f::try_rotation(orientation, result, epsilon)) {
+                        throw nb::value_error("Quaternion cannot be converted to a Mat33f rotation matrix");
+                    }
+                    return result;
+                },
+                nb::arg("orientation"),
+                nb::arg("epsilon") = 1.0e-12)
             .def_static("rotation_x", &Mat33f::rotation_x)
             .def_static("rotation_y", &Mat33f::rotation_y)
             .def_static("rotation_z", &Mat33f::rotation_z)
-            .def_static("rotation_axis_angle", &Mat33f::rotation_axis_angle)
+            .def_static(
+                "rotation_axis_angle",
+                [](const Vec3f& axis, float angle, double epsilon) {
+                    Mat33f result;
+                    if (!Mat33f::try_rotation_axis_angle(axis, angle, result, epsilon)) {
+                        throw nb::value_error(
+                            "Mat33f axis-angle rotation requires a finite non-degenerate axis and angle");
+                    }
+                    return result;
+                },
+                nb::arg("axis"),
+                nb::arg("angle"),
+                nb::arg("epsilon") = 1.0e-12)
             .def("to_rows",
                  [](const Mat33f& mat) {
                      double data[9];

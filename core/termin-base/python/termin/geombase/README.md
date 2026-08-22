@@ -21,6 +21,20 @@ Native-класс для представления позы в 2D простр�
 
 ### `pose3.py`
 
+#### Quat
+
+`Quat` хранит raw `[x, y, z, w]`, поэтому uncertain runtime input проходит
+через checked API:
+
+- **try_normalized() / try_inverse()** возвращают `None` вместо исключения;
+  full-range нормализация принимает finite multi-component `DBL_MAX` и
+  subnormal значения с представимым результатом.
+- **rotate() / inverse_rotate() / to_matrix()** проверяют и нормализуют finite
+  scaled quaternion; `try_`-варианты возвращают `None`, а zero/non-finite
+  quaternion в строгом варианте вызывает `ValueError`.
+- **from_axis_angle()** требует finite ненулевую ось и finite угол;
+  **try_from_axis_angle()** возвращает `None` при нарушении контракта.
+
 #### Pose3
 Класс для представления позы в 3D пространстве (положение + ориентация).
 
@@ -39,7 +53,7 @@ Native-класс для представления позы в 2D простр�
 - **normalized()** - строгая нормализация кватерниона к единичной длине;
   вырожденное или non-finite вращение вызывает `ValueError`
 - **distance(other)** - расстояние между двумя позами
-- **to_axis_angle() / from_axis_angle()** - конвертация axis-angle ↔ quaternion
+- **to_axis_angle() / from_axis_angle()** - checked конвертация axis-angle ↔ quaternion
 - **to_euler() / from_euler(Vec3)** - конвертация Euler angles ↔ quaternion (порядок XYZ)
 - **looking_at()** - создать позу, направленную на заданную точку
 - **as_matrix34()** - получить 3×4 матрицу трансформации

@@ -56,9 +56,14 @@ state, но не callbacks или Python objects.
 - `termin/geom/*` - базовые геометрические/value-типы: vectors, matrices,
   poses, quaternions, rays, AABB, colors, sizes, rectangles.
 - `Quat` хранит raw `xyzw` без неявного unit-invariant. Нормализация, настоящий
-  inverse, slerp и Euler-конверсия имеют checked-варианты с транзакционным
-  выходом; только `normalized_or` задаёт общий fallback явно. Euler XYZ
-  передаётся одним `Vec3`, а `Pose3` делегирует конверсию кватерниону.
+  inverse, rotate/inverse-rotate, quaternion-to-matrix, axis-angle, slerp и
+  Euler-конверсия имеют checked-варианты с транзакционным выходом. Checked
+  нормализация использует scale-by-max и поддерживает multi-`DBL_MAX` и
+  subnormal входы с представимым результатом, не меняя overflow-семантику
+  `norm`/`norm_squared`. Только `normalized_or` задаёт общий fallback явно.
+  Euler XYZ передаётся одним `Vec3`; native `Pose3` сохраняет unit-precondition,
+  а Python semantic boundary нормализует временную копию или бросает
+  `ValueError`.
 - `termin/geom/color.hpp` разделяет scalar colors по смыслу. `SrgbColor`
   хранит authored/display-referred SDR-компоненты в кодировке IEC sRGB, а
   `LinearColor` — линейный RGB в рабочем пространстве renderer-а: sRGB

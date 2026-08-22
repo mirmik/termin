@@ -78,7 +78,7 @@ namespace termin::physics_qopt {
 
         PointJacobian point_jacobian_local(termin::Vec3 radius_local, termin::Quat body_orientation) noexcept {
             const PointJacobian local = point_jacobian(radius_local);
-            const termin::Mat33 rotation = termin::Mat33::rotation(body_orientation);
+            const termin::Mat33 rotation = termin::Mat33::rotation(body_orientation.normalized());
             PointJacobian result{};
             for (std::size_t row = 0; row < 3; ++row) {
                 for (std::size_t column = 0; column < 6; ++column) {

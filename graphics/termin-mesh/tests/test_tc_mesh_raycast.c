@@ -151,6 +151,16 @@ GUARD_C_TEST(test_raycast_reports_finite_rich_hits) {
     ray.direction.z = -FLT_MAX;
     GUARD_C_REQUIRE(tc_mesh_raycast(&mesh, &ray, &hit));
     check_triangle_hit(&hit, 0.25f, 0.25f);
+
+    ray = make_default_ray();
+    ray.origin = (tc_vec3f){-0.75f, -0.75f, 1.0f};
+    ray.direction = (tc_vec3f){FLT_MAX, FLT_MAX, -FLT_MAX};
+    GUARD_C_REQUIRE(tc_mesh_raycast(&mesh, &ray, &hit));
+    GUARD_C_CHECK(hit_is_finite(&hit));
+    GUARD_C_CHECK_NEAR_DOUBLE(sqrt(3.0), hit.t, 1e-6);
+    GUARD_C_CHECK_NEAR_DOUBLE(0.25, hit.position.x, 1e-6);
+    GUARD_C_CHECK_NEAR_DOUBLE(0.25, hit.position.y, 1e-6);
+    GUARD_C_CHECK_NEAR_DOUBLE(0.0, hit.position.z, 1e-6);
     return 0;
 }
 
@@ -232,10 +242,6 @@ GUARD_C_TEST(test_raycast_rejects_degenerate_direction_and_reversed_range) {
     ray = make_default_ray();
     ray.direction = (tc_vec3f){0.0f, 0.0f, -1e-30f};
     expect_rejected(&mesh, &ray, "degenerate direction", 1);
-
-    ray = make_default_ray();
-    ray.direction = (tc_vec3f){FLT_MAX, FLT_MAX, 0.0f};
-    expect_rejected(&mesh, &ray, "non-representable direction length", 1);
 
     ray = make_default_ray();
     ray.t_min = 2.0f;

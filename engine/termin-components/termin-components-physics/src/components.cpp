@@ -25,8 +25,7 @@ namespace termin {
             constexpr double orientation_tolerance = 1.0e-10;
             Quat lhs_rotation;
             Quat rhs_rotation;
-            if (!lhs.ang.try_normalized(lhs_rotation, 1.0e-12) ||
-                !rhs.ang.try_normalized(rhs_rotation, 1.0e-12)) {
+            if (!lhs.ang.try_normalized(lhs_rotation, 1.0e-12) || !rhs.ang.try_normalized(rhs_rotation, 1.0e-12)) {
                 return false;
             }
             const double dot = lhs_rotation.dot(rhs_rotation);
@@ -35,7 +34,7 @@ namespace termin {
 
         template <typename Component>
         void stage_double(tc::InspectFacetBuilder& inspect,
-                          double Component::*member,
+                          double Component::* member,
                           const char* type_name,
                           const char* path,
                           const char* label,
@@ -148,7 +147,23 @@ namespace termin {
             }
             return false;
         }
-        pose = owner.transform().global_pose();
+        Pose3 normalized_pose = owner.transform().global_pose();
+        Quat normalized_rotation;
+        if (!normalized_pose.ang.try_normalized(normalized_rotation, 1.0e-12)) {
+            if (report_error) {
+                tc::Log::error("[RigidBodyComponent] '%s' rejects a zero or non-finite world rotation", owner.name());
+            }
+            return false;
+        }
+        if (!normalized_pose.lin.is_finite()) {
+            if (report_error) {
+                tc::Log::error("[RigidBodyComponent] '%s' rejects a non-finite world position", owner.name());
+            }
+            return false;
+        }
+        normalized_pose.ang = normalized_rotation;
+
+        pose = normalized_pose;
         scale = *maybe_scale;
         return true;
     }

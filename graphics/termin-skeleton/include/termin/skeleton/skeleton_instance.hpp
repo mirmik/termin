@@ -44,10 +44,19 @@ namespace termin {
 
         const GeneralPose3& local_pose(int bone_index) const;
 
-        void set_bone_transform(int bone_index,
-                                const double* translation,
-                                const double* rotation,
-                                const double* scale);
+        // Validate and atomically apply the supplied transform components.
+        // Rotations may have any finite non-zero scale and are stored normalized.
+        bool
+        try_set_bone_transform(int bone_index, const double* translation, const double* rotation, const double* scale);
+
+        // Compatibility entry point. Invalid input is logged and leaves the
+        // current local pose unchanged.
+        void set_bone_transform(int bone_index, const double* translation, const double* rotation, const double* scale);
+
+        bool try_set_bone_transform_by_name(const std::string& bone_name,
+                                            const double* translation,
+                                            const double* rotation,
+                                            const double* scale);
 
         void set_bone_transform_by_name(const std::string& bone_name,
                                         const double* translation,

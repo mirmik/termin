@@ -63,10 +63,9 @@ TC_API bool tc_skeleton_ensure_loaded(tc_skeleton_handle h);
 TC_API tc_bone* tc_skeleton_alloc_bones(tc_skeleton* skeleton, size_t count);
 
 // Validate, allocate, and atomically replace the complete bone/root payload.
+// Finite non-zero bind rotations are normalized before storage.
 // On failure the existing skeleton and its version remain unchanged.
-TC_API bool tc_skeleton_replace_bones(tc_skeleton* skeleton,
-                                      const tc_skeleton_bone_desc* bones,
-                                      size_t count);
+TC_API bool tc_skeleton_replace_bones(tc_skeleton* skeleton, const tc_skeleton_bone_desc* bones, size_t count);
 
 // Get bone by index
 TC_API tc_bone* tc_skeleton_get_bone(tc_skeleton* skeleton, size_t index);

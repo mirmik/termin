@@ -375,11 +375,7 @@ namespace termin {
     static_assert(offsetof(GeneralPose3, scale) == sizeof(Quat) + sizeof(Vec3), "GeneralPose3.scale offset changed");
 
     inline GeneralPose3 lerp(const GeneralPose3& a, const GeneralPose3& b, double t) {
-        return {slerp(a.ang, b.ang, t),
-                a.lin + (b.lin - a.lin) * t,
-                {a.scale.x + (b.scale.x - a.scale.x) * t,
-                 a.scale.y + (b.scale.y - a.scale.y) * t,
-                 a.scale.z + (b.scale.z - a.scale.z) * t}};
+        return {slerp(a.ang, b.ang, t), Vec3::lerp(a.lin, b.lin, t), Vec3::lerp(a.scale, b.scale, t)};
     }
 
     inline GeneralPose3 compose_trs_projected(const Pose3& a, const GeneralPose3& b) {

@@ -3,13 +3,15 @@
 #include <random>
 #include <type_traits>
 
-#include <tcbase/tc_types.h>
 #include <geom/tc_quat.h>
+#include <tcbase/tc_types.h>
+#include <termin/geom/aabb.hpp>
 #include <termin/geom/affine2.hpp>
 #include <termin/geom/affine3.hpp>
-#include <termin/geom/aabb.hpp>
 #include <termin/geom/bounds2.hpp>
 #include <termin/geom/color.hpp>
+#include <termin/geom/general_pose3.hpp>
+#include <termin/geom/mat33.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/mat66.hpp>
 #include <termin/geom/pose3.hpp>
@@ -30,6 +32,28 @@ TEST_CASE("tc_vec3 normalized zero vector returns NaNs") {
     CHECK(std::isnan(normalized.x));
     CHECK(std::isnan(normalized.y));
     CHECK(std::isnan(normalized.z));
+}
+
+TEST_CASE("Vec3 and pose interpolation preserve full-range finite endpoints") {
+    const double largest = std::numeric_limits<double>::max();
+    const tc_vec3 first{-largest, largest, -largest};
+    const tc_vec3 second{largest, -largest, largest};
+
+    CHECK(tc_vec3_lerp(first, second, 0.0) == first);
+    CHECK(tc_vec3_lerp(first, second, 1.0) == second);
+    CHECK(tc_vec3_lerp(first, second, 0.5) == tc_vec3::zero());
+
+    const termin::Pose3 first_pose{termin::Quat::identity(), first};
+    const termin::Pose3 second_pose{termin::Quat::identity(), second};
+    CHECK(termin::lerp(first_pose, second_pose, 0.0).lin == first);
+    CHECK(termin::lerp(first_pose, second_pose, 1.0).lin == second);
+    CHECK(termin::lerp(first_pose, second_pose, 0.5).lin == tc_vec3::zero());
+
+    const termin::GeneralPose3 first_general{termin::Quat::identity(), first, first};
+    const termin::GeneralPose3 second_general{termin::Quat::identity(), second, second};
+    const termin::GeneralPose3 midpoint = termin::lerp(first_general, second_general, 0.5);
+    CHECK(midpoint.lin == tc_vec3::zero());
+    CHECK(midpoint.scale == tc_vec3::zero());
 }
 
 TEST_CASE("Quat checked operations match the C foundation and preserve raw xyzw ABI") {
@@ -90,6 +114,15 @@ TEST_CASE("Quat checked operations match the C foundation and preserve raw xyzw 
     CHECK(std::abs((partial_underflow * cpp_inverse).w - 1.0) < 1.0e-15);
     CHECK(cpp_inverse.x == c_inverse.x);
 
+    const double smallest_subnormal = std::nextafter(0.0, 1.0);
+    const Quat subnormal{smallest_subnormal, 0.0, 0.0, 0.0};
+    REQUIRE(subnormal.try_normalized(cpp_normalized, 0.0));
+    CHECK(cpp_normalized.x == 1.0);
+    CHECK(cpp_normalized.y == 0.0);
+    cpp_inverse = {9.0, 8.0, 7.0, 6.0};
+    CHECK_FALSE(subnormal.try_inverse(cpp_inverse, 0.0));
+    CHECK(cpp_inverse.x == 9.0);
+
     const Quat sentinel{9.0, 8.0, 7.0, 6.0};
     Quat unchanged = sentinel;
     CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.try_normalized(unchanged, 0.0)));
@@ -112,6 +145,217 @@ TEST_CASE("Quat checked operations match the C foundation and preserve raw xyzw 
     CHECK(normalized_or.w == fallback.w);
     CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.normalized().is_finite()));
     CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.inverse().is_finite()));
+}
+
+TEST_CASE("Quat checked transforms, matrices and axis-angle have C parity") {
+    using termin::Quat;
+    using termin::Vec3;
+
+    const double largest = std::numeric_limits<double>::max();
+    const Quat multi_max{largest, largest, largest, largest};
+    Quat normalized{9.0, 8.0, 7.0, 6.0};
+    REQUIRE(multi_max.try_normalized(normalized, 0.0));
+    CHECK(normalized.x == 0.5);
+    CHECK(normalized.y == 0.5);
+    CHECK(normalized.z == 0.5);
+    CHECK(normalized.w == 0.5);
+    CHECK(std::isinf(multi_max.norm()));
+    CHECK(std::isinf(multi_max.norm_squared()));
+
+    Quat cpp_inverse{9.0, 8.0, 7.0, 6.0};
+    tc_quat c_inverse{9.0, 8.0, 7.0, 6.0};
+    REQUIRE(multi_max.try_inverse(cpp_inverse, 0.0));
+    REQUIRE(tc_quat_try_inverse(multi_max, 0.0, &c_inverse));
+    CHECK(cpp_inverse.x == c_inverse.x);
+    CHECK(cpp_inverse.y == c_inverse.y);
+    CHECK(cpp_inverse.z == c_inverse.z);
+    CHECK(cpp_inverse.w == c_inverse.w);
+    CHECK(std::abs((multi_max * cpp_inverse).w - 1.0) < 2.0e-15);
+
+    const Quat quarter_turn = Quat::from_axis_angle(Vec3{0.0, 0.0, 7.0}, 0.5 * 3.14159265358979323846);
+    REQUIRE(quarter_turn.is_finite());
+    const Quat scaled{quarter_turn.x * 9.0, quarter_turn.y * 9.0, quarter_turn.z * 9.0, quarter_turn.w * 9.0};
+    const Vec3 vector{2.0, -3.0, 4.0};
+    Vec3 cpp_rotated{9.0, 8.0, 7.0};
+    tc_vec3 c_rotated{9.0, 8.0, 7.0};
+    REQUIRE(scaled.try_rotate(vector, cpp_rotated));
+    REQUIRE(tc_quat_try_rotate(scaled, vector, 1.0e-12, &c_rotated));
+    CHECK(std::abs(cpp_rotated.x - c_rotated.x) < 1.0e-14);
+    CHECK(std::abs(cpp_rotated.y - c_rotated.y) < 1.0e-14);
+    CHECK(std::abs(cpp_rotated.z - c_rotated.z) < 1.0e-14);
+
+    Vec3 recovered{9.0, 8.0, 7.0};
+    REQUIRE(scaled.try_inverse_rotate(cpp_rotated, recovered));
+    CHECK(std::abs(recovered.x - vector.x) < 1.0e-14);
+    CHECK(std::abs(recovered.y - vector.y) < 1.0e-14);
+    CHECK(std::abs(recovered.z - vector.z) < 1.0e-14);
+
+    double cpp_matrix[9];
+    double c_matrix[9];
+    REQUIRE(scaled.try_to_matrix(cpp_matrix));
+    REQUIRE(tc_quat_try_to_matrix3_row_major(scaled, 1.0e-12, c_matrix));
+    for (int i = 0; i < 9; ++i) {
+        CHECK(cpp_matrix[i] == c_matrix[i]);
+    }
+    CHECK(std::abs(cpp_matrix[0] * vector.x + cpp_matrix[1] * vector.y + cpp_matrix[2] * vector.z - cpp_rotated.x) <
+          1.0e-14);
+    CHECK(std::abs(cpp_matrix[3] * vector.x + cpp_matrix[4] * vector.y + cpp_matrix[5] * vector.z - cpp_rotated.y) <
+          1.0e-14);
+    CHECK(std::abs(cpp_matrix[6] * vector.x + cpp_matrix[7] * vector.y + cpp_matrix[8] * vector.z - cpp_rotated.z) <
+          1.0e-14);
+
+    const Quat half_turn_z{0.0, 0.0, 1.0, 0.0};
+    const Vec3 largest_vector{largest, 0.0, 0.0};
+    REQUIRE(half_turn_z.try_rotate(largest_vector, cpp_rotated, 0.0));
+    REQUIRE(tc_quat_try_rotate(half_turn_z, largest_vector, 0.0, &c_rotated));
+    CHECK(cpp_rotated.x == -largest);
+    CHECK(cpp_rotated.y == 0.0);
+    CHECK(cpp_rotated.z == 0.0);
+    CHECK(cpp_rotated == c_rotated);
+    REQUIRE(half_turn_z.try_inverse_rotate(largest_vector, recovered, 0.0));
+    CHECK(recovered.x == -largest);
+    CHECK(recovered.y == 0.0);
+    CHECK(recovered.z == 0.0);
+
+    Quat cpp_axis{9.0, 8.0, 7.0, 6.0};
+    tc_quat c_axis{9.0, 8.0, 7.0, 6.0};
+    const Vec3 large_axis{largest, largest, 0.0};
+    REQUIRE(Quat::try_from_axis_angle(large_axis, 0.73, cpp_axis, 0.0));
+    REQUIRE(tc_quat_try_from_axis_angle(large_axis, 0.73, 0.0, &c_axis));
+    CHECK(cpp_axis.x == c_axis.x);
+    CHECK(cpp_axis.y == c_axis.y);
+    CHECK(cpp_axis.z == c_axis.z);
+    CHECK(cpp_axis.w == c_axis.w);
+
+    const Vec3 vec_sentinel{9.0, 8.0, 7.0};
+    cpp_rotated = vec_sentinel;
+    CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.try_rotate(vector, cpp_rotated, 0.0)));
+    CHECK(cpp_rotated == vec_sentinel);
+    CHECK_FALSE(
+        Quat::identity().try_rotate(Vec3{std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0}, cpp_rotated, 0.0));
+    CHECK(cpp_rotated == vec_sentinel);
+    CHECK_FALSE(Quat::identity().try_inverse_rotate(vector, cpp_rotated, -1.0));
+    CHECK(cpp_rotated == vec_sentinel);
+    const Quat eighth_turn = Quat::from_axis_angle(Vec3::unit_z(), 0.25 * 3.14159265358979323846);
+    const Vec3 overflowing_vector{largest, largest, 0.0};
+    CHECK_FALSE(eighth_turn.try_rotate(overflowing_vector, cpp_rotated, 0.0));
+    CHECK(cpp_rotated == vec_sentinel);
+    c_rotated = vec_sentinel;
+    CHECK_FALSE(tc_quat_try_rotate(eighth_turn, overflowing_vector, 0.0, &c_rotated));
+    CHECK(c_rotated == vec_sentinel);
+    CHECK_FALSE(eighth_turn.try_inverse_rotate(overflowing_vector, cpp_rotated, 0.0));
+    CHECK(cpp_rotated == vec_sentinel);
+    CHECK_FALSE(tc_quat_try_inverse_rotate(eighth_turn, overflowing_vector, 0.0, &c_rotated));
+    CHECK(c_rotated == vec_sentinel);
+
+    double matrix_sentinel[9] = {9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0};
+    CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.try_to_matrix(matrix_sentinel, 0.0)));
+    CHECK(matrix_sentinel[0] == 9.0);
+    CHECK(matrix_sentinel[8] == 1.0);
+    CHECK_FALSE(Quat::identity().try_to_matrix(nullptr, 0.0));
+
+    const Quat quat_sentinel{9.0, 8.0, 7.0, 6.0};
+    cpp_axis = quat_sentinel;
+    CHECK_FALSE(Quat::try_from_axis_angle(Vec3::zero(), 0.5, cpp_axis, 0.0));
+    CHECK(cpp_axis.x == quat_sentinel.x);
+    CHECK_FALSE(Quat::try_from_axis_angle(Vec3::unit_x(), std::numeric_limits<double>::infinity(), cpp_axis, 0.0));
+    CHECK(cpp_axis.x == quat_sentinel.x);
+    CHECK_FALSE(Quat::try_from_axis_angle(Vec3::unit_x(), 0.5, cpp_axis, -1.0));
+    CHECK(cpp_axis.x == quat_sentinel.x);
+    CHECK_FALSE(Quat::from_axis_angle(Vec3::zero(), 0.5).is_finite());
+
+    using AxisAngleFactory = Quat (*)(const Vec3&, double);
+    const AxisAngleFactory legacy_factory = &Quat::from_axis_angle;
+    CHECK(legacy_factory(Vec3::unit_z(), 0.5).is_finite());
+}
+
+TEST_CASE("Checked vector normalization covers finite multi-component maxima") {
+    const double largest = std::numeric_limits<double>::max();
+    const float largest_float = std::numeric_limits<float>::max();
+
+    termin::Vec2 vec2_out;
+    REQUIRE((termin::Vec2{largest, largest}.try_normalized(vec2_out, 0.0)));
+    CHECK(std::abs(vec2_out.norm_squared() - 1.0) < 2.0e-15);
+
+    termin::Vec3 vec3_out;
+    REQUIRE((termin::Vec3{largest, largest, largest}.try_normalized(vec3_out, 0.0)));
+    CHECK(std::abs(vec3_out.norm_squared() - 1.0) < 2.0e-15);
+
+    termin::Vec4 vec4_out;
+    REQUIRE((termin::Vec4{largest, largest, largest, largest}.try_normalized(vec4_out, 0.0)));
+    CHECK(vec4_out.x == 0.5);
+    CHECK(vec4_out.y == 0.5);
+    CHECK(vec4_out.z == 0.5);
+    CHECK(vec4_out.w == 0.5);
+
+    termin::Vec3f vec3f_out;
+    REQUIRE((termin::Vec3f{largest_float, largest_float, largest_float}.try_normalized(vec3f_out, 0.0f)));
+    CHECK(std::abs(vec3f_out.norm_squared() - 1.0f) < 2.0e-6f);
+
+    termin::Vec4f vec4f_out;
+    REQUIRE(
+        (termin::Vec4f{largest_float, largest_float, largest_float, largest_float}.try_normalized(vec4f_out, 0.0f)));
+    CHECK(vec4f_out.x == 0.5f);
+    CHECK(vec4f_out.y == 0.5f);
+    CHECK(vec4f_out.z == 0.5f);
+    CHECK(vec4f_out.w == 0.5f);
+}
+
+TEST_CASE("Typed rotation matrices expose transactional checked quaternion factories") {
+    using termin::Mat33;
+    using termin::Mat33f;
+    using termin::Mat44;
+    using termin::Mat44f;
+    using termin::Quat;
+    using termin::Vec3;
+    using termin::Vec3f;
+
+    const Quat quarter_turn = Quat::from_axis_angle(Vec3::unit_z(), 0.5 * 3.14159265358979323846);
+    const Quat scaled{quarter_turn.x * 7.0, quarter_turn.y * 7.0, quarter_turn.z * 7.0, quarter_turn.w * 7.0};
+    const Vec3 vector{2.0, -3.0, 4.0};
+    Vec3 rotated;
+    REQUIRE(scaled.try_rotate(vector, rotated));
+
+    Mat33 mat33;
+    Mat33f mat33f;
+    Mat44 mat44;
+    Mat44f mat44f;
+    REQUIRE(Mat33::try_rotation(scaled, mat33));
+    REQUIRE(Mat33f::try_rotation(scaled, mat33f));
+    REQUIRE(Mat44::try_rotation(scaled, mat44));
+    REQUIRE(Mat44f::try_rotation(scaled, mat44f));
+    CHECK((mat33.transform(vector) - rotated).norm() < 1.0e-14);
+    CHECK((mat33f.transform(vector) - rotated).norm() < 1.0e-6);
+    CHECK((mat44.transform_direction(vector) - rotated).norm() < 1.0e-14);
+    CHECK((mat44f.transform_direction(termin::Vec3f{vector}).to_double() - rotated).norm() < 1.0e-6);
+
+    const double largest = std::numeric_limits<double>::max();
+    const float largest_float = std::numeric_limits<float>::max();
+    REQUIRE(Mat33::try_rotation_axis_angle(Vec3{largest, largest, 0.0}, 0.73, mat33, 0.0));
+    REQUIRE(Mat33::try_rotation_axis_angle(Vec3{largest, 0.0, 0.0}, 0.73, mat33, 2.0));
+    REQUIRE(Mat33f::try_rotation_axis_angle(Vec3f{largest_float, 0.0f, 0.0f}, 0.73f, mat33f, 2.0));
+    REQUIRE(Mat44::try_rotation_axis_angle(Vec3{largest, largest, 0.0}, 0.73, mat44, 0.0));
+    REQUIRE(Mat44::try_rotation_axis_angle(Vec3{largest, 0.0, 0.0}, 0.73, mat44, 2.0));
+    REQUIRE(Mat44f::try_rotation_axis_angle(Vec3{largest, 0.0, 0.0}, 0.73f, mat44f, 2.0));
+
+    mat33(0, 0) = 9.0;
+    mat33f(0, 0) = 8.0f;
+    mat44(0, 0) = 7.0;
+    mat44f(0, 0) = 6.0f;
+    const Quat zero{0.0, 0.0, 0.0, 0.0};
+    CHECK_FALSE(Mat33::try_rotation(zero, mat33, 0.0));
+    CHECK_FALSE(Mat33f::try_rotation(zero, mat33f, 0.0));
+    CHECK_FALSE(Mat44::try_rotation(zero, mat44, 0.0));
+    CHECK_FALSE(Mat44f::try_rotation(zero, mat44f, 0.0));
+    CHECK(mat33(0, 0) == 9.0);
+    CHECK(mat33f(0, 0) == 8.0f);
+    CHECK(mat44(0, 0) == 7.0);
+    CHECK(mat44f(0, 0) == 6.0f);
+
+    CHECK_FALSE(Mat33::try_rotation_axis_angle(Vec3::zero(), 0.5, mat33, 0.0));
+    CHECK_FALSE(Mat44::try_rotation_axis_angle(Vec3::unit_x(), std::numeric_limits<double>::quiet_NaN(), mat44, 0.0));
+    CHECK(mat33(0, 0) == 9.0);
+    CHECK(mat44(0, 0) == 7.0);
 }
 
 TEST_CASE("Quat checked slerp and Euler conversion have C++ parity") {
@@ -140,8 +384,8 @@ TEST_CASE("Quat checked slerp and Euler conversion have C++ parity") {
     cpp_result = sentinel;
     CHECK_FALSE(Quat::try_slerp(Quat{0.0, 0.0, 0.0, 0.0}, Quat::identity(), 0.5, cpp_result, 0.0));
     CHECK(cpp_result.x == sentinel.x);
-    CHECK_FALSE(Quat::try_slerp(Quat::identity(), Quat::identity(),
-                                std::numeric_limits<double>::quiet_NaN(), cpp_result));
+    CHECK_FALSE(
+        Quat::try_slerp(Quat::identity(), Quat::identity(), std::numeric_limits<double>::quiet_NaN(), cpp_result));
     CHECK(cpp_result.x == sentinel.x);
     CHECK_FALSE(Quat::slerp(Quat{0.0, 0.0, 0.0, 0.0}, Quat::identity(), 0.5).is_finite());
 
@@ -289,6 +533,22 @@ TEST_CASE("SpatialInertia3 maps twists to momentum consistently") {
         },
     };
     CHECK(inertia.is_valid());
+
+    termin::SpatialInertia3 scaled_orientation = inertia;
+    scaled_orientation.inertia_frame.ang = {
+        inertia.inertia_frame.ang.x * 7.0,
+        inertia.inertia_frame.ang.y * 7.0,
+        inertia.inertia_frame.ang.z * 7.0,
+        inertia.inertia_frame.ang.w * 7.0,
+    };
+    CHECK(scaled_orientation.is_valid());
+    const termin::Mat33 central = inertia.central_inertia();
+    const termin::Mat33 scaled_central = scaled_orientation.central_inertia();
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            CHECK(std::abs(central(column, row) - scaled_central(column, row)) < 1e-12);
+        }
+    }
 
     const termin::Screw3 velocity{{0.3, -0.7, 1.1}, {2.0, -3.0, 4.0}};
     const termin::Screw3 momentum = inertia.momentum(velocity);
@@ -464,8 +724,7 @@ TEST_CASE("AABBf is a packed valid-by-default float bounds type") {
 
     const termin::AABB invalid{{1.0, 0.0, 0.0}, {0.0, 1.0, 1.0}};
     CHECK(!invalid.is_valid());
-    CHECK((termin::AABB{{0.0, 0.0, 0.0}, {1.0, 2.0, 3.0}}.expanded(2.0).max_point ==
-           termin::Vec3(3.0, 4.0, 5.0)));
+    CHECK((termin::AABB{{0.0, 0.0, 0.0}, {1.0, 2.0, 3.0}}.expanded(2.0).max_point == termin::Vec3(3.0, 4.0, 5.0)));
 }
 
 TEST_CASE("Ray3 is tc_ray3 alias and normalizes direction") {
@@ -706,8 +965,7 @@ TEST_CASE("base geometry value types preserve simple construction semantics") {
 }
 
 TEST_CASE("Mat44 determinant supports double and float matrices") {
-    const termin::Mat44 matrix = termin::Mat44::translation({3.0, -2.0, 7.0}) *
-                                  termin::Mat44::scale({2.0, 3.0, 4.0});
+    const termin::Mat44 matrix = termin::Mat44::translation({3.0, -2.0, 7.0}) * termin::Mat44::scale({2.0, 3.0, 4.0});
     CHECK(std::abs(matrix.determinant() - 24.0) < 1.0e-12);
 
     const termin::Mat44 singular = termin::Mat44::scale({2.0, 0.0, 4.0});
@@ -717,8 +975,8 @@ TEST_CASE("Mat44 determinant supports double and float matrices") {
     const termin::Mat44 inverse = small_but_invertible.inverse();
     CHECK(std::abs(inverse(0, 0) - 1.0e12) < 1.0e-3);
 
-    const termin::Mat44f matrix_f = termin::Mat44f::translation(3.0f, -2.0f, 7.0f) *
-                                    termin::Mat44f::scale(termin::Vec3{2.0, 3.0, 4.0});
+    const termin::Mat44f matrix_f =
+        termin::Mat44f::translation(3.0f, -2.0f, 7.0f) * termin::Mat44f::scale(termin::Vec3{2.0, 3.0, 4.0});
     CHECK(std::abs(matrix_f.determinant() - 24.0f) < 1.0e-5f);
 }
 
@@ -757,8 +1015,7 @@ TEST_CASE("Mat44 checked transforms and inverse preserve output on failure") {
     CHECK(!termin::Mat44f::scale(termin::Vec3{1.0, 0.0, 1.0}).try_inverse(inverse_f));
     CHECK(inverse_f.get_translation() == termin::Vec3(9.0, 8.0, 7.0));
     CHECK(matrix_f.try_inverse(inverse_f));
-    CHECK((inverse_f.transform_point(matrix_f.transform_point({1.0f, 2.0f, 3.0f})) -
-           termin::Vec3f{1.0f, 2.0f, 3.0f})
+    CHECK((inverse_f.transform_point(matrix_f.transform_point({1.0f, 2.0f, 3.0f})) - termin::Vec3f{1.0f, 2.0f, 3.0f})
               .norm() < 1.0e-5f);
 }
 
@@ -778,10 +1035,22 @@ TEST_CASE("Mat44 checked inverse uses relative scale and raw bridges stay explic
     }
 
     const double raw64[16] = {
-        1.0, 2.0, 3.0, 4.0,
-        5.0, 6.0, 7.0, 8.0,
-        9.0, 10.0, 11.0, 12.0,
-        13.0, 14.0, 15.0, 16.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0,
     };
     const termin::Mat44 from64 = termin::Mat44::from_column_major_f64(raw64);
     CHECK(from64(2, 1) == 10.0);
@@ -794,10 +1063,22 @@ TEST_CASE("Mat44 checked inverse uses relative scale and raw bridges stay explic
     CHECK(termin::Mat44::from_tc_mat44(c_matrix)(2, 1) == 10.0);
 
     const float raw32[16] = {
-        1.0f, 2.0f, 3.0f, 4.0f,
-        5.0f, 6.0f, 7.0f, 8.0f,
-        9.0f, 10.0f, 11.0f, 12.0f,
-        13.0f, 14.0f, 15.0f, 16.0f,
+        1.0f,
+        2.0f,
+        3.0f,
+        4.0f,
+        5.0f,
+        6.0f,
+        7.0f,
+        8.0f,
+        9.0f,
+        10.0f,
+        11.0f,
+        12.0f,
+        13.0f,
+        14.0f,
+        15.0f,
+        16.0f,
     };
     CHECK(termin::Mat44::from_column_major_f32(raw32)(2, 1) == 10.0);
     const termin::Mat44f from32 = termin::Mat44f::from_column_major_f32(raw32);
@@ -805,8 +1086,7 @@ TEST_CASE("Mat44 checked inverse uses relative scale and raw bridges stay explic
     CHECK(from32.to_double()(2, 1) == 10.0);
 
     const termin::Mat44 large_world_view_projection =
-        termin::Mat44::perspective(1.1, 16.0 / 9.0, 0.1, 5000.0) *
-        termin::Mat44::translation({-1.0e6, 2.0e6, -3.0e6});
+        termin::Mat44::perspective(1.1, 16.0 / 9.0, 0.1, 5000.0) * termin::Mat44::translation({-1.0e6, 2.0e6, -3.0e6});
     termin::Mat44 large_world_inverse;
     CHECK(large_world_view_projection.try_inverse(large_world_inverse));
     const termin::Vec3 world_point{1.0e6 + 2.0, -2.0e6 + 10.0, 3.0e6 - 4.0};
@@ -816,8 +1096,7 @@ TEST_CASE("Mat44 checked inverse uses relative scale and raw bridges stay explic
 }
 
 TEST_CASE("Mat44f checked inverse validates both products at large world coordinates") {
-    const termin::Mat44f large_translation =
-        termin::Mat44f::translation(termin::Vec3{-30000.0, 60000.0, -90000.0});
+    const termin::Mat44f large_translation = termin::Mat44f::translation(termin::Vec3{-30000.0, 60000.0, -90000.0});
     termin::Mat44f large_translation_inverse;
     CHECK(large_translation.try_inverse(large_translation_inverse));
 
@@ -845,9 +1124,8 @@ TEST_CASE("Mat44f checked inverse validates both products at large world coordin
         CHECK(unchanged.data[i] == expected_unchanged.data[i]);
     }
 
-    const termin::Mat44 double_precision =
-        termin::Mat44::perspective(1.1, 16.0 / 9.0, 0.1, 5000.0) *
-        termin::Mat44::translation(termin::Vec3{-30000.0, 60000.0, -90000.0});
+    const termin::Mat44 double_precision = termin::Mat44::perspective(1.1, 16.0 / 9.0, 0.1, 5000.0) *
+                                           termin::Mat44::translation(termin::Vec3{-30000.0, 60000.0, -90000.0});
     termin::Mat44 double_inverse;
     CHECK(double_precision.try_inverse(double_inverse));
     const termin::Mat44 double_left_identity = double_precision * double_inverse;

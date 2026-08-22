@@ -68,7 +68,28 @@ namespace termin {
                      return mat33_row_tuple(data);
                  })
             .def_static("identity", &Basis3d::identity)
-            .def_static("from_quat", &Basis3d::from_quat)
+            .def_static(
+                "try_from_quat",
+                [](const Quat& rotation, double epsilon) -> nb::object {
+                    Quat unit;
+                    if (!rotation.try_normalized(unit, epsilon)) {
+                        return nb::none();
+                    }
+                    return nb::cast(Basis3d::from_quat(unit));
+                },
+                nb::arg("rotation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "from_quat",
+                [](const Quat& rotation, double epsilon) {
+                    Quat unit;
+                    if (!rotation.try_normalized(unit, epsilon)) {
+                        throw nb::value_error("Basis3d rotation requires a finite non-degenerate quaternion");
+                    }
+                    return Basis3d::from_quat(unit);
+                },
+                nb::arg("rotation"),
+                nb::arg("epsilon") = 1.0e-12)
             .def_static("scaling",
                         nb::overload_cast<double, double, double>(&Basis3d::scaling),
                         nb::arg("x"),
@@ -170,14 +191,60 @@ namespace termin {
                  })
             .def_static("identity", &Affine3d::identity)
             .def_static("from_translation", nb::overload_cast<const Vec3&>(&Affine3d::from_translation))
-            .def_static("rotation", &Affine3d::from_rotation)
+            .def_static(
+                "try_rotation",
+                [](const Quat& rotation, double epsilon) -> nb::object {
+                    Quat unit;
+                    if (!rotation.try_normalized(unit, epsilon)) {
+                        return nb::none();
+                    }
+                    return nb::cast(Affine3d::from_rotation(unit));
+                },
+                nb::arg("rotation"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "rotation",
+                [](const Quat& rotation, double epsilon) {
+                    Quat unit;
+                    if (!rotation.try_normalized(unit, epsilon)) {
+                        throw nb::value_error("Affine3d rotation requires a finite non-degenerate quaternion");
+                    }
+                    return Affine3d::from_rotation(unit);
+                },
+                nb::arg("rotation"),
+                nb::arg("epsilon") = 1.0e-12)
             .def_static("scaling",
                         nb::overload_cast<double, double, double>(&Affine3d::scaling),
                         nb::arg("x"),
                         nb::arg("y"),
                         nb::arg("z"))
             .def_static("scaling", nb::overload_cast<double>(&Affine3d::scaling))
-            .def_static("trs", &Affine3d::trs)
+            .def_static(
+                "try_trs",
+                [](const Vec3& translation, const Quat& rotation, const Vec3& scale, double epsilon) -> nb::object {
+                    Quat unit;
+                    if (!rotation.try_normalized(unit, epsilon)) {
+                        return nb::none();
+                    }
+                    return nb::cast(Affine3d::trs(translation, unit, scale));
+                },
+                nb::arg("translation"),
+                nb::arg("rotation"),
+                nb::arg("scale"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "trs",
+                [](const Vec3& translation, const Quat& rotation, const Vec3& scale, double epsilon) {
+                    Quat unit;
+                    if (!rotation.try_normalized(unit, epsilon)) {
+                        throw nb::value_error("Affine3d TRS requires a finite non-degenerate quaternion");
+                    }
+                    return Affine3d::trs(translation, unit, scale);
+                },
+                nb::arg("translation"),
+                nb::arg("rotation"),
+                nb::arg("scale"),
+                nb::arg("epsilon") = 1.0e-12)
             .def("__repr__", [](const Affine3d&) { return "<Affine3d>"; });
     }
 

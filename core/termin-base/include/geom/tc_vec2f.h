@@ -2,6 +2,7 @@
 #ifndef TC_VEC2F_H
 #define TC_VEC2F_H
 
+#include <geom/tc_checked_normalization.h>
 #include <math.h>
 #include <stddef.h>
 #include <tcbase/tc_types.h>
@@ -112,18 +113,15 @@ TC_C_STATIC_INLINE bool tc_vec2f_is_finite(tc_vec2f v) {
 }
 
 TC_C_STATIC_INLINE bool tc_vec2f_try_normalized(tc_vec2f v, float epsilon, tc_vec2f* out_normalized) {
-    float length = hypotf(v.x, v.y);
-    if (out_normalized == NULL || !tc_vec2f_is_finite(v) || !isfinite(length) || !isfinite(epsilon) ||
-        epsilon < 0.0f || length <= epsilon) {
+    if (out_normalized == NULL) {
         return false;
     }
-    // Component-wise division avoids a subnormal reciprocal that FTZ/DAZ modes
-    // may flush to zero for large finite vectors.
-    tc_vec2f normalized = TC_VEC2F(v.x / length, v.y / length);
-    if (!tc_vec2f_is_finite(normalized)) {
+    const float input[2] = {v.x, v.y};
+    float output[2];
+    if (!tc_detail_try_normalize_f32_components(input, 2, epsilon, output)) {
         return false;
     }
-    *out_normalized = normalized;
+    *out_normalized = TC_VEC2F(output[0], output[1]);
     return true;
 }
 

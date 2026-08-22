@@ -217,7 +217,7 @@ namespace termin {
     static_assert(offsetof(Pose3, lin) == sizeof(Quat), "Pose3.lin offset changed");
 
     inline Pose3 lerp(const Pose3& p1, const Pose3& p2, double t) {
-        return {slerp(p1.ang, p2.ang, t), p1.lin + (p2.lin - p1.lin) * t};
+        return {slerp(p1.ang, p2.ang, t), Vec3::lerp(p1.lin, p2.lin, t)};
     }
 
 } // namespace termin
