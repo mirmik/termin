@@ -3,6 +3,7 @@
 #include <optional>
 
 #include <tcbase/tcbase_api.h>
+#include <termin/camera/screen_ray.hpp>
 #include <termin/geom/aabb.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/ray3.hpp>
@@ -32,8 +33,10 @@ namespace termin {
      * The gesture grabs the point under the initial screen position on the
      * plane through the orbit target whose normal is the eye-to-target line.
      * target_at() returns the translated target which keeps that world point
-     * under the current screen position.  The initial view/projection snapshot
-     * is deliberately retained for the whole drag, avoiding accumulated drift.
+     * under the current screen position. The initial projection and affine
+     * view are deliberately retained as separate inputs to the shared checked
+     * screen-ray path for the whole drag. This avoids both accumulated drift
+     * and an ill-conditioned composed inverse in large worlds.
      */
     class TCBASE_API OrbitCameraPan {
     public:
@@ -48,20 +51,16 @@ namespace termin {
         const Vec3& grabbed_point() const;
 
     private:
-        std::optional<Vec3> unproject(double ndc_x, double ndc_y, double ndc_z) const;
+        std::optional<Ray3> ray_at(const Vec2& screen_position) const;
         std::optional<Vec3> point_on_plane(const Vec2& screen_position) const;
 
-        Mat44 inverse_projection_view_{};
+        Mat44 projection_{};
+        Mat44 view_{};
         Vec3 initial_target_{};
         Vec3 plane_point_{};
         Vec3 plane_normal_{};
         Vec3 grabbed_point_{};
         Rect2 viewport_{};
-    };
-
-    struct OrbitCameraRay {
-        Vec3 origin;
-        Vec3 direction;
     };
 
     class TCBASE_API OrbitCamera {
@@ -100,7 +99,10 @@ namespace termin {
         bool pan(const Vec2& from, const Vec2& to, const Rect2& viewport);
         void fit_bounds(const AABB& bounds);
 
-        OrbitCameraRay screen_ray(const Vec2& screen_position, const Rect2& viewport) const;
+        std::optional<Ray3>
+        try_screen_ray(const Vec2& screen_position, const Rect2& viewport, ScreenRayError* error = nullptr) const;
+        std::optional<ProjectedScreenPoint>
+        try_project_world_point(const Vec3& world_point, const Rect2& viewport, ScreenRayError* error = nullptr) const;
         std::optional<Vec3> world_point_on_z_plane(const Vec2& screen_position,
                                                    const Rect2& viewport,
                                                    double z = 0.0) const;

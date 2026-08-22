@@ -2,6 +2,7 @@
 #ifndef TC_AFFINE3_H
 #define TC_AFFINE3_H
 
+#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -87,31 +88,161 @@ TC_C_STATIC_INLINE bool tc_basis3d_is_finite(tc_basis3d basis) {
            isfinite(basis.z.z);
 }
 
+TC_C_STATIC_INLINE bool tc_basis3d_inverse_products_are_reliable(tc_basis3d basis, tc_basis3d inverse, double epsilon) {
+    double tolerance = fmax(epsilon, sqrt(DBL_EPSILON));
+    tc_basis3d left = tc_basis3d_mul(basis, inverse);
+    tc_basis3d right = tc_basis3d_mul(inverse, basis);
+    if (!tc_basis3d_is_finite(left) || !tc_basis3d_is_finite(right)) {
+        return false;
+    }
+
+    return fabs(left.x.x - 1.0) <= tolerance && fabs(left.x.y) <= tolerance && fabs(left.x.z) <= tolerance &&
+           fabs(left.y.x) <= tolerance && fabs(left.y.y - 1.0) <= tolerance && fabs(left.y.z) <= tolerance &&
+           fabs(left.z.x) <= tolerance && fabs(left.z.y) <= tolerance && fabs(left.z.z - 1.0) <= tolerance &&
+           fabs(right.x.x - 1.0) <= tolerance && fabs(right.x.y) <= tolerance && fabs(right.x.z) <= tolerance &&
+           fabs(right.y.x) <= tolerance && fabs(right.y.y - 1.0) <= tolerance && fabs(right.y.z) <= tolerance &&
+           fabs(right.z.x) <= tolerance && fabs(right.z.y) <= tolerance && fabs(right.z.z - 1.0) <= tolerance;
+}
+
 TC_C_STATIC_INLINE bool tc_basis3d_try_inverse(tc_basis3d basis, double epsilon, tc_basis3d* out_inverse) {
-    if (out_inverse == NULL || !tc_basis3d_is_finite(basis)) {
+    if (out_inverse == NULL || !tc_basis3d_is_finite(basis) || !isfinite(epsilon) || epsilon < 0.0) {
         return false;
     }
 
-    double determinant = tc_basis3d_determinant(basis);
-    double threshold = fabs(epsilon);
-    if (!isfinite(determinant) || fabs(determinant) <= threshold) {
+    // Two-sided equilibration makes the rank test independent of the world
+    // unit. In particular, a well-conditioned uniform scale has the same
+    // pivots whether its coefficients are 1e-6, 1, or 1e6.
+    double input[3][3] = {
+        {basis.x.x, basis.y.x, basis.z.x},
+        {basis.x.y, basis.y.y, basis.z.y},
+        {basis.x.z, basis.y.z, basis.z.z},
+    };
+    double column_scale[3] = {0.0, 0.0, 0.0};
+    for (int column = 0; column < 3; ++column) {
+        for (int row = 0; row < 3; ++row) {
+            column_scale[column] = fmax(column_scale[column], fabs(input[row][column]));
+        }
+        if (column_scale[column] == 0.0 || !isfinite(column_scale[column])) {
+            return false;
+        }
+    }
+
+    double row_scale[3] = {0.0, 0.0, 0.0};
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            row_scale[row] = fmax(row_scale[row], fabs(input[row][column] / column_scale[column]));
+        }
+        if (row_scale[row] == 0.0 || !isfinite(row_scale[row])) {
+            return false;
+        }
+    }
+
+    double augmented[3][6] = {{0.0}};
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            augmented[row][column] = input[row][column] / column_scale[column] / row_scale[row];
+            augmented[row][column + 3] = row == column ? 1.0 : 0.0;
+        }
+    }
+
+    double pivot_threshold = fmax(epsilon, DBL_EPSILON);
+    for (int pivot_column = 0; pivot_column < 3; ++pivot_column) {
+        int pivot_row = pivot_column;
+        double pivot_abs = fabs(augmented[pivot_row][pivot_column]);
+        for (int row = pivot_column + 1; row < 3; ++row) {
+            double candidate_abs = fabs(augmented[row][pivot_column]);
+            if (candidate_abs > pivot_abs) {
+                pivot_abs = candidate_abs;
+                pivot_row = row;
+            }
+        }
+        if (!isfinite(pivot_abs) || pivot_abs <= pivot_threshold) {
+            return false;
+        }
+        if (pivot_row != pivot_column) {
+            for (int column = 0; column < 6; ++column) {
+                double temporary = augmented[pivot_column][column];
+                augmented[pivot_column][column] = augmented[pivot_row][column];
+                augmented[pivot_row][column] = temporary;
+            }
+        }
+
+        double pivot = augmented[pivot_column][pivot_column];
+        for (int column = 0; column < 6; ++column) {
+            augmented[pivot_column][column] /= pivot;
+            if (!isfinite(augmented[pivot_column][column])) {
+                return false;
+            }
+        }
+
+        for (int row = 0; row < 3; ++row) {
+            if (row == pivot_column) {
+                continue;
+            }
+            double factor = augmented[row][pivot_column];
+            for (int column = 0; column < 6; ++column) {
+                augmented[row][column] -= factor * augmented[pivot_column][column];
+                if (!isfinite(augmented[row][column])) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    tc_basis3d candidate = TC_BASIS3D(TC_VEC3(augmented[0][3] / column_scale[0] / row_scale[0],
+                                              augmented[1][3] / column_scale[1] / row_scale[0],
+                                              augmented[2][3] / column_scale[2] / row_scale[0]),
+                                      TC_VEC3(augmented[0][4] / column_scale[0] / row_scale[1],
+                                              augmented[1][4] / column_scale[1] / row_scale[1],
+                                              augmented[2][4] / column_scale[2] / row_scale[1]),
+                                      TC_VEC3(augmented[0][5] / column_scale[0] / row_scale[2],
+                                              augmented[1][5] / column_scale[1] / row_scale[2],
+                                              augmented[2][5] / column_scale[2] / row_scale[2]));
+    if (!tc_basis3d_is_finite(candidate)) {
         return false;
     }
 
-    double inv_det = 1.0 / determinant;
-    tc_vec3 row0 = TC_VEC3(basis.y.y * basis.z.z - basis.y.z * basis.z.y,
-                           basis.y.z * basis.z.x - basis.y.x * basis.z.z,
-                           basis.y.x * basis.z.y - basis.y.y * basis.z.x);
-    tc_vec3 row1 = TC_VEC3(basis.z.y * basis.x.z - basis.z.z * basis.x.y,
-                           basis.z.z * basis.x.x - basis.z.x * basis.x.z,
-                           basis.z.x * basis.x.y - basis.z.y * basis.x.x);
-    tc_vec3 row2 = TC_VEC3(basis.x.y * basis.y.z - basis.x.z * basis.y.y,
-                           basis.x.z * basis.y.x - basis.x.x * basis.y.z,
-                           basis.x.x * basis.y.y - basis.x.y * basis.y.x);
+    if (!tc_basis3d_inverse_products_are_reliable(basis, candidate, epsilon)) {
+        // One right iterative-refinement step can remove the cancellation
+        // residue introduced while undoing equilibration. Both products are
+        // checked again before publishing the result.
+        tc_basis3d product = tc_basis3d_mul(basis, candidate);
+        tc_basis3d residual = TC_BASIS3D(TC_VEC3(1.0 - product.x.x, -product.x.y, -product.x.z),
+                                         TC_VEC3(-product.y.x, 1.0 - product.y.y, -product.y.z),
+                                         TC_VEC3(-product.z.x, -product.z.y, 1.0 - product.z.z));
+        tc_basis3d correction = tc_basis3d_mul(candidate, residual);
+        tc_basis3d refined = TC_BASIS3D(tc_vec3_add(candidate.x, correction.x),
+                                        tc_vec3_add(candidate.y, correction.y),
+                                        tc_vec3_add(candidate.z, correction.z));
+        if (!tc_basis3d_is_finite(refined) || !tc_basis3d_inverse_products_are_reliable(basis, refined, epsilon)) {
+            return false;
+        }
+        candidate = refined;
+    }
 
-    *out_inverse = TC_BASIS3D(TC_VEC3(row0.x * inv_det, row1.x * inv_det, row2.x * inv_det),
-                              TC_VEC3(row0.y * inv_det, row1.y * inv_det, row2.y * inv_det),
-                              TC_VEC3(row0.z * inv_det, row1.z * inv_det, row2.z * inv_det));
+    *out_inverse = candidate;
+    return true;
+}
+
+// Normals are covectors: applying a basis uses its inverse transpose. The
+// result intentionally remains unnormalized so callers can choose their own
+// normalization and degeneracy policy.
+TC_C_STATIC_INLINE bool
+tc_basis3d_try_transform_normal(tc_basis3d basis, tc_vec3 normal, double epsilon, tc_vec3* out_normal) {
+    if (out_normal == NULL || !tc_vec3_is_finite(normal) || !isfinite(epsilon) || epsilon < 0.0) {
+        return false;
+    }
+
+    tc_basis3d inverse;
+    if (!tc_basis3d_try_inverse(basis, epsilon, &inverse)) {
+        return false;
+    }
+    tc_vec3 result =
+        TC_VEC3(tc_vec3_dot(inverse.x, normal), tc_vec3_dot(inverse.y, normal), tc_vec3_dot(inverse.z, normal));
+    if (!tc_vec3_is_finite(result)) {
+        return false;
+    }
+    *out_normal = result;
     return true;
 }
 
@@ -166,13 +297,63 @@ TC_C_STATIC_INLINE tc_vec3 tc_affine3d_transform_vector(tc_affine3d affine, tc_v
     return tc_basis3d_transform_vector(affine.basis, vector);
 }
 
-TC_C_STATIC_INLINE double tc_affine3d_determinant(tc_affine3d affine) {
-    return tc_basis3d_determinant(affine.basis);
-}
-
 TC_C_STATIC_INLINE bool tc_affine3d_is_finite(tc_affine3d affine) {
     return tc_basis3d_is_finite(affine.basis) && isfinite(affine.translation.x) && isfinite(affine.translation.y) &&
            isfinite(affine.translation.z);
+}
+
+TC_C_STATIC_INLINE bool
+tc_affine3d_try_transform_normal(tc_affine3d affine, tc_vec3 normal, double epsilon, tc_vec3* out_normal) {
+    if (!tc_affine3d_is_finite(affine)) {
+        return false;
+    }
+    return tc_basis3d_try_transform_normal(affine.basis, normal, epsilon, out_normal);
+}
+
+// Applies the inverse without materializing its translation. Besides avoiding
+// a temporary, this centered form preserves substantially more useful
+// precision for affine frames located far from the world origin.
+TC_C_STATIC_INLINE bool
+tc_affine3d_try_inverse_transform_point(tc_affine3d affine, tc_vec3 point, double epsilon, tc_vec3* out_point) {
+    if (out_point == NULL || !tc_affine3d_is_finite(affine) || !tc_vec3_is_finite(point) || !isfinite(epsilon) ||
+        epsilon < 0.0) {
+        return false;
+    }
+
+    tc_basis3d inverse_basis;
+    if (!tc_basis3d_try_inverse(affine.basis, epsilon, &inverse_basis)) {
+        return false;
+    }
+    tc_vec3 centered = tc_vec3_sub(point, affine.translation);
+    tc_vec3 result = tc_basis3d_transform_vector(inverse_basis, centered);
+    if (!tc_vec3_is_finite(result)) {
+        return false;
+    }
+    *out_point = result;
+    return true;
+}
+
+TC_C_STATIC_INLINE bool
+tc_affine3d_try_inverse_transform_vector(tc_affine3d affine, tc_vec3 vector, double epsilon, tc_vec3* out_vector) {
+    if (out_vector == NULL || !tc_affine3d_is_finite(affine) || !tc_vec3_is_finite(vector) || !isfinite(epsilon) ||
+        epsilon < 0.0) {
+        return false;
+    }
+
+    tc_basis3d inverse_basis;
+    if (!tc_basis3d_try_inverse(affine.basis, epsilon, &inverse_basis)) {
+        return false;
+    }
+    tc_vec3 result = tc_basis3d_transform_vector(inverse_basis, vector);
+    if (!tc_vec3_is_finite(result)) {
+        return false;
+    }
+    *out_vector = result;
+    return true;
+}
+
+TC_C_STATIC_INLINE double tc_affine3d_determinant(tc_affine3d affine) {
+    return tc_basis3d_determinant(affine.basis);
 }
 
 TC_C_STATIC_INLINE bool tc_affine3d_try_inverse(tc_affine3d affine, double epsilon, tc_affine3d* out_inverse) {
@@ -186,7 +367,11 @@ TC_C_STATIC_INLINE bool tc_affine3d_try_inverse(tc_affine3d affine, double epsil
     }
 
     tc_vec3 inverse_translation = tc_basis3d_transform_vector(inverse_basis, tc_vec3_neg(affine.translation));
-    *out_inverse = TC_AFFINE3D(inverse_basis, inverse_translation);
+    tc_affine3d candidate = TC_AFFINE3D(inverse_basis, inverse_translation);
+    if (!tc_affine3d_is_finite(candidate)) {
+        return false;
+    }
+    *out_inverse = candidate;
     return true;
 }
 
@@ -216,7 +401,7 @@ TC_C_STATIC_INLINE void tc_affine3d_to_matrix4(tc_affine3d affine, double* out_c
 
 TC_C_STATIC_INLINE bool
 tc_affine3d_try_from_matrix4(const double* column_major_16, double epsilon, tc_affine3d* out_affine) {
-    if (column_major_16 == NULL || out_affine == NULL) {
+    if (column_major_16 == NULL || out_affine == NULL || !isfinite(epsilon) || epsilon < 0.0) {
         return false;
     }
 
@@ -226,9 +411,8 @@ tc_affine3d_try_from_matrix4(const double* column_major_16, double epsilon, tc_a
         }
     }
 
-    double threshold = fabs(epsilon);
-    if (fabs(column_major_16[3]) > threshold || fabs(column_major_16[7]) > threshold ||
-        fabs(column_major_16[11]) > threshold || fabs(column_major_16[15] - 1.0) > threshold) {
+    if (fabs(column_major_16[3]) > epsilon || fabs(column_major_16[7]) > epsilon ||
+        fabs(column_major_16[11]) > epsilon || fabs(column_major_16[15] - 1.0) > epsilon) {
         return false;
     }
 

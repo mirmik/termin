@@ -106,6 +106,16 @@ bool tc_ui_internal_handle_is_in_subtree(tc_ui_document* document, tc_widget_han
     return false;
 }
 
+void tc_ui_internal_advance_pointer_interaction_revision(tc_ui_document* document) {
+    if (!document) {
+        return;
+    }
+    document->pointer_interaction_revision += 1;
+    if (document->pointer_interaction_revision == 0) {
+        document->pointer_interaction_revision = 1;
+    }
+}
+
 bool tc_ui_internal_cancel_pointer_state(tc_ui_document* document,
                                          bool clear_capture,
                                          bool clear_pressed,
@@ -118,6 +128,11 @@ bool tc_ui_internal_cancel_pointer_state(tc_ui_document* document,
     bool notified = false;
     if (!document) {
         return false;
+    }
+    if (clear_capture || clear_pressed) {
+        // This also invalidates an in-flight Down whose handler has not yet
+        // been installed as pressed_widget by the outer document dispatch.
+        tc_ui_internal_advance_pointer_interaction_revision(document);
     }
     document_handle = document->handle;
     if (clear_capture && !tc_widget_handle_is_invalid(document->pointer_capture)) {
@@ -154,24 +169,42 @@ bool tc_ui_internal_cancel_pointer_state(tc_ui_document* document,
             notified = true;
         }
     }
+    // Cancellation wins over capture or press ownership reacquired by a
+    // terminal callback. Do not notify again: each previous owner has already
+    // received its one Cancel above.
+    document = tc_ui_internal_resolve_document(document_handle);
+    if (document) {
+        if (clear_capture) {
+            document->pointer_capture = tc_widget_handle_invalid();
+        }
+        if (clear_pressed) {
+            document->pressed_widget = tc_widget_handle_invalid();
+        }
+    }
     return notified;
 }
 
 void tc_ui_internal_invalidate_subtree_interaction_state(tc_widget* root, tc_ui_pointer_cancel_reason reason) {
     tc_ui_document* document;
     tc_ui_document_handle document_handle;
+    tc_widget_handle root_handle;
     tc_widget_handle old_hover;
     tc_widget_handle old_focus;
     bool clear_hover;
     bool clear_capture;
     bool clear_pressed;
     bool clear_focus;
+    bool reacquired_capture;
+    bool reacquired_pressed;
+    bool reacquired_hover;
+    bool reacquired_focus;
     const tc_widget_slot* root_slot;
     bool root_destroying;
     if (!root || !(document = tc_ui_internal_resolve_document(root->document))) {
         return;
     }
     document_handle = document->handle;
+    root_handle = root->handle;
     root_slot = tc_ui_internal_resolve_slot_const(document, root->handle);
     root_destroying = root_slot && root_slot->destroying;
     old_hover = document->hovered_widget;
@@ -183,6 +216,11 @@ void tc_ui_internal_invalidate_subtree_interaction_state(tc_widget* root, tc_ui_
     tc_ui_internal_cancel_pointer_state(document, clear_capture, clear_pressed, reason);
     document = tc_ui_internal_resolve_document(document_handle);
     if (!document) {
+        return;
+    }
+    root_slot = tc_ui_internal_resolve_slot_const(document, root_handle);
+    root = root_slot ? root_slot->widget : NULL;
+    if (!root) {
         return;
     }
     if (clear_hover && tc_ui_internal_same_handle(document->hovered_widget, old_hover)) {
@@ -205,6 +243,35 @@ void tc_ui_internal_invalidate_subtree_interaction_state(tc_widget* root, tc_ui_
         } else {
             tc_ui_internal_change_focus(document, tc_widget_handle_invalid());
         }
+    }
+
+    document = tc_ui_internal_resolve_document(document_handle);
+    root_slot = document ? tc_ui_internal_resolve_slot_const(document, root_handle) : NULL;
+    root = root_slot ? root_slot->widget : NULL;
+    if (!document || !root) {
+        return;
+    }
+    reacquired_capture = tc_ui_internal_handle_is_in_subtree(document, document->pointer_capture, root);
+    reacquired_pressed = tc_ui_internal_handle_is_in_subtree(document, document->pressed_widget, root);
+    reacquired_hover = tc_ui_internal_handle_is_in_subtree(document, document->hovered_widget, root);
+    reacquired_focus = tc_ui_internal_handle_is_in_subtree(document, document->focused_widget, root);
+    if (reacquired_capture || reacquired_pressed) {
+        // Terminal callbacks have already been delivered once. State acquired
+        // reentrantly by those callbacks is cleared without another Cancel.
+        tc_ui_internal_advance_pointer_interaction_revision(document);
+    }
+    if (reacquired_capture) {
+        document->pointer_capture = tc_widget_handle_invalid();
+    }
+    if (reacquired_pressed) {
+        document->pressed_widget = tc_widget_handle_invalid();
+    }
+    if (reacquired_hover) {
+        document->hovered_widget = tc_widget_handle_invalid();
+        tc_ui_internal_refresh_cursor(document);
+    }
+    if (reacquired_focus) {
+        document->focused_widget = tc_widget_handle_invalid();
     }
 }
 

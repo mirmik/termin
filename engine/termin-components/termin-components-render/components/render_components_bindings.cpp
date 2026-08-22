@@ -198,6 +198,7 @@ using namespace termin;
 NB_MODULE(_components_render_native, m) {
     m.doc() = "Native render components bindings";
 
+    nb::module_::import_("tcbase._geom_native");
     nb::module_::import_("tgfx._tgfx_native");
     nb::module_::import_("tmesh._tmesh_native");
     nb::module_::import_("termin.scene._scene_native");
@@ -378,24 +379,32 @@ NB_MODULE(_components_render_native, m) {
                          return vp_class.attr("_from_handle")(h);
                      })
         .def(
-            "screen_point_to_ray",
-            [](CameraComponent& c, double x, double y, nb::object viewport_rect) {
-                auto rect = nb::cast<std::tuple<int, int, int, int>>(viewport_rect);
-                int vp_x = std::get<0>(rect);
-                int vp_y = std::get<1>(rect);
-                int vp_w = std::get<2>(rect);
-                int vp_h = std::get<3>(rect);
-                const Ray3 ray = c.screen_point_to_ray(x, y, vp_x, vp_y, vp_w, vp_h);
-                nb::module_ geom = nb::module_::import_("tcbase._geom_native");
-                nb::object Vec3 = geom.attr("Vec3");
-                nb::object ray3_type = geom.attr("Ray3");
-                nb::object py_origin = Vec3(ray.origin.x, ray.origin.y, ray.origin.z);
-                nb::object py_direction = Vec3(ray.direction.x, ray.direction.y, ray.direction.z);
-                return ray3_type(py_origin, py_direction);
+            "try_screen_point_to_ray",
+            [](CameraComponent& c, const Vec2& screen_point, const Rect2& viewport) -> std::optional<Ray3> {
+                return c.try_screen_point_to_ray(screen_point, viewport);
             },
-            nb::arg("x"),
-            nb::arg("y"),
-            nb::arg("viewport_rect"))
+            nb::arg("screen_point"),
+            nb::arg("viewport"))
+        .def(
+            "screen_point_to_ray",
+            [](CameraComponent& c, const Vec2& screen_point, const Rect2& viewport) -> Ray3 {
+                ScreenRayError error = ScreenRayError::None;
+                const std::optional<Ray3> ray = c.try_screen_point_to_ray(screen_point, viewport, &error);
+                if (!ray) {
+                    const std::string message =
+                        std::string("screen_point_to_ray failed: ") + screen_ray_error_message(error);
+                    throw nb::value_error(message.c_str());
+                }
+                return *ray;
+            },
+            nb::arg("screen_point"),
+            nb::arg("viewport"))
+        .def(
+            "try_project_world_point",
+            [](CameraComponent& c, const Vec3& world_point, const Rect2& viewport)
+                -> std::optional<ProjectedScreenPoint> { return c.try_project_world_point(world_point, viewport); },
+            nb::arg("world_point"),
+            nb::arg("viewport"))
         .def("c_component_ptr",
              [](CameraComponent& c) -> uintptr_t { return reinterpret_cast<uintptr_t>(c.c_component()); })
         .def("_cxx_component_ptr", [](CameraComponent& c) -> uintptr_t { return reinterpret_cast<uintptr_t>(&c); })

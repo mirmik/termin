@@ -46,6 +46,7 @@ from ._geom_native import (
     Ray3,
     AABB,
     AABBf,
+    ProjectedScreenPoint,
     OrbitCamera,
     OrbitCameraPan,
 )
@@ -90,6 +91,7 @@ __all__ = [
     'Ray3',
     'AABB',
     'AABBf',
+    'ProjectedScreenPoint',
     'OrbitCamera',
     'OrbitCameraPan',
     'TransformAABB',

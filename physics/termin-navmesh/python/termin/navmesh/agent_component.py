@@ -273,13 +273,10 @@ class NavMeshAgentComponent(InputComponent):
             return
 
         # Raycast по NavMesh
-        origin = np.array([ray.origin.x, ray.origin.y, ray.origin.z], dtype=np.float32)
-        direction = np.array([ray.direction.x, ray.direction.y, ray.direction.z], dtype=np.float32)
-
-        # Нормализуем
-        length = float(np.linalg.norm(direction))
-        if length > 1e-8:
-            direction = direction / length
+        # Viewport returns only a checked, normalized Ray3. NumPy conversion is
+        # the backend boundary; keep the vector contract intact here.
+        origin = np.asarray(ray.origin, dtype=np.float32)
+        direction = np.asarray(ray.direction, dtype=np.float32)
 
         hit = self._pathfinding_world.raycast(origin, direction)
         if hit is None:

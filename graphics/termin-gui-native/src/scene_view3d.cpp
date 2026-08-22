@@ -13,10 +13,11 @@
 #include <utility>
 #include <vector>
 
+#include <termin/camera/screen_ray.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin_visual_scene/items/item3d_packets.hpp>
-#include <tgfx2/font_atlas.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
+#include <tgfx2/font_atlas.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/immediate_renderer.hpp>
 #include <tgfx2/render_context.hpp>
@@ -85,6 +86,18 @@ namespace termin::gui_native {
             }
             const double maximum = static_cast<double>(std::numeric_limits<int>::max());
             return {static_cast<int>(std::min(width, maximum)), static_cast<int>(std::min(height, maximum))};
+        }
+
+        void release_pointer_capture_if_owned(tc_ui_document_handle document,
+                                              tc_widget_handle owner,
+                                              const char* transition) {
+            if (!tc_ui_document_is_valid(document) || tc_widget_handle_is_invalid(owner) ||
+                !tc_widget_handle_eq(tc_ui_document_pointer_capture(document), owner)) {
+                return;
+            }
+            if (!tc_ui_document_release_pointer_capture(document, owner)) {
+                tc_log_error("[termin-gui-native] SceneView3D could not release pointer capture after %s", transition);
+            }
         }
 
         struct CollectedDraw {
@@ -203,16 +216,59 @@ namespace termin::gui_native {
     void SceneView3D::set_scene(termin::visual::TcVisualScene3D scene_value) {
         if (tc_visual_scene3d_handle_eq(scene_, scene_value.handle()))
             return;
-        if (scene().valid()) {
-            interaction_.cancel_all(scene());
-        }
-        if ((scene_pointer_active_ || fallback_pointer_active_) && tc_ui_document_is_valid(document())) {
-            if (tc_widget_handle_eq(tc_ui_document_pointer_capture(document()), handle())) {
-                tc_ui_document_release_pointer_capture(document(), handle());
+
+        const std::uint64_t replacement_revision = ++scene_revision_;
+        const bool active_sequence =
+            !pointer_transition_in_progress_ &&
+            (scene_pointer_active_ || fallback_pointer_active_ || interaction_.pressed_hit(kMousePointer).has_value() ||
+             interaction_.captured_hit(kMousePointer).has_value());
+        const bool quarantine_sequence = scene_pointer_cancelled_until_up_ || active_sequence;
+        if (active_sequence) {
+            tc_ui_pointer_event cancel{};
+            cancel.type = TC_UI_POINTER_CANCEL;
+            cancel.cancel_reason = TC_UI_POINTER_CANCEL_SUBTREE_INEFFECTIVE;
+            bool delivered_by_document = false;
+            if (tc_ui_document_is_valid(document())) {
+                delivered_by_document = tc_ui_document_cancel_pointer_interaction(document(), cancel.cancel_reason);
             }
+            if (!delivered_by_document) {
+                cancel_pointer(document(), cancel);
+            }
+            // A nested replacement from a Cancel callback wins, but the
+            // physical sequence terminated by this outer replacement still
+            // owns its pending tail.
+            scene_pointer_cancelled_until_up_ = scene_pointer_cancelled_until_up_ || quarantine_sequence;
+            if (scene_revision_ != replacement_revision)
+                return;
         }
-        interaction_.cancel_all();
+
+        const termin::visual::TcVisualScene3D previous_scene = scene();
+        const bool nested_transition = pointer_transition_in_progress_;
+        if (!nested_transition)
+            pointer_transition_in_progress_ = true;
+        if (!nested_transition && previous_scene.valid()) {
+            if (interaction_.cancel_all(previous_scene)) {
+                tc_log_error("[termin-gui-native] SceneView3D scene replacement cancellation callback failed");
+            }
+        } else {
+            // A callback reentering set_scene() is already inside delivery of
+            // the one terminal Cancel for the old sequence. Clear old route
+            // state without recursively dispatching that Cancel again.
+            interaction_.cancel_all();
+        }
+        if (!nested_transition)
+            pointer_transition_in_progress_ = false;
+        if (scene_revision_ != replacement_revision) {
+            scene_pointer_cancelled_until_up_ = scene_pointer_cancelled_until_up_ || quarantine_sequence;
+            return;
+        }
+
         scene_pointer_active_ = false;
+        // Scene replacement terminates an owned physical sequence. Its tail
+        // still belongs to this widget even though document capture has been
+        // released, so never let a matching Move/Up reach the new scene or
+        // fallback without a Down.
+        scene_pointer_cancelled_until_up_ = quarantine_sequence;
         fallback_pointer_active_ = false;
         scene_ = scene_value.handle();
         invalidate_scene();
@@ -258,37 +314,34 @@ namespace termin::gui_native {
     }
 
     std::optional<termin::Ray3> SceneView3D::world_ray(float widget_x, float widget_y) const {
-        if (requested_size_.width <= 0 || requested_size_.height <= 0 || !finite_camera(camera_)) {
+        if (requested_size_.width <= 0 || requested_size_.height <= 0) {
+            tc_log_error("[termin-gui-native] SceneView3D cannot build a world ray without a positive "
+                         "framebuffer size (got %dx%d)",
+                         requested_size_.width,
+                         requested_size_.height);
+            return std::nullopt;
+        }
+        if (!finite_camera(camera_)) {
+            tc_log_error("[termin-gui-native] SceneView3D cannot build a world ray from a non-finite camera");
             return std::nullopt;
         }
         const tc_ui_rect rect = bounds();
-        if (rect.width <= 0.0f || rect.height <= 0.0f) {
+        const termin::Mat44 projection = termin::Mat44::from_tc_mat44(camera_.projection_matrix);
+        const termin::Mat44 view = termin::Mat44::from_tc_mat44(camera_.view_matrix);
+        termin::Ray3 ray;
+        termin::ScreenRayError error{};
+        if (!termin::try_unproject_screen_ray(projection,
+                                              view,
+                                              {widget_x, widget_y},
+                                              {rect.x, rect.y, rect.width, rect.height},
+                                              ray,
+                                              &error,
+                                              1.0e-12)) {
+            tc_log_error("[termin-gui-native] SceneView3D cannot build a world ray: %s",
+                         termin::screen_ray_error_message(error));
             return std::nullopt;
         }
-        const double pixel_x = static_cast<double>(widget_x - rect.x) * requested_size_.width / rect.width;
-        const double pixel_y = static_cast<double>(widget_y - rect.y) * requested_size_.height / rect.height;
-        const double ndc_x = pixel_x / requested_size_.width * 2.0 - 1.0;
-        const double ndc_y = pixel_y / requested_size_.height * 2.0 - 1.0;
-        termin::Mat44 inverse;
-        const termin::Mat44 projection_view = termin::Mat44::from_tc_mat44(camera_.projection_matrix) *
-                                               termin::Mat44::from_tc_mat44(camera_.view_matrix);
-        if (!projection_view.try_inverse(inverse, 1.0e-12)) {
-            tc_log_error("[termin-gui-native] SceneView3D cannot unproject through a singular camera");
-            return std::nullopt;
-        }
-        termin::Vec3 near_point;
-        termin::Vec3 far_point;
-        if (!inverse.try_transform_point({ndc_x, ndc_y, 0.0}, near_point, 1.0e-12) ||
-            !inverse.try_transform_point({ndc_x, ndc_y, 1.0}, far_point, 1.0e-12)) {
-            tc_log_error("[termin-gui-native] SceneView3D produced an invalid world ray");
-            return std::nullopt;
-        }
-        termin::Vec3 direction;
-        if (!(far_point - near_point).try_normalized(direction, 1.0e-12)) {
-            tc_log_error("[termin-gui-native] SceneView3D produced a degenerate world ray");
-            return std::nullopt;
-        }
-        return termin::Ray3{near_point, direction};
+        return ray;
     }
 
     termin::visual::SceneInteraction3D& SceneView3D::interaction() {
@@ -344,10 +397,14 @@ namespace termin::gui_native {
     }
 
     bool SceneView3D::call_fallback(const tc_ui_pointer_event& event, const std::optional<termin::Ray3>& ray) {
-        if (!fallback_pointer_handler_)
+        FallbackPointerHandler handler =
+            active_fallback_pointer_handler_ ? active_fallback_pointer_handler_ : fallback_pointer_handler_;
+        if (!handler)
             return false;
+        // A handler may replace/clear itself through the supplied view.
+        // Keep the currently executing callable alive across that mutation.
         try {
-            return fallback_pointer_handler_(*this, event, ray);
+            return handler(*this, event, ray);
         } catch (const std::exception& error) {
             tc_log_error("[termin-gui-native] SceneView3D fallback pointer handler failed: %s", error.what());
         } catch (...) {
@@ -357,53 +414,149 @@ namespace termin::gui_native {
     }
 
     void SceneView3D::cancel_pointer(tc_ui_document_handle document, const tc_ui_pointer_event& event) {
-        const auto ray = world_ray(event.x, event.y);
-        if (scene_pointer_active_ && scene().valid() && ray) {
-            interaction_.route(scene(),
-                               {kMousePointer,
-                                termin::visual::PointerEventKind3D::Cancel,
-                                *ray,
-                                static_cast<uint32_t>(std::max(active_button_, 0))});
-        }
-        if (fallback_pointer_active_) {
-            call_fallback(event, ray);
-        }
-        interaction_.release(kMousePointer);
+        const tc_widget_handle view_handle = handle();
+        const bool interaction_active = interaction_.hovered_hit(kMousePointer).has_value() ||
+                                        interaction_.pressed_hit(kMousePointer).has_value() ||
+                                        interaction_.captured_hit(kMousePointer).has_value();
+        const bool cancel_scene = scene_pointer_active_ || interaction_active;
+        const bool cancel_fallback = fallback_pointer_active_;
+        const termin::visual::TcVisualScene3D cancelled_scene = scene();
+        const auto fallback_ray = cancel_fallback ? world_ray(event.x, event.y) : std::nullopt;
+
+        // Publish the terminal transition before invoking user callbacks.
+        // Reentrant set_scene() must observe no active owner and clear route
+        // state without recursively delivering the same Cancel.
         scene_pointer_active_ = false;
+        scene_pointer_cancelled_until_up_ = false;
         fallback_pointer_active_ = false;
-        if (tc_widget_handle_eq(tc_ui_document_pointer_capture(document), handle())) {
-            tc_ui_document_release_pointer_capture(document, handle());
+        release_pointer_capture_if_owned(document, view_handle, "the initial Cancel transition");
+
+        if (pointer_transition_in_progress_) {
+            interaction_.cancel_all();
+            release_pointer_capture_if_owned(document, view_handle, "a reentrant Cancel callback");
+            invalidate_scene();
+            return;
         }
+
+        pointer_transition_in_progress_ = true;
+        if (cancel_scene) {
+            if (cancelled_scene.valid()) {
+                if (interaction_.cancel_all(cancelled_scene)) {
+                    tc_log_error("[termin-gui-native] SceneView3D pointer cancellation callback failed");
+                }
+            } else {
+                interaction_.cancel_all();
+            }
+        } else {
+            interaction_.release(kMousePointer);
+        }
+        if (cancel_fallback)
+            call_fallback(event, fallback_ray);
+        // Terminal callbacks cannot retain capture for the sequence being
+        // closed. Preserve capture if they deliberately transferred it to a
+        // different widget.
+        release_pointer_capture_if_owned(document, view_handle, "a Cancel callback");
+        active_fallback_pointer_handler_ = {};
+        pointer_transition_in_progress_ = false;
         invalidate_scene();
     }
 
     tc_ui_event_result SceneView3D::pointer_event(tc_ui_document_handle document, const tc_ui_pointer_event* event) {
         if (!event)
             return TC_UI_EVENT_IGNORED;
+        if (scene_pointer_cancelled_until_up_) {
+            if (event->type == TC_UI_POINTER_UP || event->type == TC_UI_POINTER_CANCEL) {
+                scene_pointer_cancelled_until_up_ = false;
+            } else if (event->type == TC_UI_POINTER_DOWN) {
+                // A new Down starts a distinct sequence even if the previous
+                // host sequence never supplied its terminal Up.
+                scene_pointer_cancelled_until_up_ = false;
+            } else {
+                return TC_UI_EVENT_HANDLED;
+            }
+            if (event->type != TC_UI_POINTER_DOWN) {
+                release_pointer_capture_if_owned(document, handle(), "a quarantined terminal event");
+                return TC_UI_EVENT_HANDLED;
+            }
+        }
         if (scene_pointer_active_ && !scene().valid()) {
             tc_log_error("[termin-gui-native] SceneView3D cancelled pointer capture because its borrowed scene "
                          "is no longer valid");
-            interaction_.cancel_all();
-            scene_pointer_active_ = false;
-            if (tc_widget_handle_eq(tc_ui_document_pointer_capture(document), handle())) {
-                tc_ui_document_release_pointer_capture(document, handle());
-            }
+            tc_ui_pointer_event cancel = *event;
+            cancel.type = TC_UI_POINTER_CANCEL;
+            cancel.cancel_reason = TC_UI_POINTER_CANCEL_SUBTREE_INEFFECTIVE;
+            const bool await_terminal_up = event->type != TC_UI_POINTER_UP && event->type != TC_UI_POINTER_CANCEL;
+            cancel_pointer(document, cancel);
+            scene_pointer_cancelled_until_up_ = await_terminal_up;
+            return TC_UI_EVENT_HANDLED;
         }
         if (event->type == TC_UI_POINTER_CANCEL) {
-            const bool active = scene_pointer_active_ || fallback_pointer_active_;
+            const bool active = scene_pointer_active_ || fallback_pointer_active_ ||
+                                interaction_.hovered_hit(kMousePointer).has_value() ||
+                                interaction_.pressed_hit(kMousePointer).has_value() ||
+                                interaction_.captured_hit(kMousePointer).has_value();
             cancel_pointer(document, *event);
             return active ? TC_UI_EVENT_HANDLED : TC_UI_EVENT_IGNORED;
         }
 
         const auto ray = world_ray(event->x, event->y);
-        if (fallback_pointer_active_) {
-            const bool handled = call_fallback(*event, ray);
-            if (event->type == TC_UI_POINTER_UP) {
-                fallback_pointer_active_ = false;
-                tc_ui_document_release_pointer_capture(document, handle());
+        if (scene_pointer_active_ && !ray) {
+            tc_log_error("[termin-gui-native] SceneView3D cancelled an active scene pointer sequence because "
+                         "the current event cannot be projected to a world ray");
+            tc_ui_pointer_event cancel = *event;
+            cancel.type = TC_UI_POINTER_CANCEL;
+            cancel.cancel_reason = TC_UI_POINTER_CANCEL_EXPLICIT;
+            const bool await_terminal_up = event->type != TC_UI_POINTER_UP;
+            cancel_pointer(document, cancel);
+            scene_pointer_cancelled_until_up_ = await_terminal_up;
+            return TC_UI_EVENT_HANDLED;
+        }
+        if (!ray && !tc_visual_item3d_handle_is_invalid(interaction_.hovered(kMousePointer))) {
+            // Projection loss also terminates hover: otherwise the controller
+            // would keep a stale Enter until some later valid scene event.
+            // There is no active press here, so fallback/normal propagation is
+            // intentionally still allowed after the final Leave notification.
+            if (scene().valid()) {
+                if (interaction_.cancel_all(scene())) {
+                    tc_log_error("[termin-gui-native] SceneView3D hover cancellation callback failed");
+                }
+            } else {
+                interaction_.cancel_all();
             }
+            invalidate_scene();
+        }
+        if (fallback_pointer_active_) {
+            const tc_widget_handle view_handle = handle();
+            if (event->type == TC_UI_POINTER_UP) {
+                // Publish the terminal state before the callback. A fallback
+                // Up handler may replace the scene, but must not then receive
+                // a second terminal Cancel from set_scene().
+                fallback_pointer_active_ = false;
+                release_pointer_capture_if_owned(document, view_handle, "the fallback Up transition");
+                scene_pointer_cancelled_until_up_ = false;
+            }
+            const std::uint64_t routed_scene_revision = scene_revision_;
+            const bool handled = call_fallback(*event, ray);
+            if (event->type == TC_UI_POINTER_UP)
+                release_pointer_capture_if_owned(document, view_handle, "a fallback Up callback");
+            if (scene_revision_ != routed_scene_revision) {
+                active_fallback_pointer_handler_ = {};
+                if (event->type == TC_UI_POINTER_UP)
+                    scene_pointer_cancelled_until_up_ = false;
+                return TC_UI_EVENT_HANDLED;
+            }
+            if (event->type == TC_UI_POINTER_UP)
+                active_fallback_pointer_handler_ = {};
             if (handled)
                 invalidate_view();
+            return TC_UI_EVENT_HANDLED;
+        }
+
+        if (scene_pointer_active_ && event->type != TC_UI_POINTER_MOVE && event->type != TC_UI_POINTER_DOWN &&
+            event->type != TC_UI_POINTER_UP) {
+            // The scene target owns the whole physical sequence. Auxiliary
+            // events such as Wheel/Leave must not leak to the fallback camera
+            // controller in the middle of an item drag.
             return TC_UI_EVENT_HANDLED;
         }
 
@@ -416,17 +569,72 @@ namespace termin::gui_native {
             kind = termin::visual::PointerEventKind3D::Up;
 
         if (kind && ray && scene().valid()) {
+            const tc_widget_handle view_handle = handle();
+            const tc_visual_scene3d_handle routed_scene = scene_;
+            const std::uint64_t routed_scene_revision = scene_revision_;
+            if (event->type == TC_UI_POINTER_UP && scene_pointer_active_) {
+                // SceneInteraction3D likewise clears pressed/captured before
+                // invoking the target Up callback.
+                scene_pointer_active_ = false;
+                release_pointer_capture_if_owned(document, view_handle, "the scene Up transition");
+                scene_pointer_cancelled_until_up_ = false;
+            }
             const auto dispatch = interaction_.route(
                 scene(), {kMousePointer, *kind, *ray, static_cast<uint32_t>(std::max(event->button, 0))});
+            if (event->type == TC_UI_POINTER_UP)
+                release_pointer_capture_if_owned(document, view_handle, "a scene Up callback");
+            if (scene_revision_ != routed_scene_revision) {
+                // set_scene() invalidated this route. Keep no state or result
+                // published by the old-scene call even if the replacement
+                // callback destroyed that borrowed scene before route returned.
+                interaction_.cancel_all();
+                scene_pointer_active_ = false;
+                fallback_pointer_active_ = false;
+                if (event->type == TC_UI_POINTER_DOWN) {
+                    // Invalidate the outer document Down even when no capture
+                    // had been installed yet (for example replacement from an
+                    // Enter callback before route() published its hit).
+                    tc_ui_document_cancel_pointer_interaction(document, TC_UI_POINTER_CANCEL_CAPTURE_REPLACED);
+                    scene_pointer_cancelled_until_up_ = true;
+                } else if (event->type == TC_UI_POINTER_UP) {
+                    // This Up is already the terminal tail which set_scene()
+                    // tried to quarantine from inside the callback.
+                    scene_pointer_cancelled_until_up_ = false;
+                }
+                invalidate_scene();
+                return TC_UI_EVENT_HANDLED;
+            }
             const bool routed_to_scene = !tc_visual_item3d_handle_is_invalid(dispatch.target);
             if (event->type == TC_UI_POINTER_DOWN && routed_to_scene) {
-                scene_pointer_active_ = true;
-                active_button_ = event->button;
-                tc_ui_document_set_focus(document, handle());
-                tc_ui_document_set_pointer_capture(document, handle());
-            } else if (event->type == TC_UI_POINTER_UP && scene_pointer_active_) {
-                scene_pointer_active_ = false;
-                tc_ui_document_release_pointer_capture(document, handle());
+                const auto cancel_failed_capture = [&](const char* reason) {
+                    tc_log_error("[termin-gui-native] SceneView3D cancelled scene Down because %s", reason);
+                    tc_ui_pointer_event cancel = *event;
+                    cancel.type = TC_UI_POINTER_CANCEL;
+                    cancel.cancel_reason = TC_UI_POINTER_CANCEL_CAPTURE_REPLACED;
+                    const bool delivered_by_document =
+                        tc_ui_document_cancel_pointer_interaction(document, cancel.cancel_reason);
+                    if (!delivered_by_document)
+                        cancel_pointer(document, cancel);
+                    scene_pointer_cancelled_until_up_ = true;
+                };
+                if (tc_visual_item3d_handle_is_invalid(dispatch.captured) ||
+                    !interaction_.captured_hit(kMousePointer).has_value()) {
+                    cancel_failed_capture("the target released scene capture during Down");
+                } else {
+                    if (!tc_ui_document_set_focus(document, handle())) {
+                        cancel_failed_capture("UI focus failed");
+                    } else if (!tc_visual_scene3d_handle_eq(scene_, routed_scene) ||
+                               !interaction_.captured_hit(kMousePointer).has_value()) {
+                        cancel_failed_capture("focus handling changed the scene capture");
+                    } else if (!tc_ui_document_set_pointer_capture(document, handle())) {
+                        cancel_failed_capture("UI pointer capture failed");
+                    } else if (!tc_visual_scene3d_handle_eq(scene_, routed_scene) ||
+                               !interaction_.captured_hit(kMousePointer).has_value()) {
+                        cancel_failed_capture("UI capture handling changed the scene capture");
+                    } else {
+                        scene_pointer_active_ = true;
+                    }
+                }
             }
             invalidate_scene();
             if (routed_to_scene || scene_pointer_active_ || event->type == TC_UI_POINTER_UP) {
@@ -434,16 +642,56 @@ namespace termin::gui_native {
             }
         }
 
+        if (event->type == TC_UI_POINTER_DOWN) {
+            active_fallback_pointer_handler_ = fallback_pointer_handler_;
+            // Publish provisional ownership before Down enters user code, as
+            // SceneInteraction3D does for a scene target. A reentrant scene
+            // replacement can then deliver exactly one terminal Cancel to the
+            // snapshotted handler. An ignored Down is rolled back below.
+            fallback_pointer_active_ = true;
+        }
+        const std::uint64_t fallback_scene_revision = scene_revision_;
         const bool fallback_handled = call_fallback(*event, ray);
+        if (scene_revision_ != fallback_scene_revision) {
+            active_fallback_pointer_handler_ = {};
+            if (event->type == TC_UI_POINTER_DOWN) {
+                fallback_pointer_active_ = false;
+                scene_pointer_cancelled_until_up_ = true;
+            } else if (event->type == TC_UI_POINTER_UP) {
+                scene_pointer_cancelled_until_up_ = false;
+            }
+            return TC_UI_EVENT_HANDLED;
+        }
         if (fallback_handled) {
             if (event->type == TC_UI_POINTER_DOWN) {
                 fallback_pointer_active_ = true;
-                active_button_ = event->button;
-                tc_ui_document_set_focus(document, handle());
-                tc_ui_document_set_pointer_capture(document, handle());
+                const auto cancel_failed_capture = [&](const char* reason) {
+                    tc_log_error("[termin-gui-native] SceneView3D cancelled fallback Down because %s", reason);
+                    tc_ui_pointer_event cancel = *event;
+                    cancel.type = TC_UI_POINTER_CANCEL;
+                    cancel.cancel_reason = TC_UI_POINTER_CANCEL_CAPTURE_REPLACED;
+                    const bool delivered_by_document =
+                        tc_ui_document_cancel_pointer_interaction(document, cancel.cancel_reason);
+                    if (!delivered_by_document && fallback_pointer_active_)
+                        cancel_pointer(document, cancel);
+                    scene_pointer_cancelled_until_up_ = true;
+                };
+                if (!tc_ui_document_set_focus(document, handle())) {
+                    cancel_failed_capture("UI focus failed");
+                } else if (scene_revision_ != fallback_scene_revision || !fallback_pointer_active_) {
+                    scene_pointer_cancelled_until_up_ = true;
+                } else if (!tc_ui_document_set_pointer_capture(document, handle())) {
+                    cancel_failed_capture("UI pointer capture failed");
+                } else if (scene_revision_ != fallback_scene_revision || !fallback_pointer_active_) {
+                    cancel_failed_capture("UI capture handling changed fallback ownership");
+                }
             }
             invalidate_view();
             return TC_UI_EVENT_HANDLED;
+        }
+        if (event->type == TC_UI_POINTER_DOWN) {
+            fallback_pointer_active_ = false;
+            active_fallback_pointer_handler_ = {};
         }
         return TC_UI_EVENT_IGNORED;
     }
@@ -454,6 +702,7 @@ namespace termin::gui_native {
         cancel.cancel_reason = TC_UI_POINTER_CANCEL_SUBTREE_INEFFECTIVE;
         cancel_pointer(document, cancel);
         fallback_pointer_handler_ = {};
+        active_fallback_pointer_handler_ = {};
         camera_provider_ = {};
         scene_ = tc_visual_scene3d_handle_invalid();
         release_render_resources();

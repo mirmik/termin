@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from tcbase import MouseButton, log
-from tcbase._geom_native import Vec3
-from termin.geombase import SrgbColor
+from termin.geombase import Affine3d, Ray3, SrgbColor, Vec3
 
 from termin.csg.document_eval import evaluate_document
 from termin.csg.document_visual_model import build_document_visual_model
@@ -82,18 +81,16 @@ class ProceduralMeshViewportInteraction:
             picked_name = entity.name
 
         local_ray = self._local_ray_from_viewport(x, y)
+        if local_ray is None:
+            log.error("[ProceduralMeshEditor] click ignored: viewport ray is not available")
+            return True
         fallback = self._click_fallback(x, y, surface)
         if fallback.point is None:
             log.error("[ProceduralMeshEditor] click ignored: no mesh hit and no OXY plane point")
             return True
-        if local_ray is None:
-            log.error("[ProceduralMeshEditor] click ignored: viewport ray is not available")
-            return True
 
-        ray_origin, ray_direction = local_ray
         result = controller.add_draft_point_from_ray(
-            ray_origin,
-            ray_direction,
+            local_ray,
             fallback_point=fallback.point,
             fallback_plane=fallback.plane,
             fallback_kind=fallback.kind,
@@ -231,7 +228,7 @@ class ProceduralMeshViewportInteraction:
             log.error("[ProceduralMeshEditor] cannot drag sketch point: viewport ray is not available")
             return True
         controller = self._model.controller
-        local_point = drag_point_to_ray(controller.document, drag, *local_ray)
+        local_point = drag_point_to_ray(controller.document, drag, local_ray)
         if local_point is None:
             return True
         if drag.kind == "contour":
@@ -256,7 +253,10 @@ class ProceduralMeshViewportInteraction:
         if local_ray is None:
             log.error("[ProceduralMeshEditor] cannot drag wall height: viewport ray is not available")
             return True
-        offset = drag_wall_height_offset_to_ray(drag, *local_ray)
+        offset = drag_wall_height_offset_to_ray(drag, local_ray)
+        if offset is None:
+            log.error("[ProceduralMeshEditor] cannot drag wall height: local ray is invalid")
+            return True
         result = self._model.controller.set_wall_corner_offset(
             drag.operation_id,
             drag.source_id,
@@ -281,20 +281,28 @@ class ProceduralMeshViewportInteraction:
         self,
         x: float,
         y: float,
-    ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+    ) -> Ray3 | None:
         if self._editor is None or self._entity is None or not self._entity.valid():
             return None
         world_ray = self._editor.world_ray_from_viewport_point(x, y)
         if world_ray is None:
             return None
-        origin, direction = world_ray
-        transform = self._entity.transform
-        local_origin = transform.transform_point_inverse(origin)
-        local_direction = transform.transform_vector_inverse(direction)
-        return (
-            (float(local_origin.x), float(local_origin.y), float(local_origin.z)),
-            (float(local_direction.x), float(local_direction.y), float(local_direction.z)),
+        entity_from_local = self._try_entity_affine("viewport ray projection")
+        if entity_from_local is None:
+            return None
+
+        local_origin = entity_from_local.try_inverse_transform_point(world_ray.origin)
+        local_direction_unscaled = entity_from_local.try_inverse_transform_vector(world_ray.direction)
+        local_direction = (
+            local_direction_unscaled.try_normalized() if local_direction_unscaled is not None else None
         )
+        if local_origin is None or not local_origin.is_finite() or local_direction is None:
+            log.error(
+                "[ProceduralMeshEditor] viewport ray projection failed: "
+                "entity transform produced a non-finite or degenerate local ray"
+            )
+            return None
+        return Ray3(local_origin, local_direction)
 
     def _world_point_from_local(self, point: tuple[float, float, float]) -> Vec3 | None:
         if self._entity is None or not self._entity.valid():
@@ -318,11 +326,24 @@ class ProceduralMeshViewportInteraction:
         return _ClickFallback((local[0], local[1], 0.0), ProceduralPlane(), "oxy")
 
     def _local_point_from_world(self, point: Vec3) -> tuple[float, float, float] | None:
-        if self._entity is None or not self._entity.valid():
-            log.error("[ProceduralMeshEditor] cannot convert point to local space: entity is not available")
+        entity_from_local = self._try_entity_affine("world point conversion")
+        if entity_from_local is None:
             return None
-        local = self._entity.transform.transform_point_inverse(point)
+        local = entity_from_local.try_inverse_transform_point(point)
+        if local is None or not local.is_finite():
+            log.error("[ProceduralMeshEditor] world point conversion produced a non-finite local point")
+            return None
         return (float(local.x), float(local.y), float(local.z))
+
+    def _try_entity_affine(self, operation: str) -> Affine3d | None:
+        if self._entity is None or not self._entity.valid():
+            log.error(f"[ProceduralMeshEditor] {operation} failed: entity is not available")
+            return None
+        try:
+            return self._entity.transform.global_affine()
+        except Exception as error:
+            log.error(f"[ProceduralMeshEditor] {operation} failed: {error}")
+            return None
 
     def draw_overlay(self) -> None:
         if self._entity is None or not self._entity.valid():

@@ -22,6 +22,7 @@ from termin.csg.procedural_document import (
     SketchPathDocument,
 )
 from termin.csg.wall_height_offsets import set_wall_corner_height_offset
+from termin.geombase import Ray3
 
 Vec2Data = tuple[float, float]
 Vec3Data = tuple[float, float, float]
@@ -77,14 +78,13 @@ def clear_document() -> ProceduralMeshDocument:
 def add_draft_point_from_ray(
     document: ProceduralMeshDocument,
     draft: SketchDraft,
-    ray_origin: Vec3Data,
-    ray_direction: Vec3Data,
+    ray: Ray3,
     fallback_point: Vec3Data | None = None,
     fallback_plane: ProceduralPlane | None = None,
     fallback_kind: str = "fallback",
 ) -> DrawPointResult:
     if not draft.points and draft.plane is not None:
-        point = ray_plane_intersection(ray_origin, ray_direction, draft.plane)
+        point = ray_plane_intersection(ray, draft.plane)
         if point is None:
             log.error("[CsgDocumentEdit] cannot add draft point: ray does not hit active sketch plane")
             return DrawPointResult(False)
@@ -95,16 +95,20 @@ def add_draft_point_from_ray(
         if draft.plane is None:
             log.error("[CsgDocumentEdit] cannot add draft point: active sketch plane is not available")
             return DrawPointResult(False)
-        point = ray_plane_intersection(ray_origin, ray_direction, draft.plane)
+        point = ray_plane_intersection(ray, draft.plane)
         if point is None:
             log.error("[CsgDocumentEdit] cannot add draft point: ray does not hit active sketch plane")
             return DrawPointResult(False)
         draft.points.append(point)
         return DrawPointResult(True, point, "plane")
 
-    hit = raycast_document(document, ray_origin, ray_direction)
+    hit = raycast_document(document, ray)
     if hit is not None:
-        draft.plane = sketch_plane_from_hit(hit)
+        plane = sketch_plane_from_hit(hit)
+        if plane is None:
+            log.error("[CsgDocumentEdit] cannot add draft point: CSG hit does not define a reliable sketch plane")
+            return DrawPointResult(False)
+        draft.plane = plane
         draft.points.append(hit.point)
         return DrawPointResult(True, hit.point, "solid")
 

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tcbase._geom_native import Vec3
+from tcbase._geom_native import Affine3d, Basis3d, Ray3, Vec3
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.editor_core.procedural_mesh_editor_extension import ProceduralMeshExtensionModel
 from termin.editor_core.procedural_mesh_viewport_interaction import ProceduralMeshViewportInteraction
@@ -70,26 +70,39 @@ def _increment(widget) -> None:
     assert widget.dispatch_pointer_event(event) == EventResult.Handled
 
 
+class _EntityTransform:
+    def __init__(self, affine: Affine3d | None = None) -> None:
+        self._affine = affine if affine is not None else Affine3d.identity()
+
+    @property
+    def global_position(self) -> Vec3:
+        return self._affine.translation
+
+    def global_affine(self) -> Affine3d:
+        return self._affine
+
+    def transform_point(self, point: Vec3) -> Vec3:
+        return self._affine.transform_point(point)
+
+
 class _Entity:
     name = "ProceduralMesh"
-    transform = SimpleNamespace(
-        global_position=Vec3(0.0, 0.0, 0.0),
-        transform_point=lambda point: Vec3(point.x, point.y, point.z),
-        transform_point_inverse=lambda point: Vec3(point.x, point.y, point.z),
-        transform_vector_inverse=lambda vector: Vec3(
-            vector.x,
-            vector.y,
-            vector.z,
-        ),
-    )
+
+    def __init__(self, affine: Affine3d | None = None) -> None:
+        self.transform = _EntityTransform(affine)
 
     def valid(self) -> bool:
         return True
 
 
 class _Geometry:
+    def __init__(self, world_ray: Ray3 | None = None) -> None:
+        self._world_ray = world_ray
+
     def world_ray_from_viewport_point(self, x: float, y: float):
-        return (
+        if self._world_ray is not None:
+            return self._world_ray
+        return Ray3(
             Vec3((x - 100.0) / 100.0, (y - 100.0) / 100.0, 1.0),
             Vec3(0.0, 0.0, -1.0),
         )
@@ -229,6 +242,46 @@ def test_procedural_viewport_overlay_styles_are_authored_srgb_colors():
     assert isinstance(unselected.edge_color, SrgbColor)
     assert selected.fill_color.a == pytest.approx(0.32)
     assert unselected.edge_color.a == pytest.approx(0.85)
+
+
+def test_procedural_viewport_ray_roundtrips_oriented_nonuniform_entity_transform():
+    affine = Affine3d(
+        Basis3d(
+            Vec3(0.0, 0.0, -2.0),
+            Vec3(0.0, 3.0, 0.0),
+            Vec3(0.5, 0.0, 0.0),
+        ),
+        Vec3(1.0e12, -2.0e12, 3.0e12),
+    )
+    local_origin = Vec3(0.25, -0.5, 2.0)
+    local_direction = Vec3(0.0, 0.0, -1.0)
+    world_direction = affine.transform_vector(local_direction).try_normalized()
+    assert world_direction is not None
+
+    interaction = ProceduralMeshViewportInteraction(SimpleNamespace())
+    interaction._editor = _Geometry(Ray3(affine.transform_point(local_origin), world_direction))
+    interaction._entity = _Entity(affine)
+
+    ray = interaction._local_ray_from_viewport(0.0, 0.0)
+
+    assert isinstance(ray, Ray3)
+    assert tuple(ray.origin) == pytest.approx(tuple(local_origin))
+    assert tuple(ray.direction) == pytest.approx(tuple(local_direction))
+
+
+@pytest.mark.parametrize(
+    "affine",
+    [
+        Affine3d.scaling(1.0, 0.0, 1.0),
+        Affine3d.from_translation(Vec3(float("nan"), 0.0, 0.0)),
+    ],
+)
+def test_procedural_viewport_ray_rejects_invalid_entity_transform(affine):
+    interaction = ProceduralMeshViewportInteraction(SimpleNamespace())
+    interaction._editor = _Geometry(Ray3(Vec3(0.0, 0.0, 1.0), Vec3(0.0, 0.0, -1.0)))
+    interaction._entity = _Entity(affine)
+
+    assert interaction._local_ray_from_viewport(0.0, 0.0) is None
 
 
 def test_native_procedural_wall_and_transform_params_use_shared_commands():

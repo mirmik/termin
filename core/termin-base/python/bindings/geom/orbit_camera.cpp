@@ -5,16 +5,6 @@
 #include <termin/camera/orbit_camera.hpp>
 
 namespace termin {
-    namespace {
-        nb::tuple mat44_tuple(const Mat44& matrix) {
-            nb::list result;
-            for (double value : matrix.data) {
-                result.append(value);
-            }
-            return nb::tuple(result);
-        }
-    } // namespace
-
     void bind_orbit_camera(nb::module_& m) {
         nb::class_<OrbitCameraPan>(m, "OrbitCameraPan")
             .def_prop_ro("grabbed_point", &OrbitCameraPan::grabbed_point);
@@ -36,13 +26,13 @@ namespace termin {
             .def_rw("min_elevation", &OrbitCamera::min_elevation)
             .def_rw("max_elevation", &OrbitCamera::max_elevation)
             .def_prop_ro("eye", &OrbitCamera::eye)
-            .def("view_matrix", [](const OrbitCamera& camera) { return mat44_tuple(camera.view_matrix()); })
-            .def("projection_matrix",
-                 [](const OrbitCamera& camera, double aspect) { return mat44_tuple(camera.projection_matrix(aspect)); },
-                 nb::arg("aspect"))
-            .def("mvp",
-                 [](const OrbitCamera& camera, double aspect) { return mat44_tuple(camera.mvp(aspect)); },
-                 nb::arg("aspect"))
+            .def("view_matrix", [](const OrbitCamera& camera) { return camera.view_matrix(); })
+            .def(
+                "projection_matrix",
+                [](const OrbitCamera& camera, double aspect) { return camera.projection_matrix(aspect); },
+                nb::arg("aspect"))
+            .def(
+                "mvp", [](const OrbitCamera& camera, double aspect) { return camera.mvp(aspect); }, nb::arg("aspect"))
             .def("orbit", &OrbitCamera::orbit, nb::arg("d_azimuth"), nb::arg("d_elevation"))
             .def("zoom", &OrbitCamera::zoom, nb::arg("factor"))
             .def("begin_pan", &OrbitCamera::begin_pan, nb::arg("screen_position"), nb::arg("viewport"))
@@ -57,12 +47,30 @@ namespace termin {
                  nb::arg("viewport"))
             .def("fit_bounds", &OrbitCamera::fit_bounds, nb::arg("bounds"))
             .def(
-                "screen_ray",
+                "try_screen_ray",
                 [](const OrbitCamera& camera, const Vec2& screen_position, const Rect2& viewport) {
-                    const OrbitCameraRay ray = camera.screen_ray(screen_position, viewport);
-                    return nb::make_tuple(ray.origin, ray.direction);
+                    return camera.try_screen_ray(screen_position, viewport);
                 },
                 nb::arg("screen_position"),
+                nb::arg("viewport"))
+            .def(
+                "screen_ray",
+                [](const OrbitCamera& camera, const Vec2& screen_position, const Rect2& viewport) -> Ray3 {
+                    ScreenRayError error = ScreenRayError::None;
+                    const std::optional<Ray3> ray = camera.try_screen_ray(screen_position, viewport, &error);
+                    if (!ray) {
+                        throw nb::value_error(screen_ray_error_message(error));
+                    }
+                    return *ray;
+                },
+                nb::arg("screen_position"),
+                nb::arg("viewport"))
+            .def(
+                "try_project_world_point",
+                [](const OrbitCamera& camera, const Vec3& world_point, const Rect2& viewport) {
+                    return camera.try_project_world_point(world_point, viewport);
+                },
+                nb::arg("world_point"),
                 nb::arg("viewport"))
             .def("world_point_on_z_plane",
                  &OrbitCamera::world_point_on_z_plane,

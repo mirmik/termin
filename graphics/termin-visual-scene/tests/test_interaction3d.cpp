@@ -185,6 +185,19 @@ int main() {
     assert(target_events.back().kind == TargetPointerEventKind3D::Up);
     assert(target_events.back().part == 30);
 
+    int cleared_actions = 0;
+    interaction.set_action_handler(*near_handle, [&](const auto&) { ++cleared_actions; });
+    interaction.set_target_pointer_handler(*near_handle, [&](const TargetPointerEvent3D& event) {
+        target_events.push_back(event);
+        if (event.pointer_event.pointer == 27 && event.kind == TargetPointerEventKind3D::Up)
+            interaction.clear_action_handler(*near_handle);
+    });
+    interaction.route(scene, PointerEvent3D{27, PointerEventKind3D::Down, ray(), 1});
+    up = interaction.route(scene, PointerEvent3D{27, PointerEventKind3D::Up, ray(), 1});
+    assert(up.action);
+    assert(cleared_actions == 0);
+    interaction.set_target_pointer_handler(*near_handle, [&](const auto& event) { target_events.push_back(event); });
+
     interaction.set_action_handler(*near_handle, [](const auto&) { throw std::runtime_error("expected action"); });
     interaction.route(scene, PointerEvent3D{12, PointerEventKind3D::Down, ray(), 1});
     up = interaction.route(scene, PointerEvent3D{12, PointerEventKind3D::Up, ray(), 1});
@@ -217,10 +230,68 @@ int main() {
     assert(target_events.back().part == 77);
     parent_ptr->set_enabled(true);
 
+    int invalid_capture_leaves = 0;
+    int invalid_capture_cancels = 0;
+    int far_moves = 0;
+    interaction.set_target_pointer_handler(*near_handle, [&](const TargetPointerEvent3D& event) {
+        if (event.pointer_event.pointer != 25)
+            return;
+        if (event.kind == TargetPointerEventKind3D::Leave) {
+            ++invalid_capture_leaves;
+        } else if (event.kind == TargetPointerEventKind3D::Cancel) {
+            ++invalid_capture_cancels;
+            assert(interaction.capture(scene, event.pointer_event.pointer, *far_handle, 88));
+        }
+    });
+    interaction.set_target_pointer_handler(*far_handle, [&](const TargetPointerEvent3D& event) {
+        if (event.pointer_event.pointer == 25 && event.kind == TargetPointerEventKind3D::Move)
+            ++far_moves;
+    });
+    interaction.route(scene, PointerEvent3D{25, PointerEventKind3D::Down, ray(), 1});
+    assert(tc_visual_item3d_handle_eq(interaction.captured(25), *near_handle));
+    parent_ptr->set_enabled(false);
+    const int fallbacks_before_invalid_capture = fallbacks;
+    move = interaction.route(scene, PointerEvent3D{25, PointerEventKind3D::Move, ray(), 1});
+    assert(invalid_capture_leaves == 1);
+    assert(invalid_capture_cancels == 1);
+    assert(far_moves == 0);
+    assert(fallbacks == fallbacks_before_invalid_capture);
+    assert(tc_visual_item3d_handle_is_invalid(move.target));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.hovered(25)));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.pressed(25)));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.captured(25)));
+    parent_ptr->set_enabled(true);
+
+    int nested_hover_leaves = 0;
+    int nested_hover_moves = 0;
+    interaction.set_target_pointer_handler(*near_handle, [&](const TargetPointerEvent3D& event) {
+        if (event.pointer_event.pointer == 26 && event.kind == TargetPointerEventKind3D::Leave) {
+            ++nested_hover_leaves;
+            const auto nested = interaction.route(scene, PointerEvent3D{26, PointerEventKind3D::Move, ray(), 0});
+            assert(tc_visual_item3d_handle_eq(nested.target, *far_handle));
+        }
+    });
+    interaction.set_target_pointer_handler(*far_handle, [&](const TargetPointerEvent3D& event) {
+        if (event.pointer_event.pointer == 26 && event.kind == TargetPointerEventKind3D::Move)
+            ++nested_hover_moves;
+    });
+    interaction.route(scene, PointerEvent3D{26, PointerEventKind3D::Move, ray(), 0});
+    parent_ptr->set_enabled(false);
+    const int fallbacks_before_nested_hover = fallbacks;
+    interaction.route(scene, PointerEvent3D{26, PointerEventKind3D::Move, ray(), 0});
+    assert(nested_hover_leaves == 1);
+    assert(nested_hover_moves == 1);
+    assert(fallbacks == fallbacks_before_nested_hover);
+    assert(tc_visual_item3d_handle_eq(interaction.hovered(26), *far_handle));
+    parent_ptr->set_enabled(true);
+    interaction.clear_target_pointer_handler(*far_handle);
+    interaction.set_target_pointer_handler(*near_handle, [&](const auto& event) { target_events.push_back(event); });
+
     // Scene-wide cancellation preserves the captured part and emits one
     // controller cancellation before state is cleared.
     interaction.route(scene, PointerEvent3D{20, PointerEventKind3D::Down, ray(), 2});
     assert(interaction.captured_hit(20)->part == 30);
+    interaction.route(scene, PointerEvent3D{20, PointerEventKind3D::Move, ray(), 0});
     const std::size_t events_before_cancel_all = target_events.size();
     assert(!interaction.cancel_all(scene));
     const auto cancel_event = std::find_if(target_events.begin() + events_before_cancel_all,
@@ -231,6 +302,7 @@ int main() {
                                            });
     assert(cancel_event != target_events.end());
     assert(cancel_event->part == 30);
+    assert(cancel_event->pointer_event.button == 2);
     const auto leave_event = std::find_if(cancel_event,
                                           target_events.end(),
                                           [](const auto& event) {
@@ -240,6 +312,36 @@ int main() {
     assert(leave_event != target_events.end());
     assert(tc_visual_item3d_handle_is_invalid(interaction.captured(20)));
 
+    int terminal_reacquisitions = 0;
+    int nested_downs = 0;
+    interaction.set_target_pointer_handler(*near_handle, [&](const TargetPointerEvent3D& event) {
+        if (event.kind == TargetPointerEventKind3D::Cancel &&
+            (event.pointer_event.pointer == 22 || event.pointer_event.pointer == 23)) {
+            ++terminal_reacquisitions;
+            assert(interaction.capture(scene, event.pointer_event.pointer, *near_handle, 91));
+            const auto nested = interaction.route(
+                scene, PointerEvent3D{event.pointer_event.pointer, PointerEventKind3D::Down, ray(), 1});
+            assert(tc_visual_item3d_handle_eq(nested.captured, *near_handle));
+        } else if (event.kind == TargetPointerEventKind3D::Down &&
+                   (event.pointer_event.pointer == 22 || event.pointer_event.pointer == 23)) {
+            ++nested_downs;
+        }
+    });
+
+    interaction.route(scene, PointerEvent3D{22, PointerEventKind3D::Down, ray(), 1});
+    assert(!interaction.cancel_all(scene));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.hovered(22)));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.pressed(22)));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.captured(22)));
+
+    interaction.route(scene, PointerEvent3D{23, PointerEventKind3D::Down, ray(), 1});
+    interaction.route(scene, PointerEvent3D{23, PointerEventKind3D::Cancel, ray(), 1});
+    assert(tc_visual_item3d_handle_is_invalid(interaction.hovered(23)));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.pressed(23)));
+    assert(tc_visual_item3d_handle_is_invalid(interaction.captured(23)));
+    assert(terminal_reacquisitions == 2);
+    assert(nested_downs == 4);
+
     interaction.set_target_pointer_handler(*near_handle, [](const auto&) {
         throw std::runtime_error("expected target event failure");
     });
@@ -247,9 +349,22 @@ int main() {
     assert(failed_target.callback_failed);
     interaction.set_target_pointer_handler(*near_handle, {});
 
-    interaction.set_fallback_handler([](const auto&) { throw std::runtime_error("expected"); });
+    int fallback_downs = 0;
+    int fallback_cancels = 0;
+    interaction.set_fallback_handler([&](const PointerEvent3D& event) {
+        if (event.kind == PointerEventKind3D::Down)
+            ++fallback_downs;
+        else if (event.kind == PointerEventKind3D::Cancel)
+            ++fallback_cancels;
+    });
     near_ptr->hittable = false;
     far_ptr->hittable = false;
+    interaction.route(scene, PointerEvent3D{24, PointerEventKind3D::Down, ray(), 1});
+    interaction.route(scene, PointerEvent3D{24, PointerEventKind3D::Cancel, ray(), 1});
+    assert(fallback_downs == 1);
+    assert(fallback_cancels == 1);
+
+    interaction.set_fallback_handler([](const auto&) { throw std::runtime_error("expected"); });
     miss = interaction.route(scene, PointerEvent3D{11, PointerEventKind3D::Move, ray(), 0});
     assert(miss.callback_failed);
 

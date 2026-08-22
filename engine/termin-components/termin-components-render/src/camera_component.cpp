@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include <tc_inspect_cpp.hpp>
+#include <tcbase/tc_log.h>
 
 extern "C" {
 #include "core/tc_camera_capability.h"
@@ -213,16 +214,61 @@ namespace termin {
         clear_viewports();
     }
 
-    Ray3 CameraComponent::screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const {
-        double vp_aspect = static_cast<double>(vp_w) / std::max(1, vp_h);
-        double nx = ((x - vp_x) / vp_w) * 2.0 - 1.0;
-        double ny = ((y - vp_y) / vp_h) * 2.0 - 1.0;
-        Mat44 proj_matrix = compute_projection_matrix(vp_aspect);
-        Mat44 pv = proj_matrix * get_view_matrix();
-        Mat44 inv_pv = pv.inverse();
-        Vec3 p_near = inv_pv.transform_point(Vec3{nx, ny, 0.0});
-        Vec3 p_far = inv_pv.transform_point(Vec3{nx, ny, 1.0});
-        return {p_near, p_far - p_near};
+    std::optional<Ray3> CameraComponent::try_screen_point_to_ray(const Vec2& screen_point,
+                                                                 const Rect2& viewport,
+                                                                 ScreenRayError* error) const {
+        ScreenRayError failure = ScreenRayError::None;
+        if (!entity().valid()) {
+            failure = ScreenRayError::MissingViewTransform;
+        } else if (!viewport.is_finite() || viewport.width <= 0.0 || viewport.height <= 0.0) {
+            failure = ScreenRayError::InvalidViewport;
+        } else {
+            const double viewport_aspect = viewport.width / viewport.height;
+            const Mat44 projection = compute_projection_matrix(viewport_aspect);
+            const Mat44 view = get_view_matrix();
+            Ray3 ray;
+            if (try_unproject_screen_ray(projection, view, screen_point, viewport, ray, &failure)) {
+                if (error) {
+                    *error = ScreenRayError::None;
+                }
+                return ray;
+            }
+        }
+
+        if (error) {
+            *error = failure;
+        }
+        tc_log_error("[CameraComponent] Failed to project screen point to ray: %s", screen_ray_error_message(failure));
+        return std::nullopt;
+    }
+
+    std::optional<ProjectedScreenPoint> CameraComponent::try_project_world_point(const Vec3& world_point,
+                                                                                 const Rect2& viewport,
+                                                                                 ScreenRayError* error) const {
+        ScreenRayError failure = ScreenRayError::None;
+        if (!entity().valid()) {
+            failure = ScreenRayError::MissingViewTransform;
+        } else if (!viewport.is_finite() || viewport.width <= 0.0 || viewport.height <= 0.0) {
+            failure = ScreenRayError::InvalidViewport;
+        } else {
+            const double viewport_aspect = viewport.width / viewport.height;
+            const Mat44 projection = compute_projection_matrix(viewport_aspect);
+            const Mat44 view = get_view_matrix();
+            ProjectedScreenPoint projected;
+            if (termin::try_project_world_point(projection, view, world_point, viewport, projected, &failure)) {
+                if (error) {
+                    *error = ScreenRayError::None;
+                }
+                return projected;
+            }
+        }
+
+        if (error) {
+            *error = failure;
+        }
+        tc_log_error("[CameraComponent] Failed to project world point to screen: %s",
+                     screen_ray_error_message(failure));
+        return std::nullopt;
     }
 
     namespace {

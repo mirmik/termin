@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -69,14 +70,21 @@ namespace termin::gui_native {
         SceneView3DCamera camera_{};
         CameraProvider camera_provider_;
         FallbackPointerHandler fallback_pointer_handler_;
+        FallbackPointerHandler active_fallback_pointer_handler_;
         termin::visual::SceneInteraction3D interaction_;
         std::unique_ptr<RenderState> render_state_;
         ViewportSurfaceSize requested_size_{};
         termin::LinearColor clear_color_{0.06f, 0.07f, 0.09f, 1.0f};
         bool render_dirty_ = true;
         bool scene_pointer_active_ = false;
+        // A projection failure terminates the captured scene interaction, but
+        // the matching Up can still be delivered directly by a host/test after
+        // capture is released. Consume that tail instead of starting a new
+        // scene/fallback sequence from it.
+        bool scene_pointer_cancelled_until_up_ = false;
         bool fallback_pointer_active_ = false;
-        int32_t active_button_ = 0;
+        bool pointer_transition_in_progress_ = false;
+        std::uint64_t scene_revision_ = 0;
     };
 
 } // namespace termin::gui_native

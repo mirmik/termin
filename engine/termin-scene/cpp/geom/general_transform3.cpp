@@ -357,18 +357,14 @@ namespace termin {
         return inverse.transform_vector(v);
     }
     Vec3 GeneralTransform3::transform_normal(const Vec3& n) const {
-        Basis3d inverse;
-        if (!linear_basis().try_inverse(inverse)) {
+        Vec3 result;
+        if (!linear_basis().try_transform_normal(n, result)) {
             tc_log_error("[GeneralTransform3] cannot transform normal for '%s': "
                          "world basis is singular",
                          name());
             throw std::runtime_error("Cannot transform normal through a singular world basis");
         }
-        return {
-            inverse.x.dot(n),
-            inverse.y.dot(n),
-            inverse.z.dot(n),
-        };
+        return result;
     }
     Vec3 GeneralTransform3::transform_direction(const Vec3& v) const {
         return global_rotation().rotate(v);

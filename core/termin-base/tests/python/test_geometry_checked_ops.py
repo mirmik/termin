@@ -1,6 +1,22 @@
 import math
 
-from termin.geombase import AABBf, Bounds2, Bounds2f, Mat44, Rect2f, Vec2, Vec2f, Vec3, Vec3f, Vec4, Vec4f
+from termin.geombase import (
+    AABBf,
+    Affine3d,
+    Basis3d,
+    Bounds2,
+    Bounds2f,
+    Mat44,
+    Quat,
+    Ray3,
+    Rect2f,
+    Vec2,
+    Vec2f,
+    Vec3,
+    Vec3f,
+    Vec4,
+    Vec4f,
+)
 
 
 def test_vector_component_and_checked_operations():
@@ -12,6 +28,96 @@ def test_vector_component_and_checked_operations():
     assert Vec2(0.0, 0.0).normalized_or(Vec2(0.0, 1.0), 1.0e-10) == Vec2(0.0, 1.0)
     assert not Vec4(math.inf, 0.0, 0.0, 0.0).is_finite()
     assert Vec4f(1.0, 2.0, 3.0, 4.0).to_double() == Vec4(1.0, 2.0, 3.0, 4.0)
+
+
+def test_ray_plane_intersection_binding_rejects_invalid_parallel_and_behind_geometry():
+    plane_origin = Vec3.zero()
+    plane_normal = Vec3.unit_z()
+    ray = Ray3(Vec3(1.0, 2.0, 3.0), Vec3(0.0, 0.0, -1.0))
+    assert ray.try_intersect_plane(plane_origin, plane_normal) == Vec3(1.0, 2.0, 0.0)
+
+    assert Ray3(Vec3(0.0, 0.0, 1.0), Vec3.unit_x()).try_intersect_plane(plane_origin, plane_normal) is None
+    assert ray.try_intersect_plane(plane_origin, Vec3.zero()) is None
+    assert ray.try_intersect_plane(plane_origin, Vec3(0.0, 0.0, math.nan)) is None
+    assert ray.try_intersect_plane(plane_origin, plane_normal, epsilon=-1.0) is None
+    assert Ray3(Vec3(0.0, 0.0, 1.0), Vec3.unit_z()).try_intersect_plane(plane_origin, plane_normal) is None
+    assert (
+        Ray3(Vec3(0.0, 0.0, 1.0), Vec3.unit_z()).try_intersect_plane(
+            plane_origin,
+            plane_normal,
+            forward_only=False,
+        )
+        == Vec3.zero()
+    )
+
+    ray.origin = Vec3(math.nan, 0.0, 0.0)
+    assert ray.try_intersect_plane(plane_origin, plane_normal) is None
+    ray.origin = Vec3.zero()
+    ray.direction = Vec3.zero()
+    assert ray.try_intersect_plane(plane_origin, plane_normal) is None
+
+    zero_direction = Ray3(Vec3(1.0, 2.0, 3.0), Vec3.zero())
+    assert zero_direction.direction == Vec3.zero()
+    non_finite_direction = Ray3(Vec3(1.0, 2.0, 3.0), Vec3(math.nan, 4.0, 5.0))
+    assert math.isnan(non_finite_direction.direction.x)
+    assert non_finite_direction.direction.y == 4.0
+    assert non_finite_direction.direction.z == 5.0
+
+
+def test_affine_checked_inverse_normal_and_centered_inverse_transform_bindings():
+    for uniform_scale in (1.0e-6, 1.0e6):
+        basis = Basis3d.scaling(uniform_scale)
+        inverse = basis.try_inverse()
+        assert inverse is not None
+        product = basis @ inverse
+        assert product.x == Vec3.unit_x()
+        assert product.y == Vec3.unit_y()
+        assert product.z == Vec3.unit_z()
+
+    mixed_axes = Basis3d.from_quat(Quat.from_axis_angle(Vec3.unit_z(), math.pi / 4.0))
+    unreliable = mixed_axes @ Basis3d.scaling(1.0e-16, 1.0e16, 1.0) @ mixed_axes
+    assert unreliable.try_inverse() is None
+    assert Basis3d.identity().try_inverse(epsilon=-1.0) is None
+    assert Basis3d.identity().try_inverse(epsilon=math.nan) is None
+
+    oriented_nonuniform = Basis3d.from_quat(
+        Quat.from_axis_angle(Vec3(1.0, 2.0, -0.5).normalized(), 0.71)
+    ) @ Basis3d.scaling(2.0, 3.0, 4.0)
+    local_tangent0 = Vec3(1.0, 2.0, -0.5)
+    local_tangent1 = Vec3(-0.3, 0.4, 1.2)
+    local_normal = local_tangent0.cross(local_tangent1)
+    transformed_normal = oriented_nonuniform.try_transform_normal(local_normal)
+    assert transformed_normal is not None
+    assert abs(transformed_normal.dot(oriented_nonuniform.transform_vector(local_tangent0))) < 1.0e-12
+    assert abs(transformed_normal.dot(oriented_nonuniform.transform_vector(local_tangent1))) < 1.0e-12
+    assert Basis3d.scaling(2.0, 3.0, 4.0).try_transform_normal(Vec3(0.0, 0.0, 2.0)) == Vec3(0.0, 0.0, 0.5)
+    assert Basis3d.scaling(1.0, 0.0, 1.0).try_transform_normal(Vec3.unit_z()) is None
+    assert Basis3d.identity().try_transform_normal(Vec3(math.nan, 0.0, 0.0)) is None
+    assert Basis3d.identity().try_transform_normal(Vec3.unit_z(), epsilon=-1.0) is None
+
+    affine = Affine3d(oriented_nonuniform, Vec3(1.0e12, -2.0e12, 3.0e12))
+    affine_normal = affine.try_transform_normal(local_normal)
+    assert affine_normal is not None
+    assert (affine_normal - transformed_normal).norm() < 1.0e-12
+
+    local_point = Vec3(0.25, -0.5, 1.75)
+    world_point = affine.transform_point(local_point)
+    recovered_point = affine.try_inverse_transform_point(world_point)
+    assert recovered_point is not None
+    assert (recovered_point - local_point).norm() < 5.0e-4
+
+    local_vector = Vec3(-0.5, 0.75, 0.125)
+    world_vector = affine.transform_vector(local_vector)
+    recovered_vector = affine.try_inverse_transform_vector(world_vector)
+    assert recovered_vector is not None
+    assert (recovered_vector - local_vector).norm() < 1.0e-12
+
+    singular = Affine3d.scaling(1.0, 0.0, 1.0)
+    assert singular.try_transform_normal(Vec3.unit_z()) is None
+    assert singular.try_inverse_transform_point(world_point) is None
+    assert singular.try_inverse_transform_vector(world_vector) is None
+    assert affine.try_inverse_transform_point(Vec3(math.inf, 0.0, 0.0)) is None
+    assert affine.try_inverse_transform_vector(Vec3(math.nan, 0.0, 0.0)) is None
 
 
 def test_bounds_rect_and_float_aabb_bindings():

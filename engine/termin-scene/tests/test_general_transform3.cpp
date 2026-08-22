@@ -154,6 +154,14 @@ int main() {
     }
     CHECK(inverse_threw);
 
+    bool normal_threw = false;
+    try {
+        singular.transform().transform_normal({0.0, 0.0, 1.0});
+    } catch (const std::runtime_error&) {
+        normal_threw = true;
+    }
+    CHECK(normal_threw);
+
     // Exact world-preserving reparenting accepts a representable local TRS.
     termin::Entity scaled_parent = termin::Entity::create(pool_handle, "scaled-parent");
     scaled_parent.transform().set_local_scale({2.0, 3.0, 4.0});

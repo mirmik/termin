@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Callable
 
 from tcbase import log
-from tcbase._geom_native import Vec3, Vec4
+from tcbase._geom_native import Ray3, Rect2, Vec2, Vec3
 
 
 _GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
@@ -133,7 +133,7 @@ class ViewportGeometryController:
         self,
         x: float,
         y: float,
-    ) -> tuple[Vec3, Vec3] | None:
+    ) -> Ray3 | None:
         camera = self._get_camera()
         viewport_widget = self._get_viewport_widget()
         if camera is None or camera.entity is None:
@@ -144,12 +144,11 @@ class ViewportGeometryController:
             return None
 
         viewport_rect = self._viewport_rect(viewport_widget)
-        try:
-            ray = camera.screen_point_to_ray(float(x), float(y), viewport_rect)
-            return (ray.origin, ray.direction)
-        except Exception as e:
-            log.error(f"[ViewportGeometryController] viewport ray failed: {e}")
+        ray = camera.try_screen_point_to_ray(Vec2(float(x), float(y)), viewport_rect)
+        if ray is None:
+            log.error("[ViewportGeometryController] viewport ray failed: camera rejected screen projection")
             return None
+        return ray
 
     def project_world_point_to_viewport(
         self,
@@ -163,30 +162,11 @@ class ViewportGeometryController:
         if viewport_widget is None:
             log.error("[ViewportGeometryController] viewport projection failed: viewport widget is not available")
             return None
-        width = float(max(1.0, viewport_widget.width))
-        height = float(max(1.0, viewport_widget.height))
-        previous_aspect = float(camera.aspect)
-        try:
-            camera.set_aspect(width / height)
-            view_point = camera.get_view_matrix().transform_vec4(
-                Vec4(float(point.x), float(point.y), float(point.z), 1.0)
-            )
-            clip = camera.get_projection_matrix().transform_vec4(view_point)
-        except Exception as e:
-            log.error(f"[ViewportGeometryController] viewport projection failed: {e}")
+        projected = camera.try_project_world_point(point, self._viewport_rect(viewport_widget))
+        if projected is None:
+            log.error("[ViewportGeometryController] viewport projection failed: camera rejected world projection")
             return None
-        finally:
-            try:
-                camera.set_aspect(previous_aspect)
-            except Exception as e:
-                log.error(f"[ViewportGeometryController] viewport projection aspect restore failed: {e}")
-        w = float(clip.w)
-        if abs(w) <= 1.0e-8:
-            return None
-        return (
-            float((clip.x / w + 1.0) * 0.5 * width),
-            float((clip.y / w + 1.0) * 0.5 * height),
-        )
+        return float(projected.screen.x), float(projected.screen.y)
 
     def world_point_on_plane(
         self,
@@ -206,19 +186,20 @@ class ViewportGeometryController:
             return None
 
         viewport_rect = self._viewport_rect(viewport_widget)
-        try:
-            ray = camera.screen_point_to_ray(float(x), float(y), viewport_rect)
-            origin = ray.origin
-            direction = ray.direction
-            denom = direction.dot(plane_normal)
-            if abs(denom) < 1e-9:
-                log.error(f"[ViewportGeometryController] {label} pick failed: ray is parallel to plane")
-                return None
-            t = (plane_origin - origin).dot(plane_normal) / denom
-            return origin + direction * t
-        except Exception as e:
-            log.error(f"[ViewportGeometryController] {label} pick failed: {e}")
+        ray = camera.try_screen_point_to_ray(Vec2(float(x), float(y)), viewport_rect)
+        if ray is None:
+            log.error(f"[ViewportGeometryController] {label} pick failed: camera rejected screen projection")
             return None
+        point = ray.try_intersect_plane(
+            plane_origin,
+            plane_normal,
+            forward_only=True,
+            epsilon=1.0e-9,
+        )
+        if point is None:
+            log.error(f"[ViewportGeometryController] {label} pick failed: checked ray-plane intersection rejected")
+            return None
+        return point
 
     def world_point_on_entity_local_oxy_plane(
         self,
@@ -233,7 +214,13 @@ class ViewportGeometryController:
         origin = transform.global_position
         axis_x = transform.transform_vector(Vec3(1.0, 0.0, 0.0))
         axis_y = transform.transform_vector(Vec3(0.0, 1.0, 0.0))
-        normal = axis_x.cross(axis_y).normalized()
+        normal = axis_x.cross(axis_y).try_normalized(1.0e-10)
+        if normal is None:
+            log.error(
+                "[ViewportGeometryController] entity local OXY plane pick failed: "
+                "transformed axes do not define a finite non-degenerate plane"
+            )
+            return None
         return self.world_point_on_plane(
             x,
             y,
@@ -242,10 +229,10 @@ class ViewportGeometryController:
             "entity local OXY plane",
         )
 
-    def _viewport_rect(self, viewport_widget) -> tuple[int, int, int, int]:
-        return (
-            0,
-            0,
-            int(max(1.0, viewport_widget.width)),
-            int(max(1.0, viewport_widget.height)),
+    def _viewport_rect(self, viewport_widget) -> Rect2:
+        return Rect2(
+            0.0,
+            0.0,
+            float(viewport_widget.width),
+            float(viewport_widget.height),
         )

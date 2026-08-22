@@ -103,6 +103,11 @@ namespace termin {
             return true;
         }
 
+        static bool try_affine3d_from_mat44f(const Mat44f& matrix, Affine3d& out_affine) {
+            const Mat44 double_matrix = matrix.to_double();
+            return Affine3d::try_from_matrix4(double_matrix.data, out_affine);
+        }
+
     } // namespace
 
     // ============================================================================
@@ -141,6 +146,7 @@ namespace termin {
     }
 
     EditorInteractionSystem::~EditorInteractionSystem() {
+        _cancel_overlay_pointer_state(false, "editor interaction shutdown");
         _clear_component_visual_gizmos();
         _destroy_transform_gizmo_visual();
 
@@ -177,7 +183,13 @@ namespace termin {
     // ============================================================================
 
     void EditorInteractionSystem::set_gizmo_target(Entity entity) {
+        const std::uint64_t transition_revision = ++_overlay_transition_revision;
+        _cancel_overlay_pointer_state(true, "gizmo target change");
+        if (_overlay_transition_revision != transition_revision)
+            return;
         _transform_gizmo.set_target(entity);
+        if (_overlay_transition_revision != transition_revision)
+            return;
         _transform_gizmo.visible = entity.valid();
         _rebuild_component_visual_gizmos(entity);
     }
@@ -233,8 +245,6 @@ namespace termin {
     }
 
     void EditorInteractionSystem::_clear_component_visual_gizmos() {
-        if (!_component_visual_items.empty() && _overlay_scene.interaction().cancel_all(_overlay_scene.scene()))
-            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] component overlay cancellation callback failed");
         for (const auto handle : _component_visual_items) {
             _overlay_scene.interaction().clear_target_pointer_handler(handle);
             _overlay_scene.interaction().clear_action_handler(handle);
@@ -247,13 +257,33 @@ namespace termin {
     void EditorInteractionSystem::_destroy_transform_gizmo_visual() {
         if (tc_visual_item3d_handle_is_invalid(_transform_gizmo_visual))
             return;
-        if (_overlay_scene.interaction().cancel_all(_overlay_scene.scene()))
-            tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] TransformGizmo overlay cancellation callback failed");
         _overlay_scene.interaction().clear_target_pointer_handler(_transform_gizmo_visual);
         _overlay_scene.interaction().clear_action_handler(_transform_gizmo_visual);
         if (!_overlay_scene.scene().destroy(_transform_gizmo_visual))
             tc_log(TC_LOG_ERROR, "[EditorInteractionSystem] failed to destroy the TransformGizmo overlay item");
         _transform_gizmo_visual = tc_visual_item3d_handle_invalid();
+    }
+
+    void EditorInteractionSystem::_cancel_overlay_pointer_state(bool quarantine_active_sequence, const char* context) {
+        auto& interaction = _overlay_scene.interaction();
+        const bool active = interaction.pressed_hit(1).has_value() || interaction.captured_hit(1).has_value();
+        // Publish ownership termination before callbacks. A Cancel handler may
+        // synchronously select another gizmo target and must observe the old
+        // sequence as already finished.
+        if (active) {
+            _overlay_pointer_cancelled_until_up = quarantine_active_sequence;
+        } else if (!quarantine_active_sequence) {
+            _overlay_pointer_cancelled_until_up = false;
+        }
+
+        // Always invalidate the interaction epoch. During Enter the hover map
+        // is not published yet, but a visual rebuild still has to stop that
+        // in-flight route before its old handler/item can be used again.
+        if (interaction.cancel_all(_overlay_scene.scene())) {
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] overlay cancellation callback failed during %s",
+                   context ? context : "state transition");
+        }
     }
 
     // ============================================================================
@@ -310,6 +340,15 @@ namespace termin {
 
         _pending_hover = {Vec2f{x, y}, vp, display, true};
 
+        _request_update();
+    }
+
+    void EditorInteractionSystem::on_focus_lost() {
+        _cancel_overlay_pointer_state(true, "viewport focus loss");
+        _has_press = false;
+        _pending_press.valid = false;
+        _pending_release.valid = false;
+        _pending_hover.valid = false;
         _request_update();
     }
 
@@ -520,12 +559,67 @@ namespace termin {
                                                          Vec2f screen,
                                                          int button,
                                                          tc_viewport_handle viewport) {
+        constexpr visual::PointerId3D overlay_pointer = 1;
+        if (_overlay_pointer_cancelled_until_up) {
+            if (kind == visual::PointerEventKind3D::Down) {
+                tc_log(TC_LOG_WARN,
+                       "[EditorInteractionSystem] received a new overlay Down before the cancelled sequence's Up; "
+                       "ending stale event suppression");
+                _overlay_pointer_cancelled_until_up = false;
+            } else {
+                if (kind == visual::PointerEventKind3D::Up || kind == visual::PointerEventKind3D::Cancel)
+                    _overlay_pointer_cancelled_until_up = false;
+                return true;
+            }
+        }
+
+        auto& interaction = _overlay_scene.interaction();
+        const auto reconcile_failed_ray = [&](const char* reason) {
+            const bool active = interaction.pressed_hit(overlay_pointer).has_value() ||
+                                interaction.captured_hit(overlay_pointer).has_value();
+            const bool hovered = interaction.hovered_hit(overlay_pointer).has_value();
+            if (!active && !hovered)
+                return false;
+
+            if (active) {
+                tc_log(TC_LOG_WARN,
+                       "[EditorInteractionSystem] %s during an active overlay pointer sequence; "
+                       "cancelling capture and consuming the event",
+                       reason);
+            } else {
+                tc_log(TC_LOG_WARN,
+                       "[EditorInteractionSystem] %s while an overlay item was hovered; clearing stale hover",
+                       reason);
+            }
+            if (interaction.cancel_all(_overlay_scene.scene())) {
+                tc_log(TC_LOG_ERROR,
+                       "[EditorInteractionSystem] overlay cancellation callback failed after screen ray loss");
+            }
+            _overlay_pointer_cancelled_until_up =
+                active && kind != visual::PointerEventKind3D::Up && kind != visual::PointerEventKind3D::Cancel;
+            return active;
+        };
+
         if (!tc_viewport_handle_valid(viewport))
-            return false;
+            return reconcile_failed_ray("viewport became invalid");
         const std::optional<Ray3> ray = _screen_to_ray(screen, viewport);
         if (!ray)
-            return false;
-        return _overlay_scene.route_pointer(kind, *ray, static_cast<std::uint32_t>(std::max(button, 0)));
+            return reconcile_failed_ray("screen ray construction failed");
+        const std::uint64_t transition_revision = _overlay_transition_revision;
+        const bool handled =
+            _overlay_scene.route_pointer(kind, *ray, static_cast<std::uint32_t>(std::max(button, 0)), overlay_pointer);
+        if (_overlay_transition_revision != transition_revision) {
+            // Enter is delivered before a Down is published as pressed. A
+            // visual/target replacement from that callback invalidates the
+            // route, so explicitly retain ownership of the physical tail.
+            if (kind == visual::PointerEventKind3D::Down) {
+                _overlay_pointer_cancelled_until_up = true;
+            } else if (kind == visual::PointerEventKind3D::Up || kind == visual::PointerEventKind3D::Cancel) {
+                _overlay_pointer_cancelled_until_up = false;
+            }
+            return true;
+        }
+        return handled;
     }
 
     bool
@@ -1101,7 +1195,10 @@ namespace termin {
 
         result.entity = Entity(pool, eid);
         result.depth = depth;
-        if (depth >= 1.0f)
+        // Exactly 1 is the cleared depth attachment and therefore has no
+        // surface point. Other out-of-range or non-finite values are passed to
+        // the checked projection contract below so the owner logs the failure.
+        if (depth == 1.0f)
             return result;
 
         tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
@@ -1121,83 +1218,210 @@ namespace termin {
             return result;
 
         CxxComponent* cxx = CxxComponent::from_tc(cam_comp);
-        if (!cxx)
+        if (!cxx) {
+            const char* type_name = tc_component_type_name(cam_comp);
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] surface pick projection failed: camera component '%s' is not "
+                   "native C++",
+                   type_name ? type_name : "<unnamed>");
             return result;
-
-        auto* camera = static_cast<CameraComponent*>(cxx);
-
-        auto desc = dev->texture_desc(id_tex);
-        const double width = std::max(1.0, static_cast<double>(desc.width));
-        const double height = std::max(1.0, static_cast<double>(desc.height));
-
-        const double nx = ((static_cast<double>(fbo.x) + 0.5) / width) * 2.0 - 1.0;
-        const double ny = ((static_cast<double>(fbo.y) + 0.5) / height) * 2.0 - 1.0;
-
-        const double aspect = width / height;
-        Mat44 view = camera->get_view_matrix();
-        Mat44 projection = camera->compute_projection_matrix(aspect);
-        Mat44 pv = projection * view;
-        Mat44 inv_pv = pv.inverse();
-        Vec3 world = inv_pv.transform_point(Vec3{nx, ny, static_cast<double>(depth)});
-        Vec3 view_point = view.transform_point(world);
-
-        const double clip_x = pv(0, 0) * world.x + pv(1, 0) * world.y + pv(2, 0) * world.z + pv(3, 0);
-        const double clip_y = pv(0, 1) * world.x + pv(1, 1) * world.y + pv(2, 1) * world.z + pv(3, 1);
-        const double clip_z = pv(0, 2) * world.x + pv(1, 2) * world.y + pv(2, 2) * world.z + pv(3, 2);
-        const double clip_w = pv(0, 3) * world.x + pv(1, 3) * world.y + pv(2, 3) * world.z + pv(3, 3);
-        if (std::abs(clip_w) > 1e-10) {
-            const double reproj_x = ((clip_x / clip_w) + 1.0) * 0.5 * width - 0.5;
-            const double reproj_y = ((clip_y / clip_w) + 1.0) * 0.5 * height - 0.5;
-            const double reproj_depth = clip_z / clip_w;
-            const Vec2 reproj_error{reproj_x - static_cast<double>(fbo.x), reproj_y - static_cast<double>(fbo.y)};
-            result.reproject_screen_error = reproj_error.norm();
-            result.reproject_depth_error = reproj_depth - static_cast<double>(depth);
         }
 
-        result.has_world_point = true;
-        result.world_point = world;
-        result.view_depth = view_point.y;
+        auto* camera = dynamic_cast<CameraComponent*>(cxx);
+        if (!camera) {
+            const char* type_name = tc_component_type_name(cam_comp);
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] surface pick projection failed: native component '%s' is not a "
+                   "CameraComponent",
+                   type_name ? type_name : "<unnamed>");
+            return result;
+        }
 
+        auto desc = dev->texture_desc(id_tex);
+        const double width = static_cast<double>(desc.width);
+        const double height = static_cast<double>(desc.height);
+        if (width <= 0.0 || height <= 0.0) {
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] surface pick projection failed: "
+                   "pick_id=%d has invalid framebuffer extent=(%.0f,%.0f)",
+                   pick_id,
+                   width,
+                   height);
+            return result;
+        }
+
+        const double aspect = width / height;
+        const Mat44 view = camera->get_view_matrix();
+        const Mat44 projection = camera->compute_projection_matrix(aspect);
+        const Rect2 framebuffer_rect{0.0, 0.0, width, height};
+        const Vec2 pixel_center{static_cast<double>(fbo.x) + 0.5, static_cast<double>(fbo.y) + 0.5};
+        ScreenRayError projection_error = ScreenRayError::None;
+        if (!_try_populate_surface_projection(result,
+                                              projection,
+                                              view,
+                                              pixel_center,
+                                              static_cast<double>(depth),
+                                              framebuffer_rect,
+                                              &projection_error)) {
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] surface pick world reconstruction failed: "
+                   "pick_id=%d fbo=(%d,%d) extent=(%.0f,%.0f) depth=%.9g: %s",
+                   pick_id,
+                   fbo.x,
+                   fbo.y,
+                   width,
+                   height,
+                   static_cast<double>(depth),
+                   screen_ray_error_message(projection_error));
+            return result;
+        }
         MeshComponent* mesh_component = result.entity.get_component<MeshComponent>();
         if (mesh_component) {
             tc_mesh* mesh = mesh_component->mesh.get();
             if (!mesh)
                 return result;
 
-            GeneralTransform3 transform = result.entity.transform();
-            Mat44f mesh_offset = mesh_component->get_mesh_offset_matrix();
-            Mat44f inverse_mesh_offset = mesh_offset.inverse();
-            Vec3 camera_position = camera->get_position();
-            Vec3 world_direction = (world - camera_position).normalized();
-            Vec3 entity_local_origin = transform.transform_point_inverse(camera_position);
-            Vec3 entity_local_direction = transform.transform_vector_inverse(world_direction).normalized();
-            const Vec3f local_origin = inverse_mesh_offset.transform_point(entity_local_origin.to_float());
-            const Vec3f local_direction =
-                inverse_mesh_offset.transform_direction(entity_local_direction.to_float()).normalized();
+            auto log_mesh_refinement_failure = [&](const char* reason) {
+                tc_log(TC_LOG_ERROR,
+                       "[EditorInteractionSystem] surface pick mesh refinement failed: "
+                       "pick_id=%d entity='%s': %s",
+                       pick_id,
+                       result.entity.name(),
+                       reason);
+            };
 
+            const GeneralTransform3 transform = result.entity.transform();
+            const Affine3d entity_affine = transform.global_affine();
+            Ray3 world_ray;
+            ScreenRayError ray_error = ScreenRayError::None;
+            if (!try_unproject_screen_ray(projection, view, pixel_center, framebuffer_rect, world_ray, &ray_error)) {
+                log_mesh_refinement_failure(screen_ray_error_message(ray_error));
+                return result;
+            }
+
+            const Mat44f mesh_offset = mesh_component->get_mesh_offset_matrix();
             tc_mesh_ray ray;
-            ray.origin = local_origin;
-            ray.direction = local_direction;
-            ray.t_min = 0.0f;
-            ray.t_max = 1000000.0f;
+            if (!_try_build_surface_mesh_ray(world_ray, entity_affine, mesh_offset, ray)) {
+                log_mesh_refinement_failure("checked mesh-local ray conversion rejected the transforms or direction");
+                return result;
+            }
 
             tc_mesh_hit hit;
             if (tc_mesh_raycast(mesh, &ray, &hit)) {
-                const Vec3f entity_local_hit = mesh_offset.transform_point(hit.position);
-                const Vec3f entity_local_normal = mesh_offset.transform_direction(hit.normal).normalized();
-                Vec3 world_hit = transform.transform_point(entity_local_hit.to_double());
-                Vec3 world_normal = transform.transform_normal(entity_local_normal.to_double()).normalized();
-
-                result.has_mesh_hit = true;
-                result.mesh_point = world_hit;
-                result.mesh_normal = world_normal;
-                result.mesh_triangle_index = hit.triangle_index;
-                result.mesh_indices = Vec3i{static_cast<int>(hit.indices[0]),
-                                            static_cast<int>(hit.indices[1]),
-                                            static_cast<int>(hit.indices[2])};
+                if (!_try_apply_surface_mesh_hit(result, hit, mesh_offset, entity_affine)) {
+                    log_mesh_refinement_failure("checked mesh hit or normal conversion rejected the result");
+                    return result;
+                }
             }
         }
         return result;
+    }
+
+    bool EditorInteractionSystem::_try_populate_surface_projection(SurfacePickResult& result,
+                                                                   const Mat44& projection,
+                                                                   const Mat44& view,
+                                                                   const Vec2& pixel_center,
+                                                                   double depth,
+                                                                   const Rect2& framebuffer_rect,
+                                                                   ScreenRayError* error) {
+        Vec3 world;
+        if (!try_unproject_screen_point(projection, view, pixel_center, depth, framebuffer_rect, world, error)) {
+            return false;
+        }
+
+        ProjectedScreenPoint reprojected;
+        if (!try_project_world_point(projection, view, world, framebuffer_rect, reprojected, error)) {
+            return false;
+        }
+
+        result.world_point = world;
+        result.view_depth = reprojected.view_point.y;
+        result.reproject_screen_error = (reprojected.screen - pixel_center).norm();
+        result.reproject_depth_error = reprojected.depth - depth;
+        result.has_world_point = true;
+        return true;
+    }
+
+    bool EditorInteractionSystem::_try_build_surface_mesh_ray(const Ray3& world_ray,
+                                                              const Affine3d& entity_affine,
+                                                              const Mat44f& mesh_offset,
+                                                              tc_mesh_ray& ray) {
+        Affine3d mesh_offset_affine;
+        if (!try_affine3d_from_mat44f(mesh_offset, mesh_offset_affine)) {
+            return false;
+        }
+
+        Vec3 world_direction;
+        if (!world_ray.direction.try_normalized(world_direction)) {
+            return false;
+        }
+        Vec3 entity_local_origin;
+        if (!entity_affine.try_inverse_transform_point(world_ray.origin, entity_local_origin)) {
+            return false;
+        }
+        Vec3 entity_local_direction;
+        Vec3 unnormalized_entity_direction;
+        if (!entity_affine.try_inverse_transform_vector(world_direction, unnormalized_entity_direction) ||
+            !unnormalized_entity_direction.try_normalized(entity_local_direction)) {
+            return false;
+        }
+
+        Vec3 local_origin_double;
+        if (!mesh_offset_affine.try_inverse_transform_point(entity_local_origin, local_origin_double)) {
+            return false;
+        }
+        Vec3 unnormalized_local_direction;
+        Vec3 local_direction_double;
+        if (!mesh_offset_affine.try_inverse_transform_vector(entity_local_direction, unnormalized_local_direction) ||
+            !unnormalized_local_direction.try_normalized(local_direction_double)) {
+            return false;
+        }
+
+        const Vec3f local_origin = local_origin_double.to_float();
+        Vec3f local_direction;
+        if (!local_origin.is_finite() || !local_direction_double.to_float().try_normalized(local_direction)) {
+            return false;
+        }
+
+        tc_mesh_ray result;
+        result.origin = local_origin;
+        result.direction = local_direction;
+        result.t_min = 0.0f;
+        result.t_max = 1000000.0f;
+        ray = result;
+        return true;
+    }
+
+    bool EditorInteractionSystem::_try_apply_surface_mesh_hit(SurfacePickResult& result,
+                                                              const tc_mesh_hit& hit,
+                                                              const Mat44f& mesh_offset,
+                                                              const Affine3d& entity_affine) {
+        Affine3d mesh_offset_affine;
+        if (!try_affine3d_from_mat44f(mesh_offset, mesh_offset_affine)) {
+            return false;
+        }
+
+        const Vec3 entity_local_hit = mesh_offset_affine.transform_point(hit.position.to_double());
+        Vec3 entity_local_normal;
+        if (!mesh_offset_affine.try_transform_normal(hit.normal.to_double(), entity_local_normal)) {
+            return false;
+        }
+
+        const Vec3 world_hit = entity_affine.transform_point(entity_local_hit);
+        Vec3 unnormalized_world_normal;
+        Vec3 world_normal;
+        if (!entity_affine.try_transform_normal(entity_local_normal, unnormalized_world_normal) ||
+            !world_hit.is_finite() || !unnormalized_world_normal.try_normalized(world_normal)) {
+            return false;
+        }
+
+        result.has_mesh_hit = true;
+        result.mesh_point = world_hit;
+        result.mesh_normal = world_normal;
+        result.mesh_triangle_index = hit.triangle_index;
+        result.mesh_indices =
+            Vec3i{static_cast<int>(hit.indices[0]), static_cast<int>(hit.indices[1]), static_cast<int>(hit.indices[2])};
+        return true;
     }
 
     // ============================================================================
@@ -1240,21 +1464,48 @@ namespace termin {
     // ============================================================================
 
     std::optional<Ray3> EditorInteractionSystem::_screen_to_ray(Vec2f screen, tc_viewport_handle vp) {
-        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-        tc_component* cam_comp = tc_render_target_get_camera(rt);
-        if (!cam_comp)
+        if (!tc_viewport_handle_valid(vp)) {
+            tc_log(TC_LOG_WARN, "[EditorInteractionSystem] cannot construct screen ray: viewport is invalid");
             return std::nullopt;
+        }
+
+        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+        if (!tc_render_target_handle_valid(rt)) {
+            tc_log(TC_LOG_WARN,
+                   "[EditorInteractionSystem] cannot construct screen ray: viewport has no live render target");
+            return std::nullopt;
+        }
+        tc_component* cam_comp = tc_render_target_get_camera(rt);
+        if (!cam_comp) {
+            tc_log(TC_LOG_WARN, "[EditorInteractionSystem] cannot construct screen ray: render target has no camera");
+            return std::nullopt;
+        }
 
         CxxComponent* cxx = CxxComponent::from_tc(cam_comp);
-        if (!cxx)
+        if (!cxx) {
+            const char* type_name = tc_component_type_name(cam_comp);
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] cannot construct screen ray: camera component '%s' is not native C++",
+                   type_name ? type_name : "<unnamed>");
             return std::nullopt;
+        }
 
-        auto* camera = static_cast<CameraComponent*>(cxx);
+        auto* camera = dynamic_cast<CameraComponent*>(cxx);
+        if (!camera) {
+            const char* type_name = tc_component_type_name(cam_comp);
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] cannot construct screen ray: native component '%s' is not a "
+                   "CameraComponent",
+                   type_name ? type_name : "<unnamed>");
+            return std::nullopt;
+        }
 
         int vp_x, vp_y, vp_w, vp_h;
         tc_viewport_get_pixel_rect(vp, &vp_x, &vp_y, &vp_w, &vp_h);
 
-        return camera->screen_point_to_ray(screen.x, screen.y, vp_x, vp_y, vp_w, vp_h);
+        const Rect2 viewport{
+            static_cast<double>(vp_x), static_cast<double>(vp_y), static_cast<double>(vp_w), static_cast<double>(vp_h)};
+        return camera->try_screen_point_to_ray(screen.to_double(), viewport);
     }
 
     // ============================================================================

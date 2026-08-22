@@ -279,6 +279,9 @@ namespace termin {
         event.platform_services = &_tc_im.platform_services;
         _dispatch_to_internal_entities(&event);
         _dispatch_to_editor_components(&event);
+        if (auto* sys = EditorInteractionSystem::instance()) {
+            sys->on_focus_lost();
+        }
         _has_cursor = false;
         _current_mods = 0;
     }

@@ -169,7 +169,9 @@ static tc_ui_event_result dispatch_pointer_route(tc_ui_document* document,
                                                  tc_widget_handle target,
                                                  const tc_ui_pointer_event* event,
                                                  tc_widget_handle* out_handler) {
+    tc_ui_document_handle document_handle;
     tc_widget_handle* route = NULL;
+    uint64_t route_revision;
     size_t count = 0;
     size_t index;
     tc_ui_event_result result = TC_UI_EVENT_IGNORED;
@@ -177,6 +179,8 @@ static tc_ui_event_result dispatch_pointer_route(tc_ui_document* document,
     if (out_handler) {
         *out_handler = tc_widget_handle_invalid();
     }
+    document_handle = document->handle;
+    route_revision = document->pointer_interaction_revision;
     if (!snapshot_route(document, target, &route, &count)) {
         return TC_UI_EVENT_IGNORED;
     }
@@ -186,6 +190,13 @@ static tc_ui_event_result dispatch_pointer_route(tc_ui_document* document,
             if (out_handler) {
                 *out_handler = route[index];
             }
+            break;
+        }
+        document = tc_ui_internal_resolve_document(document_handle);
+        if (!document || document->pointer_interaction_revision != route_revision) {
+            // A child callback cancelled the sequence or detached part of the
+            // snapshotted route. Do not bubble the stale event into ancestors.
+            result = TC_UI_EVENT_HANDLED;
             break;
         }
     }
@@ -990,6 +1001,7 @@ tc_ui_event_result tc_ui_document_dispatch_pointer_event(tc_ui_document_handle d
     tc_widget_handle hit;
     tc_widget_handle target;
     tc_widget_handle handler = tc_widget_handle_invalid();
+    uint64_t route_pointer_revision;
     tc_ui_event_result result;
     tc_ui_document* document =
         tc_ui_internal_resolve_document_checked(document_handle, "tc_ui_document_dispatch_pointer_event");
@@ -999,6 +1011,12 @@ tc_ui_event_result tc_ui_document_dispatch_pointer_event(tc_ui_document_handle d
     }
     document->last_pointer_event = *event;
     document->has_pointer_event = true;
+    if (event->type == TC_UI_POINTER_DOWN || event->type == TC_UI_POINTER_UP) {
+        // A nested terminal event or a new Down supersedes any outer Down
+        // whose route callback has not returned yet.
+        tc_ui_internal_advance_pointer_interaction_revision(document);
+    }
+    route_pointer_revision = document->pointer_interaction_revision;
     if (event->type == TC_UI_POINTER_CANCEL) {
         return tc_ui_internal_cancel_pointer_state(document, true, true, event->cancel_reason) ? TC_UI_EVENT_HANDLED
                                                                                                : TC_UI_EVENT_IGNORED;
@@ -1007,12 +1025,24 @@ tc_ui_event_result tc_ui_document_dispatch_pointer_event(tc_ui_document_handle d
     hit_resolution = event->type == TC_UI_POINTER_LEAVE
                          ? (tc_ui_hit_resolution){tc_widget_handle_invalid(), tc_widget_handle_invalid(), false, false}
                          : resolve_document_hit(document, event->x, event->y, event->type == TC_UI_POINTER_DOWN);
+    document = tc_ui_internal_resolve_document(document_handle);
+    if (!document || document->pointer_interaction_revision != route_pointer_revision) {
+        return TC_UI_EVENT_HANDLED;
+    }
     hit = hit_resolution.target;
     tc_ui_internal_update_hover(document, hit, event);
+    document = tc_ui_internal_resolve_document(document_handle);
+    if (!document || document->pointer_interaction_revision != route_pointer_revision) {
+        return TC_UI_EVENT_HANDLED;
+    }
     if (event->type == TC_UI_POINTER_DOWN) {
         document->pressed_widget = tc_widget_handle_invalid();
         if (!hit_resolution.blocked) {
             focus_from_pointer_target(document, hit);
+        }
+        document = tc_ui_internal_resolve_document(document_handle);
+        if (!document || document->pointer_interaction_revision != route_pointer_revision) {
+            return TC_UI_EVENT_HANDLED;
         }
     }
     if (hit_resolution.dismissed) {
@@ -1045,9 +1075,11 @@ tc_ui_event_result tc_ui_document_dispatch_pointer_event(tc_ui_document_handle d
         }
     }
     result = dispatch_pointer_route(document, target, event, &handler);
-    if (event->type == TC_UI_POINTER_DOWN && result == TC_UI_EVENT_HANDLED &&
-        tc_ui_document_is_alive(document->handle, handler)) {
-        tc_widget* handled_widget = tc_ui_document_resolve_widget(document->handle, handler);
+    document = tc_ui_internal_resolve_document(document_handle);
+    if (document && event->type == TC_UI_POINTER_DOWN && result == TC_UI_EVENT_HANDLED &&
+        document->pointer_interaction_revision == route_pointer_revision &&
+        tc_ui_document_is_alive(document_handle, handler)) {
+        tc_widget* handled_widget = tc_ui_document_resolve_widget(document_handle, handler);
         if (tc_ui_internal_widget_effectively_interactive(handled_widget)) {
             document->pressed_widget = handler;
         }

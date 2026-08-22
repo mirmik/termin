@@ -10,6 +10,7 @@ from tcbase import log
 from termin.csg.document_raycast import ray_plane_intersection
 from termin.csg.procedural_document import OPERATION_KIND_WALL, ProceduralMeshDocument, Vec2Data, Vec3Data
 from termin.csg.wall_height_offsets import MIN_WALL_CORNER_HEIGHT, wall_effective_corner_heights
+from termin.geombase import Ray3, Vec3
 
 
 DEFAULT_SKETCH_POINT_HIT_RADIUS_PX = 14.0
@@ -98,8 +99,7 @@ def pick_selected_wall_height_point(
 def drag_point_to_ray(
     document: ProceduralMeshDocument,
     drag: SketchPointDrag,
-    ray_origin: Vec3Data,
-    ray_direction: Vec3Data,
+    ray: Ray3,
 ) -> Vec2Data | None:
     point_ref = sketch_point_ref_by_drag(document, drag)
     if point_ref is None:
@@ -109,7 +109,7 @@ def drag_point_to_ray(
         )
         return None
     sketch = point_ref[0]
-    point = ray_plane_intersection(ray_origin, ray_direction, sketch.plane)
+    point = ray_plane_intersection(ray, sketch.plane)
     if point is None:
         log.error(
             "[CsgSketchPointInteraction] cannot drag sketch point: "
@@ -121,16 +121,21 @@ def drag_point_to_ray(
 
 def drag_wall_height_offset_to_ray(
     drag: WallHeightDrag,
-    ray_origin: Vec3Data,
-    ray_direction: Vec3Data,
-) -> float:
+    ray: Ray3,
+) -> float | None:
     height = _closest_height_on_line(
         drag.base_point,
         drag.normal,
-        ray_origin,
-        ray_direction,
+        ray,
         drag.effective_height,
     )
+    if height is None:
+        log.error(
+            "[CsgSketchPointInteraction] cannot drag wall height: "
+            f"invalid ray or handle geometry operation='{drag.operation_id}' "
+            f"source='{drag.source_id}' index={drag.point_index}"
+        )
+        return None
     height = max(MIN_WALL_CORNER_HEIGHT, height)
     return height - drag.base_height
 
@@ -274,20 +279,21 @@ def sketch_point_ref_by_drag(document: ProceduralMeshDocument, drag: SketchPoint
 def _closest_height_on_line(
     base_point: Vec3Data,
     normal: Vec3Data,
-    ray_origin: Vec3Data,
-    ray_direction: Vec3Data,
+    ray: Ray3,
     fallback_height: float,
-) -> float:
-    ux, uy, uz = ray_direction
-    vx, vy, vz = normal
-    wx = ray_origin[0] - base_point[0]
-    wy = ray_origin[1] - base_point[1]
-    wz = ray_origin[2] - base_point[2]
-    a = ux * ux + uy * uy + uz * uz
-    b = ux * vx + uy * vy + uz * vz
-    c = vx * vx + vy * vy + vz * vz
-    d = ux * wx + uy * wy + uz * wz
-    e = vx * wx + vy * wy + vz * wz
+) -> float | None:
+    direction = ray.direction.try_normalized()
+    axis = Vec3(normal).try_normalized()
+    base = Vec3(base_point)
+    if direction is None or axis is None or not ray.origin.is_finite() or not base.is_finite():
+        return None
+
+    offset = ray.origin - base
+    a = direction.dot(direction)
+    b = direction.dot(axis)
+    c = axis.dot(axis)
+    d = direction.dot(offset)
+    e = axis.dot(offset)
     denom = a * c - b * b
     if abs(denom) < 1.0e-9:
         return float(fallback_height)

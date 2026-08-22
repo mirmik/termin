@@ -44,8 +44,11 @@ namespace termin::visual {
         const auto handler = target_pointer_handlers_.find(key_(event.target));
         if (handler == target_pointer_handlers_.end())
             return false;
+        // The callback may rebuild the interaction and remove its own map
+        // entry. Keep the callable alive independently of that mutation.
+        TargetPointerHandler callback = handler->second;
         try {
-            handler->second(event);
+            callback(event);
         } catch (const std::exception& error) {
             tc::Log::error("SceneInteraction3D target pointer callback failed: %s", error.what());
             return true;
@@ -56,38 +59,56 @@ namespace termin::visual {
         return false;
     }
 
-    void SceneInteraction3D::reconcile_(const TcVisualScene3D& scene,
+    bool SceneInteraction3D::reconcile_(const TcVisualScene3D& scene,
                                         const PointerEvent3D& event,
-                                        PointerDispatch3D& result) {
+                                        PointerDispatch3D& result,
+                                        std::uint64_t route_revision) {
         const auto invalid = [&](VisualItem3DHandle handle) {
             const auto* item = scene.resolve(handle);
             return item == nullptr || !scene.effective_visible(*item) || !scene.effective_enabled(*item);
         };
-        const auto hovered = hovered_.find(event.pointer);
-        if (hovered != hovered_.end() && invalid(hovered->second.item)) {
-            result.callback_failed |= dispatch_target_({TargetPointerEventKind3D::Leave,
-                                                        event,
-                                                        hovered->second.item,
-                                                        hovered->second.part,
-                                                        std::nullopt,
-                                                        false});
-            hovered_.erase(hovered);
-        }
-        const auto captured = captured_.find(event.pointer);
-        if (captured != captured_.end() && invalid(captured->second.item)) {
-            result.callback_failed |= dispatch_target_({TargetPointerEventKind3D::Cancel,
-                                                        event,
-                                                        captured->second.item,
-                                                        captured->second.part,
-                                                        std::nullopt,
-                                                        true});
-            captured_.erase(captured);
+        const auto hovered = hit_(hovered_, event.pointer);
+        const auto captured = hit_(captured_, event.pointer);
+        const bool invalidate_hovered = hovered && invalid(hovered->item);
+        const bool invalidate_captured = captured && invalid(captured->item);
+        if (invalidate_hovered)
+            hovered_.erase(event.pointer);
+        if (invalidate_captured) {
+            captured_.erase(event.pointer);
             pressed_.erase(event.pointer);
+            sequence_buttons_.erase(event.pointer);
         } else {
-            std::erase_if(pressed_, [&](const auto& pair) {
-                return pair.first == event.pointer && invalid(pair.second.item);
-            });
+            std::erase_if(pressed_,
+                          [&](const auto& pair) { return pair.first == event.pointer && invalid(pair.second.item); });
         }
+
+        bool invalidated = false;
+        if (invalidate_hovered) {
+            result.callback_failed |= dispatch_target_(
+                {TargetPointerEventKind3D::Leave, event, hovered->item, hovered->part, std::nullopt, false});
+            invalidated = state_revision_ != route_revision;
+        }
+        if (invalidate_captured) {
+            result.callback_failed |= dispatch_target_(
+                {TargetPointerEventKind3D::Cancel, event, captured->item, captured->part, std::nullopt, true});
+            invalidated = invalidated || state_revision_ != route_revision;
+        }
+        if (invalidate_captured) {
+            // Invalid capture terminates this pointer sequence. The Cancel
+            // callback may try to capture another item (or route a nested
+            // Down), but the original event must neither use nor retain that
+            // newly published ownership.
+            if (invalidate_hovered)
+                hovered_.erase(event.pointer);
+            pressed_.erase(event.pointer);
+            captured_.erase(event.pointer);
+            last_events_.erase(event.pointer);
+            sequence_buttons_.erase(event.pointer);
+            ++state_revision_;
+            return false;
+        }
+        if (invalidated)
+            return false;
         // Handlers intentionally survive until invalid targets have received
         // their final leave/cancel notification above.
         std::erase_if(target_pointer_handlers_, [&](const auto& pair) {
@@ -98,13 +119,28 @@ namespace termin::visual {
             return scene.resolve(VisualItem3DHandle{pair.first.scene_id, pair.first.index, pair.first.generation}) ==
                    nullptr;
         });
+        return true;
     }
 
     PointerDispatch3D SceneInteraction3D::route(const TcVisualScene3D& scene, const PointerEvent3D& event) {
         PointerDispatch3D result;
-        result.event = event;
-        last_events_[event.pointer] = event;
-        reconcile_(scene, event, result);
+        PointerEvent3D routed_event = event;
+        if (event.kind == PointerEventKind3D::Cancel) {
+            const auto sequence_button = sequence_buttons_.find(event.pointer);
+            if (sequence_button != sequence_buttons_.end())
+                routed_event.button = sequence_button->second;
+        }
+        // Each route owns an epoch. A callback that routes another event must
+        // make the nested route authoritative and stop the outer event from
+        // publishing or dispatching its stale continuation.
+        const std::uint64_t route_revision = ++state_revision_;
+        bool terminal_callback_invalidated_route = false;
+        result.event = routed_event;
+        last_events_[event.pointer] = routed_event;
+        if (!reconcile_(scene, routed_event, result, route_revision))
+            return result;
+        if (event.kind == PointerEventKind3D::Down)
+            sequence_buttons_[event.pointer] = event.button;
         if (event.kind != PointerEventKind3D::Cancel)
             result.hit = hit_test(scene, event.world_ray);
         const auto previous_hover = hit_(hovered_, event.pointer);
@@ -113,32 +149,35 @@ namespace termin::visual {
                                 previous_hover->part == result.hit->part;
         if (event.kind != PointerEventKind3D::Cancel && !same_hover) {
             if (previous_hover) {
+                // The previous owner is gone before Leave runs. Reentrant
+                // cancellation must not deliver a duplicate Leave.
+                hovered_.erase(event.pointer);
                 result.callback_failed |= dispatch_target_({TargetPointerEventKind3D::Leave,
                                                             event,
                                                             previous_hover->item,
                                                             previous_hover->part,
                                                             result.hit,
                                                             false});
+                if (state_revision_ != route_revision)
+                    return result;
             }
             if (result.hit) {
+                // Conversely, Enter is published before user code so a
+                // reentrant replacement can balance it with one final Leave.
+                hovered_[event.pointer] = *result.hit;
                 result.callback_failed |= dispatch_target_({TargetPointerEventKind3D::Enter,
                                                             event,
                                                             result.hit->item,
                                                             result.hit->part,
                                                             result.hit,
                                                             false});
+                if (state_revision_ != route_revision)
+                    return result;
             }
-        }
-        // Cancel needs the previous hover below in order to deliver its final
-        // Leave notification. Other event kinds publish the newly hit target.
-        if (event.kind != PointerEventKind3D::Cancel) {
-            if (result.hit)
-                hovered_[event.pointer] = *result.hit;
-            else
-                hovered_.erase(event.pointer);
+        } else if (event.kind != PointerEventKind3D::Cancel && result.hit) {
+            hovered_[event.pointer] = *result.hit;
         }
 
-        ActionHandler action_handler;
         if (event.kind == PointerEventKind3D::Down) {
             if (result.hit) {
                 pressed_[event.pointer] = *result.hit;
@@ -150,6 +189,8 @@ namespace termin::visual {
                                                             result.hit->part,
                                                             result.hit,
                                                             true});
+                if (state_revision_ != route_revision)
+                    return result;
             }
         } else if (event.kind == PointerEventKind3D::Move) {
             const auto capture = hit_(captured_, event.pointer);
@@ -164,6 +205,8 @@ namespace termin::visual {
                                                             target_hit->part,
                                                             result.hit,
                                                             capture.has_value()});
+                if (state_revision_ != route_revision)
+                    return result;
             }
         } else if (event.kind == PointerEventKind3D::Up) {
             const auto capture = hit_(captured_, event.pointer);
@@ -171,6 +214,17 @@ namespace termin::visual {
             if (!valid_handle(result.target) && result.hit)
                 result.target = result.hit->item;
             const auto target_hit = capture ? capture : result.hit;
+            const auto pressed = pressed_.find(event.pointer);
+            if (pressed != pressed_.end() && result.hit && same_handle(pressed->second.item, result.hit->item) &&
+                pressed->second.part == result.hit->part) {
+                result.action = ActionEvent3D{pressed->second.item, event.pointer, pressed->second.part, "activate"};
+            }
+            pressed_.erase(event.pointer);
+            captured_.erase(event.pointer);
+            sequence_buttons_.erase(event.pointer);
+            // Up is terminal before user code runs. A callback may replace
+            // the scene, but that must not turn an already delivered Up into a
+            // second terminal Cancel.
             if (target_hit) {
                 result.callback_failed |= dispatch_target_({TargetPointerEventKind3D::Up,
                                                             event,
@@ -178,51 +232,80 @@ namespace termin::visual {
                                                             target_hit->part,
                                                             result.hit,
                                                             capture.has_value()});
+                // The terminal Up owns the release even if the callback
+                // attempts to revive the same sequence through capture() or a
+                // nested Down.
+                pressed_.erase(event.pointer);
+                captured_.erase(event.pointer);
+                sequence_buttons_.erase(event.pointer);
+                if (state_revision_ != route_revision)
+                    return result;
             }
-            const auto pressed = pressed_.find(event.pointer);
-            if (pressed != pressed_.end() && result.hit && same_handle(pressed->second.item, result.hit->item) &&
-                pressed->second.part == result.hit->part) {
-                result.action = ActionEvent3D{pressed->second.item, event.pointer, pressed->second.part, "activate"};
-                const auto handler = action_handlers_.find(key_(pressed->second.item));
-                if (handler != action_handlers_.end()) {
-                    action_handler = handler->second;
-                }
-            }
-            pressed_.erase(event.pointer);
-            captured_.erase(event.pointer);
         } else {
             const auto capture = hit_(captured_, event.pointer);
+            const auto pressed = hit_(pressed_, event.pointer);
+            const auto hover = hit_(hovered_, event.pointer);
             result.target = capture ? capture->item : tc_visual_item3d_handle_invalid();
             if (!valid_handle(result.target)) {
-                result.target = hit_handle_(pressed_, event.pointer);
+                result.target = pressed ? pressed->item : tc_visual_item3d_handle_invalid();
             }
-            const auto target_hit = capture ? capture : hit_(pressed_, event.pointer);
+            const auto target_hit = capture ? capture : pressed;
+            // Cancel is terminal before either callback. Reentrant global
+            // cancellation observes empty maps and cannot notify the same
+            // owners recursively.
+            hovered_.erase(event.pointer);
+            pressed_.erase(event.pointer);
+            captured_.erase(event.pointer);
+            last_events_.erase(event.pointer);
+            sequence_buttons_.erase(event.pointer);
             if (target_hit) {
                 result.callback_failed |= dispatch_target_({TargetPointerEventKind3D::Cancel,
-                                                            event,
+                                                            routed_event,
                                                             target_hit->item,
                                                             target_hit->part,
                                                             result.hit,
                                                             capture.has_value()});
+                terminal_callback_invalidated_route = state_revision_ != route_revision;
             }
-            const auto hover = hit_(hovered_, event.pointer);
             if (hover) {
-                result.callback_failed |= dispatch_target_({TargetPointerEventKind3D::Leave,
-                                                            event,
-                                                            hover->item,
-                                                            hover->part,
-                                                            std::nullopt,
-                                                            false});
+                result.callback_failed |= dispatch_target_(
+                    {TargetPointerEventKind3D::Leave, routed_event, hover->item, hover->part, std::nullopt, false});
+                terminal_callback_invalidated_route =
+                    terminal_callback_invalidated_route || state_revision_ != route_revision;
             }
+            // Terminal callbacks cannot reacquire this pointer into the just
+            // cancelled sequence. Preserve other pointer ids.
             hovered_.erase(event.pointer);
             pressed_.erase(event.pointer);
             captured_.erase(event.pointer);
+            last_events_.erase(event.pointer);
+            sequence_buttons_.erase(event.pointer);
         }
 
         result.hovered = hit_handle_(hovered_, event.pointer);
         result.pressed = hit_handle_(pressed_, event.pointer);
         result.captured = hit_handle_(captured_, event.pointer);
         result.used_fallback = !valid_handle(result.target);
+        if (terminal_callback_invalidated_route) {
+            ++state_revision_;
+            return result;
+        }
+        ActionHandler action_handler;
+        if (result.action) {
+            const auto* action_target = scene.resolve(result.action->target);
+            if (action_target != nullptr && scene.effective_visible(*action_target) &&
+                scene.effective_enabled(*action_target)) {
+                const auto handler = action_handlers_.find(key_(result.action->target));
+                if (handler != action_handlers_.end()) {
+                    // Resolve the handler after Up. The Up callback may have
+                    // torn down its controller and cleared/replaced the
+                    // action handler; retaining the pre-Up callable would
+                    // revive stale ownership and can dereference destroyed
+                    // captures.
+                    action_handler = handler->second;
+                }
+            }
+        }
         if (result.action && action_handler) {
             try {
                 action_handler(*result.action);
@@ -233,10 +316,14 @@ namespace termin::visual {
                 tc::Log::error("SceneInteraction3D action callback failed with an unknown exception");
                 result.callback_failed = true;
             }
+            if (state_revision_ != route_revision)
+                return result;
         }
         if (result.used_fallback && fallback_handler_) {
+            // The fallback can replace/clear itself reentrantly.
+            FallbackHandler fallback = fallback_handler_;
             try {
-                fallback_handler_(event);
+                fallback(routed_event);
             } catch (const std::exception& error) {
                 tc::Log::error("SceneInteraction3D fallback callback failed: %s", error.what());
                 result.callback_failed = true;
@@ -244,6 +331,18 @@ namespace termin::visual {
                 tc::Log::error("SceneInteraction3D fallback callback failed with an unknown exception");
                 result.callback_failed = true;
             }
+            if (event.kind != PointerEventKind3D::Cancel && state_revision_ != route_revision)
+                return result;
+        }
+        if (event.kind == PointerEventKind3D::Cancel) {
+            // A fallback Cancel is terminal too: nested routing or capture
+            // from that callback cannot revive the cancelled pointer.
+            hovered_.erase(event.pointer);
+            pressed_.erase(event.pointer);
+            captured_.erase(event.pointer);
+            last_events_.erase(event.pointer);
+            sequence_buttons_.erase(event.pointer);
+            ++state_revision_;
         }
         return result;
     }
@@ -265,25 +364,60 @@ namespace termin::visual {
     }
 
     void SceneInteraction3D::cancel_all() {
+        ++state_revision_;
         hovered_.clear();
         pressed_.clear();
         captured_.clear();
         last_events_.clear();
+        sequence_buttons_.clear();
     }
 
     bool SceneInteraction3D::cancel_all(const TcVisualScene3D& scene) {
         bool callback_failed = false;
         const auto events = last_events_;
-        FallbackHandler fallback = std::move(fallback_handler_);
-        fallback_handler_ = {};
+        const auto hovered = hovered_;
+        const auto pressed = pressed_;
+        const auto captured = captured_;
+        const auto sequence_buttons = sequence_buttons_;
+        (void)scene;
+
+        // Publish cancellation before invoking user code. A callback may
+        // destroy the old borrowed scene or request another cancellation; it
+        // must observe empty state and must not receive the same Cancel
+        // recursively.
+        cancel_all();
         for (const auto& [pointer, previous] : events) {
-            if (!hovered_.contains(pointer) && !pressed_.contains(pointer) && !captured_.contains(pointer))
+            const auto hovered_hit = hit_(hovered, pointer);
+            const auto pressed_hit = hit_(pressed, pointer);
+            const auto captured_hit = hit_(captured, pointer);
+            const auto target_hit = captured_hit ? captured_hit : pressed_hit;
+            if (!hovered_hit && !target_hit)
                 continue;
             PointerEvent3D cancel = previous;
             cancel.kind = PointerEventKind3D::Cancel;
-            callback_failed |= route(scene, cancel).callback_failed;
+            const auto sequence_button = sequence_buttons.find(pointer);
+            if (sequence_button != sequence_buttons.end())
+                cancel.button = sequence_button->second;
+            if (target_hit) {
+                callback_failed |= dispatch_target_({TargetPointerEventKind3D::Cancel,
+                                                     cancel,
+                                                     target_hit->item,
+                                                     target_hit->part,
+                                                     std::nullopt,
+                                                     captured_hit.has_value()});
+            }
+            if (hovered_hit) {
+                callback_failed |= dispatch_target_({TargetPointerEventKind3D::Leave,
+                                                     cancel,
+                                                     hovered_hit->item,
+                                                     hovered_hit->part,
+                                                     std::nullopt,
+                                                     false});
+            }
         }
-        fallback_handler_ = std::move(fallback);
+        // A terminal callback may route a nested Down or call capture(). The
+        // global cancellation postcondition still requires completely empty
+        // interaction state when this function returns.
         cancel_all();
         return callback_failed;
     }

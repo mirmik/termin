@@ -11,6 +11,8 @@
 #include "termin/editor/selection_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
 #include "termin/input/input_events.hpp"
+#include <termin/camera/screen_ray.hpp>
+#include <termin/geom/affine3.hpp>
 #include <termin/geom/general_pose3.hpp>
 #include <termin/geom/ray3.hpp>
 #include <termin/geom/vec2.hpp>
@@ -23,7 +25,12 @@
 #include <string>
 #include <vector>
 
+struct tc_mesh_hit;
+struct tc_mesh_ray;
+
 namespace termin {
+
+    struct EditorInteractionSystemTestAccess;
 
     struct SurfacePickResult {
         Entity entity;
@@ -56,6 +63,8 @@ namespace termin {
     };
 
     class EditorInteractionSystem {
+        friend struct EditorInteractionSystemTestAccess;
+
     public:
         // Shared state
         SelectionManager selection;
@@ -69,6 +78,15 @@ namespace termin {
 
     private:
         EditorOverlayScene3D _overlay_scene;
+        // A failed ray invalidates an active overlay capture immediately, but
+        // the rest of that physical pointer sequence still belongs to the
+        // overlay. Suppress it until Up so ordinary viewport handlers never
+        // receive an unmatched Move/Up.
+        bool _overlay_pointer_cancelled_until_up = false;
+        // A gizmo-target transition may be reentered by an overlay callback.
+        // The newest transition owns the retained visuals; older callers stop
+        // when their revision no longer matches.
+        std::uint64_t _overlay_transition_revision = 0;
         TransformGizmo _transform_gizmo;
         visual::VisualItem3DHandle _transform_gizmo_visual = tc_visual_item3d_handle_invalid();
         std::vector<visual::VisualItem3DHandle> _component_visual_items;
@@ -171,6 +189,7 @@ namespace termin {
                              tc_viewport_handle vp,
                              tc_display_handle display);
         void on_mouse_move(float x, float y, float dx, float dy, tc_viewport_handle vp, tc_display_handle display);
+        void on_focus_lost();
 
     private:
         void _process_pending_press();
@@ -188,12 +207,28 @@ namespace termin {
         void _rebuild_component_visual_gizmos(Entity entity);
         void _clear_component_visual_gizmos();
         void _destroy_transform_gizmo_visual();
+        void _cancel_overlay_pointer_state(bool quarantine_active_sequence, const char* context);
         bool _snap_transform_gizmo_target(Vec2f cursor, tc_viewport_handle viewport, tc_display_handle display);
 
         bool _window_to_fbo_coords(Vec2f screen, tc_viewport_handle vp, tc_display_handle display, Vec2i& fbo);
         Entity _entity_from_pick_color(const float color[4], tc_viewport_handle viewport);
         SurfacePickResult
         _surface_from_pick_color_depth(const float color[4], float depth, Vec2i fbo, tc_viewport_handle viewport);
+        static bool _try_populate_surface_projection(SurfacePickResult& result,
+                                                     const Mat44& projection,
+                                                     const Mat44& view,
+                                                     const Vec2& pixel_center,
+                                                     double depth,
+                                                     const Rect2& framebuffer_rect,
+                                                     ScreenRayError* error);
+        static bool _try_build_surface_mesh_ray(const Ray3& world_ray,
+                                                const Affine3d& entity_affine,
+                                                const Mat44f& mesh_offset,
+                                                tc_mesh_ray& ray);
+        static bool _try_apply_surface_mesh_hit(SurfacePickResult& result,
+                                                const tc_mesh_hit& hit,
+                                                const Mat44f& mesh_offset,
+                                                const Affine3d& entity_affine);
 
         // Get ray from screen coordinates
         std::optional<Ray3> _screen_to_ray(Vec2f screen, tc_viewport_handle vp);

@@ -323,12 +323,11 @@ class StandaloneCsgModel:
     def scene_click(self, x: float, y: float, width: int, height: int) -> bool:
         if self.controller.mode != "draw_sketch":
             return False
-        ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
+        ray = self.camera.screen_ray(x, y, width, height)
         fallback_point = self.camera.world_point_on_z_plane(x, y, width, height, 0.0)
         return self.apply_result(
             self.controller.add_draft_point_from_ray(
-                ray_origin,
-                ray_direction,
+                ray,
                 fallback_point=fallback_point,
                 fallback_plane=ProceduralPlane(),
                 fallback_kind="oxy",
@@ -339,8 +338,8 @@ class StandaloneCsgModel:
         drag = self._sketch_point_drag
         if drag is None:
             return False
-        ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
-        local_point = drag_point_to_ray(self.controller.document, drag, ray_origin, ray_direction)
+        ray = self.camera.screen_ray(x, y, width, height)
+        local_point = drag_point_to_ray(self.controller.document, drag, ray)
         if local_point is None:
             return True
         if drag.kind == "contour":
@@ -359,8 +358,11 @@ class StandaloneCsgModel:
         drag = self._wall_height_drag
         if drag is None:
             return False
-        ray_origin, ray_direction = self.camera.screen_ray(x, y, width, height)
-        offset = drag_wall_height_offset_to_ray(drag, ray_origin, ray_direction)
+        ray = self.camera.screen_ray(x, y, width, height)
+        offset = drag_wall_height_offset_to_ray(drag, ray)
+        if offset is None:
+            log.error("[CsgCad] cannot drag wall height: camera ray is invalid")
+            return True
         result = self.controller.set_wall_corner_offset(
             drag.operation_id,
             drag.source_id,

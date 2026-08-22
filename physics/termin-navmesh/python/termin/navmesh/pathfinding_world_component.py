@@ -12,7 +12,7 @@ import numpy as np
 from tcbase import log
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
-from termin.geombase import Mat44, Vec3
+from termin.geombase import Affine3d, Rect2, Vec2, Vec3
 from termin.navmesh.pathfinding import (
     RegionGraph,
     NavMeshGraph,
@@ -33,12 +33,38 @@ def _rebuild_graph_action(component: "PathfindingWorldComponent") -> None:
     component.rebuild()
 
 
-def _entity_affine_matrix(entity: "Entity") -> Mat44:
-    return entity.transform.global_affine().as_mat44()
+def _entity_affine(entity: "Entity") -> Affine3d:
+    return entity.transform.global_affine()
+
+
+def _try_world_to_local_point(
+    affine: Affine3d,
+    point: np.ndarray,
+    *,
+    operation: str,
+    region_id: int,
+) -> np.ndarray | None:
+    world_point = Vec3(point)
+    if not world_point.is_finite():
+        log.error(f"[PathfindingWorld] {operation}: region {region_id} received a non-finite world point; skipping region")
+        return None
+
+    if not affine.is_finite():
+        log.error(f"[PathfindingWorld] {operation}: region {region_id} has a non-finite world affine; skipping region")
+        return None
+
+    local_point = affine.try_inverse_transform_point(world_point)
+    if local_point is None:
+        log.error(f"[PathfindingWorld] {operation}: region {region_id} has a singular world affine; skipping region")
+        return None
+    if not local_point.is_finite():
+        log.error(f"[PathfindingWorld] {operation}: region {region_id} produced a non-finite local point; skipping region")
+        return None
+    return _vec3_to_array(local_point)
 
 
 def _vec3_to_array(value: Vec3) -> np.ndarray:
-    return np.array([value.x, value.y, value.z], dtype=np.float32)
+    return np.asarray(value, dtype=np.float64)
 
 
 class PathfindingWorldComponent(PythonComponent):
@@ -196,7 +222,9 @@ class PathfindingWorldComponent(PythonComponent):
         for navmesh, entity in entries:
             self._navmesh_sources.append((navmesh, entity))
 
-        log.warning(f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMesh for agent '{self.agent_type_name}'")
+        log.warning(
+            f"[PathfindingWorld] collected {len(self._navmesh_sources)} NavMesh for agent '{self.agent_type_name}'"
+        )
 
     def _build_graph(self) -> None:
         """Построить NavMeshGraph из собранных NavMesh."""
@@ -331,11 +359,14 @@ class PathfindingWorldComponent(PythonComponent):
         # Конвертируем воксели в мировые координаты
         world_coords = []
         for vx, vy, vz in voxels:
-            world_pos = np.array([
-                origin[0] + vx * cell_size + cell_size * 0.5,
-                origin[1] + vy * cell_size + cell_size * 0.5,
-                origin[2] + vz * cell_size + cell_size * 0.5,
-            ], dtype=np.float32)
+            world_pos = np.array(
+                [
+                    origin[0] + vx * cell_size + cell_size * 0.5,
+                    origin[1] + vy * cell_size + cell_size * 0.5,
+                    origin[2] + vz * cell_size + cell_size * 0.5,
+                ],
+                dtype=np.float32,
+            )
             world_coords.append(world_pos)
 
         # Вычисляем центр портала
@@ -431,14 +462,10 @@ class PathfindingWorldComponent(PythonComponent):
 
         # Межрегиональный путь
         if start_region != end_region:
-            return self._find_cross_region_path(
-                start, end, start_region, end_region, start_tri_idx, end_tri_idx
-            )
+            return self._find_cross_region_path(start, end, start_region, end_region, start_tri_idx, end_tri_idx)
 
         # Путь внутри одного региона
-        return self._find_single_region_path(
-            start, end, start_region, start_tri_idx, end_tri_idx
-        )
+        return self._find_single_region_path(start, end, start_region, start_tri_idx, end_tri_idx)
 
     def _find_single_region_path(
         self,
@@ -453,21 +480,29 @@ class PathfindingWorldComponent(PythonComponent):
 
         # Получаем entity для трансформации
         entity = self._region_entities.get(region_id)
-        transform = _entity_affine_matrix(entity) if entity else None
-        inverse = transform.inverse() if transform is not None else None
-
-        # Трансформируем start/end в локальные координаты
-        if inverse is not None:
-            local_start = self._transform_point(start, inverse)
-            local_end = self._transform_point(end, inverse)
+        transform = _entity_affine(entity) if entity else None
+        if transform is not None:
+            local_start = _try_world_to_local_point(
+                transform,
+                start,
+                operation="find path start",
+                region_id=region_id,
+            )
+            local_end = _try_world_to_local_point(
+                transform,
+                end,
+                operation="find path end",
+                region_id=region_id,
+            )
+            if local_start is None or local_end is None:
+                return None
         else:
             local_start = start.copy()
             local_end = end.copy()
 
         # Быстрая проверка: прямая видимость?
         if self.skip_astar_if_los and navmesh_line_of_sight(
-            local_start, local_end, start_tri_idx,
-            region.triangles, region.vertices, region.neighbors
+            local_start, local_end, start_tri_idx, region.triangles, region.vertices, region.neighbors
         ):
             # log.debug("[PathfindingWorld] direct LOS, skipping A*")
             return self._transform_path_to_world([local_start, local_end], transform)
@@ -476,16 +511,26 @@ class PathfindingWorldComponent(PythonComponent):
             path_indices = [start_tri_idx]
         else:
             from termin.navmesh.pathfinding import astar_triangles
+
             if self.use_edge_centers:
                 path_indices = astar_triangles(
-                    start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
-                    region.triangles, region.vertices,
-                    start_pos=local_start, end_pos=local_end
+                    start_tri_idx,
+                    end_tri_idx,
+                    region.neighbors,
+                    region.centroids,
+                    region.triangles,
+                    region.vertices,
+                    start_pos=local_start,
+                    end_pos=local_end,
                 )
             else:
                 path_indices = astar_triangles(
-                    start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
-                    start_pos=local_start, end_pos=local_end
+                    start_tri_idx,
+                    end_tri_idx,
+                    region.neighbors,
+                    region.centroids,
+                    start_pos=local_start,
+                    end_pos=local_end,
                 )
             if path_indices is None:
                 return None
@@ -495,9 +540,7 @@ class PathfindingWorldComponent(PythonComponent):
         # Строим путь в зависимости от настроек
         if self.use_funnel:
             # Funnel Algorithm
-            portals = get_portals_from_path(
-                path_indices, region.triangles, region.vertices, region.neighbors
-            )
+            portals = get_portals_from_path(path_indices, region.triangles, region.vertices, region.neighbors)
             # log.debug(f"[PathfindingWorld] portals: {len(portals)}")
 
             # Вычисляем нормаль региона из первого треугольника
@@ -545,9 +588,7 @@ class PathfindingWorldComponent(PythonComponent):
 
         # Высокоуровневый A* для поиска пути через регионы
         try:
-            region_path = self._navmesh_graph.find_region_path(
-                start_region, end_region, self._portals
-            )
+            region_path = self._navmesh_graph.find_region_path(start_region, end_region, self._portals)
         except Exception as e:
             log.error(f"[PathfindingWorld] find_region_path failed: {e}")
             return None
@@ -564,8 +605,21 @@ class PathfindingWorldComponent(PythonComponent):
         current_tri_idx = start_tri_idx
 
         for i, (region_id, portal_idx) in enumerate(region_path):
-            is_last = (i == len(region_path) - 1)
-            is_first = (i == 0)
+            is_last = i == len(region_path) - 1
+            is_first = i == 0
+
+            entity = self._region_entities.get(region_id)
+            transform = _entity_affine(entity) if entity else None
+            if transform is not None and (
+                _try_world_to_local_point(
+                    transform,
+                    current_pos,
+                    operation="cross-region path",
+                    region_id=region_id,
+                )
+                is None
+            ):
+                return None
 
             # log.debug(f"[PathfindingWorld] segment {i}: region={region_id}, portal_idx={portal_idx}, is_last={is_last}")
 
@@ -594,8 +648,6 @@ class PathfindingWorldComponent(PythonComponent):
                     continue
 
                 portal = self._portals[portal_idx]
-                entity = self._region_entities.get(region_id)
-                transform = _entity_affine_matrix(entity) if entity else None
 
                 # Трансформируем концы портала в мировые координаты
                 if transform is not None:
@@ -607,9 +659,7 @@ class PathfindingWorldComponent(PythonComponent):
 
                 # Находим оптимальную точку на ребре портала
                 # (ближайшую к прямой current_pos -> end)
-                target_pos = self._closest_point_on_segment_to_line(
-                    portal_left, portal_right, current_pos, end
-                )
+                target_pos = self._closest_point_on_segment_to_line(portal_left, portal_right, current_pos, end)
 
                 # Находим треугольник для портала в текущем регионе
                 target_tri_idx = self._find_triangle_in_region(target_pos, region_id)
@@ -651,7 +701,7 @@ class PathfindingWorldComponent(PythonComponent):
     def _transform_path_to_world(
         self,
         local_path: List[np.ndarray],
-        transform: Optional[Mat44],
+        transform: Optional[Affine3d],
     ) -> List[np.ndarray]:
         """Трансформировать путь из локальных в мировые координаты."""
         path_points: List[np.ndarray] = []
@@ -682,8 +732,14 @@ class PathfindingWorldComponent(PythonComponent):
         # Трансформируем точку в локальные координаты региона
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            inverse = _entity_affine_matrix(entity).inverse()
-            local_point = self._transform_point(point, inverse)
+            local_point = _try_world_to_local_point(
+                _entity_affine(entity),
+                point,
+                operation="find triangle",
+                region_id=region_id,
+            )
+            if local_point is None:
+                return -1
         else:
             local_point = point
 
@@ -712,14 +768,20 @@ class PathfindingWorldComponent(PythonComponent):
         # Трансформируем точку в локальные координаты региона
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            inverse = _entity_affine_matrix(entity).inverse()
-            local_point = self._transform_point(point, inverse)
+            local_point = _try_world_to_local_point(
+                _entity_affine(entity),
+                point,
+                operation="find nearest triangle",
+                region_id=region_id,
+            )
+            if local_point is None:
+                return -1
         else:
             local_point = point
 
         # Находим ближайший центроид
         best_idx = 0
-        best_dist = float('inf')
+        best_dist = float("inf")
         for i, centroid in enumerate(region.centroids):
             dist = float(np.linalg.norm(local_point - centroid))
             if dist < best_dist:
@@ -819,15 +881,13 @@ class PathfindingWorldComponent(PythonComponent):
             return [(start_region, start_tri_idx)]
 
         from termin.navmesh.pathfinding import astar_triangles
+
         if self.use_edge_centers:
             path_indices = astar_triangles(
-                start_tri_idx, end_tri_idx, region.neighbors, region.centroids,
-                region.triangles, region.vertices
+                start_tri_idx, end_tri_idx, region.neighbors, region.centroids, region.triangles, region.vertices
             )
         else:
-            path_indices = astar_triangles(
-                start_tri_idx, end_tri_idx, region.neighbors, region.centroids
-            )
+            path_indices = astar_triangles(start_tri_idx, end_tri_idx, region.neighbors, region.centroids)
         if path_indices is None:
             return None
 
@@ -845,8 +905,21 @@ class PathfindingWorldComponent(PythonComponent):
         local_centroid = region.centroids[triangle_id]
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            transform = _entity_affine_matrix(entity)
-            return self._transform_point(local_centroid, transform)
+            transform = _entity_affine(entity)
+            if not transform.is_finite():
+                log.error(
+                    f"[PathfindingWorld] get triangle center: region {region_id} has a non-finite world affine; "
+                    "skipping region"
+                )
+                return None
+            world_centroid = transform.transform_point(Vec3(local_centroid))
+            if not world_centroid.is_finite():
+                log.error(
+                    f"[PathfindingWorld] get triangle center: region {region_id} produced a non-finite world point; "
+                    "skipping region"
+                )
+                return None
+            return _vec3_to_array(world_centroid)
         return local_centroid.copy()
 
     def find_containing_triangle(self, point: np.ndarray) -> Optional[tuple[int, int]]:
@@ -864,8 +937,14 @@ class PathfindingWorldComponent(PythonComponent):
             # Трансформируем точку в локальные координаты региона
             entity = self._region_entities.get(region_id)
             if entity is not None:
-                inverse = _entity_affine_matrix(entity).inverse()
-                local_point = self._transform_point(point, inverse)
+                local_point = _try_world_to_local_point(
+                    _entity_affine(entity),
+                    point,
+                    operation="find containing triangle",
+                    region_id=region_id,
+                )
+                if local_point is None:
+                    continue
             else:
                 local_point = point
 
@@ -897,6 +976,12 @@ class PathfindingWorldComponent(PythonComponent):
         closest_hit: Optional[tuple[np.ndarray, float, int, int]] = None
         closest_dist = max_distance
 
+        world_origin = Vec3(origin)
+        world_direction = Vec3(direction).try_normalized()
+        if not world_origin.is_finite() or world_direction is None:
+            log.error("[PathfindingWorld] raycast requires a finite, non-zero world ray")
+            return None
+
         for region_id, region in enumerate(self._navmesh_graph.regions):
             # Получаем актуальную трансформацию entity
             entity = self._region_entities.get(region_id)
@@ -904,17 +989,32 @@ class PathfindingWorldComponent(PythonComponent):
                 continue
 
             # Трансформируем луч в локальное пространство entity
-            transform_matrix = _entity_affine_matrix(entity)
-            inverse_matrix = transform_matrix.inverse()
-
-            local_origin = self._transform_point(origin, inverse_matrix)
-            local_direction = self._transform_direction(direction, inverse_matrix)
-
-            # Нормализуем направление после трансформации
-            dir_len = float(np.linalg.norm(local_direction))
-            if dir_len < 1e-8:
+            transform = _entity_affine(entity)
+            if not transform.is_finite():
+                log.error(
+                    f"[PathfindingWorld] raycast: region {region_id} has a non-finite world affine; skipping region"
+                )
                 continue
-            local_direction = local_direction / dir_len
+
+            local_origin_vec = transform.try_inverse_transform_point(world_origin)
+            local_direction_unnormalized = transform.try_inverse_transform_vector(world_direction)
+            if local_origin_vec is None or local_direction_unnormalized is None:
+                log.error(
+                    f"[PathfindingWorld] raycast: region {region_id} has a singular world affine; skipping region"
+                )
+                continue
+            local_direction_vec = local_direction_unnormalized.try_normalized()
+            if not local_origin_vec.is_finite() or local_direction_vec is None:
+                log.error(
+                    f"[PathfindingWorld] raycast: region {region_id} produced an invalid local ray; skipping region"
+                )
+                continue
+
+            # Triangle storage and intersection are NumPy APIs. Keep conversion
+            # at this boundary instead of rebuilding vectors through the rest
+            # of the transform pipeline.
+            local_origin = _vec3_to_array(local_origin_vec)
+            local_direction = _vec3_to_array(local_direction_vec)
 
             for tri_idx in range(len(region.triangles)):
                 tri = region.triangles[tri_idx]
@@ -928,24 +1028,24 @@ class PathfindingWorldComponent(PythonComponent):
                     # Точка попадания в локальных координатах
                     local_hit = local_origin + local_direction * t_local
                     # Трансформируем обратно в мировые координаты
-                    world_hit = self._transform_point(local_hit, transform_matrix)
+                    world_hit_vec = transform.transform_point(Vec3(local_hit))
                     # Расстояние в мировых координатах
-                    world_dist = float(np.linalg.norm(world_hit - origin))
+                    world_dist = (world_hit_vec - world_origin).norm()
 
-                    if 0 < world_dist < closest_dist:
+                    if np.isfinite(world_dist) and 0 < world_dist < closest_dist:
                         closest_dist = world_dist
-                        closest_hit = (world_hit, world_dist, region_id, tri_idx)
+                        closest_hit = (
+                            _vec3_to_array(world_hit_vec),
+                            world_dist,
+                            region_id,
+                            tri_idx,
+                        )
 
         return closest_hit
 
-    def _transform_point(self, point: np.ndarray, matrix: Mat44) -> np.ndarray:
-        """Трансформировать точку с помощью матрицы 4x4."""
-        result = matrix.transform_point(Vec3(float(point[0]), float(point[1]), float(point[2])))
-        return _vec3_to_array(result)
-
-    def _transform_direction(self, direction: np.ndarray, matrix: Mat44) -> np.ndarray:
-        """Трансформировать направление с помощью матрицы 4x4 (без translation)."""
-        result = matrix.transform_direction(Vec3(float(direction[0]), float(direction[1]), float(direction[2])))
+    def _transform_point(self, point: np.ndarray, affine: Affine3d) -> np.ndarray:
+        """Трансформировать точку точным affine-преобразованием."""
+        result = affine.transform_point(Vec3(point))
         return _vec3_to_array(result)
 
     def _optimize_path_los(
@@ -1003,34 +1103,33 @@ class PathfindingWorldComponent(PythonComponent):
 
     def raycast_from_screen(
         self,
-        screen_x: float,
-        screen_y: float,
+        screen_point: Vec2,
         camera,
-        viewport_rect: tuple,
+        viewport: Rect2,
         max_distance: float = 1000.0,
     ) -> Optional[tuple[np.ndarray, float, int, int]]:
         """
         Raycast от экранных координат.
 
         Args:
-            screen_x: X координата на экране.
-            screen_y: Y координата на экране.
+            screen_point: Точка в экранных координатах.
             camera: CameraComponent для построения луча.
-            viewport_rect: (x, y, width, height) вьюпорта.
+            viewport: Прямоугольник вьюпорта.
             max_distance: Максимальная дистанция.
 
         Returns:
             (hit_point, distance, region_id, triangle_id) или None.
         """
-        ray = camera.screen_point_to_ray(screen_x, screen_y, viewport_rect)
+        ray = camera.try_screen_point_to_ray(screen_point, viewport)
+        if ray is None:
+            log.error("[PathfindingWorldComponent] screen ray projection failed")
+            return None
 
-        origin = np.array([ray.origin.x, ray.origin.y, ray.origin.z], dtype=np.float32)
-        direction = np.array([ray.direction.x, ray.direction.y, ray.direction.z], dtype=np.float32)
-
-        # Нормализуем направление
-        length = np.linalg.norm(direction)
-        if length > 1e-8:
-            direction = direction / length
+        # CameraComponent only returns a ray after its direction has been
+        # checked and normalized.  This conversion is the Detour/NumPy
+        # boundary; do not recreate the geometric contract here.
+        origin = _vec3_to_array(ray.origin)
+        direction = _vec3_to_array(ray.direction)
 
         return self.raycast(origin, direction, max_distance)
 
@@ -1059,7 +1158,7 @@ class PathfindingWorldComponent(PythonComponent):
                 entity = self._region_entities.get(portal.region_a)
                 transform = None
                 if entity is not None:
-                    transform = _entity_affine_matrix(entity)
+                    transform = _entity_affine(entity)
 
                 # Рисуем центр портала как крестик
                 center = portal.center.copy()
@@ -1090,11 +1189,14 @@ class PathfindingWorldComponent(PythonComponent):
                     origin = navmesh.origin
 
                     for vx, vy, vz in portal.voxels:
-                        world_pos = np.array([
-                            origin[0] + vx * cell_size + cell_size * 0.5,
-                            origin[1] + vy * cell_size + cell_size * 0.5,
-                            origin[2] + vz * cell_size + cell_size * 0.5,
-                        ], dtype=np.float32)
+                        world_pos = np.array(
+                            [
+                                origin[0] + vx * cell_size + cell_size * 0.5,
+                                origin[1] + vy * cell_size + cell_size * 0.5,
+                                origin[2] + vz * cell_size + cell_size * 0.5,
+                            ],
+                            dtype=np.float32,
+                        )
 
                         if transform is not None:
                             world_pos = self._transform_point(world_pos, transform)
@@ -1144,7 +1246,7 @@ class PathfindingWorldComponent(PythonComponent):
             entity = self._region_entities.get(region_id)
             transform = None
             if entity is not None:
-                transform = _entity_affine_matrix(entity)
+                transform = _entity_affine(entity)
 
             # Получаем нормаль региона для смещения
             region_normal = np.array([0.0, 1.0, 0.0], dtype=np.float32)

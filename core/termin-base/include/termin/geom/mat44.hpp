@@ -158,7 +158,67 @@ namespace termin {
                 }
             }
             if (!mat44_inverse_products_are_reliable(input, result, epsilon)) {
-                return false;
+                // Gauss-Jordan can leave a small cancellation residue after
+                // undoing the equilibration, especially for otherwise simple
+                // transforms with large translations. Perform one right
+                // iterative-refinement step in the matrix's storage precision:
+                //
+                //   R = I - A * X
+                //   X2 = X + X * R
+                //
+                // Keep every intermediate local so a failed refinement cannot
+                // modify the caller's output.
+                Scalar residual[16]{};
+                for (int column = 0; column < 4; ++column) {
+                    for (int row = 0; row < 4; ++row) {
+                        Scalar product = Scalar{0};
+                        for (int k = 0; k < 4; ++k) {
+                            const Scalar term = input[k * 4 + row] * result[column * 4 + k];
+                            if (!std::isfinite(term)) {
+                                return false;
+                            }
+                            const Scalar accumulated = product + term;
+                            if (!std::isfinite(accumulated)) {
+                                return false;
+                            }
+                            product = accumulated;
+                        }
+                        const Scalar expected = column == row ? Scalar{1} : Scalar{0};
+                        const Scalar value = expected - product;
+                        if (!std::isfinite(value)) {
+                            return false;
+                        }
+                        residual[column * 4 + row] = value;
+                    }
+                }
+
+                Scalar refined[16]{};
+                for (int column = 0; column < 4; ++column) {
+                    for (int row = 0; row < 4; ++row) {
+                        Scalar correction = Scalar{0};
+                        for (int k = 0; k < 4; ++k) {
+                            const Scalar term = result[k * 4 + row] * residual[column * 4 + k];
+                            if (!std::isfinite(term)) {
+                                return false;
+                            }
+                            const Scalar accumulated = correction + term;
+                            if (!std::isfinite(accumulated)) {
+                                return false;
+                            }
+                            correction = accumulated;
+                        }
+                        const Scalar value = result[column * 4 + row] + correction;
+                        if (!std::isfinite(value)) {
+                            return false;
+                        }
+                        refined[column * 4 + row] = value;
+                    }
+                }
+
+                if (!mat44_inverse_products_are_reliable(input, refined, epsilon)) {
+                    return false;
+                }
+                std::memcpy(result, refined, sizeof(result));
             }
             std::memcpy(output, result, sizeof(result));
             return true;
