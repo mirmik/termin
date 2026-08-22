@@ -12,7 +12,7 @@ import numpy as np
 from tcbase import log
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
-from termin.geombase import Affine3d, Rect2, Vec2, Vec3
+from termin.geombase import Affine3d, Ray3, Rect2, Vec2, Vec3
 from termin.navmesh.pathfinding import (
     RegionGraph,
     NavMeshGraph,
@@ -957,27 +957,30 @@ class PathfindingWorldComponent(PythonComponent):
 
     def raycast(
         self,
-        origin: np.ndarray,
-        direction: np.ndarray,
+        ray: Ray3,
         max_distance: float = 1000.0,
     ) -> Optional[tuple[np.ndarray, float, int, int]]:
         """
         Raycast по всем треугольникам NavMesh.
 
         Args:
-            origin: Начало луча (3D) в мировых координатах.
-            direction: Направление луча (нормализованное) в мировых координатах.
+            ray: Луч в мировых координатах. Направление может иметь
+                любую ненулевую длину; метод нормализует его для метрической
+                семантики distance.
             max_distance: Максимальная дистанция.
 
         Returns:
             (hit_point, distance, region_id, triangle_id) или None если нет пересечения.
             hit_point в мировых координатах.
         """
+        if type(ray) is not Ray3:
+            raise TypeError("PathfindingWorldComponent.raycast expects a Ray3")
+
         closest_hit: Optional[tuple[np.ndarray, float, int, int]] = None
         closest_dist = max_distance
 
-        world_origin = Vec3(origin)
-        world_direction = Vec3(direction).try_normalized()
+        world_origin = ray.origin
+        world_direction = ray.direction.try_normalized()
         if not world_origin.is_finite() or world_direction is None:
             log.error("[PathfindingWorld] raycast requires a finite, non-zero world ray")
             return None
@@ -1125,13 +1128,7 @@ class PathfindingWorldComponent(PythonComponent):
             log.error("[PathfindingWorldComponent] screen ray projection failed")
             return None
 
-        # CameraComponent only returns a ray after its direction has been
-        # checked and normalized.  This conversion is the Detour/NumPy
-        # boundary; do not recreate the geometric contract here.
-        origin = _vec3_to_array(ray.origin)
-        direction = _vec3_to_array(ray.direction)
-
-        return self.raycast(origin, direction, max_distance)
+        return self.raycast(ray, max_distance=max_distance)
 
     def draw(self) -> None:
         """Отрисовка отладочной визуализации."""
@@ -1350,7 +1347,16 @@ def _ray_triangle_intersect(
     epsilon: float = 1e-8,
 ) -> Optional[float]:
     """
-    Möller–Trumbore ray-triangle intersection.
+    NumPy-specialized Möller–Trumbore intersection for navmesh storage.
+
+    This stays separate from ``Ray3.try_intersect_triangle`` deliberately:
+    navmesh vertices and triangle traversal live in dense NumPy arrays, and
+    constructing three bound ``Vec3`` values plus a native result for every
+    triangle would turn the hot loop into a conversion loop. The semantic
+    differences are intentional too: this helper returns local-space ``t``
+    for the already normalized local direction and rejects ``t <= epsilon``
+    to avoid self-hits. ``raycast`` converts the accepted point back to world
+    space before comparing and returning metric distance.
 
     Args:
         origin: Начало луча.

@@ -272,13 +272,9 @@ class NavMeshAgentComponent(InputComponent):
             log.warn("[NavMeshAgent] click ignored - no ray from viewport")
             return
 
-        # Raycast по NavMesh
-        # Viewport returns only a checked, normalized Ray3. NumPy conversion is
-        # the backend boundary; keep the vector contract intact here.
-        origin = np.asarray(ray.origin, dtype=np.float32)
-        direction = np.asarray(ray.direction, dtype=np.float32)
-
-        hit = self._pathfinding_world.raycast(origin, direction)
+        # Viewport returns a checked Ray3; preserve that semantic object until
+        # PathfindingWorld reaches its internal NumPy triangle-storage loop.
+        hit = self._pathfinding_world.raycast(ray)
         if hit is None:
             log.info("[NavMeshAgent] click missed NavMesh")
             return

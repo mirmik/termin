@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
-
 import numpy as np
 
 from tcbase import log
@@ -15,6 +13,7 @@ from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPla
 from termin.geombase import Ray3, Vec3
 
 Vec3Data = tuple[float, float, float]
+_RAY_TRIANGLE_EPSILON = 1.0e-8
 
 
 @dataclass
@@ -52,22 +51,32 @@ def raycast_document(
             continue
 
         transformed = [
-            evaluated.point_transform((float(v[0]), float(v[1]), float(v[2])))
+            Vec3(evaluated.point_transform((float(v[0]), float(v[1]), float(v[2]))))
             for v in vertices
         ]
+        if any(not vertex.is_finite() for vertex in transformed):
+            log.error(
+                "[CsgRaycast] rejected non-finite transformed geometry "
+                f"operation='{evaluated.operation_id}' contour='{evaluated.contour_id}'"
+            )
+            continue
         for index in range(0, len(triangles), 3):
             a = transformed[int(triangles[index])]
             b = transformed[int(triangles[index + 1])]
             c = transformed[int(triangles[index + 2])]
-            distance = _ray_triangle_distance(checked_ray, a, b, c)
-            if distance is None:
+            triangle_hit = checked_ray.try_intersect_triangle(
+                a,
+                b,
+                c,
+                epsilon=_RAY_TRIANGLE_EPSILON,
+            )
+            if triangle_hit is None or triangle_hit.ray_parameter < _RAY_TRIANGLE_EPSILON:
                 continue
+            distance = triangle_hit.ray_parameter
             if best_hit is not None and distance >= best_hit.distance:
                 continue
             point = _vec3_data(checked_ray.point_at(distance))
-            normal = _triangle_normal(a, b, c)
-            if normal is None:
-                continue
+            normal = triangle_hit.normal
             if normal.dot(checked_ray.direction) > 0.0:
                 normal = -normal
             best_hit = CsgRaycastHit(
@@ -77,7 +86,7 @@ def raycast_document(
                 point=point,
                 normal=_vec3_data(normal),
                 distance=distance,
-                vertices=(a, b, c),
+                vertices=(_vec3_data(a), _vec3_data(b), _vec3_data(c)),
             )
     return best_hit
 
@@ -123,44 +132,6 @@ def ray_plane_intersection(
     if point is None:
         return None
     return _vec3_data(point)
-
-
-def _ray_triangle_distance(
-    ray: Ray3,
-    a: Vec3Data,
-    b: Vec3Data,
-    c: Vec3Data,
-) -> float | None:
-    eps = 1.0e-8
-    vertex_a = Vec3(a)
-    vertex_b = Vec3(b)
-    vertex_c = Vec3(c)
-    if not vertex_a.is_finite() or not vertex_b.is_finite() or not vertex_c.is_finite():
-        return None
-
-    edge1 = vertex_b - vertex_a
-    edge2 = vertex_c - vertex_a
-    pvec = ray.direction.cross(edge2)
-    det = edge1.dot(pvec)
-    if not isfinite(det) or abs(det) < eps:
-        return None
-    inv_det = 1.0 / det
-    tvec = ray.origin - vertex_a
-    u = tvec.dot(pvec) * inv_det
-    if not isfinite(u) or u < 0.0 or u > 1.0:
-        return None
-    qvec = tvec.cross(edge1)
-    v = ray.direction.dot(qvec) * inv_det
-    if not isfinite(v) or v < 0.0 or u + v > 1.0:
-        return None
-    distance = edge2.dot(qvec) * inv_det
-    if not isfinite(distance) or distance < eps:
-        return None
-    return distance
-
-
-def _triangle_normal(a: Vec3Data, b: Vec3Data, c: Vec3Data) -> Vec3 | None:
-    return (Vec3(b) - Vec3(a)).cross(Vec3(c) - Vec3(a)).try_normalized()
 
 
 def _checked_ray(ray: Ray3, operation: str) -> Ray3 | None:

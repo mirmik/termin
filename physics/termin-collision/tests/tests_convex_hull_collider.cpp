@@ -24,6 +24,10 @@ static ConvexHullCollider make_cube_hull(const Vec3& half_size, const GeneralPos
     return ConvexHullCollider::from_points(pts, t);
 }
 
+static ConvexHullCollider make_triangle_hull(const Vec3& a, const Vec3& b, const Vec3& c) {
+    return ConvexHullCollider(std::vector<Vec3>{a, b, c}, std::vector<ConvexFace>{{0, 1, 2, Vec3::up()}});
+}
+
 // ==================== Support function tests ====================
 
 TEST_CASE("ConvexHull support: cube along +X") {
@@ -162,6 +166,59 @@ TEST_CASE("ConvexHull raycast returns first intersection") {
     auto bottom_hit = hull.closest_to_ray(termin::Ray3(Vec3(0, 0, -5), Vec3(0, 0, 1)));
     CHECK(bottom_hit.hit());
     CHECK_EQ(bottom_hit.point_on_collider.z, Approx(-1.0).epsilon(1e-6));
+}
+
+TEST_CASE("ConvexHull raycast includes triangle edges and vertices") {
+    auto hull = make_triangle_hull(Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0));
+
+    auto edge_hit = hull.closest_to_ray(termin::Ray3(Vec3(0.5, 0, 1), Vec3::down()));
+    REQUIRE(edge_hit.hit());
+    CHECK_EQ(edge_hit.distance, 0.0);
+    CHECK((edge_hit.point_on_collider - Vec3(0.5, 0, 0)).norm() < 1.0e-12);
+    CHECK((edge_hit.point_on_ray - edge_hit.point_on_collider).norm() < 1.0e-12);
+
+    auto vertex_hit = hull.closest_to_ray(termin::Ray3(Vec3(0, 0, 1), Vec3::down()));
+    REQUIRE(vertex_hit.hit());
+    CHECK_EQ(vertex_hit.distance, 0.0);
+    CHECK((vertex_hit.point_on_collider - Vec3::zero()).norm() < 1.0e-12);
+    CHECK((vertex_hit.point_on_ray - vertex_hit.point_on_collider).norm() < 1.0e-12);
+}
+
+TEST_CASE("ConvexHull raycast preserves its near-edge tolerance") {
+    auto hull = make_triangle_hull(Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0));
+
+    auto near_edge_hit = hull.closest_to_ray(termin::Ray3(Vec3(0.5, -5.0e-9, 1), Vec3::down()));
+    REQUIRE(near_edge_hit.hit());
+    CHECK_EQ(near_edge_hit.distance, 0.0);
+    CHECK_EQ(near_edge_hit.point_on_collider.y, Approx(-5.0e-9).epsilon(1e-12));
+
+    auto outside_tolerance = hull.closest_to_ray(termin::Ray3(Vec3(0.5, -4.0e-8, 1), Vec3::down()));
+    CHECK_FALSE(outside_tolerance.hit());
+    CHECK_EQ(outside_tolerance.distance, Approx(4.0e-8).epsilon(1e-6));
+}
+
+TEST_CASE("ConvexHull raycast preserves a non-unit ray parameter") {
+    auto hull = make_triangle_hull(Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0));
+    termin::Ray3 ray;
+    ray.origin = Vec3(0.25, 0.25, 1);
+    ray.direction = Vec3(0, 0, -0.25);
+
+    auto hit = hull.closest_to_ray(ray);
+    REQUIRE(hit.hit());
+    CHECK_EQ(hit.distance, 0.0);
+    CHECK((hit.point_on_collider - Vec3(0.25, 0.25, 0)).norm() < 1.0e-12);
+    CHECK((hit.point_on_ray - hit.point_on_collider).norm() < 1.0e-12);
+}
+
+TEST_CASE("ConvexHull raycast rejects triangle misses and degenerate faces") {
+    auto hull = make_triangle_hull(Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0));
+    auto miss = hull.closest_to_ray(termin::Ray3(Vec3(1, 1, 1), Vec3::down()));
+    CHECK_FALSE(miss.hit());
+
+    auto degenerate = make_triangle_hull(Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(2, 0, 0));
+    auto degenerate_miss = degenerate.closest_to_ray(termin::Ray3(Vec3(0.5, 0.25, 1), Vec3::down()));
+    CHECK_FALSE(degenerate_miss.hit());
+    CHECK_EQ(degenerate_miss.distance, Approx(0.25).epsilon(1e-12));
 }
 
 // ==================== Reverse dispatch: Box/Sphere → ConvexHull ====================

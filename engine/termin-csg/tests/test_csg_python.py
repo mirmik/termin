@@ -27,7 +27,6 @@ from termin.csg.cad_model import StandaloneCsgModel
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
 from termin.csg.document_raycast import ray_plane_intersection, raycast_document
-from termin.csg import document_raycast as document_raycast_module
 from termin.csg.document_tree_model import build_document_tree
 from termin.csg.document_visual_model import PATH_SELECTED_COLOR, build_document_visual_model
 from termin.csg.document_edit import (
@@ -1023,6 +1022,7 @@ def test_document_raycast_uses_evaluated_solids_in_document_space():
     assert isclose(hit.point[0], 0.0, abs_tol=1.0e-6)
     assert isclose(hit.point[1], 0.0, abs_tol=1.0e-6)
     assert isclose(hit.point[2], 2.0, abs_tol=1.0e-6)
+    assert isclose(hit.distance, 3.0, abs_tol=1.0e-6)
     assert hit.normal == (0.0, 0.0, 1.0)
 
 
@@ -1058,20 +1058,6 @@ def test_document_picking_rejects_degenerate_ray_without_axis_fallback():
 
     assert raycast_document(document, ray) is None
     assert ray_plane_intersection(ray, ProceduralPlane()) is None
-
-
-def test_document_raycast_rejects_nonfinite_triangle_geometry():
-    ray = Ray3(Vec3(0.25, 0.25, 1.0), Vec3(0.0, 0.0, -1.0))
-
-    assert (
-        document_raycast_module._ray_triangle_distance(
-            ray,
-            (float("nan"), 0.0, 0.0),
-            (1.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-        )
-        is None
-    )
 
 
 def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):

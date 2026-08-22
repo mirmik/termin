@@ -181,6 +181,15 @@ int main() {
     assert(hit && tc_visual_item3d_handle_eq(hit->item, *primitive_handle));
     assert(close(hit->distance, 3.0) && hit->part == 77);
 
+    // The inverse affine deliberately leaves the local direction
+    // unnormalized. Shared triangle intersection must preserve its parameter,
+    // which remains the world-space distance under non-uniform scale.
+    primitive_ptr->set_local_transform(Affine3d::from_translation(2.0, 0.0, 0.0) * Affine3d::scaling(5.0, 2.0, 0.5));
+    hit = termin::visual::hit_test(scene, ray);
+    assert(hit && tc_visual_item3d_handle_eq(hit->item, *primitive_handle));
+    assert(close(hit->distance, 3.0) && hit->part == 77);
+    primitive_ptr->set_local_transform(Affine3d::from_translation(2.0, 0.0, 0.0));
+
     primitive_ptr->set_enabled(false);
     hit = termin::visual::hit_test(scene, ray);
     assert(hit && tc_visual_item3d_handle_eq(hit->item, *mesh_handle));

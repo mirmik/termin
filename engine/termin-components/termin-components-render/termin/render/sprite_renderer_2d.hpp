@@ -55,7 +55,7 @@ namespace termin {
         bool collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) override;
 
         AABB world_bounds() const;
-        bool ray_intersects(const Vec3& ray_origin, const Vec3& ray_direction, double* out_distance = nullptr) const;
+        bool ray_intersects(const Ray3& ray, double* out_ray_parameter = nullptr) const;
     };
 
 } // namespace termin

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 import termin.bootstrap
-from termin.geombase import Affine3d, Basis3d, Rect2, Vec2, Vec3
+from termin.geombase import Affine3d, Basis3d, Ray3, Rect2, Vec2, Vec3
 from termin.navmesh import DetourPathfindingWorldComponent, PathfindingWorld
 from termin.navmesh.pathfinding import NavMeshGraph, RegionGraph
 import termin.navmesh.pathfinding_world_component as pathfinding_world_module
@@ -142,6 +142,80 @@ def test_screen_raycast_does_not_hide_camera_api_regressions() -> None:
         )
 
 
+def test_screen_raycast_forwards_canonical_ray_without_flattening() -> None:
+    ray = Ray3(Vec3(1.0e12, -2.0e12, 3.0e12), Vec3(0.0, 0.0, -2.0))
+    expected = (np.array([1.0, 2.0, 3.0]), 7.0, 4, 5)
+
+    class Camera:
+        def try_screen_point_to_ray(self, screen_point, viewport):
+            assert type(screen_point) is Vec2
+            assert type(viewport) is Rect2
+            return ray
+
+    def recording_raycast(candidate, max_distance=1000.0):
+        assert candidate is ray
+        assert type(candidate) is Ray3
+        assert max_distance == 42.0
+        return expected
+
+    world = PathfindingWorldComponent()
+    world.raycast = recording_raycast
+
+    result = world.raycast_from_screen(
+        Vec2(10.0, 20.0),
+        Camera(),
+        Rect2(0.0, 0.0, 640.0, 480.0),
+        max_distance=42.0,
+    )
+
+    assert result is expected
+
+
+def test_agent_click_forwards_canonical_ray_without_flattening() -> None:
+    from tcbase import Action, MouseButton
+    from termin.navmesh.agent_component import NavMeshAgentComponent
+
+    ray = Ray3(Vec3(10.0, 20.0, 30.0), Vec3(0.0, -1.0, 0.0))
+
+    class Viewport:
+        def screen_point_to_ray(self, x, y):
+            assert (x, y) == (12.0, 34.0)
+            return ray
+
+    class Event:
+        button = MouseButton.LEFT
+        action = Action.PRESS
+        x = 12.0
+        y = 34.0
+        viewport = Viewport()
+
+    class RecordingWorld:
+        def __init__(self) -> None:
+            self.received = None
+
+        def raycast(self, candidate):
+            self.received = candidate
+            return None
+
+    world = RecordingWorld()
+    agent = NavMeshAgentComponent()
+    agent._pathfinding_world = world
+
+    agent.on_mouse_button(Event())
+
+    assert world.received is ray
+    assert type(world.received) is Ray3
+
+
+def test_raycast_rejects_legacy_flat_origin_direction_form() -> None:
+    world = PathfindingWorldComponent()
+    origin = np.array([0.25, 0.25, 1.0], dtype=np.float64)
+    direction = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+
+    with pytest.raises(TypeError, match="expects a Ray3"):
+        world.raycast(origin, direction)
+
+
 @pytest.mark.parametrize(
     ("affine", "expected_reason"),
     [
@@ -161,11 +235,10 @@ def test_invalid_region_affine_cannot_contribute_a_false_hit(
     monkeypatch.setattr(pathfinding_world_module, "log", recording_log)
     world = _single_triangle_world(affine)
 
-    origin = np.array([0.25, 0.25, 1.0], dtype=np.float64)
-    direction = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+    ray = Ray3(Vec3(0.25, 0.25, 1.0), Vec3(0.0, 0.0, -1.0))
     point_on_identity_triangle = np.array([0.25, 0.25, 0.0], dtype=np.float64)
 
-    assert world.raycast(origin, direction, max_distance=10.0) is None
+    assert world.raycast(ray, max_distance=10.0) is None
     assert world.find_containing_triangle(point_on_identity_triangle) is None
     assert any(expected_reason in message for message in recording_log.errors)
 
@@ -200,11 +273,7 @@ def test_raycast_roundtrips_oriented_nonuniform_affine() -> None:
     world_direction = affine.transform_vector(Vec3(0.0, 0.0, -1.0)).try_normalized()
     assert world_direction is not None
 
-    result = world.raycast(
-        np.asarray(world_origin, dtype=np.float64),
-        np.asarray(world_direction, dtype=np.float64),
-        max_distance=10.0,
-    )
+    result = world.raycast(Ray3(world_origin, world_direction), max_distance=10.0)
 
     assert result is not None
     hit_point, distance, region_id, triangle_id = result
@@ -231,11 +300,7 @@ def test_raycast_uses_direct_checked_inverse_transforms_in_large_world() -> None
     world_direction = inner.transform_vector(Vec3(0.0, 0.0, -1.0)).try_normalized()
     assert world_direction is not None
 
-    result = world.raycast(
-        np.asarray(world_origin, dtype=np.float64),
-        np.asarray(world_direction, dtype=np.float64),
-        max_distance=10.0,
-    )
+    result = world.raycast(Ray3(world_origin, world_direction), max_distance=10.0)
 
     assert result is not None
     hit_point, distance, region_id, triangle_id = result

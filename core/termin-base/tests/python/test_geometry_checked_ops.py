@@ -9,6 +9,7 @@ from termin.geombase import (
     Mat44,
     Quat,
     Ray3,
+    RayTriangleHit,
     Rect2f,
     Vec2,
     Vec2f,
@@ -62,6 +63,133 @@ def test_ray_plane_intersection_binding_rejects_invalid_parallel_and_behind_geom
     assert math.isnan(non_finite_direction.direction.x)
     assert non_finite_direction.direction.y == 4.0
     assert non_finite_direction.direction.z == 5.0
+
+
+def test_ray_triangle_intersection_binding_returns_parameter_and_barycentric_coordinates():
+    a = Vec3.zero()
+    b = Vec3.unit_x()
+    c = Vec3.unit_y()
+    ray = Ray3(Vec3(0.2, 0.3, 1.0), Vec3(0.0, 0.0, -2.0))
+
+    hit = ray.try_intersect_triangle(a, b, c)
+    assert isinstance(hit, RayTriangleHit)
+    assert math.isclose(hit.ray_parameter, 1.0)
+    assert (hit.barycentric - Vec3(0.5, 0.2, 0.3)).norm() < 1.0e-12
+    assert hit.normal == Vec3.unit_z()
+    assert ray.point_at(hit.ray_parameter) == Vec3(0.2, 0.3, 0.0)
+
+    reverse_hit = ray.try_intersect_triangle(a, c, b)
+    assert reverse_hit is not None
+    assert (reverse_hit.barycentric - Vec3(0.5, 0.3, 0.2)).norm() < 1.0e-12
+    assert reverse_hit.normal == Vec3.down()
+    assert Ray3(Vec3(0.5, 0.0, 1.0), Vec3.down()).try_intersect_triangle(a, b, c) is not None
+    vertex_hit = Ray3(a, Vec3.up()).try_intersect_triangle(a, b, c)
+    assert vertex_hit is not None
+    assert vertex_hit.ray_parameter == 0.0
+    assert vertex_hit.barycentric == Vec3(1.0, 0.0, 0.0)
+
+    parameterized_ray = Ray3()
+    parameterized_ray.origin = Vec3(0.2, 0.3, 1.0)
+    parameterized_ray.direction = Vec3(0.0, 0.0, -0.25)
+    parameterized_hit = parameterized_ray.try_intersect_triangle(a, b, c)
+    assert parameterized_hit is not None
+    assert math.isclose(parameterized_hit.ray_parameter, 4.0)
+    assert parameterized_ray.point_at(parameterized_hit.ray_parameter) == Vec3(0.2, 0.3, 0.0)
+
+
+def test_ray_triangle_intersection_binding_rejects_invalid_geometry_and_is_scale_aware():
+    a = Vec3.zero()
+    b = Vec3.unit_x()
+    c = Vec3.unit_y()
+    ray = Ray3(Vec3(0.25, 0.25, 1.0), Vec3.down())
+
+    assert Ray3(Vec3(2.0, 2.0, 1.0), Vec3.down()).try_intersect_triangle(a, b, c) is None
+    assert Ray3(Vec3(0.25, 0.25, 1.0), Vec3.unit_x()).try_intersect_triangle(a, b, c) is None
+    assert ray.try_intersect_triangle(a, b, Vec3(2.0, 0.0, 0.0)) is None
+    assert ray.try_intersect_triangle(a, b, Vec3(0.0, 1.0e-12, 0.0)) is None
+    assert ray.try_intersect_triangle(Vec3(math.nan, 0.0, 0.0), b, c) is None
+    assert ray.try_intersect_triangle(a, b, c, epsilon=-1.0) is None
+    assert ray.try_intersect_triangle(a, b, c, epsilon=math.nan) is None
+
+    assert (
+        Ray3(Vec3(0.2, 0.3, 0.0), Vec3(1.0, 0.0, -0.5e-6)).try_intersect_triangle(
+            a,
+            b,
+            c,
+            epsilon=1.0e-6,
+        )
+        is None
+    )
+    angled_hit = Ray3(Vec3(0.2, 0.3, 0.0), Vec3(1.0, 0.0, -2.0e-6)).try_intersect_triangle(
+        a,
+        b,
+        c,
+        epsilon=1.0e-6,
+    )
+    assert angled_hit is not None
+    assert angled_hit.ray_parameter == 0.0
+
+    snapped_hit = Ray3(Vec3(-0.5e-6, 0.5, 1.0), Vec3.down()).try_intersect_triangle(
+        a,
+        b,
+        c,
+        epsilon=1.0e-6,
+    )
+    assert snapped_hit is not None
+    assert snapped_hit.barycentric.y == 0.0
+    assert (
+        Ray3(Vec3(-2.0e-6, 0.5, 1.0), Vec3.down()).try_intersect_triangle(
+            a,
+            b,
+            c,
+            epsilon=1.0e-6,
+        )
+        is None
+    )
+
+    near_origin_hit = Ray3(Vec3(0.25, 0.25, 0.5e-6), Vec3.down()).try_intersect_triangle(
+        a,
+        b,
+        c,
+        epsilon=1.0e-6,
+    )
+    assert near_origin_hit is not None
+    assert 0.0 < near_origin_hit.ray_parameter < 1.0e-6
+
+    invalid_ray = Ray3(Vec3(0.25, 0.25, 1.0), Vec3.down())
+    invalid_ray.direction = Vec3.zero()
+    assert invalid_ray.try_intersect_triangle(a, b, c) is None
+    invalid_ray.origin = Vec3(0.25, 0.25, 1.0e-300)
+    invalid_ray.direction = Vec3(0.0, 0.0, 1.0e300)
+    assert invalid_ray.try_intersect_triangle(a, b, c) is None
+    invalid_ray.direction = Vec3(0.0, 0.0, -1.0e300)
+    assert invalid_ray.try_intersect_triangle(a, b, c) is None
+    invalid_ray.origin = Vec3(0.2e-20, 0.3e-20, 1.0e-20)
+    assert (
+        invalid_ray.try_intersect_triangle(
+            a,
+            Vec3(1.0e-20, 0.0, 0.0),
+            Vec3(0.0, 1.0e-20, 0.0),
+        )
+        is None
+    )
+
+    behind_ray = Ray3(Vec3(0.25, 0.25, -1.0), Vec3.up())
+    behind = (Vec3(0.0, 0.0, -2.0), Vec3(1.0, 0.0, -2.0), Vec3(0.0, 1.0, -2.0))
+    assert behind_ray.try_intersect_triangle(*behind) is None
+    behind_hit = behind_ray.try_intersect_triangle(*behind, forward_only=False)
+    assert behind_hit is not None
+    assert math.isclose(behind_hit.ray_parameter, -1.0)
+
+    for scale in (1.0e-120, 1.0e120):
+        scaled_hit = Ray3(Vec3(0.2 * scale, 0.3 * scale, scale), Vec3.down()).try_intersect_triangle(
+            a,
+            Vec3(scale, 0.0, 0.0),
+            Vec3(0.0, scale, 0.0),
+        )
+        assert scaled_hit is not None
+        assert math.isclose(scaled_hit.ray_parameter / scale, 1.0, rel_tol=1.0e-12)
+        assert (scaled_hit.barycentric - Vec3(0.5, 0.2, 0.3)).norm() < 1.0e-12
 
 
 def test_affine_checked_inverse_normal_and_centered_inverse_transform_bindings():

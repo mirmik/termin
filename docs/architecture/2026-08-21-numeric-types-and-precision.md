@@ -48,6 +48,18 @@ direction tuples at each binding boundary. `Affine3d::try_inverse_transform_poin
 `try_inverse_transform_vector` expose the same checked, unchanged-output
 contract for other large-world affine consumers.
 
+Ray/triangle intersection is likewise owned by `Ray3`. The two-sided checked
+primitive returns a `RayTriangleHit` containing the original ray parameter,
+closed-simplex barycentric weights and a scale-aware unit winding normal. The
+parameter is named `ray_parameter` because it satisfies
+`ray.point_at(ray_parameter)` and is a metric distance only when the stored
+direction is unit length. Its epsilon is dimensionless: it controls triangle
+shape quality, angular parallelism and boundary snapping, but never acts as a
+self-hit distance. Domain consumers apply their own positive-distance bias.
+Packed float C mesh raycasts and NumPy navmesh traversal remain explicit
+storage/hot-loop specializations; canonical `Ray3` consumers must use the
+shared primitive rather than repeat component-wise Möller–Trumbore code.
+
 Single-depth reconstruction and its reverse projection share the adjacent
 `try_unproject_screen_point` and `try_project_world_point` primitives. Their
 semantic `ProjectedScreenPoint` result groups the `Vec2` screen coordinate,
