@@ -62,6 +62,50 @@ packed float boundary лучи или диапазоны отклоняются 
 выполняется явно: координаты собираются в `Vec3`, пара значений — в `Ray3`, а
 границы передаются как `min_distance` и `max_distance`.
 
+Surface-edge queries также используют типизированную границу:
+
+```python
+edge = mesh.find_surface_edge(
+    start_triangle=triangle_index,
+    point=local_point,
+    normal=local_normal,
+)
+if edge is not None:
+    print(edge.point, edge.indices, edge.distance, edge.side)
+```
+
+`TcMesh.find_surface_edge(...)`, `TcMesh.find_surface_edge_aligned(...)` и
+`TcMesh.find_nearest_surface_edge(...)` возвращают read-only
+`TcMeshSurfaceEdgeHit` либо `None`. Его `point` представлен `Vec3`, `indices`
+— фиксированным `tuple[int, int]`, а `distance` и `side` — соответственно
+`float` и `int`. Тип доступен как из `tmesh`, так и из публичного
+`termin.mesh`.
+
+`point` и diagonal `metric` проходят проверяемое преобразование в packed
+float. Направления `normal`, `up` и `edge_direction` сначала нормализуются в
+double, поэтому их исходный модуль не влияет на запрос: как очень маленькие,
+так и очень большие конечные ненулевые направления пересекают float-границу
+уже нормализованными. Нефинитные и непредставимые значения, вырожденные
+направления, а также переполнение или underflow произведения packed value на
+metric отклоняются с `None`; ошибка при этом записывается в лог. Опциональные
+`up` и `metric` сохраняют defaults `Vec3.up()` и unit metric. Каждая
+компонента явного metric должна быть не меньше `1e-8`, а
+`max_angle_degrees` — конечным double-значением в диапазоне `[0, 90]` до
+преобразования во float; само значение порога при этом никогда не округляется
+вверх. Последующее вычисление косинуса и сравнение направлений выполняются уже
+в packed-float арифметике. Остальные значения отклоняются с `None`.
+
+Diagonal metric преобразует точки и касательные направления покомпонентным
+умножением. Нормаль является ковектором и преобразуется inverse-transpose —
+для положительной diagonal metric это покомпонентное деление. Поэтому
+анизотропный metric сохраняет связность копланарных наклонных треугольников;
+entity-адаптер передаёт обычную mesh-local нормаль и не кодирует поправку на
+внутреннюю реализацию запроса.
+
+Прежний dict-результат удалён без fallback. Миграция выполняется прямой
+заменой `edge["point"]`, `edge["indices"]`, `edge["distance"]` и
+`edge["side"]` на одноимённые атрибуты.
+
 C/C++ API публикуется через installed headers из `include/`.
 
 `tc_mesh` и `tc_texture` считаются canonical engine resources. Renderer/device-specific upload и handle adapters должны оставаться отдельным слоем поверх этих типов.

@@ -1,6 +1,8 @@
 #include <tgfx/tgfx_mesh3.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
+#include <geom/tc_vec3f.h>
+
 #include <cmath>
 #include <limits>
 
@@ -8,7 +10,7 @@ namespace termin {
 
     namespace {
 
-        bool try_narrow_lower_distance(double value, float& out) noexcept {
+        bool try_narrow_float_lower_bound(double value, float& out) noexcept {
             constexpr double float_max = static_cast<double>(std::numeric_limits<float>::max());
             if (!std::isfinite(value) || value < -float_max || value > float_max) {
                 return false;
@@ -25,7 +27,7 @@ namespace termin {
             return true;
         }
 
-        bool try_narrow_upper_distance(double value, float& out) noexcept {
+        bool try_narrow_float_upper_bound(double value, float& out) noexcept {
             constexpr double float_max = static_cast<double>(std::numeric_limits<float>::max());
             if (!std::isfinite(value) || value < -float_max || value > float_max) {
                 return false;
@@ -40,6 +42,94 @@ namespace termin {
             }
             out = narrowed;
             return true;
+        }
+
+        struct PackedSurfaceEdgeInputs {
+            tc_vec3f point{};
+            tc_vec3f up{};
+            tc_vec3f metric{};
+        };
+
+        tc_mesh* surface_edge_mesh(const TcMesh& handle, const char* operation) {
+            tc_mesh* mesh = handle.get();
+            if (!mesh) {
+                tc_log_error("[TcMesh] Cannot %s on an invalid or stale mesh handle", operation);
+            }
+            return mesh;
+        }
+
+        bool try_pack_surface_edge_direction(const Vec3& value, const char* name, tc_vec3f& out) {
+            Vec3 unit;
+            if (!value.try_normalized(unit, 0.0) || !unit.try_to_float(out)) {
+                tc_log_error("[TcMesh] Surface-edge %s must be finite, non-degenerate, and representable as float",
+                             name);
+                return false;
+            }
+            return true;
+        }
+
+        bool validate_surface_edge_metric_product(const tc_vec3f& value,
+                                                  const tc_vec3f& metric,
+                                                  const char* name) {
+            tc_vec3f product;
+            if (!tc_vec3f_try_cwise_product(value, metric, &product)) {
+                tc_log_error("[TcMesh] Surface-edge %s and metric overflow or underflow packed-float math", name);
+                return false;
+            }
+            return true;
+        }
+
+        bool try_pack_surface_edge_inputs(const Vec3& point,
+                                          const std::optional<Vec3>& up,
+                                          const std::optional<Vec3>& metric,
+                                          PackedSurfaceEdgeInputs& out) {
+            if (!point.try_to_float(out.point)) {
+                tc_log_error(
+                    "[TcMesh] Surface-edge point cannot be narrowed to float without overflow or underflow");
+                return false;
+            }
+
+            const Vec3 resolved_up = up.value_or(Vec3::unit_z());
+            if (!try_pack_surface_edge_direction(resolved_up, "up direction", out.up)) {
+                return false;
+            }
+
+            const Vec3 resolved_metric = metric.value_or(Vec3(1.0, 1.0, 1.0));
+            constexpr double metric_floor = 1.0e-8;
+            if (!resolved_metric.is_finite() || resolved_metric.min_component() < metric_floor ||
+                !resolved_metric.try_to_float(out.metric)) {
+                tc_log_error(
+                    "[TcMesh] Surface-edge metric components must be finite, float-representable, and at least 1e-8");
+                return false;
+            }
+
+            if (!validate_surface_edge_metric_product(out.point, out.metric, "point") ||
+                !validate_surface_edge_metric_product(out.up, out.metric, "up direction")) {
+                return false;
+            }
+            return true;
+        }
+
+        bool try_pack_surface_edge_angle(double value, float& out) {
+            if (!std::isfinite(value) || value < 0.0 || value > 90.0) {
+                tc_log_error("[TcMesh] Surface-edge maximum angle must be finite and lie in [0, 90] degrees");
+                return false;
+            }
+            return try_narrow_float_upper_bound(value, out);
+        }
+
+        std::optional<TcMeshSurfaceEdgeHit> unpack_surface_edge_hit(const tc_mesh_surface_edge_hit& hit) {
+            if (!hit.point.is_finite() || !std::isfinite(hit.distance) || hit.distance < 0.0f || hit.side < -1 ||
+                hit.side > 1) {
+                tc_log_error("[TcMesh] Surface-edge backend returned an invalid hit");
+                return std::nullopt;
+            }
+            return TcMeshSurfaceEdgeHit{
+                hit.point.to_double(),
+                {hit.indices[0], hit.indices[1]},
+                static_cast<double>(hit.distance),
+                hit.side,
+            };
         }
 
     } // namespace
@@ -155,8 +245,8 @@ namespace termin {
                 "[TcMesh] Raycast origin or normalized direction cannot be narrowed to float without overflow or underflow");
             return std::nullopt;
         }
-        if (!try_narrow_lower_distance(min_distance, packed_ray.t_min) ||
-            !try_narrow_upper_distance(max_distance, packed_ray.t_max)) {
+        if (!try_narrow_float_lower_bound(min_distance, packed_ray.t_min) ||
+            !try_narrow_float_upper_bound(max_distance, packed_ray.t_max)) {
             tc_log_error("[TcMesh] Raycast range is outside the finite float magnitude range (min=%.17g, max=%.17g)",
                          min_distance,
                          max_distance);
@@ -182,6 +272,94 @@ namespace termin {
             packed_hit.triangle_index,
             {packed_hit.indices[0], packed_hit.indices[1], packed_hit.indices[2]},
         };
+    }
+
+    std::optional<TcMeshSurfaceEdgeHit>
+    TcMesh::find_surface_edge(uint32_t start_triangle,
+                              const Vec3& point,
+                              const Vec3& normal,
+                              std::optional<Vec3> up,
+                              std::optional<Vec3> metric) const {
+        tc_mesh* mesh = surface_edge_mesh(*this, "find a surface edge");
+        if (!mesh) {
+            return std::nullopt;
+        }
+
+        PackedSurfaceEdgeInputs packed;
+        tc_mesh_surface_edge_query query{};
+        if (!try_pack_surface_edge_inputs(point, up, metric, packed) ||
+            !try_pack_surface_edge_direction(normal, "normal", query.normal)) {
+            return std::nullopt;
+        }
+        query.start_triangle = start_triangle;
+        query.point = packed.point;
+        query.up = packed.up;
+        query.metric = packed.metric;
+
+        tc_mesh_surface_edge_hit hit{};
+        if (!tc_mesh_find_surface_edge_query(mesh, &query, &hit)) {
+            return std::nullopt;
+        }
+        return unpack_surface_edge_hit(hit);
+    }
+
+    std::optional<TcMeshSurfaceEdgeHit>
+    TcMesh::find_surface_edge_aligned(uint32_t start_triangle,
+                                      const Vec3& point,
+                                      const Vec3& normal,
+                                      const Vec3& edge_direction,
+                                      double max_angle_degrees,
+                                      std::optional<Vec3> up,
+                                      std::optional<Vec3> metric) const {
+        tc_mesh* mesh = surface_edge_mesh(*this, "find an aligned surface edge");
+        if (!mesh) {
+            return std::nullopt;
+        }
+        PackedSurfaceEdgeInputs packed;
+        tc_mesh_surface_edge_query query{};
+        if (!try_pack_surface_edge_angle(max_angle_degrees, query.max_angle_degrees)) {
+            return std::nullopt;
+        }
+        if (!try_pack_surface_edge_inputs(point, up, metric, packed) ||
+            !try_pack_surface_edge_direction(normal, "normal", query.normal) ||
+            !try_pack_surface_edge_direction(edge_direction, "edge direction", query.edge_direction)) {
+            return std::nullopt;
+        }
+        if (!validate_surface_edge_metric_product(query.edge_direction, packed.metric, "edge direction")) {
+            return std::nullopt;
+        }
+
+        query.start_triangle = start_triangle;
+        query.point = packed.point;
+        query.up = packed.up;
+        query.metric = packed.metric;
+        query.use_direction_filter = true;
+
+        tc_mesh_surface_edge_hit hit{};
+        if (!tc_mesh_find_surface_edge_query(mesh, &query, &hit)) {
+            return std::nullopt;
+        }
+        return unpack_surface_edge_hit(hit);
+    }
+
+    std::optional<TcMeshSurfaceEdgeHit> TcMesh::find_nearest_surface_edge(const Vec3& point,
+                                                                          std::optional<Vec3> up,
+                                                                          std::optional<Vec3> metric) const {
+        tc_mesh* mesh = surface_edge_mesh(*this, "find the nearest surface edge");
+        if (!mesh) {
+            return std::nullopt;
+        }
+
+        PackedSurfaceEdgeInputs packed;
+        if (!try_pack_surface_edge_inputs(point, up, metric, packed)) {
+            return std::nullopt;
+        }
+
+        tc_mesh_surface_edge_hit hit{};
+        if (!tc_mesh_find_nearest_surface_edge_metric(mesh, packed.point, packed.up, packed.metric, &hit)) {
+            return std::nullopt;
+        }
+        return unpack_surface_edge_hit(hit);
     }
 
     TcMesh TcMesh::from_mesh3(const Mesh3& mesh,

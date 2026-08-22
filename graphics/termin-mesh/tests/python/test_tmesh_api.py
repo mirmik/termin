@@ -5,6 +5,7 @@ from array import array
 import numpy as np
 import tmesh
 import pytest
+from tcbase import clear_resource_loader, set_resource_loader
 from tcbase._geom_native import Ray3, Vec3
 
 
@@ -498,6 +499,298 @@ def _box_tc_mesh_unshared(width: float, depth: float, height: float):
     return tmesh.TcMesh.from_mesh3(mesh, f"surface-edge-wall-box-unshared-{uuid.uuid4()}")
 
 
+def test_surface_edge_queries_return_typed_read_only_hits_and_public_export():
+    from termin.mesh import TcMeshSurfaceEdgeHit as PublicTcMeshSurfaceEdgeHit
+
+    mesh = _cube_tc_mesh()
+    point = Vec3(1.3, 0.0, 3.5)
+    normal = Vec3.up()
+    hits = (
+        mesh.find_surface_edge(start_triangle=0, point=point, normal=normal),
+        mesh.find_surface_edge_aligned(
+            start_triangle=0,
+            point=point,
+            normal=normal,
+            edge_direction=Vec3.unit_y(),
+            max_angle_degrees=0.0,
+        ),
+        mesh.find_nearest_surface_edge(point=point),
+    )
+
+    assert PublicTcMeshSurfaceEdgeHit is tmesh.TcMeshSurfaceEdgeHit
+    for hit in hits:
+        assert hit is not None
+        assert type(hit) is tmesh.TcMeshSurfaceEdgeHit
+        assert isinstance(hit.point, Vec3)
+        assert isinstance(hit.indices, tuple)
+        assert len(hit.indices) == 2
+        assert all(isinstance(index, int) for index in hit.indices)
+        assert isinstance(hit.distance, float)
+        assert isinstance(hit.side, int)
+
+    hit = hits[0]
+    assert hit is not None
+    _assert_vec3_approx(hit.point, (1.5, 0.0, 3.5))
+    assert hit.distance == pytest.approx(0.2, abs=1e-6)
+
+    with pytest.raises(AttributeError):
+        hit.point = Vec3.zero()
+    with pytest.raises(AttributeError):
+        hit.indices = (0, 1)
+    with pytest.raises(AttributeError):
+        hit.distance = 1.0
+    with pytest.raises(AttributeError):
+        hit.side = 0
+    with pytest.raises(TypeError):
+        hit["point"]
+
+
+@pytest.mark.parametrize("direction_magnitude", [1.0e-300, 1.0e300])
+def test_surface_edge_query_direction_magnitude_is_ignored(direction_magnitude: float):
+    mesh = _cube_tc_mesh()
+    point = Vec3(1.3, 0.0, 3.5)
+    scaled_up = Vec3(0.0, 0.0, direction_magnitude)
+
+    surface_hit = mesh.find_surface_edge(
+        start_triangle=0,
+        point=point,
+        normal=Vec3(0.0, 0.0, direction_magnitude),
+        up=scaled_up,
+    )
+    aligned_hit = mesh.find_surface_edge_aligned(
+        start_triangle=0,
+        point=point,
+        normal=Vec3(0.0, 0.0, direction_magnitude),
+        edge_direction=Vec3(0.0, direction_magnitude, 0.0),
+        max_angle_degrees=0.0,
+        up=scaled_up,
+    )
+    nearest_hit = mesh.find_nearest_surface_edge(point=point, up=scaled_up)
+
+    for hit in (surface_hit, aligned_hit, nearest_hit):
+        assert hit is not None
+        _assert_vec3_approx(hit.point, (1.5, 0.0, 3.5))
+        assert hit.distance == pytest.approx(0.2, abs=1e-6)
+
+
+@pytest.mark.parametrize(
+    "point",
+    [
+        Vec3(math.nan, 0.0, 3.5),
+        Vec3(math.inf, 0.0, 3.5),
+        Vec3(1.0e300, 0.0, 3.5),
+        Vec3(math.ulp(0.0), 0.0, 3.5),
+    ],
+)
+def test_surface_edge_queries_reject_invalid_or_unrepresentable_points(point: Vec3):
+    mesh = _cube_tc_mesh()
+
+    assert (
+        mesh.find_surface_edge(
+            start_triangle=0,
+            point=point,
+            normal=Vec3.up(),
+        )
+        is None
+    )
+    assert mesh.find_nearest_surface_edge(point=point) is None
+
+
+@pytest.mark.parametrize(
+    "direction",
+    [
+        Vec3.zero(),
+        Vec3(math.nan, 0.0, 1.0),
+        Vec3(math.inf, 0.0, 1.0),
+    ],
+)
+def test_surface_edge_queries_reject_invalid_direction_like_inputs(direction: Vec3):
+    mesh = _cube_tc_mesh()
+    point = Vec3(1.3, 0.0, 3.5)
+
+    assert (
+        mesh.find_surface_edge(
+            start_triangle=0,
+            point=point,
+            normal=direction,
+        )
+        is None
+    )
+    assert (
+        mesh.find_surface_edge(
+            start_triangle=0,
+            point=point,
+            normal=Vec3.up(),
+            up=direction,
+        )
+        is None
+    )
+    assert (
+        mesh.find_surface_edge_aligned(
+            start_triangle=0,
+            point=point,
+            normal=Vec3.up(),
+            edge_direction=direction,
+            max_angle_degrees=10.0,
+        )
+        is None
+    )
+    assert mesh.find_nearest_surface_edge(point=point, up=direction) is None
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        Vec3.zero(),
+        Vec3(-1.0, 1.0, 1.0),
+        Vec3(math.nan, 1.0, 1.0),
+        Vec3(math.inf, 1.0, 1.0),
+        Vec3(1.0e300, 1.0, 1.0),
+        Vec3(1.0e-9, 1.0, 1.0),
+        Vec3(math.ulp(0.0), 1.0, 1.0),
+    ],
+)
+def test_surface_edge_queries_reject_invalid_or_unrepresentable_metric(metric: Vec3):
+    mesh = _cube_tc_mesh()
+
+    assert (
+        mesh.find_surface_edge(
+            start_triangle=0,
+            point=Vec3(1.3, 0.0, 3.5),
+            normal=Vec3.up(),
+            metric=metric,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "point,metric",
+    [
+        (
+            Vec3(float(np.finfo(np.float32).max), 0.0, 3.5),
+            Vec3(2.0, 1.0, 1.0),
+        ),
+        (
+            Vec3(
+                float(np.nextafter(np.float32(0.0), np.float32(1.0))),
+                0.0,
+                3.5,
+            ),
+            Vec3(1.0e-8, 1.0, 1.0),
+        ),
+    ],
+)
+def test_surface_edge_queries_reject_packed_metric_product_overflow_or_underflow(
+    point: Vec3,
+    metric: Vec3,
+):
+    mesh = _cube_tc_mesh()
+
+    assert (
+        mesh.find_surface_edge(
+            start_triangle=0,
+            point=point,
+            normal=Vec3.up(),
+            metric=metric,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "max_angle_degrees",
+    [
+        math.nan,
+        math.inf,
+        -math.inf,
+        -0.001,
+        -math.ulp(0.0),
+        math.nextafter(90.0, math.inf),
+        90.001,
+    ],
+)
+def test_surface_edge_aligned_query_rejects_invalid_angle(max_angle_degrees: float):
+    mesh = _cube_tc_mesh()
+
+    assert (
+        mesh.find_surface_edge_aligned(
+            start_triangle=0,
+            point=Vec3(1.3, 0.0, 3.5),
+            normal=Vec3.up(),
+            edge_direction=Vec3.unit_y(),
+            max_angle_degrees=max_angle_degrees,
+        )
+        is None
+    )
+
+
+def test_surface_edge_queries_reject_invalid_handle_and_start_triangle():
+    assert tmesh.TcMesh().find_nearest_surface_edge(point=Vec3.zero()) is None
+
+    mesh = _cube_tc_mesh()
+    invalid_triangle = mesh.triangle_count
+    assert (
+        mesh.find_surface_edge(
+            start_triangle=invalid_triangle,
+            point=Vec3(1.3, 0.0, 3.5),
+            normal=Vec3.up(),
+        )
+        is None
+    )
+    assert (
+        mesh.find_surface_edge_aligned(
+            start_triangle=invalid_triangle,
+            point=Vec3(1.3, 0.0, 3.5),
+            normal=Vec3.up(),
+            edge_direction=Vec3.unit_y(),
+            max_angle_degrees=10.0,
+        )
+        is None
+    )
+
+
+def test_surface_edge_query_loads_declared_mesh_before_validating_start_triangle():
+    mesh_uuid = f"surface-edge-lazy-{uuid.uuid4()}"
+    declared = tmesh.tc_mesh_declare(mesh_uuid, "surface-edge-lazy")
+    layout = tmesh.TcVertexLayout.pos_normal_uv()
+    vertices = np.array(
+        [
+            0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0,
+            0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0,
+        ],
+        dtype=np.float32,
+    )
+    indices = np.array([0, 1, 2], dtype=np.uint32)
+
+    def load_mesh(resource_uuid: str) -> bool:
+        assert resource_uuid == mesh_uuid
+        return tmesh.tc_mesh_set_data(
+            declared,
+            vertices,
+            3,
+            layout,
+            indices,
+            "surface-edge-lazy",
+        )
+
+    assert not tmesh.tc_mesh_is_loaded(declared)
+    set_resource_loader(load_mesh)
+    try:
+        hit = declared.find_surface_edge(
+            start_triangle=0,
+            point=Vec3(0.2, 0.2, 0.0),
+            normal=Vec3.up(),
+        )
+    finally:
+        clear_resource_loader()
+
+    assert tmesh.tc_mesh_is_loaded(declared)
+    assert hit is not None
+    _assert_vec3_approx(hit.point, (0.2, 0.0, 0.0))
+
+
 @pytest.mark.parametrize(
     "point,expected_edge",
     [
@@ -525,8 +818,8 @@ def test_surface_edge_query_finds_symmetric_top_cube_edges(point, expected_edge)
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], expected_edge)
-    assert edge["distance"] == pytest.approx(0.2, abs=1e-6)
+    _assert_vec3_approx(edge.point, expected_edge)
+    assert edge.distance == pytest.approx(0.2, abs=1e-6)
 
 
 def test_surface_edge_query_ignores_unshared_internal_diagonal():
@@ -539,8 +832,8 @@ def test_surface_edge_query_ignores_unshared_internal_diagonal():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (1.5, 0.0, 3.5))
-    assert edge["distance"] == pytest.approx(1.4, abs=1e-6)
+    _assert_vec3_approx(edge.point, (1.5, 0.0, 3.5))
+    assert edge.distance == pytest.approx(1.4, abs=1e-6)
 
 
 def test_surface_edge_query_finds_nearest_edge_on_vertical_surface():
@@ -553,8 +846,8 @@ def test_surface_edge_query_finds_nearest_edge_on_vertical_surface():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (1.5, 0.0, 3.5))
-    assert edge["distance"] == pytest.approx(1.0, abs=1e-6)
+    _assert_vec3_approx(edge.point, (1.5, 0.0, 3.5))
+    assert edge.distance == pytest.approx(1.0, abs=1e-6)
 
 
 def test_surface_edge_query_finds_short_edge_on_long_box_top_face():
@@ -567,8 +860,8 @@ def test_surface_edge_query_finds_short_edge_on_long_box_top_face():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (-10.0, 0.0, 3.5))
-    assert edge["distance"] == pytest.approx(0.2, abs=1e-6)
+    _assert_vec3_approx(edge.point, (-10.0, 0.0, 3.5))
+    assert edge.distance == pytest.approx(0.2, abs=1e-6)
 
 
 def test_surface_edge_query_uses_metric_for_distance():
@@ -582,8 +875,51 @@ def test_surface_edge_query_uses_metric_for_distance():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (1.5, 1.3, 3.5))
-    assert edge["distance"] == pytest.approx(0.06, abs=1e-6)
+    _assert_vec3_approx(edge.point, (1.5, 1.3, 3.5))
+    assert edge.distance == pytest.approx(0.06, abs=1e-6)
+
+
+def test_surface_edge_queries_preserve_tilted_coplanar_connectivity_with_anisotropic_metric():
+    mesh_data = tmesh.Mesh3(
+        vertices=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, -1.0, 0.0],
+                [1.0, -1.0, 1.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        ),
+        triangles=np.array([[0, 1, 2], [0, 2, 3]], dtype=np.uint32),
+        name="surface-edge-tilted-quad",
+    )
+    mesh = tmesh.TcMesh.from_mesh3(
+        mesh_data,
+        f"surface-edge-tilted-quad-{uuid.uuid4()}",
+    )
+    point = Vec3(0.6, -0.6, 0.5)
+    metric = Vec3(100.0, 1.0, 1.0)
+
+    hits = (
+        mesh.find_surface_edge(
+            start_triangle=0,
+            point=point,
+            normal=Vec3(-1.0, -1.0, 0.0),
+            up=Vec3.unit_z(),
+            metric=metric,
+        ),
+        mesh.find_nearest_surface_edge(
+            point=point,
+            up=Vec3.unit_z(),
+            metric=metric,
+        ),
+    )
+
+    for hit in hits:
+        assert hit is not None
+        assert hit.indices == (0, 1)
+        _assert_vec3_approx(hit.point, (0.6, -0.6, 0.0), abs=1e-5)
+        assert hit.distance == pytest.approx(0.5, abs=1e-5)
 
 
 def test_surface_edge_aligned_query_uses_metric_for_direction_filter():
@@ -599,8 +935,8 @@ def test_surface_edge_aligned_query_uses_metric_for_direction_filter():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (1.5, 1.3, 3.5))
-    assert edge["distance"] == pytest.approx(0.06, abs=1e-6)
+    _assert_vec3_approx(edge.point, (1.5, 1.3, 3.5))
+    assert edge.distance == pytest.approx(0.06, abs=1e-6)
 
 
 def test_surface_edge_query_finds_short_vertical_edge_on_long_box_wall_face():
@@ -613,9 +949,9 @@ def test_surface_edge_query_finds_short_vertical_edge_on_long_box_wall_face():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (-10.0, -0.5, 2.0))
-    assert edge["distance"] == pytest.approx(0.2, abs=1e-6)
-    assert edge["side"] == -1
+    _assert_vec3_approx(edge.point, (-10.0, -0.5, 2.0))
+    assert edge.distance == pytest.approx(0.2, abs=1e-6)
+    assert edge.side == -1
 
 
 def test_surface_edge_query_prefers_near_horizontal_edge_over_far_wall_end():
@@ -628,8 +964,8 @@ def test_surface_edge_query_prefers_near_horizontal_edge_over_far_wall_end():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (-5.0, -0.5, 3.5))
-    assert edge["distance"] == pytest.approx(0.2, abs=1e-6)
+    _assert_vec3_approx(edge.point, (-5.0, -0.5, 3.5))
+    assert edge.distance == pytest.approx(0.2, abs=1e-6)
 
 
 def test_surface_edge_aligned_query_filters_by_vertical_edge_direction():
@@ -644,9 +980,9 @@ def test_surface_edge_aligned_query_filters_by_vertical_edge_direction():
     )
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (-10.0, -0.5, 3.3))
-    assert edge["distance"] == pytest.approx(5.0, abs=1e-6)
-    assert edge["side"] == -1
+    _assert_vec3_approx(edge.point, (-10.0, -0.5, 3.3))
+    assert edge.distance == pytest.approx(5.0, abs=1e-6)
+    assert edge.side == -1
 
 
 def test_surface_edge_aligned_query_rejects_mismatching_edge_direction():
@@ -669,5 +1005,5 @@ def test_nearest_surface_edge_query_does_not_require_start_triangle():
     edge = mesh.find_nearest_surface_edge(point=Vec3(-9.8, 0.0, 3.5))
 
     assert edge is not None
-    _assert_vec3_approx(edge["point"], (-10.0, 0.0, 3.5))
-    assert edge["distance"] == pytest.approx(0.2, abs=1e-6)
+    _assert_vec3_approx(edge.point, (-10.0, 0.0, 3.5))
+    assert edge.distance == pytest.approx(0.2, abs=1e-6)

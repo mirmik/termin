@@ -77,9 +77,7 @@ def _find_surface_edge_for_entity(
     local_point = _world_point_to_mesh_local(
         transform, inverse_mesh_offset, mesh_point
     )
-    local_normal = _world_normal_to_mesh_query(
-        transform, mesh_offset, mesh_normal, metric
-    )
+    local_normal = _world_normal_to_mesh_query(transform, mesh_offset, mesh_normal)
     local_up = _world_vector_to_mesh_local(
         transform, inverse_mesh_offset, Vec3(0.0, 0.0, 1.0)
     )
@@ -109,14 +107,12 @@ def _find_surface_edge_for_entity(
     if edge is None:
         return None
 
-    local_edge = edge["point"]
-    world_edge = _mesh_point_to_world(transform, mesh_offset, local_edge)
-    indices = edge["indices"]
+    world_edge = _mesh_point_to_world(transform, mesh_offset, edge.point)
     return SurfaceEdgeHit(
         world_edge,
-        (int(indices[0]), int(indices[1])),
-        float(edge["distance"]),
-        int(edge["side"]),
+        edge.indices,
+        edge.distance,
+        edge.side,
     )
 
 
@@ -138,18 +134,15 @@ def _world_normal_to_mesh_query(
     transform,
     mesh_offset,
     normal: Vec3,
-    metric: Vec3,
 ) -> Vec3:
     # A normal is a covector. For local-to-world basis L its local components
-    # are L^T * n_world, not L^-1 * n_world. The mesh query applies its
-    # diagonal metric M to every supplied vector, so encode the covector as
-    # M^-2 * L^T * n_world; after the query's multiplication this becomes the
-    # correct M^-T local normal for its documented approximate metric space.
+    # are L^T * n_world, not L^-1 * n_world. The mesh query owns the subsequent
+    # inverse-transpose conversion into its diagonal metric space.
     axis_x, axis_y, axis_z = _mesh_world_basis_axes(transform, mesh_offset)
     return Vec3(
-        axis_x.dot(normal) / (metric.x * metric.x),
-        axis_y.dot(normal) / (metric.y * metric.y),
-        axis_z.dot(normal) / (metric.z * metric.z),
+        axis_x.dot(normal),
+        axis_y.dot(normal),
+        axis_z.dot(normal),
     ).normalized()
 
 

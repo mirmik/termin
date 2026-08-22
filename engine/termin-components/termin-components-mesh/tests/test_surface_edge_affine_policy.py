@@ -1,9 +1,14 @@
 import math
+import uuid
 
+import numpy as np
 import pytest
 
 from termin.geombase import Mat44f, Pose3, Vec3
+from termin.mesh import Mesh3, MeshComponent, TcMesh
 from termin.mesh.surface_edge_query import (
+    SurfaceEdgeHit,
+    find_surface_edge_for_entity,
     _mesh_point_to_world,
     _surface_edge_axis_length_metric,
     _world_normal_to_mesh_query,
@@ -11,6 +16,48 @@ from termin.mesh.surface_edge_query import (
     _world_vector_to_mesh_local,
 )
 from termin.scene import TcScene, TransformKind
+
+
+def test_surface_edge_entity_adapter_preserves_typed_native_hit_fields():
+    mesh_data = Mesh3(
+        vertices=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ],
+            dtype=np.float32,
+        ),
+        triangles=np.array([[0, 1, 2]], dtype=np.uint32),
+        name="surface-edge-entity-adapter",
+    )
+    mesh = TcMesh.from_mesh3(
+        mesh_data,
+        f"surface-edge-entity-adapter-{uuid.uuid4()}",
+    )
+    scene = TcScene.create("surface-edge-entity-adapter")
+    try:
+        entity = scene.create_entity("mesh")
+        mesh_component = MeshComponent()
+        mesh_component.mesh = mesh
+        entity.add_component(mesh_component)
+
+        hit = find_surface_edge_for_entity(
+            entity,
+            Vec3(0.2, 0.2, 0.0),
+            Vec3.up(),
+            triangle_index=0,
+        )
+
+        assert isinstance(hit, SurfaceEdgeHit)
+        assert hit.indices in ((0, 1), (1, 0))
+        assert hit.distance == pytest.approx(0.2)
+        assert hit.side == 0
+        assert hit.point.x == pytest.approx(0.2)
+        assert hit.point.y == pytest.approx(0.0)
+        assert hit.point.z == pytest.approx(0.0)
+    finally:
+        scene.destroy()
 
 
 def test_surface_edge_affine_helpers_use_exact_basis_and_named_metric_policy():
@@ -33,7 +80,6 @@ def test_surface_edge_affine_helpers_use_exact_basis_and_named_metric_policy():
         child.transform,
         mesh_offset,
         Vec3.unit_x(),
-        metric,
     )
     inv_sqrt_two = 1.0 / math.sqrt(2.0)
     assert local_normal.x == pytest.approx(inv_sqrt_two)
