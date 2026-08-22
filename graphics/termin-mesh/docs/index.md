@@ -27,9 +27,40 @@ Python:
 
 ```python
 import tmesh
+from termin.geombase import Ray3, Vec3
 from termin.default_assets.mesh.asset import MeshAsset
 from termin.default_assets.mesh.asset_plugin import register_mesh_import_plugin
+
+hit = mesh.raycast(
+    Ray3(Vec3(0.25, 0.25, 1.0), Vec3.down()),
+    min_distance=0.0,
+    max_distance=100.0,
+)
+if hit is not None:
+    print(hit.distance, hit.position, hit.normal)
 ```
+
+`TcMesh.raycast(ray, min_distance=0.0, max_distance=1_000_000.0)` принимает
+канонический `Ray3` и возвращает read-only `TcMeshRayHit` либо `None`. Поля
+результата: `distance`, `position`, `normal`, `barycentric`,
+`triangle_index` и `indices`; геометрические поля представлены `Vec3`.
+Диапазон расстояний замкнутый и может включать отрицательные значения.
+На packed-float границе его нижняя и верхняя границы округляются внутрь,
+поэтому возвращённый hit никогда не выходит за исходный double-интервал;
+интервал без представимых float-расстояний возвращает `None`.
+
+В отличие от `RayTriangleHit.ray_parameter`, `TcMeshRayHit.distance` — это
+знаковое метрическое расстояние в локальных координатах mesh вдоль
+нормализованного направления. Модуль `ray.direction` не влияет на результат:
+для ненормализованного направления позиция равна
+`ray.origin + ray.direction.try_normalized() * hit.distance`, а не
+`ray.point_at(hit.distance)`. Нефинитные, вырожденные и не представимые в
+packed float boundary лучи или диапазоны отклоняются с `None`.
+
+Прежняя плоская форма
+`raycast(origin_tuple, direction_tuple, t_min, t_max)` удалена. Миграция
+выполняется явно: координаты собираются в `Vec3`, пара значений — в `Ray3`, а
+границы передаются как `min_distance` и `max_distance`.
 
 C/C++ API публикуется через installed headers из `include/`.
 

@@ -1,7 +1,48 @@
 #include <tgfx/tgfx_mesh3.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
+#include <cmath>
+#include <limits>
+
 namespace termin {
+
+    namespace {
+
+        bool try_narrow_lower_distance(double value, float& out) noexcept {
+            constexpr double float_max = static_cast<double>(std::numeric_limits<float>::max());
+            if (!std::isfinite(value) || value < -float_max || value > float_max) {
+                return false;
+            }
+
+            float narrowed = static_cast<float>(value);
+            if (!std::isfinite(narrowed)) {
+                return false;
+            }
+            if (static_cast<double>(narrowed) < value) {
+                narrowed = std::nextafter(narrowed, std::numeric_limits<float>::infinity());
+            }
+            out = narrowed;
+            return true;
+        }
+
+        bool try_narrow_upper_distance(double value, float& out) noexcept {
+            constexpr double float_max = static_cast<double>(std::numeric_limits<float>::max());
+            if (!std::isfinite(value) || value < -float_max || value > float_max) {
+                return false;
+            }
+
+            float narrowed = static_cast<float>(value);
+            if (!std::isfinite(narrowed)) {
+                return false;
+            }
+            if (static_cast<double>(narrowed) > value) {
+                narrowed = std::nextafter(narrowed, -std::numeric_limits<float>::infinity());
+            }
+            out = narrowed;
+            return true;
+        }
+
+    } // namespace
 
     static void set_mesh_submeshes(TcMesh& mesh, const TcMeshCreateInfo& create_info) {
         if (!create_info.submeshes || create_info.submesh_count == 0) {
@@ -82,6 +123,65 @@ namespace termin {
                                 mesh.triangles.data(),
                                 mesh.triangles.size(),
                                 mesh.name.empty() ? nullptr : mesh.name.c_str());
+    }
+
+    std::optional<TcMeshRayHit>
+    TcMesh::raycast(const Ray3& ray, double min_distance, double max_distance) const {
+        tc_mesh* mesh = get();
+        if (!mesh) {
+            tc_log_error("[TcMesh] Cannot raycast an invalid or stale mesh handle");
+            return std::nullopt;
+        }
+        if (!std::isfinite(min_distance) || !std::isfinite(max_distance) || min_distance > max_distance) {
+            tc_log_error("[TcMesh] Raycast range must be a finite closed interval (min=%.17g, max=%.17g)",
+                         min_distance,
+                         max_distance);
+            return std::nullopt;
+        }
+        if (!ray.origin.is_finite()) {
+            tc_log_error("[TcMesh] Raycast origin must contain only finite values");
+            return std::nullopt;
+        }
+
+        Vec3 direction;
+        if (!ray.direction.try_normalized(direction)) {
+            tc_log_error("[TcMesh] Raycast direction must be finite and non-degenerate");
+            return std::nullopt;
+        }
+
+        tc_mesh_ray packed_ray{};
+        if (!ray.origin.try_to_float(packed_ray.origin) || !direction.try_to_float(packed_ray.direction)) {
+            tc_log_error(
+                "[TcMesh] Raycast origin or normalized direction cannot be narrowed to float without overflow or underflow");
+            return std::nullopt;
+        }
+        if (!try_narrow_lower_distance(min_distance, packed_ray.t_min) ||
+            !try_narrow_upper_distance(max_distance, packed_ray.t_max)) {
+            tc_log_error("[TcMesh] Raycast range is outside the finite float magnitude range (min=%.17g, max=%.17g)",
+                         min_distance,
+                         max_distance);
+            return std::nullopt;
+        }
+        if (packed_ray.t_min > packed_ray.t_max) {
+            tc_log_error("[TcMesh] Raycast range contains no representable float distances (min=%.17g, max=%.17g)",
+                         min_distance,
+                         max_distance);
+            return std::nullopt;
+        }
+
+        tc_mesh_hit packed_hit{};
+        if (!tc_mesh_raycast(mesh, &packed_ray, &packed_hit)) {
+            return std::nullopt;
+        }
+
+        return TcMeshRayHit{
+            static_cast<double>(packed_hit.t),
+            packed_hit.position.to_double(),
+            packed_hit.normal.to_double(),
+            packed_hit.barycentric.to_double(),
+            packed_hit.triangle_index,
+            {packed_hit.indices[0], packed_hit.indices[1], packed_hit.indices[2]},
+        };
     }
 
     TcMesh TcMesh::from_mesh3(const Mesh3& mesh,

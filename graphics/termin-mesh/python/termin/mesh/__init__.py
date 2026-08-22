@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pkgutil import extend_path
 
-from tmesh import Mesh3, TcMesh
+from tmesh import Mesh3, TcMesh, TcMeshRayHit
 
 __path__ = extend_path(__path__, __name__)
 
@@ -44,6 +44,7 @@ def __getattr__(name: str):
 __all__ = [
     "Mesh3",
     "TcMesh",
+    "TcMeshRayHit",
     "MeshComponent",
     "ProceduralMeshComponent",
     "ScriptMeshComponent",

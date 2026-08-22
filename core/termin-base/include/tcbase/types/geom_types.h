@@ -601,6 +601,9 @@ struct tc_vec3 {
         const double yz = y > z ? y : z;
         return x > yz ? x : yz;
     }
+    // Narrows finite components that lie within the finite float range without
+    // underflowing a non-zero component to zero. Any failure leaves out unchanged.
+    bool try_to_float(tc_vec3f& out) const noexcept;
     tc_vec3f to_float() const noexcept;
 
     static double angle(const tc_vec3& a, const tc_vec3& b) {
@@ -1005,6 +1008,22 @@ inline tc_vec3f operator*(float s, const tc_vec3f& v) noexcept {
 
 inline tc_vec3f tc_vec3::to_float() const noexcept {
     return tc_vec3f{static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)};
+}
+
+inline bool tc_vec3::try_to_float(tc_vec3f& out) const noexcept {
+    constexpr double float_max = static_cast<double>(std::numeric_limits<float>::max());
+    if (!is_finite() || x < -float_max || x > float_max || y < -float_max || y > float_max || z < -float_max ||
+        z > float_max) {
+        return false;
+    }
+
+    const tc_vec3f narrowed = to_float();
+    if (!narrowed.is_finite() || (x != 0.0 && narrowed.x == 0.0f) || (y != 0.0 && narrowed.y == 0.0f) ||
+        (z != 0.0 && narrowed.z == 0.0f)) {
+        return false;
+    }
+    out = narrowed;
+    return true;
 }
 
 struct tc_quatf {

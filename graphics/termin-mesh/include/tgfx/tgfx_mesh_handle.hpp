@@ -7,8 +7,11 @@
 #include <tcbase/tc_value.h>
 #include <tgfx/resources/tc_mesh.h>
 #include <tgfx/resources/tc_mesh_registry.h>
+#include <termin/geom/ray3.hpp>
 
+#include <array>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <tgfx/tgfx_api.h>
 #include <vector>
@@ -33,6 +36,16 @@ namespace termin {
         std::string name;
         std::string uuid_hint;
         tc_draw_mode draw_mode = TC_DRAW_TRIANGLES;
+    };
+
+    /** Rich result of a mesh-local metric raycast. */
+    struct TcMeshRayHit {
+        double distance = 0.0;
+        Vec3 position{};
+        Vec3 normal{};
+        Vec3 barycentric{};
+        uint32_t triangle_index = 0;
+        std::array<uint32_t, 3> indices{};
     };
 
     // TcMesh - GPU-ready mesh wrapper
@@ -271,6 +284,17 @@ namespace termin {
 
         // Populate existing TcMesh with data from Mesh3
         bool set_from_mesh3(const Mesh3& mesh, const tc_vertex_layout* custom_layout = nullptr);
+
+        /**
+         * Finds the nearest triangle hit in the closed metric-distance range.
+         *
+         * Direction magnitude is ignored. For a non-unit direction, position
+         * is origin + normalized(direction) * distance rather than
+         * ray.point_at(distance). Range endpoints are rounded inward at the
+         * packed-float boundary. Invalid inputs are logged and return no hit.
+         */
+        [[nodiscard]] std::optional<TcMeshRayHit>
+        raycast(const Ray3& ray, double min_distance = 0.0, double max_distance = 1000000.0) const;
 
         // Create TcMesh from Mesh3 (CPU mesh)
         static TcMesh from_mesh3(const Mesh3& mesh,
