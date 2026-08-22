@@ -1,10 +1,11 @@
+import math
 import uuid
 from array import array
 
 import numpy as np
 import tmesh
 import pytest
-from tcbase._geom_native import Vec3
+from tcbase._geom_native import Ray3, Vec3
 
 
 def _v3(value) -> Vec3:
@@ -278,6 +279,167 @@ def _cube_tc_mesh():
     )
     mesh = tmesh.Mesh3(vertices=vertices, triangles=triangles, name="surface-edge-cube")
     return tmesh.TcMesh.from_mesh3(mesh, f"surface-edge-cube-{uuid.uuid4()}")
+
+
+def _triangle_tc_mesh():
+    mesh = tmesh.Mesh3(
+        vertices=np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ],
+            dtype=np.float32,
+        ),
+        triangles=np.array([[0, 1, 2]], dtype=np.uint32),
+        name="raycast-triangle",
+    )
+    return tmesh.TcMesh.from_mesh3(mesh, f"raycast-triangle-{uuid.uuid4()}")
+
+
+def _raw_ray(origin: Vec3, direction: Vec3) -> Ray3:
+    ray = Ray3()
+    ray.origin = origin
+    ray.direction = direction
+    return ray
+
+
+def test_tc_mesh_raycast_returns_typed_rich_hit_and_public_export():
+    from termin.mesh import TcMeshRayHit as PublicTcMeshRayHit
+
+    mesh = _triangle_tc_mesh()
+    hit = mesh.raycast(Ray3(Vec3(0.25, 0.25, 1.0), Vec3.down()))
+
+    assert hit is not None
+    assert isinstance(hit, tmesh.TcMeshRayHit)
+    assert PublicTcMeshRayHit is tmesh.TcMeshRayHit
+    assert isinstance(hit.distance, float)
+    assert isinstance(hit.position, Vec3)
+    assert isinstance(hit.normal, Vec3)
+    assert isinstance(hit.barycentric, Vec3)
+    assert hit.distance == pytest.approx(1.0)
+    _assert_vec3_approx(hit.position, (0.25, 0.25, 0.0))
+    _assert_vec3_approx(hit.normal, (0.0, 0.0, 1.0))
+    _assert_vec3_approx(hit.barycentric, (0.5, 0.25, 0.25))
+    assert hit.triangle_index == 0
+    assert hit.indices == (0, 1, 2)
+    assert isinstance(hit.indices, tuple)
+
+    with pytest.raises(AttributeError):
+        hit.distance = 2.0
+    with pytest.raises(AttributeError):
+        hit.position = Vec3.zero()
+    with pytest.raises(AttributeError):
+        hit.indices = (2, 1, 0)
+
+
+@pytest.mark.parametrize("direction_scale", [0.25, 4.0, 1.0e300])
+def test_tc_mesh_raycast_distance_is_metric_for_non_unit_ray(direction_scale: float):
+    mesh = _triangle_tc_mesh()
+    origin = Vec3(0.25, 0.25, 1.0)
+    ray = _raw_ray(origin, Vec3(0.0, 0.0, -direction_scale))
+
+    hit = mesh.raycast(ray)
+
+    assert hit is not None
+    assert hit.distance == pytest.approx(1.0)
+    normalized_direction = ray.direction.try_normalized()
+    assert normalized_direction is not None
+    _assert_vec3_approx(hit.position, origin + normalized_direction * hit.distance)
+
+
+def test_tc_mesh_raycast_uses_a_closed_signed_metric_range():
+    mesh = _triangle_tc_mesh()
+    forward_ray = Ray3(Vec3(0.25, 0.25, 1.0), Vec3.down())
+
+    boundary_hit = mesh.raycast(forward_ray, min_distance=1.0, max_distance=1.0)
+    assert boundary_hit is not None
+    assert boundary_hit.distance == pytest.approx(1.0)
+    assert mesh.raycast(forward_ray, min_distance=0.0, max_distance=0.999) is None
+
+    backward_hit = mesh.raycast(
+        Ray3(Vec3(0.25, 0.25, -1.0), Vec3.down()),
+        min_distance=-1.0,
+        max_distance=-1.0,
+    )
+    assert backward_hit is not None
+    assert backward_hit.distance == pytest.approx(-1.0)
+    _assert_vec3_approx(backward_hit.position, (0.25, 0.25, 0.0))
+
+
+def test_tc_mesh_raycast_float_boundary_never_expands_the_requested_range():
+    mesh = _triangle_tc_mesh()
+    ray = Ray3(Vec3(0.25, 0.25, 1.0), Vec3.down())
+    below_hit = math.nextafter(1.0, -math.inf)
+    above_hit = math.nextafter(1.0, math.inf)
+
+    assert mesh.raycast(ray, min_distance=below_hit, max_distance=below_hit) is None
+    assert mesh.raycast(ray, min_distance=above_hit, max_distance=above_hit) is None
+    assert mesh.raycast(ray, min_distance=below_hit, max_distance=1.0) is not None
+    assert mesh.raycast(ray, min_distance=1.0, max_distance=above_hit) is not None
+
+
+def test_tc_mesh_raycast_reports_miss_and_rejects_old_flat_signature():
+    mesh = _triangle_tc_mesh()
+
+    assert mesh.raycast(Ray3(Vec3(2.0, 2.0, 1.0), Vec3.down())) is None
+    with pytest.raises(TypeError):
+        mesh.raycast((0.25, 0.25, 1.0), (0.0, 0.0, -1.0))
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        Vec3(math.nan, 0.25, 1.0),
+        Vec3(math.inf, 0.25, 1.0),
+        Vec3(1.0e300, 0.25, 1.0),
+        Vec3(math.ulp(0.0), 0.25, 1.0),
+    ],
+)
+def test_tc_mesh_raycast_rejects_invalid_or_unrepresentable_origin(origin: Vec3):
+    mesh = _triangle_tc_mesh()
+
+    assert mesh.raycast(_raw_ray(origin, Vec3.down())) is None
+
+
+@pytest.mark.parametrize(
+    "direction",
+    [
+        Vec3.zero(),
+        Vec3(math.nan, 0.0, -1.0),
+        Vec3(math.inf, 0.0, -1.0),
+    ],
+)
+def test_tc_mesh_raycast_rejects_invalid_or_degenerate_direction(direction: Vec3):
+    mesh = _triangle_tc_mesh()
+
+    assert mesh.raycast(_raw_ray(Vec3(0.25, 0.25, 1.0), direction)) is None
+
+
+@pytest.mark.parametrize(
+    "min_distance,max_distance",
+    [
+        (math.nan, 2.0),
+        (0.0, math.inf),
+        (2.0, 1.0),
+        (-1.0e300, 2.0),
+        (0.0, 1.0e300),
+    ],
+)
+def test_tc_mesh_raycast_rejects_invalid_or_unrepresentable_range(
+    min_distance: float,
+    max_distance: float,
+):
+    mesh = _triangle_tc_mesh()
+
+    assert (
+        mesh.raycast(
+            Ray3(Vec3(0.25, 0.25, 1.0), Vec3.down()),
+            min_distance=min_distance,
+            max_distance=max_distance,
+        )
+        is None
+    )
 
 
 def _cube_tc_mesh_with_unshared_triangle_vertices():

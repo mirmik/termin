@@ -60,6 +60,22 @@ Packed float C mesh raycasts and NumPy navmesh traversal remain explicit
 storage/hot-loop specializations; canonical `Ray3` consumers must use the
 shared primitive rather than repeat component-wise Möller–Trumbore code.
 
+The typed Python `TcMesh.raycast` adapter intentionally preserves the packed
+mesh specialization's distance contract. It accepts a canonical `Ray3`, but
+uses its normalized direction at the mesh boundary and returns a
+`TcMeshRayHit.distance` measured as a signed metric distance in mesh-local
+coordinates. Its `min_distance` and `max_distance` form an inclusive interval
+in the same units. At the packed-float boundary the lower bound is rounded up
+and the upper bound down, so conversion cannot admit a hit outside the
+original double interval; an interval containing no float distance is empty.
+Consequently, direction magnitude does not affect a mesh hit and, for a
+non-unit stored direction, the hit position is not
+`ray.point_at(hit.distance)`. This deliberate distinction from
+`RayTriangleHit.ray_parameter` is expressed by the names rather than hidden in
+an overload. The adapter validates finite values and float representability,
+converts the boundary payload once, and returns typed `Vec3` hit geometry
+instead of rebuilding coordinate tuples in Python.
+
 Single-depth reconstruction and its reverse projection share the adjacent
 `try_unproject_screen_point` and `try_project_world_point` primitives. Their
 semantic `ProjectedScreenPoint` result groups the `Vec2` screen coordinate,

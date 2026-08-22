@@ -162,6 +162,22 @@ TEST_CASE("tc_vec3 normalized non-zero vector remains unit length") {
     CHECK(std::abs(normalized.z) < 1.0e-12);
 }
 
+TEST_CASE("Vec3 checked float narrowing is finite and transactional") {
+    termin::Vec3f narrowed{7.0f, 8.0f, 9.0f};
+    CHECK((termin::Vec3{1.25, -2.5, 3.75}.try_to_float(narrowed)));
+    CHECK(narrowed == termin::Vec3f(1.25f, -2.5f, 3.75f));
+
+    const termin::Vec3f unchanged = narrowed;
+    CHECK((!termin::Vec3{std::numeric_limits<double>::max(), 0.0, 0.0}.try_to_float(narrowed)));
+    CHECK(narrowed == unchanged);
+    CHECK((!termin::Vec3{0.0, std::numeric_limits<double>::infinity(), 0.0}.try_to_float(narrowed)));
+    CHECK(narrowed == unchanged);
+    CHECK((!termin::Vec3{0.0, 0.0, std::numeric_limits<double>::quiet_NaN()}.try_to_float(narrowed)));
+    CHECK(narrowed == unchanged);
+    CHECK((!termin::Vec3{std::numeric_limits<double>::denorm_min(), 0.0, 0.0}.try_to_float(narrowed)));
+    CHECK(narrowed == unchanged);
+}
+
 TEST_CASE("canonical vectors provide checked normalization and component operations") {
     const termin::Vec2 left2{-2.0, 8.0};
     const termin::Vec2 right2{4.0, 2.0};

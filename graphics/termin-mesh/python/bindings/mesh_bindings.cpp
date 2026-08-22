@@ -344,6 +344,16 @@ namespace tmesh_bindings {
                 return nb::cast(*submesh);
             });
 
+        nb::class_<TcMeshRayHit>(m, "TcMeshRayHit")
+            .def_prop_ro("distance", [](const TcMeshRayHit& hit) { return hit.distance; })
+            .def_prop_ro("position", [](const TcMeshRayHit& hit) { return hit.position; })
+            .def_prop_ro("normal", [](const TcMeshRayHit& hit) { return hit.normal; })
+            .def_prop_ro("barycentric", [](const TcMeshRayHit& hit) { return hit.barycentric; })
+            .def_prop_ro("triangle_index", [](const TcMeshRayHit& hit) { return hit.triangle_index; })
+            .def_prop_ro("indices", [](const TcMeshRayHit& hit) {
+                return nb::make_tuple(hit.indices[0], hit.indices[1], hit.indices[2]);
+            });
+
         // TcMesh - GPU-ready mesh wrapper
         nb::class_<TcMesh>(m, "TcMesh")
             .def(nb::init<>())
@@ -448,41 +458,12 @@ namespace tmesh_bindings {
                 "set_from_mesh3", [](TcMesh& h, const Mesh3& mesh) { return h.set_from_mesh3(mesh); }, nb::arg("mesh"))
             .def(
                 "raycast",
-                [](const TcMesh& h, nb::tuple origin, nb::tuple direction, float t_min, float t_max) -> nb::object {
-                    if (origin.size() < 3 || direction.size() < 3) {
-                        return nb::none();
-                    }
-                    tc_mesh* m = h.get();
-                    if (!m) {
-                        return nb::none();
-                    }
-
-                    tc_mesh_ray ray;
-                    ray.origin =
-                        tc_vec3f{nb::cast<float>(origin[0]), nb::cast<float>(origin[1]), nb::cast<float>(origin[2])};
-                    ray.direction = tc_vec3f{
-                        nb::cast<float>(direction[0]), nb::cast<float>(direction[1]), nb::cast<float>(direction[2])};
-                    ray.t_min = t_min;
-                    ray.t_max = t_max;
-
-                    tc_mesh_hit hit;
-                    if (!tc_mesh_raycast(m, &ray, &hit)) {
-                        return nb::none();
-                    }
-
-                    nb::dict d;
-                    d["t"] = hit.t;
-                    d["position"] = nb::make_tuple(hit.position.x, hit.position.y, hit.position.z);
-                    d["normal"] = nb::make_tuple(hit.normal.x, hit.normal.y, hit.normal.z);
-                    d["barycentric"] = nb::make_tuple(hit.barycentric.x, hit.barycentric.y, hit.barycentric.z);
-                    d["triangle_index"] = hit.triangle_index;
-                    d["indices"] = nb::make_tuple(hit.indices[0], hit.indices[1], hit.indices[2]);
-                    return d;
-                },
-                nb::arg("origin"),
-                nb::arg("direction"),
-                nb::arg("t_min") = 0.0f,
-                nb::arg("t_max") = 1000000.0f)
+                &TcMesh::raycast,
+                nb::arg("ray"),
+                nb::arg("min_distance") = 0.0,
+                nb::arg("max_distance") = 1000000.0,
+                "Find the nearest triangle in the closed mesh-local metric-distance range. "
+                "Direction magnitude is ignored; invalid inputs are logged and return None.")
             .def(
                 "find_surface_edge",
                 [](const TcMesh& h,
