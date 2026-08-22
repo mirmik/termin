@@ -16,6 +16,12 @@ static_assert(std::is_same_v<decltype(tc_keyframe_vec3{}.value), tc_vec3>);
 static_assert(std::is_same_v<decltype(tc_keyframe_quat{}.value), tc_quat>);
 static_assert(std::is_same_v<decltype(tc_channel_sample{}.translation), tc_vec3>);
 static_assert(std::is_same_v<decltype(tc_channel_sample{}.rotation), tc_quat>);
+static_assert(std::is_same_v<decltype(tc_animation_track{}.values.vec3_values), tc_vec3*>);
+static_assert(std::is_same_v<decltype(tc_animation_track{}.values.rotation_values), tc_quat*>);
+static_assert(std::is_same_v<decltype(tc_animation_cubic_rotation_key{}.in_tangent), tc_vec4>);
+static_assert(std::is_same_v<decltype(tc_animation_cubic_rotation_key{}.value), tc_quat>);
+static_assert(std::is_same_v<decltype(tc_animation_track_sample_result{}.value.translation), tc_vec3>);
+static_assert(std::is_same_v<decltype(tc_animation_track_sample_result{}.value.rotation), tc_quat>);
 static_assert(sizeof(tc_keyframe_vec3) == sizeof(double) * 4);
 static_assert(offsetof(tc_keyframe_vec3, value) == sizeof(double));
 static_assert(sizeof(tc_keyframe_quat) == sizeof(double) * 5);
@@ -56,16 +62,14 @@ namespace {
     }
 
     tc_animation_track rotation_track(double* times,
-                                      double* values,
+                                      tc_quat* values,
                                       tc_animation_interpolation interpolation) {
         tc_animation_track track{};
         track.path = TC_ANIMATION_PATH_ROTATION;
         track.interpolation = static_cast<uint8_t>(interpolation);
-        track.components = 4;
         track.key_count = 2;
-        track.value_count = 8;
         track.times = times;
-        track.values = values;
+        track.values.rotation_values = values;
         return track;
     }
 
@@ -74,66 +78,61 @@ namespace {
 TEST_CASE("bulk rotation sampling normalizes endpoints and follows the shortest path") {
     double times[2] = {0.0, 2.0};
     const double half_sqrt2 = std::sqrt(0.5);
-    double values[8] = {0.0, 0.0, 0.0, 2.0, 0.0, 0.0, -3.0 * half_sqrt2, -3.0 * half_sqrt2};
-    const double original_values[8] = {0.0,
-                                       0.0,
-                                       0.0,
-                                       2.0,
-                                       0.0,
-                                       0.0,
-                                       -3.0 * half_sqrt2,
-                                       -3.0 * half_sqrt2};
+    tc_quat values[2] = {{0.0, 0.0, 0.0, 2.0},
+                         {0.0, 0.0, -3.0 * half_sqrt2, -3.0 * half_sqrt2}};
+    const tc_quat original_values[2] = {values[0], values[1]};
     tc_animation_track track = rotation_track(times, values, TC_ANIMATION_INTERPOLATION_LINEAR);
 
-    double sample[4] = {};
-    REQUIRE(tc_animation_track_sample(&track, 1.0, sample, 4));
+    tc_animation_track_sample_result sample{};
+    REQUIRE(tc_animation_track_sample(&track, 1.0, &sample));
+    CHECK(sample.path == TC_ANIMATION_PATH_ROTATION);
     const tc_quat expected_midpoint = tc_quat_from_euler(tc_vec3{0.0, 0.0, 3.14159265358979323846 / 4.0});
-    CHECK(equivalent_rotation(tc_quat{sample[0], sample[1], sample[2], sample[3]}, expected_midpoint));
-    CHECK(std::abs(tc_quat_norm(tc_quat{sample[0], sample[1], sample[2], sample[3]}) - 1.0) <= 1.0e-12);
+    CHECK(equivalent_rotation(sample.value.rotation, expected_midpoint));
+    CHECK(std::abs(tc_quat_norm(sample.value.rotation) - 1.0) <= 1.0e-12);
     CHECK(std::memcmp(values, original_values, sizeof(values)) == 0);
 
     track.interpolation = TC_ANIMATION_INTERPOLATION_STEP;
-    REQUIRE(tc_animation_track_sample(&track, 1.5, sample, 4));
-    CHECK(equivalent_rotation(tc_quat{sample[0], sample[1], sample[2], sample[3]}, tc_quat_identity()));
-    REQUIRE(tc_animation_track_sample(&track, 2.0, sample, 4));
-    CHECK(equivalent_rotation(tc_quat{sample[0], sample[1], sample[2], sample[3]},
-                              tc_quat{0.0, 0.0, half_sqrt2, half_sqrt2}));
+    REQUIRE(tc_animation_track_sample(&track, 1.5, &sample));
+    CHECK(equivalent_rotation(sample.value.rotation, tc_quat_identity()));
+    REQUIRE(tc_animation_track_sample(&track, 2.0, &sample));
+    CHECK(equivalent_rotation(sample.value.rotation, tc_quat{0.0, 0.0, half_sqrt2, half_sqrt2}));
 }
 
 TEST_CASE("bulk rotation sampling rejects invalid keys and interpolation transactionally") {
     double times[2] = {0.0, 1.0};
-    double values[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+    tc_quat values[2] = {{0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 1.0}};
     tc_animation_track track = rotation_track(times, values, TC_ANIMATION_INTERPOLATION_LINEAR);
-    const double sentinel[4] = {11.0, 12.0, 13.0, 14.0};
-    double sample[4];
+    tc_animation_track_sample_result sample{};
+    unsigned char sentinel[sizeof(sample)];
+    std::memset(sentinel, 0xA5, sizeof(sentinel));
 
-    std::memcpy(sample, sentinel, sizeof(sample));
+    std::memcpy(&sample, sentinel, sizeof(sample));
     {
         LogCapture capture;
-        CHECK_FALSE(tc_animation_track_sample(&track, 0.5, sample, 4));
+        CHECK_FALSE(tc_animation_track_sample(&track, 0.5, &sample));
         CHECK(error_log_count > 0);
     }
-    CHECK(std::memcmp(sample, sentinel, sizeof(sample)) == 0);
+    CHECK(std::memcmp(&sample, sentinel, sizeof(sample)) == 0);
 
-    values[3] = 1.0;
-    values[4] = std::numeric_limits<double>::quiet_NaN();
-    std::memcpy(sample, sentinel, sizeof(sample));
+    values[0].w = 1.0;
+    values[1].x = std::numeric_limits<double>::quiet_NaN();
+    std::memcpy(&sample, sentinel, sizeof(sample));
     {
         LogCapture capture;
-        CHECK_FALSE(tc_animation_track_sample(&track, 0.5, sample, 4));
+        CHECK_FALSE(tc_animation_track_sample(&track, 0.5, &sample));
         CHECK(error_log_count > 0);
     }
-    CHECK(std::memcmp(sample, sentinel, sizeof(sample)) == 0);
+    CHECK(std::memcmp(&sample, sentinel, sizeof(sample)) == 0);
 
-    values[4] = 0.0;
+    values[1].x = 0.0;
     track.interpolation = 99;
-    std::memcpy(sample, sentinel, sizeof(sample));
+    std::memcpy(&sample, sentinel, sizeof(sample));
     {
         LogCapture capture;
-        CHECK_FALSE(tc_animation_track_sample(&track, 0.5, sample, 4));
+        CHECK_FALSE(tc_animation_track_sample(&track, 0.5, &sample));
         CHECK(error_log_count > 0);
     }
-    CHECK(std::memcmp(sample, sentinel, sizeof(sample)) == 0);
+    CHECK(std::memcmp(&sample, sentinel, sizeof(sample)) == 0);
 }
 
 TEST_CASE("typed channel sampling is normalized and transactional") {
@@ -238,6 +237,139 @@ TEST_CASE("animation sampling leaves invalid channels empty and keeps topology c
     CHECK(samples[1].has_scale == 0);
 }
 
+TEST_CASE("bulk publication owns typed values and normalizes linear and step rotations") {
+    tc_animation animation{};
+    animation.tps = 1.0;
+    animation.header.version = 7;
+    double times[2] = {0.0, 1.0};
+    double translation_values[6] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+    double rotation_values[8] = {0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 3.0};
+    double step_rotation_values[8] = {0.0, 2.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0};
+    const double source_rotations[8] = {0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 3.0};
+    const tc_animation_track_desc tracks[3] = {
+        {2, TC_ANIMATION_PATH_TRANSLATION, TC_ANIMATION_INTERPOLATION_LINEAR, 3, 2, 6, times, translation_values},
+        {2, TC_ANIMATION_PATH_ROTATION, TC_ANIMATION_INTERPOLATION_LINEAR, 4, 2, 8, times, rotation_values},
+        {3, TC_ANIMATION_PATH_ROTATION, TC_ANIMATION_INTERPOLATION_STEP, 4, 2, 8, times, step_rotation_values},
+    };
+
+    REQUIRE(tc_animation_replace_tracks(&animation, tracks, 3));
+    REQUIRE(animation.track_count == 3);
+    CHECK((animation.tracks[0].values.vec3_values[0] == tc_vec3{1.0, 2.0, 3.0}));
+    CHECK((animation.tracks[0].values.vec3_values[1] == tc_vec3{4.0, 5.0, 6.0}));
+    CHECK(equivalent_rotation(animation.tracks[1].values.rotation_values[0], tc_quat_identity()));
+    CHECK(std::abs(tc_quat_norm(animation.tracks[1].values.rotation_values[1]) - 1.0) <= 1.0e-12);
+    CHECK(std::abs(tc_quat_norm(animation.tracks[2].values.rotation_values[0]) - 1.0) <= 1.0e-12);
+    CHECK(std::abs(tc_quat_norm(animation.tracks[2].values.rotation_values[1]) - 1.0) <= 1.0e-12);
+    CHECK(std::memcmp(rotation_values, source_rotations, sizeof(rotation_values)) == 0);
+
+    const uint32_t version = animation.header.version;
+    double invalid_rotation[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+    const tc_animation_track_desc invalid = {
+        2, TC_ANIMATION_PATH_ROTATION, TC_ANIMATION_INTERPOLATION_LINEAR, 4, 2, 8, times, invalid_rotation};
+    {
+        LogCapture capture;
+        CHECK_FALSE(tc_animation_replace_tracks(&animation, &invalid, 1));
+        CHECK(error_log_count > 0);
+    }
+    CHECK(animation.header.version == version);
+    CHECK(animation.track_count == 3);
+    CHECK((animation.tracks[0].values.vec3_values[1] == tc_vec3{4.0, 5.0, 6.0}));
+
+    REQUIRE(tc_animation_replace_tracks(&animation, nullptr, 0));
+}
+
+TEST_CASE("cubic rotation publication normalizes values but preserves vec4 derivatives") {
+    tc_animation animation{};
+    animation.tps = 1.0;
+    animation.header.version = 11;
+    double times[2] = {0.0, 2.0};
+    const double half_sqrt2 = std::sqrt(0.5);
+    double values[24] = {
+        0.0, 0.0, 0.0, 0.0, // key 0 in tangent: zero is valid
+        0.0, 0.0, 0.0, 2.0, // key 0 value
+        1.0, 2.0, 3.0, 4.0, // key 0 out tangent
+        -4.0, -3.0, -2.0, -1.0, // key 1 in tangent
+        0.0, 0.0, 3.0 * half_sqrt2, 3.0 * half_sqrt2, // key 1 value
+        0.0, 0.0, 0.0, 0.0, // key 1 out tangent
+    };
+    double source_values[24];
+    std::memcpy(source_values, values, sizeof(values));
+    const tc_animation_track_desc descriptor = {
+        5, TC_ANIMATION_PATH_ROTATION, TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE, 4, 2, 24, times, values};
+
+    REQUIRE(tc_animation_replace_tracks(&animation, &descriptor, 1));
+    REQUIRE(animation.track_count == 1);
+    const tc_animation_cubic_rotation_key* keys = animation.tracks[0].values.cubic_rotation_keys;
+    REQUIRE(keys != nullptr);
+    CHECK(keys[0].in_tangent == tc_vec4::zero());
+    CHECK(equivalent_rotation(keys[0].value, tc_quat_identity()));
+    CHECK((keys[0].out_tangent == tc_vec4{1.0, 2.0, 3.0, 4.0}));
+    CHECK((keys[1].in_tangent == tc_vec4{-4.0, -3.0, -2.0, -1.0}));
+    CHECK(std::abs(tc_quat_norm(keys[1].value) - 1.0) <= 1.0e-12);
+    CHECK(keys[1].out_tangent == tc_vec4::zero());
+    CHECK(std::memcmp(values, source_values, sizeof(values)) == 0);
+
+    const uint32_t version = animation.header.version;
+    values[4] = 0.0;
+    values[5] = 0.0;
+    values[6] = 0.0;
+    values[7] = 0.0;
+    {
+        LogCapture capture;
+        CHECK_FALSE(tc_animation_replace_tracks(&animation, &descriptor, 1));
+        CHECK(error_log_count > 0);
+    }
+    CHECK(animation.header.version == version);
+    CHECK((animation.tracks[0].values.cubic_rotation_keys[0].out_tangent == tc_vec4{1.0, 2.0, 3.0, 4.0}));
+
+    std::memcpy(values, source_values, sizeof(values));
+    values[0] = std::numeric_limits<double>::infinity();
+    {
+        LogCapture capture;
+        CHECK_FALSE(tc_animation_replace_tracks(&animation, &descriptor, 1));
+        CHECK(error_log_count > 0);
+    }
+    CHECK(animation.header.version == version);
+    CHECK(animation.track_count == 1);
+
+    REQUIRE(tc_animation_replace_tracks(&animation, nullptr, 0));
+}
+
+TEST_CASE("typed vec3 and legacy scalar sampling cover opposite full-range endpoints") {
+    const double largest = std::numeric_limits<double>::max();
+    double times[2] = {0.0, 2.0};
+    double values[6] = {-largest, largest, -largest, largest, -largest, largest};
+    const tc_animation_track_desc descriptors[2] = {
+        {0, TC_ANIMATION_PATH_TRANSLATION, TC_ANIMATION_INTERPOLATION_LINEAR, 3, 2, 6, times, values},
+        {0, TC_ANIMATION_PATH_SCALE, TC_ANIMATION_INTERPOLATION_LINEAR, 3, 2, 6, times, values},
+    };
+    tc_animation animation{};
+    animation.tps = 1.0;
+    REQUIRE(tc_animation_replace_tracks(&animation, descriptors, 2));
+
+    tc_animation_track_sample_result sample{};
+    REQUIRE(tc_animation_track_sample(&animation.tracks[0], 1.0, &sample));
+    CHECK(sample.path == TC_ANIMATION_PATH_TRANSLATION);
+    CHECK(sample.value.translation == tc_vec3::zero());
+    REQUIRE(tc_animation_track_sample(&animation.tracks[1], 1.0, &sample));
+    CHECK(sample.path == TC_ANIMATION_PATH_SCALE);
+    CHECK(sample.value.scale == tc_vec3::zero());
+    REQUIRE(tc_animation_track_sample(&animation.tracks[0], 0.0, &sample));
+    CHECK((sample.value.translation == tc_vec3{-largest, largest, -largest}));
+
+    tc_keyframe_scalar scalar_keys[2] = {{0.0, -largest}, {2.0, largest}};
+    tc_animation_channel channel{};
+    tc_animation_channel_init(&channel);
+    channel.scale_keys = scalar_keys;
+    channel.scale_count = 2;
+    tc_channel_sample channel_sample{};
+    REQUIRE(tc_animation_channel_sample(&channel, 1.0, &channel_sample));
+    CHECK(channel_sample.has_scale == 1);
+    CHECK(channel_sample.scale == 0.0);
+
+    REQUIRE(tc_animation_replace_tracks(&animation, nullptr, 0));
+}
+
 TEST_CASE("channel replacement is transactional and becomes the authoritative payload") {
     tc_animation_init();
     {
@@ -259,11 +391,12 @@ TEST_CASE("channel replacement is transactional and becomes the authoritative pa
         };
         REQUIRE(clip.replace_tracks(&track_desc, 1));
 
-        double track_sample[3] = {};
-        REQUIRE(tc_animation_track_sample(clip.get_track(0), 0.5, track_sample, 3));
-        CHECK(track_sample[0] == guard::Approx(1.0));
-        CHECK(track_sample[1] == guard::Approx(2.0));
-        CHECK(track_sample[2] == guard::Approx(3.0));
+        tc_animation_track_sample_result track_sample{};
+        REQUIRE(tc_animation_track_sample(clip.get_track(0), 0.5, &track_sample));
+        CHECK(track_sample.path == TC_ANIMATION_PATH_TRANSLATION);
+        CHECK(track_sample.value.translation.x == guard::Approx(1.0));
+        CHECK(track_sample.value.translation.y == guard::Approx(2.0));
+        CHECK(track_sample.value.translation.z == guard::Approx(3.0));
 
         const uint32_t version = clip.version();
         double invalid_rotation_values[8] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
@@ -285,8 +418,8 @@ TEST_CASE("channel replacement is transactional and becomes the authoritative pa
         CHECK(clip.version() == version);
         CHECK(clip.channel_count() == 0);
         CHECK(clip.track_count() == 1);
-        REQUIRE(tc_animation_track_sample(clip.get_track(0), 0.5, track_sample, 3));
-        CHECK(track_sample[1] == guard::Approx(2.0));
+        REQUIRE(tc_animation_track_sample(clip.get_track(0), 0.5, &track_sample));
+        CHECK(track_sample.value.translation.y == guard::Approx(2.0));
 
         const tc_keyframe_quat invalid_rotation = {0.0, {0.0, 0.0, 0.0, 0.0}};
         const tc_animation_channel_desc invalid_channel = {
@@ -366,25 +499,25 @@ TEST_CASE("bulk replacement rejects byte-size overflow before reading descriptor
 
 TEST_CASE("standalone samplers reject impossible key storage transactionally") {
     double dummy_value = 0.0;
+    tc_vec3 dummy_vector = {1.0, 2.0, 3.0};
     const size_t huge_double_count = std::numeric_limits<size_t>::max() / sizeof(double) + 1;
     tc_animation_track track{};
     track.path = TC_ANIMATION_PATH_TRANSLATION;
     track.interpolation = TC_ANIMATION_INTERPOLATION_STEP;
-    track.components = 3;
     track.key_count = huge_double_count;
-    track.value_count = huge_double_count;
     track.times = &dummy_value;
-    track.values = &dummy_value;
+    track.values.vec3_values = &dummy_vector;
 
-    const double track_sentinel[3] = {11.0, 12.0, 13.0};
-    double track_output[3];
-    std::memcpy(track_output, track_sentinel, sizeof(track_output));
+    tc_animation_track_sample_result track_output{};
+    unsigned char track_sentinel[sizeof(track_output)];
+    std::memset(track_sentinel, 0xA5, sizeof(track_sentinel));
+    std::memcpy(&track_output, track_sentinel, sizeof(track_output));
     {
         LogCapture capture;
-        CHECK_FALSE(tc_animation_track_sample(&track, 0.0, track_output, 3));
+        CHECK_FALSE(tc_animation_track_sample(&track, 0.0, &track_output));
         CHECK(error_log_count > 0);
     }
-    CHECK(std::memcmp(track_output, track_sentinel, sizeof(track_output)) == 0);
+    CHECK(std::memcmp(&track_output, track_sentinel, sizeof(track_output)) == 0);
 
     tc_keyframe_vec3 dummy_key = {0.0, {1.0, 2.0, 3.0}};
     tc_animation_channel channel{};
@@ -410,7 +543,11 @@ TEST_CASE("TcAnimationClip sample_into rejects undersized output before writing"
         termin::animation::TcAnimationClip clip =
             termin::animation::TcAnimationClip::create("capacity", "animation-capacity-regression");
         REQUIRE(clip.is_valid());
-        REQUIRE(clip.alloc_channels(2) != nullptr);
+        const tc_animation_channel_desc channels[2] = {
+            {"First", nullptr, 0, nullptr, 0, nullptr, 0},
+            {"Second", nullptr, 0, nullptr, 0, nullptr, 0},
+        };
+        REQUIRE(tc_animation_replace_channels(clip.get(), channels, 2));
 
         tc_channel_sample output[2];
         unsigned char sentinel[sizeof(output)];

@@ -184,7 +184,10 @@ def extract_animations(
         anim_path = output_dir / f"{safe_name}.tanim"
         save_animation_clip(clip, anim_path)
         created_files.append(anim_path)
-        log.info(f"[GLB Extract] Saved animation: {anim_path.name} ({clip.duration:.2f}s, {len(clip.channels)} channels)")
+        log.info(
+            f"[GLB Extract] Saved animation: {anim_path.name} "
+            f"({clip.duration:.2f}s, {clip.track_count} tracks)"
+        )
 
     if created_files:
         log.info(f"[GLB Extract] Extracted {len(created_files)} animation(s)")

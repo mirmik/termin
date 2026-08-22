@@ -5,7 +5,6 @@
 Связанные документы:
 
 - [Module Map](../../../docs/modules.md#termin-animation)
-- [termin-skeleton](../../termin-skeleton/docs/index.md)
 - [canonical naming](../../../docs/architecture/2026-03-15-canonical-naming.md)
 
 ## Основные области
@@ -23,16 +22,22 @@ The `termin-animation` distribution contains only the portable
 
 ## Bulk track contract
 
-`TcAnimationClip.set_tracks()` atomically replaces a clip with owned flat
-tracks identified by source node index, path, interpolation, component count,
-times, and values. The format keeps vec3 scale and the glTF CUBICSPLINE
-`in/value/out` tensor shape. LINEAR and STEP translation/rotation/scale tracks
-are sampled by the runtime. Rotation samples use checked quaternion loads from
-the flat payload, normalize non-unit keys, follow the shortest path, and publish
-only a finite unit quaternion. Degenerate or non-finite rotation keys are logged
-sampling errors and leave the caller's output unchanged.
+`TcAnimationClip.set_tracks()` is the flat import adapter and atomically
+publishes path-discriminated owned tracks. Runtime LINEAR/STEP translation and
+scale values are `tc_vec3`; rotations are normalized `tc_quat` values. Cubic
+vec3 keys own typed `in/value/out` triples, while cubic rotation keys keep
+ordinary `tc_vec4` derivative tangents around a normalized quaternion value.
+The source node index, interpolation metadata, vec3 scale and full glTF tensor
+shape remain available through the flat `tracks` inspection adapter.
+
+LINEAR and STEP translation/rotation/scale tracks return a discriminated typed
+sample. Degenerate or non-finite rotation values are rejected during
+publication without replacing the prior clip. Valid non-unit rotation values
+are normalized during the same transaction; cubic tangents are never treated
+as quaternions.
 CUBICSPLINE and morph-weight tracks remain round-trippable but sampling them is
 an explicit error until those player paths are implemented. The legacy
 name-grouped channel API remains available only for existing assets. Its
 dedicated translation and rotation fields use `tc_vec3` and `tc_quat` without
-changing their packed ABI layout; channel sampling is transactional as well.
+changing their packed ABI layout; channel replacement and sampling are
+transactional as well.

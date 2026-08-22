@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <geom/tc_lerp_detail.h>
 #include <geom/tc_quat.h>
 #include <tcbase/tc_log.h>
 #include <tcbase/tc_pool.h>
@@ -39,7 +40,18 @@ static void animation_free_track_array(tc_animation_track* tracks, size_t count)
         return;
     for (size_t i = 0; i < count; ++i) {
         free(tracks[i].times);
-        free(tracks[i].values);
+        if (tracks[i].path == TC_ANIMATION_PATH_WEIGHTS) {
+            free(tracks[i].values.weights.values);
+        } else if (tracks[i].interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE) {
+            if (tracks[i].path == TC_ANIMATION_PATH_ROTATION)
+                free(tracks[i].values.cubic_rotation_keys);
+            else
+                free(tracks[i].values.cubic_vec3_keys);
+        } else if (tracks[i].path == TC_ANIMATION_PATH_ROTATION) {
+            free(tracks[i].values.rotation_values);
+        } else {
+            free(tracks[i].values.vec3_values);
+        }
     }
     free(tracks);
 }
@@ -313,30 +325,6 @@ bool tc_animation_release(tc_animation* animation) {
     return false;
 }
 
-tc_animation_channel* tc_animation_alloc_channels(tc_animation* anim, size_t count) {
-    if (!anim)
-        return NULL;
-
-    animation_free_data(anim);
-    if (count == 0)
-        return NULL;
-
-    anim->channels = (tc_animation_channel*)calloc(count, sizeof(tc_animation_channel));
-    if (!anim->channels) {
-        tc_log_error("tc_animation_alloc_channels: allocation failed");
-        return NULL;
-    }
-
-    anim->channel_count = count;
-    for (size_t i = 0; i < count; i++) {
-        tc_animation_channel_init(&anim->channels[i]);
-    }
-
-    anim->header.is_loaded = 1;
-    anim->header.version++;
-    return anim->channels;
-}
-
 static bool animation_track_value_count(size_t key_count,
                                         uint32_t components,
                                         tc_animation_interpolation interpolation,
@@ -353,6 +341,34 @@ static bool animation_track_value_count(size_t key_count,
 
 static tc_quat animation_load_quat(const double* values) {
     return TC_QUAT(values[0], values[1], values[2], values[3]);
+}
+
+static tc_vec3 animation_load_vec3(const double* values) {
+    return TC_VEC3(values[0], values[1], values[2]);
+}
+
+static tc_vec4 animation_load_vec4(const double* values) {
+    return TC_VEC4(values[0], values[1], values[2], values[3]);
+}
+
+static bool animation_track_owned_size_valid(const tc_animation_track_desc* track, size_t index) {
+    size_t element_size = sizeof(double);
+    size_t element_count = track->value_count;
+    if (track->path != TC_ANIMATION_PATH_WEIGHTS) {
+        element_count = track->key_count;
+        if (track->interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE) {
+            element_size = track->path == TC_ANIMATION_PATH_ROTATION
+                               ? sizeof(tc_animation_cubic_rotation_key)
+                               : sizeof(tc_animation_cubic_vec3_key);
+        } else {
+            element_size = track->path == TC_ANIMATION_PATH_ROTATION ? sizeof(tc_quat) : sizeof(tc_vec3);
+        }
+    }
+    if (element_count > SIZE_MAX / element_size) {
+        tc_log_error("tc_animation_replace_tracks: track[%zu] typed payload byte size overflows allocation", index);
+        return false;
+    }
+    return true;
 }
 
 static bool animation_track_desc_valid(const tc_animation_track_desc* track, size_t index) {
@@ -392,7 +408,10 @@ static bool animation_track_desc_valid(const tc_animation_track_desc* track, siz
         return false;
     }
     if (track->key_count > SIZE_MAX / sizeof(double) || track->value_count > SIZE_MAX / sizeof(double)) {
-        tc_log_error("tc_animation_replace_tracks: track[%zu] payload byte size overflows allocation", index);
+        tc_log_error("tc_animation_replace_tracks: track[%zu] flat payload byte size overflows allocation", index);
+        return false;
+    }
+    if (!animation_track_owned_size_valid(track, index)) {
         return false;
     }
 
@@ -419,12 +438,13 @@ static bool animation_track_desc_valid(const tc_animation_track_desc* track, siz
             return false;
         }
     }
-    if (track->path == TC_ANIMATION_PATH_ROTATION &&
-        track->interpolation != TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE) {
+    if (track->path == TC_ANIMATION_PATH_ROTATION) {
         for (size_t key = 0; key < track->key_count; ++key) {
+            const size_t tuple = track->interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u;
+            const size_t value_slot = track->interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 1u : 0u;
+            const double* value = track->values + (key * tuple + value_slot) * track->components;
             tc_quat normalized;
-            if (!tc_quat_try_normalized(
-                    animation_load_quat(track->values + key * track->components), 1.0e-12, &normalized)) {
+            if (!tc_quat_try_normalized(animation_load_quat(value), 1.0e-12, &normalized)) {
                 tc_log_error("tc_animation_replace_tracks: track[%zu] rotation key[%zu] is degenerate",
                              index,
                              key);
@@ -432,6 +452,78 @@ static bool animation_track_desc_valid(const tc_animation_track_desc* track, siz
             }
         }
     }
+    return true;
+}
+
+static bool animation_track_copy_values(tc_animation_track* destination,
+                                        const tc_animation_track_desc* source,
+                                        size_t index) {
+    if (source->path == TC_ANIMATION_PATH_WEIGHTS) {
+        destination->values.weights.component_count = source->components;
+        destination->values.weights.values = (double*)malloc(source->value_count * sizeof(double));
+        if (!destination->values.weights.values)
+            return false;
+        memcpy(destination->values.weights.values, source->values, source->value_count * sizeof(double));
+        return true;
+    }
+
+    if (source->interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE) {
+        if (source->path == TC_ANIMATION_PATH_ROTATION) {
+            destination->values.cubic_rotation_keys = (tc_animation_cubic_rotation_key*)malloc(
+                source->key_count * sizeof(tc_animation_cubic_rotation_key));
+            if (!destination->values.cubic_rotation_keys)
+                return false;
+            for (size_t key = 0; key < source->key_count; ++key) {
+                const double* values = source->values + key * 3u * 4u;
+                tc_animation_cubic_rotation_key* result = &destination->values.cubic_rotation_keys[key];
+                result->in_tangent = animation_load_vec4(values);
+                if (!tc_quat_try_normalized(animation_load_quat(values + 4), 1.0e-12, &result->value)) {
+                    tc_log_error("tc_animation_replace_tracks: track[%zu] rotation key[%zu] became invalid during copy",
+                                 index,
+                                 key);
+                    return false;
+                }
+                result->out_tangent = animation_load_vec4(values + 8);
+            }
+            return true;
+        }
+
+        destination->values.cubic_vec3_keys = (tc_animation_cubic_vec3_key*)malloc(
+            source->key_count * sizeof(tc_animation_cubic_vec3_key));
+        if (!destination->values.cubic_vec3_keys)
+            return false;
+        for (size_t key = 0; key < source->key_count; ++key) {
+            const double* values = source->values + key * 3u * 3u;
+            tc_animation_cubic_vec3_key* result = &destination->values.cubic_vec3_keys[key];
+            result->in_tangent = animation_load_vec3(values);
+            result->value = animation_load_vec3(values + 3);
+            result->out_tangent = animation_load_vec3(values + 6);
+        }
+        return true;
+    }
+
+    if (source->path == TC_ANIMATION_PATH_ROTATION) {
+        destination->values.rotation_values = (tc_quat*)malloc(source->key_count * sizeof(tc_quat));
+        if (!destination->values.rotation_values)
+            return false;
+        for (size_t key = 0; key < source->key_count; ++key) {
+            if (!tc_quat_try_normalized(animation_load_quat(source->values + key * 4u),
+                                        1.0e-12,
+                                        &destination->values.rotation_values[key])) {
+                tc_log_error("tc_animation_replace_tracks: track[%zu] rotation key[%zu] became invalid during copy",
+                             index,
+                             key);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    destination->values.vec3_values = (tc_vec3*)malloc(source->key_count * sizeof(tc_vec3));
+    if (!destination->values.vec3_values)
+        return false;
+    for (size_t key = 0; key < source->key_count; ++key)
+        destination->values.vec3_values[key] = animation_load_vec3(source->values + key * 3u);
     return true;
 }
 
@@ -465,18 +557,19 @@ bool tc_animation_replace_tracks(tc_animation* anim, const tc_animation_track_de
         destination->target_node_index = source->target_node_index;
         destination->path = (uint8_t)source->path;
         destination->interpolation = (uint8_t)source->interpolation;
-        destination->components = source->components;
         destination->key_count = source->key_count;
-        destination->value_count = source->value_count;
         destination->times = (double*)malloc(source->key_count * sizeof(double));
-        destination->values = (double*)malloc(source->value_count * sizeof(double));
-        if (!destination->times || !destination->values) {
-            tc_log_error("tc_animation_replace_tracks: track[%zu] payload allocation failed", i);
+        if (!destination->times) {
+            tc_log_error("tc_animation_replace_tracks: track[%zu] timeline allocation failed", i);
+            animation_free_track_array(replacement, count);
+            return false;
+        }
+        if (!animation_track_copy_values(destination, source, i)) {
+            tc_log_error("tc_animation_replace_tracks: track[%zu] typed payload construction failed", i);
             animation_free_track_array(replacement, count);
             return false;
         }
         memcpy(destination->times, source->times, source->key_count * sizeof(double));
-        memcpy(destination->values, source->values, source->value_count * sizeof(double));
         if (destination->times[destination->key_count - 1] > max_ticks)
             max_ticks = destination->times[destination->key_count - 1];
     }
@@ -497,7 +590,7 @@ const tc_animation_track* tc_animation_get_track(const tc_animation* anim, size_
     return &anim->tracks[index];
 }
 
-tc_animation_channel* tc_animation_get_channel(tc_animation* anim, size_t index) {
+const tc_animation_channel* tc_animation_get_channel(const tc_animation* anim, size_t index) {
     if (!anim || index >= anim->channel_count)
         return NULL;
     return &anim->channels[index];
@@ -513,57 +606,6 @@ int tc_animation_find_channel(const tc_animation* anim, const char* target_name)
         }
     }
     return -1;
-}
-
-tc_keyframe_vec3* tc_animation_channel_alloc_translation(tc_animation_channel* ch, size_t count) {
-    if (!ch)
-        return NULL;
-    if (ch->translation_keys) {
-        free(ch->translation_keys);
-        ch->translation_keys = NULL;
-    }
-    ch->translation_count = 0;
-    if (count == 0)
-        return NULL;
-    ch->translation_keys = (tc_keyframe_vec3*)calloc(count, sizeof(tc_keyframe_vec3));
-    if (!ch->translation_keys)
-        return NULL;
-    ch->translation_count = count;
-    return ch->translation_keys;
-}
-
-tc_keyframe_quat* tc_animation_channel_alloc_rotation(tc_animation_channel* ch, size_t count) {
-    if (!ch)
-        return NULL;
-    if (ch->rotation_keys) {
-        free(ch->rotation_keys);
-        ch->rotation_keys = NULL;
-    }
-    ch->rotation_count = 0;
-    if (count == 0)
-        return NULL;
-    ch->rotation_keys = (tc_keyframe_quat*)calloc(count, sizeof(tc_keyframe_quat));
-    if (!ch->rotation_keys)
-        return NULL;
-    ch->rotation_count = count;
-    return ch->rotation_keys;
-}
-
-tc_keyframe_scalar* tc_animation_channel_alloc_scale(tc_animation_channel* ch, size_t count) {
-    if (!ch)
-        return NULL;
-    if (ch->scale_keys) {
-        free(ch->scale_keys);
-        ch->scale_keys = NULL;
-    }
-    ch->scale_count = 0;
-    if (count == 0)
-        return NULL;
-    ch->scale_keys = (tc_keyframe_scalar*)calloc(count, sizeof(tc_keyframe_scalar));
-    if (!ch->scale_keys)
-        return NULL;
-    ch->scale_count = count;
-    return ch->scale_keys;
 }
 
 static bool animation_vec3_keys_valid(const tc_keyframe_vec3* keys, size_t count) {
@@ -683,10 +725,20 @@ bool tc_animation_replace_channels(tc_animation* anim,
             destination->rotation_keys =
                 (tc_keyframe_quat*)malloc(source->rotation_count * sizeof(tc_keyframe_quat));
             if (destination->rotation_keys) {
-                memcpy(destination->rotation_keys,
-                       source->rotation_keys,
-                       source->rotation_count * sizeof(tc_keyframe_quat));
-                destination->rotation_count = source->rotation_count;
+                for (size_t key = 0; key < source->rotation_count; ++key) {
+                    destination->rotation_keys[key].time = source->rotation_keys[key].time;
+                    if (!tc_quat_try_normalized(source->rotation_keys[key].value,
+                                                1.0e-12,
+                                                &destination->rotation_keys[key].value)) {
+                        tc_log_error(
+                            "tc_animation_replace_channels: channel[%zu] rotation key[%zu] became invalid during copy",
+                            index,
+                            key);
+                        animation_free_channel_array(replacement, count);
+                        return false;
+                    }
+                    destination->rotation_count = key + 1;
+                }
             }
         }
         if (source->scale_count > 0) {
@@ -828,13 +880,6 @@ static size_t find_keyframe_index_scalar(const tc_keyframe_scalar* keys, size_t 
     return lo;
 }
 
-static void animation_store_quat(double* values, tc_quat value) {
-    values[0] = value.x;
-    values[1] = value.y;
-    values[2] = value.z;
-    values[3] = value.w;
-}
-
 static size_t find_track_keyframe_index(const tc_animation_track* track, double t) {
     if (t <= track->times[0])
         return 0;
@@ -855,10 +900,8 @@ static size_t find_track_keyframe_index(const tc_animation_track* track, double 
 
 bool tc_animation_track_sample(const tc_animation_track* track,
                                double t_ticks,
-                               double* values,
-                               size_t value_count) {
-    if (!track || !values || value_count < track->components || track->key_count == 0 || !track->times ||
-        !track->values) {
+                               tc_animation_track_sample_result* out_sample) {
+    if (!track || !out_sample || track->key_count == 0 || !track->times) {
         tc_log_error("tc_animation_track_sample: invalid track or output storage");
         return false;
     }
@@ -866,8 +909,8 @@ bool tc_animation_track_sample(const tc_animation_track* track,
         tc_log_error("tc_animation_track_sample: sample time must be finite");
         return false;
     }
-    if (track->key_count > SIZE_MAX / sizeof(double) || track->value_count > SIZE_MAX / sizeof(double)) {
-        tc_log_error("tc_animation_track_sample: track payload byte size overflows addressable storage");
+    if (track->key_count > SIZE_MAX / sizeof(double)) {
+        tc_log_error("tc_animation_track_sample: track timeline byte size overflows addressable storage");
         return false;
     }
     if (track->interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE) {
@@ -888,21 +931,9 @@ bool tc_animation_track_sample(const tc_animation_track* track,
         tc_log_error("tc_animation_track_sample: interpolation=%u is invalid", (unsigned)track->interpolation);
         return false;
     }
-    const uint32_t required_components = track->path == TC_ANIMATION_PATH_ROTATION ? 4u : 3u;
-    if (track->components != required_components) {
-        tc_log_error("tc_animation_track_sample: path=%u requires %u components, got %u",
-                     (unsigned)track->path,
-                     (unsigned)required_components,
-                     (unsigned)track->components);
-        return false;
-    }
-    size_t expected_values = 0;
-    if (!animation_track_value_count(track->key_count,
-                                     track->components,
-                                     (tc_animation_interpolation)track->interpolation,
-                                     &expected_values) ||
-        track->value_count != expected_values) {
-        tc_log_error("tc_animation_track_sample: track value_count does not match its key layout");
+    if ((track->path == TC_ANIMATION_PATH_ROTATION && !track->values.rotation_values) ||
+        (track->path != TC_ANIMATION_PATH_ROTATION && !track->values.vec3_values)) {
+        tc_log_error("tc_animation_track_sample: typed value storage is missing");
         return false;
     }
     for (size_t key = 0; key < track->key_count; ++key) {
@@ -913,61 +944,55 @@ bool tc_animation_track_sample(const tc_animation_track* track,
     }
 
     const size_t index = find_track_keyframe_index(track, t_ticks);
-    const double* first = track->values + index * track->components;
     const bool use_first = track->interpolation == TC_ANIMATION_INTERPOLATION_STEP ||
                            index >= track->key_count - 1 || t_ticks <= track->times[0];
+    tc_animation_track_sample_result sampled = {0};
+    sampled.path = (tc_animation_path)track->path;
 
     if (track->path == TC_ANIMATION_PATH_ROTATION) {
-        tc_quat sampled;
+        const tc_quat first = track->values.rotation_values[index];
         if (use_first) {
-            if (!tc_quat_try_normalized(animation_load_quat(first), 1.0e-12, &sampled)) {
+            if (!tc_quat_try_normalized(first, 1.0e-12, &sampled.value.rotation)) {
                 tc_log_error("tc_animation_track_sample: rotation key is non-finite or degenerate");
                 return false;
             }
         } else {
-            const double* second = first + track->components;
+            const tc_quat second = track->values.rotation_values[index + 1];
             const double delta = track->times[index + 1] - track->times[index];
             const double alpha = (t_ticks - track->times[index]) / delta;
             if (!isfinite(delta) || delta <= 0.0 || !isfinite(alpha) ||
-                !tc_quat_try_slerp(animation_load_quat(first),
-                                   animation_load_quat(second),
-                                   alpha,
-                                   1.0e-12,
-                                   &sampled)) {
+                !tc_quat_try_slerp(first, second, alpha, 1.0e-12, &sampled.value.rotation)) {
                 tc_log_error("tc_animation_track_sample: rotation interpolation has invalid endpoints or factor");
                 return false;
             }
         }
-        animation_store_quat(values, sampled);
+        *out_sample = sampled;
         return true;
     }
 
-    double sampled[3];
+    const tc_vec3 first = track->values.vec3_values[index];
+    tc_vec3 vector;
     if (use_first) {
-        for (size_t component = 0; component < track->components; ++component) {
-            if (!isfinite(first[component])) {
-                tc_log_error("tc_animation_track_sample: sampled value is non-finite");
-                return false;
-            }
-            sampled[component] = first[component];
-        }
+        vector = first;
     } else {
-        const double* second = first + track->components;
+        const tc_vec3 second = track->values.vec3_values[index + 1];
         const double delta = track->times[index + 1] - track->times[index];
         const double alpha = (t_ticks - track->times[index]) / delta;
         if (!isfinite(delta) || delta <= 0.0 || !isfinite(alpha)) {
             tc_log_error("tc_animation_track_sample: interpolation factor is invalid");
             return false;
         }
-        for (size_t component = 0; component < track->components; ++component) {
-            sampled[component] = first[component] * (1.0 - alpha) + second[component] * alpha;
-            if (!isfinite(sampled[component])) {
-                tc_log_error("tc_animation_track_sample: interpolation produced a non-finite value");
-                return false;
-            }
-        }
+        vector = tc_vec3_lerp(first, second, alpha);
     }
-    memcpy(values, sampled, sizeof(sampled));
+    if (!tc_vec3_is_finite(vector)) {
+        tc_log_error("tc_animation_track_sample: interpolation produced a non-finite value");
+        return false;
+    }
+    if (track->path == TC_ANIMATION_PATH_TRANSLATION)
+        sampled.value.translation = vector;
+    else
+        sampled.value.scale = vector;
+    *out_sample = sampled;
     return true;
 }
 
@@ -1055,7 +1080,7 @@ bool tc_animation_channel_sample(const tc_animation_channel* ch, double t_ticks,
                 tc_log_error("tc_animation_channel_sample: scale key interval is invalid");
                 return false;
             }
-            sampled.scale = first->value * (1.0 - alpha) + second->value * alpha;
+            sampled.scale = tc_detail_lerp_f64_component(first->value, second->value, alpha);
         }
         if (!isfinite(sampled.scale)) {
             tc_log_error("tc_animation_channel_sample: scale sample is non-finite");

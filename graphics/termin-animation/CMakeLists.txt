@@ -19,12 +19,6 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_inspect REQUIRED)
 endif()
-if(COMMAND termin_require_package)
-    termin_require_package(termin_skeleton termin_skeleton::termin_skeleton)
-else()
-    find_package(termin_skeleton REQUIRED)
-endif()
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 
@@ -48,7 +42,6 @@ target_include_directories(termin_animation PUBLIC
 target_link_libraries(termin_animation PUBLIC
     tcbase::termin_base
     termin_inspect::termin_inspect
-    termin_skeleton::termin_skeleton
 )
 
 set_target_properties(termin_animation PROPERTIES

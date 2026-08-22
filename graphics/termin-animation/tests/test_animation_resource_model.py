@@ -8,18 +8,20 @@ from termin.animation._animation_native import (
     tc_animation_is_loaded,
 )
 from tcbase import clear_resource_loader, set_resource_loader
-from termin.glb.loader import GLBAnimationChannel, GLBAnimationClip
+from termin.glb.loader import GLBAnimationClip, GLBAnimationTrack
 
 
 def _glb_clip(name: str = "Walk") -> GLBAnimationClip:
-    channel = GLBAnimationChannel(
+    track = GLBAnimationTrack(
         node_index=0,
         node_name="Root",
-        pos_keys=[(0.0, [0.0, 0.0, 0.0]), (1.0, [1.0, 0.0, 0.0])],
-        rot_keys=[(0.0, [0.0, 0.0, 0.0, 1.0])],
-        scale_keys=[(0.0, [1.0, 1.0, 1.0])],
+        path="translation",
+        interpolation="linear",
+        components=3,
+        times=[0.0, 1.0],
+        values=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
     )
-    return GLBAnimationClip(name=name, channels=[channel], duration=1.0)
+    return GLBAnimationClip(name=name, tracks=[track], duration=1.0)
 
 
 def test_clip_from_glb_fills_declared_animation_uuid() -> None:
@@ -34,7 +36,7 @@ def test_clip_from_glb_fills_declared_animation_uuid() -> None:
     assert clip.is_valid
     assert clip.uuid == animation_uuid
     assert tc_animation_is_loaded(clip)
-    assert clip.channel_count == 1
+    assert clip.track_count == 1
     assert TcAnimationClip.from_uuid(animation_uuid).uuid == animation_uuid
 
 
@@ -52,6 +54,6 @@ def test_declared_animation_process_loader_populates_same_resource() -> None:
         assert tc_animation_ensure_loaded(declared)
         assert declared.uuid == animation_uuid
         assert tc_animation_is_loaded(declared)
-        assert declared.channel_count == 1
+        assert declared.track_count == 1
     finally:
         clear_resource_loader()

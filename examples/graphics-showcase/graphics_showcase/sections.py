@@ -377,11 +377,16 @@ def _animated_skinned_glb(application) -> SectionContent:
              "bind_scale": Vec3(1, 1, 1)},
         ])
         clip = clip_from_glb(loaded.animations[0], str(uuid.uuid4()))
-        channel = loaded.animations[0].channels[0]
+        translation_track = next(
+            track
+            for track in loaded.animations[0].tracks
+            if track.node_index == 2 and track.path == "translation"
+        )
         sample_time = 0.5
-        first, second = channel.pos_keys
-        alpha = (sample_time - float(first[0])) / (float(second[0]) - float(first[0]))
-        sampled_tip_x = float(first[1][0]) * (1.0 - alpha) + float(second[1][0]) * alpha
+        first_time, second_time = translation_track.times
+        first_value, second_value = translation_track.values
+        alpha = (sample_time - float(first_time)) / (float(second_time) - float(first_time))
+        sampled_tip_x = float(first_value[0]) * (1.0 - alpha) + float(second_value[0]) * alpha
 
         scene = tc_visual_scene_create()
         view = application.document.create_scene_view(scene)

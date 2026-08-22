@@ -265,10 +265,10 @@ def test_native_arthur_skinned_geometry_and_bulk_rig_reference():
                 and len(track["times"]) >= 2
             ):
                 before = np.nextafter(track["times"][1], track["times"][0])
-                assert clip.sample_track(track_index, before) == pytest.approx(
+                assert tuple(clip.sample_track(track_index, before)) == pytest.approx(
                     track["values"][: track["components"]]
                 )
-                assert clip.sample_track(track_index, track["times"][1]) == pytest.approx(
+                assert tuple(clip.sample_track(track_index, track["times"][1])) == pytest.approx(
                     track["values"][track["components"] : 2 * track["components"]]
                 )
                 found_step_boundary = True
@@ -279,8 +279,8 @@ def test_native_arthur_skinned_geometry_and_bulk_rig_reference():
                 )
                 if candidates.size:
                     key_index = int(candidates[0])
-                    assert clip.sample_track(
-                        track_index, track["times"][key_index]
+                    assert tuple(
+                        clip.sample_track(track_index, track["times"][key_index])
                     ) == pytest.approx(scale_values[key_index])
                     found_nonuniform_scale = True
             if found_step_boundary and found_nonuniform_scale:

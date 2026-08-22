@@ -93,18 +93,89 @@ nb::tuple animation_keyframe_tuple(nb::handle value, const char* field) {
     return frame;
 }
 
+void append_vec3(nb::list& values, tc_vec3 value) {
+    values.append(value.x);
+    values.append(value.y);
+    values.append(value.z);
+}
+
+void append_vec4(nb::list& values, tc_vec4 value) {
+    values.append(value.x);
+    values.append(value.y);
+    values.append(value.z);
+    values.append(value.w);
+}
+
+void append_quat(nb::list& values, tc_quat value) {
+    values.append(value.x);
+    values.append(value.y);
+    values.append(value.z);
+    values.append(value.w);
+}
+
+uint32_t animation_track_components(const tc_animation_track& track) {
+    if (track.path == TC_ANIMATION_PATH_ROTATION)
+        return 4;
+    if (track.path == TC_ANIMATION_PATH_TRANSLATION || track.path == TC_ANIMATION_PATH_SCALE)
+        return 3;
+    if (track.path == TC_ANIMATION_PATH_WEIGHTS)
+        return track.values.weights.component_count;
+    throw std::runtime_error("owned animation track has an invalid path discriminator");
+}
+
 nb::dict animation_track_to_dict(const tc_animation_track& track) {
     nb::dict result;
     result["target_node_index"] = track.target_node_index;
     result["path"] = animation_path_name((tc_animation_path)track.path);
     result["interpolation"] = animation_interpolation_name((tc_animation_interpolation)track.interpolation);
-    result["components"] = track.components;
+    const uint32_t components = animation_track_components(track);
+    result["components"] = components;
     nb::list times;
     for (size_t i = 0; i < track.key_count; ++i)
         times.append(track.times[i]);
     nb::list values;
-    for (size_t i = 0; i < track.value_count; ++i)
-        values.append(track.values[i]);
+    if (track.path == TC_ANIMATION_PATH_WEIGHTS) {
+        const size_t multiplier = track.interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE ? 3u : 1u;
+        if (components == 0 || track.key_count > SIZE_MAX / components ||
+            track.key_count * components > SIZE_MAX / multiplier) {
+            throw std::runtime_error("owned morph-weight track has an overflowing layout");
+        }
+        const size_t value_count = track.key_count * components * multiplier;
+        if (!track.values.weights.values)
+            throw std::runtime_error("owned morph-weight track has no value storage");
+        for (size_t i = 0; i < value_count; ++i)
+            values.append(track.values.weights.values[i]);
+    } else if (track.interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE) {
+        if (track.path == TC_ANIMATION_PATH_ROTATION) {
+            if (!track.values.cubic_rotation_keys)
+                throw std::runtime_error("owned cubic rotation track has no key storage");
+            for (size_t i = 0; i < track.key_count; ++i) {
+                const tc_animation_cubic_rotation_key& key = track.values.cubic_rotation_keys[i];
+                append_vec4(values, key.in_tangent);
+                append_quat(values, key.value);
+                append_vec4(values, key.out_tangent);
+            }
+        } else {
+            if (!track.values.cubic_vec3_keys)
+                throw std::runtime_error("owned cubic vec3 track has no key storage");
+            for (size_t i = 0; i < track.key_count; ++i) {
+                const tc_animation_cubic_vec3_key& key = track.values.cubic_vec3_keys[i];
+                append_vec3(values, key.in_tangent);
+                append_vec3(values, key.value);
+                append_vec3(values, key.out_tangent);
+            }
+        }
+    } else if (track.path == TC_ANIMATION_PATH_ROTATION) {
+        if (!track.values.rotation_values)
+            throw std::runtime_error("owned rotation track has no value storage");
+        for (size_t i = 0; i < track.key_count; ++i)
+            append_quat(values, track.values.rotation_values[i]);
+    } else {
+        if (!track.values.vec3_values)
+            throw std::runtime_error("owned vec3 track has no value storage");
+        for (size_t i = 0; i < track.key_count; ++i)
+            append_vec3(values, track.values.vec3_values[i]);
+    }
     result["times"] = std::move(times);
     result["values"] = std::move(values);
     return result;
@@ -148,7 +219,6 @@ void bind_tc_animation_clip(nb::module_& m) {
         .def("set_loop", &TcAnimationClip::set_loop, nb::arg("value"))
         .def("ensure_loaded", &TcAnimationClip::ensure_loaded)
         .def("recompute_duration", &TcAnimationClip::recompute_duration)
-        .def("bump_version", &TcAnimationClip::bump_version)
         .def("find_channel", &TcAnimationClip::find_channel, nb::arg("target_name"))
         .def_prop_ro(
             "tracks",
@@ -207,18 +277,21 @@ void bind_tc_animation_clip(nb::module_& m) {
             nb::arg("tracks"))
         .def(
             "sample_track",
-            [](const TcAnimationClip& self, size_t track_index, double t_seconds) {
+            [](const TcAnimationClip& self, size_t track_index, double t_seconds) -> nb::object {
                 const tc_animation_track* track = self.get_track(track_index);
                 if (!track)
                     throw std::out_of_range("animation track index is out of range");
-                std::vector<double> values(track->components);
                 const double t_ticks = t_seconds * self.tps();
-                if (!tc_animation_track_sample(track, t_ticks, values.data(), values.size()))
+                tc_animation_track_sample_result sample{};
+                if (!tc_animation_track_sample(track, t_ticks, &sample))
                     throw std::runtime_error("animation track sampling is unsupported for this path/interpolation");
-                nb::list result;
-                for (double value : values)
-                    result.append(value);
-                return result;
+                if (sample.path == TC_ANIMATION_PATH_ROTATION)
+                    return nb::cast(sample.value.rotation);
+                if (sample.path == TC_ANIMATION_PATH_TRANSLATION)
+                    return nb::cast(sample.value.translation);
+                if (sample.path == TC_ANIMATION_PATH_SCALE)
+                    return nb::cast(sample.value.scale);
+                throw std::runtime_error("animation sampler returned an invalid path discriminator");
             },
             nb::arg("track_index"),
             nb::arg("t_seconds"))

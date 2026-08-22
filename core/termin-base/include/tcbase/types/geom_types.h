@@ -21,6 +21,7 @@ namespace termin {
 struct tc_rect2f;
 struct tc_vec2f;
 struct tc_vec3f;
+struct tc_vec4f;
 #endif
 
 #ifdef __cplusplus
@@ -662,6 +663,292 @@ struct tc_vec3 {
 extern "C++" {
 inline tc_vec3 operator*(double s, const tc_vec3& v) noexcept {
     return v * s;
+}
+}
+
+struct tc_vec4 {
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+    double w = 0.0;
+
+    constexpr tc_vec4() noexcept = default;
+    constexpr tc_vec4(double x, double y, double z, double w) noexcept
+        : x(x),
+          y(y),
+          z(z),
+          w(w) {}
+
+    double& operator[](int i) noexcept {
+        assert(i >= 0 && i < 4);
+        return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
+    }
+    double operator[](int i) const noexcept {
+        assert(i >= 0 && i < 4);
+        return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
+    }
+
+    tc_vec4 operator+(const tc_vec4& v) const noexcept {
+        return {x + v.x, y + v.y, z + v.z, w + v.w};
+    }
+    tc_vec4 operator-(const tc_vec4& v) const noexcept {
+        return {x - v.x, y - v.y, z - v.z, w - v.w};
+    }
+    tc_vec4 operator*(double s) const noexcept {
+        return {x * s, y * s, z * s, w * s};
+    }
+    tc_vec4 operator/(double s) const noexcept {
+        return {x / s, y / s, z / s, w / s};
+    }
+    tc_vec4 operator-() const noexcept {
+        return {-x, -y, -z, -w};
+    }
+
+    tc_vec4& operator+=(const tc_vec4& v) noexcept {
+        x += v.x;
+        y += v.y;
+        z += v.z;
+        w += v.w;
+        return *this;
+    }
+    tc_vec4& operator-=(const tc_vec4& v) noexcept {
+        x -= v.x;
+        y -= v.y;
+        z -= v.z;
+        w -= v.w;
+        return *this;
+    }
+    tc_vec4& operator*=(double s) noexcept {
+        x *= s;
+        y *= s;
+        z *= s;
+        w *= s;
+        return *this;
+    }
+    tc_vec4& operator/=(double s) noexcept {
+        x /= s;
+        y /= s;
+        z /= s;
+        w /= s;
+        return *this;
+    }
+
+    bool operator==(const tc_vec4& v) const noexcept {
+        return x == v.x && y == v.y && z == v.z && w == v.w;
+    }
+    bool operator!=(const tc_vec4& v) const noexcept {
+        return !(*this == v);
+    }
+
+    double dot(const tc_vec4& v) const noexcept {
+        return x * v.x + y * v.y + z * v.z + w * v.w;
+    }
+    double norm() const noexcept {
+        return std::sqrt(x * x + y * y + z * z + w * w);
+    }
+    double norm_squared() const noexcept {
+        return x * x + y * y + z * z + w * w;
+    }
+    bool is_finite() const noexcept {
+        return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
+    }
+
+    tc_vec4 normalized() const noexcept {
+        const double n = norm();
+        return n > 1.0e-10 ? *this / n : tc_vec4{0.0, 0.0, 0.0, 1.0};
+    }
+    bool try_normalized(tc_vec4& out, double epsilon = 1.0e-10) const noexcept {
+        const double input[4] = {x, y, z, w};
+        double output[4];
+        if (!tc_detail_try_normalize_f64_components(input, 4, epsilon, output)) {
+            return false;
+        }
+        out = {output[0], output[1], output[2], output[3]};
+        return true;
+    }
+    tc_vec4 normalized_or(const tc_vec4& fallback, double epsilon = 1.0e-10) const noexcept {
+        tc_vec4 result;
+        return try_normalized(result, epsilon) ? result : fallback;
+    }
+    static tc_vec4 lerp(const tc_vec4& a, const tc_vec4& b, double t) noexcept {
+        return {tc_detail_lerp_f64_component(a.x, b.x, t),
+                tc_detail_lerp_f64_component(a.y, b.y, t),
+                tc_detail_lerp_f64_component(a.z, b.z, t),
+                tc_detail_lerp_f64_component(a.w, b.w, t)};
+    }
+    double* ptr() noexcept {
+        return &x;
+    }
+    const double* ptr() const noexcept {
+        return &x;
+    }
+
+    tc_vec4f to_float() const noexcept;
+
+    static tc_vec4 zero() noexcept {
+        return {0.0, 0.0, 0.0, 0.0};
+    }
+    static tc_vec4 unit_x() noexcept {
+        return {1.0, 0.0, 0.0, 0.0};
+    }
+    static tc_vec4 unit_y() noexcept {
+        return {0.0, 1.0, 0.0, 0.0};
+    }
+    static tc_vec4 unit_z() noexcept {
+        return {0.0, 0.0, 1.0, 0.0};
+    }
+    static tc_vec4 unit_w() noexcept {
+        return {0.0, 0.0, 0.0, 1.0};
+    }
+};
+
+struct tc_vec4f {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float w = 0.0f;
+
+    constexpr tc_vec4f() noexcept = default;
+    constexpr tc_vec4f(float x, float y, float z, float w) noexcept
+        : x(x),
+          y(y),
+          z(z),
+          w(w) {}
+    explicit tc_vec4f(const tc_vec4& value) noexcept
+        : x(static_cast<float>(value.x)),
+          y(static_cast<float>(value.y)),
+          z(static_cast<float>(value.z)),
+          w(static_cast<float>(value.w)) {}
+
+    float& operator[](int i) noexcept {
+        assert(i >= 0 && i < 4);
+        return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
+    }
+    float operator[](int i) const noexcept {
+        assert(i >= 0 && i < 4);
+        return i == 0 ? x : (i == 1 ? y : (i == 2 ? z : w));
+    }
+
+    tc_vec4f operator+(const tc_vec4f& v) const noexcept {
+        return {x + v.x, y + v.y, z + v.z, w + v.w};
+    }
+    tc_vec4f operator-(const tc_vec4f& v) const noexcept {
+        return {x - v.x, y - v.y, z - v.z, w - v.w};
+    }
+    tc_vec4f operator*(float s) const noexcept {
+        return {x * s, y * s, z * s, w * s};
+    }
+    tc_vec4f operator/(float s) const noexcept {
+        return {x / s, y / s, z / s, w / s};
+    }
+    tc_vec4f operator-() const noexcept {
+        return {-x, -y, -z, -w};
+    }
+
+    tc_vec4f& operator+=(const tc_vec4f& v) noexcept {
+        x += v.x;
+        y += v.y;
+        z += v.z;
+        w += v.w;
+        return *this;
+    }
+    tc_vec4f& operator-=(const tc_vec4f& v) noexcept {
+        x -= v.x;
+        y -= v.y;
+        z -= v.z;
+        w -= v.w;
+        return *this;
+    }
+    tc_vec4f& operator*=(float s) noexcept {
+        x *= s;
+        y *= s;
+        z *= s;
+        w *= s;
+        return *this;
+    }
+    tc_vec4f& operator/=(float s) noexcept {
+        x /= s;
+        y /= s;
+        z /= s;
+        w /= s;
+        return *this;
+    }
+
+    bool operator==(const tc_vec4f& v) const noexcept {
+        return x == v.x && y == v.y && z == v.z && w == v.w;
+    }
+    bool operator!=(const tc_vec4f& v) const noexcept {
+        return !(*this == v);
+    }
+
+    float dot(const tc_vec4f& v) const noexcept {
+        return x * v.x + y * v.y + z * v.z + w * v.w;
+    }
+    float norm() const noexcept {
+        return std::sqrt(x * x + y * y + z * z + w * w);
+    }
+    float norm_squared() const noexcept {
+        return x * x + y * y + z * z + w * w;
+    }
+    bool is_finite() const noexcept {
+        return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
+    }
+
+    tc_vec4f normalized() const noexcept {
+        const float n = norm();
+        return n > 1.0e-6f ? *this / n : tc_vec4f{0.0f, 0.0f, 0.0f, 1.0f};
+    }
+    bool try_normalized(tc_vec4f& out, float epsilon = 1.0e-6f) const noexcept {
+        const float input[4] = {x, y, z, w};
+        float output[4];
+        if (!tc_detail_try_normalize_f32_components(input, 4, epsilon, output)) {
+            return false;
+        }
+        out = {output[0], output[1], output[2], output[3]};
+        return true;
+    }
+    tc_vec4f normalized_or(const tc_vec4f& fallback, float epsilon = 1.0e-6f) const noexcept {
+        tc_vec4f result;
+        return try_normalized(result, epsilon) ? result : fallback;
+    }
+    float* ptr() noexcept {
+        return &x;
+    }
+    const float* ptr() const noexcept {
+        return &x;
+    }
+
+    tc_vec4 to_double() const noexcept {
+        return {x, y, z, w};
+    }
+
+    static tc_vec4f zero() noexcept {
+        return {0.0f, 0.0f, 0.0f, 0.0f};
+    }
+    static tc_vec4f unit_x() noexcept {
+        return {1.0f, 0.0f, 0.0f, 0.0f};
+    }
+    static tc_vec4f unit_y() noexcept {
+        return {0.0f, 1.0f, 0.0f, 0.0f};
+    }
+    static tc_vec4f unit_z() noexcept {
+        return {0.0f, 0.0f, 1.0f, 0.0f};
+    }
+    static tc_vec4f unit_w() noexcept {
+        return {0.0f, 0.0f, 0.0f, 1.0f};
+    }
+};
+
+inline tc_vec4f tc_vec4::to_float() const noexcept {
+    return {static_cast<float>(x), static_cast<float>(y), static_cast<float>(z), static_cast<float>(w)};
+}
+
+extern "C++" {
+inline tc_vec4 operator*(double s, const tc_vec4& value) noexcept {
+    return value * s;
+}
+inline tc_vec4f operator*(float s, const tc_vec4f& value) noexcept {
+    return value * s;
 }
 }
 
@@ -1742,6 +2029,14 @@ typedef struct tc_rect2f {
 typedef struct tc_vec3 {
     double x, y, z;
 } tc_vec3;
+
+typedef struct tc_vec4 {
+    double x, y, z, w;
+} tc_vec4;
+
+typedef struct tc_vec4f {
+    float x, y, z, w;
+} tc_vec4f;
 
 typedef struct tc_ray3 {
     tc_vec3 origin;

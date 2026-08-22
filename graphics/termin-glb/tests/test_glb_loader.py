@@ -10,8 +10,8 @@ from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.glb_adapters.asset import GLBAsset
 from termin.glb_adapters.instantiator import _glb_mesh_to_tc_mesh, _populate_tc_skeleton_from_glb
 from termin.glb.loader import (
-    GLBAnimationChannel,
     GLBAnimationClip,
+    GLBAnimationTrack,
     GLBNodeData,
     GLBSceneData,
     GLBSkinData,
@@ -251,20 +251,60 @@ def test_root_node_animation_tracks_follow_pose_corrections():
     scene_data.animations = [
         GLBAnimationClip(
             name="Idle",
-            channels=[
-                GLBAnimationChannel(
+            tracks=[
+                GLBAnimationTrack(
                     node_index=0,
                     node_name="Armature",
-                    pos_keys=[[0.0, np.array([0.0, -1.7, -0.4], dtype=np.float32)]],
-                    rot_keys=[[0.0, np.array([0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float32)]],
-                    scale_keys=[[0.0, np.array([0.1, 0.1, 0.1], dtype=np.float32)]],
+                    path="translation",
+                    interpolation="linear",
+                    components=3,
+                    times=[0.0],
+                    values=[[0.0, -1.7, -0.4]],
                 ),
-                GLBAnimationChannel(
+                GLBAnimationTrack(
+                    node_index=0,
+                    node_name="Armature",
+                    path="rotation",
+                    interpolation="linear",
+                    components=4,
+                    times=[0.0],
+                    values=[[0.70710678, 0.0, 0.0, 0.70710678]],
+                ),
+                GLBAnimationTrack(
+                    node_index=0,
+                    node_name="Armature",
+                    path="scale",
+                    interpolation="linear",
+                    components=3,
+                    times=[0.0],
+                    values=[[0.1, 0.1, 0.1]],
+                ),
+                GLBAnimationTrack(
                     node_index=1,
                     node_name="Base",
-                    pos_keys=[[0.0, np.array([0.0, 1.0, 0.0], dtype=np.float32)]],
-                    rot_keys=[[0.0, np.array([-0.70710678, 0.0, 0.0, 0.70710678], dtype=np.float32)]],
-                    scale_keys=[[0.0, np.array([1.0, 1.0, 1.0], dtype=np.float32)]],
+                    path="translation",
+                    interpolation="linear",
+                    components=3,
+                    times=[0.0],
+                    values=[[0.0, 1.0, 0.0]],
+                ),
+                GLBAnimationTrack(
+                    node_index=1,
+                    node_name="Base",
+                    path="rotation",
+                    interpolation="linear",
+                    components=4,
+                    times=[0.0],
+                    values=[[-0.70710678, 0.0, 0.0, 0.70710678]],
+                ),
+                GLBAnimationTrack(
+                    node_index=1,
+                    node_name="Base",
+                    path="scale",
+                    interpolation="linear",
+                    components=3,
+                    times=[0.0],
+                    values=[[1.0, 1.0, 1.0]],
                 ),
             ],
             duration=0.0,
@@ -275,13 +315,13 @@ def test_root_node_animation_tracks_follow_pose_corrections():
     normalize_glb_scale(scene_data)
 
     root_node = scene_data.nodes[0]
-    root_channel = scene_data.animations[0].channels[0]
+    tracks = scene_data.animations[0].tracks
     np.testing.assert_allclose(root_node.rotation, [0.0, 0.0, 0.0, 1.0], atol=1e-6)
     np.testing.assert_allclose(root_node.scale, [1.0, 1.0, 1.0], atol=1e-6)
-    np.testing.assert_allclose(root_channel.rot_keys[0][1], root_node.rotation, atol=1e-6)
-    np.testing.assert_allclose(root_channel.scale_keys[0][1], root_node.scale, atol=1e-6)
-    np.testing.assert_allclose(root_channel.pos_keys[0][1], [0.0, -1.7, -0.4], atol=1e-6)
-    np.testing.assert_allclose(scene_data.animations[0].channels[1].pos_keys[0][1], [0.0, 0.0, 0.1], atol=1e-6)
+    np.testing.assert_allclose(tracks[1].values[0], root_node.rotation, atol=1e-6)
+    np.testing.assert_allclose(tracks[2].values[0], root_node.scale, atol=1e-6)
+    np.testing.assert_allclose(tracks[0].values[0], [0.0, -1.7, -0.4], atol=1e-6)
+    np.testing.assert_allclose(tracks[3].values[0], [0.0, 0.0, 0.1], atol=1e-6)
 
 
 def test_legacy_skeleton_publisher_uses_column_major_inverse_bind_storage():

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ._animation_native import TcAnimationClip
-from .channel import channel_data_from_fbx, channel_data_from_glb
+from .channel import channel_data_from_fbx
 
 
 def clip_from_fbx(fbx_clip, uuid_hint: str = "") -> TcAnimationClip:
@@ -39,14 +39,22 @@ def clip_from_glb(glb_clip, uuid_hint: str = "") -> TcAnimationClip:
     Returns:
         TcAnimationClip
     """
-    channels_data = []
-    for ch in glb_clip.channels:
-        channels_data.append(channel_data_from_glb(ch))
+    tracks = [
+        {
+            "target_node_index": track.node_index,
+            "path": track.path,
+            "interpolation": track.interpolation,
+            "components": track.components,
+            "times": track.times,
+            "values": track.values.reshape(-1),
+        }
+        for track in glb_clip.tracks
+    ]
 
     clip = TcAnimationClip.create(glb_clip.name, uuid_hint)
     clip.set_tps(1.0)  # GLB uses seconds directly
     clip.set_loop(True)
-    clip.set_channels(channels_data)
+    clip.set_tracks(tracks)
 
     return clip
 

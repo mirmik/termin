@@ -23,13 +23,14 @@ The runtime asset contract remains sequential: native parsing and CPU resource
 preparation are followed by deterministic publication into declared embedded
 resources. This migration does not add concurrent `Asset.ensure_loaded()`.
 
-The explicit `NativeGLBDocument` backend now keeps mapped GLB storage alive
-while cgltf accessors refer to it, publishes static and skinned Termin meshes
-without Python per-index processing, and exposes encoded images, materials,
-nodes, skins, and exact animation tensors through compact discovery/bulk
-boundaries. Until the migration card that switches the default backend and the
-exact runtime animation-track prerequisite are completed, the Python loader
-remains the production implementation described above.
+The explicit `NativeGLBDocument` backend keeps mapped GLB storage alive while
+cgltf accessors refer to it, publishes static and skinned Termin meshes without
+Python per-index processing, and exposes encoded images, materials, nodes,
+skins, and exact animation tensors through compact discovery/bulk boundaries.
+`GLBAsset` now selects this backend by default for binary `.glb` sources; JSON
+`.gltf` sources use the portable Python decoder. Both paths publish the same
+exact animation-track contract, preserving source node indices, interpolation,
+non-uniform vec3 scale, morph weights, and full CUBICSPLINE tuples.
 
 The pinned dependency revision and fork policy are documented in
 [`native-cgltf.md`](native-cgltf.md).

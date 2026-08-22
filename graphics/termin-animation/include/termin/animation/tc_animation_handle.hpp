@@ -126,13 +126,9 @@ namespace termin {
                 return a && a->loop;
             }
 
-            // Channel access
-            tc_animation_channel* channels() const {
-                tc_animation* a = get();
-                return a ? a->channels : nullptr;
-            }
-
-            tc_animation_channel* get_channel(size_t index) const {
+            // Read-only channel access. Payload publication goes through the
+            // transactional replace APIs.
+            const tc_animation_channel* get_channel(size_t index) const {
                 tc_animation* a = get();
                 return a ? tc_animation_get_channel(a, index) : nullptr;
             }
@@ -152,21 +148,9 @@ namespace termin {
                 return a ? tc_animation_find_channel(a, target_name) : -1;
             }
 
-            void bump_version() {
-                if (tc_animation* a = get()) {
-                    a->header.version++;
-                }
-            }
-
             // Trigger lazy load
             bool ensure_loaded() {
                 return tc_animation_ensure_loaded(handle);
-            }
-
-            // Allocate channels
-            tc_animation_channel* alloc_channels(size_t count) {
-                tc_animation* a = get();
-                return a ? tc_animation_alloc_channels(a, count) : nullptr;
             }
 
             // Set properties

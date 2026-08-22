@@ -16,14 +16,15 @@ namespace termin {
             if (!entity.valid()) {
                 return;
             }
+            GeneralTransform3 transform = entity.transform();
             if (translation) {
-                entity.set_local_position(&translation->x);
+                transform.set_local_position(*translation);
             }
             if (rotation) {
-                entity.set_local_rotation(&rotation->x);
+                transform.set_local_rotation(*rotation);
             }
             if (scale) {
-                entity.set_local_scale(&scale->x);
+                transform.set_local_scale(*scale);
             }
         }
     } // namespace
@@ -330,8 +331,8 @@ namespace termin {
                 continue;
             }
 
-            double value[4] = {};
-            if (!tc_animation_track_sample(&track, t_ticks, value, 4)) {
+            tc_animation_track_sample_result sample{};
+            if (!tc_animation_track_sample(&track, t_ticks, &sample)) {
                 tc::Log::error("[AnimationPlayer::_apply_tracks_at_time] failed to sample track %zu", i);
                 continue;
             }
@@ -343,22 +344,16 @@ namespace termin {
             const Entity target = mapping.bone_index >= 0
                                       ? skeleton_controller->bone_entity(mapping.bone_index)
                                       : mapping.node_entity;
-            switch ((tc_animation_path)track.path) {
-            case TC_ANIMATION_PATH_TRANSLATION: {
-                const Vec3 translation{value[0], value[1], value[2]};
-                apply_entity_transform(target, &translation, nullptr, nullptr);
+            switch (sample.path) {
+            case TC_ANIMATION_PATH_TRANSLATION:
+                apply_entity_transform(target, &sample.value.translation, nullptr, nullptr);
                 break;
-            }
-            case TC_ANIMATION_PATH_ROTATION: {
-                const Quat rotation{value[0], value[1], value[2], value[3]};
-                apply_entity_transform(target, nullptr, &rotation, nullptr);
+            case TC_ANIMATION_PATH_ROTATION:
+                apply_entity_transform(target, nullptr, &sample.value.rotation, nullptr);
                 break;
-            }
-            case TC_ANIMATION_PATH_SCALE: {
-                const Vec3 scale{value[0], value[1], value[2]};
-                apply_entity_transform(target, nullptr, nullptr, &scale);
+            case TC_ANIMATION_PATH_SCALE:
+                apply_entity_transform(target, nullptr, nullptr, &sample.value.scale);
                 break;
-            }
             case TC_ANIMATION_PATH_WEIGHTS:
                 break;
             }

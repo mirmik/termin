@@ -58,19 +58,11 @@ TC_API bool tc_animation_ensure_loaded(tc_animation_handle h);
 // Animation data operations
 // ============================================================================
 
-// Allocate channels array (frees existing if any)
-TC_API tc_animation_channel* tc_animation_alloc_channels(tc_animation* anim, size_t count);
-
 // Get channel by index
-TC_API tc_animation_channel* tc_animation_get_channel(tc_animation* anim, size_t index);
+TC_API const tc_animation_channel* tc_animation_get_channel(const tc_animation* anim, size_t index);
 
 // Find channel by target name (-1 if not found)
 TC_API int tc_animation_find_channel(const tc_animation* anim, const char* target_name);
-
-// Allocate keyframes for a channel
-TC_API tc_keyframe_vec3* tc_animation_channel_alloc_translation(tc_animation_channel* ch, size_t count);
-TC_API tc_keyframe_quat* tc_animation_channel_alloc_rotation(tc_animation_channel* ch, size_t count);
-TC_API tc_keyframe_scalar* tc_animation_channel_alloc_scale(tc_animation_channel* ch, size_t count);
 
 typedef struct tc_animation_channel_desc {
     const char* target_name;
@@ -104,8 +96,7 @@ TC_API const tc_animation_track* tc_animation_get_track(const tc_animation* anim
 // and weights are preserved exactly but return false with an error log.
 TC_API bool tc_animation_track_sample(const tc_animation_track* track,
                                       double t_ticks,
-                                      double* values,
-                                      size_t value_count);
+                                      tc_animation_track_sample_result* out_sample);
 
 // Recompute animation duration from the active legacy channels or bulk tracks.
 TC_API void tc_animation_recompute_duration(tc_animation* anim);

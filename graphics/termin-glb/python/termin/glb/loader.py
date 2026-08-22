@@ -217,22 +217,43 @@ class GLBTcTexture:
         self.sampler = dict(sampler or {})
 
 
-class GLBAnimationChannel:
-    """Animation channel for a single node."""
-    def __init__(self, node_index: int, node_name: str,
-                 pos_keys: List, rot_keys: List, scale_keys: List):
+class GLBAnimationTrack:
+    """One exact glTF animation channel.
+
+    ``values`` always has shape ``(value_tuple_count, components)``. LINEAR
+    and STEP tracks contain one value tuple per time. CUBICSPLINE tracks keep
+    the authored ``in_tangent, value, out_tangent`` rows, in that order, for
+    every time. Quaternion tangent rows are ordinary vec4 derivatives and are
+    deliberately not represented or normalized as rotations.
+    """
+
+    def __init__(
+        self,
+        node_index: int,
+        node_name: str,
+        path: str,
+        interpolation: str,
+        components: int,
+        times,
+        values,
+    ):
+        if components <= 0:
+            raise ValueError("animation track components must be positive")
         self.node_index = node_index
         self.node_name = node_name
-        self.pos_keys = pos_keys      # [(time, [x,y,z]), ...]
-        self.rot_keys = rot_keys      # [(time, [x,y,z,w]), ...] quaternion
-        self.scale_keys = scale_keys  # [(time, [x,y,z]), ...]
+        self.path = path
+        self.interpolation = interpolation
+        self.components = components
+        self.times = np.asarray(times).reshape(-1)
+        self.values = np.asarray(values).reshape(-1, components)
 
 
 class GLBAnimationClip:
-    """Animation clip containing multiple channels."""
-    def __init__(self, name: str, channels: List[GLBAnimationChannel], duration: float):
+    """Animation clip containing exact source-node tracks."""
+
+    def __init__(self, name: str, tracks: List[GLBAnimationTrack], duration: float):
         self.name = name
-        self.channels = channels
+        self.tracks = tracks
         self.duration = duration
 
 
@@ -1149,80 +1170,143 @@ def _parse_skins(gltf: dict, buffers: list[bytes], scene_data: GLBSceneData):
 
 
 def _parse_animations(gltf: dict, buffers: list[bytes], scene_data: GLBSceneData):
-    """Parse animations from glTF."""
+    """Parse exact glTF animation tracks without lowering their semantics."""
     nodes = gltf.get("nodes", [])
+    accessors = gltf.get("accessors", [])
+    interpolation_names = {
+        "LINEAR": "linear",
+        "STEP": "step",
+        "CUBICSPLINE": "cubic_spline",
+    }
+    required_output_types = {
+        "translation": ("VEC3", 3),
+        "rotation": ("VEC4", 4),
+        "scale": ("VEC3", 3),
+    }
 
     for anim_idx, anim in enumerate(gltf.get("animations", [])):
         anim_name = anim.get("name", f"Animation_{anim_idx}")
-
-        # Group channels by target node
-        node_channels: Dict[int, Dict[str, Any]] = {}
-
-        for channel in anim.get("channels", []):
-            sampler_idx = channel["sampler"]
-            sampler = anim["samplers"][sampler_idx]
-
-            target = channel["target"]
-            node_idx = target.get("node")
-            path = target.get("path")  # translation, rotation, scale, weights
-
-            if node_idx is None or path not in ("translation", "rotation", "scale"):
-                continue
-
-            # Read input (times) and output (values)
-            times = _read_accessor(gltf, buffers, sampler["input"])
-            values = _read_accessor(gltf, buffers, sampler["output"])
-
-            if times.ndim > 1:
-                times = times.flatten()
-
-            if node_idx not in node_channels:
-                node_channels[node_idx] = {
-                    "pos_keys": [],
-                    "rot_keys": [],
-                    "scale_keys": [],
-                }
-
-            # Build keyframe list (use lists, not tuples, for mutability in normalize_glb_scale)
-            keys = []
-            for i, t in enumerate(times):
-                if values.ndim == 1:
-                    v = values[i:i+1]
-                else:
-                    v = values[i]
-                keys.append([float(t), v.copy()])
-
-            if path == "translation":
-                node_channels[node_idx]["pos_keys"] = keys
-            elif path == "rotation":
-                node_channels[node_idx]["rot_keys"] = keys
-            elif path == "scale":
-                node_channels[node_idx]["scale_keys"] = keys
-
-        # Build animation channels
-        channels = []
+        samplers = anim.get("samplers", [])
+        tracks = []
+        seen_targets: set[tuple[int, str]] = set()
         max_time = 0.0
 
-        for node_idx, ch_data in node_channels.items():
-            node_name = nodes[node_idx].get("name", f"Node_{node_idx}") if node_idx < len(nodes) else f"Node_{node_idx}"
+        for channel_idx, channel in enumerate(anim.get("channels", [])):
+            sampler_idx = int(channel.get("sampler", -1))
+            if sampler_idx < 0 or sampler_idx >= len(samplers):
+                raise ValueError(
+                    f"animation {anim_idx} channel {channel_idx} references invalid sampler {sampler_idx}"
+                )
+            sampler = samplers[sampler_idx]
+            target = channel.get("target", {})
+            node_idx = target.get("node")
+            path = target.get("path")
+            if node_idx is None:
+                raise ValueError(f"animation {anim_idx} channel {channel_idx} has no target node")
+            node_idx = int(node_idx)
+            if node_idx < 0 or node_idx >= len(nodes):
+                raise ValueError(
+                    f"animation {anim_idx} channel {channel_idx} target node {node_idx} is out of range"
+                )
+            if path not in (*required_output_types, "weights"):
+                raise ValueError(
+                    f"animation {anim_idx} channel {channel_idx} has unsupported target path {path!r}"
+                )
+            identity = (node_idx, path)
+            if identity in seen_targets:
+                raise ValueError(
+                    f"animation {anim_idx} has duplicate {path} tracks for node {node_idx}"
+                )
+            seen_targets.add(identity)
 
-            # Track max time for duration
-            for keys in [ch_data["pos_keys"], ch_data["rot_keys"], ch_data["scale_keys"]]:
-                if keys:
-                    max_time = max(max_time, keys[-1][0])
+            interpolation_source = sampler.get("interpolation", "LINEAR")
+            interpolation = interpolation_names.get(interpolation_source)
+            if interpolation is None:
+                raise ValueError(
+                    f"animation {anim_idx} sampler {sampler_idx} has unsupported "
+                    f"interpolation {interpolation_source!r}"
+                )
 
-            channels.append(GLBAnimationChannel(
+            input_accessor_idx = int(sampler.get("input", -1))
+            output_accessor_idx = int(sampler.get("output", -1))
+            if input_accessor_idx < 0 or input_accessor_idx >= len(accessors):
+                raise ValueError(
+                    f"animation {anim_idx} sampler {sampler_idx} has invalid input accessor"
+                )
+            if output_accessor_idx < 0 or output_accessor_idx >= len(accessors):
+                raise ValueError(
+                    f"animation {anim_idx} sampler {sampler_idx} has invalid output accessor"
+                )
+            input_accessor = accessors[input_accessor_idx]
+            output_accessor = accessors[output_accessor_idx]
+            if (
+                input_accessor.get("type") != "SCALAR"
+                or int(input_accessor.get("componentType", -1)) != 5126
+                or input_accessor.get("normalized", False)
+            ):
+                raise ValueError(
+                    f"animation {anim_idx} sampler {sampler_idx} input must be a non-normalized FLOAT SCALAR"
+                )
+            if (
+                int(output_accessor.get("componentType", -1)) != 5126
+                or output_accessor.get("normalized", False)
+            ):
+                raise ValueError(
+                    f"animation {anim_idx} sampler {sampler_idx} output must use non-normalized FLOAT values"
+                )
+
+            times = _read_accessor(gltf, buffers, input_accessor_idx).reshape(-1).copy()
+            raw_values = _read_accessor(gltf, buffers, output_accessor_idx)
+            if times.size == 0:
+                raise ValueError(f"animation {anim_idx} sampler {sampler_idx} has no key times")
+            if not np.all(np.isfinite(times)) or np.any(np.diff(times) <= 0.0):
+                raise ValueError(
+                    f"animation {anim_idx} sampler {sampler_idx} times must be finite and strictly increasing"
+                )
+            if not np.all(np.isfinite(raw_values)):
+                raise ValueError(f"animation {anim_idx} sampler {sampler_idx} values must be finite")
+
+            tuple_multiplier = 3 if interpolation == "cubic_spline" else 1
+            tuple_count = int(times.size) * tuple_multiplier
+            if path == "weights":
+                if output_accessor.get("type") != "SCALAR":
+                    raise ValueError(
+                        f"animation {anim_idx} channel {channel_idx} weights output must be SCALAR"
+                    )
+                if raw_values.size == 0 or raw_values.size % tuple_count:
+                    raise ValueError(
+                        f"animation {anim_idx} channel {channel_idx} has malformed morph-weight output"
+                    )
+                components = int(raw_values.size // tuple_count)
+            else:
+                required_type, components = required_output_types[path]
+                if output_accessor.get("type") != required_type:
+                    raise ValueError(
+                        f"animation {anim_idx} channel {channel_idx} {path} output "
+                        f"must be {required_type}"
+                    )
+                if raw_values.size != tuple_count * components:
+                    raise ValueError(
+                        f"animation {anim_idx} channel {channel_idx} has malformed {path} output"
+                    )
+
+            values = raw_values.reshape(tuple_count, components).copy()
+            node_name = nodes[node_idx].get("name", f"Node_{node_idx}")
+            tracks.append(GLBAnimationTrack(
                 node_index=node_idx,
                 node_name=node_name,
-                pos_keys=ch_data["pos_keys"],
-                rot_keys=ch_data["rot_keys"],
-                scale_keys=ch_data["scale_keys"],
+                path=path,
+                interpolation=interpolation,
+                components=components,
+                times=times,
+                values=values,
             ))
+            max_time = max(max_time, float(times[-1]))
 
-        if channels:
+        if tracks:
             scene_data.animations.append(GLBAnimationClip(
                 name=anim_name,
-                channels=channels,
+                tracks=tracks,
                 duration=max_time,
             ))
 
@@ -1438,24 +1522,20 @@ def convert_y_up_to_z_up(scene_data: GLBSceneData) -> None:
         for i in range(len(skin.inverse_bind_matrices)):
             skin.inverse_bind_matrices[i] = convert_matrix(skin.inverse_bind_matrices[i])
 
-    # 4. Convert animation keyframes
+    # 4. Convert every animation value/tangent tuple. CUBICSPLINE quaternion
+    # tangents are vec4 derivatives, so the basis change applies to them but
+    # quaternion normalization does not.
     for anim in scene_data.animations:
-        for channel in anim.channels:
-            # Position keys
-            if channel.pos_keys:
-                for key in channel.pos_keys:
-                    key[1] = convert_position(key[1])
-
-            # Rotation keys
-            if channel.rot_keys:
-                for key in channel.rot_keys:
-                    key[1] = convert_quaternion(key[1])
-
-            # Scale keys - swap Y and Z
-            if channel.scale_keys:
-                for key in channel.scale_keys:
-                    s = key[1]
-                    key[1] = np.array([s[0], s[2], s[1]], dtype=np.float32)
+        for track in anim.tracks:
+            values = track.values
+            if track.path in ("translation", "rotation"):
+                old_y = values[:, 1].copy()
+                values[:, 1] = -values[:, 2]
+                values[:, 2] = old_y
+            elif track.path == "scale":
+                old_y = values[:, 1].copy()
+                values[:, 1] = values[:, 2]
+                values[:, 2] = old_y
 
 
 def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
@@ -1500,10 +1580,14 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
         for i in range(len(skin.inverse_bind_matrices)):
             skin.inverse_bind_matrices[i] = scale_matrix @ skin.inverse_bind_matrices[i]
 
-    # 4. Scale translation of all child nodes (recursive from root)
+    # 4. Scale translation of all child nodes (recursive from root), and retain
+    # their exact set for applying the same operation to animation tracks.
+    descendants: set[int] = set()
+
     def scale_children_translation(node_idx: int) -> None:
         node = scene_data.nodes[node_idx]
         for child_idx in node.children:
+            descendants.add(child_idx)
             child_node = scene_data.nodes[child_idx]
             child_node.translation = child_node.translation * scale_factor
             scale_children_translation(child_idx)
@@ -1512,13 +1596,11 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
 
     # 5. Keep animation channels in the same local space as normalized nodes.
     for anim in scene_data.animations:
-        for channel in anim.channels:
-            if channel.node_index == root_idx:
-                for key in channel.scale_keys:
-                    key[1] = key[1] / root_scale
-                continue
-            for key in channel.pos_keys:
-                key[1] = key[1] * scale_factor
+        for track in anim.tracks:
+            if track.node_index == root_idx and track.path == "scale":
+                track.values[:] /= root_scale
+            elif track.node_index in descendants and track.path == "translation":
+                track.values[:] *= scale_factor
 
     # Store original scale for reference
     scene_data.skin_scale = scale_factor
@@ -1567,11 +1649,11 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
     # to a node rest pose must also be applied to that node's tracks; otherwise
     # enabling animation snaps the imported root back to raw glTF space.
     for anim in scene_data.animations:
-        for channel in anim.channels:
-            if channel.node_index not in root_node_indices:
+        for track in anim.tracks:
+            if track.node_index not in root_node_indices or track.path != "rotation":
                 continue
-            for key in channel.rot_keys:
-                key[1] = _qmul(rot_neg_90_x, key[1])
+            for row_index, row in enumerate(track.values):
+                track.values[row_index] = _qmul(rot_neg_90_x, row)
 
     # Transform root bone (first joint, e.g. Hips) by +90° X
     # This is a full transform: rotation, translation, and scale
@@ -1589,21 +1671,25 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
             root_bone_idx = skin.joint_node_indices[0]
             if root_bone_idx < len(scene_data.nodes):
                 root_bone_node = scene_data.nodes[root_bone_idx]
-                root_bone_name = root_bone_node.name
                 root_bone_node.translation = transform_pos_90_x(root_bone_node.translation)
                 root_bone_node.rotation = _qmul(rot_pos_90_x, root_bone_node.rotation)
                 root_bone_node.scale = transform_scale_90_x(root_bone_node.scale)
 
-                # Transform root bone animation keyframes by +90° X
+                # Transform all root-bone animation value/tangent tuples by
+                # +90° X. Cubic quaternion tangents remain raw vec4s.
                 for anim in scene_data.animations:
-                    for channel in anim.channels:
-                        if channel.node_name == root_bone_name:
-                            for key in channel.pos_keys:
-                                key[1] = transform_pos_90_x(key[1])
-                            for key in channel.rot_keys:
-                                key[1] = _qmul(rot_pos_90_x, key[1])
-                            for key in channel.scale_keys:
-                                key[1] = transform_scale_90_x(key[1])
+                    for track in anim.tracks:
+                        if track.node_index != root_bone_idx:
+                            continue
+                        if track.path == "translation":
+                            for row_index, row in enumerate(track.values):
+                                track.values[row_index] = transform_pos_90_x(row)
+                        elif track.path == "rotation":
+                            for row_index, row in enumerate(track.values):
+                                track.values[row_index] = _qmul(rot_pos_90_x, row)
+                        elif track.path == "scale":
+                            for row_index, row in enumerate(track.values):
+                                track.values[row_index] = transform_scale_90_x(row)
 
 
 def load_glb_file_normalized(

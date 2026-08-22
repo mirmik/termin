@@ -773,8 +773,8 @@ def test_native_animation_bridge_preserves_step_vec3_scale_and_node_index(tmp_pa
     assert clip.track_count == 2
     assert clip.tracks[0]["target_node_index"] == 0
     assert clip.tracks[0]["interpolation"] == "step"
-    assert clip.sample_track(0, 0.5) == pytest.approx([1.0, -3.0, 2.0])
-    assert clip.sample_track(1, 0.5) == pytest.approx([2.0, 6.0, 4.0])
+    assert tuple(clip.sample_track(0, 0.5)) == pytest.approx([1.0, -3.0, 2.0])
+    assert tuple(clip.sample_track(1, 0.5)) == pytest.approx([2.0, 6.0, 4.0])
 
 
 def test_native_skin_keeps_column_major_inverse_bind_storage(tmp_path):
@@ -841,7 +841,7 @@ def test_glb_asset_default_cgltf_backend_publishes_children_and_node_targets(
     assert clip.track_count == 1
     assert clip.tracks[0]["target_node_index"] == 1
     assert clip.tracks[0]["interpolation"] == "step"
-    assert clip.sample_track(0, 1.0) == pytest.approx((4.0, 6.0, 8.0))
+    assert tuple(clip.sample_track(0, 1.0)) == pytest.approx((4.0, 6.0, 8.0))
 
     monkeypatch.setattr(
         termin_assets,

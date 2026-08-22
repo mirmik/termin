@@ -1,6 +1,7 @@
 // tc_animation.h - Animation clip data structures
 #pragma once
 
+#include <geom/tc_vec4.h>
 #include <stdlib.h>
 #include <tcbase/tc_binding_types.h>
 #include <tcbase/tc_resource.h>
@@ -73,20 +74,45 @@ typedef enum tc_animation_interpolation {
     TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE = 2,
 } tc_animation_interpolation;
 
-// One self-contained track. Times and values are owned by the animation.
-// LINEAR/STEP values contain key_count * components doubles. CUBIC_SPLINE
-// preserves the glTF in-tangent/value/out-tangent representation and contains
-// key_count * 3 * components doubles.
+typedef struct tc_animation_cubic_vec3_key {
+    tc_vec3 in_tangent;
+    tc_vec3 value;
+    tc_vec3 out_tangent;
+} tc_animation_cubic_vec3_key;
+
+// glTF quaternion spline tangents are ordinary vec4 derivatives. They are
+// finite but are not rotations and must never be normalized.
+typedef struct tc_animation_cubic_rotation_key {
+    tc_vec4 in_tangent;
+    tc_quat value;
+    tc_vec4 out_tangent;
+} tc_animation_cubic_rotation_key;
+
+typedef struct tc_animation_weight_values {
+    uint32_t component_count;
+    double* values;
+} tc_animation_weight_values;
+
+// path + interpolation discriminate the active member. Geometry tracks own
+// typed values; only variable-width morph weights remain a packed scalar array.
+typedef union tc_animation_track_values {
+    tc_vec3* vec3_values;
+    tc_quat* rotation_values;
+    tc_animation_cubic_vec3_key* cubic_vec3_keys;
+    tc_animation_cubic_rotation_key* cubic_rotation_keys;
+    tc_animation_weight_values weights;
+} tc_animation_track_values;
+
+// One self-contained owned runtime track. Flat component arrays are accepted
+// only through tc_animation_track_desc and converted at publication.
 typedef struct tc_animation_track {
     int32_t target_node_index;
     uint8_t path;          // tc_animation_path
     uint8_t interpolation; // tc_animation_interpolation
     uint16_t _pad;
-    uint32_t components;
     size_t key_count;
-    size_t value_count;
     double* times;
-    double* values;
+    tc_animation_track_values values;
 } tc_animation_track;
 
 // Non-owning input used by transactional bulk replacement.
@@ -173,6 +199,20 @@ typedef struct tc_channel_sample {
     uint8_t has_scale;
     uint8_t _pad[5];
 } tc_channel_sample;
+
+typedef union tc_animation_track_sample_value {
+    tc_vec3 translation;
+    tc_quat rotation;
+    tc_vec3 scale;
+} tc_animation_track_sample_value;
+
+// Typed result for the supported bulk TRS track paths. The path is the union
+// discriminator. Sampling is transactional and writes the result only on
+// success.
+typedef struct tc_animation_track_sample_result {
+    tc_animation_path path;
+    tc_animation_track_sample_value value;
+} tc_animation_track_sample_result;
 
 // Initialize sample to empty
 static inline void tc_channel_sample_init(tc_channel_sample* s) {

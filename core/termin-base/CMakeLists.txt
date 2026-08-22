@@ -183,6 +183,14 @@ if(TERMIN_BUILD_TESTS)
     target_link_libraries(termin_base_vec3f_c_test PRIVATE termin_base)
     add_test(NAME termin_base_vec3f_c_test COMMAND termin_base_vec3f_c_test)
 
+    add_executable(termin_base_vec4_c_test tests/test_tc_vec4.c)
+    set_target_properties(termin_base_vec4_c_test PROPERTIES LINKER_LANGUAGE CXX)
+    target_include_directories(termin_base_vec4_c_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_base_vec4_c_test PRIVATE termin_base)
+    add_test(NAME termin_base_vec4_c_test COMMAND termin_base_vec4_c_test)
+
     add_executable(termin_base_quat_c_test tests/test_tc_quat.c)
     set_target_properties(termin_base_quat_c_test PROPERTIES LINKER_LANGUAGE CXX)
     target_include_directories(termin_base_quat_c_test PRIVATE

@@ -1,7 +1,7 @@
 """Portable GLB/glTF decoding and runtime publication support."""
 from termin.glb.loader import (
-    GLBAnimationChannel,
     GLBAnimationClip,
+    GLBAnimationTrack,
     GLBMaterialData,
     GLBMeshData,
     GLBNodeData,
@@ -27,8 +27,8 @@ from termin.glb.native import (
 )
 
 __all__ = [
-    "GLBAnimationChannel",
     "GLBAnimationClip",
+    "GLBAnimationTrack",
     "GLBMaterialData",
     "GLBMeshData",
     "GLBNodeData",

@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from termin.animation import TcAnimationClip
+from termin.geombase import Quat, Vec3
 
 
 def _clip() -> TcAnimationClip:
@@ -31,7 +32,7 @@ def _track(
     }
 
 
-def test_bulk_tracks_own_flat_payload_and_sample_linear_vec3_scale() -> None:
+def test_bulk_tracks_expose_flat_adapter_and_sample_typed_vec3_scale() -> None:
     clip = _clip()
     times = [0.0, 2.0]
     values = [1.0, 2.0, 3.0, 3.0, 6.0, 9.0]
@@ -52,7 +53,9 @@ def test_bulk_tracks_own_flat_payload_and_sample_linear_vec3_scale() -> None:
         "times": [0.0, 2.0],
         "values": [1.0, 2.0, 3.0, 3.0, 6.0, 9.0],
     }]
-    assert clip.sample_track(0, 1.0) == pytest.approx([2.0, 4.0, 6.0])
+    sample = clip.sample_track(0, 1.0)
+    assert isinstance(sample, Vec3)
+    assert tuple(sample) == pytest.approx([2.0, 4.0, 6.0])
 
 
 def test_set_tps_recomputes_duration_and_rejects_invalid_values() -> None:
@@ -80,10 +83,10 @@ def test_step_track_holds_previous_value_and_changes_at_key_time() -> None:
         ),
     ])
 
-    assert clip.sample_track(0, 0.75) == pytest.approx([0.0, 0.0, 0.0])
-    assert clip.sample_track(0, 1.0) == pytest.approx([10.0, 20.0, 30.0])
-    assert clip.sample_track(0, 1.75) == pytest.approx([10.0, 20.0, 30.0])
-    assert clip.sample_track(0, 3.0) == pytest.approx([40.0, 50.0, 60.0])
+    assert tuple(clip.sample_track(0, 0.75)) == pytest.approx([0.0, 0.0, 0.0])
+    assert tuple(clip.sample_track(0, 1.0)) == pytest.approx([10.0, 20.0, 30.0])
+    assert tuple(clip.sample_track(0, 1.75)) == pytest.approx([10.0, 20.0, 30.0])
+    assert tuple(clip.sample_track(0, 3.0)) == pytest.approx([40.0, 50.0, 60.0])
 
 
 def test_bulk_track_replacement_is_transactional() -> None:
@@ -99,7 +102,64 @@ def test_bulk_track_replacement_is_transactional() -> None:
     assert clip.version == version
     assert clip.track_count == 1
     assert clip.tracks[0]["values"] == original["values"]
-    assert clip.sample_track(0, 0.5) == pytest.approx([2.5, 3.5, 4.5])
+    assert tuple(clip.sample_track(0, 0.5)) == pytest.approx([2.5, 3.5, 4.5])
+
+
+def test_rotation_publication_normalizes_owned_values_and_returns_quat() -> None:
+    clip = _clip()
+    source_values = [0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 3.0]
+    clip.set_tracks([
+        _track(path="rotation", components=4, values=source_values),
+    ])
+
+    assert source_values == [0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 3.0]
+    assert clip.tracks[0]["values"] == pytest.approx([
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        2.0 ** -0.5,
+        2.0 ** -0.5,
+    ])
+    sample = clip.sample_track(0, 0.5)
+    assert isinstance(sample, Quat)
+    assert sum(component * component for component in sample) == pytest.approx(1.0)
+
+
+def test_cubic_rotation_normalizes_only_values_and_rejects_degenerate_value_transactionally() -> None:
+    clip = _clip()
+    values = [
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 2.0,
+        1.0, 2.0, 3.0, 4.0,
+        -4.0, -3.0, -2.0, -1.0,
+        0.0, 0.0, 3.0, 3.0,
+        0.0, 0.0, 0.0, 0.0,
+    ]
+    track = _track(
+        path="rotation",
+        interpolation="cubic_spline",
+        components=4,
+        values=values,
+    )
+    clip.set_tracks([track])
+    published = clip.tracks[0]["values"]
+    assert published[:4] == values[:4]
+    assert published[8:16] == values[8:16]
+    assert published[20:24] == values[20:24]
+    assert published[4:8] == pytest.approx([0.0, 0.0, 0.0, 1.0])
+    assert published[16:20] == pytest.approx([0.0, 0.0, 2.0 ** -0.5, 2.0 ** -0.5])
+
+    version = clip.version
+    invalid = dict(track)
+    invalid["values"] = list(values)
+    invalid["values"][4:8] = [0.0, 0.0, 0.0, 0.0]
+    with pytest.raises(RuntimeError, match="previous payload was preserved"):
+        clip.set_tracks([invalid])
+    assert clip.version == version
+    assert clip.tracks[0]["values"] == published
 
 
 @pytest.mark.parametrize(
