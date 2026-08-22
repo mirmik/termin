@@ -46,7 +46,13 @@ namespace termin {
             // rotate_vector is an alias for transform_vector (for Pose3 without scale, they are the same)
             .def("rotate_vector", nb::overload_cast<const Vec3&>(&Pose3::transform_vector, nb::const_))
             .def("inverse_rotate_vector", nb::overload_cast<const Vec3&>(&Pose3::inverse_transform_vector, nb::const_))
-            .def("normalized", &Pose3::normalized)
+            .def("normalized", [](const Pose3& pose) {
+                Quat rotation;
+                if (!pose.ang.try_normalized(rotation)) {
+                    throw nb::value_error("Pose3 rotation cannot be normalized");
+                }
+                return Pose3{rotation, pose.lin};
+            })
             .def("with_translation", nb::overload_cast<const Vec3&>(&Pose3::with_translation, nb::const_))
             .def("with_rotation", &Pose3::with_rotation)
             .def("rotation_matrix",
@@ -87,8 +93,25 @@ namespace termin {
                 nb::arg("eye"),
                 nb::arg("target"),
                 nb::arg("up").none() = nb::none())
-            .def_static("from_euler", &Pose3::from_euler, nb::arg("roll"), nb::arg("pitch"), nb::arg("yaw"))
-            .def("to_euler", nb::overload_cast<>(&Pose3::to_euler, nb::const_))
+            .def_static(
+                "from_euler",
+                [](const Vec3& euler_xyz) {
+                    Quat rotation;
+                    if (!Quat::try_from_euler(euler_xyz, rotation)) {
+                        throw nb::value_error("Euler angles must be finite");
+                    }
+                    return Pose3{rotation, Vec3::zero()};
+                },
+                nb::arg("euler_xyz"))
+            .def(
+                "to_euler",
+                [](const Pose3& pose) {
+                    Vec3 result;
+                    if (!pose.ang.try_to_euler(result)) {
+                        throw nb::value_error("Pose3 rotation cannot be converted to Euler angles");
+                    }
+                    return result;
+                })
             .def("to_axis_angle",
                  [](const Pose3& p) {
                      Vec3 axis;

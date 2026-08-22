@@ -10,20 +10,20 @@
 namespace termin {
     namespace {
         void apply_entity_transform(Entity entity,
-                                    const double* translation,
-                                    const double* rotation,
-                                    const double* scale) {
+                                    const Vec3* translation,
+                                    const Quat* rotation,
+                                    const Vec3* scale) {
             if (!entity.valid()) {
                 return;
             }
             if (translation) {
-                entity.set_local_position(translation);
+                entity.set_local_position(&translation->x);
             }
             if (rotation) {
-                entity.set_local_rotation(rotation);
+                entity.set_local_rotation(&rotation->x);
             }
             if (scale) {
-                entity.set_local_scale(scale);
+                entity.set_local_scale(&scale->x);
             }
         }
     } // namespace
@@ -126,6 +126,9 @@ namespace termin {
         } else {
             _current_index = -1;
             _channel_mappings.clear();
+            _track_mappings.clear();
+            _samples_buffer.clear();
+            _mapped_clip_version = 0;
         }
     }
 
@@ -153,6 +156,8 @@ namespace termin {
     void AnimationPlayer::_build_channel_mapping() {
         _channel_mappings.clear();
         _track_mappings.clear();
+        _samples_buffer.clear();
+        _mapped_clip_version = 0;
 
         if (_current_index < 0 || _current_index >= (int)clips.size()) {
             return;
@@ -204,6 +209,7 @@ namespace termin {
                         track.target_node_index);
                 }
             }
+            _mapped_clip_version = anim->header.version;
             return;
         }
 
@@ -225,6 +231,7 @@ namespace termin {
 
         // Resize samples buffer
         _samples_buffer.resize(anim->channel_count);
+        _mapped_clip_version = anim->header.version;
     }
 
     void AnimationPlayer::update(float dt) {
@@ -234,8 +241,18 @@ namespace termin {
 
         time += dt;
 
+        if (_current_index >= static_cast<int>(clips.size())) {
+            return;
+        }
         const animation::TcAnimationClip& clip = clips[_current_index];
-        if (tc_animation* anim = clip.get(); anim && anim->track_count > 0) {
+        tc_animation* anim = clip.get();
+        if (!anim) {
+            return;
+        }
+        if (_mapped_clip_version != anim->header.version) {
+            _build_channel_mapping();
+        }
+        if (anim->track_count > 0) {
             _apply_tracks_at_time(anim, time);
             return;
         }
@@ -257,7 +274,14 @@ namespace termin {
         }
 
         const animation::TcAnimationClip& clip = clips[_current_index];
-        if (tc_animation* anim = clip.get(); anim && anim->track_count > 0) {
+        tc_animation* anim = clip.get();
+        if (!anim) {
+            return;
+        }
+        if (_mapped_clip_version != anim->header.version) {
+            _build_channel_mapping();
+        }
+        if (anim->track_count > 0) {
             _apply_tracks_at_time(anim, t);
             return;
         }
@@ -311,18 +335,32 @@ namespace termin {
                 continue;
             }
 
-            const double* translation = track.path == TC_ANIMATION_PATH_TRANSLATION ? value : nullptr;
-            const double* rotation = track.path == TC_ANIMATION_PATH_ROTATION ? value : nullptr;
-            const double* scale = track.path == TC_ANIMATION_PATH_SCALE ? value : nullptr;
             const ChannelMapping& mapping = _track_mappings[i];
-            if (mapping.bone_index >= 0) {
-                if (skeleton_controller) {
-                    apply_entity_transform(
-                        skeleton_controller->bone_entity(mapping.bone_index), translation, rotation, scale);
-                }
+            if (mapping.bone_index >= 0 && !skeleton_controller) {
                 continue;
             }
-            apply_entity_transform(mapping.node_entity, translation, rotation, scale);
+            const Entity target = mapping.bone_index >= 0
+                                      ? skeleton_controller->bone_entity(mapping.bone_index)
+                                      : mapping.node_entity;
+            switch ((tc_animation_path)track.path) {
+            case TC_ANIMATION_PATH_TRANSLATION: {
+                const Vec3 translation{value[0], value[1], value[2]};
+                apply_entity_transform(target, &translation, nullptr, nullptr);
+                break;
+            }
+            case TC_ANIMATION_PATH_ROTATION: {
+                const Quat rotation{value[0], value[1], value[2], value[3]};
+                apply_entity_transform(target, nullptr, &rotation, nullptr);
+                break;
+            }
+            case TC_ANIMATION_PATH_SCALE: {
+                const Vec3 scale{value[0], value[1], value[2]};
+                apply_entity_transform(target, nullptr, nullptr, &scale);
+                break;
+            }
+            case TC_ANIMATION_PATH_WEIGHTS:
+                break;
+            }
         }
     }
 
@@ -345,16 +383,14 @@ namespace termin {
         SkeletonController* skeleton_controller = _target_skeleton_controller.get();
         for (size_t i = 0; i < count && i < _channel_mappings.size(); ++i) {
             const tc_channel_sample& ch = samples[i];
-            const double* tr_ptr = ch.has_translation ? ch.translation : nullptr;
-            const double* rot_ptr = ch.has_rotation ? ch.rotation : nullptr;
+            const Vec3* tr_ptr = ch.has_translation ? &ch.translation : nullptr;
+            const Quat* rot_ptr = ch.has_rotation ? &ch.rotation : nullptr;
 
-            double sc[3] = {1, 1, 1};
-            const double* sc_ptr = nullptr;
+            Vec3 sc{1.0, 1.0, 1.0};
+            const Vec3* sc_ptr = nullptr;
             if (ch.has_scale) {
-                sc[0] = ch.scale;
-                sc[1] = ch.scale;
-                sc[2] = ch.scale;
-                sc_ptr = sc;
+                sc = {ch.scale, ch.scale, ch.scale};
+                sc_ptr = &sc;
             }
 
             const ChannelMapping& mapping = _channel_mappings[i];

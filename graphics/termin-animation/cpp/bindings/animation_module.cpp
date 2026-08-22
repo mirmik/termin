@@ -78,6 +78,21 @@ std::vector<double> doubles_from_sequence(nb::handle value, const char* field) {
     return result;
 }
 
+nb::tuple animation_keyframe_tuple(nb::handle value, const char* field) {
+    nb::tuple frame;
+    try {
+        frame = nb::cast<nb::tuple>(value);
+    } catch (const nb::cast_error&) {
+        throw std::invalid_argument(std::string("animation channel '") + field +
+                                    "' entries must be (time, value) tuples");
+    }
+    if (nb::len(frame) != 2) {
+        throw std::invalid_argument(std::string("animation channel '") + field +
+                                    "' entries must contain exactly time and value");
+    }
+    return frame;
+}
+
 nb::dict animation_track_to_dict(const tc_animation_track& track) {
     nb::dict result;
     result["target_node_index"] = track.target_node_index;
@@ -122,7 +137,14 @@ void bind_tc_animation_clip(nb::module_& m) {
         .def_prop_ro("channel_count", &TcAnimationClip::channel_count)
         .def_prop_ro("track_count", &TcAnimationClip::track_count)
         .def_prop_ro("loop", &TcAnimationClip::loop)
-        .def("set_tps", &TcAnimationClip::set_tps, nb::arg("value"))
+        .def(
+            "set_tps",
+            [](TcAnimationClip& self, double value) {
+                if (!self.set_tps(value)) {
+                    throw std::invalid_argument("animation ticks per second must be finite and positive");
+                }
+            },
+            nb::arg("value"))
         .def("set_loop", &TcAnimationClip::set_loop, nb::arg("value"))
         .def("ensure_loaded", &TcAnimationClip::ensure_loaded)
         .def("recompute_duration", &TcAnimationClip::recompute_duration)
@@ -220,9 +242,9 @@ void bind_tc_animation_clip(nb::module_& m) {
                     const tc_channel_sample& s = samples[i];
                     if (s.has_translation) {
                         nb::list tr;
-                        tr.append(s.translation[0]);
-                        tr.append(s.translation[1]);
-                        tr.append(s.translation[2]);
+                        tr.append(s.translation.x);
+                        tr.append(s.translation.y);
+                        tr.append(s.translation.z);
                         ch_dict["translation"] = tr;
                     } else {
                         ch_dict["translation"] = nb::none();
@@ -230,10 +252,10 @@ void bind_tc_animation_clip(nb::module_& m) {
 
                     if (s.has_rotation) {
                         nb::list rot;
-                        rot.append(s.rotation[0]);
-                        rot.append(s.rotation[1]);
-                        rot.append(s.rotation[2]);
-                        rot.append(s.rotation[3]);
+                        rot.append(s.rotation.x);
+                        rot.append(s.rotation.y);
+                        rot.append(s.rotation.z);
+                        rot.append(s.rotation.w);
                         ch_dict["rotation"] = rot;
                     } else {
                         ch_dict["rotation"] = nb::none();
@@ -274,88 +296,85 @@ void bind_tc_animation_clip(nb::module_& m) {
                 tc_animation* anim = self.get();
                 if (!anim) {
                     tc::Log::error("TcAnimationClip::set_channels: invalid clip");
-                    return;
+                    throw std::runtime_error("cannot set channels on an invalid animation clip");
                 }
 
-                size_t count = nb::len(channels_data);
-                tc_animation_channel* channels = tc_animation_alloc_channels(anim, count);
-                if (!channels) {
-                    tc::Log::error("TcAnimationClip::set_channels: failed to allocate %zu channels", count);
-                    return;
+                struct ParsedChannel {
+                    std::string target_name;
+                    std::vector<tc_keyframe_vec3> translation_keys;
+                    std::vector<tc_keyframe_quat> rotation_keys;
+                    std::vector<tc_keyframe_scalar> scale_keys;
+                };
+
+                std::vector<ParsedChannel> parsed;
+                try {
+                    const size_t count = nb::len(channels_data);
+                    parsed.reserve(count);
+                    for (size_t i = 0; i < count; ++i) {
+                        const nb::dict channel_data = nb::cast<nb::dict>(channels_data[i]);
+                        ParsedChannel channel;
+                        if (channel_data.contains("target_name")) {
+                            channel.target_name = nb::cast<std::string>(channel_data["target_name"]);
+                        }
+                        if (channel_data.contains("translation_keys")) {
+                            const nb::list keys = nb::cast<nb::list>(channel_data["translation_keys"]);
+                            channel.translation_keys.reserve(nb::len(keys));
+                            for (size_t key = 0; key < nb::len(keys); ++key) {
+                                const nb::tuple frame = animation_keyframe_tuple(keys[key], "translation_keys");
+                                channel.translation_keys.push_back(
+                                    {nb::cast<double>(frame[0]), nb::cast<Vec3>(frame[1])});
+                            }
+                        }
+                        if (channel_data.contains("rotation_keys")) {
+                            const nb::list keys = nb::cast<nb::list>(channel_data["rotation_keys"]);
+                            channel.rotation_keys.reserve(nb::len(keys));
+                            for (size_t key = 0; key < nb::len(keys); ++key) {
+                                const nb::tuple frame = animation_keyframe_tuple(keys[key], "rotation_keys");
+                                channel.rotation_keys.push_back(
+                                    {nb::cast<double>(frame[0]), nb::cast<Quat>(frame[1])});
+                            }
+                        }
+                        if (channel_data.contains("scale_keys")) {
+                            const nb::list keys = nb::cast<nb::list>(channel_data["scale_keys"]);
+                            channel.scale_keys.reserve(nb::len(keys));
+                            for (size_t key = 0; key < nb::len(keys); ++key) {
+                                const nb::tuple frame = animation_keyframe_tuple(keys[key], "scale_keys");
+                                channel.scale_keys.push_back(
+                                    {nb::cast<double>(frame[0]), nb::cast<double>(frame[1])});
+                            }
+                        }
+                        parsed.push_back(std::move(channel));
+                    }
+                } catch (const nb::cast_error& error) {
+                    tc::Log::error("TcAnimationClip::set_channels: failed to parse channels: %s", error.what());
+                    throw nb::type_error("animation channels contain a value of the wrong type");
+                } catch (const std::exception& error) {
+                    tc::Log::error("TcAnimationClip::set_channels: failed to parse channels: %s", error.what());
+                    throw;
                 }
 
-                for (size_t i = 0; i < count; i++) {
-                    nb::dict ch_data = nb::cast<nb::dict>(channels_data[i]);
-                    tc_animation_channel* ch = &channels[i];
-
-                    // Target name
-                    if (ch_data.contains("target_name")) {
-                        std::string target = nb::cast<std::string>(ch_data["target_name"]);
-                        strncpy(ch->target_name, target.c_str(), TC_CHANNEL_NAME_MAX - 1);
-                        ch->target_name[TC_CHANNEL_NAME_MAX - 1] = '\0';
+                std::vector<tc_animation_channel_desc> descriptors;
+                try {
+                    descriptors.reserve(parsed.size());
+                    for (const ParsedChannel& channel : parsed) {
+                        descriptors.push_back({
+                            channel.target_name.c_str(),
+                            channel.translation_keys.data(),
+                            channel.translation_keys.size(),
+                            channel.rotation_keys.data(),
+                            channel.rotation_keys.size(),
+                            channel.scale_keys.data(),
+                            channel.scale_keys.size(),
+                        });
                     }
-
-                    double max_time = 0.0;
-
-                    // Translation keys
-                    if (ch_data.contains("translation_keys")) {
-                        nb::list tr_keys = nb::cast<nb::list>(ch_data["translation_keys"]);
-                        size_t tr_count = nb::len(tr_keys);
-                        if (tr_count > 0) {
-                            tc_keyframe_vec3* keys = tc_animation_channel_alloc_translation(ch, tr_count);
-                            for (size_t j = 0; j < tr_count; j++) {
-                                nb::tuple kf = nb::cast<nb::tuple>(tr_keys[j]);
-                                keys[j].time = nb::cast<double>(kf[0]);
-                                Vec3 val = nb::cast<Vec3>(kf[1]);
-                                keys[j].value[0] = val.x;
-                                keys[j].value[1] = val.y;
-                                keys[j].value[2] = val.z;
-                                if (keys[j].time > max_time)
-                                    max_time = keys[j].time;
-                            }
-                        }
-                    }
-
-                    // Rotation keys
-                    if (ch_data.contains("rotation_keys")) {
-                        nb::list rot_keys = nb::cast<nb::list>(ch_data["rotation_keys"]);
-                        size_t rot_count = nb::len(rot_keys);
-                        if (rot_count > 0) {
-                            tc_keyframe_quat* keys = tc_animation_channel_alloc_rotation(ch, rot_count);
-                            for (size_t j = 0; j < rot_count; j++) {
-                                nb::tuple kf = nb::cast<nb::tuple>(rot_keys[j]);
-                                keys[j].time = nb::cast<double>(kf[0]);
-                                Quat val = nb::cast<Quat>(kf[1]);
-                                keys[j].value[0] = val.x;
-                                keys[j].value[1] = val.y;
-                                keys[j].value[2] = val.z;
-                                keys[j].value[3] = val.w;
-                                if (keys[j].time > max_time)
-                                    max_time = keys[j].time;
-                            }
-                        }
-                    }
-
-                    // Scale keys
-                    if (ch_data.contains("scale_keys")) {
-                        nb::list sc_keys = nb::cast<nb::list>(ch_data["scale_keys"]);
-                        size_t sc_count = nb::len(sc_keys);
-                        if (sc_count > 0) {
-                            tc_keyframe_scalar* keys = tc_animation_channel_alloc_scale(ch, sc_count);
-                            for (size_t j = 0; j < sc_count; j++) {
-                                nb::tuple kf = nb::cast<nb::tuple>(sc_keys[j]);
-                                keys[j].time = nb::cast<double>(kf[0]);
-                                keys[j].value = nb::cast<double>(kf[1]);
-                                if (keys[j].time > max_time)
-                                    max_time = keys[j].time;
-                            }
-                        }
-                    }
-
-                    ch->duration = max_time;
+                } catch (const std::exception& error) {
+                    tc::Log::error("TcAnimationClip::set_channels: failed to build channel descriptors: %s",
+                                   error.what());
+                    throw;
                 }
-
-                tc_animation_recompute_duration(anim);
+                if (!tc_animation_replace_channels(anim, descriptors.data(), descriptors.size())) {
+                    throw std::runtime_error("animation channel replacement failed; previous payload was preserved");
+                }
             },
             nb::arg("channels_data"));
 }

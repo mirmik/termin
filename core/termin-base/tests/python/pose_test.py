@@ -152,6 +152,12 @@ class TestPose3(unittest.TestCase):
         norm = math.sqrt(ang.x**2 + ang.y**2 + ang.z**2 + ang.w**2)
         self.assertAlmostEqual(norm, 1.0)
 
+    def test_normalize_rejects_degenerate_rotation(self):
+        pose = Pose3(ang=Quat(0.0, 0.0, 0.0, 0.0))
+
+        with self.assertRaisesRegex(ValueError, "Pose3 rotation cannot be normalized"):
+            pose.normalized()
+
     def test_distance(self):
         pose1 = Pose3(
             ang=Quat(0.0, 0.0, 0.0, 1.0),
@@ -185,7 +191,7 @@ class TestPose3(unittest.TestCase):
         pitch = math.pi / 4  # 45 degrees
         yaw = math.pi / 3    # 60 degrees
 
-        pose = Pose3.from_euler(roll, pitch, yaw)
+        pose = Pose3.from_euler(Vec3(roll, pitch, yaw))
 
         # Convert back to Euler angles
         euler = pose.to_euler()
@@ -198,7 +204,7 @@ class TestPose3(unittest.TestCase):
 
     def test_euler_consistency(self):
         # Test that rotation by Euler angles produces expected result
-        pose = Pose3.from_euler(0, 0, math.pi / 2)  # 90 degrees around Z
+        pose = Pose3.from_euler(Vec3(0, 0, math.pi / 2))  # 90 degrees around Z
         point = Vec3(1.0, 0.0, 0.0)
         transformed = pose.transform_point(point)
         expected = Vec3(0.0, 1.0, 0.0)

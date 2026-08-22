@@ -689,34 +689,96 @@ struct tc_quat {
           z(z),
           w(w) {}
 
-    static tc_quat identity() {
+    static constexpr tc_quat identity() noexcept {
         return {0, 0, 0, 1};
     }
 
-    tc_quat operator*(const tc_quat& q) const {
+    tc_quat operator*(const tc_quat& q) const noexcept {
         return {w * q.x + x * q.w + y * q.z - z * q.y,
                 w * q.y - x * q.z + y * q.w + z * q.x,
                 w * q.z + x * q.y - y * q.x + z * q.w,
                 w * q.w - x * q.x - y * q.y - z * q.z};
     }
 
-    tc_quat conjugate() const {
+    tc_quat conjugate() const noexcept {
         return {-x, -y, -z, w};
     }
-    tc_quat inverse() const {
-        return conjugate();
+
+    double dot(const tc_quat& other) const noexcept {
+        return x * other.x + y * other.y + z * other.z + w * other.w;
     }
 
-    double norm() const {
-        return std::sqrt(x * x + y * y + z * z + w * w);
+    double norm_squared() const noexcept {
+        return dot(*this);
     }
-    bool is_finite() const {
+
+    double norm() const noexcept {
+        const double squared = norm_squared();
+        // A positive subnormal sum may already have lost a material fraction
+        // of its terms. Use hypot for that range as well as complete under/overflow.
+        if (std::isnormal(squared)) {
+            return std::sqrt(squared);
+        }
+        return std::hypot(std::hypot(x, y), std::hypot(z, w));
+    }
+
+    bool is_finite() const noexcept {
         return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) && std::isfinite(w);
     }
 
-    tc_quat normalized() const {
-        double n = norm();
-        return n > 1e-10 ? tc_quat{x / n, y / n, z / n, w / n} : identity();
+    bool try_normalized(tc_quat& out, double epsilon = 1.0e-12) const noexcept {
+        const double length = norm();
+        if (!is_finite() || !std::isfinite(length) || !std::isfinite(epsilon) || epsilon < 0.0 ||
+            length <= epsilon) {
+            return false;
+        }
+
+        const tc_quat result{x / length, y / length, z / length, w / length};
+        if (!result.is_finite()) {
+            return false;
+        }
+        out = result;
+        return true;
+    }
+
+    tc_quat normalized_or(const tc_quat& fallback, double epsilon = 1.0e-12) const noexcept {
+        tc_quat result;
+        return try_normalized(result, epsilon) ? result : fallback;
+    }
+
+    tc_quat normalized(double epsilon = 1.0e-12) const noexcept {
+        tc_quat result;
+        if (try_normalized(result, epsilon)) {
+            return result;
+        }
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return {nan, nan, nan, nan};
+    }
+
+    bool try_inverse(tc_quat& out, double epsilon = 1.0e-12) const noexcept {
+        const double length = norm();
+        if (!is_finite() || !std::isfinite(length) || !std::isfinite(epsilon) || epsilon < 0.0 ||
+            length <= epsilon) {
+            return false;
+        }
+
+        // Divide in two stages instead of forming norm_squared: this remains
+        // useful for finite quaternions whose squared norm overflows.
+        const tc_quat result{-x / length / length, -y / length / length, -z / length / length, w / length / length};
+        if (!result.is_finite()) {
+            return false;
+        }
+        out = result;
+        return true;
+    }
+
+    tc_quat inverse(double epsilon = 1.0e-12) const noexcept {
+        tc_quat result;
+        if (try_inverse(result, epsilon)) {
+            return result;
+        }
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return {nan, nan, nan, nan};
     }
 
     tc_vec3 rotate(const tc_vec3& v) const {
@@ -747,29 +809,150 @@ struct tc_quat {
         return from_rotation_matrix(m);
     }
 
-    static tc_quat slerp(const tc_quat& q1, tc_quat q2, double t) {
-        double dot = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
-
-        if (dot < 0) {
-            q2 = {-q2.x, -q2.y, -q2.z, -q2.w};
-            dot = -dot;
+    static bool try_slerp(const tc_quat& a,
+                          const tc_quat& b,
+                          double t,
+                          tc_quat& out,
+                          double epsilon = 1.0e-12) noexcept {
+        if (!std::isfinite(t) || !std::isfinite(epsilon) || epsilon < 0.0) {
+            return false;
         }
 
-        if (dot > 0.9995) {
-            tc_quat result = {
-                q1.x + t * (q2.x - q1.x), q1.y + t * (q2.y - q1.y), q1.z + t * (q2.z - q1.z), q1.w + t * (q2.w - q1.w)};
-            return result.normalized();
+        tc_quat from;
+        tc_quat to;
+        if (!a.try_normalized(from, epsilon) || !b.try_normalized(to, epsilon)) {
+            return false;
         }
 
-        double theta_0 = std::acos(dot);
-        double theta = theta_0 * t;
-        double sin_theta = std::sin(theta);
-        double sin_theta_0 = std::sin(theta_0);
+        double normalized_dot = from.dot(to);
+        if (!std::isfinite(normalized_dot)) {
+            return false;
+        }
+        if (normalized_dot < 0.0) {
+            to = {-to.x, -to.y, -to.z, -to.w};
+            normalized_dot = -normalized_dot;
+        }
+        if (normalized_dot > 1.0) {
+            normalized_dot = 1.0;
+        }
 
-        double s1 = std::cos(theta) - dot * sin_theta / sin_theta_0;
-        double s2 = sin_theta / sin_theta_0;
+        tc_quat interpolated;
+        if (normalized_dot > 0.9995) {
+            interpolated = {from.x + t * (to.x - from.x),
+                            from.y + t * (to.y - from.y),
+                            from.z + t * (to.z - from.z),
+                            from.w + t * (to.w - from.w)};
+        } else {
+            const double theta = std::acos(normalized_dot);
+            const double sin_theta = std::sin(theta);
+            const double from_angle = (1.0 - t) * theta;
+            const double to_angle = t * theta;
+            if (!std::isfinite(theta) || !std::isfinite(sin_theta) || sin_theta == 0.0 ||
+                !std::isfinite(from_angle) || !std::isfinite(to_angle)) {
+                return false;
+            }
+            const double from_weight = std::sin(from_angle) / sin_theta;
+            const double to_weight = std::sin(to_angle) / sin_theta;
+            interpolated = {from_weight * from.x + to_weight * to.x,
+                            from_weight * from.y + to_weight * to.y,
+                            from_weight * from.z + to_weight * to.z,
+                            from_weight * from.w + to_weight * to.w};
+        }
 
-        return {s1 * q1.x + s2 * q2.x, s1 * q1.y + s2 * q2.y, s1 * q1.z + s2 * q2.z, s1 * q1.w + s2 * q2.w};
+        tc_quat result;
+        if (!interpolated.try_normalized(result, epsilon)) {
+            return false;
+        }
+        out = result;
+        return true;
+    }
+
+    static tc_quat slerp(const tc_quat& a,
+                         const tc_quat& b,
+                         double t,
+                         double epsilon = 1.0e-12) noexcept {
+        tc_quat result;
+        if (try_slerp(a, b, t, result, epsilon)) {
+            return result;
+        }
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return {nan, nan, nan, nan};
+    }
+
+    static bool try_from_euler(const tc_vec3& euler_xyz, tc_quat& out) noexcept {
+        if (!euler_xyz.is_finite()) {
+            return false;
+        }
+
+        const double cx = std::cos(euler_xyz.x * 0.5);
+        const double sx = std::sin(euler_xyz.x * 0.5);
+        const double cy = std::cos(euler_xyz.y * 0.5);
+        const double sy = std::sin(euler_xyz.y * 0.5);
+        const double cz = std::cos(euler_xyz.z * 0.5);
+        const double sz = std::sin(euler_xyz.z * 0.5);
+        const tc_quat raw{sx * cy * cz - cx * sy * sz,
+                          cx * sy * cz + sx * cy * sz,
+                          cx * cy * sz - sx * sy * cz,
+                          cx * cy * cz + sx * sy * sz};
+        tc_quat result;
+        if (!raw.try_normalized(result, 0.0)) {
+            return false;
+        }
+        out = result;
+        return true;
+    }
+
+    static tc_quat from_euler(const tc_vec3& euler_xyz) noexcept {
+        tc_quat result;
+        if (try_from_euler(euler_xyz, result)) {
+            return result;
+        }
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return {nan, nan, nan, nan};
+    }
+
+    bool try_to_euler(tc_vec3& out, double epsilon = 1.0e-12) const noexcept {
+        tc_quat q;
+        if (!try_normalized(q, epsilon)) {
+            return false;
+        }
+
+        double sin_pitch = 2.0 * (q.w * q.y - q.z * q.x);
+        if (sin_pitch > 1.0) {
+            sin_pitch = 1.0;
+        } else if (sin_pitch < -1.0) {
+            sin_pitch = -1.0;
+        }
+
+        tc_vec3 result;
+        if (std::abs(sin_pitch) >= 1.0 - 1.0e-12) {
+            // XYZ gimbal policy: choose roll = 0 and retain the uniquely
+            // observable combined Z rotation in yaw.
+            result.x = 0.0;
+            result.y = std::copysign(0.5 * 3.14159265358979323846, sin_pitch);
+            result.z = std::atan2(2.0 * (q.w * q.z - q.x * q.y),
+                                  1.0 - 2.0 * (q.x * q.x + q.z * q.z));
+        } else {
+            result.x = std::atan2(2.0 * (q.w * q.x + q.y * q.z),
+                                  1.0 - 2.0 * (q.x * q.x + q.y * q.y));
+            result.y = std::asin(sin_pitch);
+            result.z = std::atan2(2.0 * (q.w * q.z + q.x * q.y),
+                                  1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+        }
+        if (!result.is_finite()) {
+            return false;
+        }
+        out = result;
+        return true;
+    }
+
+    tc_vec3 to_euler(double epsilon = 1.0e-12) const noexcept {
+        tc_vec3 result;
+        if (try_to_euler(result, epsilon)) {
+            return result;
+        }
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return {nan, nan, nan};
     }
 
     static tc_quat from_rotation_matrix(const double* m) {
@@ -1230,7 +1413,7 @@ struct tc_pose3 {
     static tc_pose3 rotate_y(double angle);
     static tc_pose3 rotate_z(double angle);
     static tc_pose3 looking_at(const tc_vec3& eye, const tc_vec3& target, const tc_vec3& up = tc_vec3::unit_z());
-    static tc_pose3 from_euler(double roll, double pitch, double yaw);
+    static tc_pose3 from_euler(const tc_vec3& euler_xyz);
 
     tc_vec3 to_euler() const;
     void to_axis_angle(tc_vec3& axis, double& angle) const;

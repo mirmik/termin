@@ -126,6 +126,27 @@ TEST_CASE("external entity transform teleports native rigid body") {
     fixture.scene.destroy();
 }
 
+TEST_CASE("scaled quaternion cannot hide an external orientation change") {
+    using namespace termin;
+
+    initialize_runtime();
+    FallingBoxScene fixture = make_falling_box_scene();
+    fixture.world->fixed_update(1.0F / 120.0F);
+
+    Pose3 requested = fixture.body->rigid_body()->shape_pose();
+    requested.ang = Quat{std::sqrt(3.0), 0.0, 0.0, 1.0};
+    fixture.box_entity.transform().set_global_pose(requested);
+    fixture.world->fixed_update(1.0F / 120.0F);
+
+    Quat expected_rotation;
+    Quat actual_rotation;
+    REQUIRE(requested.ang.try_normalized(expected_rotation, 1.0e-12));
+    REQUIRE(fixture.body->rigid_body()->shape_pose().ang.try_normalized(actual_rotation, 1.0e-12));
+    CHECK(std::abs(actual_rotation.dot(expected_rotation)) >= 1.0 - 1.0e-10);
+
+    fixture.scene.destroy();
+}
+
 TEST_CASE("collider rebuild replaces rigid-body collision mapping") {
     using namespace termin;
 

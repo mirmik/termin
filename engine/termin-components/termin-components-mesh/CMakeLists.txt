@@ -71,3 +71,24 @@ if(TERMIN_BUILD_PYTHON)
         PATTERN "*.pyc" EXCLUDE
     )
 endif()
+
+if(TERMIN_BUILD_TESTS)
+    add_executable(termin_components_mesh_component_test
+        tests/test_mesh_component.cpp
+    )
+    target_include_directories(termin_components_mesh_component_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_components_mesh_component_test PRIVATE
+        termin_components_mesh
+    )
+    set_target_properties(termin_components_mesh_component_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_components_mesh_component_test
+        COMMAND termin_components_mesh_component_test
+    )
+endif()
+
+termin_label_tests_in_directory("termin-components-mesh")

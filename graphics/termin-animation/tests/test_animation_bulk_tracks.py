@@ -55,6 +55,21 @@ def test_bulk_tracks_own_flat_payload_and_sample_linear_vec3_scale() -> None:
     assert clip.sample_track(0, 1.0) == pytest.approx([2.0, 4.0, 6.0])
 
 
+def test_set_tps_recomputes_duration_and_rejects_invalid_values() -> None:
+    clip = _clip()
+    clip.set_tracks([_track(times=[0.0, 8.0])])
+    assert clip.duration == pytest.approx(8.0)
+
+    assert clip.set_tps(4.0) is None
+    assert clip.duration == pytest.approx(2.0)
+
+    for value in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="finite and positive"):
+            clip.set_tps(value)
+        assert clip.tps == pytest.approx(4.0)
+        assert clip.duration == pytest.approx(2.0)
+
+
 def test_step_track_holds_previous_value_and_changes_at_key_time() -> None:
     clip = _clip()
     clip.set_tracks([
@@ -125,3 +140,43 @@ def test_legacy_channels_remain_available_and_successful_bulk_replace_is_authori
 
     assert clip.channel_count == 0
     assert clip.track_count == 1
+
+
+def test_legacy_channel_parse_failure_preserves_previous_payload() -> None:
+    from termin.geombase import Quat, Vec3
+
+    clip = _clip()
+    original = [{
+        "target_name": "Root",
+        "translation_keys": [(0.0, Vec3(1.0, 2.0, 3.0))],
+        "rotation_keys": [(0.0, Quat(0.0, 0.0, 0.0, 2.0))],
+        "scale_keys": [],
+    }]
+    clip.set_channels(original)
+    version = clip.version
+
+    with pytest.raises(TypeError):
+        clip.set_channels([
+            original[0],
+            {
+                "target_name": "Broken",
+                "translation_keys": [],
+                "rotation_keys": [(0.0, "not-a-quaternion")],
+                "scale_keys": [],
+            },
+        ])
+
+    with pytest.raises(ValueError, match="exactly time and value"):
+        clip.set_channels([
+            {
+                "target_name": "Broken shape",
+                "translation_keys": [(0.0, Vec3.zero(), "ignored tail")],
+                "rotation_keys": [],
+                "scale_keys": [],
+            },
+        ])
+
+    assert clip.version == version
+    assert clip.channel_count == 1
+    assert clip.sample(0.0)[0]["translation"] == pytest.approx([1.0, 2.0, 3.0])
+    assert clip.sample(0.0)[0]["rotation"] == pytest.approx([0.0, 0.0, 0.0, 1.0])

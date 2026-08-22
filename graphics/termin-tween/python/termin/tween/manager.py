@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from termin.tween.ease import Ease
-from termin.tween.tween import Tween, MoveTween, RotateTween, ScaleTween
+from termin.tween.tween import (
+    MoveTween,
+    QuatValue,
+    RotateTween,
+    ScaleTween,
+    Tween,
+    Vec3Value,
+)
 
 if TYPE_CHECKING:
     from termin.kinematic.general_transform import GeneralTransform3
@@ -48,7 +54,7 @@ class TweenManager:
     def move(
         self,
         transform: "GeneralTransform3",
-        target: Sequence[float],
+        target: Vec3Value,
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
@@ -61,7 +67,7 @@ class TweenManager:
     def rotate(
         self,
         transform: "GeneralTransform3",
-        target: Sequence[float],
+        target: QuatValue,
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
@@ -74,7 +80,7 @@ class TweenManager:
     def scale(
         self,
         transform: "GeneralTransform3",
-        target: Sequence[float] | float,
+        target: Vec3Value | float,
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,

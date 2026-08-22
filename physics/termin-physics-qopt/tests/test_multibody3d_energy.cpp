@@ -183,6 +183,26 @@ namespace {
         TERMIN_QOPT_CHECK(converges);
     }
 
+    void check_energy_bound(const char* name,
+                            double dt,
+                            const EnergyEnvelope& envelope,
+                            double maximum_drift) {
+        const bool within_bound = std::isfinite(envelope.maximum_relative_drift) &&
+                                  envelope.maximum_relative_drift < maximum_drift;
+        if (!within_bound) {
+            std::fprintf(stderr,
+                         "%s energy: dt=%g max_drift=%.17g bound=%.17g "
+                         "initial=%.17g final=%.17g\n",
+                         name,
+                         dt,
+                         envelope.maximum_relative_drift,
+                         maximum_drift,
+                         envelope.initial,
+                         envelope.final);
+        }
+        TERMIN_QOPT_CHECK(within_bound);
+    }
+
     void test_continuous_power_balance() {
         constexpr double theta = 0.4;
         constexpr double angular_speed = 2.0;
@@ -242,12 +262,17 @@ int main() {
     const EnergyEnvelope double_long_fine = simulate_double_pendulum(0.00125, 50.0);
     const FreeBodyInvariantError free_coarse = simulate_free_body(0.002, 20.0);
     const FreeBodyInvariantError free_fine = simulate_free_body(0.001, 20.0);
-    TERMIN_QOPT_CHECK(single_reference.maximum_relative_drift < 2e-5);
-    TERMIN_QOPT_CHECK(double_reference.maximum_relative_drift < 4e-4);
-    TERMIN_QOPT_CHECK(single_long.maximum_relative_drift < 1e-3);
-    TERMIN_QOPT_CHECK(double_long.maximum_relative_drift < 6e-2);
-    TERMIN_QOPT_CHECK(double_long_fine.maximum_relative_drift < 1.5e-2);
-    TERMIN_QOPT_CHECK(double_long_fine.maximum_relative_drift < 0.3 * double_long.maximum_relative_drift);
+    check_energy_bound("single pendulum reference", 0.0005, single_reference, 2e-5);
+    check_energy_bound("double pendulum reference", 0.0005, double_reference, 4e-4);
+    check_energy_bound("single pendulum long", 0.0025, single_long, 1e-3);
+    check_energy_bound("double pendulum long", 0.0025, double_long, 6e-2);
+    check_energy_bound("double pendulum long fine", 0.00125, double_long_fine, 1.5e-2);
+    const bool long_run_converges =
+        double_long_fine.maximum_relative_drift < 0.3 * double_long.maximum_relative_drift;
+    if (!long_run_converges) {
+        report("double pendulum long", 0.0025, double_long, 0.00125, double_long_fine);
+    }
+    TERMIN_QOPT_CHECK(long_run_converges);
     TERMIN_QOPT_CHECK(free_fine.maximum_relative_energy_drift < 0.35 * free_coarse.maximum_relative_energy_drift);
     TERMIN_QOPT_CHECK(free_fine.maximum_angular_momentum_error < 0.35 * free_coarse.maximum_angular_momentum_error);
     TERMIN_QOPT_CHECK(free_fine.maximum_relative_energy_drift < 2e-7);

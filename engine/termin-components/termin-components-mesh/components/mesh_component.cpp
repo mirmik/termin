@@ -1,9 +1,32 @@
 #include <components/mesh_component.hpp>
 #include <core/tc_scene.h>
+#include <limits>
 #include <tc_inspect_cpp.hpp>
+#include <tcbase/tc_log.hpp>
 #include <termin/tc_scene.hpp>
 
 namespace termin {
+
+    namespace {
+
+        bool try_rotation_from_euler_degrees(const tc_vec3& euler_degrees, Quat& rotation) {
+            constexpr double deg2rad = 3.14159265358979323846 / 180.0;
+            return Quat::try_from_euler(Vec3{euler_degrees.x * deg2rad,
+                                             euler_degrees.y * deg2rad,
+                                             euler_degrees.z * deg2rad},
+                                        rotation);
+        }
+
+        Mat44f non_finite_matrix() {
+            Mat44f result;
+            const float nan = std::numeric_limits<float>::quiet_NaN();
+            for (float& value : result.data) {
+                value = nan;
+            }
+            return result;
+        }
+
+    } // namespace
 
     void MeshComponent::register_type() {
         auto descriptor = ComponentTypeDescriptorBuilder::native<MeshComponent>(
@@ -187,6 +210,11 @@ namespace termin {
     }
 
     void MeshComponent::set_mesh_offset_euler(const tc_vec3& value) {
+        Quat rotation;
+        if (!try_rotation_from_euler_degrees(value, rotation)) {
+            tc::Log::error("MeshComponent::set_mesh_offset_euler: offset Euler angles must be finite");
+            return;
+        }
         mesh_offset_euler = value;
         notify_mesh_changed();
     }
@@ -201,11 +229,11 @@ namespace termin {
             return Mat44f::identity();
         }
 
-        constexpr double deg2rad = 3.14159265358979323846 / 180.0;
-        Quat rx = Quat::from_axis_angle(Vec3(1, 0, 0), mesh_offset_euler.x * deg2rad);
-        Quat ry = Quat::from_axis_angle(Vec3(0, 1, 0), mesh_offset_euler.y * deg2rad);
-        Quat rz = Quat::from_axis_angle(Vec3(0, 0, 1), mesh_offset_euler.z * deg2rad);
-        Quat rotation = rz * ry * rx;
+        Quat rotation;
+        if (!try_rotation_from_euler_degrees(mesh_offset_euler, rotation)) {
+            tc::Log::error("MeshComponent::get_mesh_offset_matrix: offset Euler angles must be finite");
+            return non_finite_matrix();
+        }
 
         Vec3 pos(mesh_offset_position.x, mesh_offset_position.y, mesh_offset_position.z);
         Vec3 scl(mesh_offset_scale.x, mesh_offset_scale.y, mesh_offset_scale.z);

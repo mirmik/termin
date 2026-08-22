@@ -1,3 +1,6 @@
+import logging
+import math
+
 import pytest
 
 from termin.bootstrap import bootstrap_player, shutdown_player
@@ -6,6 +9,7 @@ from termin.editor_core.entity_inspector_model import (
     EntityInspectorController,
 )
 from termin.editor_core.undo_stack import UndoStack
+from termin.geombase import Quat
 from termin.inspect import InspectField
 from termin.scene import ComponentRegistry, PythonComponent, TcScene, publish_python_component
 
@@ -95,6 +99,53 @@ def test_entity_inspector_properties_components_fields_and_undo(scene):
     assert entity.name == "source"
     stack.undo()
     assert tuple(entity.transform.local_pose().lin) == pytest.approx((0.0, 0.0, 0.0))
+
+
+@pytest.mark.parametrize(
+    "rotation_degrees",
+    [
+        (31.0, 0.0, 0.0),
+        (0.0, -27.0, 0.0),
+        (0.0, 0.0, 63.0),
+        (17.0, 89.5, -31.0),
+    ],
+)
+def test_entity_inspector_round_trips_axis_and_near_gimbal_euler_angles(
+    scene,
+    rotation_degrees,
+):
+    entity = scene.create_entity("rotation-probe")
+    controller = EntityInspectorController()
+    controller.set_target(entity)
+
+    snapshot = controller.set_transform(
+        (1.0, 2.0, 3.0),
+        rotation_degrees,
+        (2.0, 3.0, 4.0),
+    )
+
+    assert snapshot.transform.rotation_degrees == pytest.approx(
+        rotation_degrees,
+        abs=1.0e-8,
+    )
+    assert snapshot.transform.position == pytest.approx((1.0, 2.0, 3.0))
+    assert snapshot.transform.scale == pytest.approx((2.0, 3.0, 4.0))
+
+
+def test_entity_inspector_reports_degenerate_rotation_without_faking_identity(
+    scene,
+    caplog,
+):
+    entity = scene.create_entity("invalid-rotation")
+    pose = entity.transform.local_pose()
+    pose.ang = Quat(0.0, 0.0, 0.0, 0.0)
+    entity.transform.relocate(pose)
+
+    with caplog.at_level(logging.ERROR):
+        snapshot = EntityInspectorController().set_target(entity)
+
+    assert all(math.isnan(value) for value in snapshot.transform.rotation_degrees)
+    assert "Failed to read transform rotation for entity invalid-rotation" in caplog.text
 
 
 def test_entity_inspector_clears_fields_for_non_component_or_missing_target(scene):

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <string>
+
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
 #include <nanobind/stl/optional.h>
@@ -12,8 +15,19 @@ namespace nb = nanobind;
 
 namespace termin {
 
+    inline nb::sequence fixed_component_sequence(nb::handle obj, size_t count, const char* type_name) {
+        nb::sequence sequence = nb::cast<nb::sequence>(obj);
+        if (nb::len(sequence) != count) {
+            throw nb::value_error(
+                (std::string(type_name) + " requires a sequence of exactly " + std::to_string(count) +
+                 " components")
+                    .c_str());
+        }
+        return sequence;
+    }
+
     inline Vec3 sequence_to_vec3(nb::handle obj) {
-        nb::sequence seq = nb::cast<nb::sequence>(obj);
+        nb::sequence seq = fixed_component_sequence(obj, 3, "Vec3");
         return Vec3{
             nb::cast<double>(seq[0]),
             nb::cast<double>(seq[1]),
@@ -22,7 +36,7 @@ namespace termin {
     }
 
     inline Vec3f sequence_to_vec3f(nb::handle obj) {
-        nb::sequence seq = nb::cast<nb::sequence>(obj);
+        nb::sequence seq = fixed_component_sequence(obj, 3, "Vec3f");
         return Vec3f{
             nb::cast<float>(seq[0]),
             nb::cast<float>(seq[1]),
@@ -31,7 +45,7 @@ namespace termin {
     }
 
     inline Quat sequence_to_quat(nb::handle obj) {
-        nb::sequence seq = nb::cast<nb::sequence>(obj);
+        nb::sequence seq = fixed_component_sequence(obj, 4, "Quat");
         return Quat{
             nb::cast<double>(seq[0]),
             nb::cast<double>(seq[1]),
@@ -41,7 +55,7 @@ namespace termin {
     }
 
     inline Vec4 sequence_to_vec4(nb::handle obj) {
-        nb::sequence seq = nb::cast<nb::sequence>(obj);
+        nb::sequence seq = fixed_component_sequence(obj, 4, "Vec4");
         return Vec4{
             nb::cast<double>(seq[0]),
             nb::cast<double>(seq[1]),
@@ -51,7 +65,7 @@ namespace termin {
     }
 
     inline Vec4f sequence_to_vec4f(nb::handle obj) {
-        nb::sequence seq = nb::cast<nb::sequence>(obj);
+        nb::sequence seq = fixed_component_sequence(obj, 4, "Vec4f");
         return Vec4f{
             nb::cast<float>(seq[0]),
             nb::cast<float>(seq[1]),

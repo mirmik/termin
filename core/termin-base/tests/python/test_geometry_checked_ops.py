@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from termin.geombase import (
     AABBf,
     Affine3d,
@@ -18,6 +20,31 @@ from termin.geombase import (
     Vec4,
     Vec4f,
 )
+
+
+@pytest.mark.parametrize(
+    ("factory", "component_count"),
+    [
+        (Vec3, 3),
+        (Vec3f, 3),
+        (Vec4, 4),
+        (Vec4f, 4),
+        (Quat, 4),
+    ],
+)
+def test_fixed_component_sequence_constructors_require_exact_length(
+    factory,
+    component_count,
+):
+    values = tuple(float(index + 1) for index in range(component_count))
+    assert tuple(factory(values)) == values
+
+    for invalid in (values[:-1], values + (99.0,)):
+        with pytest.raises(
+            ValueError,
+            match=rf"requires a sequence of exactly {component_count} components",
+        ):
+            factory(invalid)
 
 
 def test_vector_component_and_checked_operations():

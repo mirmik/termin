@@ -55,6 +55,10 @@ state, но не callbacks или Python objects.
 - `trent` - JSON/YAML/value tree utilities.
 - `termin/geom/*` - базовые геометрические/value-типы: vectors, matrices,
   poses, quaternions, rays, AABB, colors, sizes, rectangles.
+- `Quat` хранит raw `xyzw` без неявного unit-invariant. Нормализация, настоящий
+  inverse, slerp и Euler-конверсия имеют checked-варианты с транзакционным
+  выходом; только `normalized_or` задаёт общий fallback явно. Euler XYZ
+  передаётся одним `Vec3`, а `Pose3` делегирует конверсию кватерниону.
 - `termin/geom/color.hpp` разделяет scalar colors по смыслу. `SrgbColor`
   хранит authored/display-referred SDR-компоненты в кодировке IEC sRGB, а
   `LinearColor` — линейный RGB в рабочем пространстве renderer-а: sRGB

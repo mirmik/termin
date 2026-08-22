@@ -17,7 +17,6 @@ setup(
         "termin_tween_component_specs": "python/termin_tween_component_specs",
     },
     install_requires=[
-        "numpy",
         "termin-scene",
         "termin-tween",
     ],

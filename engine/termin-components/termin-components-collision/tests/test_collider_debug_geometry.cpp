@@ -2,6 +2,9 @@
 
 GUARD_TEST_MAIN();
 
+#include <cmath>
+#include <limits>
+
 #include <components/collider_component.hpp>
 #include <inspect/tc_inspect_component_adapter.h>
 #include <inspect/tc_inspect_init.h>
@@ -9,6 +12,7 @@ GUARD_TEST_MAIN();
 #include <termin/tc_scene.hpp>
 #include <termin_collision/termin_collision.h>
 #include <termin_scene/internal/tc_scene_extension_registry.h>
+#include <tcbase/tc_log.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_primitive_mesh.h>
 
@@ -18,6 +22,25 @@ extern "C" {
 }
 
 namespace {
+
+    int error_log_count = 0;
+
+    void capture_log(tc_log_level level, const char*) {
+        if (level == TC_LOG_ERROR) {
+            ++error_log_count;
+        }
+    }
+
+    struct LogCapture {
+        LogCapture() {
+            error_log_count = 0;
+            tc_log_set_callback(capture_log);
+        }
+
+        ~LogCapture() {
+            tc_log_set_callback(nullptr);
+        }
+    };
 
     void initialize_runtime() {
         static const bool initialized = [] {
@@ -50,7 +73,53 @@ namespace {
         return result;
     }
 
+    bool equivalent_rotation(const termin::Quat& lhs, const termin::Quat& rhs) {
+        termin::Quat lhs_normalized;
+        termin::Quat rhs_normalized;
+        return lhs.try_normalized(lhs_normalized, 1.0e-12) && rhs.try_normalized(rhs_normalized, 1.0e-12) &&
+               std::abs(lhs_normalized.dot(rhs_normalized)) >= 1.0 - 1.0e-12;
+    }
+
 } // namespace
+
+TEST_CASE("collider offset Euler angles preserve multi-axis XYZ composition") {
+    using namespace termin;
+
+    initialize_runtime();
+    TcSceneRef scene = TcSceneRef::create("collider Euler order");
+    Entity entity = scene.create_entity("Offset box");
+    auto* collider = new ColliderComponent();
+    collider->collider_offset_enabled = true;
+    collider->collider_offset_euler = {90.0, 90.0, 0.0};
+    entity.add_component(collider);
+
+    const colliders::ColliderPrimitive* primitive = collider->collider();
+    REQUIRE(primitive != nullptr);
+    CHECK(equivalent_rotation(primitive->transform.ang, Quat{0.5, 0.5, -0.5, 0.5}));
+
+    scene.destroy();
+}
+
+TEST_CASE("collider offset rejects non-finite Euler values without an identity fallback") {
+    using namespace termin;
+
+    initialize_runtime();
+    TcSceneRef scene = TcSceneRef::create("invalid collider Euler angles");
+    Entity entity = scene.create_entity("Invalid offset box");
+    auto* collider = new ColliderComponent();
+    collider->collider_offset_enabled = true;
+    collider->collider_offset_euler = {std::numeric_limits<double>::quiet_NaN(),
+                                       std::numeric_limits<double>::infinity(),
+                                       0.0};
+    {
+        LogCapture capture;
+        entity.add_component(collider);
+        CHECK(error_log_count > 0);
+    }
+    CHECK(collider->collider() == nullptr);
+
+    scene.destroy();
+}
 
 TEST_CASE("colliders publish registry-controlled canonical debug primitives") {
     using namespace termin;

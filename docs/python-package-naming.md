@@ -70,7 +70,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `engine/termin-components/termin-components-kinematic` | `termin-components-kinematic` | `termin.kinematic`, `termin_kinematic_component_specs` | Kinematic components. |
 | `engine/termin-lighting` | `termin-lighting` | `termin.lighting` | Lighting API. |
 | `engine/termin-components/termin-components-mesh` | `termin-components-mesh` | `termin.mesh`, `termin_mesh_component_specs` | Scene mesh components. |
-| `engine/termin-components/termin-components-tween` | `termin-components-tween` | `termin_tween_component_specs` | Tween component specs. |
+| `engine/termin-components/termin-components-tween` | `termin-components-tween` | `termin.tween_components`, `termin_tween_component_specs` | Tween scene component and specs. |
 | `engine/termin-input` | `termin-input` | `termin.input` | Input API. |
 | `physics/termin-collision` | `termin-collision` | `termin.colliders`, `termin.collision`, `termin_collision_component_specs` | Collision runtime and components. |
 | `engine/termin-render` | `termin-render` | `termin.render`, `termin.render_framework`, `termin_render_framework_specs` | Render framework. |

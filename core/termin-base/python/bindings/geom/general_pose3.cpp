@@ -66,7 +66,13 @@ namespace termin {
             .def("global_down_in_local", &GeneralPose3::global_down_in_local, nb::arg("distance") = 1.0)
             .def("global_right_in_local", &GeneralPose3::global_right_in_local, nb::arg("distance") = 1.0)
             .def("global_left_in_local", &GeneralPose3::global_left_in_local, nb::arg("distance") = 1.0)
-            .def("normalized", &GeneralPose3::normalized)
+            .def("normalized", [](const GeneralPose3& pose) {
+                Quat rotation;
+                if (!pose.ang.try_normalized(rotation)) {
+                    throw nb::value_error("GeneralPose3 rotation cannot be normalized");
+                }
+                return GeneralPose3{rotation, pose.lin, pose.scale};
+            })
             .def("with_translation", nb::overload_cast<const Vec3&>(&GeneralPose3::with_translation, nb::const_))
             .def("with_rotation", &GeneralPose3::with_rotation)
             .def("with_scale", nb::overload_cast<const Vec3&>(&GeneralPose3::with_scale, nb::const_))
