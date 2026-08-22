@@ -26,6 +26,34 @@ Legacy convenience methods may retain their established behavior for compatibili
 
 Checked functions with an output parameter leave that output unchanged on failure. Callers either return the failure, log it at the owning system boundary, or choose and name a domain-specific fallback.
 
+`Quat` is a raw standard-layout `xyzw` value, not a unit-quaternion wrapper.
+Its multiplication, `dot` and `norm_squared` therefore preserve the stored
+coefficients, while `norm`, checked normalization, inversion and interpolation
+use an overflow/underflow-safe magnitude path: normal squared norms retain the
+established `sqrt(sum of squares)` arithmetic, while zero, subnormal or
+non-finite squared accumulation uses nested `hypot` as the range fallback.
+`try_normalized`, `try_inverse` and `try_slerp` reject
+non-finite inputs, a non-finite or negative epsilon, and norms not greater than
+epsilon; failed calls do not modify their output. Quaternion inverse is the
+true conjugate divided by squared norm, including for non-unit input. Slerp
+normalizes both endpoints, selects the shortest antipodal representation,
+clamps the normalized dot, uses normalized lerp near equal endpoints and
+normalizes its finite result. Finite extrapolation parameters are allowed.
+Legacy `rotate`, `inverse_rotate` and matrix-conversion helpers retain their
+unit, finite quaternion precondition; the raw type itself cannot establish it,
+so uncertain input is checked and normalized before those helpers are called.
+
+The only generic quaternion fallback is the explicitly named
+`normalized_or`. Invalid C/C++ convenience calls `normalize`/`normalized`,
+`inverse`, `slerp` and `to_euler` produce a non-finite sentinel instead of a
+plausible identity rotation; Python convenience methods raise `ValueError`,
+and their `try_` counterparts return `None`. Euler angles cross the API as one
+`Vec3` in XYZ order, never as three unrelated scalar parameters. Composition
+is `qz(yaw) * qy(pitch) * qx(roll)`. At gimbal lock conversion chooses
+`roll = 0` and retains the observable combined Z rotation in `yaw`. `Pose3`
+delegates these conversions to `Quat` rather than carrying another copy of the
+formulas.
+
 Screen-to-world ray construction follows the same rule. CPU camera owners pass
 their double-precision TerminClip projection and affine view matrices to
 `try_unproject_screen_ray`, together with a `Vec2` screen point and a positive

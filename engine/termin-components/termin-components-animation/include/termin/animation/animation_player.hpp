@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -61,6 +62,11 @@ namespace termin {
 
         // Cached samples buffer for reuse
         std::vector<tc_channel_sample> _samples_buffer;
+
+        // Payload replacement is versioned by the animation registry. Mapping
+        // and sample storage must follow both target changes and representation
+        // switches between legacy channels and bulk tracks.
+        uint32_t _mapped_clip_version = 0;
 
     public:
         AnimationPlayer();

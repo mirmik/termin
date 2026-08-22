@@ -1,6 +1,7 @@
 #include "core/tc_entity_pool.h"
 
 #include <geom/tc_affine3.h>
+#include <geom/tc_quat.h>
 
 #include <math.h>
 #include <stdio.h>
@@ -157,9 +158,35 @@ static int test_zero_negative_growth_and_reuse(void) {
     return 0;
 }
 
+static int test_rigid_rotation_composition_uses_parent_then_child(void) {
+    tc_entity_pool* pool = tc_entity_pool_create(2);
+    CHECK(pool != NULL);
+
+    const tc_entity_id parent = tc_entity_pool_alloc(pool, "rotation-parent");
+    const tc_entity_id child = tc_entity_pool_alloc(pool, "rotation-child");
+    CHECK(tc_entity_pool_set_parent_checked(pool, child, parent));
+
+    const tc_quat parent_rotation = {0.5, 0.5, 0.5, 0.5};
+    const tc_quat child_rotation = {-0.5, 0.5, -0.5, 0.5};
+    set_pose(pool, parent, (tc_vec3){0.0, 0.0, 0.0}, parent_rotation, (tc_vec3){1.0, 1.0, 1.0});
+    set_pose(pool, child, (tc_vec3){0.0, 0.0, 0.0}, child_rotation, (tc_vec3){1.0, 1.0, 1.0});
+
+    const tc_quat expected = tc_quat_mul(parent_rotation, child_rotation);
+    double actual[4] = {0.0, 0.0, 0.0, 0.0};
+    tc_entity_pool_get_global_rotation(pool, child, actual);
+    CHECK(near(actual[0], expected.x));
+    CHECK(near(actual[1], expected.y));
+    CHECK(near(actual[2], expected.z));
+    CHECK(near(actual[3], expected.w));
+
+    tc_entity_pool_destroy(pool);
+    return 0;
+}
+
 int main(void) {
     CHECK(test_classification_and_exact_shear() == 0);
     CHECK(test_promotion_demotion_and_affine_descendant() == 0);
     CHECK(test_zero_negative_growth_and_reuse() == 0);
+    CHECK(test_rigid_rotation_composition_uses_parent_then_child() == 0);
     return 0;
 }

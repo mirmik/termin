@@ -15,6 +15,14 @@ namespace termin {
 
         const SrgbColor collider_debug_color = {0.2f, 0.9f, 0.2f, 1.0f};
 
+        bool try_rotation_from_euler_degrees(const Vec3& euler_degrees, Quat& rotation) {
+            constexpr double deg2rad = 3.14159265358979323846 / 180.0;
+            return Quat::try_from_euler(Vec3{euler_degrees.x * deg2rad,
+                                             euler_degrees.y * deg2rad,
+                                             euler_degrees.z * deg2rad},
+                                        rotation);
+        }
+
         DebugGeometryTypeRegistration& collider_debug_geometry_type() {
             static DebugGeometryTypeRegistration registration("physics.colliders", "Colliders", "Physics", false);
             return registration;
@@ -292,6 +300,16 @@ namespace termin {
 
     void ColliderComponent::_rebuild_collider(bool report_failure) {
         const bool detached = !_lifecycle_attached;
+        const bool apply_offset = collider_offset_enabled && !_uses_mesh_component_mesh();
+        Quat offset_rotation;
+        if (apply_offset && !try_rotation_from_euler_degrees(collider_offset_euler, offset_rotation)) {
+            _remove_from_collision_world();
+            _attached.reset();
+            _collider.reset();
+            _build_state = BuildState::InvalidSource;
+            _report_build_failure_once("collider offset Euler angles must be finite");
+            return;
+        }
         if (detached && collider_type == "ConvexHull") {
             _attached.reset();
             _collider.reset();
@@ -325,15 +343,10 @@ namespace termin {
 
         // MeshComponent-sourced convex hulls already follow the render mesh local data.
         // In that mode Collider Offset is intentionally ignored to avoid a second offset stack.
-        if (collider_offset_enabled && !_uses_mesh_component_mesh()) {
+        if (apply_offset) {
             _collider->transform.lin =
                 Vec3(collider_offset_position.x, collider_offset_position.y, collider_offset_position.z);
-
-            constexpr double deg2rad = 3.14159265358979323846 / 180.0;
-            Quat rx = Quat::from_axis_angle(Vec3(1, 0, 0), collider_offset_euler.x * deg2rad);
-            Quat ry = Quat::from_axis_angle(Vec3(0, 1, 0), collider_offset_euler.y * deg2rad);
-            Quat rz = Quat::from_axis_angle(Vec3(0, 0, 1), collider_offset_euler.z * deg2rad);
-            _collider->transform.ang = rz * ry * rx;
+            _collider->transform.ang = offset_rotation;
         }
 
         // Create attached collider if transform is valid

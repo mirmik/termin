@@ -151,8 +151,10 @@ namespace termin {
             info.step = 0.1;
             info.getter = [](void* obj) -> tc_value {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
-                Pose3 p{c->origin_rotation, Vec3::zero()};
-                Vec3 euler = p.to_euler();
+                const Vec3 euler = c->origin_rotation.to_euler();
+                if (!euler.is_finite()) {
+                    tc::Log::error("[KinematicUnitComponent] cannot expose invalid origin rotation as Euler angles");
+                }
                 tc_value list = tc_value_list_new();
                 tc_value_list_push(&list, tc_value_double(degrees(euler.x)));
                 tc_value_list_push(&list, tc_value_double(degrees(euler.y)));
@@ -163,8 +165,13 @@ namespace termin {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 tc_vec3 v;
                 if (tc_value_to_vec3(value, v)) {
-                    Pose3 p = Pose3::from_euler(radians(v.x), radians(v.y), radians(v.z));
-                    c->origin_rotation = p.ang;
+                    const Vec3 euler{radians(v.x), radians(v.y), radians(v.z)};
+                    Quat rotation;
+                    if (!Quat::try_from_euler(euler, rotation)) {
+                        tc::Log::error("[KinematicUnitComponent] rejected non-finite origin Euler angles");
+                        return false;
+                    }
+                    c->origin_rotation = rotation;
                     c->apply();
                     return true;
                 }

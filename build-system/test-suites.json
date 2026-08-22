@@ -747,6 +747,14 @@
       ]
     },
     {
+      "id": "termin-components-mesh-tests-native",
+      "module": "termin-components-mesh",
+      "executor": "ctest",
+      "roots": [
+        "engine/termin-components/termin-components-mesh/tests"
+      ]
+    },
+    {
       "id": "termin-components-physics-tests-native",
       "module": "termin-components-physics",
       "executor": "ctest",
@@ -832,6 +840,14 @@
       "executor": "ctest",
       "roots": [
         "graphics/termin-graphics/tests"
+      ]
+    },
+    {
+      "id": "termin-animation-tests-native",
+      "module": "termin-animation",
+      "executor": "ctest",
+      "roots": [
+        "graphics/termin-animation/tests"
       ]
     },
     {

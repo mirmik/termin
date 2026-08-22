@@ -36,10 +36,11 @@ Native-класс для представления позы в 2D простр�
 
 **Новые возможности:**
 - **Properties x, y, z** - прямой доступ к координатам положения
-- **normalize()** - нормализация кватерниона к единичной длине
+- **normalized()** - строгая нормализация кватерниона к единичной длине;
+  вырожденное или non-finite вращение вызывает `ValueError`
 - **distance(other)** - расстояние между двумя позами
 - **to_axis_angle() / from_axis_angle()** - конвертация axis-angle ↔ quaternion
-- **to_euler() / from_euler()** - конвертация Euler angles ↔ quaternion (порядок 'xyz')
+- **to_euler() / from_euler(Vec3)** - конвертация Euler angles ↔ quaternion (порядок XYZ)
 - **looking_at()** - создать позу, направленную на заданную точку
 - **as_matrix34()** - получить 3×4 матрицу трансформации
 

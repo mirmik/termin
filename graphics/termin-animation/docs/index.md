@@ -27,7 +27,12 @@ The `termin-animation` distribution contains only the portable
 tracks identified by source node index, path, interpolation, component count,
 times, and values. The format keeps vec3 scale and the glTF CUBICSPLINE
 `in/value/out` tensor shape. LINEAR and STEP translation/rotation/scale tracks
-are sampled by the runtime, including shortest-path quaternion interpolation.
+are sampled by the runtime. Rotation samples use checked quaternion loads from
+the flat payload, normalize non-unit keys, follow the shortest path, and publish
+only a finite unit quaternion. Degenerate or non-finite rotation keys are logged
+sampling errors and leave the caller's output unchanged.
 CUBICSPLINE and morph-weight tracks remain round-trippable but sampling them is
 an explicit error until those player paths are implemented. The legacy
-name-grouped channel API remains available only for existing assets.
+name-grouped channel API remains available only for existing assets. Its
+dedicated translation and rotation fields use `tc_vec3` and `tc_quat` without
+changing their packed ABI layout; channel sampling is transactional as well.

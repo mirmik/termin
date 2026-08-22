@@ -44,8 +44,8 @@ int main(int argc, char** argv) {
     channel.translation_keys = keys;
     channel.translation_count = 2;
     tc_channel_sample sample{};
-    tc_animation_channel_sample(&channel, 0.5, &sample);
-    if (!sample.has_translation || std::abs(sample.translation[1] - 0.5) > 1e-9)
+    if (!tc_animation_channel_sample(&channel, 0.5, &sample) || !sample.has_translation ||
+        std::abs(sample.translation.y - 0.5) > 1e-9)
         return 4;
     channel.translation_keys = nullptr;
 

@@ -181,65 +181,15 @@ inline tc_pose3 tc_pose3::rotate_z(double angle) {
 }
 
 inline tc_pose3 tc_pose3::looking_at(const tc_vec3& eye, const tc_vec3& target, const tc_vec3& up) {
-    tc_vec3 forward = (target - eye).normalized();
-    tc_vec3 right = forward.cross(up).normalized();
-    tc_vec3 up_corrected = right.cross(forward);
-
-    double m00 = right.x, m01 = forward.x, m02 = up_corrected.x;
-    double m10 = right.y, m11 = forward.y, m12 = up_corrected.y;
-    double m20 = right.z, m21 = forward.z, m22 = up_corrected.z;
-
-    double trace = m00 + m11 + m22;
-    tc_quat q;
-
-    if (trace > 0) {
-        double s = 0.5 / std::sqrt(trace + 1.0);
-        q = tc_quat((m21 - m12) * s, (m02 - m20) * s, (m10 - m01) * s, 0.25 / s);
-    } else if (m00 > m11 && m00 > m22) {
-        double s = 2.0 * std::sqrt(1.0 + m00 - m11 - m22);
-        q = tc_quat(0.25 * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s);
-    } else if (m11 > m22) {
-        double s = 2.0 * std::sqrt(1.0 + m11 - m00 - m22);
-        q = tc_quat((m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s);
-    } else {
-        double s = 2.0 * std::sqrt(1.0 + m22 - m00 - m11);
-        q = tc_quat((m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s);
-    }
-
-    return {q.normalized(), eye};
+    return {tc_quat::look_rotation(target - eye, up), eye};
 }
 
-inline tc_pose3 tc_pose3::from_euler(double roll, double pitch, double yaw) {
-    double cr = std::cos(roll * 0.5);
-    double sr = std::sin(roll * 0.5);
-    double cp = std::cos(pitch * 0.5);
-    double sp = std::sin(pitch * 0.5);
-    double cy = std::cos(yaw * 0.5);
-    double sy = std::sin(yaw * 0.5);
-
-    tc_quat q(sr * cp * cy - cr * sp * sy,
-              cr * sp * cy + sr * cp * sy,
-              cr * cp * sy - sr * sp * cy,
-              cr * cp * cy + sr * sp * sy);
-    return {q, tc_vec3::zero()};
+inline tc_pose3 tc_pose3::from_euler(const tc_vec3& euler_xyz) {
+    return {tc_quat::from_euler(euler_xyz), tc_vec3::zero()};
 }
 
 inline tc_vec3 tc_pose3::to_euler() const {
-    double x = ang.x, y = ang.y, z = ang.z, w = ang.w;
-
-    double sinr_cosp = 2 * (w * x + y * z);
-    double cosr_cosp = 1 - 2 * (x * x + y * y);
-    double roll = std::atan2(sinr_cosp, cosr_cosp);
-
-    double sinp = 2 * (w * y - z * x);
-    sinp = std::clamp(sinp, -1.0, 1.0);
-    double pitch = std::asin(sinp);
-
-    double siny_cosp = 2 * (w * z + x * y);
-    double cosy_cosp = 1 - 2 * (y * y + z * z);
-    double yaw = std::atan2(siny_cosp, cosy_cosp);
-
-    return {roll, pitch, yaw};
+    return ang.to_euler();
 }
 
 inline void tc_pose3::to_axis_angle(tc_vec3& axis, double& angle) const {

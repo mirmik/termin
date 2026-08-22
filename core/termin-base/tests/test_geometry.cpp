@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include <tcbase/tc_types.h>
+#include <geom/tc_quat.h>
 #include <termin/geom/affine2.hpp>
 #include <termin/geom/affine3.hpp>
 #include <termin/geom/aabb.hpp>
@@ -11,6 +12,8 @@
 #include <termin/geom/color.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/mat66.hpp>
+#include <termin/geom/pose3.hpp>
+#include <termin/geom/quat.hpp>
 #include <termin/geom/ray3.hpp>
 #include <termin/geom/rect2.hpp>
 #include <termin/geom/se3.hpp>
@@ -27,6 +30,161 @@ TEST_CASE("tc_vec3 normalized zero vector returns NaNs") {
     CHECK(std::isnan(normalized.x));
     CHECK(std::isnan(normalized.y));
     CHECK(std::isnan(normalized.z));
+}
+
+TEST_CASE("Quat checked operations match the C foundation and preserve raw xyzw ABI") {
+    using termin::Quat;
+
+    static_assert(sizeof(Quat) == sizeof(double) * 4);
+    static_assert(offsetof(Quat, x) == sizeof(double) * 0);
+    static_assert(offsetof(Quat, y) == sizeof(double) * 1);
+    static_assert(offsetof(Quat, z) == sizeof(double) * 2);
+    static_assert(offsetof(Quat, w) == sizeof(double) * 3);
+
+    const Quat value{1.0, -2.0, 3.0, 4.0};
+    const Quat other{-0.5, 0.25, 2.0, -1.0};
+    CHECK(value.dot(other) == tc_quat_dot(value, other));
+    CHECK(value.norm_squared() == tc_quat_norm_squared(value));
+    CHECK(value.norm() == tc_quat_norm(value));
+    CHECK(value.is_finite() == tc_quat_is_finite(value));
+
+    Quat cpp_normalized{9.0, 8.0, 7.0, 6.0};
+    tc_quat c_normalized{9.0, 8.0, 7.0, 6.0};
+    REQUIRE(value.try_normalized(cpp_normalized));
+    REQUIRE(tc_quat_try_normalized(value, 1.0e-12, &c_normalized));
+    CHECK(cpp_normalized.x == c_normalized.x);
+    CHECK(cpp_normalized.y == c_normalized.y);
+    CHECK(cpp_normalized.z == c_normalized.z);
+    CHECK(cpp_normalized.w == c_normalized.w);
+
+    Quat cpp_inverse{9.0, 8.0, 7.0, 6.0};
+    tc_quat c_inverse{9.0, 8.0, 7.0, 6.0};
+    REQUIRE(value.try_inverse(cpp_inverse));
+    REQUIRE(tc_quat_try_inverse(value, 1.0e-12, &c_inverse));
+    CHECK(cpp_inverse.x == c_inverse.x);
+    CHECK(cpp_inverse.y == c_inverse.y);
+    CHECK(cpp_inverse.z == c_inverse.z);
+    CHECK(cpp_inverse.w == c_inverse.w);
+    const Quat product = value * cpp_inverse;
+    CHECK(std::abs(product.x) < 1.0e-15);
+    CHECK(std::abs(product.y) < 1.0e-15);
+    CHECK(std::abs(product.z) < 1.0e-15);
+    CHECK(std::abs(product.w - 1.0) < 1.0e-15);
+
+    const Quat largest_finite{std::numeric_limits<double>::max(), 0.0, 0.0, 0.0};
+    REQUIRE(largest_finite.try_inverse(cpp_inverse, 0.0));
+    REQUIRE(tc_quat_try_inverse(largest_finite, 0.0, &c_inverse));
+    CHECK(cpp_inverse.x == c_inverse.x);
+    CHECK(cpp_inverse.x < 0.0);
+    const Quat large_product = largest_finite * cpp_inverse;
+    CHECK(std::abs(large_product.w - 1.0) < 1.0e-15);
+
+    const Quat partial_underflow{2.0e-162, 2.0e-162, 0.0, 0.0};
+    REQUIRE(partial_underflow.try_normalized(cpp_normalized, 0.0));
+    REQUIRE(tc_quat_try_normalized(partial_underflow, 0.0, &c_normalized));
+    CHECK(std::abs(cpp_normalized.norm() - 1.0) < 1.0e-15);
+    CHECK(cpp_normalized.x == c_normalized.x);
+    CHECK(cpp_normalized.y == c_normalized.y);
+    REQUIRE(partial_underflow.try_inverse(cpp_inverse, 0.0));
+    REQUIRE(tc_quat_try_inverse(partial_underflow, 0.0, &c_inverse));
+    CHECK(std::abs((partial_underflow * cpp_inverse).w - 1.0) < 1.0e-15);
+    CHECK(cpp_inverse.x == c_inverse.x);
+
+    const Quat sentinel{9.0, 8.0, 7.0, 6.0};
+    Quat unchanged = sentinel;
+    CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.try_normalized(unchanged, 0.0)));
+    CHECK(unchanged.x == sentinel.x);
+    CHECK(unchanged.y == sentinel.y);
+    CHECK(unchanged.z == sentinel.z);
+    CHECK(unchanged.w == sentinel.w);
+    CHECK_FALSE(Quat::identity().try_inverse(unchanged, -1.0));
+    CHECK(unchanged.x == sentinel.x);
+    CHECK_FALSE(Quat::identity().try_inverse(unchanged, std::numeric_limits<double>::quiet_NaN()));
+    CHECK(unchanged.x == sentinel.x);
+    CHECK_FALSE((Quat{std::numeric_limits<double>::infinity(), 0.0, 0.0, 1.0}.try_normalized(unchanged)));
+    CHECK(unchanged.x == sentinel.x);
+
+    const Quat fallback{4.0, 3.0, 2.0, 1.0};
+    const Quat normalized_or = Quat{0.0, 0.0, 0.0, 0.0}.normalized_or(fallback, 0.0);
+    CHECK(normalized_or.x == fallback.x);
+    CHECK(normalized_or.y == fallback.y);
+    CHECK(normalized_or.z == fallback.z);
+    CHECK(normalized_or.w == fallback.w);
+    CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.normalized().is_finite()));
+    CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.inverse().is_finite()));
+}
+
+TEST_CASE("Quat checked slerp and Euler conversion have C++ parity") {
+    using termin::Quat;
+    using termin::Vec3;
+
+    const Quat a{0.0, 0.0, 0.0, 2.0};
+    const Quat b = Quat::from_axis_angle(Vec3::unit_z(), 0.5 * 3.14159265358979323846);
+    const Quat scaled_b{b.x * 3.0, b.y * 3.0, b.z * 3.0, b.w * 3.0};
+
+    Quat cpp_result{9.0, 8.0, 7.0, 6.0};
+    tc_quat c_result{9.0, 8.0, 7.0, 6.0};
+    REQUIRE(Quat::try_slerp(a, scaled_b, 1.5, cpp_result));
+    REQUIRE(tc_quat_try_slerp(a, scaled_b, 1.5, 1.0e-12, &c_result));
+    CHECK(std::abs(cpp_result.x - c_result.x) < 1.0e-15);
+    CHECK(std::abs(cpp_result.y - c_result.y) < 1.0e-15);
+    CHECK(std::abs(cpp_result.z - c_result.z) < 1.0e-15);
+    CHECK(std::abs(cpp_result.w - c_result.w) < 1.0e-15);
+    CHECK(std::abs(cpp_result.norm() - 1.0) < 1.0e-15);
+
+    const Quat antipodal{0.0, 0.0, 0.0, -4.0};
+    REQUIRE(Quat::try_slerp(a, antipodal, 0.37, cpp_result));
+    CHECK(std::abs(std::abs(cpp_result.dot(Quat::identity())) - 1.0) < 1.0e-15);
+
+    const Quat sentinel{9.0, 8.0, 7.0, 6.0};
+    cpp_result = sentinel;
+    CHECK_FALSE(Quat::try_slerp(Quat{0.0, 0.0, 0.0, 0.0}, Quat::identity(), 0.5, cpp_result, 0.0));
+    CHECK(cpp_result.x == sentinel.x);
+    CHECK_FALSE(Quat::try_slerp(Quat::identity(), Quat::identity(),
+                                std::numeric_limits<double>::quiet_NaN(), cpp_result));
+    CHECK(cpp_result.x == sentinel.x);
+    CHECK_FALSE(Quat::slerp(Quat{0.0, 0.0, 0.0, 0.0}, Quat::identity(), 0.5).is_finite());
+
+    const Vec3 euler{0.37, -0.42, 0.81};
+    Quat cpp_euler{9.0, 8.0, 7.0, 6.0};
+    tc_quat c_euler{9.0, 8.0, 7.0, 6.0};
+    REQUIRE(Quat::try_from_euler(euler, cpp_euler));
+    REQUIRE(tc_quat_try_from_euler(euler, &c_euler));
+    CHECK(std::abs(cpp_euler.x - c_euler.x) < 1.0e-15);
+    CHECK(std::abs(cpp_euler.y - c_euler.y) < 1.0e-15);
+    CHECK(std::abs(cpp_euler.z - c_euler.z) < 1.0e-15);
+    CHECK(std::abs(cpp_euler.w - c_euler.w) < 1.0e-15);
+
+    Vec3 cpp_recovered{9.0, 8.0, 7.0};
+    tc_vec3 c_recovered{9.0, 8.0, 7.0};
+    REQUIRE(cpp_euler.try_to_euler(cpp_recovered));
+    REQUIRE(tc_quat_try_to_euler(c_euler, 1.0e-12, &c_recovered));
+    CHECK(std::abs(cpp_recovered.x - c_recovered.x) < 1.0e-15);
+    CHECK(std::abs(cpp_recovered.y - c_recovered.y) < 1.0e-15);
+    CHECK(std::abs(cpp_recovered.z - c_recovered.z) < 1.0e-15);
+
+    const Vec3 locked{0.4, 0.5 * 3.14159265358979323846, -0.7};
+    const Quat locked_quat = Quat::from_euler(locked);
+    REQUIRE(locked_quat.try_to_euler(cpp_recovered));
+    CHECK(cpp_recovered.x == 0.0);
+    CHECK(std::abs(cpp_recovered.y - 0.5 * 3.14159265358979323846) < 1.0e-15);
+    const Quat locked_round_trip = Quat::from_euler(cpp_recovered);
+    CHECK(std::abs(std::abs(locked_quat.dot(locked_round_trip)) - 1.0) < 1.0e-14);
+
+    const termin::Pose3 pose = termin::Pose3::from_euler(euler);
+    CHECK(std::abs(std::abs(pose.ang.dot(cpp_euler)) - 1.0) < 1.0e-15);
+    const Vec3 pose_euler = pose.to_euler();
+    CHECK(std::abs(pose_euler.x - euler.x) < 1.0e-14);
+    CHECK(std::abs(pose_euler.y - euler.y) < 1.0e-14);
+    CHECK(std::abs(pose_euler.z - euler.z) < 1.0e-14);
+
+    cpp_euler = sentinel;
+    CHECK_FALSE(Quat::try_from_euler(Vec3{std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0}, cpp_euler));
+    CHECK(cpp_euler.x == sentinel.x);
+    cpp_recovered = {9.0, 8.0, 7.0};
+    CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.try_to_euler(cpp_recovered, 0.0)));
+    CHECK(cpp_recovered.x == 9.0);
+    CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.to_euler().is_finite()));
 }
 
 TEST_CASE("Mat66 follows the canonical column-major matrix contract") {

@@ -6,6 +6,7 @@
 #include "tc_entity_pool_internal.h"
 #include "tc_hash_map.h"
 #include <geom/tc_affine3.h>
+#include <geom/tc_quat.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,10 +82,6 @@ static uint64_t pack_entity_id(tc_entity_id id) {
 // Unpack entity_id from uint64
 static tc_entity_id unpack_entity_id(uint64_t packed) {
     return (tc_entity_id){.index = (uint32_t)packed, .generation = (uint32_t)(packed >> 32)};
-}
-
-static Quat quat_identity(void) {
-    return (Quat){0, 0, 0, 1};
 }
 
 static Vec3 vec3_one(void) {
@@ -578,10 +575,10 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     pool->soa_type_masks[idx] = 0;
 
     pool->local_positions[idx] = vec3_zero();
-    pool->local_rotations[idx] = quat_identity();
+    pool->local_rotations[idx] = tc_quat_identity();
     pool->local_scales[idx] = vec3_one();
     pool->world_positions[idx] = vec3_zero();
-    pool->world_rotations[idx] = quat_identity();
+    pool->world_rotations[idx] = tc_quat_identity();
     pool->world_scales[idx] = vec3_one();
     pool->world_transform_kinds[idx] = TC_TRANSFORM_RIGID;
     pool->world_basis_x[idx] = (Vec3){1.0, 0.0, 0.0};
@@ -1226,14 +1223,6 @@ void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id
     tc_affine3d_to_matrix4(world_affine_at(pool, id.index), m16);
 }
 
-// Simple quaternion multiply
-static Quat quat_mul(Quat a, Quat b) {
-    return (Quat){a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-                  a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-                  a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-                  a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
-}
-
 static bool quat_is_identity_rotation(Quat q) {
     return q.x == 0.0 && q.y == 0.0 && q.z == 0.0 && (q.w == 1.0 || q.w == -1.0);
 }
@@ -1298,7 +1287,7 @@ static void update_entity_transform(tc_entity_pool* pool, uint32_t idx) {
         tc_transform_kind parent_kind = (tc_transform_kind)pool->world_transform_kinds[parent_idx];
 
         pool->world_positions[idx] = world.translation;
-        pool->world_rotations[idx] = quat_mul(pool->world_rotations[parent_idx], lr);
+        pool->world_rotations[idx] = tc_quat_mul(pool->world_rotations[parent_idx], lr);
         store_world_basis(pool, idx, world.basis);
 
         if (parent_kind == TC_TRANSFORM_AFFINE ||

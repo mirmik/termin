@@ -82,6 +82,25 @@ if(TERMIN_BUILD_PYTHON)
     termin_set_rpath_python(_animation_native)
 endif()
 
+if(TERMIN_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_animation_sampling_test
+        tests/test_tc_animation_sampling.cpp
+    )
+    target_include_directories(termin_animation_sampling_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_animation_sampling_test PRIVATE
+        termin_animation
+    )
+    set_target_properties(termin_animation_sampling_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    termin_set_rpath_test(termin_animation_sampling_test)
+    add_test(NAME termin_animation_sampling_test COMMAND termin_animation_sampling_test)
+endif()
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
@@ -137,3 +156,7 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_animationConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_animation
 )
+
+if(COMMAND termin_label_tests_in_directory)
+    termin_label_tests_in_directory("termin-animation")
+endif()

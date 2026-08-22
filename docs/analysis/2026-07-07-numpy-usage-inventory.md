@@ -1,7 +1,7 @@
 # NumPy Usage Inventory
 
 Date: 2026-07-07
-Last updated: 2026-07-09 after first buffer-compatible input binding pass
+Last updated: 2026-08-22 after quaternion/tween typed-value pass
 
 This inventory lists project Python files that import NumPy directly. It excludes
 virtual environments, build outputs, the SDK bundle, and third-party sources.
@@ -17,7 +17,7 @@ rg -l "^\s*(import numpy\b|from numpy\b)" \
   --glob '!termin-thirdparty/**' | sort
 ```
 
-Total files: 143
+Total files: 161
 
 ## Reading Notes
 
@@ -76,11 +76,16 @@ Total files: 143
   passes `bytes` directly through tgfx2 byte-buffer overloads; NumPy import removed.
 - `termin-components/termin-components-physics/python/termin/physics_components/rigid_body_component.py`: collider extents moved to `Vec3`.
 - `termin-components/termin-components-render/python/termin/render_components/camera.py`: annotation-only NumPy import removed.
-- `termin-components/termin-components-tween/python/termin/tween/component.py`: annotation-only NumPy import removed.
+- `termin-components/termin-components-tween/python/termin/tween_components/component.py`:
+  public tween target annotations use the canonical `Vec3Value`/`QuatValue`
+  boundary aliases; the package no longer declares an unused NumPy dependency.
 - `termin-app/termin/editor_tcgui/dialogs/scene_inspector.py`: scene color edits moved to plain float tuples.
 - `termin-audio/python/termin/audio/components/audio_source.py`: spatial audio math moved to `Vec3` and `math`.
 - `termin-pga/python/termin/ga201/convex_body.py`: `np.argmin` replaced by list/min selection.
-- `termin-tween/python/termin/tween/manager.py`: annotation-only NumPy import removed.
+- `termin-tween/python/termin/tween/tween.py`, `manager.py`, and
+  `tests/test_tween_core.py`: move/scale state now uses `Vec3`, rotation state and
+  interpolation use checked `Quat`, and the package no longer imports or depends
+  on NumPy.
 
 ## 2026-07-09 Buffer-Compatible Input Pass
 
@@ -283,8 +288,6 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-qopt/tests/subspaces_test.py` | subspace linalg fixtures | tests only |
 | `termin-render/python/termin/render/texture.py` | texture image buffers | keep ndarray boundary |
 | `termin-render/python/termin/render/texture_handle.py` | 1x1 texture pixels | tiny ndarray boundary |
-| `termin-tween/python/termin/tween/tween.py` | Vec3/quaternion interpolation | Vec3/Quat candidate |
-| `termin-tween/tests/test_tween_core.py` | tween vector fixtures | tests only |
 | `termin-voxels/python/termin/voxels/chunk.py` | voxel chunk storage | keep ndarray dense grid |
 | `termin-voxels/python/termin/voxels/intersection.py` | triangle AABB math | Vec3 candidate |
 | `termin-voxels/python/termin/voxels/native_voxelizer.py` | native mesh array conversion | keep ndarray ABI boundary |

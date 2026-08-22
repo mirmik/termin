@@ -22,12 +22,12 @@ TC_DEFINE_HANDLE(tc_animation_handle)
 
 typedef struct tc_keyframe_vec3 {
     double time;
-    double value[3];
+    tc_vec3 value;
 } tc_keyframe_vec3;
 
 typedef struct tc_keyframe_quat {
     double time;
-    double value[4]; // [x, y, z, w]
+    tc_quat value;
 } tc_keyframe_quat;
 
 typedef struct tc_keyframe_scalar {
@@ -165,8 +165,8 @@ static inline void tc_animation_channel_free(tc_animation_channel* ch) {
 // ============================================================================
 
 typedef struct tc_channel_sample {
-    double translation[3];
-    double rotation[4]; // [x, y, z, w]
+    tc_vec3 translation;
+    tc_quat rotation;
     double scale;
     uint8_t has_translation;
     uint8_t has_rotation;
@@ -178,25 +178,33 @@ typedef struct tc_channel_sample {
 static inline void tc_channel_sample_init(tc_channel_sample* s) {
     if (!s)
         return;
-    s->translation[0] = 0.0;
-    s->translation[1] = 0.0;
-    s->translation[2] = 0.0;
-    s->rotation[0] = 0.0;
-    s->rotation[1] = 0.0;
-    s->rotation[2] = 0.0;
-    s->rotation[3] = 1.0;
+    s->translation.x = 0.0;
+    s->translation.y = 0.0;
+    s->translation.z = 0.0;
+    s->rotation.x = 0.0;
+    s->rotation.y = 0.0;
+    s->rotation.z = 0.0;
+    s->rotation.w = 1.0;
     s->scale = 1.0;
     s->has_translation = 0;
     s->has_rotation = 0;
     s->has_scale = 0;
+    s->_pad[0] = 0;
+    s->_pad[1] = 0;
+    s->_pad[2] = 0;
+    s->_pad[3] = 0;
+    s->_pad[4] = 0;
 }
 
 // ============================================================================
 // Sampling functions
 // ============================================================================
 
-// Sample a single channel at time t_ticks (returns interpolated values)
-TC_API void tc_animation_channel_sample(const tc_animation_channel* ch, double t_ticks, tc_channel_sample* out);
+// Sample a single channel at time t_ticks. Quaternion keys are normalized at
+// the sampling boundary. Invalid input is logged and leaves out unchanged.
+TC_API bool tc_animation_channel_sample(const tc_animation_channel* ch,
+                                        double t_ticks,
+                                        tc_channel_sample* out);
 
 // Sample animation at time t_seconds (handles looping and tps conversion)
 // out_samples must be preallocated with animation->channel_count elements

@@ -1,5 +1,7 @@
 #include "common.hpp"
 
+#include <optional>
+
 namespace termin {
 
     void bind_quat(nb::module_& m) {
@@ -40,13 +42,95 @@ namespace termin {
             .def("__iter__", [](const Quat& q) { return nb::iter(nb::make_tuple(q.x, q.y, q.z, q.w)); })
             .def(nb::self * nb::self)
             .def("conjugate", &Quat::conjugate)
-            .def("inverse", &Quat::inverse)
+            .def("dot", &Quat::dot, nb::arg("other"))
+            .def("norm_squared", &Quat::norm_squared)
             .def("norm", &Quat::norm)
-            .def("normalized", &Quat::normalized)
+            .def("is_finite", &Quat::is_finite)
+            .def(
+                "try_normalized",
+                [](const Quat& value, double epsilon) -> std::optional<Quat> {
+                    Quat result;
+                    if (!value.try_normalized(result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
+            .def("normalized_or", &Quat::normalized_or, nb::arg("fallback"), nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "normalized",
+                [](const Quat& value, double epsilon) {
+                    Quat result;
+                    if (!value.try_normalized(result, epsilon)) {
+                        throw nb::value_error("Quat cannot be normalized");
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "try_inverse",
+                [](const Quat& value, double epsilon) -> std::optional<Quat> {
+                    Quat result;
+                    if (!value.try_inverse(result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "inverse",
+                [](const Quat& value, double epsilon) {
+                    Quat result;
+                    if (!value.try_inverse(result, epsilon)) {
+                        throw nb::value_error("Quat cannot be inverted");
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
             .def("rotate", &Quat::rotate)
             .def("inverse_rotate", &Quat::inverse_rotate)
             .def_static("identity", &Quat::identity)
             .def_static("from_axis_angle", &Quat::from_axis_angle)
+            .def_static(
+                "try_from_euler",
+                [](const Vec3& euler_xyz) -> std::optional<Quat> {
+                    Quat result;
+                    if (!Quat::try_from_euler(euler_xyz, result)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("euler_xyz"))
+            .def_static(
+                "from_euler",
+                [](const Vec3& euler_xyz) {
+                    Quat result;
+                    if (!Quat::try_from_euler(euler_xyz, result)) {
+                        throw nb::value_error("Euler angles must be finite");
+                    }
+                    return result;
+                },
+                nb::arg("euler_xyz"))
+            .def(
+                "try_to_euler",
+                [](const Quat& value, double epsilon) -> std::optional<Vec3> {
+                    Vec3 result;
+                    if (!value.try_to_euler(result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
+            .def(
+                "to_euler",
+                [](const Quat& value, double epsilon) {
+                    Vec3 result;
+                    if (!value.try_to_euler(result, epsilon)) {
+                        throw nb::value_error("Quat cannot be converted to Euler angles");
+                    }
+                    return result;
+                },
+                nb::arg("epsilon") = 1.0e-12)
             .def_static(
                 "look_rotation",
                 [](const Vec3& forward, std::optional<Vec3> up) {
@@ -55,12 +139,33 @@ namespace termin {
                 nb::arg("forward"),
                 nb::arg("up").none() = nb::none(),
                 "Create quaternion looking in direction (Forward=+Y, Up=+Z)")
-            .def_static("slerp",
-                        &Quat::slerp,
-                        nb::arg("a"),
-                        nb::arg("b"),
-                        nb::arg("t"),
-                        "Spherical linear interpolation between quaternions")
+            .def_static(
+                "try_slerp",
+                [](const Quat& a, const Quat& b, double t, double epsilon) -> std::optional<Quat> {
+                    Quat result;
+                    if (!Quat::try_slerp(a, b, t, result, epsilon)) {
+                        return std::nullopt;
+                    }
+                    return result;
+                },
+                nb::arg("a"),
+                nb::arg("b"),
+                nb::arg("t"),
+                nb::arg("epsilon") = 1.0e-12)
+            .def_static(
+                "slerp",
+                [](const Quat& a, const Quat& b, double t, double epsilon) {
+                    Quat result;
+                    if (!Quat::try_slerp(a, b, t, result, epsilon)) {
+                        throw nb::value_error("Quaternions cannot be interpolated");
+                    }
+                    return result;
+                },
+                nb::arg("a"),
+                nb::arg("b"),
+                nb::arg("t"),
+                nb::arg("epsilon") = 1.0e-12,
+                "Spherical linear interpolation between quaternions")
             .def("tolist",
                  [](const Quat& q) {
                      nb::list lst;
@@ -75,8 +180,6 @@ namespace termin {
                 return "Quat(" + std::to_string(q.x) + ", " + std::to_string(q.y) + ", " + std::to_string(q.z) + ", " +
                        std::to_string(q.w) + ")";
             });
-
-        m.def("slerp", &slerp, "Spherical linear interpolation between quaternions");
     }
 
 } // namespace termin

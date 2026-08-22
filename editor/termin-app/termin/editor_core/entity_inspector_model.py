@@ -254,14 +254,11 @@ class EntityInspectorController:
         if entity is None or entity.transform is None:
             return self._snapshot
         old_pose = entity.transform.local_pose()
-        x_degrees, y_degrees, z_degrees = rotation_degrees
-        qz = Quat.from_axis_angle(Vec3.unit_z(), math.radians(z_degrees))
-        qy = Quat.from_axis_angle(Vec3.unit_y(), math.radians(y_degrees))
-        qx = Quat.from_axis_angle(Vec3.unit_x(), math.radians(x_degrees))
+        rotation_radians = Vec3(rotation_degrees) * (math.pi / 180.0)
         new_pose = GeneralPose3(
-            lin=Vec3(*position),
-            ang=(qz * qy * qx).normalized(),
-            scale=Vec3(*scale),
+            lin=Vec3(position),
+            ang=Quat.from_euler(rotation_radians),
+            scale=Vec3(scale),
         )
         self._execute(
             TransformEditCommand(entity.transform, old_pose, new_pose),
@@ -516,19 +513,22 @@ class EntityInspectorController:
                 scale=(1.0, 1.0, 1.0),
             )
         pose = transform.local_pose()
-        quat = pose.ang
-        t0 = 2.0 * (quat.w * quat.z + quat.x * quat.y)
-        t1 = 1.0 - 2.0 * (quat.y * quat.y + quat.z * quat.z)
-        z_degrees = math.degrees(math.atan2(t0, t1))
-        t2 = max(-1.0, min(1.0, 2.0 * (quat.w * quat.y - quat.z * quat.x)))
-        y_degrees = math.degrees(math.asin(t2))
-        t3 = 2.0 * (quat.w * quat.x + quat.y * quat.z)
-        t4 = 1.0 - 2.0 * (quat.x * quat.x + quat.y * quat.y)
-        x_degrees = math.degrees(math.atan2(t3, t4))
+        try:
+            rotation_radians = pose.ang.to_euler()
+            rotation_degrees = tuple(
+                math.degrees(value) for value in rotation_radians
+            )
+        except ValueError as error:
+            _logger.error(
+                "Failed to read transform rotation for entity %s: %s",
+                entity.name or entity.uuid or "<unnamed>",
+                error,
+            )
+            rotation_degrees = (math.nan, math.nan, math.nan)
         return EntityTransformSnapshot(
             enabled=True,
             position=tuple(float(value) for value in pose.lin),
-            rotation_degrees=(x_degrees, y_degrees, z_degrees),
+            rotation_degrees=rotation_degrees,
             scale=tuple(float(value) for value in pose.scale),
         )
 

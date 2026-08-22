@@ -41,6 +41,12 @@ class TestGeneralPose3Basics:
         assert_vec3_approx(gp.lin, (1, 2, 3))
         assert_vec3_approx(gp.scale, (2, 3, 4))
 
+    def test_normalized_rejects_degenerate_rotation(self):
+        gp = GeneralPose3(ang=Quat(0.0, 0.0, 0.0, 0.0))
+
+        with pytest.raises(ValueError, match="GeneralPose3 rotation cannot be normalized"):
+            gp.normalized()
+
     def test_copy(self):
         gp = GeneralPose3(
             lin=Vec3(1, 2, 3),

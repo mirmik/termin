@@ -3,15 +3,38 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from enum import Enum, auto
+from numbers import Real
 from typing import Callable, TYPE_CHECKING
 
-import numpy as np
-
+from termin.geombase import Quat, Vec3
 from termin.tween.ease import Ease, evaluate as ease_evaluate
 
 if TYPE_CHECKING:
     from termin.kinematic.general_transform import GeneralTransform3
+
+
+Vec3Value = Vec3 | Sequence[float]
+QuatValue = Quat | Sequence[float]
+
+
+def _finite_vec3(value: Vec3Value, *, name: str) -> Vec3:
+    if len(value) != 3:
+        raise ValueError(f"{name} must contain exactly 3 components")
+    result = Vec3(value)
+    if not result.is_finite():
+        raise ValueError(f"{name} must contain only finite values")
+    return result
+
+
+def _normalized_quat(value: QuatValue, *, name: str) -> Quat:
+    if len(value) != 4:
+        raise ValueError(f"{name} must contain exactly 4 components")
+    result = Quat(value).try_normalized()
+    if result is None:
+        raise ValueError(f"{name} must be a finite, non-degenerate quaternion")
+    return result
 
 
 class TweenState(Enum):
@@ -134,22 +157,24 @@ class MoveTween(Tween):
     def __init__(
         self,
         transform: "GeneralTransform3",
-        target: np.ndarray,
+        target: Vec3Value,
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
     ):
         super().__init__(duration, ease, delay)
         self.transform = transform
-        self.target = np.asarray(target, dtype=np.float32)
-        self._start: np.ndarray | None = None
+        self.target = _finite_vec3(target, name="move target")
+        self._start: Vec3 | None = None
 
     def _apply(self, t: float) -> None:
+        pose = self.transform.local_pose()
         if self._start is None:
-            self._start = self.transform.local_pose().lin.copy()
+            self._start = _finite_vec3(pose.lin, name="move start")
 
         new_pos = self._start + (self.target - self._start) * t
-        pose = self.transform.local_pose()
+        if not new_pos.is_finite():
+            raise ValueError("move interpolation produced a non-finite position")
         pose.lin = new_pos
         self.transform.relocate(pose)
 
@@ -160,49 +185,23 @@ class RotateTween(Tween):
     def __init__(
         self,
         transform: "GeneralTransform3",
-        target: np.ndarray,
+        target: QuatValue,
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
     ):
         super().__init__(duration, ease, delay)
         self.transform = transform
-        self.target = np.asarray(target, dtype=np.float32)
-        self._start: np.ndarray | None = None
+        self.target = _normalized_quat(target, name="rotation target")
+        self._start: Quat | None = None
 
     def _apply(self, t: float) -> None:
-        if self._start is None:
-            self._start = self.transform.local_pose().ang.copy()
-
-        new_rot = self._slerp(self._start, self.target, t)
         pose = self.transform.local_pose()
-        pose.ang = new_rot
+        if self._start is None:
+            self._start = _normalized_quat(pose.ang, name="rotation start")
+
+        pose.ang = Quat.slerp(self._start, self.target, t)
         self.transform.relocate(pose)
-
-    @staticmethod
-    def _slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
-        """Spherical linear interpolation between quaternions."""
-        # Ensure shortest path
-        dot = float(np.dot(q0, q1))
-        if dot < 0:
-            q1 = -q1
-            dot = -dot
-
-        # If very close, use linear interpolation
-        if dot > 0.9995:
-            result = q0 + t * (q1 - q0)
-            return result / np.linalg.norm(result)
-
-        theta_0 = np.arccos(dot)
-        theta = theta_0 * t
-        sin_theta = np.sin(theta)
-        sin_theta_0 = np.sin(theta_0)
-
-        s0 = np.cos(theta) - dot * sin_theta / sin_theta_0
-        s1 = sin_theta / sin_theta_0
-
-        result = s0 * q0 + s1 * q1
-        return result / np.linalg.norm(result)
 
 
 class ScaleTween(Tween):
@@ -211,24 +210,30 @@ class ScaleTween(Tween):
     def __init__(
         self,
         transform: "GeneralTransform3",
-        target: np.ndarray | float,
+        target: Vec3Value | float,
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
     ):
         super().__init__(duration, ease, delay)
         self.transform = transform
-        if isinstance(target, (int, float)):
-            self.target = np.array([target, target, target], dtype=np.float32)
+        if isinstance(target, Real):
+            uniform_scale = float(target)
+            self.target = _finite_vec3(
+                Vec3(uniform_scale, uniform_scale, uniform_scale),
+                name="scale target",
+            )
         else:
-            self.target = np.asarray(target, dtype=np.float32)
-        self._start: np.ndarray | None = None
+            self.target = _finite_vec3(target, name="scale target")
+        self._start: Vec3 | None = None
 
     def _apply(self, t: float) -> None:
+        pose = self.transform.local_pose()
         if self._start is None:
-            self._start = self.transform.local_pose().scale.copy()
+            self._start = _finite_vec3(pose.scale, name="scale start")
 
         new_scale = self._start + (self.target - self._start) * t
-        pose = self.transform.local_pose()
+        if not new_scale.is_finite():
+            raise ValueError("scale interpolation produced a non-finite scale")
         pose.scale = new_scale
         self.transform.relocate(pose)

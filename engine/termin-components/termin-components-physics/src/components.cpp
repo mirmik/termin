@@ -23,8 +23,13 @@ namespace termin {
         bool poses_near(const Pose3& lhs, const Pose3& rhs) {
             constexpr double translation_tolerance = 1.0e-8;
             constexpr double orientation_tolerance = 1.0e-10;
-            const double dot =
-                lhs.ang.x * rhs.ang.x + lhs.ang.y * rhs.ang.y + lhs.ang.z * rhs.ang.z + lhs.ang.w * rhs.ang.w;
+            Quat lhs_rotation;
+            Quat rhs_rotation;
+            if (!lhs.ang.try_normalized(lhs_rotation, 1.0e-12) ||
+                !rhs.ang.try_normalized(rhs_rotation, 1.0e-12)) {
+                return false;
+            }
+            const double dot = lhs_rotation.dot(rhs_rotation);
             return (lhs.lin - rhs.lin).norm() <= translation_tolerance && 1.0 - std::abs(dot) <= orientation_tolerance;
         }
 

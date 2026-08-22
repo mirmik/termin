@@ -72,6 +72,24 @@ TC_API tc_keyframe_vec3* tc_animation_channel_alloc_translation(tc_animation_cha
 TC_API tc_keyframe_quat* tc_animation_channel_alloc_rotation(tc_animation_channel* ch, size_t count);
 TC_API tc_keyframe_scalar* tc_animation_channel_alloc_scale(tc_animation_channel* ch, size_t count);
 
+typedef struct tc_animation_channel_desc {
+    const char* target_name;
+    const tc_keyframe_vec3* translation_keys;
+    size_t translation_count;
+    const tc_keyframe_quat* rotation_keys;
+    size_t rotation_count;
+    const tc_keyframe_scalar* scale_keys;
+    size_t scale_count;
+} tc_animation_channel_desc;
+
+// Atomically replace legacy channels with a deep copy of descriptors. Existing
+// channels and bulk tracks remain intact when validation or allocation fails.
+// A successful replacement clears bulk tracks so one clip has one authoritative
+// payload model.
+TC_API bool tc_animation_replace_channels(tc_animation* anim,
+                                          const tc_animation_channel_desc* channels,
+                                          size_t count);
+
 // Atomically replace all bulk tracks. The old channels/tracks remain intact if
 // validation or allocation fails. A successful replacement clears legacy
 // channels so one clip has one authoritative payload model.

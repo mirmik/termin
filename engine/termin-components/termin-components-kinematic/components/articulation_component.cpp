@@ -35,9 +35,8 @@ namespace termin {
 
         Pose3 unit_zero_pose(const KinematicUnitComponent& unit) {
             return Pose3{
-                Quat{unit.origin_rotation.x, unit.origin_rotation.y, unit.origin_rotation.z, unit.origin_rotation.w}
-                    .normalized(),
-                Vec3{unit.origin_position.x, unit.origin_position.y, unit.origin_position.z},
+                unit.origin_rotation.normalized(),
+                unit.origin_position,
             };
         }
 

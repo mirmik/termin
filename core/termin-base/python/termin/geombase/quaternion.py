@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from ._geom_native import Quat, Vec3, slerp
+from ._geom_native import Quat, Vec3
 
 
 def _quat(value) -> Quat:
@@ -37,7 +37,7 @@ def qrot(q, v) -> Vec3:
 
 def qslerp(q1, q2, t: float) -> Quat:
     """Spherical linear interpolation between two quaternions."""
-    return slerp(_quat(q1), _quat(q2), t)
+    return Quat.slerp(_quat(q1), _quat(q2), t)
 
 
 def deg2rad(deg):

@@ -66,7 +66,7 @@ int main(void) {
     GUARD_C_CHECK(fabs(xy_dot) > 1.0e-3);
 
     tc_affine3d reflection = tc_affine3d_mul(tc_affine3d_translation(7.0, -5.0, 3.0),
-                                             tc_affine3d_mul(tc_affine3d_rotation(tc_quat_from_euler(0.2, -0.4, 0.7)),
+                                             tc_affine3d_mul(tc_affine3d_rotation(tc_quat_from_euler(TC_VEC3(0.2, -0.4, 0.7))),
                                                              tc_affine3d_scaling(-2.0, 0.75, 1.5)));
     tc_affine3d inverse = tc_affine3d_identity();
     GUARD_C_CHECK(tc_affine3d_try_inverse(reflection, 1.0e-12, &inverse));

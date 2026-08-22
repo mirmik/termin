@@ -9,6 +9,7 @@ extern "C" {
 #include "resources/tc_animation_registry.h"
 }
 
+#include <cmath>
 #include <string>
 #include <tcbase/tc_log.hpp>
 #include <tcbase/tc_string.h>
@@ -169,10 +170,19 @@ namespace termin {
             }
 
             // Set properties
-            void set_tps(double value) {
-                if (tc_animation* a = get()) {
-                    a->tps = value;
+            bool set_tps(double value) {
+                tc_animation* a = get();
+                if (!a) {
+                    tc::Log::error("TcAnimationClip::set_tps: animation clip is invalid");
+                    return false;
                 }
+                if (!std::isfinite(value) || value <= 0.0) {
+                    tc::Log::error("TcAnimationClip::set_tps: ticks per second must be finite and positive");
+                    return false;
+                }
+                a->tps = value;
+                tc_animation_recompute_duration(a);
+                return true;
             }
 
             void set_loop(bool value) {
@@ -208,10 +218,14 @@ namespace termin {
                 if (!a || !out_samples || a->channel_count == 0) {
                     return 0;
                 }
-
-                size_t count = a->channel_count < max_count ? a->channel_count : max_count;
+                if (max_count < a->channel_count) {
+                    tc::Log::error("TcAnimationClip::sample_into: output capacity=%zu is smaller than channel_count=%zu",
+                                   max_count,
+                                   a->channel_count);
+                    return 0;
+                }
                 tc_animation_sample(a, t_seconds, out_samples);
-                return count;
+                return a->channel_count;
             }
 
             // Serialize for kind registry (returns tc_value)

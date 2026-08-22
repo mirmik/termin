@@ -36,9 +36,8 @@ namespace termin {
         }
 
         bool joint_zero_pose(const KinematicUnitComponent& joint, Pose3& result) {
-            const Quat rotation{
-                joint.origin_rotation.x, joint.origin_rotation.y, joint.origin_rotation.z, joint.origin_rotation.w};
-            const Vec3 position{joint.origin_position.x, joint.origin_position.y, joint.origin_position.z};
+            const Quat rotation = joint.origin_rotation;
+            const Vec3 position = joint.origin_position;
             if (!rotation.is_finite() || rotation.norm() <= rigid_tolerance || !position.is_finite()) {
                 return false;
             }
