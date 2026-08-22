@@ -30,6 +30,10 @@ TC_C_STATIC_INLINE tc_vec3f tc_vec3f_zero(void) {
     return TC_VEC3F(0.0f, 0.0f, 0.0f);
 }
 
+TC_C_STATIC_INLINE tc_vec3f tc_vec3f_one(void) {
+    return TC_VEC3F(1.0f, 1.0f, 1.0f);
+}
+
 TC_C_STATIC_INLINE tc_vec3f tc_vec3f_unit_x(void) {
     return TC_VEC3F(1.0f, 0.0f, 0.0f);
 }
@@ -123,7 +127,13 @@ TC_C_STATIC_INLINE bool tc_vec3f_try_normalized(tc_vec3f v, float epsilon, tc_ve
         epsilon < 0.0f || length <= epsilon) {
         return false;
     }
-    *out_normalized = tc_vec3f_scale(v, 1.0f / length);
+    // Component-wise division avoids a subnormal reciprocal that FTZ/DAZ modes
+    // may flush to zero for large finite vectors.
+    tc_vec3f normalized = TC_VEC3F(v.x / length, v.y / length, v.z / length);
+    if (!tc_vec3f_is_finite(normalized)) {
+        return false;
+    }
+    *out_normalized = normalized;
     return true;
 }
 

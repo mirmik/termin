@@ -1,7 +1,9 @@
 #include <geom/tc_affine2.h>
+#include <geom/tc_vec2.h>
 
 #include "guard_c.h"
 
+#include <float.h>
 #include <math.h>
 #include <stddef.h>
 
@@ -28,6 +30,12 @@ int main(void) {
     GUARD_C_CHECK(tc_vec2f_try_normalized(TC_VEC2F(3.0f, 4.0f), 1.0e-6f, &checked_normalized));
     GUARD_C_CHECK(nearf(checked_normalized.x, 0.6f, 1.0e-6f));
     GUARD_C_CHECK(nearf(checked_normalized.y, 0.8f, 1.0e-6f));
+    GUARD_C_CHECK(tc_vec2f_try_normalized(TC_VEC2F(FLT_MAX, 0.0f), 0.0f, &checked_normalized));
+    GUARD_C_CHECK(checked_normalized.x == 1.0f && checked_normalized.y == 0.0f);
+
+    tc_vec2 checked_normalized_double = TC_VEC2(9.0, 8.0);
+    GUARD_C_CHECK(tc_vec2_try_normalized(TC_VEC2(DBL_MAX, 0.0), 0.0, &checked_normalized_double));
+    GUARD_C_CHECK(checked_normalized_double.x == 1.0 && checked_normalized_double.y == 0.0);
     GUARD_C_CHECK(tc_vec2f_mul(TC_VEC2F(2.0f, 3.0f), TC_VEC2F(4.0f, 5.0f)).y == 15.0f);
 
     tc_affine2f parent = tc_affine2f_mul(tc_affine2f_translation(5.0f, -3.0f), tc_affine2f_scaling(2.0f, 0.5f));

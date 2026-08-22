@@ -117,7 +117,13 @@ TC_C_STATIC_INLINE bool tc_vec2_try_normalized(tc_vec2 v, double epsilon, tc_vec
         length <= epsilon) {
         return false;
     }
-    *out_normalized = tc_vec2_scale(v, 1.0 / length);
+    // Component-wise division avoids a subnormal reciprocal that FTZ/DAZ modes
+    // may flush to zero for large finite vectors.
+    tc_vec2 normalized = TC_VEC2(v.x / length, v.y / length);
+    if (!tc_vec2_is_finite(normalized)) {
+        return false;
+    }
+    *out_normalized = normalized;
     return true;
 }
 
