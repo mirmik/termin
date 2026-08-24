@@ -34,6 +34,18 @@ elseif(TERMIN_PLATFORM_ANDROID)
         "Build tests that require a windowing system" FORCE)
 endif()
 
+# The repository-level backend switches are the source of truth for the
+# composed Graphics target graph.  termin-graphics also exposes package-local
+# cache options, so they must be refreshed on every configure: CMake option()
+# only uses its default for a new cache and would otherwise retain a backend
+# enabled by an earlier build in the same build directory.
+set(TGFX2_ENABLE_OPENGL "${TERMIN_ENABLE_OPENGL}" CACHE BOOL
+    "Enable OpenGL backend for tgfx2" FORCE)
+set(TGFX2_ENABLE_WEBGL2 "${TERMIN_ENABLE_WEBGL2}" CACHE BOOL
+    "Enable WebGL 2 through the shared constrained-GL backend" FORCE)
+set(TGFX2_ENABLE_VULKAN "${TERMIN_ENABLE_VULKAN}" CACHE BOOL
+    "Enable Vulkan backend for tgfx2" FORCE)
+
 if(TERMIN_SDK_PROFILE STREQUAL "graphics")
     set(TERMIN_VISUAL_SCENE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(TERMIN_GUI_NATIVE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

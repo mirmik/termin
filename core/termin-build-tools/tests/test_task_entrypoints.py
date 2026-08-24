@@ -120,6 +120,21 @@ def test_sdl_capability_has_no_stale_derived_cache_toggle() -> None:
     assert "option(TERMIN_GUI_NATIVE_BUILD_WINDOW_INTEGRATION" not in gui_native
 
 
+def test_graphics_backend_cache_follows_repository_switches() -> None:
+    """Do not retain tgfx2 backends from an earlier configure."""
+    graphics_composition = (
+        REPO_ROOT / "graphics" / "CMakeLists.txt"
+    ).read_text(encoding="utf-8")
+
+    for backend in ("OPENGL", "WEBGL2", "VULKAN"):
+        assert re.search(
+            rf"set\(TGFX2_ENABLE_{backend}\s+"
+            rf'"\$\{{TERMIN_ENABLE_{backend}\}}"\s+CACHE\s+BOOL\s+'
+            rf'"[^"]+"\s+FORCE\)',
+            graphics_composition,
+        )
+
+
 def test_web_toolchain_uses_a_shared_versioned_cache() -> None:
     setup = (REPO_ROOT / "scripts/build/setup-web-toolchain.sh").read_text(
         encoding="utf-8"
