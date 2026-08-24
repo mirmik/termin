@@ -82,6 +82,7 @@ from .sdk_profiles import (
     select_python_packages,
     write_profiled_sdk_product,
 )
+from .slang_toolchain import SlangToolchainError, prepare_slang_toolchain
 from .wheelhouse import (
     WheelhouseError,
     supported_wheel_tags,
@@ -1807,6 +1808,18 @@ def _run_sdk_build_impl(
             return 1
     build_env["PYTHON_BIN"] = str(build_python)
     build_env["PYTHON_EXECUTABLE"] = str(build_python)
+    if dry_run:
+        print("+ prepare pinned Slang host toolchain")
+    else:
+        try:
+            slangc = prepare_slang_toolchain(repo_root, build_python)
+        except (OSError, SlangToolchainError) as error:
+            print(
+                f"ERROR: failed to prepare pinned Slang toolchain: {error}",
+                file=sys.stderr,
+            )
+            return 1
+        build_env["TERMIN_SLANGC"] = str(slangc)
 
     print("")
     print("========================================")

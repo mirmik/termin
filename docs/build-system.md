@@ -52,6 +52,14 @@ platform-рецептов для проверки или будущей комп
 фиксировать ABI, target system, architecture, Android API и toolchain.
 
 Сборка через `task build --` проходит в четыре стадии:
+
+Перед первой стадией оркестратор закреплённым build-Python устанавливает или
+проверяет закреплённый `slangc` из `build-system/slang-toolchain-lock.json` в
+`build/toolchains` и передаёт его стадиям через `TERMIN_SLANGC`. Поэтому чистая
+сборка SDK не требует заранее собранного `sdk/bin/termin_python` или вручную
+установленного Slang compiler. Повторная сборка использует проверенный локальный
+toolchain; при первой установке требуется доступ к архиву из lock-файла.
+
 1. **C/C++ библиотеки + Python bindings** — shared libraries, заголовки, CMake config, nanobind-модули и Python-исходники
 2. **C# bindings** — на Windows включены по умолчанию, на Linux включаются флагом `--csharp` и требуют SWIG и `dotnet`; Linux-сборка содержит только `Termin.Native`, без WPF
 3. **Bundled Python site-packages** — установка Python-пакетов в bundled runtime SDK

@@ -30,6 +30,7 @@ from .sdk import (
     prepare_pinned_python_build_environment,
 )
 from .sdk_profiles import load_sdk_profiles, select_python_packages
+from .slang_toolchain import SlangToolchainError, prepare_slang_toolchain
 from .wheelhouse import inspect_wheel
 
 
@@ -229,29 +230,6 @@ def build_resource_wheel(
     return output
 
 
-def _slangc_path(repo_root: Path, build_python: Path) -> Path:
-    result = subprocess.run(
-        [
-            str(build_python),
-            str(repo_root / "scripts" / "install_slang_toolchain.py"),
-            "--install-root",
-            str(repo_root / "build" / "toolchains"),
-            "--no-configure",
-            "--print-path",
-        ],
-        cwd=repo_root,
-        text=True,
-        stdout=subprocess.PIPE,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise GraphicsPythonProductError("failed to prepare the pinned Slang toolchain")
-    path = Path(result.stdout.strip())
-    if not path.is_file():
-        raise GraphicsPythonProductError(f"Slang installer returned a missing path: {path}")
-    return path
-
-
 def _publish(source: Path, destination: Path, product_data: dict[str, object]) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.parent / f".{destination.name}.new-{uuid.uuid4().hex}"
@@ -438,7 +416,10 @@ def build_product(repo_root: Path, build_args: list[str]) -> int:
     staging_dir = product_root / "cmake-install-staging"
     wheel_dir = product_root / "wheels"
     build_python = prepare_pinned_python_build_environment(repo_root)
-    slangc = _slangc_path(repo_root, build_python)
+    try:
+        slangc = prepare_slang_toolchain(repo_root, build_python)
+    except SlangToolchainError as error:
+        raise GraphicsPythonProductError(str(error)) from error
     env = os.environ.copy()
     env.update(
         {

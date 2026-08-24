@@ -54,6 +54,11 @@ def _repository_profiles_for_mechanism_tests(monkeypatch):
             else REPO_ROOT
         ),
     )
+    monkeypatch.setattr(
+        sdk,
+        "prepare_slang_toolchain",
+        lambda repo_root, _python: repo_root / "build" / "toolchains" / "slangc",
+    )
 
 
 def _write_test_distribution(
@@ -216,6 +221,9 @@ def test_sdk_build_propagates_one_absolute_python_to_child_stages(
     child_env = captured[0][2]
     assert child_env["PYTHON_BIN"] == str(interpreter)
     assert child_env["PYTHON_EXECUTABLE"] == str(interpreter)
+    assert child_env["TERMIN_SLANGC"] == str(
+        tmp_path / "build" / "toolchains" / "slangc"
+    )
 
 
 def test_core_sdk_build_uses_isolated_prefix_and_build_directory(
