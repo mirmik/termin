@@ -52,7 +52,18 @@ if ($dryRun) {
 $sdkPrefix = if ($env:SDK_PREFIX) {
     $env:SDK_PREFIX
 } else {
-    Join-Path $ScriptDir "sdk"
+    $profilesPath = Join-Path $ScriptDir "build-system\sdk-profiles.json"
+    $profiles = Get-Content -LiteralPath $profilesPath -Raw | ConvertFrom-Json
+    $profile = $profiles.profiles |
+        Where-Object { $_.id -eq $sdkProfile } |
+        Select-Object -First 1
+    if (-not $profile) {
+        throw "SDK profile is missing from ${profilesPath}: $sdkProfile"
+    }
+    if ([string]::IsNullOrWhiteSpace($profile.sdk_prefix)) {
+        throw "SDK profile has no sdk_prefix in ${profilesPath}: $sdkProfile"
+    }
+    Join-Path $ScriptDir $profile.sdk_prefix
 }
 Enable-TerminSdkInheritedPermissions -SdkPrefix $sdkPrefix
 

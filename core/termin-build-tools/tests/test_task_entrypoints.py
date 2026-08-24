@@ -35,6 +35,17 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
     assert "TERMIN_USE_BUNDLED_SDL2" in bindings
 
 
+def test_windows_sdk_wrapper_resolves_profiled_output_from_canonical_manifest() -> None:
+    windows_script = (REPO_ROOT / "scripts" / "build" / "sdk.ps1").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"build-system\\sdk-profiles.json"' in windows_script
+    assert "Where-Object { $_.id -eq $sdkProfile }" in windows_script
+    assert "Join-Path $ScriptDir $profile.sdk_prefix" in windows_script
+    assert 'Join-Path $ScriptDir "sdk"' not in windows_script
+
+
 def test_root_has_no_platform_launcher_scripts() -> None:
     root_launchers = [
         path.name
