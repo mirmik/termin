@@ -19,7 +19,9 @@ if(NOT DEFINED TERMIN_ROOT)
 endif()
 # Standalone build mode (C++ app with embedded Python)
 option(BUILD_STANDALONE "Build as standalone C++ application" OFF)
-if(BUILD_EDITOR_MINIMAL)
+option(TERMIN_BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)
+option(TERMIN_BUILD_LAUNCHER "Build termin_launcher (UIRenderer test, no Qt)" OFF)
+if(TERMIN_BUILD_EDITOR_MINIMAL)
     set(BUILD_STANDALONE ON)
 endif()
 
@@ -45,7 +47,7 @@ else()
     set(OPTIMIZE_FLAGS -O3)
 endif()
 
-if(TERMIN_BUILD_PYTHON OR BUILD_EDITOR_MINIMAL OR BUILD_LAUNCHER)
+if(TERMIN_BUILD_PYTHON OR TERMIN_BUILD_EDITOR_MINIMAL OR TERMIN_BUILD_LAUNCHER)
     termin_require_canonical_python(Interpreter Development)
 endif()
 
@@ -231,9 +233,7 @@ if(TERMIN_BUILD_PYTHON)
 endif()
 
 # ============== Editor Executable ==============
-option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" ${TERMIN_BUILD_EDITOR_MINIMAL})
-
-if(BUILD_EDITOR_MINIMAL)
+if(TERMIN_BUILD_EDITOR_MINIMAL)
     if(NOT TARGET termin_python_host::termin_python_host)
         find_package(termin_python_host REQUIRED)
     endif()
@@ -271,9 +271,7 @@ if(BUILD_EDITOR_MINIMAL)
 endif()
 
 # ============== Launcher Test Executable ==============
-option(BUILD_LAUNCHER "Build termin_launcher (UIRenderer test, no Qt)" ${TERMIN_BUILD_LAUNCHER})
-
-if(BUILD_LAUNCHER)
+if(TERMIN_BUILD_LAUNCHER)
     if(NOT TARGET termin_python_host::termin_python_host)
         find_package(termin_python_host REQUIRED)
     endif()

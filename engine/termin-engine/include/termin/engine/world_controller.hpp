@@ -19,7 +19,7 @@ namespace termin {
 
     // Safe value handle to the EngineCore-owned per-run context. Copies retain
     // only the invalidatable control block, never the RuntimeSession itself.
-    class WorldContext {
+    class TERMIN_ENGINE_API WorldContext {
         tc_world_context* _native = nullptr;
         std::uint64_t _generation = 0;
 
