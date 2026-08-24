@@ -70,6 +70,17 @@ namespace termin {
 #endif
         }
 
+        void get_sdl_window_size_in_pixels(SDL_Window* window, int* width, int* height) {
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+            SDL_GetWindowSizeInPixels(window, width, height);
+#else
+            // SDL did not expose a backend-neutral pixel-size query before
+            // 2.26. OpenGL and Vulkan use their drawable-size APIs instead;
+            // this keeps older SDL releases usable for the remaining path.
+            SDL_GetWindowSize(window, width, height);
+#endif
+        }
+
         uint32_t event_window_id(const SDL_Event& ev) {
             switch (ev.type) {
             case SDL_WINDOWEVENT:
@@ -614,9 +625,9 @@ namespace termin {
 
     SDLBackendWindow::SDLBackendWindow(SDLWindowSystem& window_system,
                                        tgfx::GraphicsHost& graphics,
-                                       const std::string& title,
-                                       int width,
-                                       int height,
+                                       [[maybe_unused]] const std::string& title,
+                                       [[maybe_unused]] int width,
+                                       [[maybe_unused]] int height,
                                        tgfx::PresentationMode presentation_mode)
         : impl_(std::make_unique<Impl>()) {
         impl_->window_system = &window_system;
@@ -686,7 +697,7 @@ namespace termin {
                 }
 
                 int fb_w = 0, fb_h = 0;
-                SDL_GetWindowSizeInPixels(window_, &fb_w, &fb_h);
+                get_sdl_window_size_in_pixels(window_, &fb_w, &fb_h);
                 if (fb_w <= 0 || fb_h <= 0) {
                     fb_w = width;
                     fb_h = height;
@@ -938,7 +949,7 @@ namespace termin {
         }
 #endif
         else {
-            SDL_GetWindowSizeInPixels(window_, &w, &h);
+            get_sdl_window_size_in_pixels(window_, &w, &h);
         }
         return {w, h};
     }
@@ -1002,6 +1013,7 @@ namespace termin {
                     out_event.type = WindowEventType::FocusLost;
                     return true;
                 }
+#if SDL_VERSION_ATLEAST(2, 0, 18)
                 if (ev.window.event == SDL_WINDOWEVENT_DISPLAY_CHANGED) {
                     out_event.type = WindowEventType::DisplayScaleChanged;
                     const auto [logical_width, logical_height] = window_size();
@@ -1013,6 +1025,7 @@ namespace termin {
                     out_event.resize.content_scale = content_scale();
                     return true;
                 }
+#endif
                 if (ev.window.event != SDL_WINDOWEVENT_RESIZED && ev.window.event != SDL_WINDOWEVENT_SIZE_CHANGED) {
                     continue;
                 }
@@ -1156,7 +1169,7 @@ namespace termin {
             tc_log_error("[BackendWindow] output transform failed");
             return;
         }
-        const tgfx::TextureHandle presentation_texture = impl_->presentation_texture;
+        [[maybe_unused]] const tgfx::TextureHandle presentation_texture = impl_->presentation_texture;
 
         if (impl_->backend == tgfx::BackendType::OpenGL) {
 #ifdef TGFX2_HAS_OPENGL
