@@ -61,6 +61,7 @@ namespace {
         bool enabled = false;
         std::shared_ptr<const void> resource;
         std::shared_ptr<const termin::visual::BaseColorTextureData3D> base_color_texture;
+        termin::visual::FlatLighting3D flat_lighting;
     };
 
     class PacketSink final : public termin::visual::ScenePaintSink3D {
@@ -86,6 +87,7 @@ namespace {
                     *static_cast<const termin::visual::StaticMeshDrawPacket3D*>(submission.packet.payload);
                 record.resource = packet.mesh;
                 record.base_color_texture = packet.base_color_texture;
+                record.flat_lighting = packet.flat_lighting;
             } else if (record.protocol == termin::visual::PointCloudDrawProtocol3D) {
                 assert(submission.packet.payload_size == sizeof(termin::visual::PointCloudDrawPacket3D));
                 const auto& packet =
@@ -194,6 +196,11 @@ int main() {
     hit = termin::visual::hit_test(scene, ray);
     assert(hit && tc_visual_item3d_handle_eq(hit->item, *mesh_handle));
     assert(close(hit->distance, 5.0) && hit->part == 1);
+    assert(mesh_ptr->hit_test_enabled());
+    mesh_ptr->set_hit_test_enabled(false);
+    hit = termin::visual::hit_test(scene, ray);
+    assert(hit && tc_visual_item3d_handle_eq(hit->item, *cloud_handle));
+    mesh_ptr->set_hit_test_enabled(true);
     mesh_ptr->set_enabled(false);
     hit = termin::visual::hit_test(scene, ray);
     assert(hit && tc_visual_item3d_handle_eq(hit->item, *cloud_handle));
@@ -219,6 +226,7 @@ int main() {
     assert(close(sink.published[0].world_from_local.translation.x, 3.0));
     assert(!sink.published[0].enabled);
     assert(sink.published[1].protocol == termin::visual::StaticMeshDrawProtocol3D);
+    assert(!sink.published[1].flat_lighting.enabled);
     assert(sink.published[2].protocol == termin::visual::PointCloudDrawProtocol3D);
 
     auto texture = std::make_shared<termin::visual::BaseColorTextureData3D>();
@@ -226,6 +234,30 @@ int main() {
     texture->height = 1;
     texture->rgba8 = {255, 0, 0, 255, 0, 255, 0, 255};
     std::weak_ptr<const termin::visual::BaseColorTextureData3D> texture_lifetime = texture;
+    mesh_ptr->set_flat_lighting({0.0f, 3.0f, 4.0f}, 0.28f, 0.72f);
+    assert(mesh_ptr->flat_lighting().enabled);
+    assert(std::abs(mesh_ptr->flat_lighting().direction.y - 0.6f) < 1.0e-6f);
+    assert(std::abs(mesh_ptr->flat_lighting().direction.z - 0.8f) < 1.0e-6f);
+    assert(termin::visual::paint(scene, view, sink));
+    assert(sink.published[1].flat_lighting.enabled);
+    assert(std::abs(sink.published[1].flat_lighting.ambient - 0.28f) < 1.0e-6f);
+
+    bool rejected_lighting = false;
+    try {
+        mesh_ptr->set_flat_lighting({0.0f, 0.0f, 0.0f});
+    } catch (const std::invalid_argument&) {
+        rejected_lighting = true;
+    }
+    assert(rejected_lighting && mesh_ptr->flat_lighting().enabled);
+
+    bool rejected_texture = false;
+    try {
+        mesh_ptr->set_base_color_texture(texture);
+    } catch (const std::invalid_argument&) {
+        rejected_texture = true;
+    }
+    assert(rejected_texture && !mesh_ptr->base_color_texture());
+    mesh_ptr->clear_flat_lighting();
     mesh_ptr->set_base_color_texture(texture);
     texture.reset();
     assert(!texture_lifetime.expired());

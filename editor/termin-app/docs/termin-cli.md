@@ -16,6 +16,7 @@ termin profile PROFILE [--project path/to/project]
 termin build PROFILE [--project path/to/project] [--dry-run]
 termin run PROFILE [--project path/to/project] [run options]
 termin play [SCENE] [--project path/to/project] [play options]
+termin show MODEL.glb [--width PX] [--height PX] [--title TEXT] [--backend NAME]
 termin stdlib [sync] [--project path/to/project] [--clean] [--dry-run]
 termin runner ...
 termin builder ...
@@ -74,6 +75,31 @@ termin_runner run PROFILE
 
 ```bash
 termin_runner play [SCENE]
+```
+
+`termin show MODEL.glb` opens a standalone model window and does not require a
+Termin project. The viewer preserves the GLB node hierarchy, presents static
+mesh geometry with base-color factors and base-color textures, converts glTF's
+Y-up coordinates to Termin's Z-up convention, and frames the complete model
+automatically. Meshes without an assigned GLB material use a cyan, flat-lit
+preview material so their form remains readable.
+
+- drag with the left mouse button to orbit;
+- drag with the middle or right mouse button to pan;
+- scroll the wheel up to zoom in and down to zoom out.
+
+The current command is a static asset preview: skins are shown in their bind
+pose and animations are not played. It intentionally uses the lightweight
+retained graphics path rather than the project/player PBR scene pipeline.
+`--frames N` closes after a finite number of rendered frames and is useful for
+SDK smoke checks. `--backend vulkan|opengl|d3d11` overrides the normal platform
+backend selection when a specific graphics path needs to be tested.
+
+The command delegates to the dedicated model-viewer package:
+
+```bash
+termin_show MODEL.glb
+python -m termin.model_viewer MODEL.glb
 ```
 
 Packaged build commands use the standalone `termin-project-build` package

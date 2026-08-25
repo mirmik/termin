@@ -13,7 +13,7 @@
 namespace termin::visual {
 
     inline constexpr char PrimitiveDrawProtocol3D[] = "termin.visual.primitive-triangles.v1";
-    inline constexpr char StaticMeshDrawProtocol3D[] = "termin.visual.static-mesh.v1";
+    inline constexpr char StaticMeshDrawProtocol3D[] = "termin.visual.static-mesh.v2";
     inline constexpr char PointCloudDrawProtocol3D[] = "termin.visual.point-cloud.v1";
 
     struct PrimitiveVertex3D {
@@ -42,10 +42,18 @@ namespace termin::visual {
         std::vector<std::uint8_t> rgba8;
     };
 
+    struct FlatLighting3D {
+        bool enabled = false;
+        termin::Vec3f direction{0.0f, 0.0f, 1.0f};
+        float ambient = 0.28f;
+        float diffuse = 0.72f;
+    };
+
     struct StaticMeshDrawPacket3D {
         std::shared_ptr<const termin::Mesh3> mesh;
         std::shared_ptr<const BaseColorTextureData3D> base_color_texture;
         termin::LinearColor tint{1.0f, 1.0f, 1.0f, 1.0f};
+        FlatLighting3D flat_lighting{};
         bool depth_test = true;
     };
 

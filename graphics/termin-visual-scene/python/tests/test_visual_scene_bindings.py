@@ -212,6 +212,11 @@ def test_scene3d_builtins_copy_resources_and_choose_nearest_hit():
     assert hit.distance == pytest.approx(4.0)
 
     mesh.set_mesh(_triangle_mesh(5.0))
+    assert mesh.hit_test_enabled
+    mesh.hit_test_enabled = False
+    hit = scene.hit_test(_x_ray())
+    assert hit.item == cloud
+    mesh.hit_test_enabled = True
     mesh.enabled = False
     hit = scene.hit_test(_x_ray())
     assert hit.item == cloud
@@ -246,6 +251,32 @@ def test_static_mesh_base_color_texture_is_owned_and_replaceable():
     mesh.clear_base_color_texture()
     assert not mesh.has_base_color_texture
     mesh.set_mesh(_triangle_mesh())
+    tc_visual_scene3d_destroy(scene)
+
+
+def test_static_mesh_flat_lighting_is_validated_and_untextured():
+    scene = tc_visual_scene3d_create()
+    mesh = scene.create_static_mesh(_triangle_mesh(textured=True))
+
+    assert not mesh.flat_lighting_enabled
+    mesh.set_flat_lighting((0.0, 3.0, 4.0), ambient=0.28, diffuse=0.72)
+    assert mesh.flat_lighting_enabled
+    assert tuple(mesh.flat_light_direction) == pytest.approx((0.0, 0.6, 0.8))
+    assert mesh.flat_light_ambient == pytest.approx(0.28)
+    assert mesh.flat_light_diffuse == pytest.approx(0.72)
+
+    with pytest.raises(ValueError, match="finite direction"):
+        mesh.set_flat_lighting((0.0, 0.0, 0.0))
+    assert mesh.flat_lighting_enabled
+    with pytest.raises(ValueError, match="only supported for untextured"):
+        mesh.set_base_color_texture_rgba8(1, 1, bytes([255, 255, 255, 255]))
+
+    mesh.clear_flat_lighting()
+    assert not mesh.flat_lighting_enabled
+    mesh.set_base_color_texture_rgba8(1, 1, bytes([255, 255, 255, 255]))
+    with pytest.raises(ValueError, match="only supported for untextured"):
+        mesh.set_flat_lighting((0.0, 0.0, 1.0))
+
     tc_visual_scene3d_destroy(scene)
 
 

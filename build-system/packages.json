@@ -500,6 +500,10 @@
       "distribution": "termin-glb"
     },
     {
+      "path": "editor/termin-model-viewer",
+      "distribution": "termin-model-viewer"
+    },
+    {
       "path": "editor/termin-glb-adapters",
       "distribution": "termin-glb-adapters"
     },

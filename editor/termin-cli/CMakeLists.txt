@@ -38,6 +38,8 @@ target_include_directories(termin_cli_python_backend PRIVATE ${CMAKE_CURRENT_SOU
 termin_cli_add_tool(termin src/termin.cpp)
 termin_cli_add_tool(termin_init src/termin_init.cpp)
 target_link_libraries(termin_init PRIVATE termin_cli_python_backend)
+termin_cli_add_tool(termin_show src/termin_show.cpp)
+target_link_libraries(termin_show PRIVATE termin_cli_python_backend)
 termin_cli_add_tool(termin_modules_cli src/termin_modules_cli.cpp)
 target_link_libraries(termin_modules_cli PRIVATE termin_cli_python_backend)
 termin_cli_add_tool(termin_stdlib src/termin_stdlib.cpp)

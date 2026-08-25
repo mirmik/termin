@@ -1188,6 +1188,14 @@
       ]
     },
     {
+      "id": "termin-model-viewer-tests",
+      "module": "termin-model-viewer",
+      "executor": "pytest",
+      "roots": [
+        "editor/termin-model-viewer/tests"
+      ]
+    },
+    {
       "id": "termin-collision-tests",
       "module": "termin-collision",
       "executor": "pytest",

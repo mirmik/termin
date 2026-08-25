@@ -173,6 +173,19 @@ def test_load_gltf_with_external_bin_and_texture(tmp_path):
     assert material.emissive_factor.tolist() == pytest.approx([0.1, 0.2, 0.3])
 
 
+def test_load_gltf_primitive_without_material_uses_default_material(tmp_path):
+    gltf_path = _write_triangle_gltf(tmp_path)
+    document = json.loads(gltf_path.read_text(encoding="utf-8"))
+    document["meshes"][0]["primitives"][0].pop("material")
+    gltf_path.write_text(json.dumps(document), encoding="utf-8")
+
+    scene_data = load_glb_file(gltf_path)
+
+    assert len(scene_data.materials) == 1
+    assert scene_data.meshes[0].material_index == -1
+    assert scene_data.meshes[0].submeshes[0].material_index == -1
+
+
 def test_load_gltf_webp_texture_extension_from_buffer_view(tmp_path):
     image_bytes = b"RIFF\x0c\x00\x00\x00WEBPVP8 "
     bin_path = tmp_path / "texture.bin"

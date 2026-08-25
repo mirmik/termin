@@ -134,6 +134,30 @@ int main() {
             return 1;
         }
 
+        static_mesh_ptr->clear_base_color_texture();
+        static_mesh_ptr->set_tint({0.34f, 0.72f, 0.95f, 1.0f});
+        static_mesh_ptr->set_flat_lighting({0.0f, 0.0f, 1.0f}, 0.28f, 0.72f);
+        view->invalidate_scene();
+        if (!composition.render_frame()) {
+            std::fprintf(stderr, "SceneView3D did not render a flat-lit static mesh\n");
+            return 1;
+        }
+        const std::vector<float> lit = composition.read_frame_rgba_float();
+        const float lit_blue = lit[(static_cast<std::size_t>(32) * 64 + 32) * 4 + 2];
+
+        static_mesh_ptr->set_flat_lighting({0.0f, 0.0f, -1.0f}, 0.28f, 0.72f);
+        view->invalidate_scene();
+        if (!composition.render_frame()) {
+            std::fprintf(stderr, "SceneView3D did not update flat-light direction\n");
+            return 1;
+        }
+        const std::vector<float> shadowed = composition.read_frame_rgba_float();
+        const float shadowed_blue = shadowed[(static_cast<std::size_t>(32) * 64 + 32) * 4 + 2];
+        if (lit_blue <= shadowed_blue + 0.3f) {
+            std::fprintf(stderr, "SceneView3D flat lighting did not distinguish lit and shadowed faces\n");
+            return 1;
+        }
+
         composition.push_pointer(tc_ui_pointer_event{TC_UI_POINTER_DOWN, 32.0f, 32.0f, 0, 1, 0});
         composition.push_pointer(tc_ui_pointer_event{TC_UI_POINTER_UP, 32.0f, 32.0f, 0, 1, 0});
         if (composition.pump_input() != 2 || actions != 1) {

@@ -473,6 +473,14 @@ Source of truth: `termin-player/`.
 
 Standalone/source/headless player runtime and native `termin_player` executable. `termin-app` may consume player commands/APIs, but player code must not depend on `termin-app`.
 
+### termin-model-viewer
+
+Source of truth: `editor/termin-model-viewer/`.
+
+Projectless static GLB viewer used by `termin show`. It composes portable GLB
+data into the retained 3D graphics scene and owns the native window and orbit
+camera interaction without depending on editor or project runtime state.
+
 ### termin-cli
 
 Source of truth: `termin-cli/`.
@@ -480,7 +488,8 @@ Source of truth: `termin-cli/`.
 SDK command entrypoint layer. Owns native command wrappers such as `termin`,
 `termin_builder`, `termin_runner`, `termin_modules_cli`, and `termin_stdlib`.
 Domain behavior remains in the owning packages (`termin-project-build`,
-`termin-player`, `termin-project-modules`, `termin-stdlib`); `termin-cli`
+`termin-player`, `termin-model-viewer`, `termin-project-modules`,
+`termin-stdlib`); `termin-cli`
 only resolves profiles, configures the SDK Python environment, and dispatches
 to the owning package entrypoints.
 

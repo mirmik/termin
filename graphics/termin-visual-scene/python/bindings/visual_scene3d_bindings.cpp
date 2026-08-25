@@ -503,6 +503,38 @@ namespace termin::visual::python {
                                  require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D")
                                      .base_color_texture());
                          })
+            .def_prop_rw(
+                "hit_test_enabled",
+                [](const StaticMeshItemRef3D& self) {
+                    return require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D").hit_test_enabled();
+                },
+                [](const StaticMeshItemRef3D& self, bool value) {
+                    require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D").set_hit_test_enabled(value);
+                })
+            .def_prop_ro("flat_lighting_enabled",
+                         [](const StaticMeshItemRef3D& self) {
+                             return require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D")
+                                 .flat_lighting()
+                                 .enabled;
+                         })
+            .def_prop_ro("flat_light_direction",
+                         [](const StaticMeshItemRef3D& self) {
+                             return require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D")
+                                 .flat_lighting()
+                                 .direction;
+                         })
+            .def_prop_ro("flat_light_ambient",
+                         [](const StaticMeshItemRef3D& self) {
+                             return require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D")
+                                 .flat_lighting()
+                                 .ambient;
+                         })
+            .def_prop_ro("flat_light_diffuse",
+                         [](const StaticMeshItemRef3D& self) {
+                             return require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D")
+                                 .flat_lighting()
+                                 .diffuse;
+                         })
             .def("set_mesh",
                  [](const StaticMeshItemRef3D& self, const termin::Mesh3& mesh) {
                      require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D").set_mesh(mesh_snapshot(mesh));
@@ -515,6 +547,17 @@ namespace termin::visual::python {
                      require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D").set_tint(factor);
                  },
                  nb::arg("factor"))
+            .def("set_flat_lighting",
+                 [](const StaticMeshItemRef3D& self, nb::handle direction, float ambient, float diffuse) {
+                     require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D")
+                         .set_flat_lighting(vec3f(direction, "direction"), ambient, diffuse);
+                 },
+                 nb::arg("direction"),
+                 nb::arg("ambient") = 0.28f,
+                 nb::arg("diffuse") = 0.72f)
+            .def("clear_flat_lighting", [](const StaticMeshItemRef3D& self) {
+                require_item<StaticMeshItem3D>(self, "termin.visual.StaticMesh3D").clear_flat_lighting();
+            })
             .def("set_base_color_texture_rgba8",
                  [](const StaticMeshItemRef3D& self,
                     std::uint32_t width,

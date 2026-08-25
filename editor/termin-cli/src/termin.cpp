@@ -44,6 +44,7 @@ namespace {
                   << "  build <profile>        Run termin_builder build <profile>.\n"
                   << "  run <profile>          Run packaged build output for a profile.\n"
                   << "  play [scene]           Run project scene without building.\n"
+                  << "  show <model.glb>       Show a GLB model in an orbit-camera window.\n"
                   << "  modules [args...]      Warm up project modules and dependencies.\n"
                   << "  profiles [args...]     Run termin_builder profiles [args...].\n"
                   << "  profile <name>         Run termin_builder profile <name>.\n"
@@ -182,6 +183,8 @@ namespace {
             dispatch.args.emplace_back("play");
             std::vector<std::string> rest = tail_args(argc, argv, 2);
             dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
+        } else if (command == "show") {
+            direct("termin_show", 2);
         } else if (command == "modules") {
             direct("termin_modules_cli", 2);
         } else if (command == "profiles") {

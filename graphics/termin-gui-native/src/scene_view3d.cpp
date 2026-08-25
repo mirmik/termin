@@ -60,6 +60,29 @@ namespace termin::gui_native {
             return layout;
         }
 
+        termin::LinearColor flat_lit_color(const termin::visual::StaticMeshDrawPacket3D& packet,
+                                           const termin::Vec3& first,
+                                           const termin::Vec3& second,
+                                           const termin::Vec3& third) {
+            if (!packet.flat_lighting.enabled)
+                return packet.tint;
+            termin::Vec3 normal;
+            if (!(second - first).cross(third - first).try_normalized(normal))
+                return packet.tint;
+            const termin::Vec3 light_direction{packet.flat_lighting.direction.x,
+                                               packet.flat_lighting.direction.y,
+                                               packet.flat_lighting.direction.z};
+            const float intensity = packet.flat_lighting.ambient +
+                                    packet.flat_lighting.diffuse *
+                                        static_cast<float>(std::max(normal.dot(light_direction), 0.0));
+            return {
+                packet.tint.r * intensity,
+                packet.tint.g * intensity,
+                packet.tint.b * intensity,
+                packet.tint.a,
+            };
+        }
+
         bool finite_camera(const SceneView3DCamera& camera) {
             return termin::Mat44::from_tc_mat44(camera.view_matrix).is_finite() &&
                    termin::Mat44::from_tc_mat44(camera.projection_matrix).is_finite() &&
@@ -924,12 +947,18 @@ namespace termin::gui_native {
                         tc_log_error("[termin-gui-native] SceneView3D skipped an invalid mesh triangle");
                         continue;
                     }
-                    for (uint32_t vertex_index : indices) {
-                        const auto& vertex = mesh.vertices[vertex_index];
-                        append_linear_vertex(vertices,
-                                             draw.world_from_local.transform_point({vertex.x, vertex.y, vertex.z}),
-                                             draw.mesh.tint);
-                    }
+                    const auto& first_vertex = mesh.vertices[indices[0]];
+                    const auto& second_vertex = mesh.vertices[indices[1]];
+                    const auto& third_vertex = mesh.vertices[indices[2]];
+                    const std::array<termin::Vec3, 3> world_vertices = {
+                        draw.world_from_local.transform_point({first_vertex.x, first_vertex.y, first_vertex.z}),
+                        draw.world_from_local.transform_point({second_vertex.x, second_vertex.y, second_vertex.z}),
+                        draw.world_from_local.transform_point({third_vertex.x, third_vertex.y, third_vertex.z}),
+                    };
+                    const auto color = flat_lit_color(
+                        draw.mesh, world_vertices[0], world_vertices[1], world_vertices[2]);
+                    for (const auto& vertex : world_vertices)
+                        append_linear_vertex(vertices, vertex, color);
                 }
                 state.immediate.flush_depth(&context, view_matrix, projection_matrix, true);
                 state.immediate.flush(&context, view_matrix, projection_matrix, false, true);

@@ -2,6 +2,7 @@
 
 #include "item_geometry3d_internal.hpp"
 
+#include <cmath>
 #include <stdexcept>
 
 #include <tcbase/tc_log.hpp>
@@ -73,11 +74,35 @@ namespace termin::visual {
 
     void StaticMeshItem3D::set_base_color_texture(std::shared_ptr<const BaseColorTextureData3D> texture) {
         require_texture(texture);
+        if (flat_lighting_.enabled) {
+            tc::Log::error("StaticMeshItem3D rejected a base-color texture while flat lighting is enabled");
+            throw std::invalid_argument("StaticMeshItem3D flat lighting is only supported for untextured meshes");
+        }
         if (!mesh_->has_uvs()) {
             tc::Log::error("StaticMeshItem3D rejected a base-color texture for a mesh without UVs");
             throw std::invalid_argument("StaticMeshItem3D textured mesh requires one UV per vertex");
         }
         base_color_texture_ = std::move(texture);
+    }
+
+    void StaticMeshItem3D::set_flat_lighting(termin::Vec3f direction, float ambient, float diffuse) {
+        termin::Vec3f normalized;
+        if (!direction.is_finite() || !direction.try_normalized(normalized) || !std::isfinite(ambient) ||
+            !std::isfinite(diffuse) || ambient < 0.0f || diffuse < 0.0f) {
+            tc::Log::error("StaticMeshItem3D rejected invalid flat-lighting parameters");
+            throw std::invalid_argument(
+                "StaticMeshItem3D flat lighting requires a finite direction and non-negative finite intensities");
+        }
+        if (base_color_texture_) {
+            tc::Log::error("StaticMeshItem3D rejected flat lighting for a textured mesh");
+            throw std::invalid_argument("StaticMeshItem3D flat lighting is only supported for untextured meshes");
+        }
+        flat_lighting_ = {
+            .enabled = true,
+            .direction = normalized,
+            .ambient = ambient,
+            .diffuse = diffuse,
+        };
     }
 
     std::optional<VisualBounds3D> StaticMeshItem3D::local_bounds() const {
@@ -87,6 +112,8 @@ namespace termin::visual {
     }
 
     std::optional<HitCandidate3D> StaticMeshItem3D::hit_test(const HitTestContext3D& context) const {
+        if (!hit_test_enabled_)
+            return std::nullopt;
         return detail::ray_triangles(
             context.local_ray, mesh_->vertices.size(), mesh_->triangles, {}, [&](std::size_t index) {
                 return mesh_->vertices[index];
@@ -94,7 +121,7 @@ namespace termin::visual {
     }
 
     bool StaticMeshItem3D::paint(GraphicItemPaintContext3D& context) const {
-        const StaticMeshDrawPacket3D packet{mesh_, base_color_texture_, tint_, depth_test_};
+        const StaticMeshDrawPacket3D packet{mesh_, base_color_texture_, tint_, flat_lighting_, depth_test_};
         return context.submit(StaticMeshDrawProtocol3D, &packet, sizeof(packet));
     }
 

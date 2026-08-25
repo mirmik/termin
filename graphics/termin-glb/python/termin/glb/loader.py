@@ -783,7 +783,10 @@ def _parse_meshes(
                 indices = np.arange(len(vertices), dtype=np.uint32)
 
             # Material
-            material_index = primitive.get("material", 0)
+            # The glTF material field is optional. Its absence selects the
+            # specification's implicit default material, not material 0 from
+            # the document's authored material array.
+            material_index = primitive.get("material", -1)
             if first_material_index < 0:
                 first_material_index = material_index
             if material_index not in material_slot_for_index:
