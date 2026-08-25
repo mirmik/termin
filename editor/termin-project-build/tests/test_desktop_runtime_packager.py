@@ -182,7 +182,7 @@ def test_build_desktop_project_writes_bundle_contract(
                 "Scripts",
             ],
             "requirements": [
-                "python-chess",
+                "colorama",
             ],
         },
     )
@@ -201,8 +201,8 @@ def test_build_desktop_project_writes_bundle_contract(
     sdk_root = _write_fake_desktop_sdk(tmp_path)
     _write_fake_distribution(
         sdk_root / "lib" / "python3.10" / "site-packages",
-        "python-chess",
-        {"chess/__init__.py": "VALUE = 'sdk chess seed'\n"},
+        "colorama",
+        {"colorama/__init__.py": "VALUE = 'sdk colorama seed'\n"},
     )
 
     result = build_desktop_project(
@@ -384,7 +384,7 @@ def test_build_desktop_project_writes_bundle_contract(
                     "Scripts",
                 ],
                 "requirements": [
-                    "python-chess",
+                    "colorama",
                 ],
                 "files": [
                     "descriptors/game.pymodule",
@@ -1155,7 +1155,7 @@ def test_export_runtime_package_compiles_default_pipeline_shadow_variants(
     tmp_path: Path,
 ) -> None:
     source_project = (
-        Path(__file__).resolve().parents[2]
+        Path(__file__).resolve().parents[3]
         / "tests"
         / "fixtures"
         / "android-project-build-smoke"
