@@ -800,6 +800,17 @@ def _parse_meshes(
                     prim_name = f"{mesh_name}/{material_name}"
 
             primitive_records.append({
+                "stream_key": tuple(
+                    attributes.get(attribute_name)
+                    for attribute_name in (
+                        "POSITION",
+                        "NORMAL",
+                        "TEXCOORD_0",
+                        "TANGENT",
+                        "JOINTS_0",
+                        "WEIGHTS_0",
+                    )
+                ),
                 "vertices": vertices,
                 "normals": normals,
                 "uvs": uvs,
@@ -839,100 +850,102 @@ def _parse_meshes(
                 )
             continue
 
-        vertex_map: dict[tuple, int] = {}
-        vertex_out: list[np.ndarray] = []
-        normal_out: list[np.ndarray] = []
-        uv_out: list[np.ndarray] = []
-        tangent_out: list[np.ndarray] = []
-        joint_out: list[np.ndarray] = []
-        weight_out: list[np.ndarray] = []
-
-        zero3 = (0.0, 0.0, 0.0)
-        zero2 = (0.0, 0.0)
-        zero4 = (0.0, 0.0, 0.0, 0.0)
-
-        def row_tuple(data: Optional[np.ndarray], index: int, fallback: tuple[float, ...]) -> tuple[float, ...]:
-            if data is None:
-                return fallback
-            return tuple(data[index].tolist())
-
+        vertex_chunks: list[np.ndarray] = []
+        normal_chunks: list[np.ndarray] = []
+        uv_chunks: list[np.ndarray] = []
+        tangent_chunks: list[np.ndarray] = []
+        joint_chunks: list[np.ndarray] = []
+        weight_chunks: list[np.ndarray] = []
+        stream_offsets: dict[tuple[int | None, ...], int] = {}
+        vertex_count = 0
         total_source_indices = sum(len(record["indices"]) for record in primitive_records)
-        deduplicate_started_at = time.perf_counter()
+        total_source_vertices = sum(len(record["vertices"]) for record in primitive_records)
+        assemble_started_at = time.perf_counter()
         if trace is not None:
             log.info(
-                f"[GLBLoad] deduplicate-begin mesh_index={mesh_idx} name='{mesh_name}' "
-                f"source_indices={total_source_indices} source='{trace.source}' "
+                f"[GLBLoad] assemble-indexed-begin mesh_index={mesh_idx} name='{mesh_name}' "
+                f"source_vertices={total_source_vertices} source_indices={total_source_indices} "
+                f"source='{trace.source}' "
                 f"thread={trace.thread_id}"
             )
 
         for record in primitive_records:
-            local_indices: list[int] = []
-            source_indices = record["indices"]
-            for source_index in source_indices:
-                idx = int(source_index)
-                key_parts = [row_tuple(record["vertices"], idx, zero3)]
+            stream_key = record["stream_key"]
+            stream_vertex_count = len(record["vertices"])
+            vertex_offset = stream_offsets.get(stream_key)
+            if vertex_offset is None:
+                if vertex_count + stream_vertex_count > np.iinfo(np.uint32).max:
+                    raise ValueError(
+                        f"mesh '{mesh_name}' contains too many vertices for 32-bit indices"
+                    )
+                vertex_offset = vertex_count
+                stream_offsets[stream_key] = vertex_offset
+                vertex_count += stream_vertex_count
+
+                vertex_chunks.append(np.ascontiguousarray(record["vertices"], dtype=np.float32))
                 if has_normals:
-                    key_parts.append(row_tuple(record["normals"], idx, zero3))
+                    normal_chunks.append(
+                        np.ascontiguousarray(record["normals"], dtype=np.float32)
+                        if record["normals"] is not None
+                        else np.zeros((stream_vertex_count, 3), dtype=np.float32)
+                    )
                 if has_uvs:
-                    key_parts.append(row_tuple(record["uvs"], idx, zero2))
+                    uv_chunks.append(
+                        np.ascontiguousarray(record["uvs"], dtype=np.float32)
+                        if record["uvs"] is not None
+                        else np.zeros((stream_vertex_count, 2), dtype=np.float32)
+                    )
                 if has_tangents:
-                    key_parts.append(row_tuple(record["tangents"], idx, zero4))
+                    tangent_chunks.append(
+                        np.ascontiguousarray(record["tangents"], dtype=np.float32)
+                        if record["tangents"] is not None
+                        else np.zeros((stream_vertex_count, 4), dtype=np.float32)
+                    )
                 if has_joints:
-                    key_parts.append(row_tuple(record["joint_indices"], idx, zero4))
+                    joint_chunks.append(
+                        np.ascontiguousarray(record["joint_indices"], dtype=np.uint32)
+                        if record["joint_indices"] is not None
+                        else np.zeros((stream_vertex_count, 4), dtype=np.uint32)
+                    )
                 if has_weights:
-                    key_parts.append(row_tuple(record["joint_weights"], idx, zero4))
-                key = tuple(key_parts)
+                    weight_chunks.append(
+                        np.ascontiguousarray(record["joint_weights"], dtype=np.float32)
+                        if record["joint_weights"] is not None
+                        else np.zeros((stream_vertex_count, 4), dtype=np.float32)
+                    )
 
-                vertex_index = vertex_map.get(key)
-                if vertex_index is None:
-                    vertex_index = len(vertex_out)
-                    vertex_map[key] = vertex_index
-                    vertex_out.append(record["vertices"][idx])
-                    if has_normals:
-                        normal_out.append(
-                            record["normals"][idx] if record["normals"] is not None
-                            else np.zeros(3, dtype=np.float32)
-                        )
-                    if has_uvs:
-                        uv_out.append(
-                            record["uvs"][idx] if record["uvs"] is not None
-                            else np.zeros(2, dtype=np.float32)
-                        )
-                    if has_tangents:
-                        tangent_out.append(
-                            record["tangents"][idx] if record["tangents"] is not None
-                            else np.zeros(4, dtype=np.float32)
-                        )
-                    if has_joints:
-                        joint_out.append(
-                            record["joint_indices"][idx] if record["joint_indices"] is not None
-                            else np.zeros(4, dtype=np.float32)
-                        )
-                    if has_weights:
-                        weight_out.append(
-                            record["joint_weights"][idx] if record["joint_weights"] is not None
-                            else np.zeros(4, dtype=np.float32)
-                        )
-                local_indices.append(vertex_index)
-
-            index_chunks.append(np.asarray(local_indices, dtype=np.uint32))
+            source_indices = np.asarray(record["indices"], dtype=np.uint32).reshape(-1)
+            if source_indices.size and int(np.max(source_indices)) >= stream_vertex_count:
+                raise ValueError(
+                    f"mesh '{mesh_name}' primitive '{record['name']}' contains an index "
+                    f"outside its {stream_vertex_count} vertices"
+                )
+            index_chunks.append(
+                np.ascontiguousarray(source_indices + np.uint32(vertex_offset), dtype=np.uint32)
+            )
 
         if trace is not None:
             log.info(
-                f"[GLBLoad] deduplicate-end mesh_index={mesh_idx} name='{mesh_name}' "
-                f"source_indices={total_source_indices} unique_vertices={len(vertex_out)} "
+                f"[GLBLoad] assemble-indexed-end mesh_index={mesh_idx} name='{mesh_name}' "
+                f"source_vertices={total_source_vertices} source_indices={total_source_indices} "
+                f"vertices={vertex_count} "
                 f"duration_ms="
-                f"{(time.perf_counter() - deduplicate_started_at) * 1000.0:.3f} "
+                f"{(time.perf_counter() - assemble_started_at) * 1000.0:.3f} "
                 f"source='{trace.source}' thread={trace.thread_id}"
             )
 
-        vertices = np.asarray(vertex_out, dtype=np.float32)
-        normals = np.asarray(normal_out, dtype=np.float32) if has_normals else None
-        uvs = np.asarray(uv_out, dtype=np.float32) if has_uvs else None
-        tangents = np.asarray(tangent_out, dtype=np.float32) if has_tangents else None
-        joint_indices = np.asarray(joint_out, dtype=np.uint32) if has_joints else None
-        joint_weights = np.asarray(weight_out, dtype=np.float32) if has_weights else None
-        indices = np.concatenate(index_chunks, axis=0).astype(np.uint32)
+        def combine(chunks: list[np.ndarray], dtype: np.dtype) -> np.ndarray:
+            if len(chunks) == 1:
+                return np.ascontiguousarray(chunks[0], dtype=dtype)
+            return np.ascontiguousarray(np.concatenate(chunks, axis=0), dtype=dtype)
+
+        vertices = combine(vertex_chunks, np.dtype(np.float32))
+        normals = combine(normal_chunks, np.dtype(np.float32)) if has_normals else None
+        uvs = combine(uv_chunks, np.dtype(np.float32)) if has_uvs else None
+        tangents = combine(tangent_chunks, np.dtype(np.float32)) if has_tangents else None
+        joint_indices = combine(joint_chunks, np.dtype(np.uint32)) if has_joints else None
+        joint_weights = combine(weight_chunks, np.dtype(np.float32)) if has_weights else None
+        indices = combine(index_chunks, np.dtype(np.uint32))
 
         our_mesh_idx = len(scene_data.meshes)
         scene_data.mesh_index_map[mesh_idx].append(our_mesh_idx)

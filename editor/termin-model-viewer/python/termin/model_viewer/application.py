@@ -255,7 +255,8 @@ def run_viewer(options: ViewerOptions) -> int:
                 if not adapter.render_frame():
                     raise RuntimeError("model viewer failed to render a frame")
                 rendered_frames += 1
-                if rendered_frames < 2:
+                requested_frame_count = options.frame_limit or 2
+                if rendered_frames < requested_frame_count:
                     adapter.request_repaint()
             else:
                 time.sleep(0.01)

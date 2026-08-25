@@ -2,6 +2,7 @@ import termin_prelude;
 
 struct StaticMeshTexturedPush {
     column_major float4x4 u_view_projection;
+    column_major float4x4 u_world_from_local;
     float4 u_base_color_factor;
 };
 
@@ -24,8 +25,9 @@ struct VertexOutput {
 [shader("vertex")]
 VertexOutput vs_main(VertexInput input) {
     VertexOutput output;
+    float4 world_position = mul(u_push.u_world_from_local, float4(input.position, 1.0));
     output.position = termin_to_native_clip(
-        mul(u_push.u_view_projection, float4(input.position, 1.0)));
+        mul(u_push.u_view_projection, world_position));
     output.uv = input.uv;
     return output;
 }

@@ -4,11 +4,13 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <exception>
 #include <limits>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,6 +19,7 @@
 #include <termin/geom/mat44.hpp>
 #include <termin_visual_scene/items/item3d_packets.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
+#include <tgfx2/descriptors.hpp>
 #include <tgfx2/font_atlas.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/immediate_renderer.hpp>
@@ -33,6 +36,7 @@ namespace termin::gui_native {
     namespace {
 
         constexpr termin::visual::PointerId3D kMousePointer = 1;
+        constexpr const char* kStaticMeshShader = "termin-engine-static-mesh";
         constexpr const char* kTexturedStaticMeshShader = "termin-engine-static-mesh-textured";
 
         struct TexturedStaticMeshVertex {
@@ -40,47 +44,42 @@ namespace termin::gui_native {
             termin::Vec2f uv;
         };
 
+        struct StaticMeshPush {
+            float view_projection[16];
+            float world_from_local[16];
+            float base_color_factor[4];
+            float light_direction_enabled[4];
+            float light_intensity[4];
+        };
+
         struct TexturedStaticMeshPush {
             float view_projection[16];
+            float world_from_local[16];
             float base_color_factor[4];
         };
 
-        tgfx::VertexLayoutDesc textured_static_mesh_layout() {
+        tgfx::VertexLayoutDesc static_mesh_layout(bool with_uvs) {
             tgfx::VertexLayoutDesc layout;
-            layout.stride = sizeof(TexturedStaticMeshVertex);
-            layout.attribute_count = 2;
+            layout.stride = with_uvs ? sizeof(TexturedStaticMeshVertex) : sizeof(termin::Vec3f);
+            layout.attribute_count = with_uvs ? 2 : 1;
             layout.attributes[0] = {0,
                                     tgfx::VertexFormat::Float3,
                                     static_cast<std::uint32_t>(offsetof(TexturedStaticMeshVertex, position)),
                                     tgfx::intern_vertex_semantic("position")};
-            layout.attributes[1] = {1,
-                                    tgfx::VertexFormat::Float2,
-                                    static_cast<std::uint32_t>(offsetof(TexturedStaticMeshVertex, uv)),
-                                    tgfx::intern_vertex_semantic("uv0")};
+            if (with_uvs) {
+                layout.attributes[1] = {1,
+                                        tgfx::VertexFormat::Float2,
+                                        static_cast<std::uint32_t>(offsetof(TexturedStaticMeshVertex, uv)),
+                                        tgfx::intern_vertex_semantic("uv0")};
+            }
             return layout;
         }
 
-        termin::LinearColor flat_lit_color(const termin::visual::StaticMeshDrawPacket3D& packet,
-                                           const termin::Vec3& first,
-                                           const termin::Vec3& second,
-                                           const termin::Vec3& third) {
-            if (!packet.flat_lighting.enabled)
-                return packet.tint;
-            termin::Vec3 normal;
-            if (!(second - first).cross(third - first).try_normalized(normal))
-                return packet.tint;
-            const termin::Vec3 light_direction{packet.flat_lighting.direction.x,
-                                               packet.flat_lighting.direction.y,
-                                               packet.flat_lighting.direction.z};
-            const float intensity = packet.flat_lighting.ambient +
-                                    packet.flat_lighting.diffuse *
-                                        static_cast<float>(std::max(normal.dot(light_direction), 0.0));
-            return {
-                packet.tint.r * intensity,
-                packet.tint.g * intensity,
-                packet.tint.b * intensity,
-                packet.tint.a,
-            };
+        void affine_to_float_matrix(const termin::Affine3d& affine, float* destination) {
+            double values[16];
+            affine.matrix4(values);
+            for (std::size_t index = 0; index < 16; ++index)
+                destination[index] = static_cast<float>(values[index]);
         }
 
         bool finite_camera(const SceneView3DCamera& camera) {
@@ -205,6 +204,15 @@ namespace termin::gui_native {
             bool used = false;
         };
 
+        struct StaticMeshCache {
+            std::shared_ptr<const termin::Mesh3> source;
+            tgfx::BufferHandle vertex_buffer{};
+            tgfx::BufferHandle index_buffer{};
+            std::uint32_t index_count = 0;
+            bool has_uvs = false;
+            bool used = false;
+        };
+
         tgfx::IRenderDevice* device = nullptr;
         tgfx::TextureHandle color{};
         tgfx::TextureHandle depth{};
@@ -212,6 +220,10 @@ namespace termin::gui_native {
         tgfx::PointCloudRenderer point_renderer;
         std::vector<PointCloudCache> point_clouds;
         std::vector<BaseColorTextureCache> base_color_textures;
+        std::vector<StaticMeshCache> static_meshes;
+        tc_shader_handle static_mesh_shader = tc_shader_handle_invalid();
+        tgfx::ShaderHandle static_mesh_vertex{};
+        tgfx::ShaderHandle static_mesh_fragment{};
         tc_shader_handle textured_mesh_shader = tc_shader_handle_invalid();
         tgfx::ShaderHandle textured_mesh_vertex{};
         tgfx::ShaderHandle textured_mesh_fragment{};
@@ -829,6 +841,8 @@ namespace termin::gui_native {
             cache.used = false;
         for (auto& cache : state.base_color_textures)
             cache.used = false;
+        for (auto& cache : state.static_meshes)
+            cache.used = false;
 
         for (const CollectedDraw& draw : sink.draws) {
             if (draw.protocol == termin::visual::PrimitiveDrawProtocol3D && draw.primitive.geometry) {
@@ -854,18 +868,151 @@ namespace termin::gui_native {
                 }
                 state.immediate.flush_depth(&context, view_matrix, projection_matrix, true);
                 state.immediate.flush(&context, view_matrix, projection_matrix, false, true);
-            } else if (draw.protocol == termin::visual::StaticMeshDrawProtocol3D && draw.mesh.mesh &&
-                       draw.mesh.base_color_texture) {
+            } else if (draw.protocol == termin::visual::StaticMeshDrawProtocol3D && draw.mesh.mesh) {
                 const auto& mesh = *draw.mesh.mesh;
-                const auto& texture_source = draw.mesh.base_color_texture;
-                if (!mesh.has_uvs()) {
+                auto mesh_cache = std::find_if(state.static_meshes.begin(),
+                                               state.static_meshes.end(),
+                                               [&](const auto& value) { return value.source == draw.mesh.mesh; });
+                if (mesh_cache == state.static_meshes.end()) {
+                    if (mesh.vertices.empty() || mesh.triangles.empty() || mesh.triangles.size() % 3 != 0) {
+                        tc_log_error("[termin-gui-native] SceneView3D skipped invalid static mesh '%s' "
+                                     "(%zu vertices, %zu indices)",
+                                     mesh.name.c_str(),
+                                     mesh.vertices.size(),
+                                     mesh.triangles.size());
+                        continue;
+                    }
+                    if (mesh.triangles.size() > std::numeric_limits<std::uint32_t>::max()) {
+                        tc_log_error("[termin-gui-native] SceneView3D static mesh '%s' exceeds the 32-bit draw limit",
+                                     mesh.name.c_str());
+                        continue;
+                    }
+                    const auto maximum_index = *std::max_element(mesh.triangles.begin(), mesh.triangles.end());
+                    if (maximum_index >= mesh.vertices.size()) {
+                        tc_log_error("[termin-gui-native] SceneView3D static mesh '%s' contains index %u "
+                                     "outside %zu vertices",
+                                     mesh.name.c_str(),
+                                     maximum_index,
+                                     mesh.vertices.size());
+                        continue;
+                    }
+
+                    const auto upload_started_at = std::chrono::steady_clock::now();
+                    RenderState::StaticMeshCache created;
+                    created.source = draw.mesh.mesh;
+                    created.has_uvs = mesh.has_uvs();
+                    created.index_count = static_cast<std::uint32_t>(mesh.triangles.size());
+
+                    std::vector<TexturedStaticMeshVertex> textured_vertices;
+                    const void* vertex_data = mesh.vertices.data();
+                    std::uint64_t vertex_bytes =
+                        static_cast<std::uint64_t>(mesh.vertices.size()) * sizeof(mesh.vertices[0]);
+                    if (created.has_uvs) {
+                        textured_vertices.resize(mesh.vertices.size());
+                        for (std::size_t index = 0; index < mesh.vertices.size(); ++index)
+                            textured_vertices[index] = {mesh.vertices[index], mesh.uvs[index]};
+                        vertex_data = textured_vertices.data();
+                        vertex_bytes =
+                            static_cast<std::uint64_t>(textured_vertices.size()) * sizeof(textured_vertices[0]);
+                    }
+                    const std::uint64_t index_bytes =
+                        static_cast<std::uint64_t>(mesh.triangles.size()) * sizeof(mesh.triangles[0]);
+
+                    tgfx::BufferDesc vertex_description;
+                    vertex_description.size = vertex_bytes;
+                    vertex_description.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
+                    created.vertex_buffer = device.create_buffer(vertex_description);
+                    if (!created.vertex_buffer) {
+                        tc_log_error("[termin-gui-native] SceneView3D failed to allocate %llu vertex bytes "
+                                     "for static mesh '%s'",
+                                     static_cast<unsigned long long>(vertex_bytes),
+                                     mesh.name.c_str());
+                        continue;
+                    }
+
+                    tgfx::BufferDesc index_description;
+                    index_description.size = index_bytes;
+                    index_description.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
+                    created.index_buffer = device.create_buffer(index_description);
+                    if (!created.index_buffer) {
+                        device.destroy(created.vertex_buffer);
+                        tc_log_error("[termin-gui-native] SceneView3D failed to allocate %llu index bytes "
+                                     "for static mesh '%s'",
+                                     static_cast<unsigned long long>(index_bytes),
+                                     mesh.name.c_str());
+                        continue;
+                    }
+
+                    device.upload_buffer(created.vertex_buffer,
+                                         std::span<const std::uint8_t>(static_cast<const std::uint8_t*>(vertex_data),
+                                                                       static_cast<std::size_t>(vertex_bytes)));
+                    device.upload_buffer(
+                        created.index_buffer,
+                        std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(mesh.triangles.data()),
+                                                      static_cast<std::size_t>(index_bytes)));
+                    const auto upload_duration =
+                        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - upload_started_at);
+                    tc_log_info("[termin-gui-native] SceneView3D uploaded static mesh '%s': "
+                                "%zu vertices, %zu indices, %llu bytes in %.3f ms",
+                                mesh.name.c_str(),
+                                mesh.vertices.size(),
+                                mesh.triangles.size(),
+                                static_cast<unsigned long long>(vertex_bytes + index_bytes),
+                                upload_duration.count());
+                    state.static_meshes.push_back(std::move(created));
+                    mesh_cache = std::prev(state.static_meshes.end());
+                }
+                mesh_cache->used = true;
+
+                context.set_depth_test(draw.mesh.depth_test);
+                context.set_depth_write(draw.mesh.depth_test);
+                context.set_blend(false);
+                context.set_cull(tgfx::CullMode::None);
+                context.set_vertex_layout(static_mesh_layout(mesh_cache->has_uvs));
+                context.set_topology(tgfx::PrimitiveTopology::TriangleList);
+
+                if (!draw.mesh.base_color_texture) {
+                    if (tc_shader_handle_is_invalid(state.static_mesh_shader))
+                        state.static_mesh_shader = tgfx::register_builtin_shader_from_catalog(kStaticMeshShader);
+                    tc_shader* shader = tc_shader_get(state.static_mesh_shader);
+                    if (!shader || !termin::tc_shader_ensure_tgfx2(
+                                       shader, &device, &state.static_mesh_vertex, &state.static_mesh_fragment)) {
+                        tc_log_error("[termin-gui-native] SceneView3D static-mesh shader is unavailable");
+                        continue;
+                    }
+
+                    StaticMeshPush push{};
+                    std::copy(view_projection_float.begin(), view_projection_float.end(), push.view_projection);
+                    affine_to_float_matrix(draw.world_from_local, push.world_from_local);
+                    push.base_color_factor[0] = draw.mesh.tint.r;
+                    push.base_color_factor[1] = draw.mesh.tint.g;
+                    push.base_color_factor[2] = draw.mesh.tint.b;
+                    push.base_color_factor[3] = draw.mesh.tint.a;
+                    push.light_direction_enabled[0] = draw.mesh.flat_lighting.direction.x;
+                    push.light_direction_enabled[1] = draw.mesh.flat_lighting.direction.y;
+                    push.light_direction_enabled[2] = draw.mesh.flat_lighting.direction.z;
+                    push.light_direction_enabled[3] = draw.mesh.flat_lighting.enabled ? 1.0f : 0.0f;
+                    push.light_intensity[0] = draw.mesh.flat_lighting.ambient;
+                    push.light_intensity[1] = draw.mesh.flat_lighting.diffuse;
+
+                    context.bind_shader(state.static_mesh_vertex, state.static_mesh_fragment);
+                    context.use_shader_resource_layout(shader);
+                    context.bind_uniform_data("u_push", &push, sizeof(push));
+                    context.draw(mesh_cache->vertex_buffer,
+                                 mesh_cache->index_buffer,
+                                 mesh_cache->index_count,
+                                 tgfx::IndexType::Uint32);
+                    continue;
+                }
+
+                if (!mesh_cache->has_uvs) {
                     tc_log_error("[termin-gui-native] SceneView3D skipped a textured mesh without UVs");
                     continue;
                 }
-                auto texture_cache =
-                    std::find_if(state.base_color_textures.begin(), state.base_color_textures.end(), [&](const auto& value) {
-                        return value.source == texture_source;
-                    });
+                const auto& texture_source = draw.mesh.base_color_texture;
+                auto texture_cache = std::find_if(state.base_color_textures.begin(),
+                                                  state.base_color_textures.end(),
+                                                  [&](const auto& value) { return value.source == texture_source; });
                 if (texture_cache == state.base_color_textures.end()) {
                     tgfx::TextureDesc description;
                     description.width = texture_source->width;
@@ -888,80 +1035,27 @@ namespace termin::gui_native {
                 if (tc_shader_handle_is_invalid(state.textured_mesh_shader))
                     state.textured_mesh_shader = tgfx::register_builtin_shader_from_catalog(kTexturedStaticMeshShader);
                 tc_shader* shader = tc_shader_get(state.textured_mesh_shader);
-                if (!shader || !termin::tc_shader_ensure_tgfx2(shader,
-                                                               &device,
-                                                               &state.textured_mesh_vertex,
-                                                               &state.textured_mesh_fragment)) {
+                if (!shader || !termin::tc_shader_ensure_tgfx2(
+                                   shader, &device, &state.textured_mesh_vertex, &state.textured_mesh_fragment)) {
                     tc_log_error("[termin-gui-native] SceneView3D textured static-mesh shader is unavailable");
                     continue;
                 }
 
-                std::vector<TexturedStaticMeshVertex> vertices;
-                vertices.reserve(mesh.triangles.size());
-                for (std::uint32_t vertex_index : mesh.triangles) {
-                    if (vertex_index >= mesh.vertices.size() || vertex_index >= mesh.uvs.size()) {
-                        tc_log_error("[termin-gui-native] SceneView3D skipped an invalid textured mesh triangle");
-                        vertices.clear();
-                        break;
-                    }
-                    const auto& vertex = mesh.vertices[vertex_index];
-                    const auto world = draw.world_from_local.transform_point({vertex.x, vertex.y, vertex.z});
-                    vertices.push_back({{static_cast<float>(world.x),
-                                         static_cast<float>(world.y),
-                                         static_cast<float>(world.z)},
-                                        mesh.uvs[vertex_index]});
-                }
-                if (vertices.empty())
-                    continue;
-
                 TexturedStaticMeshPush push{};
                 std::copy(view_projection_float.begin(), view_projection_float.end(), push.view_projection);
+                affine_to_float_matrix(draw.world_from_local, push.world_from_local);
                 push.base_color_factor[0] = draw.mesh.tint.r;
                 push.base_color_factor[1] = draw.mesh.tint.g;
                 push.base_color_factor[2] = draw.mesh.tint.b;
                 push.base_color_factor[3] = draw.mesh.tint.a;
-                context.set_depth_test(draw.mesh.depth_test);
-                context.set_depth_write(draw.mesh.depth_test);
-                context.set_blend(false);
-                context.set_cull(tgfx::CullMode::None);
                 context.bind_shader(state.textured_mesh_vertex, state.textured_mesh_fragment);
                 context.use_shader_resource_layout(shader);
                 context.bind_uniform_data("u_push", &push, sizeof(push));
                 context.bind_texture("u_base_color_texture", texture_cache->gpu);
-                const auto layout = textured_static_mesh_layout();
-                context.draw_transient_arrays(vertices.data(),
-                                              static_cast<std::uint32_t>(vertices.size() * sizeof(vertices[0])),
-                                              static_cast<std::uint32_t>(vertices.size()),
-                                              layout,
-                                              tgfx::PrimitiveTopology::TriangleList);
-            } else if (draw.protocol == termin::visual::StaticMeshDrawProtocol3D && draw.mesh.mesh) {
-                const auto& mesh = *draw.mesh.mesh;
-                state.immediate.begin();
-                auto& vertices =
-                    draw.mesh.depth_test ? state.immediate.tri_vertices_depth : state.immediate.tri_vertices;
-                for (size_t index = 0; index + 2 < mesh.triangles.size(); index += 3) {
-                    const uint32_t indices[3] = {
-                        mesh.triangles[index], mesh.triangles[index + 1], mesh.triangles[index + 2]};
-                    if (indices[0] >= mesh.vertices.size() || indices[1] >= mesh.vertices.size() ||
-                        indices[2] >= mesh.vertices.size()) {
-                        tc_log_error("[termin-gui-native] SceneView3D skipped an invalid mesh triangle");
-                        continue;
-                    }
-                    const auto& first_vertex = mesh.vertices[indices[0]];
-                    const auto& second_vertex = mesh.vertices[indices[1]];
-                    const auto& third_vertex = mesh.vertices[indices[2]];
-                    const std::array<termin::Vec3, 3> world_vertices = {
-                        draw.world_from_local.transform_point({first_vertex.x, first_vertex.y, first_vertex.z}),
-                        draw.world_from_local.transform_point({second_vertex.x, second_vertex.y, second_vertex.z}),
-                        draw.world_from_local.transform_point({third_vertex.x, third_vertex.y, third_vertex.z}),
-                    };
-                    const auto color = flat_lit_color(
-                        draw.mesh, world_vertices[0], world_vertices[1], world_vertices[2]);
-                    for (const auto& vertex : world_vertices)
-                        append_linear_vertex(vertices, vertex, color);
-                }
-                state.immediate.flush_depth(&context, view_matrix, projection_matrix, true);
-                state.immediate.flush(&context, view_matrix, projection_matrix, false, true);
+                context.draw(mesh_cache->vertex_buffer,
+                             mesh_cache->index_buffer,
+                             mesh_cache->index_count,
+                             tgfx::IndexType::Uint32);
             } else if (draw.protocol == termin::visual::PointCloudDrawProtocol3D && draw.point_cloud.cloud) {
                 auto cache = std::find_if(state.point_clouds.begin(), state.point_clouds.end(), [&](const auto& value) {
                     return value.source == draw.point_cloud.cloud &&
@@ -1006,6 +1100,13 @@ namespace termin::gui_native {
             device.destroy(cache.gpu);
             return true;
         });
+        std::erase_if(state.static_meshes, [&](auto& cache) {
+            if (cache.used)
+                return false;
+            device.destroy(cache.vertex_buffer);
+            device.destroy(cache.index_buffer);
+            return true;
+        });
         render_dirty_ = false;
         mark_dirty(TC_WIDGET_DIRTY_PAINT);
     }
@@ -1024,6 +1125,15 @@ namespace termin::gui_native {
                 state.device->destroy(cache.gpu);
         }
         state.base_color_textures.clear();
+        for (auto& cache : state.static_meshes) {
+            if (cache.vertex_buffer)
+                state.device->destroy(cache.vertex_buffer);
+            if (cache.index_buffer)
+                state.device->destroy(cache.index_buffer);
+        }
+        state.static_meshes.clear();
+        state.static_mesh_vertex = {};
+        state.static_mesh_fragment = {};
         state.textured_mesh_vertex = {};
         state.textured_mesh_fragment = {};
         state.point_renderer.release(*state.device);

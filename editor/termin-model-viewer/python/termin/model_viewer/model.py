@@ -66,9 +66,31 @@ def _submesh_geometry(mesh, submesh):
         raise ValueError(f"mesh '{mesh.name}' submesh range ends at {last_index}, past {flat_indices.size} indices")
 
     source_indices = flat_indices[first_index:last_index]
+    source_vertices = np.asarray(mesh.vertices, dtype=np.float32)
+    if source_indices.size and int(np.max(source_indices)) >= len(source_vertices):
+        raise ValueError(f"mesh '{mesh.name}' contains an index outside its {len(source_vertices)} vertices")
+
+    # A GLB with one submesh already has exactly the indexed representation
+    # consumed by Mesh3. Keep it intact: np.unique over tens of millions of
+    # indices is expensive and only saves unused vertices, which are uncommon.
+    if first_index == 0 and index_count == flat_indices.size:
+        vertices = np.ascontiguousarray(source_vertices, dtype=np.float32)
+        triangles = np.ascontiguousarray(source_indices.reshape((-1, 3)), dtype=np.uint32)
+        uvs = (
+            np.ascontiguousarray(np.asarray(mesh.uvs, dtype=np.float32), dtype=np.float32)
+            if mesh.uvs is not None
+            else None
+        )
+        normals = (
+            np.ascontiguousarray(np.asarray(mesh.normals, dtype=np.float32), dtype=np.float32)
+            if mesh.normals is not None
+            else None
+        )
+        return vertices, triangles, uvs, normals
+
     unique_indices, compact_indices = np.unique(source_indices, return_inverse=True)
     vertices = np.ascontiguousarray(
-        np.asarray(mesh.vertices, dtype=np.float32)[unique_indices],
+        source_vertices[unique_indices],
         dtype=np.float32,
     )
     triangles = np.ascontiguousarray(

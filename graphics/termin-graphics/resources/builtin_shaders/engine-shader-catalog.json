@@ -91,6 +91,21 @@
       }
     },
     {
+      "uuid": "termin-engine-static-mesh",
+      "name": "StaticMeshVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-static-mesh.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-static-mesh.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
       "uuid": "termin-engine-static-mesh-textured",
       "name": "StaticMeshTexturedVSFS",
       "language": "slang",

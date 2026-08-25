@@ -121,25 +121,26 @@ def test_glb_load_logs_realtime_mesh_phases(tmp_path, monkeypatch):
         i for i, message in enumerate(messages)
         if "[GLBLoad] primitive-begin" in message
     )
-    deduplicate_begin_index = next(
+    assemble_begin_index = next(
         i for i, message in enumerate(messages)
-        if "[GLBLoad] deduplicate-begin" in message
+        if "[GLBLoad] assemble-indexed-begin" in message
     )
-    deduplicate_end_index = next(
+    assemble_end_index = next(
         i for i, message in enumerate(messages)
-        if "[GLBLoad] deduplicate-end" in message
+        if "[GLBLoad] assemble-indexed-end" in message
     )
     complete_index = next(
         i for i, message in enumerate(messages)
         if "[GLBLoad] complete" in message
     )
 
-    assert begin_index < primitive_begin_index < deduplicate_begin_index
-    assert deduplicate_begin_index < deduplicate_end_index < complete_index
-    assert "source_indices=3" in messages[deduplicate_end_index]
-    assert "unique_vertices=3" in messages[deduplicate_end_index]
-    assert "duration_ms=" in messages[deduplicate_end_index]
-    assert "thread=" in messages[deduplicate_end_index]
+    assert begin_index < primitive_begin_index < assemble_begin_index
+    assert assemble_begin_index < assemble_end_index < complete_index
+    assert "source_vertices=3" in messages[assemble_end_index]
+    assert "source_indices=3" in messages[assemble_end_index]
+    assert "vertices=3" in messages[assemble_end_index]
+    assert "duration_ms=" in messages[assemble_end_index]
+    assert "thread=" in messages[assemble_end_index]
 
 
 def test_load_gltf_with_external_bin_and_texture(tmp_path):
@@ -455,7 +456,7 @@ def test_load_gltf_multi_primitive_mesh_as_submeshes(tmp_path):
     assert scene_data.mesh_index_map[0] == [0]
 
 
-def test_load_gltf_preserves_indexed_vertices_with_exact_dedup(tmp_path):
+def test_load_gltf_preserves_source_indexing(tmp_path):
     positions = struct.pack(
         "<12f",
         0.0, 0.0, 0.0,
@@ -513,7 +514,7 @@ def test_load_gltf_preserves_indexed_vertices_with_exact_dedup(tmp_path):
     assert mesh.submeshes[0].index_count == 6
 
 
-def test_load_gltf_exact_dedup_preserves_uv_seams(tmp_path):
+def test_load_gltf_source_indexing_preserves_uv_seams(tmp_path):
     positions = struct.pack(
         "<9f",
         0.0, 0.0, 0.0,

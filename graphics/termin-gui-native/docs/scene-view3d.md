@@ -17,6 +17,13 @@ snapshot on its current render device and releases stale entries after item
 replacement/destruction or during widget/device teardown. This keeps a visual
 scene portable across hosts and preserves the Python ownership boundary.
 
+Static meshes follow the same retained-device policy. `SceneView3D` uploads
+each shared immutable `Mesh3` snapshot once as indexed vertex and index
+buffers. Camera and item transforms are draw uniforms, and flat preview
+lighting is evaluated in the fragment shader, so camera-only repaints do not
+expand or transform triangle vertices on the CPU. Mesh buffers are evicted
+when the snapshot is no longer submitted and are released on device teardown.
+
 ```cpp
 auto scene_handle = tc_visual_scene3d_create();
 termin::visual::TcVisualScene3D scene{scene_handle};
