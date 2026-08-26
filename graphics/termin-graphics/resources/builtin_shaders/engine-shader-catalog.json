@@ -121,6 +121,36 @@
       }
     },
     {
+      "uuid": "termin-engine-static-mesh-smooth",
+      "name": "StaticMeshSmoothVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-static-mesh-smooth.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-static-mesh-smooth.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
+      "uuid": "termin-engine-static-mesh-textured-smooth",
+      "name": "StaticMeshTexturedSmoothVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {
+          "path": "termin-engine-static-mesh-textured-smooth.slang",
+          "entry": "vs_main"
+        },
+        "fragment": {
+          "path": "termin-engine-static-mesh-textured-smooth.slang",
+          "entry": "fs_main"
+        }
+      }
+    },
+    {
       "uuid": "termin-engine-point-cloud",
       "name": "PointCloudVSFS",
       "language": "slang",

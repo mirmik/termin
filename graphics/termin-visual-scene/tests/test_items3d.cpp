@@ -250,15 +250,10 @@ int main() {
     }
     assert(rejected_lighting && mesh_ptr->flat_lighting().enabled);
 
-    bool rejected_texture = false;
-    try {
-        mesh_ptr->set_base_color_texture(texture);
-    } catch (const std::invalid_argument&) {
-        rejected_texture = true;
-    }
-    assert(rejected_texture && !mesh_ptr->base_color_texture());
-    mesh_ptr->clear_flat_lighting();
     mesh_ptr->set_base_color_texture(texture);
+    assert(mesh_ptr->base_color_texture());
+    assert(mesh_ptr->flat_lighting().enabled);
+    mesh_ptr->clear_flat_lighting();
     texture.reset();
     assert(!texture_lifetime.expired());
     assert(termin::visual::paint(scene, view, sink));

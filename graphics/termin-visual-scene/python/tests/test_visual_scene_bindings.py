@@ -254,7 +254,7 @@ def test_static_mesh_base_color_texture_is_owned_and_replaceable():
     tc_visual_scene3d_destroy(scene)
 
 
-def test_static_mesh_flat_lighting_is_validated_and_untextured():
+def test_static_mesh_preview_lighting_is_validated_and_supports_textures():
     scene = tc_visual_scene3d_create()
     mesh = scene.create_static_mesh(_triangle_mesh(textured=True))
 
@@ -268,14 +268,15 @@ def test_static_mesh_flat_lighting_is_validated_and_untextured():
     with pytest.raises(ValueError, match="finite direction"):
         mesh.set_flat_lighting((0.0, 0.0, 0.0))
     assert mesh.flat_lighting_enabled
-    with pytest.raises(ValueError, match="only supported for untextured"):
-        mesh.set_base_color_texture_rgba8(1, 1, bytes([255, 255, 255, 255]))
+    mesh.set_base_color_texture_rgba8(1, 1, bytes([255, 255, 255, 255]))
+    assert mesh.has_base_color_texture
+    assert mesh.flat_lighting_enabled
 
     mesh.clear_flat_lighting()
     assert not mesh.flat_lighting_enabled
-    mesh.set_base_color_texture_rgba8(1, 1, bytes([255, 255, 255, 255]))
-    with pytest.raises(ValueError, match="only supported for untextured"):
-        mesh.set_flat_lighting((0.0, 0.0, 1.0))
+    mesh.set_flat_lighting((0.0, 0.0, 1.0))
+    assert mesh.flat_lighting_enabled
+    assert mesh.has_base_color_texture
 
     tc_visual_scene3d_destroy(scene)
 

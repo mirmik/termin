@@ -24,6 +24,15 @@ lighting is evaluated in the fragment shader, so camera-only repaints do not
 expand or transform triangle vertices on the CPU. Mesh buffers are evicted
 when the snapshot is no longer submitted and are released on device teardown.
 
+`SceneView3DShadingMode::Flat` derives one normal per rasterized face.
+`SceneView3DShadingMode::Smooth` consumes authored vertex normals; if a mesh
+has none, the widget generates and uploads them once when smooth mode is first
+requested. The position-only buffer is then replaced by the enriched retained
+buffer, so later camera movement and mode switches do not repeat that work.
+`set_wireframe_enabled(true)` selects the backend's indexed triangle line
+rasterization and does not build a second edge mesh. Textured and untextured
+static meshes share these preview-lighting and display-mode rules.
+
 ```cpp
 auto scene_handle = tc_visual_scene3d_create();
 termin::visual::TcVisualScene3D scene{scene_handle};
@@ -36,6 +45,8 @@ view->set_camera_provider([](termin::gui_native::ViewportSurfaceSize size)
     -> std::optional<termin::gui_native::SceneView3DCamera> {
     return make_camera(size.width, size.height);
 });
+view->set_shading_mode(termin::gui_native::SceneView3DShadingMode::Smooth);
+view->set_wireframe_enabled(true);
 ```
 
 `set_camera()` installs fixed view/projection matrices. A camera provider is

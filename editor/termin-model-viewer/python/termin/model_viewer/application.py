@@ -28,6 +28,21 @@ class ViewerOptions:
     frame_limit: int = 0
 
 
+def _camera_light_direction(camera) -> tuple[float, float, float]:
+    eye = camera.eye
+    target = camera.target
+    direction = (
+        float(eye.x - target.x),
+        float(eye.y - target.y),
+        float(eye.z - target.z),
+    )
+    length = math.sqrt(sum(component * component for component in direction))
+    if not math.isfinite(length) or length <= 1.0e-12:
+        _LOG.error("Cannot derive the model-viewer light from a degenerate camera direction")
+        raise RuntimeError("camera direction is unavailable for the preview light")
+    return tuple(component / length for component in direction)
+
+
 def _argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="termin show",
@@ -160,18 +175,117 @@ class _OrbitInteraction:
         return False
 
 
+class _ViewerUi:
+    def __init__(
+        self,
+        root,
+        view,
+        camera,
+        interaction,
+        model: VisualModel,
+        flat_button,
+        smooth_button,
+        wireframe_button,
+        light_button,
+        statistics_label,
+        request_repaint,
+    ) -> None:
+        self.root = root
+        self.view = view
+        self.camera = camera
+        self.interaction = interaction
+        self.model = model
+        self.flat_button = flat_button
+        self.smooth_button = smooth_button
+        self.wireframe_button = wireframe_button
+        self.light_button = light_button
+        self.statistics_label = statistics_label
+        self.request_repaint = request_repaint
+
+    def set_shading_mode(self, mode) -> None:
+        from termin.gui_native import SceneView3DShadingMode
+
+        if mode not in (SceneView3DShadingMode.Flat, SceneView3DShadingMode.Smooth):
+            raise ValueError(f"unsupported model-viewer shading mode: {mode}")
+        self.view.shading_mode = mode
+        self.flat_button.active = mode == SceneView3DShadingMode.Flat
+        self.smooth_button.active = mode == SceneView3DShadingMode.Smooth
+        self.request_repaint()
+
+    def toggle_wireframe(self) -> None:
+        enabled = not self.view.wireframe_enabled
+        self.view.wireframe_enabled = enabled
+        self.wireframe_button.active = enabled
+        self.request_repaint()
+
+    def light_from_camera(self) -> None:
+        self.model.set_preview_light(_camera_light_direction(self.camera))
+        self.view.invalidate_scene()
+        self.request_repaint()
+
+
 def _create_view(document, model: VisualModel, request_repaint):
     from tcbase._geom_native import LinearColor
     from termin.geombase import OrbitCamera
-    from termin.gui_native import SceneView3DCamera, Size
+    from termin.gui_native import SceneView3DCamera, SceneView3DShadingMode, Size, SrgbColor
+
+    root = document.create_vstack("termin-model-viewer-root")
+    root.widget.stable_id = "termin.model-viewer.root"
+    root.widget.preferred_size = Size(1100.0, 760.0)
+
+    toolbar = document.create_hstack("termin-model-viewer-toolbar")
+    toolbar.widget.stable_id = "termin.model-viewer.toolbar"
+    toolbar.set_layout_spacing(4.0)
+    toolbar.set_layout_background(SrgbColor(0.055, 0.065, 0.09, 1.0))
+
+    flat_button = document.create_icon_button("Flat")
+    flat_button.widget.stable_id = "termin.model-viewer.shading.flat"
+    flat_button.tooltip = "Flat shading"
+    smooth_button = document.create_icon_button("Smooth")
+    smooth_button.widget.stable_id = "termin.model-viewer.shading.smooth"
+    smooth_button.tooltip = "Smooth shading (generates normals once when absent)"
+    wireframe_button = document.create_icon_button("Wireframe")
+    wireframe_button.widget.stable_id = "termin.model-viewer.wireframe"
+    wireframe_button.tooltip = "Toggle wireframe"
+    light_button = document.create_icon_button("Light from view")
+    light_button.widget.stable_id = "termin.model-viewer.light-from-camera"
+    light_button.tooltip = "Set preview light from the current camera"
+    statistics = model.statistics
+    statistics_label = document.create_label(
+        f"Vertices: {statistics.vertex_count:,}  ·  Triangles: {statistics.triangle_count:,}",
+        "termin-model-viewer-statistics",
+    )
+    statistics_label.widget.stable_id = "termin.model-viewer.statistics"
+    statistics_label.set_font_size(13.0)
+    statistics_label.set_color(SrgbColor(0.68, 0.74, 0.84, 1.0))
+
+    active_color = SrgbColor(0.08, 0.42, 0.58, 1.0)
+    flat_button.set_active_color(active_color)
+    smooth_button.set_active_color(active_color)
+    wireframe_button.set_active_color(active_color)
+    flat_button.set_font_size(13.0)
+    smooth_button.set_font_size(13.0)
+    wireframe_button.set_font_size(13.0)
+    light_button.set_font_size(13.0)
+
+    toolbar.add_fixed_child(flat_button.widget, 56.0)
+    toolbar.add_fixed_child(smooth_button.widget, 72.0)
+    toolbar.add_fixed_child(wireframe_button.widget, 88.0)
+    toolbar.add_fixed_child(light_button.widget, 124.0)
+    toolbar.add_stretch_child(document.create_spacer(Size(1.0, 1.0)).widget)
+    toolbar.add_fixed_child(statistics_label.widget, 290.0)
 
     view = document.create_scene_view3d(model.scene)
     view.widget.stable_id = "termin.model-viewer.scene"
-    view.widget.preferred_size = Size(1100.0, 760.0)
+    view.widget.preferred_size = Size(1100.0, 718.0)
     view.set_clear_color(LinearColor(0.018, 0.024, 0.038, 1.0))
 
     camera = OrbitCamera()
     camera.fit_bounds(model.bounds.as_aabb())
+    # Keep the initial key light on the visible side of the model.  This is
+    # also the policy used by diffusion-editor: its light starts from the
+    # actual camera direction, not from an orientation-specific constant.
+    model.set_preview_light(_camera_light_direction(camera))
 
     def invalidate() -> None:
         view.invalidate_view()
@@ -192,12 +306,38 @@ def _create_view(document, model: VisualModel, request_repaint):
 
     view.set_camera_provider(camera_provider)
     view.set_fallback_pointer_handler(interaction.handle)
-    if not document.add_root(view.widget.handle):
+    root.add_fixed_child(toolbar.widget, 42.0)
+    root.add_stretch_child(view.widget)
+
+    ui = _ViewerUi(
+        root,
+        view,
+        camera,
+        interaction,
+        model,
+        flat_button,
+        smooth_button,
+        wireframe_button,
+        light_button,
+        statistics_label,
+        request_repaint,
+    )
+    flat_button.connect_clicked(
+        lambda: ui.set_shading_mode(SceneView3DShadingMode.Flat)
+    )
+    smooth_button.connect_clicked(
+        lambda: ui.set_shading_mode(SceneView3DShadingMode.Smooth)
+    )
+    wireframe_button.connect_clicked(ui.toggle_wireframe)
+    light_button.connect_clicked(ui.light_from_camera)
+    ui.set_shading_mode(SceneView3DShadingMode.Flat)
+
+    if not document.add_root(root.widget.handle):
         view.set_fallback_pointer_handler(None)
         view.set_camera_provider(None)
         view.detach_scene()
-        raise RuntimeError("failed to add the model view to the UI document")
-    return view, camera, interaction
+        raise RuntimeError("failed to add the model-viewer UI to the document")
+    return ui
 
 
 def run_viewer(options: ViewerOptions) -> int:
@@ -219,7 +359,7 @@ def run_viewer(options: ViewerOptions) -> int:
     window_handle = None
     document = None
     adapter = None
-    view = None
+    ui = None
     try:
         model = load_visual_model(options.model)
         graphics_session = WindowedGraphicsSession.create_native()
@@ -238,7 +378,7 @@ def run_viewer(options: ViewerOptions) -> int:
             font_size=15,
             enable_text_input=False,
         )
-        view, _camera, _interaction = _create_view(
+        ui = _create_view(
             document,
             model,
             adapter.request_repaint,
@@ -269,12 +409,12 @@ def run_viewer(options: ViewerOptions) -> int:
         raise
     finally:
         cleanup_actions = []
-        if view is not None:
+        if ui is not None:
             cleanup_actions.extend(
                 [
-                    ("clear model-view pointer handler", partial(view.set_fallback_pointer_handler, None)),
-                    ("clear model-view camera provider", partial(view.set_camera_provider, None)),
-                    ("detach model-view scene", view.detach_scene),
+                    ("clear model-view pointer handler", partial(ui.view.set_fallback_pointer_handler, None)),
+                    ("clear model-view camera provider", partial(ui.view.set_camera_provider, None)),
+                    ("detach model-view scene", ui.view.detach_scene),
                 ]
             )
         if model is not None:

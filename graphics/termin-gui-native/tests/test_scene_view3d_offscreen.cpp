@@ -7,23 +7,36 @@
 #include <memory>
 #include <vector>
 
+#include <termin/camera/orbit_camera.hpp>
 #include <termin_visual_scene/items/static_mesh_item3d.hpp>
 #include <tgfx2/device_factory.hpp>
 
 namespace {
 
-    tc_mat44 identity_matrix() {
-        tc_mat44 result{};
-        result.m[0] = result.m[5] = result.m[10] = result.m[15] = 1.0;
-        return result;
+    termin::OrbitCamera preview_camera() {
+        return {};
+    }
+
+    termin::Vec3 preview_normal() {
+        const termin::OrbitCamera camera = preview_camera();
+        return (camera.eye() - camera.target).normalized();
+    }
+
+    termin::Vec3f to_float(const termin::Vec3& value) {
+        return {static_cast<float>(value.x), static_cast<float>(value.y), static_cast<float>(value.z)};
     }
 
     std::shared_ptr<termin::Mesh3> textured_quad() {
+        const termin::OrbitCamera camera = preview_camera();
+        const termin::Vec3 forward = (camera.target - camera.eye()).normalized();
+        const termin::Vec3 right = forward.cross(termin::Vec3::unit_z()).normalized();
+        const termin::Vec3 up = right.cross(forward);
+        constexpr double half_extent = 1.6;
         auto mesh = std::make_shared<termin::Mesh3>(
-            std::vector<termin::Vec3f>{{-0.9f, -0.9f, 0.5f},
-                                       {0.9f, -0.9f, 0.5f},
-                                       {0.9f, 0.9f, 0.5f},
-                                       {-0.9f, 0.9f, 0.5f}},
+            std::vector<termin::Vec3f>{to_float(camera.target - right * half_extent - up * half_extent),
+                                       to_float(camera.target + right * half_extent - up * half_extent),
+                                       to_float(camera.target + right * half_extent + up * half_extent),
+                                       to_float(camera.target - right * half_extent + up * half_extent)},
             std::vector<std::uint32_t>{0, 1, 2, 0, 2, 3},
             "scene-view3d-textured-quad");
         mesh->uvs = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
@@ -81,15 +94,16 @@ int main() {
         auto* view = new termin::gui_native::SceneView3D(scene);
         composition.document().adopt(view);
         composition.document().add_root(*view);
+        const termin::OrbitCamera camera = preview_camera();
         int provider_calls = 0;
-        view->set_camera_provider(
-            [&](termin::gui_native::ViewportSurfaceSize size) -> std::optional<termin::gui_native::SceneView3DCamera> {
-                ++provider_calls;
-                if (size != termin::gui_native::ViewportSurfaceSize{64, 64})
-                    return std::nullopt;
-                const tc_mat44 identity = identity_matrix();
-                return termin::gui_native::SceneView3DCamera{identity, identity, {0.0, 0.0, 0.0}};
-            });
+        view->set_camera_provider([&camera, &provider_calls](termin::gui_native::ViewportSurfaceSize size)
+                                      -> std::optional<termin::gui_native::SceneView3DCamera> {
+            ++provider_calls;
+            if (size != termin::gui_native::ViewportSurfaceSize{64, 64})
+                return std::nullopt;
+            return termin::gui_native::SceneView3DCamera{
+                camera.view_matrix().to_tc_mat44(), camera.projection_matrix(1.0).to_tc_mat44(), camera.eye()};
+        });
         view->interaction().set_action_handler(*item, [&](const termin::visual::ActionEvent3D& action) {
             if (action.part == 1)
                 ++actions;
@@ -112,8 +126,7 @@ int main() {
         const auto pixel = [&](int x, int y, int channel) {
             return pixels[(static_cast<std::size_t>(y) * 64 + x) * 4 + channel];
         };
-        if (pixel(16, 32, 0) <= pixel(16, 32, 1) + 0.2f ||
-            pixel(48, 32, 1) <= pixel(48, 32, 0) + 0.2f) {
+        if (pixel(16, 32, 0) <= pixel(16, 32, 1) + 0.2f || pixel(48, 32, 1) <= pixel(48, 32, 0) + 0.2f) {
             std::fprintf(stderr, "SceneView3D base-color texture was not spatially distinguishable\n");
             return 1;
         }
@@ -134,9 +147,17 @@ int main() {
             return 1;
         }
 
+        view->set_shading_mode(termin::gui_native::SceneView3DShadingMode::Smooth);
+        if (!composition.render_frame()) {
+            std::fprintf(stderr, "SceneView3D did not render a smooth textured static mesh\n");
+            return 1;
+        }
+        view->set_shading_mode(termin::gui_native::SceneView3DShadingMode::Flat);
+
         static_mesh_ptr->clear_base_color_texture();
         static_mesh_ptr->set_tint({0.34f, 0.72f, 0.95f, 1.0f});
-        static_mesh_ptr->set_flat_lighting({0.0f, 0.0f, 1.0f}, 0.28f, 0.72f);
+        const termin::Vec3f light_direction = to_float(preview_normal());
+        static_mesh_ptr->set_flat_lighting(light_direction, 0.28f, 0.72f);
         view->invalidate_scene();
         if (!composition.render_frame()) {
             std::fprintf(stderr, "SceneView3D did not render a flat-lit static mesh\n");
@@ -145,7 +166,7 @@ int main() {
         const std::vector<float> lit = composition.read_frame_rgba_float();
         const float lit_blue = lit[(static_cast<std::size_t>(32) * 64 + 32) * 4 + 2];
 
-        static_mesh_ptr->set_flat_lighting({0.0f, 0.0f, -1.0f}, 0.28f, 0.72f);
+        static_mesh_ptr->set_flat_lighting(light_direction * -1.0f, 0.28f, 0.72f);
         view->invalidate_scene();
         if (!composition.render_frame()) {
             std::fprintf(stderr, "SceneView3D did not update flat-light direction\n");
@@ -157,6 +178,33 @@ int main() {
             std::fprintf(stderr, "SceneView3D flat lighting did not distinguish lit and shadowed faces\n");
             return 1;
         }
+
+        static_mesh_ptr->set_flat_lighting(light_direction, 0.28f, 0.72f);
+        view->set_shading_mode(termin::gui_native::SceneView3DShadingMode::Smooth);
+        if (view->shading_mode() != termin::gui_native::SceneView3DShadingMode::Smooth || !composition.render_frame()) {
+            std::fprintf(stderr, "SceneView3D did not render a smooth-lit static mesh\n");
+            return 1;
+        }
+        const std::vector<float> smooth = composition.read_frame_rgba_float();
+        const float smooth_blue = smooth[(static_cast<std::size_t>(32) * 64 + 32) * 4 + 2];
+        if (smooth_blue <= shadowed_blue + 0.3f) {
+            std::fprintf(stderr, "SceneView3D generated smooth normals did not light the mesh\n");
+            return 1;
+        }
+
+        view->set_wireframe_enabled(true);
+        if (!view->wireframe_enabled() || !composition.render_frame()) {
+            std::fprintf(stderr, "SceneView3D did not render wireframe mode\n");
+            return 1;
+        }
+        const std::vector<float> wireframe = composition.read_frame_rgba_float();
+        const float wireframe_interior = wireframe[(static_cast<std::size_t>(32) * 64 + 16) * 4 + 2];
+        if (wireframe_interior >= 0.2f) {
+            std::fprintf(stderr, "SceneView3D wireframe mode filled a triangle interior\n");
+            return 1;
+        }
+        view->set_wireframe_enabled(false);
+        view->set_shading_mode(termin::gui_native::SceneView3DShadingMode::Flat);
 
         composition.push_pointer(tc_ui_pointer_event{TC_UI_POINTER_DOWN, 32.0f, 32.0f, 0, 1, 0});
         composition.push_pointer(tc_ui_pointer_event{TC_UI_POINTER_UP, 32.0f, 32.0f, 0, 1, 0});

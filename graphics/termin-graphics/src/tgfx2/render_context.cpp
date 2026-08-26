@@ -1348,11 +1348,12 @@ namespace tgfx {
         }
 
         set_vertex_layout(fullscreen_quad_vertex_layout_desc());
-        // Explicit topology — previous draws (ImmediateRenderer line/point
-        // batches) may leave topology_ pointing at LineList, which makes
-        // the FSQ index list `{0,1,2, 0,2,3}` render as three line segments
-        // instead of two triangles. Was showing up as a diagonal sliver in
-        // fullscreen-pass output.
+        // Fullscreen geometry owns both of the raster choices that determine
+        // whether its two triangles actually cover the target.  Previous
+        // mesh/immediate draws may leave Line polygon mode or line/point
+        // topology behind; either leak turns the FSQ index list
+        // `{0,1,2, 0,2,3}` into a diagonal sliver.
+        set_polygon_mode(PolygonMode::Fill);
         set_topology(PrimitiveTopology::TriangleList);
 
         // Fullscreen quad drawing owns its vertex stream. Reusing an
@@ -1377,6 +1378,7 @@ namespace tgfx {
         ensure_fsq_resources();
 
         set_vertex_layout(fullscreen_quad_vertex_layout_desc());
+        set_polygon_mode(PolygonMode::Fill);
         set_topology(PrimitiveTopology::TriangleList);
 
         if (!flush_pipeline())

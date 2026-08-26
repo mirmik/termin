@@ -323,6 +323,9 @@ namespace {
             {identity_first.document, 0, 10, metrics},
         };
         context.begin_pass(target, {}, &clear, 1.0f, false);
+        // Simulate a wireframe 3D renderer immediately before UI composition.
+        // Canvas2D must still fill its triangle-backed rectangles and images.
+        context.set_polygon_mode(tgfx::PolygonMode::Line);
         const std::size_t painted =
             painter.paint_documents(context, static_cast<int>(kWidth), static_cast<int>(kHeight), submissions);
         context.end_pass();

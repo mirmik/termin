@@ -415,6 +415,9 @@ static void test_fullscreen_quad(tgfx::IRenderDevice& device, tgfx::PipelineCach
     // But we need fsq_vs_ before binding... let's just bind only FS
     // and let draw_fullscreen_quad supply the VS.
     ctx.bind_shader({}, fs);
+    // A fullscreen helper must not inherit wireframe state from the pass that
+    // produced its input texture.
+    ctx.set_polygon_mode(tgfx::PolygonMode::Line);
 
     // Check GL errors before draw
     while (glGetError() != GL_NO_ERROR) {

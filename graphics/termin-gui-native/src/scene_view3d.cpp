@@ -37,10 +37,23 @@ namespace termin::gui_native {
 
         constexpr termin::visual::PointerId3D kMousePointer = 1;
         constexpr const char* kStaticMeshShader = "termin-engine-static-mesh";
+        constexpr const char* kSmoothStaticMeshShader = "termin-engine-static-mesh-smooth";
         constexpr const char* kTexturedStaticMeshShader = "termin-engine-static-mesh-textured";
+        constexpr const char* kSmoothTexturedStaticMeshShader = "termin-engine-static-mesh-textured-smooth";
 
         struct TexturedStaticMeshVertex {
             termin::Vec3f position;
+            termin::Vec2f uv;
+        };
+
+        struct SmoothStaticMeshVertex {
+            termin::Vec3f position;
+            termin::Vec3f normal;
+        };
+
+        struct SmoothTexturedStaticMeshVertex {
+            termin::Vec3f position;
+            termin::Vec3f normal;
             termin::Vec2f uv;
         };
 
@@ -50,29 +63,48 @@ namespace termin::gui_native {
             float base_color_factor[4];
             float light_direction_enabled[4];
             float light_intensity[4];
+            float normal_matrix_rows[12];
         };
 
-        struct TexturedStaticMeshPush {
-            float view_projection[16];
-            float world_from_local[16];
-            float base_color_factor[4];
-        };
-
-        tgfx::VertexLayoutDesc static_mesh_layout(bool with_uvs) {
+        tgfx::VertexLayoutDesc static_mesh_layout(bool with_uvs, bool buffer_has_normals, bool use_normals) {
             tgfx::VertexLayoutDesc layout;
-            layout.stride = with_uvs ? sizeof(TexturedStaticMeshVertex) : sizeof(termin::Vec3f);
-            layout.attribute_count = with_uvs ? 2 : 1;
-            layout.attributes[0] = {0,
-                                    tgfx::VertexFormat::Float3,
-                                    static_cast<std::uint32_t>(offsetof(TexturedStaticMeshVertex, position)),
-                                    tgfx::intern_vertex_semantic("position")};
+            if (buffer_has_normals)
+                layout.stride = with_uvs ? sizeof(SmoothTexturedStaticMeshVertex) : sizeof(SmoothStaticMeshVertex);
+            else
+                layout.stride = with_uvs ? sizeof(TexturedStaticMeshVertex) : sizeof(termin::Vec3f);
+            layout.attribute_count = 1 + (use_normals ? 1 : 0) + (with_uvs ? 1 : 0);
+            layout.attributes[0] = {0, tgfx::VertexFormat::Float3, 0, tgfx::intern_vertex_semantic("position")};
+            std::uint32_t next_location = 1;
+            if (use_normals) {
+                layout.attributes[next_location] = {
+                    next_location,
+                    tgfx::VertexFormat::Float3,
+                    static_cast<std::uint32_t>(offsetof(SmoothStaticMeshVertex, normal)),
+                    tgfx::intern_vertex_semantic("normal")};
+                ++next_location;
+            }
             if (with_uvs) {
-                layout.attributes[1] = {1,
-                                        tgfx::VertexFormat::Float2,
-                                        static_cast<std::uint32_t>(offsetof(TexturedStaticMeshVertex, uv)),
-                                        tgfx::intern_vertex_semantic("uv0")};
+                const std::uint32_t offset =
+                    buffer_has_normals ? static_cast<std::uint32_t>(offsetof(SmoothTexturedStaticMeshVertex, uv))
+                                       : static_cast<std::uint32_t>(offsetof(TexturedStaticMeshVertex, uv));
+                layout.attributes[next_location] = {
+                    next_location, tgfx::VertexFormat::Float2, offset, tgfx::intern_vertex_semantic("uv0")};
             }
             return layout;
+        }
+
+        bool normal_matrix_rows(const termin::Affine3d& transform, float* destination) {
+            termin::Basis3d inverse;
+            if (!transform.basis.try_inverse(inverse, 1.0e-12))
+                return false;
+            const termin::Vec3 rows[3] = {inverse.x, inverse.y, inverse.z};
+            for (std::size_t row = 0; row < 3; ++row) {
+                destination[row * 4 + 0] = static_cast<float>(rows[row].x);
+                destination[row * 4 + 1] = static_cast<float>(rows[row].y);
+                destination[row * 4 + 2] = static_cast<float>(rows[row].z);
+                destination[row * 4 + 3] = 0.0f;
+            }
+            return true;
         }
 
         void affine_to_float_matrix(const termin::Affine3d& affine, float* destination) {
@@ -188,6 +220,112 @@ namespace termin::gui_native {
             destination.push_back(color.a);
         }
 
+        struct StaticMeshVertexUpload {
+            tgfx::BufferHandle buffer{};
+            std::uint64_t bytes = 0;
+            bool has_normals = false;
+            bool generated_normals = false;
+        };
+
+        std::vector<termin::Vec3f> smooth_normals(const termin::Mesh3& mesh, bool& generated) {
+            std::vector<termin::Vec3f> normals;
+            generated = false;
+            if (mesh.has_normals()) {
+                normals = mesh.normals;
+                bool usable = true;
+                for (auto& normal : normals) {
+                    termin::Vec3f normalized;
+                    if (!normal.is_finite() || !normal.try_normalized(normalized)) {
+                        usable = false;
+                        break;
+                    }
+                    normal = normalized;
+                }
+                if (usable)
+                    return normals;
+                tc_log_error("[termin-gui-native] SceneView3D static mesh '%s' has invalid authored normals; "
+                             "regenerating them",
+                             mesh.name.c_str());
+            }
+
+            generated = true;
+            normals.assign(mesh.vertices.size(), termin::Vec3f{0.0f, 0.0f, 0.0f});
+            for (std::size_t index = 0; index + 2 < mesh.triangles.size(); index += 3) {
+                const std::uint32_t i0 = mesh.triangles[index];
+                const std::uint32_t i1 = mesh.triangles[index + 1];
+                const std::uint32_t i2 = mesh.triangles[index + 2];
+                const termin::Vec3f face_normal =
+                    (mesh.vertices[i1] - mesh.vertices[i0]).cross(mesh.vertices[i2] - mesh.vertices[i0]);
+                normals[i0] += face_normal;
+                normals[i1] += face_normal;
+                normals[i2] += face_normal;
+            }
+            for (auto& normal : normals) {
+                termin::Vec3f normalized;
+                normal = normal.try_normalized(normalized) ? normalized : termin::Vec3f{0.0f, 0.0f, 1.0f};
+            }
+            return normals;
+        }
+
+        bool upload_static_mesh_vertices(tgfx::IRenderDevice& device,
+                                         const termin::Mesh3& mesh,
+                                         bool include_normals,
+                                         StaticMeshVertexUpload& output) {
+            try {
+                std::vector<termin::Vec3f> normals;
+                bool generated_normals = false;
+                if (include_normals)
+                    normals = smooth_normals(mesh, generated_normals);
+
+                std::vector<TexturedStaticMeshVertex> textured;
+                std::vector<SmoothStaticMeshVertex> smooth;
+                std::vector<SmoothTexturedStaticMeshVertex> smooth_textured;
+                const void* data = mesh.vertices.data();
+                std::uint64_t bytes = static_cast<std::uint64_t>(mesh.vertices.size()) * sizeof(mesh.vertices[0]);
+                if (include_normals && mesh.has_uvs()) {
+                    smooth_textured.resize(mesh.vertices.size());
+                    for (std::size_t index = 0; index < mesh.vertices.size(); ++index)
+                        smooth_textured[index] = {mesh.vertices[index], normals[index], mesh.uvs[index]};
+                    data = smooth_textured.data();
+                    bytes = static_cast<std::uint64_t>(smooth_textured.size()) * sizeof(smooth_textured[0]);
+                } else if (include_normals) {
+                    smooth.resize(mesh.vertices.size());
+                    for (std::size_t index = 0; index < mesh.vertices.size(); ++index)
+                        smooth[index] = {mesh.vertices[index], normals[index]};
+                    data = smooth.data();
+                    bytes = static_cast<std::uint64_t>(smooth.size()) * sizeof(smooth[0]);
+                } else if (mesh.has_uvs()) {
+                    textured.resize(mesh.vertices.size());
+                    for (std::size_t index = 0; index < mesh.vertices.size(); ++index)
+                        textured[index] = {mesh.vertices[index], mesh.uvs[index]};
+                    data = textured.data();
+                    bytes = static_cast<std::uint64_t>(textured.size()) * sizeof(textured[0]);
+                }
+
+                tgfx::BufferDesc description;
+                description.size = bytes;
+                description.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
+                const tgfx::BufferHandle buffer = device.create_buffer(description);
+                if (!buffer) {
+                    tc_log_error("[termin-gui-native] SceneView3D failed to allocate %llu vertex bytes "
+                                 "for static mesh '%s'",
+                                 static_cast<unsigned long long>(bytes),
+                                 mesh.name.c_str());
+                    return false;
+                }
+                device.upload_buffer(buffer,
+                                     std::span<const std::uint8_t>(static_cast<const std::uint8_t*>(data),
+                                                                   static_cast<std::size_t>(bytes)));
+                output = {buffer, bytes, include_normals, generated_normals};
+                return true;
+            } catch (const std::exception& error) {
+                tc_log_error("[termin-gui-native] SceneView3D failed to prepare vertices for static mesh '%s': %s",
+                             mesh.name.c_str(),
+                             error.what());
+            }
+            return false;
+        }
+
     } // namespace
 
     struct SceneView3D::RenderState {
@@ -210,6 +348,7 @@ namespace termin::gui_native {
             tgfx::BufferHandle index_buffer{};
             std::uint32_t index_count = 0;
             bool has_uvs = false;
+            bool has_normals = false;
             bool used = false;
         };
 
@@ -224,9 +363,15 @@ namespace termin::gui_native {
         tc_shader_handle static_mesh_shader = tc_shader_handle_invalid();
         tgfx::ShaderHandle static_mesh_vertex{};
         tgfx::ShaderHandle static_mesh_fragment{};
+        tc_shader_handle smooth_static_mesh_shader = tc_shader_handle_invalid();
+        tgfx::ShaderHandle smooth_static_mesh_vertex{};
+        tgfx::ShaderHandle smooth_static_mesh_fragment{};
         tc_shader_handle textured_mesh_shader = tc_shader_handle_invalid();
         tgfx::ShaderHandle textured_mesh_vertex{};
         tgfx::ShaderHandle textured_mesh_fragment{};
+        tc_shader_handle smooth_textured_mesh_shader = tc_shader_handle_invalid();
+        tgfx::ShaderHandle smooth_textured_mesh_vertex{};
+        tgfx::ShaderHandle smooth_textured_mesh_fragment{};
     };
 
     SceneView3D::SceneView3D(termin::visual::TcVisualScene3D scene)
@@ -338,6 +483,20 @@ namespace termin::gui_native {
     void SceneView3D::invalidate_view() {
         render_dirty_ = true;
         mark_dirty(TC_WIDGET_DIRTY_STATE | TC_WIDGET_DIRTY_PAINT);
+    }
+
+    void SceneView3D::set_shading_mode(SceneView3DShadingMode mode) {
+        if (shading_mode_ == mode)
+            return;
+        shading_mode_ = mode;
+        invalidate_view();
+    }
+
+    void SceneView3D::set_wireframe_enabled(bool enabled) {
+        if (wireframe_enabled_ == enabled)
+            return;
+        wireframe_enabled_ = enabled;
+        invalidate_view();
     }
 
     ViewportSurfaceSize SceneView3D::framebuffer_size() const {
@@ -846,6 +1005,7 @@ namespace termin::gui_native {
 
         for (const CollectedDraw& draw : sink.draws) {
             if (draw.protocol == termin::visual::PrimitiveDrawProtocol3D && draw.primitive.geometry) {
+                context.set_polygon_mode(tgfx::PolygonMode::Fill);
                 const auto& geometry = *draw.primitive.geometry;
                 state.immediate.begin();
                 auto& vertices =
@@ -903,32 +1063,12 @@ namespace termin::gui_native {
                     created.has_uvs = mesh.has_uvs();
                     created.index_count = static_cast<std::uint32_t>(mesh.triangles.size());
 
-                    std::vector<TexturedStaticMeshVertex> textured_vertices;
-                    const void* vertex_data = mesh.vertices.data();
-                    std::uint64_t vertex_bytes =
-                        static_cast<std::uint64_t>(mesh.vertices.size()) * sizeof(mesh.vertices[0]);
-                    if (created.has_uvs) {
-                        textured_vertices.resize(mesh.vertices.size());
-                        for (std::size_t index = 0; index < mesh.vertices.size(); ++index)
-                            textured_vertices[index] = {mesh.vertices[index], mesh.uvs[index]};
-                        vertex_data = textured_vertices.data();
-                        vertex_bytes =
-                            static_cast<std::uint64_t>(textured_vertices.size()) * sizeof(textured_vertices[0]);
-                    }
+                    StaticMeshVertexUpload vertex_upload;
+                    if (!upload_static_mesh_vertices(device, mesh, false, vertex_upload))
+                        continue;
+                    created.vertex_buffer = vertex_upload.buffer;
                     const std::uint64_t index_bytes =
                         static_cast<std::uint64_t>(mesh.triangles.size()) * sizeof(mesh.triangles[0]);
-
-                    tgfx::BufferDesc vertex_description;
-                    vertex_description.size = vertex_bytes;
-                    vertex_description.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
-                    created.vertex_buffer = device.create_buffer(vertex_description);
-                    if (!created.vertex_buffer) {
-                        tc_log_error("[termin-gui-native] SceneView3D failed to allocate %llu vertex bytes "
-                                     "for static mesh '%s'",
-                                     static_cast<unsigned long long>(vertex_bytes),
-                                     mesh.name.c_str());
-                        continue;
-                    }
 
                     tgfx::BufferDesc index_description;
                     index_description.size = index_bytes;
@@ -943,9 +1083,6 @@ namespace termin::gui_native {
                         continue;
                     }
 
-                    device.upload_buffer(created.vertex_buffer,
-                                         std::span<const std::uint8_t>(static_cast<const std::uint8_t*>(vertex_data),
-                                                                       static_cast<std::size_t>(vertex_bytes)));
                     device.upload_buffer(
                         created.index_buffer,
                         std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(mesh.triangles.data()),
@@ -957,45 +1094,81 @@ namespace termin::gui_native {
                                 mesh.name.c_str(),
                                 mesh.vertices.size(),
                                 mesh.triangles.size(),
-                                static_cast<unsigned long long>(vertex_bytes + index_bytes),
+                                static_cast<unsigned long long>(vertex_upload.bytes + index_bytes),
                                 upload_duration.count());
                     state.static_meshes.push_back(std::move(created));
                     mesh_cache = std::prev(state.static_meshes.end());
                 }
                 mesh_cache->used = true;
 
+                bool use_smooth = shading_mode_ == SceneView3DShadingMode::Smooth;
+                if (use_smooth && !mesh_cache->has_normals) {
+                    const auto normal_started_at = std::chrono::steady_clock::now();
+                    StaticMeshVertexUpload smooth_upload;
+                    if (!upload_static_mesh_vertices(device, mesh, true, smooth_upload)) {
+                        tc_log_error("[termin-gui-native] SceneView3D fell back to flat shading for static mesh '%s'",
+                                     mesh.name.c_str());
+                        use_smooth = false;
+                    } else {
+                        device.destroy(mesh_cache->vertex_buffer);
+                        mesh_cache->vertex_buffer = smooth_upload.buffer;
+                        mesh_cache->has_normals = true;
+                        const auto normal_duration = std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - normal_started_at);
+                        tc_log_info("[termin-gui-native] SceneView3D uploaded %s smooth normals for static mesh '%s': "
+                                    "%llu vertex bytes in %.3f ms",
+                                    smooth_upload.generated_normals ? "generated" : "authored",
+                                    mesh.name.c_str(),
+                                    static_cast<unsigned long long>(smooth_upload.bytes),
+                                    normal_duration.count());
+                    }
+                }
+
+                StaticMeshPush push{};
+                std::copy(view_projection_float.begin(), view_projection_float.end(), push.view_projection);
+                affine_to_float_matrix(draw.world_from_local, push.world_from_local);
+                push.base_color_factor[0] = draw.mesh.tint.r;
+                push.base_color_factor[1] = draw.mesh.tint.g;
+                push.base_color_factor[2] = draw.mesh.tint.b;
+                push.base_color_factor[3] = draw.mesh.tint.a;
+                push.light_direction_enabled[0] = draw.mesh.flat_lighting.direction.x;
+                push.light_direction_enabled[1] = draw.mesh.flat_lighting.direction.y;
+                push.light_direction_enabled[2] = draw.mesh.flat_lighting.direction.z;
+                push.light_direction_enabled[3] = draw.mesh.flat_lighting.enabled ? 1.0f : 0.0f;
+                push.light_intensity[0] = draw.mesh.flat_lighting.ambient;
+                push.light_intensity[1] = draw.mesh.flat_lighting.diffuse;
+                if (use_smooth && !normal_matrix_rows(draw.world_from_local, push.normal_matrix_rows)) {
+                    tc_log_error("[termin-gui-native] SceneView3D fell back to flat shading for static mesh '%s' "
+                                 "because its world transform has no normal matrix",
+                                 mesh.name.c_str());
+                    use_smooth = false;
+                }
+
                 context.set_depth_test(draw.mesh.depth_test);
                 context.set_depth_write(draw.mesh.depth_test);
                 context.set_blend(false);
                 context.set_cull(tgfx::CullMode::None);
-                context.set_vertex_layout(static_mesh_layout(mesh_cache->has_uvs));
+                context.set_polygon_mode(wireframe_enabled_ ? tgfx::PolygonMode::Line : tgfx::PolygonMode::Fill);
+                context.set_vertex_layout(static_mesh_layout(mesh_cache->has_uvs, mesh_cache->has_normals, use_smooth));
                 context.set_topology(tgfx::PrimitiveTopology::TriangleList);
 
                 if (!draw.mesh.base_color_texture) {
-                    if (tc_shader_handle_is_invalid(state.static_mesh_shader))
-                        state.static_mesh_shader = tgfx::register_builtin_shader_from_catalog(kStaticMeshShader);
-                    tc_shader* shader = tc_shader_get(state.static_mesh_shader);
-                    if (!shader || !termin::tc_shader_ensure_tgfx2(
-                                       shader, &device, &state.static_mesh_vertex, &state.static_mesh_fragment)) {
+                    tc_shader_handle& shader_handle =
+                        use_smooth ? state.smooth_static_mesh_shader : state.static_mesh_shader;
+                    tgfx::ShaderHandle& vertex =
+                        use_smooth ? state.smooth_static_mesh_vertex : state.static_mesh_vertex;
+                    tgfx::ShaderHandle& fragment =
+                        use_smooth ? state.smooth_static_mesh_fragment : state.static_mesh_fragment;
+                    if (tc_shader_handle_is_invalid(shader_handle))
+                        shader_handle = tgfx::register_builtin_shader_from_catalog(use_smooth ? kSmoothStaticMeshShader
+                                                                                              : kStaticMeshShader);
+                    tc_shader* shader = tc_shader_get(shader_handle);
+                    if (!shader || !termin::tc_shader_ensure_tgfx2(shader, &device, &vertex, &fragment)) {
                         tc_log_error("[termin-gui-native] SceneView3D static-mesh shader is unavailable");
                         continue;
                     }
 
-                    StaticMeshPush push{};
-                    std::copy(view_projection_float.begin(), view_projection_float.end(), push.view_projection);
-                    affine_to_float_matrix(draw.world_from_local, push.world_from_local);
-                    push.base_color_factor[0] = draw.mesh.tint.r;
-                    push.base_color_factor[1] = draw.mesh.tint.g;
-                    push.base_color_factor[2] = draw.mesh.tint.b;
-                    push.base_color_factor[3] = draw.mesh.tint.a;
-                    push.light_direction_enabled[0] = draw.mesh.flat_lighting.direction.x;
-                    push.light_direction_enabled[1] = draw.mesh.flat_lighting.direction.y;
-                    push.light_direction_enabled[2] = draw.mesh.flat_lighting.direction.z;
-                    push.light_direction_enabled[3] = draw.mesh.flat_lighting.enabled ? 1.0f : 0.0f;
-                    push.light_intensity[0] = draw.mesh.flat_lighting.ambient;
-                    push.light_intensity[1] = draw.mesh.flat_lighting.diffuse;
-
-                    context.bind_shader(state.static_mesh_vertex, state.static_mesh_fragment);
+                    context.bind_shader(vertex, fragment);
                     context.use_shader_resource_layout(shader);
                     context.bind_uniform_data("u_push", &push, sizeof(push));
                     context.draw(mesh_cache->vertex_buffer,
@@ -1032,23 +1205,22 @@ namespace termin::gui_native {
                 }
                 texture_cache->used = true;
 
-                if (tc_shader_handle_is_invalid(state.textured_mesh_shader))
-                    state.textured_mesh_shader = tgfx::register_builtin_shader_from_catalog(kTexturedStaticMeshShader);
-                tc_shader* shader = tc_shader_get(state.textured_mesh_shader);
-                if (!shader || !termin::tc_shader_ensure_tgfx2(
-                                   shader, &device, &state.textured_mesh_vertex, &state.textured_mesh_fragment)) {
+                tc_shader_handle& shader_handle =
+                    use_smooth ? state.smooth_textured_mesh_shader : state.textured_mesh_shader;
+                tgfx::ShaderHandle& vertex =
+                    use_smooth ? state.smooth_textured_mesh_vertex : state.textured_mesh_vertex;
+                tgfx::ShaderHandle& fragment =
+                    use_smooth ? state.smooth_textured_mesh_fragment : state.textured_mesh_fragment;
+                if (tc_shader_handle_is_invalid(shader_handle))
+                    shader_handle = tgfx::register_builtin_shader_from_catalog(
+                        use_smooth ? kSmoothTexturedStaticMeshShader : kTexturedStaticMeshShader);
+                tc_shader* shader = tc_shader_get(shader_handle);
+                if (!shader || !termin::tc_shader_ensure_tgfx2(shader, &device, &vertex, &fragment)) {
                     tc_log_error("[termin-gui-native] SceneView3D textured static-mesh shader is unavailable");
                     continue;
                 }
 
-                TexturedStaticMeshPush push{};
-                std::copy(view_projection_float.begin(), view_projection_float.end(), push.view_projection);
-                affine_to_float_matrix(draw.world_from_local, push.world_from_local);
-                push.base_color_factor[0] = draw.mesh.tint.r;
-                push.base_color_factor[1] = draw.mesh.tint.g;
-                push.base_color_factor[2] = draw.mesh.tint.b;
-                push.base_color_factor[3] = draw.mesh.tint.a;
-                context.bind_shader(state.textured_mesh_vertex, state.textured_mesh_fragment);
+                context.bind_shader(vertex, fragment);
                 context.use_shader_resource_layout(shader);
                 context.bind_uniform_data("u_push", &push, sizeof(push));
                 context.bind_texture("u_base_color_texture", texture_cache->gpu);
@@ -1057,6 +1229,7 @@ namespace termin::gui_native {
                              mesh_cache->index_count,
                              tgfx::IndexType::Uint32);
             } else if (draw.protocol == termin::visual::PointCloudDrawProtocol3D && draw.point_cloud.cloud) {
+                context.set_polygon_mode(tgfx::PolygonMode::Fill);
                 auto cache = std::find_if(state.point_clouds.begin(), state.point_clouds.end(), [&](const auto& value) {
                     return value.source == draw.point_cloud.cloud &&
                            std::memcmp(&value.transform, &draw.world_from_local, sizeof(termin::Affine3d)) == 0;
@@ -1086,6 +1259,10 @@ namespace termin::gui_native {
                 state.point_renderer.draw(context, *cache->gpu, draw.point_cloud.style, parameters);
             }
         }
+        // Wireframe is local to static meshes in this offscreen pass.  Keep it
+        // from becoming implicit input state for the next prepared renderer or
+        // for the Canvas2D quad that composites this viewport texture.
+        context.set_polygon_mode(tgfx::PolygonMode::Fill);
         context.end_pass();
 
         std::erase_if(state.point_clouds, [&](auto& cache) {
@@ -1134,8 +1311,12 @@ namespace termin::gui_native {
         state.static_meshes.clear();
         state.static_mesh_vertex = {};
         state.static_mesh_fragment = {};
+        state.smooth_static_mesh_vertex = {};
+        state.smooth_static_mesh_fragment = {};
         state.textured_mesh_vertex = {};
         state.textured_mesh_fragment = {};
+        state.smooth_textured_mesh_vertex = {};
+        state.smooth_textured_mesh_fragment = {};
         state.point_renderer.release(*state.device);
         if (state.color)
             state.device->destroy(state.color);

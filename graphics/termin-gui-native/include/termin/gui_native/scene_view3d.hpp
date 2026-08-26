@@ -14,6 +14,11 @@
 
 namespace termin::gui_native {
 
+    enum class SceneView3DShadingMode : std::uint8_t {
+        Flat,
+        Smooth,
+    };
+
     struct SceneView3DCamera {
         tc_mat44 view_matrix{};
         tc_mat44 projection_matrix{};
@@ -39,6 +44,15 @@ namespace termin::gui_native {
         const SceneView3DCamera& camera() const;
         void set_camera_provider(CameraProvider provider);
         void invalidate_view();
+
+        SceneView3DShadingMode shading_mode() const noexcept {
+            return shading_mode_;
+        }
+        void set_shading_mode(SceneView3DShadingMode mode);
+        bool wireframe_enabled() const noexcept {
+            return wireframe_enabled_;
+        }
+        void set_wireframe_enabled(bool enabled);
 
         ViewportSurfaceSize framebuffer_size() const;
         uint32_t texture_id() const;
@@ -75,6 +89,8 @@ namespace termin::gui_native {
         std::unique_ptr<RenderState> render_state_;
         ViewportSurfaceSize requested_size_{};
         termin::LinearColor clear_color_{0.06f, 0.07f, 0.09f, 1.0f};
+        SceneView3DShadingMode shading_mode_ = SceneView3DShadingMode::Flat;
+        bool wireframe_enabled_ = false;
         bool render_dirty_ = true;
         bool scene_pointer_active_ = false;
         // A projection failure terminates the captured scene interaction, but

@@ -331,6 +331,9 @@ static bool render_fsq_artifact_smoke(tgfx::IRenderDevice& device) {
         ctx.set_blend(false);
         ctx.set_cull(tgfx::CullMode::None);
         ctx.bind_shader({}, fs);
+        // The fullscreen helper owns filled coverage even when the preceding
+        // scene pass left wireframe rasterization selected.
+        ctx.set_polygon_mode(tgfx::PolygonMode::Line);
         ctx.draw_fullscreen_quad();
         ctx.end_pass();
         ctx.end_frame();

@@ -6,7 +6,7 @@ import struct
 
 import pytest
 
-from termin.model_viewer.application import _OrbitInteraction, parse_options
+from termin.model_viewer.application import _OrbitInteraction, _create_view, parse_options
 from termin.model_viewer.model import load_visual_model
 
 
@@ -114,8 +114,12 @@ def test_load_visual_model_preserves_hierarchy_and_converts_to_z_up(tmp_path):
         assert model.bounds.minimum == pytest.approx((2.0, -4.0, 3.0))
         assert model.bounds.maximum == pytest.approx((3.0, -4.0, 4.0))
         assert not model.items[0].hit_test_enabled
-        assert not model.items[0].flat_lighting_enabled
+        assert model.items[0].flat_lighting_enabled
         assert {path.name for path in tmp_path.iterdir()} == before
+        assert model.statistics.mesh_count == 1
+        assert model.statistics.primitive_count == 1
+        assert model.statistics.vertex_count == 3
+        assert model.statistics.triangle_count == 1
     finally:
         model.close()
 
@@ -135,7 +139,7 @@ def test_load_visual_model_uses_default_material_when_glb_has_no_materials(tmp_p
         assert not item.hit_test_enabled
         assert item.flat_lighting_enabled
         assert tuple(item.flat_light_direction) == pytest.approx(
-            (0.0, 0.9781476007338057, 0.20791169081775931)
+            (0.6123724356957945, -0.6123724356957946, 0.5)
         )
         assert item.flat_light_ambient == pytest.approx(0.28)
         assert item.flat_light_diffuse == pytest.approx(0.72)
@@ -204,3 +208,70 @@ def test_orbit_interaction_uses_shared_orbit_camera():
     assert interaction.handle(event, None)
     assert camera.distance < initial_distance
     assert len(invalidations) == 2
+
+
+def test_model_viewer_native_toolbar_controls_scene_view_and_light(tmp_path):
+    from termin.gui_native import (
+        EventResult,
+        PointerEvent,
+        PointerEventType,
+        Rect,
+        SceneView3DShadingMode,
+        tc_ui_document_create,
+        tc_ui_document_destroy,
+    )
+
+    model = load_visual_model(_write_triangle_glb(tmp_path / "toolbar.glb"))
+    document = tc_ui_document_create()
+    repaint_requests = []
+    ui = None
+    try:
+        ui = _create_view(document, model, lambda: repaint_requests.append(True))
+        assert ui.root.widget.stable_id == "termin.model-viewer.root"
+        assert ui.view.widget.stable_id == "termin.model-viewer.scene"
+        assert ui.view.shading_mode == SceneView3DShadingMode.Flat
+        assert ui.statistics_label.widget.stable_id == "termin.model-viewer.statistics"
+        assert ui.statistics_label.text == "Vertices: 3  ·  Triangles: 1"
+        assert ui.flat_button.active
+        assert not ui.smooth_button.active
+        assert not ui.view.wireframe_enabled
+        initial_direction = (ui.camera.eye - ui.camera.target).normalized()
+        assert tuple(model.items[0].flat_light_direction) == pytest.approx(
+            (initial_direction.x, initial_direction.y, initial_direction.z)
+        )
+
+        def click(button) -> None:
+            button.widget.bounds = Rect(0.0, 0.0, 36.0, 36.0)
+            event = PointerEvent()
+            event.x = 10.0
+            event.y = 10.0
+            event.type = PointerEventType.Down
+            assert button.widget.dispatch_pointer_event(event) == EventResult.Handled
+            event.type = PointerEventType.Up
+            assert button.widget.dispatch_pointer_event(event) == EventResult.Handled
+
+        click(ui.smooth_button)
+        assert ui.view.shading_mode == SceneView3DShadingMode.Smooth
+        assert not ui.flat_button.active
+        assert ui.smooth_button.active
+
+        click(ui.wireframe_button)
+        assert ui.view.wireframe_enabled
+        assert ui.wireframe_button.active
+
+        ui.camera.orbit(0.37, -0.18)
+        eye = ui.camera.eye
+        target = ui.camera.target
+        expected = (eye - target).normalized()
+        click(ui.light_button)
+        assert tuple(model.items[0].flat_light_direction) == pytest.approx(
+            (expected.x, expected.y, expected.z)
+        )
+        assert len(repaint_requests) >= 4
+    finally:
+        if ui is not None:
+            ui.view.set_fallback_pointer_handler(None)
+            ui.view.set_camera_provider(None)
+            ui.view.detach_scene()
+        model.close()
+        tc_ui_document_destroy(document)

@@ -479,7 +479,9 @@ Source of truth: `editor/termin-model-viewer/`.
 
 Projectless static GLB viewer used by `termin show`. It composes portable GLB
 data into the retained 3D graphics scene and owns the native window and orbit
-camera interaction without depending on editor or project runtime state.
+camera interaction without depending on editor or project runtime state. Its
+native toolbar switches flat/smooth shading and wireframe presentation, and
+can place the preview key light from the current camera direction.
 
 ### termin-cli
 

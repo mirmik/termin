@@ -434,6 +434,10 @@ namespace tgfx {
         ctx.set_blend(true);
         ctx.set_blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
         ctx.set_cull(CullMode::None);
+        // Canvas batches are filled triangle meshes.  Do not inherit a Line
+        // polygon mode from an earlier 3D pass: that reduces every image or
+        // rectangular widget to its outer edges and a screen-space diagonal.
+        ctx.set_polygon_mode(PolygonMode::Fill);
         ctx.clear_scissor();
 
         text2d_.begin(&ctx, viewport_w_, viewport_h_, default_font_);

@@ -37,11 +37,9 @@ namespace termin::visual {
         }
 
         void require_texture(const std::shared_ptr<const BaseColorTextureData3D>& texture) {
-            const std::uint64_t expected = texture
-                                               ? static_cast<std::uint64_t>(texture->width) * texture->height * 4u
-                                               : 0u;
-            if (!texture || texture->width == 0 || texture->height == 0 ||
-                expected != texture->rgba8.size()) {
+            const std::uint64_t expected =
+                texture ? static_cast<std::uint64_t>(texture->width) * texture->height * 4u : 0u;
+            if (!texture || texture->width == 0 || texture->height == 0 || expected != texture->rgba8.size()) {
                 tc::Log::error("StaticMeshItem3D rejected invalid base-color texture replacement");
                 throw std::invalid_argument("StaticMeshItem3D requires a non-empty RGBA8 base-color texture");
             }
@@ -74,10 +72,6 @@ namespace termin::visual {
 
     void StaticMeshItem3D::set_base_color_texture(std::shared_ptr<const BaseColorTextureData3D> texture) {
         require_texture(texture);
-        if (flat_lighting_.enabled) {
-            tc::Log::error("StaticMeshItem3D rejected a base-color texture while flat lighting is enabled");
-            throw std::invalid_argument("StaticMeshItem3D flat lighting is only supported for untextured meshes");
-        }
         if (!mesh_->has_uvs()) {
             tc::Log::error("StaticMeshItem3D rejected a base-color texture for a mesh without UVs");
             throw std::invalid_argument("StaticMeshItem3D textured mesh requires one UV per vertex");
@@ -92,10 +86,6 @@ namespace termin::visual {
             tc::Log::error("StaticMeshItem3D rejected invalid flat-lighting parameters");
             throw std::invalid_argument(
                 "StaticMeshItem3D flat lighting requires a finite direction and non-negative finite intensities");
-        }
-        if (base_color_texture_) {
-            tc::Log::error("StaticMeshItem3D rejected flat lighting for a textured mesh");
-            throw std::invalid_argument("StaticMeshItem3D flat lighting is only supported for untextured meshes");
         }
         flat_lighting_ = {
             .enabled = true,

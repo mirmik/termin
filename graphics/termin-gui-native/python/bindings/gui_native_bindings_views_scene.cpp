@@ -28,19 +28,20 @@ namespace {
 } // namespace
 
 void bind_gui_native_scene_views(nb::module_& m) {
+    nb::enum_<termin::gui_native::SceneView3DShadingMode>(m, "SceneView3DShadingMode")
+        .value("Flat", termin::gui_native::SceneView3DShadingMode::Flat)
+        .value("Smooth", termin::gui_native::SceneView3DShadingMode::Smooth);
+
     nb::class_<SceneView3DTargetPointerEventRef>(m, "SceneView3DTargetPointerEvent")
         .def_prop_ro("kind", [](const SceneView3DTargetPointerEventRef& self) { return self.event.kind; })
-        .def_prop_ro(
-            "pointer_event",
-            [](const SceneView3DTargetPointerEventRef& self) { return self.event.pointer_event; })
+        .def_prop_ro("pointer_event",
+                     [](const SceneView3DTargetPointerEventRef& self) { return self.event.pointer_event; })
         .def_prop_ro("target", [](const SceneView3DTargetPointerEventRef& self) { return self.event.target; })
         .def_prop_ro("part", [](const SceneView3DTargetPointerEventRef& self) { return self.event.part; })
         .def_prop_ro("captured", [](const SceneView3DTargetPointerEventRef& self) { return self.event.captured; })
-        .def_prop_ro(
-            "current_hit_world_point",
-            [](const SceneView3DTargetPointerEventRef& self) -> nb::object {
-                return self.event.current_hit ? nb::cast(self.event.current_hit->world_point) : nb::none();
-            });
+        .def_prop_ro("current_hit_world_point", [](const SceneView3DTargetPointerEventRef& self) -> nb::object {
+            return self.event.current_hit ? nb::cast(self.event.current_hit->world_point) : nb::none();
+        });
 
     nb::class_<termin::gui_native::SceneTransform>(m, "SceneTransform")
         .def(nb::init<>())
@@ -752,6 +753,16 @@ void bind_gui_native_scene_views(nb::module_& m) {
             },
             nb::arg("callback").none())
         .def("invalidate_view", [](const SceneView3DRef& self) { self.get().invalidate_view(); })
+        .def_prop_rw(
+            "shading_mode",
+            [](const SceneView3DRef& self) { return self.get().shading_mode(); },
+            [](const SceneView3DRef& self, termin::gui_native::SceneView3DShadingMode mode) {
+                self.get().set_shading_mode(mode);
+            })
+        .def_prop_rw(
+            "wireframe_enabled",
+            [](const SceneView3DRef& self) { return self.get().wireframe_enabled(); },
+            [](const SceneView3DRef& self, bool enabled) { self.get().set_wireframe_enabled(enabled); })
         .def_prop_ro("framebuffer_size", [](const SceneView3DRef& self) { return self.get().framebuffer_size(); })
         .def_prop_ro("texture_id", [](const SceneView3DRef& self) { return self.get().texture_id(); })
         .def(
@@ -776,16 +787,14 @@ void bind_gui_native_scene_views(nb::module_& m) {
                 const std::shared_ptr<DocumentState> state = self.widget.state;
                 self.get().interaction().set_target_pointer_handler(
                     item,
-                    [state, scene, callback = std::move(callback)](
-                        const termin::visual::TargetPointerEvent3D& event) {
+                    [state, scene, callback = std::move(callback)](const termin::visual::TargetPointerEvent3D& event) {
                         if (!state || tc_ui_document_handle_is_invalid(state->document))
                             return;
                         nb::gil_scoped_acquire gil;
                         try {
                             callback(SceneView3DTargetPointerEventRef{scene, event});
                         } catch (...) {
-                            tc_log_error(
-                                "[termin-gui-native/python] SceneView3D target pointer handler failed");
+                            tc_log_error("[termin-gui-native/python] SceneView3D target pointer handler failed");
                             if (!state->pending_exception)
                                 state->pending_exception = std::current_exception();
                         }

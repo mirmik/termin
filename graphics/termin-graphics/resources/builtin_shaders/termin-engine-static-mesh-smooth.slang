@@ -14,11 +14,12 @@ ConstantBuffer<StaticMeshPush> u_push;
 
 struct VertexInput {
     float3 position : POSITION;
+    float3 normal : NORMAL;
 };
 
 struct VertexOutput {
     float4 position : SV_Position;
-    float3 world_position : TEXCOORD0;
+    float3 world_normal : TEXCOORD0;
 };
 
 [shader("vertex")]
@@ -27,7 +28,10 @@ VertexOutput vs_main(VertexInput input) {
     float4 world_position = mul(u_push.u_world_from_local, float4(input.position, 1.0));
     output.position = termin_to_native_clip(
         mul(u_push.u_view_projection, world_position));
-    output.world_position = world_position.xyz;
+    output.world_normal = float3(
+        dot(u_push.u_normal_matrix_rows[0].xyz, input.normal),
+        dot(u_push.u_normal_matrix_rows[1].xyz, input.normal),
+        dot(u_push.u_normal_matrix_rows[2].xyz, input.normal));
     return output;
 }
 
@@ -40,13 +44,9 @@ FragmentOutput fs_main(VertexOutput input) {
     FragmentOutput output;
     float intensity = 1.0;
     if (u_push.u_light_direction_enabled.w != 0.0) {
-        float3 dx = ddx(input.world_position);
-        float3 dy = ddy(input.world_position);
-        // Termin clip/screen space is Y-down. Swap the derivative order so
-        // the preview normal faces the visible side of the triangle.
-        float3 normal = normalize(cross(dy, dx));
         float diffuse = max(
-            dot(normal, normalize(u_push.u_light_direction_enabled.xyz)),
+            dot(normalize(input.world_normal),
+                normalize(u_push.u_light_direction_enabled.xyz)),
             0.0);
         intensity = u_push.u_light_intensity.x +
                     u_push.u_light_intensity.y * diffuse;
