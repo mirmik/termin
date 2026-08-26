@@ -90,6 +90,7 @@ namespace {
             << "  --backend <name>          Set TERMIN_BACKEND for the player process.\n"
             << "  --scene <path>            Select source scene for play/project mode.\n"
             << "  --headless                Forward to termin.player source project headless mode.\n"
+            << "  --no-stdlib-sync          Skip SDK stdlib synchronization for source project runs.\n"
             << "  --frames <count>          Limit termin.player --headless to a finite frame count.\n"
             << "  --dt <seconds>            Forward to termin.player --headless timestep.\n"
             << "  --width <pixels>          Forward to termin.player.\n"
@@ -209,7 +210,8 @@ namespace {
                     throw std::runtime_error("scene specified both positionally and with --scene");
                 }
                 parsed.options.scene_override = take_value(argc, argv, i, arg);
-            } else if (arg == "--headless" || arg == "--no-assets" || arg == "--no-modules" || arg == "--windowed") {
+            } else if (arg == "--headless" || arg == "--no-assets" || arg == "--no-modules" ||
+                       arg == "--no-stdlib-sync" || arg == "--windowed") {
                 parsed.options.player_args.emplace_back(arg);
             } else if (arg == "--frames" || arg == "--dt") {
                 parsed.options.player_args.emplace_back(arg);

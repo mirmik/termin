@@ -77,6 +77,17 @@ termin_runner run PROFILE
 termin_runner play [SCENE]
 ```
 
+Source playback synchronizes the SDK's standard resource library into
+`<project>/stdlib` before loading the scene. Projects that intentionally do not
+use or manage the standard library can skip this step explicitly:
+
+```bash
+termin play --project . --no-stdlib-sync
+```
+
+The flag affects source-project playback only; packaged `termin run` bundles
+use the resources exported into the bundle.
+
 `termin show MODEL.glb` opens a standalone model window and does not require a
 Termin project. The viewer preserves the GLB node hierarchy, presents static
 mesh geometry with base-color factors and base-color textures, converts glTF's

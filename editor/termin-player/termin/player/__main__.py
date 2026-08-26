@@ -90,6 +90,11 @@ def main():
         help="Skip project module loading in --headless mode",
     )
     parser.add_argument(
+        "--no-stdlib-sync",
+        action="store_true",
+        help="Skip synchronizing SDK stdlib resources into the source project",
+    )
+    parser.add_argument(
         "--mcp",
         action="store_true",
         help="Enable the player MCP diagnostics endpoint",
@@ -135,6 +140,16 @@ def main():
         print(f"Error: Project path does not exist: {project_path}")
         sys.exit(1)
 
+    if not args.no_stdlib_sync:
+        try:
+            _sync_project_stdlib(project_path)
+        except OSError as exc:
+            print(
+                f"Error: Failed to synchronize Termin stdlib into {project_path}: {exc}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     # Find scene file
     scene_name = args.scene
     if scene_name is None:
@@ -174,6 +189,14 @@ def main():
         mcp_enabled=args.mcp,
         mcp_options=mcp_options,
     )
+
+
+def _sync_project_stdlib(project_path: Path) -> None:
+    from termin.stdlib import sync_stdlib
+
+    result = sync_stdlib(project_path)
+    if result.copied > 0:
+        print(f"Synchronized Termin stdlib: {result.copied} file(s) updated")
 
 
 def _mcp_options_from_args(args) -> dict[str, object]:

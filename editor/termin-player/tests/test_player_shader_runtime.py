@@ -179,3 +179,71 @@ def test_python_player_cli_exposes_source_modes_only(monkeypatch, capsys) -> Non
     assert "--bundle" not in help_text
     assert "--app" not in help_text
     assert "--headless" in help_text
+    assert "--no-stdlib-sync" in help_text
+
+
+def _run_headless_player_cli(
+    monkeypatch,
+    tmp_path: Path,
+    *extra_args: str,
+) -> None:
+    from termin import player
+    from termin.player import __main__ as player_main
+
+    (tmp_path / "Main.scene").write_text('{"scene": {"entities": []}}', encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "termin.player",
+            str(tmp_path),
+            "--scene",
+            "Main.scene",
+            "--headless",
+            "--frames",
+            "0",
+            "--no-assets",
+            "--no-modules",
+            *extra_args,
+        ],
+    )
+    monkeypatch.setattr(
+        player,
+        "run_headless_project",
+        lambda **_kwargs: types.SimpleNamespace(exit_code=0),
+    )
+
+    player_main.main()
+
+
+def test_python_player_cli_syncs_stdlib_before_source_run(monkeypatch, tmp_path: Path) -> None:
+    _run_headless_player_cli(monkeypatch, tmp_path)
+
+    assert (tmp_path / "stdlib" / "materials" / "NormalizedPBR.material").is_file()
+
+
+def test_python_player_cli_can_skip_stdlib_sync(monkeypatch, tmp_path: Path) -> None:
+    _run_headless_player_cli(monkeypatch, tmp_path, "--no-stdlib-sync")
+
+    assert not (tmp_path / "stdlib").exists()
+
+
+def test_python_player_cli_reports_stdlib_sync_failure(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    from termin.player import __main__ as player_main
+
+    monkeypatch.setattr(sys, "argv", ["termin.player", str(tmp_path)])
+
+    def fail_sync(_project_path: Path) -> None:
+        raise PermissionError("injected read-only project")
+
+    monkeypatch.setattr(player_main, "_sync_project_stdlib", fail_sync)
+
+    with pytest.raises(SystemExit) as exit_info:
+        player_main.main()
+
+    assert exit_info.value.code == 1
+    assert "Failed to synchronize Termin stdlib" in capsys.readouterr().err
