@@ -23,6 +23,7 @@ namespace {
         std::vector<std::tuple<double, double, int>> scrolls;
         std::vector<std::tuple<int, int, int, int>> keys;
         std::vector<uint32_t> text;
+        bool key_handled = true;
     };
 
     class TestSurfaceHost final : public ViewportSurfaceHost {
@@ -59,7 +60,7 @@ namespace {
         }
         bool key(int key, int scancode, int action, int modifiers) override {
             trace_->keys.emplace_back(key, scancode, action, modifiers);
-            return true;
+            return trace_->key_handled;
         }
         bool text(uint32_t codepoint) override {
             trace_->text.push_back(codepoint);
@@ -132,6 +133,10 @@ namespace {
 
         assert(document.dispatch_key_event(tc_ui_key_event{TC_UI_KEY_DOWN, 65, 9, 3, true}) == TC_UI_EVENT_HANDLED);
         assert((trace->keys.back() == std::tuple<int, int, int, int>{65, 9, 2, 3}));
+        trace->key_handled = false;
+        assert(document.dispatch_key_event(tc_ui_key_event{TC_UI_KEY_DOWN, 80, 10, 0, false}) ==
+               TC_UI_EVENT_IGNORED);
+        assert((trace->keys.back() == std::tuple<int, int, int, int>{80, 10, 1, 0}));
         assert(document.dispatch_text_event(tc_ui_text_event{"A\xD0\x96"}) == TC_UI_EVENT_HANDLED);
         assert((trace->text == std::vector<uint32_t>{65, 0x416}));
 

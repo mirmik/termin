@@ -313,14 +313,16 @@ namespace termin::gui_native {
                 int action = event->type == TC_UI_KEY_UP ? kInputRelease : kInputPress;
                 if (event->type == TC_UI_KEY_DOWN && event->repeat)
                     action = kInputRepeat;
-                surface_host_->key(event->key, event->scancode, action, event->modifiers);
+                return surface_host_->key(event->key, event->scancode, action, event->modifiers)
+                           ? TC_UI_EVENT_HANDLED
+                           : TC_UI_EVENT_IGNORED;
             } catch (const std::exception& error) {
                 tc_log_error("[termin-gui-native] Viewport3D key dispatch failed: %s", error.what());
             } catch (...) {
                 log_host_failure("key dispatch");
             }
         }
-        return TC_UI_EVENT_HANDLED;
+        return TC_UI_EVENT_IGNORED;
     }
 
     tc_ui_event_result Viewport3D::text_event(tc_ui_document_handle, const tc_ui_text_event* event) {
