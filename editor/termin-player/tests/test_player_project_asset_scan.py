@@ -18,12 +18,13 @@ class RecordingResourceManager:
 class RecordingPreloader:
     priority = 0
 
-    def __init__(self) -> None:
+    def __init__(self, type_id: str = "shader") -> None:
+        self.type_id = type_id
         self.paths: list[str] = []
 
     def preload(self, path: str) -> PreLoadResult:
         self.paths.append(path)
-        return PreLoadResult(resource_type="shader", path=path)
+        return PreLoadResult(resource_type=self.type_id, path=path)
 
 
 def test_source_project_settings_treat_missing_ignored_paths_as_empty(monkeypatch, tmp_path: Path):
@@ -107,3 +108,40 @@ def test_source_asset_scan_does_not_allow_malformed_settings_to_ignore_project_r
 
     assert project_runtime_support.scan_project_assets(project, log_prefix="[Test]") == 1
     assert preloader.paths == [str(keep)]
+
+
+def test_headless_asset_scan_skips_render_resources_and_keeps_gameplay_assets(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "Game"
+    material = project / "Assets" / "Surface.material"
+    audio = project / "Assets" / "Step.wav"
+    material.parent.mkdir(parents=True)
+    material.write_text("{}", encoding="utf-8")
+    audio.write_bytes(b"wave")
+
+    material_preloader = RecordingPreloader("material")
+    audio_preloader = RecordingPreloader("audio_clip")
+    monkeypatch.setattr(
+        project_runtime_support,
+        "create_asset_import_plugin_map",
+        lambda: {".material": material_preloader, ".wav": audio_preloader},
+    )
+    manager = RecordingResourceManager()
+    monkeypatch.setattr(
+        project_runtime_support.DefaultResourceManager,
+        "instance",
+        staticmethod(lambda: manager),
+    )
+
+    loaded_count = project_runtime_support.scan_project_assets(
+        project,
+        log_prefix="[Test]",
+        include_render_resources=False,
+    )
+
+    assert loaded_count == 1
+    assert material_preloader.paths == []
+    assert audio_preloader.paths == [str(audio)]
+    assert [result.resource_type for result in manager.results] == ["audio_clip"]

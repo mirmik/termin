@@ -17,6 +17,10 @@ from termin.player.project_settings import (
     load_project_runtime_settings,
 )
 
+_RENDER_RESOURCE_TYPE_IDS = frozenset(
+    {"glb", "material", "mesh", "pipeline", "shader", "sprite_asset", "texture", "ui"}
+)
+
 
 class ProjectRuntimeSupportError(RuntimeError):
     """A project-backed runtime could not establish its strict runtime contract."""
@@ -147,7 +151,12 @@ def create_asset_import_plugin_map():
     return build_import_plugin_extension_map(registry)
 
 
-def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
+def scan_project_assets(
+    project_path: str | Path,
+    *,
+    log_prefix: str,
+    include_render_resources: bool = True,
+) -> int:
     """Scan project directory for source assets and register them."""
     from tcbase import log
 
@@ -164,6 +173,7 @@ def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
         )
 
     pending = []
+    skipped_render_count = 0
     for root, dirs, files in os.walk(project_path):
         dirs[:] = [
             dirname for dirname in dirs
@@ -179,6 +189,12 @@ def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
             ext = os.path.splitext(filename)[1].lower()
             if ext in ext_map:
                 preloader = ext_map[ext]
+                if (
+                    not include_render_resources
+                    and preloader.type_id in _RENDER_RESOURCE_TYPE_IDS
+                ):
+                    skipped_render_count += 1
+                    continue
                 pending.append((preloader.priority, path, preloader))
 
     pending.sort(key=lambda item: (item[0], item[1]))
@@ -194,6 +210,10 @@ def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
         except Exception as e:
             log.error(f"{log_prefix} Failed to load {path}: {e}")
 
+    if skipped_render_count:
+        log.info(
+            f"{log_prefix} Skipped {skipped_render_count} render-only project assets"
+        )
     log.info(f"{log_prefix} Loaded {loaded_count} project assets")
     return loaded_count
 

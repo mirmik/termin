@@ -17,6 +17,9 @@ from termin.player.project_runtime_support import (
 )
 
 _RENDER_SCENE_EXTENSION_KEYS = frozenset({"render_mount", "render_state"})
+_RENDER_ONLY_COMPONENT_TYPES = frozenset(
+    {"CameraComponent", "LightComponent", "MeshComponent", "MeshRenderer"}
+)
 
 
 class HeadlessRuntimeError(RuntimeError):
@@ -105,7 +108,11 @@ class HeadlessRuntime:
             self._session_started = True
             self._engine.scene_manager.set_scene_elevator(self._elevate_scene)
             if self.load_assets:
-                scan_project_assets(self.project_path, log_prefix="[HeadlessRuntime]")
+                scan_project_assets(
+                    self.project_path,
+                    log_prefix="[HeadlessRuntime]",
+                    include_render_resources=self.include_render_resources,
+                )
 
             self.scene = self._load_scene()
             self._activate_primary_scene()
@@ -267,13 +274,23 @@ class HeadlessRuntime:
         except Exception as e:
             raise HeadlessRuntimeError(f"Failed to read scene {scene_path}: {e}") from e
 
-        scene_data, ignored_extensions = _prepare_headless_scene_data(data)
+        scene_data, ignored_extensions, ignored_components = _prepare_headless_scene_data(
+            data,
+            include_render_resources=self.include_render_resources,
+        )
         if ignored_extensions:
             from tcbase import log
 
             log.info(
                 "[HeadlessRuntime] Ignoring render-only scene extensions: "
                 + ", ".join(ignored_extensions)
+            )
+        if ignored_components:
+            from tcbase import log
+
+            log.info(
+                "[HeadlessRuntime] Ignoring render-only scene components: "
+                + ", ".join(ignored_components)
             )
 
         if self._engine is None:
@@ -333,11 +350,24 @@ class HeadlessRuntime:
             raise HeadlessRuntimeError("RuntimeSession failed to activate the headless scene")
 
 
-def _prepare_headless_scene_data(data: object) -> tuple[dict, tuple[str, ...]]:
+def _prepare_headless_scene_data(
+    data: object,
+    *,
+    include_render_resources: bool,
+) -> tuple[dict, tuple[str, ...], tuple[str, ...]]:
     scene_data = dict(_extract_scene_data(data))
+    ignored_components: list[str] = []
+    if not include_render_resources:
+        entities = scene_data.get("entities")
+        if isinstance(entities, list):
+            scene_data["entities"] = [
+                _filter_headless_entity(entity, ignored_components)
+                for entity in entities
+            ]
+
     extensions = scene_data.get("extensions")
     if not isinstance(extensions, dict):
-        return scene_data, ()
+        return scene_data, (), tuple(sorted(set(ignored_components)))
 
     headless_extensions = dict(extensions)
     ignored_extensions = tuple(
@@ -350,7 +380,32 @@ def _prepare_headless_scene_data(data: object) -> tuple[dict, tuple[str, ...]]:
         scene_data["extensions"] = headless_extensions
     else:
         scene_data.pop("extensions", None)
-    return scene_data, ignored_extensions
+    return scene_data, ignored_extensions, tuple(sorted(set(ignored_components)))
+
+
+def _filter_headless_entity(entity: object, ignored_components: list[str]) -> object:
+    if not isinstance(entity, dict):
+        return entity
+
+    filtered = dict(entity)
+    components = entity.get("components")
+    if isinstance(components, list):
+        retained_components = []
+        for component in components:
+            component_type = component.get("type") if isinstance(component, dict) else None
+            if component_type in _RENDER_ONLY_COMPONENT_TYPES:
+                ignored_components.append(component_type)
+                continue
+            retained_components.append(component)
+        filtered["components"] = retained_components
+
+    children = entity.get("children")
+    if isinstance(children, list):
+        filtered["children"] = [
+            _filter_headless_entity(child, ignored_components)
+            for child in children
+        ]
+    return filtered
 
 
 def _extract_scene_data(data: object) -> dict:

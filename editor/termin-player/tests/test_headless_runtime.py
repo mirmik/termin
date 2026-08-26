@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 import termin.project_modules.runtime as modules_runtime
-from termin.player.headless import HeadlessRuntime, HeadlessRuntimeError
+from termin.player.headless import (
+    HeadlessRuntime,
+    HeadlessRuntimeError,
+    _prepare_headless_scene_data,
+)
 from termin.player.project_runtime_support import (
     ProjectRuntimeSupportError,
     load_project_modules,
@@ -724,6 +728,82 @@ def test_headless_runtime_ignores_serialized_render_extensions(tmp_path: Path) -
         assert list(runtime._engine.render_topology.render_targets(runtime.scene)) == []
     finally:
         runtime.shutdown()
+
+
+def test_headless_runtime_strips_render_components_but_keeps_gameplay_component(
+    tmp_path: Path,
+) -> None:
+    _write_scene_with_component(tmp_path)
+    scene_path = tmp_path / "Main.scene"
+    document = json.loads(scene_path.read_text(encoding="utf-8"))
+    components = document["scene"]["entities"][0]["components"]
+    components.extend(
+        {"type": component_type, "data": {}}
+        for component_type in (
+            "MeshComponent",
+            "MeshRenderer",
+            "LightComponent",
+            "CameraComponent",
+        )
+    )
+    scene_path.write_text(json.dumps(document), encoding="utf-8")
+    runtime = HeadlessRuntime(
+        tmp_path,
+        "Main.scene",
+        load_modules=False,
+        load_assets=False,
+        register_builtin_resources=False,
+        manage_bootstrap=False,
+    )
+
+    try:
+        runtime.initialize()
+        assert len(runtime.scene.get_components_of_type("HeadlessCounterComponent")) == 1
+        for component_type in (
+            "MeshComponent",
+            "MeshRenderer",
+            "LightComponent",
+            "CameraComponent",
+        ):
+            assert runtime.scene.get_components_of_type(component_type) == []
+    finally:
+        runtime.shutdown()
+
+
+def test_headless_render_resource_opt_in_preserves_render_components() -> None:
+    document = {
+        "scene": {
+            "entities": [
+                {
+                    "components": [
+                        {"type": "HeadlessCounterComponent", "data": {}},
+                        {"type": "MeshRenderer", "data": {}},
+                    ],
+                    "children": [
+                        {
+                            "components": [
+                                {"type": "CameraComponent", "data": {}},
+                            ]
+                        }
+                    ],
+                }
+            ],
+            "extensions": {"render_state": {}},
+        }
+    }
+
+    filtered, ignored_extensions, ignored_components = _prepare_headless_scene_data(
+        document,
+        include_render_resources=True,
+    )
+
+    assert ignored_extensions == ("render_state",)
+    assert ignored_components == ()
+    assert [
+        component["type"]
+        for component in filtered["entities"][0]["components"]
+    ] == ["HeadlessCounterComponent", "MeshRenderer"]
+    assert filtered["entities"][0]["children"][0]["components"][0]["type"] == "CameraComponent"
 
 
 @pytest.mark.parametrize(
