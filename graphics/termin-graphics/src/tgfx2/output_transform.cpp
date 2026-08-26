@@ -75,12 +75,17 @@ namespace tgfx {
         }
 
         tc_shader_handle& selected_shader_handle = multiview ? multiview_shader_handle_ : shader_handle_;
+        bool& selected_shader_failed = multiview ? multiview_shader_failed_ : shader_failed_;
         const char* selected_shader_uuid =
             multiview ? kMultiviewOutputTransformShaderUuid : kOutputTransformShaderUuid;
+        if (selected_shader_failed) {
+            return false;
+        }
         if (tc_shader_handle_is_invalid(selected_shader_handle)) {
             selected_shader_handle = register_builtin_shader_from_catalog(selected_shader_uuid);
             if (tc_shader_handle_is_invalid(selected_shader_handle)) {
                 tc::Log::error("[OutputTransform] failed to register built-in shader");
+                selected_shader_failed = true;
                 return false;
             }
         }
@@ -89,6 +94,7 @@ namespace tgfx {
         tc_shader* raw = tc_shader_get(selected_shader_handle);
         if (!raw || !termin::tc_shader_ensure_tgfx2(raw, device_, nullptr, &fragment_shader)) {
             tc::Log::error("[OutputTransform] failed to prepare built-in shader");
+            selected_shader_failed = true;
             return false;
         }
 
@@ -146,6 +152,8 @@ namespace tgfx {
         device_ = nullptr;
         shader_handle_ = tc_shader_handle_invalid();
         multiview_shader_handle_ = tc_shader_handle_invalid();
+        shader_failed_ = false;
+        multiview_shader_failed_ = false;
     }
 
 } // namespace tgfx

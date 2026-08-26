@@ -1,4 +1,5 @@
 #include <tgfx/resources/tc_shader_registry.h>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/device_factory.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/output_transform.hpp>
@@ -20,7 +21,24 @@
 #include <system_error>
 #include <vector>
 
+extern "C" {
+#include <tcbase/tc_log.h>
+}
+
 namespace {
+
+    std::vector<std::string> captured_logs;
+
+    void capture_log(tc_log_level, const char* message) {
+        captured_logs.emplace_back(message ? message : "");
+    }
+
+    size_t count_logs_containing(const char* fragment) {
+        return static_cast<size_t>(std::count_if(
+            captured_logs.begin(),
+            captured_logs.end(),
+            [fragment](const std::string& message) { return message.find(fragment) != std::string::npos; }));
+    }
 
     bool existing_file(const std::filesystem::path& path) {
         std::error_code ec;
@@ -101,6 +119,50 @@ namespace {
 
         tgfx::PipelineCache cache(*device);
         tgfx::RenderContext2 context(*device, cache);
+
+        tgfx::set_builtin_shader_root("missing-output-transform-test");
+        tgfx::set_builtin_shader_read_callback([](std::string_view path, std::string& output) {
+            if (path.find("engine-shader-catalog.json") == std::string_view::npos) {
+                return false;
+            }
+            output = R"({"version":1,"shaders":[]})";
+            return true;
+        });
+        captured_logs.clear();
+        tc_log_set_callback(capture_log);
+
+        tgfx::OutputTransformRenderer missing_shader_renderer;
+        const auto record_with_missing_shader = [&]() {
+            context.begin_frame();
+            const bool result = missing_shader_renderer.record(
+                context,
+                source,
+                output,
+                tgfx::OutputTransformParams{
+                    .sampled_input_encoding = tgfx::TextureEncoding::Linear,
+                    .target_encoding = tgfx::TextureEncoding::SRGB,
+                    .dither = tgfx::OutputDitherMode::Disabled,
+                });
+            context.end_frame();
+            return result;
+        };
+        const bool missing_first = record_with_missing_shader();
+        const bool missing_second = record_with_missing_shader();
+        missing_shader_renderer.close();
+        const bool missing_after_reset = record_with_missing_shader();
+
+        tc_log_set_callback(nullptr);
+        tgfx::set_builtin_shader_read_callback({});
+        tgfx::set_builtin_shader_root(nullptr);
+        const bool missing_shader_is_log_once =
+            !missing_first && !missing_second && !missing_after_reset &&
+            count_logs_containing("No entry for shader uuid 'termin-engine-output-transform'") == 2 &&
+            count_logs_containing("[OutputTransform] failed to register built-in shader") == 2;
+        if (!missing_shader_is_log_once) {
+            std::fprintf(stderr, "Output-transform missing-shader failure was not latched\n");
+            return 1;
+        }
+
         tgfx::OutputTransformRenderer renderer;
         context.begin_frame();
         const bool recorded = renderer.record(

@@ -1166,7 +1166,6 @@ namespace termin {
             });
         output_context.end_frame();
         if (!transformed) {
-            tc_log_error("[BackendWindow] output transform failed");
             return;
         }
         [[maybe_unused]] const tgfx::TextureHandle presentation_texture = impl_->presentation_texture;

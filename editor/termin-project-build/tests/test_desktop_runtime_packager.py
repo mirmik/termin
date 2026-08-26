@@ -1127,6 +1127,17 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     catalog_shader_uuids = {entry["uuid"] for entry in catalog["shaders"]}
     assert "termin-engine-line-default" in catalog_shader_uuids
     assert "termin-engine-world-tube-line" not in catalog_shader_uuids
+    contract_shaders = {shader["uuid"]: shader for shader in contract["shaders"]}
+    for shader_uuid in (
+        runtime_shaders.ENGINE_OUTPUT_TRANSFORM_SHADER_UUID,
+        runtime_shaders.ENGINE_MULTIVIEW_OUTPUT_TRANSFORM_SHADER_UUID,
+    ):
+        assert contract_shaders[shader_uuid]["artifacts"]["opengl"] == {
+            "fragment": f"shaders/opengl/{shader_uuid}.frag.glsl",
+        }
+        assert (
+            result.package_dir / "shaders" / "opengl" / f"{shader_uuid}.frag.glsl"
+        ).is_file()
     assert (
         result.package_dir
         / "builtin_shaders"

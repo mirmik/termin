@@ -485,6 +485,10 @@ def _assert_clean_runtime_log(log_text: str) -> None:
         "project module shutdown failed",
         "Failed to prepare registered component",
         "Entity is invalid",
+        "No entry for shader uuid 'termin-engine-output-transform'",
+        "[OutputTransform] failed to register built-in shader",
+        "[OutputTransform] failed to prepare built-in shader",
+        "[BackendWindow] output transform failed",
     )
     found = [fragment for fragment in forbidden if fragment in log_text]
     if found:

@@ -51,6 +51,8 @@ namespace tgfx {
         IRenderDevice* device_ = nullptr;
         tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
         tc_shader_handle multiview_shader_handle_ = tc_shader_handle_invalid();
+        bool shader_failed_ = false;
+        bool multiview_shader_failed_ = false;
     };
 
 } // namespace tgfx
