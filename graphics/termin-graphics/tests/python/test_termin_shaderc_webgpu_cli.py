@@ -189,6 +189,11 @@ def test_builtin_catalog_compiles_to_validated_webgpu_artifacts(tmp_path: Path) 
     shaderc = Path(os.environ["TERMIN_SHADERC"])
     placements: dict[str, tuple[int, int | None]] = {}
     compiled = 0
+    expected = sum(
+        len(shader["stages"])
+        for shader in catalog["shaders"]
+        if shader["language"] == "slang"
+    )
 
     for shader in catalog["shaders"]:
         if shader["language"] != "slang":
@@ -238,4 +243,4 @@ def test_builtin_catalog_compiles_to_validated_webgpu_artifacts(tmp_path: Path) 
                 assert previous == placement, resource["name"]
             compiled += 1
 
-    assert compiled == 96
+    assert compiled == expected
