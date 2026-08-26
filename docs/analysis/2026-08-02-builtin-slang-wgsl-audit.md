@@ -1,17 +1,17 @@
 # Built-in Slang → WGSL audit
 
-Generated: 2026-08-12
+Generated: 2026-08-26
 
 ## Result
 
-The pinned matrix is **PASSED**: 93/93 Slang stages passed Slang WGSL generation, independent Naga parsing, and binding-contract checks.
+The pinned matrix is **PASSED**: 102/102 Slang stages passed Slang WGSL generation, independent Naga parsing, and binding-contract checks.
 
-Catalog coverage: 55/55 identities. 1 non-Slang program source is classified separately.
+Catalog coverage: 60/60 identities. 1 non-Slang program source is classified separately.
 
 Reproduce from the repository root:
 
 ```bash
-./audit-webgpu-shaders.sh --setup
+task check:webgpu-shaders -- --setup
 ```
 
 Toolchain: Slang 2026.5.2, Naga CLI 30.0.0.
@@ -25,7 +25,7 @@ Toolchain: Slang 2026.5.2, Naga CLI 30.0.0.
 - Textures and samplers remain separate WGSL bindings; no combined-sampler compatibility layer is assumed.
 - This is an offline source gate. Browser device limits and render-pipeline creation belong to the WebGPU runtime smoke gate.
 
-Observed across passing stages: 83 uniform-buffer declarations, 22 texture declarations, 22 sampler declarations, and 52 stages using matrices.
+Observed across passing stages: 92 uniform-buffer declarations, 25 texture declarations, 25 sampler declarations, and 60 stages using matrices.
 All reflected resources are currently placed in bind group 0; the largest binding index is 4. That matches the current single-set backend contract while preserving semantic Termin scopes in sidecar reflection.
 
 ## Catalog classification
@@ -38,6 +38,10 @@ All reflected resources are currently placed in bind group 0; the largest bindin
 | `termin-engine-debug-triangle` | slang | vertex, fragment | passed |
 | `termin-engine-present-blit` | slang | vertex, fragment | passed |
 | `termin-engine-immediate` | slang | vertex, fragment | passed |
+| `termin-engine-static-mesh` | slang | vertex, fragment | passed |
+| `termin-engine-static-mesh-textured` | slang | vertex, fragment | passed |
+| `termin-engine-static-mesh-smooth` | slang | vertex, fragment | passed |
+| `termin-engine-static-mesh-textured-smooth` | slang | vertex, fragment | passed |
 | `termin-engine-point-cloud` | slang | vertex, fragment | passed |
 | `termin-engine-tcplot-3d` | slang | vertex, fragment | passed |
 | `termin-engine-tcplot-2d-line` | slang | vertex, fragment | passed |
@@ -71,6 +75,7 @@ All reflected resources are currently placed in bind group 0; the largest bindin
 | `termin-engine-depth` | slang | vertex, fragment | passed |
 | `termin-engine-depth-only` | slang | vertex, fragment | passed |
 | `termin-engine-depth-to-color` | slang | fragment | passed |
+| `termin-engine-frame-graph-presenter` | slang | fragment | passed |
 | `termin-engine-color-to-depth` | slang | fragment | passed |
 | `termin-engine-skybox` | shader | — | excluded: program source has no staged Slang entries |
 | `termin-engine-bloom-bright` | slang | fragment | passed |

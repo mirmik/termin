@@ -14,6 +14,15 @@ from typing import Any
 
 
 SUPPORTED_WEBGPU_STAGES = {"vertex", "fragment", "compute"}
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+DEFAULT_CATALOG = (
+    REPO_ROOT
+    / "graphics"
+    / "termin-graphics"
+    / "resources"
+    / "builtin_shaders"
+    / "engine-shader-catalog.json"
+)
 RESOURCE_DECLARATION = re.compile(
     r"(?P<attributes>(?:@\w+\([^)]*\)\s*)*)"
     r"var(?:<(?P<address_space>[^>]+)>)?\s+"
@@ -276,9 +285,8 @@ def markdown_report(report: dict[str, Any]) -> str:
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
-    repo_root = pathlib.Path(__file__).resolve().parents[1]
-    web_lock = json.loads((repo_root / "build-system/web-shader-toolchain-lock.json").read_text(encoding="utf-8"))
-    slang_lock = json.loads((repo_root / "build-system/slang-toolchain-lock.json").read_text(encoding="utf-8"))
+    web_lock = json.loads((REPO_ROOT / "build-system/web-shader-toolchain-lock.json").read_text(encoding="utf-8"))
+    slang_lock = json.loads((REPO_ROOT / "build-system/slang-toolchain-lock.json").read_text(encoding="utf-8"))
     slang_version = tool_version(args.slangc, slang_lock["version"])
     naga_version = tool_version(args.naga, web_lock["naga_cli"]["version"])
     catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
@@ -354,27 +362,26 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main() -> int:
-    repo_root = pathlib.Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--slangc", type=pathlib.Path, required=True)
     parser.add_argument("--naga", type=pathlib.Path, required=True)
     parser.add_argument(
         "--catalog",
         type=pathlib.Path,
-        default=repo_root / "termin-graphics/resources/builtin_shaders/engine-shader-catalog.json",
+        default=DEFAULT_CATALOG,
     )
     parser.add_argument(
-        "--output-dir", type=pathlib.Path, default=repo_root / "build/web-shader-audit"
+        "--output-dir", type=pathlib.Path, default=REPO_ROOT / "build/web-shader-audit"
     )
     parser.add_argument(
         "--report-json",
         type=pathlib.Path,
-        default=repo_root / "build/web-shader-audit/report.json",
+        default=REPO_ROOT / "build/web-shader-audit/report.json",
     )
     parser.add_argument(
         "--report-md",
         type=pathlib.Path,
-        default=repo_root / "docs/analysis/2026-08-02-builtin-slang-wgsl-audit.md",
+        default=REPO_ROOT / "docs/analysis/2026-08-02-builtin-slang-wgsl-audit.md",
     )
     args = parser.parse_args()
 

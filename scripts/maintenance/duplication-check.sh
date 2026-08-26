@@ -21,38 +21,31 @@ SILENT=0
 TARGETS=()
 EXTRA_IGNORES=()
 
-DEFAULT_TARGETS=(
-    termin-assets
-    termin-prefab
-    termin-glb
-    termin-scene
-    termin-display
-    termin-render
-    termin-nodegraph
-    termin-physics
-    termin-navmesh
-    termin-qopt
-    termin-pga
-    termin-runtime
-    termin-input
-    termin-render-passes
-    termin-components
-    termin-csg
-    termin-build-tools
-    termin-openxr
-    termin-csharp
-    termin-modules
-    termin-materials
-    termin-graphics
-    termin-lighting
-    termin-app
-    termin-animation
-    termin-skeleton
-    termin-engine
-    termin-android
-    termin-collision
-    termin-mesh
+mapfile -t DEFAULT_TARGETS < <(
+    python3 - "$SCRIPT_DIR/build-system/districts.json" <<'PY'
+import json
+import pathlib
+import sys
+
+manifest_path = pathlib.Path(sys.argv[1])
+repo_root = manifest_path.parents[1]
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+targets = [
+    pathlib.PurePosixPath(district["root"], package).as_posix()
+    for district in manifest["districts"]
+    for package in district["packages"]
+]
+missing = [target for target in targets if not (repo_root / target).is_dir()]
+if missing:
+    raise SystemExit("district manifest contains missing packages: " + ", ".join(missing))
+print(*targets, sep="\n")
+PY
 )
+if (( ${#DEFAULT_TARGETS[@]} == 0 )); then
+    echo "Failed to load default targets from build-system/districts.json" >&2
+    exit 1
+fi
+DEFAULT_TARGETS+=(termin-csharp)
 
 print_usage() {
     printf '%s\n' \
@@ -67,6 +60,7 @@ print_usage() {
         "  --threshold PERCENT     Fail when duplicated lines reach the threshold" \
         "  --silent                Suppress detailed jscpd console output" \
         "  --include-thirdparty    Include termin-app/third and termin-thirdparty" \
+        "  --list-default-targets  Print manifest-derived default paths and exit" \
         "  --ignore GLOB           Add an ignore glob; can be passed multiple times" \
         "  --help, -h              Show this help" \
         "" \
@@ -142,6 +136,10 @@ while (($# > 0)); do
             SILENT=1
             shift
             ;;
+        --list-default-targets)
+            printf '%s\n' "${DEFAULT_TARGETS[@]}"
+            exit 0
+            ;;
         --ignore)
             require_value "$1" "${2:-}"
             EXTRA_IGNORES+=("$2")
@@ -192,7 +190,7 @@ IGNORES=(
 
 if [[ "$INCLUDE_THIRDPARTY" -eq 0 ]]; then
     IGNORES+=(
-        "termin-app/third/**"
+        "editor/termin-app/third/**"
         "termin-thirdparty/**"
     )
 fi
