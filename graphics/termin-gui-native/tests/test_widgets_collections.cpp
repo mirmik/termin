@@ -1337,6 +1337,67 @@ namespace termin_gui_native_test {
         tc_ui_document_destroy(document_handle);
     }
 
+    void test_message_box_layout_is_viewport_bounded_and_scrollable() {
+        struct LayoutResult {
+            tc_ui_rect bounds{};
+            bool vertical_scrollbar = false;
+            bool horizontal_scrollbar = false;
+        };
+        const auto show_message = [](std::string message, tc_ui_rect viewport) {
+            tc_ui_document_handle document_handle = tc_ui_document_create();
+            TcDocument document(document_handle);
+            install_test_text_measurer(document);
+            DocumentBuilder ui(document);
+            auto& box = ui.make<MessageBox>("Failure", std::move(message), MessageBoxKind::Error);
+            assert(box.show(document.get(), viewport));
+            tc_widget* content = tc_ui_document_resolve_widget(document.get(), box.content_handle());
+            auto* scroll = content ? dynamic_cast<ScrollArea*>(static_cast<Widget*>(content->body)) : nullptr;
+            assert(scroll != nullptr);
+            const LayoutResult result{
+                box.bounds(),
+                scroll->vertical_scrollbar_visible(),
+                scroll->horizontal_scrollbar_visible(),
+            };
+            tc_ui_document_destroy(document_handle);
+            return result;
+        };
+        const auto assert_centered = [](tc_ui_rect bounds, tc_ui_rect viewport) {
+            assert(near(bounds.x, viewport.x + (viewport.width - bounds.width) * 0.5f));
+            assert(near(bounds.y, viewport.y + (viewport.height - bounds.height) * 0.5f));
+        };
+
+        const tc_ui_rect large_viewport{0.0f, 0.0f, 1200.0f, 800.0f};
+        const LayoutResult short_message = show_message("Generation failed", large_viewport);
+        assert(short_message.bounds.width < 400.0f);
+        assert(short_message.bounds.height < 220.0f);
+        assert(!short_message.vertical_scrollbar);
+        assert(!short_message.horizontal_scrollbar);
+        assert_centered(short_message.bounds, large_viewport);
+
+        const LayoutResult multiline_message =
+            show_message("Generation failed\nWorker returned no image\nTry another prompt", large_viewport);
+        assert(multiline_message.bounds.width < 400.0f);
+        assert(multiline_message.bounds.height > short_message.bounds.height);
+        assert(!multiline_message.horizontal_scrollbar);
+        assert_centered(multiline_message.bounds, large_viewport);
+
+        const std::string unbroken_error(12000, 'x');
+        const tc_ui_rect small_viewport{20.0f, 30.0f, 320.0f, 200.0f};
+        const LayoutResult small_long_message = show_message(unbroken_error, small_viewport);
+        assert(small_long_message.bounds.width <= 288.0f);
+        assert(small_long_message.bounds.height <= 168.0f);
+        assert(small_long_message.vertical_scrollbar);
+        assert(!small_long_message.horizontal_scrollbar);
+        assert_centered(small_long_message.bounds, small_viewport);
+
+        const LayoutResult large_long_message = show_message(unbroken_error, large_viewport);
+        assert(large_long_message.bounds.width <= 720.0f);
+        assert(large_long_message.bounds.height <= 768.0f);
+        assert(large_long_message.vertical_scrollbar);
+        assert(!large_long_message.horizontal_scrollbar);
+        assert_centered(large_long_message.bounds, large_viewport);
+    }
+
     void test_file_grid_widget_input_scrollbar_signals_and_lifetime() {
         tc_ui_document_handle document_handle = tc_ui_document_create();
         TcDocument document(document_handle);

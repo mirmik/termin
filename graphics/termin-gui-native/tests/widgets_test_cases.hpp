@@ -78,6 +78,7 @@ namespace termin_gui_native_test {
     void test_menu_bar_adjacent_switching_shortcuts_and_overlay_lifetime();
     void test_dialog_modal_stack_focus_actions_and_exactly_once_results();
     void test_message_box_and_input_dialog_share_modal_result_contract();
+    void test_message_box_layout_is_viewport_bounded_and_scrollable();
     void test_table_models_preserve_row_ids_and_validate_columns();
     void test_table_widget_virtualizes_large_model_and_lays_out_columns();
     void test_table_widget_pointer_keyboard_resize_signals_and_lifetime();
