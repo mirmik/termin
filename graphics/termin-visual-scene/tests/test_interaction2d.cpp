@@ -168,6 +168,29 @@ int main() {
     assert(fallback.used_fallback);
     assert(fallbacks >= 1);
 
+    int self_clearing_fallbacks = 0;
+    interaction.set_fallback_handler([&](const PointerEvent2D&) {
+        ++self_clearing_fallbacks;
+        interaction.set_fallback_handler({});
+    });
+    interaction.route(scene, {9, PointerEventKind2D::Down, {-1000.0f, -1000.0f}, 0});
+    interaction.route(scene, {9, PointerEventKind2D::Move, {-1000.0f, -1000.0f}, 0});
+    assert(self_clearing_fallbacks == 1);
+
+    int replaced_fallbacks = 0;
+    int replacement_fallbacks = 0;
+    interaction.set_fallback_handler([&](const PointerEvent2D&) {
+        ++replaced_fallbacks;
+        interaction.set_fallback_handler(
+            [&](const PointerEvent2D&) { ++replacement_fallbacks; });
+    });
+    interaction.route(scene, {10, PointerEventKind2D::Down, {-1000.0f, -1000.0f}, 0});
+    assert(replaced_fallbacks == 1);
+    assert(replacement_fallbacks == 0);
+    interaction.route(scene, {10, PointerEventKind2D::Move, {-1000.0f, -1000.0f}, 0});
+    assert(replaced_fallbacks == 1);
+    assert(replacement_fallbacks == 1);
+
     const auto detached_world = scene.world_transform(*child_ptr->c_item()).transform_point({10.0f, 10.0f});
     selection.handle(scene, interaction.route(scene, {8, PointerEventKind2D::Down, detached_world, 0}));
     assert(selection.selection().size() == 1);

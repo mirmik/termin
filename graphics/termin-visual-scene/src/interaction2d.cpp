@@ -198,7 +198,10 @@ namespace termin::visual {
             action_handler(*result.action);
         }
         if (result.used_fallback && fallback_handler_) {
-            fallback_handler_(event);
+            // The fallback can replace or clear itself synchronously. Keep the
+            // active callable alive until this dispatch has returned.
+            FallbackHandler fallback = fallback_handler_;
+            fallback(event);
         }
         return result;
     }
