@@ -626,6 +626,38 @@ def test_failed_play_setup_ends_session_and_restores_authoring_scene():
         _stop_and_shutdown(engine, model)
 
 
+def test_failed_play_name_collision_preserves_preexisting_runtime_scene():
+    engine, editor_scene, connector, render_session, model = (
+        _new_game_mode_fixture()
+    )
+    runtime_key = _runtime_key("Editor")
+    preexisting_runtime_scene = engine.scene_manager.create_scene(runtime_key, [])
+    assert preexisting_runtime_scene is not None
+    engine.scene_manager.set_mode(runtime_key, SceneMode.STOP)
+
+    try:
+        model.toggle_game_mode()
+
+        registered_runtime_scene = engine.scene_manager.get_scene(runtime_key)
+        assert registered_runtime_scene is not None
+        assert registered_runtime_scene.equal(preexisting_runtime_scene)
+        assert engine.scene_manager.key_of(registered_runtime_scene) == runtime_key
+        assert engine.scene_manager.get_mode(runtime_key) == SceneMode.STOP
+        registered_editor_scene = engine.scene_manager.get_scene(
+            _authoring_key("Editor")
+        )
+        assert registered_editor_scene is not None
+        assert registered_editor_scene.equal(editor_scene)
+        assert engine.scene_manager.get_mode(_authoring_key("Editor")) == SceneMode.STOP
+        assert not engine.has_runtime_session
+        assert not model.is_game_mode
+        assert connector.attached_scene_name == "Editor"
+        assert connector.events == []
+        assert render_session.events == [("sync_scene_render_state", "Editor")]
+    finally:
+        _stop_and_shutdown(engine, model)
+
+
 def test_editor_presentation_failure_does_not_roll_back_committed_primary():
     engine, _editor_scene, connector, render_session, model = (
         _new_game_mode_fixture()
