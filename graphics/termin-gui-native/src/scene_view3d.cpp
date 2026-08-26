@@ -402,7 +402,10 @@ namespace termin::gui_native {
             !pointer_transition_in_progress_ &&
             (scene_pointer_active_ || fallback_pointer_active_ || interaction_.pressed_hit(kMousePointer).has_value() ||
              interaction_.captured_hit(kMousePointer).has_value());
-        const bool quarantine_sequence = scene_pointer_cancelled_until_up_ || active_sequence;
+        const std::optional<int32_t> quarantine_button = quarantined_pointer_button_
+                                                             ? quarantined_pointer_button_
+                                                             : (active_sequence ? active_pointer_button_
+                                                                                : std::nullopt);
         if (active_sequence) {
             tc_ui_pointer_event cancel{};
             cancel.type = TC_UI_POINTER_CANCEL;
@@ -417,7 +420,8 @@ namespace termin::gui_native {
             // A nested replacement from a Cancel callback wins, but the
             // physical sequence terminated by this outer replacement still
             // owns its pending tail.
-            scene_pointer_cancelled_until_up_ = scene_pointer_cancelled_until_up_ || quarantine_sequence;
+            if (!quarantined_pointer_button_)
+                quarantined_pointer_button_ = quarantine_button;
             if (scene_revision_ != replacement_revision)
                 return;
         }
@@ -439,7 +443,8 @@ namespace termin::gui_native {
         if (!nested_transition)
             pointer_transition_in_progress_ = false;
         if (scene_revision_ != replacement_revision) {
-            scene_pointer_cancelled_until_up_ = scene_pointer_cancelled_until_up_ || quarantine_sequence;
+            if (!quarantined_pointer_button_)
+                quarantined_pointer_button_ = quarantine_button;
             return;
         }
 
@@ -448,8 +453,9 @@ namespace termin::gui_native {
         // still belongs to this widget even though document capture has been
         // released, so never let a matching Move/Up reach the new scene or
         // fallback without a Down.
-        scene_pointer_cancelled_until_up_ = quarantine_sequence;
+        quarantined_pointer_button_ = quarantine_button;
         fallback_pointer_active_ = false;
+        active_pointer_button_.reset();
         scene_ = scene_value.handle();
         invalidate_scene();
     }
@@ -621,8 +627,9 @@ namespace termin::gui_native {
         // Reentrant set_scene() must observe no active owner and clear route
         // state without recursively delivering the same Cancel.
         scene_pointer_active_ = false;
-        scene_pointer_cancelled_until_up_ = false;
+        quarantined_pointer_button_.reset();
         fallback_pointer_active_ = false;
+        active_pointer_button_.reset();
         release_pointer_capture_if_owned(document, view_handle, "the initial Cancel transition");
 
         if (pointer_transition_in_progress_) {
@@ -658,13 +665,15 @@ namespace termin::gui_native {
     tc_ui_event_result SceneView3D::pointer_event(tc_ui_document_handle document, const tc_ui_pointer_event* event) {
         if (!event)
             return TC_UI_EVENT_IGNORED;
-        if (scene_pointer_cancelled_until_up_) {
+        if (quarantined_pointer_button_) {
+            if (event->type == TC_UI_POINTER_UP && event->button != *quarantined_pointer_button_)
+                return TC_UI_EVENT_IGNORED;
             if (event->type == TC_UI_POINTER_UP || event->type == TC_UI_POINTER_CANCEL) {
-                scene_pointer_cancelled_until_up_ = false;
+                quarantined_pointer_button_.reset();
             } else if (event->type == TC_UI_POINTER_DOWN) {
                 // A new Down starts a distinct sequence even if the previous
                 // host sequence never supplied its terminal Up.
-                scene_pointer_cancelled_until_up_ = false;
+                quarantined_pointer_button_.reset();
             } else {
                 return TC_UI_EVENT_HANDLED;
             }
@@ -673,6 +682,16 @@ namespace termin::gui_native {
                 return TC_UI_EVENT_HANDLED;
             }
         }
+        if (active_pointer_button_) {
+            // Cancel is pointer-wide. Button-specific Down/Up chords do not
+            // supersede the one sequence represented by kMousePointer.
+            if (event->type == TC_UI_POINTER_UP && event->button != *active_pointer_button_)
+                return TC_UI_EVENT_IGNORED;
+            if (event->type == TC_UI_POINTER_DOWN)
+                return event->button == *active_pointer_button_ ? TC_UI_EVENT_HANDLED : TC_UI_EVENT_IGNORED;
+        }
+        if (event->type == TC_UI_POINTER_DOWN)
+            active_pointer_button_ = event->button;
         if (scene_pointer_active_ && !scene().valid()) {
             tc_log_error("[termin-gui-native] SceneView3D cancelled pointer capture because its borrowed scene "
                          "is no longer valid");
@@ -680,8 +699,9 @@ namespace termin::gui_native {
             cancel.type = TC_UI_POINTER_CANCEL;
             cancel.cancel_reason = TC_UI_POINTER_CANCEL_SUBTREE_INEFFECTIVE;
             const bool await_terminal_up = event->type != TC_UI_POINTER_UP && event->type != TC_UI_POINTER_CANCEL;
+            const std::optional<int32_t> cancelled_button = active_pointer_button_;
             cancel_pointer(document, cancel);
-            scene_pointer_cancelled_until_up_ = await_terminal_up;
+            quarantined_pointer_button_ = await_terminal_up ? cancelled_button : std::nullopt;
             return TC_UI_EVENT_HANDLED;
         }
         if (event->type == TC_UI_POINTER_CANCEL) {
@@ -701,8 +721,9 @@ namespace termin::gui_native {
             cancel.type = TC_UI_POINTER_CANCEL;
             cancel.cancel_reason = TC_UI_POINTER_CANCEL_EXPLICIT;
             const bool await_terminal_up = event->type != TC_UI_POINTER_UP;
+            const std::optional<int32_t> cancelled_button = active_pointer_button_;
             cancel_pointer(document, cancel);
-            scene_pointer_cancelled_until_up_ = await_terminal_up;
+            quarantined_pointer_button_ = await_terminal_up ? cancelled_button : std::nullopt;
             return TC_UI_EVENT_HANDLED;
         }
         if (!ray && !tc_visual_item3d_handle_is_invalid(interaction_.hovered(kMousePointer))) {
@@ -727,7 +748,8 @@ namespace termin::gui_native {
                 // a second terminal Cancel from set_scene().
                 fallback_pointer_active_ = false;
                 release_pointer_capture_if_owned(document, view_handle, "the fallback Up transition");
-                scene_pointer_cancelled_until_up_ = false;
+                quarantined_pointer_button_.reset();
+                active_pointer_button_.reset();
             }
             const std::uint64_t routed_scene_revision = scene_revision_;
             const bool handled = call_fallback(*event, ray);
@@ -736,7 +758,7 @@ namespace termin::gui_native {
             if (scene_revision_ != routed_scene_revision) {
                 active_fallback_pointer_handler_ = {};
                 if (event->type == TC_UI_POINTER_UP)
-                    scene_pointer_cancelled_until_up_ = false;
+                    quarantined_pointer_button_.reset();
                 return TC_UI_EVENT_HANDLED;
             }
             if (event->type == TC_UI_POINTER_UP)
@@ -771,7 +793,8 @@ namespace termin::gui_native {
                 // invoking the target Up callback.
                 scene_pointer_active_ = false;
                 release_pointer_capture_if_owned(document, view_handle, "the scene Up transition");
-                scene_pointer_cancelled_until_up_ = false;
+                quarantined_pointer_button_.reset();
+                active_pointer_button_.reset();
             }
             const auto dispatch = interaction_.route(
                 scene(), {kMousePointer, *kind, *ray, static_cast<uint32_t>(std::max(event->button, 0))});
@@ -789,11 +812,11 @@ namespace termin::gui_native {
                     // had been installed yet (for example replacement from an
                     // Enter callback before route() published its hit).
                     tc_ui_document_cancel_pointer_interaction(document, TC_UI_POINTER_CANCEL_CAPTURE_REPLACED);
-                    scene_pointer_cancelled_until_up_ = true;
+                    quarantined_pointer_button_ = event->button;
                 } else if (event->type == TC_UI_POINTER_UP) {
                     // This Up is already the terminal tail which set_scene()
                     // tried to quarantine from inside the callback.
-                    scene_pointer_cancelled_until_up_ = false;
+                    quarantined_pointer_button_.reset();
                 }
                 invalidate_scene();
                 return TC_UI_EVENT_HANDLED;
@@ -809,7 +832,7 @@ namespace termin::gui_native {
                         tc_ui_document_cancel_pointer_interaction(document, cancel.cancel_reason);
                     if (!delivered_by_document)
                         cancel_pointer(document, cancel);
-                    scene_pointer_cancelled_until_up_ = true;
+                    quarantined_pointer_button_ = event->button;
                 };
                 if (tc_visual_item3d_handle_is_invalid(dispatch.captured) ||
                     !interaction_.captured_hit(kMousePointer).has_value()) {
@@ -827,6 +850,7 @@ namespace termin::gui_native {
                         cancel_failed_capture("UI capture handling changed the scene capture");
                     } else {
                         scene_pointer_active_ = true;
+                        active_pointer_button_ = event->button;
                     }
                 }
             }
@@ -850,9 +874,10 @@ namespace termin::gui_native {
             active_fallback_pointer_handler_ = {};
             if (event->type == TC_UI_POINTER_DOWN) {
                 fallback_pointer_active_ = false;
-                scene_pointer_cancelled_until_up_ = true;
+                active_pointer_button_.reset();
+                quarantined_pointer_button_ = event->button;
             } else if (event->type == TC_UI_POINTER_UP) {
-                scene_pointer_cancelled_until_up_ = false;
+                quarantined_pointer_button_.reset();
             }
             return TC_UI_EVENT_HANDLED;
         }
@@ -868,12 +893,12 @@ namespace termin::gui_native {
                         tc_ui_document_cancel_pointer_interaction(document, cancel.cancel_reason);
                     if (!delivered_by_document && fallback_pointer_active_)
                         cancel_pointer(document, cancel);
-                    scene_pointer_cancelled_until_up_ = true;
+                    quarantined_pointer_button_ = event->button;
                 };
                 if (!tc_ui_document_set_focus(document, handle())) {
                     cancel_failed_capture("UI focus failed");
                 } else if (scene_revision_ != fallback_scene_revision || !fallback_pointer_active_) {
-                    scene_pointer_cancelled_until_up_ = true;
+                    quarantined_pointer_button_ = event->button;
                 } else if (!tc_ui_document_set_pointer_capture(document, handle())) {
                     cancel_failed_capture("UI pointer capture failed");
                 } else if (scene_revision_ != fallback_scene_revision || !fallback_pointer_active_) {
@@ -885,6 +910,7 @@ namespace termin::gui_native {
         }
         if (event->type == TC_UI_POINTER_DOWN) {
             fallback_pointer_active_ = false;
+            active_pointer_button_.reset();
             active_fallback_pointer_handler_ = {};
         }
         return TC_UI_EVENT_IGNORED;

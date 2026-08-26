@@ -97,8 +97,12 @@ namespace termin::gui_native {
         // the matching Up can still be delivered directly by a host/test after
         // capture is released. Consume that tail instead of starting a new
         // scene/fallback sequence from it.
-        bool scene_pointer_cancelled_until_up_ = false;
+        std::optional<int32_t> quarantined_pointer_button_;
         bool fallback_pointer_active_ = false;
+        // SceneInteraction3D currently exposes one mouse pointer identity, so
+        // SceneView3D owns at most one button sequence at a time. Chord events
+        // from other buttons remain independent and cannot terminate it.
+        std::optional<int32_t> active_pointer_button_;
         bool pointer_transition_in_progress_ = false;
         std::uint64_t scene_revision_ = 0;
     };

@@ -169,7 +169,7 @@ namespace {
         // A failed Move cancels the captured target from its last valid ray,
         // releases UI capture, and consumes the remaining Up without routing
         // it as a new event.
-        assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_DOWN, 50.0f, 50.0f, 1, 1, 0}) == TC_UI_EVENT_HANDLED);
+        assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_DOWN, 50.0f, 50.0f, 0, 1, 0}) == TC_UI_EVENT_HANDLED);
         assert(downs == 1);
         assert(tc_widget_handle_eq(document.pointer_capture(), view_handle));
         make_singular();
@@ -182,7 +182,11 @@ namespace {
         assert(tc_widget_handle_is_invalid(document.pointer_capture()));
 
         view->set_camera(identity_camera());
-        assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_UP, 55.0f, 55.0f, 1, 1, 0}) == TC_UI_EVENT_HANDLED);
+        assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_UP, 55.0f, 55.0f, 1, 1, 0}) == TC_UI_EVENT_IGNORED);
+        assert(ups == 0);
+        assert(actions == 0);
+        assert(fallback_calls == 0);
+        assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_UP, 55.0f, 55.0f, 0, 1, 0}) == TC_UI_EVENT_HANDLED);
         assert(ups == 0);
         assert(actions == 0);
         assert(fallback_calls == 0);
@@ -314,6 +318,11 @@ namespace {
         assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_DOWN, 110.0f, 70.0f, 0, 1, 0}) == TC_UI_EVENT_HANDLED);
         assert(fallback_calls == 0);
         assert(tc_widget_handle_eq(document.pointer_capture(), view_handle));
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_UP, 110.0f, 70.0f, 1, 1, 0}) == TC_UI_EVENT_IGNORED);
+        assert(actions == 0);
+        assert(fallback_calls == 0);
+        assert(tc_widget_handle_eq(document.pointer_capture(), view_handle));
         tc_ui_pointer_event wheel{};
         wheel.type = TC_UI_POINTER_WHEEL;
         wheel.x = 110.0f;
@@ -333,6 +342,10 @@ namespace {
         assert(tc_widget_handle_is_invalid(document.pointer_capture()));
 
         assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_DOWN, 205.0f, 115.0f, 0, 1, 0}) == TC_UI_EVENT_HANDLED);
+        assert(fallback_calls == 1);
+        assert(tc_widget_handle_eq(document.pointer_capture(), view_handle));
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_UP, 205.0f, 115.0f, 1, 1, 0}) == TC_UI_EVENT_IGNORED);
         assert(fallback_calls == 1);
         assert(tc_widget_handle_eq(document.pointer_capture(), view_handle));
         assert(dispatch(tc_ui_pointer_event{TC_UI_POINTER_UP, 205.0f, 115.0f, 0, 1, 0}) == TC_UI_EVENT_HANDLED);
