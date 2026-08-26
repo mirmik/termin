@@ -123,4 +123,15 @@ def build_parser(
         default=None,
         help="Maximum concurrent pytest suites (default: TERMIN_PYTEST_JOBS or 1).",
     )
+
+    selected_parser = subparsers.add_parser(
+        "run-selected-pytest",
+        help="Execute selected pytest targets in manifest-owned suite processes.",
+    )
+    selected_parser.add_argument(
+        "--python", default=sys.executable, dest="python_executable"
+    )
+    selected_parser.add_argument("--python-arg", action="append", default=[])
+    selected_parser.add_argument("--mark-expression")
+    selected_parser.add_argument("targets", nargs="+")
     return parser

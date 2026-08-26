@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -10,6 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -20,6 +22,13 @@ NANOBIND_DIAGNOSTIC_CONTEXT_BEFORE = 3
 NANOBIND_DIAGNOSTIC_CONTEXT_AFTER = 20
 PYTEST_DURATION_CACHE_SCHEMA = 1
 PYTEST_DURATION_SMOOTHING = 0.5
+
+
+@dataclass(frozen=True)
+class SelectedPytestSuite:
+    id: str
+    targets: tuple[str, ...]
+    excluded_roots: tuple[str, ...]
 
 
 def host_platform() -> str:
@@ -176,3 +185,67 @@ def report_pytest_suite_result(suite_id: str, returncode: int, output: str, *, p
         print(f"ERROR: pytest suite {suite_id} emitted nanobind shutdown leak diagnostics:", file=sys.stderr)
         print(nanobind_excerpt, file=sys.stderr)
     return returncode != 0 or nanobind_excerpt is not None
+
+
+def run_selected_pytest_suites(
+    repo_root: Path,
+    suites: list[SelectedPytestSuite],
+    python_executable: str,
+    python_arguments: tuple[str, ...] = (),
+    mark_expression: str | None = None,
+) -> int:
+    """Run explicit pytest targets with one process per manifest suite."""
+    run_root = repo_root / "build" / "pt" / uuid.uuid4().hex[:8]
+    cache_root = repo_root / "build" / "pytest-cache"
+    run_root.mkdir(parents=True, exist_ok=True)
+    cache_root.mkdir(parents=True, exist_ok=True)
+
+    print(f"Selected pytest suites: {len(suites)}")
+    print(f"Selected pytest temp root: {run_root}")
+    failures = []
+    base_environment = os.environ.copy()
+    for suite in suites:
+        safe_suite_id = safe_suite_directory(suite.id)
+        suite_temp = run_root / hashlib.sha256(
+            safe_suite_id.encode("utf-8")
+        ).hexdigest()[:8]
+        suite_cache = cache_root / safe_suite_id
+        suite_temp.mkdir(parents=True, exist_ok=True)
+        suite_cache.mkdir(parents=True, exist_ok=True)
+
+        command = [python_executable, *python_arguments, "-m", "pytest"]
+        if mark_expression is not None:
+            command.extend(["-m", mark_expression])
+        command.extend(suite.targets)
+        for excluded_root in suite.excluded_roots:
+            command.extend(["--ignore", excluded_root])
+        command.extend(
+            [
+                "--basetemp",
+                str(suite_temp),
+                "-o",
+                f"cache_dir={suite_cache}",
+                "-v",
+            ]
+        )
+
+        print_pytest_suite_header(suite.id)
+        sys.stdout.flush()
+        returncode, output = run_pytest_command(
+            command,
+            repo_root,
+            pytest_worker_environment(base_environment, suite_temp),
+            stream_output=True,
+        )
+        if report_pytest_suite_result(
+            suite.id, returncode, output, print_output=False
+        ):
+            failures.append(suite.id)
+
+    if failures:
+        print("", file=sys.stderr)
+        print("Selected Python suite failures:", file=sys.stderr)
+        for suite_id in failures:
+            print(f"  - {suite_id}", file=sys.stderr)
+        return 1
+    return 0

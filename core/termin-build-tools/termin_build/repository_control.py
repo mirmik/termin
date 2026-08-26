@@ -37,12 +37,14 @@ from .package_manifest import repo_root_from
 from .process_smoke import ProcessSmokeRun, execute_process_smoke_suites
 from .product_manifest import validate_repository_product_manifests
 from .pytest_orchestration import (
+    SelectedPytestSuite,
     host_platform as _host_platform,
     load_pytest_duration_cache as _load_pytest_duration_cache,
     print_pytest_suite_header as _print_pytest_suite_header,
     pytest_worker_environment as _pytest_worker_environment,
     report_pytest_suite_result as _report_pytest_suite_result,
     run_pytest_command as _run_pytest_command,
+    run_selected_pytest_suites as _run_selected_pytest_suites,
     safe_suite_directory as _safe_suite_directory,
     updated_pytest_durations as _updated_pytest_durations,
     write_pytest_duration_cache as _write_pytest_duration_cache,
@@ -1200,6 +1202,71 @@ def run_pytest_plan(
     return 0, []
 
 
+def _selected_pytest_suites(
+    repo_root: Path,
+    catalog: RepositoryCatalog,
+    targets: tuple[str, ...],
+) -> list[SelectedPytestSuite]:
+    pytest_suites = tuple(
+        suite for suite in catalog.suites if suite.executor == "pytest"
+    )
+    selected: dict[str, list[str]] = {}
+
+    for target in targets:
+        target_path_text = target.partition("::")[0]
+        target_path = Path(target_path_text)
+        if target_path.is_absolute():
+            try:
+                ownership_path = target_path.resolve().relative_to(repo_root.resolve())
+            except ValueError as exc:
+                raise ManifestError(
+                    f"selected pytest target is outside the repository: {target}"
+                ) from exc
+        else:
+            ownership_path = target_path
+
+        owners = _pytest_owners(ownership_path.as_posix(), pytest_suites)
+        if len(owners) > 1:
+            raise ManifestError(
+                f"selected pytest target has multiple suite owners: {target}: "
+                + ", ".join(owners)
+            )
+        if owners:
+            selected.setdefault(owners[0], []).append(target)
+            continue
+
+        # A directory above suite roots is a valid pytest selector. Fan it out
+        # to the catalog roots it contains so each suite still gets its own
+        # lifecycle boundary.
+        containing_suites = []
+        for suite in pytest_suites:
+            roots = [
+                root
+                for root in suite.roots
+                if _is_within(Path(root), ownership_path)
+            ]
+            if roots:
+                containing_suites.append((suite.id, roots))
+        if not containing_suites:
+            raise ManifestError(f"selected pytest target has no suite owner: {target}")
+        if "::" in target:
+            raise ManifestError(
+                f"selected pytest node target does not identify one suite: {target}"
+            )
+        for suite_id, roots in containing_suites:
+            selected.setdefault(suite_id, []).extend(roots)
+
+    return [
+        SelectedPytestSuite(
+            id=suite.id,
+            targets=tuple(selected[suite.id]),
+            excluded_roots=suite.excluded_roots,
+        )
+        for suite in pytest_suites
+        if suite.id in selected
+    ]
+
+
 def run_process_smoke_plan(
     repo_root: Path,
     catalog: RepositoryCatalog,
@@ -1776,6 +1843,18 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_verify_execution(
                 args.expected.resolve(),
                 tuple(path.resolve() for path in args.manifest),
+            )
+        if args.command == "run-selected-pytest":
+            catalog = _load_valid_catalog(repo_root)
+            suites = _selected_pytest_suites(
+                repo_root, catalog, tuple(args.targets)
+            )
+            return _run_selected_pytest_suites(
+                repo_root,
+                suites,
+                args.python_executable,
+                tuple(args.python_arg),
+                args.mark_expression,
             )
         if args.command == "run":
             pytest_jobs = args.pytest_jobs

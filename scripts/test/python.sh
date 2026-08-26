@@ -6,7 +6,7 @@
 # Flags:
 #   --full       Include pytest tests marked full
 #   --jobs N     Run up to N manifest-selected pytest suites concurrently
-#   test paths   Run only selected pytest targets after environment setup;
+#   test paths   Run selected pytest targets in isolated manifest-owned suites;
 #                selected runs skip the repo-wide Python lint suite.
 #   --help, -h   Show this help
 
@@ -46,7 +46,8 @@ while (( $# > 0 )); do
             echo "  --full      Include pytest tests marked full"
             echo "  --jobs N    Run up to N manifest-selected pytest suites concurrently"
             echo "  pytest-target"
-            echo "              Run only selected pytest target(s), e.g. termin-app/tests/test_game_mode_model.py"
+            echo "              Run selected pytest target(s), e.g. termin-app/tests/test_game_mode_model.py"
+            echo "              Targets from different manifest suites run in isolated processes."
             echo "              Selected runs skip the repo-wide Python lint suite."
             exit 0
             ;;
@@ -160,8 +161,16 @@ run_suite() {
 }
 
 if (( ${#PYTEST_TARGETS[@]} > 0 )); then
+    SELECTED_MARK_ARGS=()
+    if [[ "$FULL" -eq 0 ]]; then
+        SELECTED_MARK_ARGS=(--mark-expression "not full")
+    fi
     run_suite "selected python" \
-        "${PYTHON_COMMAND[@]}" -m pytest "${PYTEST_MARK_ARGS[@]}" "${PYTEST_TARGETS[@]}" -v
+        "${PYTHON_COMMAND[@]}" -m termin_build.repository_control \
+        --repo-root "$SCRIPT_DIR" run-selected-pytest \
+        --python "$PYTHON_BIN" \
+        --python-arg=--termin-overlay --python-arg="$OVERLAY_MANIFEST" \
+        "${SELECTED_MARK_ARGS[@]}" -- "${PYTEST_TARGETS[@]}"
 else
     TEST_PROFILE="pr"
     if [[ "$FULL" -eq 1 ]]; then

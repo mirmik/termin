@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from termin_build import process_smoke, repository_control
+from termin_build import process_smoke, pytest_orchestration, repository_control
 from termin_build.managed_process import process_group_exists
 
 
@@ -843,6 +843,92 @@ def test_run_executes_manifest_pytest_suites(
     assert text is True
     assert bufsize == 1
     assert "Pytest suites: 1" in capsys.readouterr().out
+
+
+def test_run_selected_pytest_isolates_targets_by_manifest_suite(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    repo = _repository(tmp_path)
+    first_test = repo / "alpha" / "tests" / "test_first.py"
+    first_test.write_text("def test_first(): pass\n", encoding="utf-8")
+    _add_pytest_suite(repo, "beta-python", "alpha/beta-tests")
+    second_test = repo / "alpha" / "beta-tests" / "test_second.py"
+    second_test.write_text("def test_second(): pass\n", encoding="utf-8")
+    calls = []
+
+    def fake_run(command, repo_root, environment, *, stream_output):
+        calls.append((command, repo_root, environment, stream_output))
+        return 0, "1 passed\n"
+
+    monkeypatch.setattr(pytest_orchestration, "run_pytest_command", fake_run)
+
+    result = repository_control.main(
+        [
+            "--repo-root",
+            str(repo),
+            "run-selected-pytest",
+            "--python",
+            "/test/python",
+            "--python-arg=--test-overlay",
+            "--mark-expression",
+            "not full",
+            "--",
+            "alpha/tests/test_first.py::test_first",
+            "alpha/beta-tests/test_second.py",
+        ]
+    )
+
+    assert result == 0
+    assert len(calls) == 2
+    first_command, first_repo, first_environment, first_stream = calls[0]
+    second_command, second_repo, second_environment, second_stream = calls[1]
+    assert first_command[:7] == [
+        "/test/python",
+        "--test-overlay",
+        "-m",
+        "pytest",
+        "-m",
+        "not full",
+        "alpha/tests/test_first.py::test_first",
+    ]
+    assert second_command[:7] == [
+        "/test/python",
+        "--test-overlay",
+        "-m",
+        "pytest",
+        "-m",
+        "not full",
+        "alpha/beta-tests/test_second.py",
+    ]
+    assert first_repo == second_repo == repo
+    assert first_stream is second_stream is True
+    assert first_environment["TMPDIR"] != second_environment["TMPDIR"]
+    assert "Selected pytest suites: 2" in capsys.readouterr().out
+
+
+def test_run_selected_pytest_rejects_unowned_target(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    repo = _repository(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        pytest_orchestration,
+        "run_pytest_command",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    result = repository_control.main(
+        [
+            "--repo-root",
+            str(repo),
+            "run-selected-pytest",
+            "outside/tests/test_unknown.py",
+        ]
+    )
+
+    assert result == 1
+    assert calls == []
+    assert "selected pytest target has no suite owner" in capsys.readouterr().err
 
 
 def test_run_skips_capability_suite_and_ignores_its_roots_in_parent_suite(
