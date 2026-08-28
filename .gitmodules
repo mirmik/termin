@@ -1,6 +1,6 @@
 [submodule "termin-thirdparty/recastnavigation"]
 	path = termin-thirdparty/recastnavigation
-	url = git@github.com:mirmik/recastnavigation.git
+	url = https://github.com/mirmik/recastnavigation.git
 [submodule "termin-thirdparty/manifold"]
 	path = termin-thirdparty/manifold
 	url = https://github.com/elalish/manifold.git
@@ -9,7 +9,7 @@
 	url = https://github.com/AngusJohnson/Clipper2.git
 [submodule "termin-thirdparty/guard"]
 	path = termin-thirdparty/guard
-	url = git@github.com:mirmik/guard.git
+	url = https://github.com/mirmik/guard.git
 [submodule "termin-thirdparty/openxr-sdk"]
 	path = termin-thirdparty/openxr-sdk
 	url = https://github.com/KhronosGroup/OpenXR-SDK.git
