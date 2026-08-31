@@ -1802,6 +1802,38 @@ def prepare_pinned_python_build_environment(
     )
 
 
+def prepare_python_build_environment(
+    repo_root: Path,
+    *,
+    base_python: Path,
+    variant: str,
+    environment_root: Path,
+) -> Path:
+    """Prepare a build frontend from an explicitly selected, ABI-checked Python.
+
+    The normal SDK/product path uses the repository's pinned CPython toolchain.
+    Release containers are a separate trusted toolchain boundary: official
+    manylinux images publish their interpreters at immutable, ABI-named paths.
+    They may opt in here, but an ambient or merely version-compatible Python is
+    never accepted.
+    """
+    info = _python_version_and_paths(str(base_python))
+    identity = PythonAbiIdentity.from_runtime_probe(
+        info,
+        context=f"explicit {variant} Python build environment base",
+    )
+    if identity.wheel_abi_tag != variant:
+        raise PythonAbiError(
+            f"explicit Python for {variant} has ABI {identity.wheel_abi_tag}: "
+            f"{base_python}"
+        )
+    return _ensure_sdk_python_build_environment(
+        repo_root,
+        base_python=base_python,
+        environment_root=environment_root,
+    )
+
+
 def _run_sdk_build_impl(
     repo_root: Path,
     build_type: str,
@@ -2184,6 +2216,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     publish_python_parser.add_argument("--install-dir", type=Path, required=True)
     publish_python_parser.add_argument("--sdk-prefix", type=Path, required=True)
+    publish_python_parser.add_argument(
+        "--modules-only",
+        action="store_true",
+        help="publish extension modules without requiring a bundled Python runtime",
+    )
 
     install_packages_parser = subparsers.add_parser(
         "install-packages",
@@ -2351,6 +2388,7 @@ def main(argv: list[str] | None = None) -> int:
             publish_cmake_python_install(
                 install_dir=args.install_dir,
                 sdk_prefix=args.sdk_prefix,
+                modules_only=args.modules_only,
             )
         except RuntimeError as error:
             print(f"ERROR: {error}", file=sys.stderr)

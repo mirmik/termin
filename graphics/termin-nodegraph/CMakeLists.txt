@@ -35,7 +35,7 @@ target_link_libraries(termin_nodegraph_core PUBLIC
 termin_set_rpath_lib(termin_nodegraph_core)
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
     nanobind_add_module(_nodegraph_native NB_SHARED
         python/bindings/nodegraph_module.cpp)

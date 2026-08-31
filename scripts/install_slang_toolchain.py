@@ -123,7 +123,23 @@ def replace_install_directory(staging: Path, install_dir: Path) -> None:
             time.sleep(0.25 * (attempt + 1))
 
 
-def install(lock_path: Path, root: Path, *, require_installed: bool) -> tuple[Path, str]:
+def apply_post_extract_script(script: Path, install_root: Path) -> None:
+    if not script.is_file():
+        raise RuntimeError(f"Slang post-extract script is missing: {script}")
+    print(f"Applying Slang post-extract script: {script}", file=sys.stderr)
+    subprocess.run(
+        [sys.executable, str(script), str(install_root)],
+        check=True,
+    )
+
+
+def install(
+    lock_path: Path,
+    root: Path,
+    *,
+    require_installed: bool,
+    post_extract_script: Path | None = None,
+) -> tuple[Path, str]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     version = str(lock["version"])
     descriptor = lock["platforms"][platform_key()]
@@ -131,6 +147,8 @@ def install(lock_path: Path, root: Path, *, require_installed: bool) -> tuple[Pa
     executable = install_dir / descriptor["executable"]
 
     if executable.is_file():
+        if post_extract_script is not None:
+            apply_post_extract_script(post_extract_script, install_dir)
         verify_version(executable, version)
         return executable.resolve(), version
     if require_installed:
@@ -161,6 +179,8 @@ def install(lock_path: Path, root: Path, *, require_installed: bool) -> tuple[Pa
             raise RuntimeError(
                 f"Slang archive does not contain {descriptor['executable']}"
             )
+        if post_extract_script is not None:
+            apply_post_extract_script(post_extract_script, staging)
         verify_version(staged_executable, version)
         replace_install_directory(staging, install_dir)
     finally:
@@ -197,6 +217,11 @@ def main() -> int:
         action="store_true",
         help=f"do not write {SETTINGS_KEY} to the common Termin settings",
     )
+    parser.add_argument(
+        "--post-extract-script",
+        type=Path,
+        help="run a Python script over the extracted toolchain before validation",
+    )
     parser.add_argument("--print-path", action="store_true")
     args = parser.parse_args()
 
@@ -205,6 +230,11 @@ def main() -> int:
             args.lock_file.resolve(),
             args.install_root.expanduser().resolve(),
             require_installed=args.require_installed,
+            post_extract_script=(
+                args.post_extract_script.expanduser().resolve()
+                if args.post_extract_script is not None
+                else None
+            ),
         )
         settings_path = None if args.no_configure else configure_settings(executable)
     except (KeyError, OSError, RuntimeError, subprocess.SubprocessError) as exc:

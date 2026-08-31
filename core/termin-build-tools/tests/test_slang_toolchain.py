@@ -43,6 +43,33 @@ def test_prepare_slang_toolchain_uses_build_python_and_repository_cache(
     ]
 
 
+def test_prepare_slang_toolchain_forwards_post_extract_script(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo_root = tmp_path / "termin"
+    repo_root.mkdir()
+    executable = repo_root / "slangc"
+    executable.write_text("", encoding="utf-8")
+    patch_script = repo_root / "patch-slang.py"
+    patch_script.write_text("", encoding="utf-8")
+    captured: list[str] = []
+
+    def run(command, **_kwargs):
+        captured.extend(command)
+        return subprocess.CompletedProcess(command, 0, stdout=f"{executable}\n")
+
+    monkeypatch.setattr(slang_toolchain.subprocess, "run", run)
+
+    result = slang_toolchain.prepare_slang_toolchain(
+        repo_root,
+        tmp_path / "python",
+        post_extract_script=patch_script,
+    )
+
+    assert result == executable.resolve()
+    assert captured[-2:] == ["--post-extract-script", str(patch_script)]
+
+
 def test_prepare_slang_toolchain_rejects_missing_installer_result(
     tmp_path: Path, monkeypatch
 ) -> None:

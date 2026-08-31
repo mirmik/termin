@@ -125,7 +125,7 @@ else()
 endif()
 
 if(TERMIN_BUILD_PYTHON AND TERMIN_WINDOW_HAS_SDL)
-    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
     nanobind_add_module(_window_native NB_SHARED
         python/bindings/window_module.cpp)

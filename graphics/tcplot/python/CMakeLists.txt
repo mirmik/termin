@@ -1,4 +1,4 @@
-find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(nanobind CONFIG REQUIRED)
 if(TGFX2_ENABLE_OPENGL)
     find_package(OpenGL REQUIRED)

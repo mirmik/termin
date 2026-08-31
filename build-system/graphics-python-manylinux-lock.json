@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "policy": "manylinux_2_28_x86_64",
+  "architecture": "x86_64",
+  "base_image": "quay.io/pypa/manylinux_2_28_x86_64@sha256:0bf9db09181f36be8cf0628332abb5d31855b7d0f372faa776f492ccd9d3100d",
+  "auditwheel_version": "6.8.1",
+  "software_vulkan": {
+    "implementation": "Mesa lavapipe",
+    "version": "24.3.4",
+    "source_url": "https://archive.mesa3d.org/mesa-24.3.4.tar.xz",
+    "source_sha256": "e641ae27191d387599219694560d221b7feaa91c900bcec46bf444218ed66025",
+    "icd_manifest": "/opt/termin-lavapipe/share/vulkan/icd.d/lvp_icd.x86_64.json"
+  },
+  "python_interpreters": {
+    "cp314": {
+      "path": "/opt/python/cp314-cp314/bin/python",
+      "version": "3.14.7"
+    },
+    "cp314t": {
+      "path": "/opt/python/cp314-cp314t/bin/python",
+      "version": "3.14.7"
+    }
+  },
+  "release_licenses": [
+    {"name": "Termin", "path": "LICENSE"},
+    {"name": "SDL2", "path": "termin-thirdparty/sdl2/LICENSE.txt"},
+    {"name": "zlib", "path": "termin-thirdparty/zlib/LICENSE"},
+    {"name": "libpng", "path": "termin-thirdparty/libpng/LICENSE"},
+    {"name": "libjpeg-turbo", "path": "termin-thirdparty/libjpeg-turbo/LICENSE.md"},
+    {"name": "libwebp", "path": "termin-thirdparty/libwebp/COPYING"},
+    {"name": "SPIRV-Cross", "path": "termin-thirdparty/spirv-cross/LICENSE"},
+    {"name": "Manifold", "path": "termin-thirdparty/manifold/LICENSE"},
+    {"name": "Clipper2", "path": "termin-thirdparty/clipper2/LICENSE"},
+    {"name": "Eigen", "path": "termin-thirdparty/eigen/COPYING.MPL2"},
+    {"name": "cgltf", "path": "termin-thirdparty/cgltf/LICENSE"},
+    {"name": "Vulkan-Loader", "path": "/usr/share/licenses/vulkan-loader/LICENSE.txt"},
+    {
+      "name": "libglvnd",
+      "path": "/opt/termin-release-licenses/libglvnd/README.md",
+      "source_url": "https://github.com/NVIDIA/libglvnd/archive/refs/tags/v1.3.4.tar.gz",
+      "source_sha256": "8f4218d7cdaf89d5b7eced818e810ccbc76f4bb9cba36d66eddac5a7ca892bab"
+    },
+    {
+      "name": "libXau",
+      "path": "/opt/termin-release-licenses/libXau/COPYING",
+      "source_url": "https://www.x.org/releases/individual/lib/libXau-1.0.9.tar.bz2",
+      "source_sha256": "ccf8cbf0dbf676faa2ea0a6d64bcc3b6746064722b606c8c52917ed00dcb73ec"
+    },
+    {
+      "name": "libxcb",
+      "path": "/opt/termin-release-licenses/libxcb/COPYING",
+      "source_url": "https://xcb.freedesktop.org/dist/libxcb-1.13.1.tar.bz2",
+      "source_sha256": "a89fb7af7a11f43d2ce84a844a4b38df688c092bf4b67683aef179cdf2a647c4"
+    }
+  ]
+}

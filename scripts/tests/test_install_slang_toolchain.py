@@ -67,6 +67,51 @@ def test_install_extracts_pinned_windows_zip_idempotently(
     assert [entry[1] for entry in verified] == ["test-version", "test-version"]
 
 
+def test_install_runs_post_extract_script_before_validation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    archive_source = tmp_path / "source.zip"
+    with zipfile.ZipFile(archive_source, "w") as bundle:
+        bundle.writestr("bin/slangc.exe", b"compiler")
+    lock = tmp_path / "lock.json"
+    lock.write_text(
+        json.dumps(
+            {
+                "version": "test-version",
+                "platforms": {
+                    "windows-x86_64": {
+                        "archive": "slang.zip",
+                        "url": archive_source.as_uri(),
+                        "sha256": hashlib.sha256(archive_source.read_bytes()).hexdigest(),
+                        "executable": "bin/slangc.exe",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    patch_script = tmp_path / "patch.py"
+    patch_script.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "Path(sys.argv[1], 'patched').write_text('yes', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(installer, "platform_key", lambda: "windows-x86_64")
+
+    def verify(executable: Path, _version: str) -> None:
+        assert (executable.parents[1] / "patched").read_text(encoding="utf-8") == "yes"
+
+    monkeypatch.setattr(installer, "verify_version", verify)
+
+    installer.install(
+        lock,
+        tmp_path / "toolchains",
+        require_installed=False,
+        post_extract_script=patch_script,
+    )
+
+
 def test_zip_path_escape_is_rejected(tmp_path: Path) -> None:
     archive = tmp_path / "bad.zip"
     with zipfile.ZipFile(archive, "w") as bundle:

@@ -17,6 +17,7 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         "build:android",
         "build:web",
         "package:graphics:python",
+        "package:graphics:python:manylinux",
         "docs:build",
         "docs:serve",
     ):
@@ -25,6 +26,7 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
     assert "./scripts/build/sdk.sh" in taskfile
     assert "./scripts/build/sdk.ps1" in taskfile
     assert "./scripts/build/graphics-python.sh" in taskfile
+    assert "./scripts/build/graphics-python-manylinux.sh" in taskfile
     assert "./scripts/test/all.sh" in taskfile
     assert "./scripts/test/all.ps1" in taskfile
     assert "\\" not in taskfile
@@ -33,6 +35,44 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         encoding="utf-8"
     )
     assert "TERMIN_USE_BUNDLED_SDL2" in bindings
+    assert "TERMIN_ENABLE_SHADERC" in bindings
+    assert "-DCMAKE_INSTALL_LIBDIR=lib" in bindings
+    assert '"${TERMIN_RELOCATABLE_PYTHON_WHEELS:-OFF}" != "ON"' in bindings
+    assert "publish_python_args+=(--modules-only)" in bindings
+
+
+def test_relocatable_python_wheels_do_not_require_embedded_libpython() -> None:
+    root_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    python_policy = (REPO_ROOT / "cmake" / "TerminPython.cmake").read_text(
+        encoding="utf-8"
+    )
+    core_cmake = (REPO_ROOT / "core" / "CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
+    inspect_cmake = (
+        REPO_ROOT / "core" / "termin-inspect" / "CMakeLists.txt"
+    ).read_text(encoding="utf-8")
+
+    assert "termin_require_canonical_python(Interpreter Development.Module)" in root_cmake
+    assert "NOT TERMIN_RELOCATABLE_PYTHON_WHEELS" in python_policy
+    assert "if(NOT TERMIN_RELOCATABLE_PYTHON_WHEELS)" in core_cmake
+    assert "PRIVATE\n            Python::Module" in inspect_cmake
+
+    extension_projects = [
+        path
+        for district in (REPO_ROOT / "core", REPO_ROOT / "graphics")
+        for path in district.rglob("CMakeLists.txt")
+        if "find_package(Python" in path.read_text(encoding="utf-8")
+        and "termin-python-host" not in path.as_posix()
+        and "termin-inspect" not in path.as_posix()
+    ]
+    stale = [
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in extension_projects
+        if "COMPONENTS Interpreter Development REQUIRED"
+        in path.read_text(encoding="utf-8")
+    ]
+    assert stale == []
 
 
 def test_windows_sdk_wrapper_resolves_profiled_output_from_canonical_manifest() -> None:

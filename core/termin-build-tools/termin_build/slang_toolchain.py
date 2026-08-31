@@ -15,18 +15,22 @@ def prepare_slang_toolchain(
     python_executable: Path,
     *,
     install_root: Path | None = None,
+    post_extract_script: Path | None = None,
 ) -> Path:
     """Install or verify the pinned Slang compiler and return ``slangc``."""
     root = install_root or repo_root / "build" / "toolchains"
+    command = [
+        str(python_executable),
+        str(repo_root / "scripts" / "install_slang_toolchain.py"),
+        "--install-root",
+        str(root),
+        "--no-configure",
+        "--print-path",
+    ]
+    if post_extract_script is not None:
+        command.extend(["--post-extract-script", str(post_extract_script)])
     result = subprocess.run(
-        [
-            str(python_executable),
-            str(repo_root / "scripts" / "install_slang_toolchain.py"),
-            "--install-root",
-            str(root),
-            "--no-configure",
-            "--print-path",
-        ],
+        command,
         cwd=repo_root,
         text=True,
         stdout=subprocess.PIPE,

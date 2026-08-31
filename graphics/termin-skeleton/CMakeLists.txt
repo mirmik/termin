@@ -70,7 +70,7 @@ if(TERMIN_BUILD_PYTHON)
         endif()
     endif()
 
-    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
     if(COMMAND termin_require_package)
     termin_require_package(termin_inspect termin_inspect::termin_inspect)

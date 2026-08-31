@@ -54,9 +54,43 @@ manifest описывает оба ABI, их раздельные `native_build_
 SDL2; `--no-sdl` для этой операции является ошибкой. Headless остаётся режимом
 исполнения той же поставки. `termin_shaderc`,
 `slangc` и библиотеки Slang являются только build-time inputs и в runtime wheel
-не входят. Это пока CPython 3.14/3.14t Linux x86_64 product, а не
-manylinux/PyPI release. Канонический Python полного/editor SDK при этом остаётся
-free-threaded `cp314t`; dual-ABI matrix относится только к standalone product.
+не входят. Эта команда создаёт локальный `linux_x86_64` product и предназначена
+для быстрой разработки, а не для публикации в package index. Канонический
+Python полного/editor SDK при этом остаётся free-threaded `cp314t`; dual-ABI
+matrix относится только к standalone product.
+
+Release-кандидат для PyPI собирается отдельным обязательным gate:
+
+```bash
+task package:graphics:python:manylinux
+```
+
+Команда требует Docker на Linux x86_64 и всегда строит полную матрицу `cp314` +
+`cp314t`; focused ABI здесь запрещён, чтобы нельзя было случайно выпустить
+неполный набор. Builder основан на digest-pinned официальном
+`manylinux_2_28_x86_64`. Пути и версии обоих интерпретаторов, версия
+`auditwheel`, исходник software Vulkan ICD и release license inventory
+закреплены в `build-system/graphics-python-manylinux-lock.json`.
+
+Для независимого headless gate builder по SHA-256 собирает Mesa lavapipe в
+отдельном Docker stage. Этот драйвер проверяет настоящий Vulkan showcase без
+GPU хоста и не входит в wheel payload. Pinned Slang archive получает локальную
+build-only compatibility library для старого libstdc++ baseline; Slang также
+не публикуется.
+
+После обычной чистой проверки raw product каждый binary wheel проходит
+`auditwheel show` и `auditwheel repair --plat manylinux_2_28_x86_64`.
+`termin-graphics-profile` остаётся единственным владельцем общей native closure;
+остальные extension wheels сохраняют `DT_NEEDED` на неё и не дублируют C++
+libraries. Затем repaired набор ещё раз устанавливается без сети в чистые venv
+обоих ABI и проходит `pip check`, проверку относительных RPATH, Vulkan headless
+render и SDL-offscreen OpenGL frame.
+
+Успешный набор атомарно появляется в `dist/graphics-python-manylinux/`. Его
+`termin-graphics-python-product.json` фиксирует SHA-256 всех wheel’ов, теги ABI,
+base/builder image identity, версии Python, audit provenance и SHA-256 всех
+вложенных license files. Это готовый к загрузке набор артефактов; сама загрузка
+в PyPI намеренно не является частью build task.
 
 Внешний Core SDK и `--core-sdk` для обычной монорепозиторной сборки не
 требуются.

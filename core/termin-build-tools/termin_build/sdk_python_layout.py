@@ -144,9 +144,20 @@ def resolve_sdk_python_layout(
 def publish_cmake_python_install(
     install_dir: Path,
     sdk_prefix: Path,
+    *,
+    modules_only: bool = False,
 ) -> Path:
     """Normalize CMake-installed Python modules into SDK site-packages."""
-    site_packages = resolve_sdk_python_layout(sdk_prefix)
+    if modules_only:
+        info = _python_version_and_paths(_python_executable())
+        bundled_name = _bundled_python_dir_name(
+            str(info["version"]),
+            free_threaded=bool(info.get("free_threaded", False)),
+        )
+        site_packages = sdk_prefix / "lib" / bundled_name / "site-packages"
+        site_packages.mkdir(parents=True, exist_ok=True)
+    else:
+        site_packages = resolve_sdk_python_layout(sdk_prefix)
 
     source_roots = [install_dir / "lib" / "python"]
     if _is_windows():
@@ -192,6 +203,16 @@ def publish_cmake_python_install(
         if bytecode.is_file():
             bytecode.unlink()
 
-    resolve_sdk_python_layout(sdk_prefix, require_native_bindings=True)
+    if modules_only:
+        tcbase_dir = site_packages / "tcbase"
+        native_bindings = tuple(tcbase_dir.glob("_tcbase_native*.so")) + tuple(
+            tcbase_dir.glob("_tcbase_native*.pyd")
+        )
+        if not native_bindings:
+            raise RuntimeError(
+                f"staged Python native bindings were not found under {tcbase_dir}"
+            )
+    else:
+        resolve_sdk_python_layout(sdk_prefix, require_native_bindings=True)
     print(f"Published CMake Python install to {site_packages}")
     return site_packages

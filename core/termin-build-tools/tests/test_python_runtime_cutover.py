@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from termin_build import sdk
+from termin_build.python_abi import PythonAbiError
+
 from termin_build.package_manifest import (
     CANONICAL_REQUIRES_PYTHON,
     load_manifest,
@@ -115,3 +120,40 @@ def test_test_builds_cannot_overwrite_the_installed_sdk() -> None:
         encoding="utf-8"
     )
     assert "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/" not in render_cmake
+
+
+def test_explicit_release_python_is_abi_checked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sdk,
+        "_python_version_and_paths",
+        lambda _python: {
+            "version": "3.14",
+            "soabi": "cpython-314t-x86_64-linux-gnu",
+            "free_threaded": True,
+            "py_gil_disabled": True,
+        },
+    )
+    expected = tmp_path / "environment" / "bin" / "python"
+    monkeypatch.setattr(
+        sdk,
+        "_ensure_sdk_python_build_environment",
+        lambda *_args, **_kwargs: expected,
+    )
+
+    assert sdk.prepare_python_build_environment(
+        tmp_path,
+        base_python=Path("/opt/python/cp314-cp314t/bin/python"),
+        variant="cp314t",
+        environment_root=tmp_path / "environment",
+    ) == expected
+
+    with pytest.raises(PythonAbiError, match="has ABI cp314t"):
+        sdk.prepare_python_build_environment(
+            tmp_path,
+            base_python=Path("/opt/python/cp314-cp314t/bin/python"),
+            variant="cp314",
+            environment_root=tmp_path / "wrong-environment",
+        )

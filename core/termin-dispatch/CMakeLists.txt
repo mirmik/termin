@@ -45,7 +45,7 @@ if(TERMIN_BUILD_PYTHON)
             set(Python_EXECUTABLE "python3")
         endif()
     endif()
-    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
 
     nanobind_add_module(_dispatch_native NB_SHARED

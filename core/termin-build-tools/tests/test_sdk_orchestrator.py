@@ -1542,6 +1542,36 @@ def test_publish_cmake_python_install_normalizes_staged_bindings(
     assert not list(site_packages.rglob("*.pyc"))
 
 
+def test_publish_cmake_python_modules_only_needs_no_bundled_runtime(
+    tmp_path,
+    monkeypatch,
+):
+    sdk_prefix = tmp_path / "sdk"
+    install_dir = tmp_path / "install"
+    staged_tcbase = install_dir / "lib" / "python" / "tcbase"
+    staged_tcbase.mkdir(parents=True)
+    native_name = "_tcbase_native.cpython-314t-x86_64-linux-gnu.so"
+    (staged_tcbase / native_name).write_bytes(b"native")
+
+    monkeypatch.setattr(sdk_python_layout, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk_python_layout, "_python_executable", lambda: "python")
+    monkeypatch.setattr(
+        sdk_python_layout,
+        "_python_version_and_paths",
+        lambda _py_exec: {"version": "3.14", "free_threaded": True},
+    )
+
+    result = sdk.publish_cmake_python_install(
+        install_dir,
+        sdk_prefix,
+        modules_only=True,
+    )
+
+    expected = sdk_prefix / "lib" / "python3.14t" / "site-packages"
+    assert result == expected
+    assert (expected / "tcbase" / native_name).read_bytes() == b"native"
+
+
 def test_publish_cmake_python_install_removes_windows_legacy_tree(
     tmp_path,
     monkeypatch,

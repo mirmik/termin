@@ -28,6 +28,7 @@ from .sdk import (
     _resolve_bindings_dir,
     _run,
     prepare_locked_runtime_wheels,
+    prepare_python_build_environment,
     prepare_pinned_python_build_environment,
 )
 from .sdk_profiles import load_sdk_profiles, select_python_packages
@@ -469,7 +470,16 @@ def verify_product(
             raise GraphicsPythonProductError("clean installed windowed graphics showcase failed")
 
 
-def build_product(repo_root: Path, build_args: list[str]) -> int:
+def build_product(
+    repo_root: Path,
+    build_args: list[str],
+    *,
+    product_root: Path | None = None,
+    destination: Path | None = None,
+    python_executables: dict[str, Path] | None = None,
+    slang_install_root: Path | None = None,
+    slang_post_extract_script: Path | None = None,
+) -> int:
     variants, forwarded_build_args = _parse_product_build_args(build_args)
     if "--no-sdl" in forwarded_build_args:
         raise GraphicsPythonProductError(
@@ -491,7 +501,7 @@ def build_product(repo_root: Path, build_args: list[str]) -> int:
             "graphics profile contains non-repository packages: " + ", ".join(unsupported)
         )
 
-    product_root = repo_root / "build" / "products" / "graphics-python"
+    product_root = product_root or repo_root / "build" / "products" / "graphics-python"
     product_root.mkdir(parents=True, exist_ok=True)
     variant_results: list[dict[str, object]] = []
     variant_wheel_dirs: list[tuple[str, Path]] = []
@@ -504,18 +514,47 @@ def build_product(repo_root: Path, build_args: list[str]) -> int:
         wheel_dir = variant_root / "wheels"
         external_wheels = variant_root / "external-wheels"
         build_environment = variant_root / "python-build-env"
-        build_python = prepare_pinned_python_build_environment(
-            repo_root,
-            variant=variant,
-            environment_root=build_environment,
+        explicit_python = (
+            python_executables.get(variant)
+            if python_executables is not None
+            else None
         )
+        if python_executables is not None and explicit_python is None:
+            raise GraphicsPythonProductError(
+                f"explicit Graphics Python matrix has no interpreter for {variant}"
+            )
+        if explicit_python is None:
+            build_python = prepare_pinned_python_build_environment(
+                repo_root,
+                variant=variant,
+                environment_root=build_environment,
+            )
+        else:
+            build_python = prepare_python_build_environment(
+                repo_root,
+                base_python=explicit_python,
+                variant=variant,
+                environment_root=build_environment,
+            )
         prepare_locked_runtime_wheels(
             repo_root,
             build_python,
             wheel_dir=external_wheels,
         )
         try:
-            slangc = prepare_slang_toolchain(repo_root, build_python)
+            if slang_install_root is None:
+                slangc = prepare_slang_toolchain(
+                    repo_root,
+                    build_python,
+                    post_extract_script=slang_post_extract_script,
+                )
+            else:
+                slangc = prepare_slang_toolchain(
+                    repo_root,
+                    build_python,
+                    install_root=slang_install_root,
+                    post_extract_script=slang_post_extract_script,
+                )
         except SlangToolchainError as error:
             raise GraphicsPythonProductError(str(error)) from error
         env = os.environ.copy()
@@ -614,7 +653,7 @@ def build_product(repo_root: Path, build_args: list[str]) -> int:
         raise GraphicsPythonProductError(
             "Graphics product Python ABI variants unexpectedly share a native_build_id"
         )
-    destination = repo_root / "dist" / "graphics-python"
+    destination = destination or repo_root / "dist" / "graphics-python"
     with tempfile.TemporaryDirectory(
         prefix="graphics-python-publish.",
         dir=product_root,

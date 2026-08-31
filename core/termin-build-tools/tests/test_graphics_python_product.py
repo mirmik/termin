@@ -300,7 +300,11 @@ def test_build_product_uses_isolated_abi_roots_and_verifies_merged_release(
         "prepare_locked_runtime_wheels",
         lambda _root, _python, *, wheel_dir: wheel_dir,
     )
-    monkeypatch.setattr(product_module, "prepare_slang_toolchain", lambda *_a: tmp_path / "slangc")
+    monkeypatch.setattr(
+        product_module,
+        "prepare_slang_toolchain",
+        lambda *_a, **_kw: tmp_path / "slangc",
+    )
     monkeypatch.setattr(product_module, "_run", run)
     monkeypatch.setattr(product_module, "_resolve_bindings_dir", lambda _r, build: build)
     monkeypatch.setattr(product_module, "build_local_wheel_artifact_set", build_wheels)

@@ -198,9 +198,11 @@ PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
     --vulkan "$TERMIN_ENABLE_VULKAN" \
     --init-submodules
 
-PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
-    "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" prepare-build-python-runtime \
-    --sdk-prefix "$SDK_PREFIX"
+if [[ "${TERMIN_RELOCATABLE_PYTHON_WHEELS:-OFF}" != "ON" ]]; then
+    PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
+        "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" prepare-build-python-runtime \
+        --sdk-prefix "$SDK_PREFIX"
+fi
 
 cmake_args=()
 if [[ -n "$CMAKE_GENERATOR_NAME" && ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
@@ -209,10 +211,17 @@ fi
 if [[ -n "${TERMIN_USE_BUNDLED_SDL2:-}" ]]; then
     cmake_args+=(-DTERMIN_USE_BUNDLED_SDL2="$TERMIN_USE_BUNDLED_SDL2")
 fi
+if [[ -n "${TERMIN_USE_BUNDLED_IMAGE_CODECS:-}" ]]; then
+    cmake_args+=(-DTERMIN_USE_BUNDLED_IMAGE_CODECS="$TERMIN_USE_BUNDLED_IMAGE_CODECS")
+fi
+if [[ -n "${TERMIN_ENABLE_SHADERC:-}" ]]; then
+    cmake_args+=(-DTGFX2_ENABLE_SHADERC="$TERMIN_ENABLE_SHADERC")
+fi
 
 cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DCMAKE_INSTALL_PREFIX="$SDK_PREFIX" \
+    -DCMAKE_INSTALL_LIBDIR=lib \
     -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF \
     -DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON \
     -DTERMIN_USE_CCACHE="$TERMIN_USE_CCACHE" \
@@ -260,14 +269,22 @@ sync_staged_dir lib --exclude '/python*/'
 # The staged lib/ tree intentionally does not own the bundled CPython shared
 # library.  rsync --delete therefore removes it unless we restore the runtime
 # after synchronizing native SDK artifacts.
-PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
-    "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" prepare-build-python-runtime \
-    --sdk-prefix "$SDK_PREFIX"
+if [[ "${TERMIN_RELOCATABLE_PYTHON_WHEELS:-OFF}" != "ON" ]]; then
+    PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
+        "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" prepare-build-python-runtime \
+        --sdk-prefix "$SDK_PREFIX"
+fi
 
-PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
-    "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" publish-cmake-python \
-    --install-dir "$INSTALL_STAGING_DIR" \
+publish_python_args=(
+    --repo-root "$SCRIPT_DIR" publish-cmake-python
+    --install-dir "$INSTALL_STAGING_DIR"
     --sdk-prefix "$SDK_PREFIX"
+)
+if [[ "${TERMIN_RELOCATABLE_PYTHON_WHEELS:-OFF}" == "ON" ]]; then
+    publish_python_args+=(--modules-only)
+fi
+PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
+    "$PY_EXEC" -m termin_build.sdk "${publish_python_args[@]}"
 
 PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}" \
     "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" write-artifacts \

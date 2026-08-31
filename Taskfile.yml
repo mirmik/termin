@@ -79,6 +79,12 @@ tasks:
     cmds:
       - ./scripts/build/graphics-python.sh {{.CLI_ARGS}}
 
+  package:graphics:python:manylinux:
+    desc: Build and audit CPython 3.14/3.14t manylinux Graphics wheels
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/graphics-python-manylinux.sh {{.CLI_ARGS}}
+
   test:
     desc: Run the complete editor SDK test entry point
     cmds:

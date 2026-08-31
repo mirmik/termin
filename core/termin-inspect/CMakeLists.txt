@@ -70,7 +70,10 @@ if(TI_BUILD_PYTHON_BRIDGE)
         endif()
     endif()
 
-    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
+    if(TERMIN_BUILD_TESTS)
+        find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    endif()
 
     find_package(nanobind CONFIG REQUIRED)
 endif()
@@ -132,7 +135,7 @@ if(TI_BUILD_PYTHON_BRIDGE)
         PUBLIC
             termin_inspect
         PRIVATE
-            Python::Python
+            Python::Module
     )
     termin_nanobind_link_runtime(termin_inspect_python PUBLIC)
 endif()

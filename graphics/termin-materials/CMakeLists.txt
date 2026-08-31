@@ -119,7 +119,7 @@ if(TERMIN_BUILD_TESTS)
 endif()
 
 if(TERMIN_BUILD_PYTHON)
-    find_package(Python 3.14 COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
 
     nanobind_add_module(_materials_native NB_SHARED

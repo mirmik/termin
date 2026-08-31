@@ -1,0 +1,47 @@
+GLIBCXX_3.4 {
+};
+GLIBCXX_3.4.9 {
+} GLIBCXX_3.4;
+GLIBCXX_3.4.11 {
+} GLIBCXX_3.4.9;
+GLIBCXX_3.4.14 {
+} GLIBCXX_3.4.11;
+GLIBCXX_3.4.15 {
+} GLIBCXX_3.4.14;
+GLIBCXX_3.4.18 {
+} GLIBCXX_3.4.15;
+GLIBCXX_3.4.19 {
+} GLIBCXX_3.4.18;
+GLIBCXX_3.4.20 {
+} GLIBCXX_3.4.19;
+GLIBCXX_3.4.21 {
+} GLIBCXX_3.4.20;
+GLIBCXX_3.4.22 {
+} GLIBCXX_3.4.21;
+GLIBCXX_3.4.26 {
+    global:
+        _ZNKSt10filesystem7__cxx114path5_List13_Impl_deleterclEPNS2_5_ImplE;
+        _ZNKSt10filesystem7__cxx114path5_List3endEv;
+        _ZNKSt10filesystem7__cxx114path5_List5beginEv;
+        _ZNSt10filesystem7__cxx114path14_M_split_cmptsEv;
+        _ZNSt10filesystem7__cxx114path5_ListC1Ev;
+        _ZNSt10filesystem8absoluteERKNS_7__cxx114pathE;
+        _ZNSt10filesystem8relativeERKNS_7__cxx114pathES3_RSt10error_code;
+        _ZNSt7__cxx1119basic_ostringstreamIcSt11char_traitsIcESaIcEEC1Ev;
+    local: *;
+} GLIBCXX_3.4.22;
+GLIBCXX_3.4.29 {
+    global:
+        _ZSt28__throw_bad_array_new_lengthv;
+} GLIBCXX_3.4.26;
+
+CXXABI_1.3 {
+};
+CXXABI_1.3.5 {
+} CXXABI_1.3;
+CXXABI_1.3.7 {
+} CXXABI_1.3.5;
+CXXABI_1.3.8 {
+} CXXABI_1.3.7;
+CXXABI_1.3.9 {
+} CXXABI_1.3.8;

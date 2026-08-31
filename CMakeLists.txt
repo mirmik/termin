@@ -163,7 +163,11 @@ include(TerminRpath)
 
 if(TERMIN_BUILD_PYTHON)
     include(TerminPython)
-    termin_require_canonical_python(Interpreter Development)
+    if(TERMIN_RELOCATABLE_PYTHON_WHEELS)
+        termin_require_canonical_python(Interpreter Development.Module)
+    else()
+        termin_require_canonical_python(Interpreter Development)
+    endif()
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

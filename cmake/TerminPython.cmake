@@ -85,7 +85,8 @@ macro(termin_require_canonical_python)
             "Canonical Python headers were not found for "
             "${Python_EXECUTABLE}: ${TERMIN_PYTHON_INCLUDE_DIR}/Python.h")
     endif()
-    if(NOT EXISTS "${TERMIN_PYTHON_LIBRARY}")
+    if(NOT TERMIN_RELOCATABLE_PYTHON_WHEELS
+       AND NOT EXISTS "${TERMIN_PYTHON_LIBRARY}")
         message(FATAL_ERROR
             "Canonical Python library was not found for "
             "${Python_EXECUTABLE}: ${TERMIN_PYTHON_LIBRARY}")
@@ -97,8 +98,12 @@ macro(termin_require_canonical_python)
         "Canonical ${TERMIN_PYTHON_ABI} Python used by Termin" FORCE)
     set(Python_INCLUDE_DIR "${TERMIN_PYTHON_INCLUDE_DIR}" CACHE PATH
         "Canonical ${TERMIN_PYTHON_ABI} Python headers used by Termin" FORCE)
-    set(Python_LIBRARY "${TERMIN_PYTHON_LIBRARY}" CACHE FILEPATH
-        "Canonical ${TERMIN_PYTHON_ABI} Python library used by Termin" FORCE)
+    if(TERMIN_RELOCATABLE_PYTHON_WHEELS)
+        unset(Python_LIBRARY CACHE)
+    else()
+        set(Python_LIBRARY "${TERMIN_PYTHON_LIBRARY}" CACHE FILEPATH
+            "Canonical ${TERMIN_PYTHON_ABI} Python library used by Termin" FORCE)
+    endif()
 
     find_package(
         Python ${TERMIN_CANONICAL_PYTHON_VERSION}

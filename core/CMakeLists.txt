@@ -27,7 +27,9 @@ if(TERMIN_BUILD_PYTHON)
 
     add_subdirectory(termin-nanobind-sdk)
     include(termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake)
-    add_subdirectory(termin-python-host)
+    if(NOT TERMIN_RELOCATABLE_PYTHON_WHEELS)
+        add_subdirectory(termin-python-host)
+    endif()
 endif()
 
 add_subdirectory(termin-base)
