@@ -241,6 +241,14 @@ def test_local_version_is_content_stable_and_changes_with_payload(
     assert second.startswith("0.1.0+sdk")
 
 
+def test_explicit_package_release_version_omits_sdk_local_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TERMIN_PYTHON_PACKAGE_VERSION", "0.2.0")
+
+    assert TerminCMakeBuildExt.compute_local_version("0.1.0") == "0.2.0"
+
+
 def _write_test_wheel(
     path: Path,
     *,

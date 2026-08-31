@@ -116,11 +116,14 @@ def test_build_can_bundle_runtime_libraries(tmp_path: Path) -> None:
         run=run,
         clear_build_caches=lambda root: None,
         bundle_runtime_libraries=True,
+        package_version="0.2.0",
     )
 
     assert result == 0
     assert build_env is not None
     assert build_env["TERMIN_PIP_BUNDLE_LIBS"] == "1"
+    assert build_env["TERMIN_PYTHON_PACKAGE_VERSION"] == "0.2.0"
+    assert build_env["SOURCE_DATE_EPOCH"] == "946684800"
 
 
 def test_validation_rejects_tampered_wheel(tmp_path: Path) -> None:

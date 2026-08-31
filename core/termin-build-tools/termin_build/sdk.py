@@ -911,11 +911,12 @@ def _ensure_sdk_python_build_environment(
     repo_root: Path,
     *,
     base_python: Path | None = None,
+    environment_root: Path | None = None,
 ) -> Path:
     requirements = repo_root / SDK_BUILD_REQUIREMENTS_RELATIVE
     if not requirements.is_file():
         raise RuntimeError(f"SDK Python build requirements are missing: {requirements}")
-    environment_root = _sdk_build_environment_root(repo_root)
+    environment_root = environment_root or _sdk_build_environment_root(repo_root)
     build_python = _build_environment_python(environment_root)
     stamp = environment_root / "python-sdk-build-requirements.txt"
     selected_base = base_python or Path(_python_executable())
@@ -1105,6 +1106,21 @@ def _prepare_external_runtime_wheels(
         f"{python_abi.wheel_abi_tag}"
     )
     return 0
+
+
+def prepare_locked_runtime_wheels(
+    repo_root: Path,
+    build_python: Path,
+    *,
+    wheel_dir: Path,
+) -> Path:
+    """Prepare an ABI-specific wheelhouse from the exact runtime lock."""
+    result = _prepare_external_runtime_wheels(repo_root, wheel_dir, build_python)
+    if result != 0:
+        raise RuntimeError(
+            f"failed to prepare locked runtime wheels for {build_python}"
+        )
+    return wheel_dir
 
 
 def _install_prepared_runtime_wheels(
@@ -1772,11 +1788,17 @@ def _bundled_site_packages_hint(sdk_prefix: Path) -> Path:
     return sdk_prefix / "lib" / "python3.*" / "site-packages"
 
 
-def prepare_pinned_python_build_environment(repo_root: Path) -> Path:
-    toolchain = ensure_python_toolchain(repo_root)
+def prepare_pinned_python_build_environment(
+    repo_root: Path,
+    *,
+    variant: str | None = None,
+    environment_root: Path | None = None,
+) -> Path:
+    toolchain = ensure_python_toolchain(repo_root, variant=variant)
     return _ensure_sdk_python_build_environment(
         repo_root,
         base_python=toolchain.python_executable,
+        environment_root=environment_root,
     )
 
 

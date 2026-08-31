@@ -1,6 +1,25 @@
 include_guard(DIRECTORY)
 
 set(TERMIN_CANONICAL_PYTHON_VERSION "3.14")
+set(TERMIN_PYTHON_ABI "cp314t" CACHE STRING
+    "CPython 3.14 ABI used by Termin (cp314 or cp314t)")
+set_property(CACHE TERMIN_PYTHON_ABI PROPERTY STRINGS cp314 cp314t)
+
+if(TERMIN_PYTHON_ABI STREQUAL "cp314t")
+    set(TERMIN_PYTHON_FREE_THREADED 1)
+    set(TERMIN_PYTHON_ABI_DIR_SUFFIX
+        "${TERMIN_CANONICAL_PYTHON_VERSION}t")
+    set(_TERMIN_PYTHON_EXPECTED_SOABI_PATTERN "^(cpython-|cp)314t($|-)")
+elseif(TERMIN_PYTHON_ABI STREQUAL "cp314")
+    set(TERMIN_PYTHON_FREE_THREADED 0)
+    set(TERMIN_PYTHON_ABI_DIR_SUFFIX
+        "${TERMIN_CANONICAL_PYTHON_VERSION}")
+    set(_TERMIN_PYTHON_EXPECTED_SOABI_PATTERN "^(cpython-|cp)314($|-)")
+else()
+    message(FATAL_ERROR
+        "Unsupported TERMIN_PYTHON_ABI='${TERMIN_PYTHON_ABI}'. "
+        "Expected cp314 or cp314t.")
+endif()
 
 macro(termin_require_canonical_python)
     # CMake versions predating free-threaded CPython support do not search for
@@ -45,16 +64,21 @@ macro(termin_require_canonical_python)
     if(NOT TERMIN_PYTHON_ABI_VERSION STREQUAL
        TERMIN_CANONICAL_PYTHON_VERSION)
         message(FATAL_ERROR
-            "Termin requires CPython ${TERMIN_CANONICAL_PYTHON_VERSION}t, "
+            "Termin ${TERMIN_PYTHON_ABI} requires CPython "
+            "${TERMIN_CANONICAL_PYTHON_VERSION}, "
             "got ${TERMIN_PYTHON_ABI_VERSION} (${TERMIN_PYTHON_SOABI}) from "
             "${Python_EXECUTABLE}")
     endif()
-    if(NOT TERMIN_PYTHON_GIL_DISABLED STREQUAL "1"
-       OR NOT TERMIN_PYTHON_SOABI MATCHES "^(cpython-|cp)314t($|-)")
+    if(NOT TERMIN_PYTHON_GIL_DISABLED STREQUAL
+           "${TERMIN_PYTHON_FREE_THREADED}"
+       OR NOT TERMIN_PYTHON_SOABI MATCHES
+           "${_TERMIN_PYTHON_EXPECTED_SOABI_PATTERN}")
         message(FATAL_ERROR
-            "Termin requires free-threaded CPython "
-            "${TERMIN_CANONICAL_PYTHON_VERSION}t, got "
-            "${TERMIN_PYTHON_SOABI} from ${Python_EXECUTABLE}")
+            "Termin requires ${TERMIN_PYTHON_ABI} "
+            "(Py_GIL_DISABLED=${TERMIN_PYTHON_FREE_THREADED}), got "
+            "${TERMIN_PYTHON_SOABI} with "
+            "Py_GIL_DISABLED=${TERMIN_PYTHON_GIL_DISABLED} from "
+            "${Python_EXECUTABLE}")
     endif()
     if(NOT EXISTS "${TERMIN_PYTHON_INCLUDE_DIR}/Python.h")
         message(FATAL_ERROR
@@ -68,15 +92,13 @@ macro(termin_require_canonical_python)
     endif()
 
     set(TERMIN_PYTHON_STDLIB_DIR_NAME
-        "python${TERMIN_CANONICAL_PYTHON_VERSION}t")
-    set(TERMIN_PYTHON_ABI_DIR_SUFFIX
-        "${TERMIN_CANONICAL_PYTHON_VERSION}t")
+        "python${TERMIN_PYTHON_ABI_DIR_SUFFIX}")
     set(Python_EXECUTABLE "${Python_EXECUTABLE}" CACHE FILEPATH
-        "Canonical free-threaded Python used by Termin" FORCE)
+        "Canonical ${TERMIN_PYTHON_ABI} Python used by Termin" FORCE)
     set(Python_INCLUDE_DIR "${TERMIN_PYTHON_INCLUDE_DIR}" CACHE PATH
-        "Canonical free-threaded Python headers used by Termin" FORCE)
+        "Canonical ${TERMIN_PYTHON_ABI} Python headers used by Termin" FORCE)
     set(Python_LIBRARY "${TERMIN_PYTHON_LIBRARY}" CACHE FILEPATH
-        "Canonical free-threaded Python library used by Termin" FORCE)
+        "Canonical ${TERMIN_PYTHON_ABI} Python library used by Termin" FORCE)
 
     find_package(
         Python ${TERMIN_CANONICAL_PYTHON_VERSION}
@@ -91,29 +113,39 @@ macro(termin_require_canonical_python)
     # Python.h's MSVC auto-link pragma as well: CMake already carries the
     # exact checked import library, while the pragma derives its name from
     # compile definitions and can silently request the regular-GIL library.
-    foreach(_termin_python_target Python::Python Python::Module)
-        if(TARGET "${_termin_python_target}")
-            set_property(
-                TARGET "${_termin_python_target}"
-                APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS
-                    Py_GIL_DISABLED=1
-                    Py_NO_LINK_LIB
-            )
-        endif()
-    endforeach()
+    if(WIN32)
+        foreach(_termin_python_target Python::Python Python::Module)
+            if(TARGET "${_termin_python_target}")
+                set_property(
+                    TARGET "${_termin_python_target}"
+                    APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS
+                        Py_NO_LINK_LIB
+                )
+                if(TERMIN_PYTHON_FREE_THREADED)
+                    set_property(
+                        TARGET "${_termin_python_target}"
+                        APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS
+                            Py_GIL_DISABLED=1
+                    )
+                endif()
+            endif()
+        endforeach()
+    endif()
 
     # nanobind persists interpreter-derived ABI values as INTERNAL cache
     # entries. Recompute them before the root nanobind target is configured so
     # an existing build tree cannot retain a suffix from the previous runtime.
     # Subprojects invoke this macro again after nanobind is loaded, so clearing
     # the values unconditionally would erase the active configuration.
-    if(NOT TARGET nanobind-ft
-       AND DEFINED NB_SUFFIX
-       AND NOT NB_SUFFIX MATCHES "^\\.(cpython-|cp)314t")
-        unset(NB_SOABI CACHE)
-        unset(NB_SUFFIX CACHE)
-        unset(NB_SUFFIX_S CACHE)
-        unset(NB_ABI CACHE)
-        unset(NB_FREE_THREADED CACHE)
+    if(NOT TARGET nanobind AND NOT TARGET nanobind-ft AND DEFINED NB_SUFFIX)
+        string(FIND "${NB_SUFFIX}" ".${TERMIN_PYTHON_SOABI}"
+            _termin_python_expected_suffix_index)
+        if(NOT _termin_python_expected_suffix_index EQUAL 0)
+            unset(NB_SOABI CACHE)
+            unset(NB_SUFFIX CACHE)
+            unset(NB_SUFFIX_S CACHE)
+            unset(NB_ABI CACHE)
+            unset(NB_FREE_THREADED CACHE)
+        endif()
     endif()
 endmacro()

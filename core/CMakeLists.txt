@@ -26,9 +26,6 @@ if(TERMIN_BUILD_PYTHON)
         CACHE PATH "Canonical nanobind CMake package directory" FORCE)
 
     add_subdirectory(termin-nanobind-sdk)
-    set(TERMIN_NANOBIND_RUNTIME_TARGET
-        "nanobind-ft"
-        CACHE INTERNAL "Canonical Termin nanobind runtime target" FORCE)
     include(termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake)
     add_subdirectory(termin-python-host)
 endif()

@@ -29,10 +29,17 @@ def test_toolchain_lock_is_the_only_runtime_identity() -> None:
         )
     )
     assert lock["version"] == "3.14.6"
-    assert lock["python_abi"] == {
+    assert lock["default_variant"] == "cp314t"
+    assert set(lock["variants"]) == {"cp314", "cp314t"}
+    assert lock["variants"]["cp314t"]["python_abi"] == {
         "version": "3.14",
         "free_threaded": True,
         "py_gil_disabled": True,
+    }
+    assert lock["variants"]["cp314"]["python_abi"] == {
+        "version": "3.14",
+        "free_threaded": False,
+        "py_gil_disabled": False,
     }
 
     cmake_contract = (

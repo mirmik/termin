@@ -4,8 +4,6 @@ import os
 from pathlib import Path
 import types
 
-import pytest
-
 from termin_nanobind import runtime
 
 
@@ -18,7 +16,7 @@ class _DllDirectoryHandle:
         self.closed = True
 
 
-def test_logical_nanobind_name_requires_free_threaded_runtime(monkeypatch) -> None:
+def test_logical_nanobind_name_selects_interpreter_abi_runtime(monkeypatch) -> None:
     monkeypatch.setattr(
         runtime.sysconfig,
         "get_config_var",
@@ -28,8 +26,7 @@ def test_logical_nanobind_name_requires_free_threaded_runtime(monkeypatch) -> No
     assert runtime._abi_runtime_library_name("termin_base") == "termin_base"
 
     monkeypatch.setattr(runtime.sysconfig, "get_config_var", lambda _name: 0)
-    with pytest.raises(ImportError, match="CPython 3.14t"):
-        runtime._abi_runtime_library_name("nanobind")
+    assert runtime._abi_runtime_library_name("nanobind") == "nanobind"
 
 
 def test_find_library_prefers_elf_soname_over_flattened_linker_name(tmp_path) -> None:

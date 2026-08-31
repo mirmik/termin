@@ -216,6 +216,7 @@ $cmakeArgs += @(
     "-DTERMIN_ENABLE_UNITY_BUILD=$TerminEnableUnityBuild",
     "-DTERMIN_ENABLE_PCH=$TerminEnablePch",
     "-DTERMIN_SDK_PROFILE=$Profile",
+    "-DTERMIN_PYTHON_ABI=$(if ($env:TERMIN_PYTHON_ABI) { $env:TERMIN_PYTHON_ABI } else { 'cp314t' })",
     "-DTERMIN_BUILD_PYTHON=ON",
     "-DTERMIN_BUILD_TESTS=OFF",
     "-DTERMIN_ENABLE_VULKAN=$TerminEnableVulkan",

@@ -22,7 +22,7 @@ def _artifact(*, sha256: str) -> python_toolchain.PythonToolchainArtifact:
     )
 
 
-def test_repository_lock_pins_free_threaded_cpython_314():
+def test_repository_lock_defaults_to_free_threaded_cpython_314():
     repo_root = Path(__file__).resolve().parents[3]
 
     lock = python_toolchain.PythonToolchainLock.load(
@@ -30,6 +30,8 @@ def test_repository_lock_pins_free_threaded_cpython_314():
     )
 
     assert lock.version == "3.14.6"
+    assert lock.variant == "cp314t"
+    assert lock.default_variant == "cp314t"
     assert lock.abi_version == "3.14"
     assert lock.free_threaded is True
     assert lock.py_gil_disabled is True
@@ -37,36 +39,32 @@ def test_repository_lock_pins_free_threaded_cpython_314():
     assert lock.platforms["windows-x86_64"].kind == "nuget"
 
 
-def test_lock_rejects_a_gil_enabled_canonical_profile(tmp_path):
-    lock_path = tmp_path / "lock.json"
-    lock_path.write_text(
-        json.dumps(
-            {
-                "schema": 1,
-                "version": "3.14.6",
-                "python_abi": {
-                    "version": "3.14",
-                    "free_threaded": False,
-                    "py_gil_disabled": False,
-                },
-                "platforms": {
-                    "linux-x86_64": {
-                        "kind": "source",
-                        "url": "https://example.invalid/python.tar.xz",
-                        "sha256": "0" * 64,
-                        "archive_root": "Python-3.14.6",
-                    }
-                },
-            }
-        ),
-        encoding="utf-8",
+def test_repository_lock_selects_regular_cpython_314():
+    repo_root = Path(__file__).resolve().parents[3]
+
+    lock = python_toolchain.PythonToolchainLock.load(
+        repo_root / python_toolchain.LOCK_RELATIVE_PATH,
+        "cp314",
     )
 
-    with pytest.raises(
-        python_toolchain.PythonToolchainError,
-        match="must be free-threaded",
-    ):
-        python_toolchain.PythonToolchainLock.load(lock_path)
+    assert lock.variant == "cp314"
+    assert lock.default_variant == "cp314t"
+    assert lock.free_threaded is False
+    assert lock.py_gil_disabled is False
+    assert "--disable-gil" not in lock.platforms["linux-x86_64"].configure_args
+    assert lock.platforms["windows-x86_64"].url.endswith(
+        "/python/3.14.6/python.3.14.6.nupkg"
+    )
+
+
+def test_lock_rejects_unknown_variant():
+    repo_root = Path(__file__).resolve().parents[3]
+
+    with pytest.raises(python_toolchain.PythonToolchainError, match="unknown Python"):
+        python_toolchain.PythonToolchainLock.load(
+            repo_root / python_toolchain.LOCK_RELATIVE_PATH,
+            "cp313",
+        )
 
 
 def test_download_uses_verified_cached_artifact_offline(tmp_path, monkeypatch):
@@ -228,5 +226,6 @@ def test_ensure_toolchain_writes_reproducibility_manifest(
     )
     assert toolchain.python_executable == python_executable
     assert manifest["version"] == "3.14.6"
+    assert manifest["variant"] == "cp314t"
     assert manifest["python_abi"] == identity.to_dict()
     assert manifest["python_executable"] == "bin/python3.14t"

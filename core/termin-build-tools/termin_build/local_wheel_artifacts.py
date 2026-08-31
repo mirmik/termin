@@ -167,6 +167,7 @@ def build_local_wheel_artifact_set(
     run: Callable[..., int],
     clear_build_caches: Callable[[Path], None],
     bundle_runtime_libraries: bool = False,
+    package_version: str | None = None,
 ) -> int:
     wheel_dir.parent.mkdir(parents=True, exist_ok=True)
     bundle_runtime_libraries_value = "1" if bundle_runtime_libraries else "0"
@@ -179,6 +180,12 @@ def build_local_wheel_artifact_set(
             "TERMIN_PIP_COPY_TO_SOURCE": "0",
         }
     )
+    if package_version is not None:
+        env["TERMIN_PYTHON_PACKAGE_VERSION"] = package_version
+        # A release matrix builds the same pure wheels with multiple Python
+        # interpreters. Keep their ZIP metadata byte-identical so a shared
+        # distribution cannot conceal ABI-dependent build output.
+        env.setdefault("SOURCE_DATE_EPOCH", "946684800")
     build_tools = str(repo_root / "core" / "termin-build-tools")
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = build_tools if not existing_pythonpath else build_tools + os.pathsep + existing_pythonpath

@@ -106,6 +106,67 @@ def test_cmake_consumers_do_not_link_bare_nanobind_runtime() -> None:
     assert not bypasses, f"bare nanobind runtime links bypass the SDK profile: {bypasses}"
 
 
+@pytest.mark.parametrize(
+    ("free_threaded", "expects_definition"),
+    (("0", False), ("1", True)),
+)
+def test_profile_derives_module_contract_from_runtime_abi(
+    tmp_path: Path,
+    free_threaded: str,
+    expects_definition: bool,
+) -> None:
+    cmake = shutil.which("cmake")
+    if cmake is None:
+        pytest.skip("cmake is unavailable")
+
+    source_dir = tmp_path / "source"
+    build_dir = tmp_path / "build"
+    source_dir.mkdir()
+    (source_dir / "probe.cpp").write_text("int probe = 0;\n", encoding="utf-8")
+    profile_path = REPO_ROOT / "termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake"
+    (source_dir / "CMakeLists.txt").write_text(
+        "cmake_minimum_required(VERSION 3.16)\n"
+        "project(termin_nanobind_profile_unit LANGUAGES CXX)\n"
+        "add_library(Python::Module INTERFACE IMPORTED)\n"
+        "add_library(abi_runtime INTERFACE)\n"
+        "set_target_properties(abi_runtime PROPERTIES "
+        f"TERMIN_NANOBIND_FREE_THREADED {free_threaded})\n"
+        "set(TERMIN_NANOBIND_RUNTIME_TARGET abi_runtime)\n"
+        "function(nanobind_compile_options target_name)\nendfunction()\n"
+        "function(nanobind_link_options target_name)\nendfunction()\n"
+        "function(nanobind_extension target_name)\nendfunction()\n"
+        "function(nanobind_disable_stack_protector target_name)\nendfunction()\n"
+        "function(nanobind_opt_size target_name)\nendfunction()\n"
+        "function(nanobind_strip target_name)\nendfunction()\n"
+        "function(nanobind_lto target_name)\nendfunction()\n"
+        "function(nanobind_set_visibility target_name)\nendfunction()\n"
+        f'include("{profile_path.as_posix()}")\n'
+        "nanobind_add_module(_probe NB_SHARED probe.cpp)\n"
+        "get_target_property(profile_links _probe LINK_LIBRARIES)\n"
+        "get_target_property(profile_definitions _probe COMPILE_DEFINITIONS)\n"
+        "get_target_property(profile_abi _probe TERMIN_NANOBIND_FREE_THREADED)\n"
+        'file(WRITE "${CMAKE_BINARY_DIR}/profile.txt" '
+        '"${profile_links}\\n${profile_definitions}\\n${profile_abi}\\n")\n',
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [cmake, "-S", str(source_dir), "-B", str(build_dir)],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    assert result.returncode == 0, result.stdout
+    links, definitions, profile_abi = (build_dir / "profile.txt").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    assert "Python::Module" in links
+    assert "abi_runtime" in links
+    assert ("NB_FREE_THREADED" in definitions) is expects_definition
+    assert profile_abi == free_threaded
+
+
 def test_installed_cmake_package_applies_interpreter_abi_profile(
     tmp_path: Path,
 ) -> None:

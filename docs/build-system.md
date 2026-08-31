@@ -27,11 +27,26 @@ Graphics product:
 task package:graphics:python
 ```
 
+По умолчанию операция последовательно строит матрицу CPython `cp314` и
+free-threaded `cp314t`. Для быстрой целевой пересборки одного варианта можно
+выбрать его явно:
+
+```bash
+task package:graphics:python -- --python-abi cp314
+task package:graphics:python -- --python-abi cp314t
+```
+
 Она повторно использует declarative closure профиля `graphics` (исключая
 build-only `termin-build-tools`) и единый
 корневой CMake-граф, но собирает их в собственные
-`build/products/graphics-python/{native-prefix,cmake-build,...}`. Готовый набор
+`build/products/graphics-python/<abi>/{native-prefix,cmake-build,...}`. У каждого
+ABI также свои build environment и wheelhouse внешних runtime-зависимостей, так
+что несовместимые binary wheels не смешиваются. Готовый набор
 публикуется атомарно в `dist/graphics-python/` и не читает `sdk-graphics/`.
+Совпадающие по имени pure-Python wheels попадают туда единожды только при
+побайтовом совпадении; native wheels обоих ABI сохраняются рядом. Product
+manifest описывает оба ABI, их раздельные `native_build_id` и происхождение
+каждого wheel.
 `termin-graphics-profile` единолично владеет общей native closure (это не даёт
 разным extensions загрузить дублирующие C++ registries), font resources и
 предварительно собранными Vulkan/OpenGL shader artifacts. Продукт всегда
@@ -39,8 +54,9 @@ build-only `termin-build-tools`) и единый
 SDL2; `--no-sdl` для этой операции является ошибкой. Headless остаётся режимом
 исполнения той же поставки. `termin_shaderc`,
 `slangc` и библиотеки Slang являются только build-time inputs и в runtime wheel
-не входят. Это пока CPython 3.14t Linux x86_64
-product, а не manylinux/PyPI release.
+не входят. Это пока CPython 3.14/3.14t Linux x86_64 product, а не
+manylinux/PyPI release. Канонический Python полного/editor SDK при этом остаётся
+free-threaded `cp314t`; dual-ABI matrix относится только к standalone product.
 
 Внешний Core SDK и `--core-sdk` для обычной монорепозиторной сборки не
 требуются.

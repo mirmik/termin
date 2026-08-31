@@ -59,6 +59,9 @@ class TerminCMakeBuildExt(build_ext):
 
     @classmethod
     def compute_local_version(cls, base_version):
+        release_version = os.environ.get("TERMIN_PYTHON_PACKAGE_VERSION")
+        if release_version:
+            return release_version
         manifest = load_selected_manifest(required=False)
         if manifest is None:
             return base_version

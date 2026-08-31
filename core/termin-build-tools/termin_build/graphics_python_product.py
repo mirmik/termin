@@ -27,6 +27,7 @@ from .sdk import (
     _clear_python_package_build_caches,
     _resolve_bindings_dir,
     _run,
+    prepare_locked_runtime_wheels,
     prepare_pinned_python_build_environment,
 )
 from .sdk_profiles import load_sdk_profiles, select_python_packages
@@ -38,6 +39,9 @@ PRODUCT_DISTRIBUTION = "termin-graphics-profile"
 PRODUCT_IMPORT = "termin_graphics_profile"
 PRODUCT_VERSION = "0.1.0"
 PRODUCT_MANIFEST = "termin-graphics-python-product.json"
+PRODUCT_MANIFEST_KIND = "termin-graphics-python-product"
+PRODUCT_MANIFEST_SCHEMA = 2
+SUPPORTED_PYTHON_ABIS = ("cp314", "cp314t")
 BUILD_ONLY_DISTRIBUTIONS = frozenset({"termin-build-tools"})
 WINDOW_EXTENSIONS = (
     "termin.window._window_native",
@@ -53,6 +57,77 @@ class GraphicsPythonProductError(RuntimeError):
 def _record_digest(payload: bytes) -> str:
     digest = base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).decode("ascii")
     return digest.rstrip("=")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _parse_product_build_args(build_args: list[str]) -> tuple[tuple[str, ...], list[str]]:
+    """Separate the product ABI selector from arguments forwarded to CMake."""
+    selected: str | None = None
+    forwarded: list[str] = []
+    index = 0
+    while index < len(build_args):
+        argument = build_args[index]
+        if argument == "--python-abi":
+            index += 1
+            if index >= len(build_args):
+                raise GraphicsPythonProductError("--python-abi requires cp314 or cp314t")
+            value = build_args[index]
+        elif argument.startswith("--python-abi="):
+            value = argument.split("=", 1)[1]
+        else:
+            forwarded.append(argument)
+            index += 1
+            continue
+        if selected is not None:
+            raise GraphicsPythonProductError("--python-abi may be specified only once")
+        if value not in SUPPORTED_PYTHON_ABIS:
+            choices = ", ".join(SUPPORTED_PYTHON_ABIS)
+            raise GraphicsPythonProductError(
+                f"unsupported Graphics product Python ABI {value!r}; expected one of: {choices}"
+            )
+        selected = value
+        index += 1
+    return ((selected,) if selected is not None else SUPPORTED_PYTHON_ABIS), forwarded
+
+
+def _merge_variant_wheels(
+    variant_wheel_dirs: list[tuple[str, Path]],
+    destination: Path,
+) -> list[dict[str, object]]:
+    """Merge ABI wheel sets, admitting a shared wheel only when bytes are identical."""
+    destination.mkdir(parents=True, exist_ok=False)
+    merged: dict[str, dict[str, object]] = {}
+    for variant, wheel_dir in variant_wheel_dirs:
+        wheels = sorted(wheel_dir.glob("*.whl"))
+        if not wheels:
+            raise GraphicsPythonProductError(
+                f"Graphics product variant {variant} produced no wheels under {wheel_dir}"
+            )
+        for wheel in wheels:
+            digest = _sha256_file(wheel)
+            existing = merged.get(wheel.name)
+            if existing is not None:
+                if existing["sha256"] != digest:
+                    raise GraphicsPythonProductError(
+                        "same-named wheel differs between Python ABI variants: "
+                        f"{wheel.name} ({', '.join(existing['python_abis'])} and {variant})"
+                    )
+                existing["python_abis"].append(variant)
+                continue
+            shutil.copy2(wheel, destination / wheel.name)
+            merged[wheel.name] = {
+                "filename": wheel.name,
+                "sha256": digest,
+                "python_abis": [variant],
+            }
+    return [merged[name] for name in sorted(merged)]
 
 
 def _resource_module() -> bytes:
@@ -155,7 +230,7 @@ def build_resource_wheel(
     if sys.platform != "linux":
         raise GraphicsPythonProductError("the initial Graphics Python product supports Linux only")
     platform_tag = "linux_x86_64"
-    version = f"{PRODUCT_VERSION}+{manifest.native_build_id}"
+    version = PRODUCT_VERSION
     dist_info = f"termin_graphics_profile-{version}.dist-info"
     filename = f"termin_graphics_profile-{version}-{interpreter}-{abi}-{platform_tag}.whl"
     output = wheel_dir / filename
@@ -284,7 +359,13 @@ def _verify_relative_elf_rpaths(site_packages: Path) -> None:
                 )
 
 
-def verify_product(repo_root: Path, wheel_dir: Path, build_python: Path) -> None:
+def verify_product(
+    repo_root: Path,
+    wheel_dir: Path,
+    build_python: Path,
+    *,
+    external_wheels: Path,
+) -> None:
     """Install and render the product without any SDK or checkout Python overlay."""
     with tempfile.TemporaryDirectory(prefix="termin-graphics-python-verify-") as temporary:
         root = Path(temporary)
@@ -292,7 +373,6 @@ def verify_product(repo_root: Path, wheel_dir: Path, build_python: Path) -> None
         if _run([str(build_python), "-m", "venv", str(venv)], cwd=root) != 0:
             raise GraphicsPythonProductError("failed to create clean product verification venv")
         python = venv / "bin" / "python"
-        external_wheels = repo_root / "build" / "python-runtime" / "external-wheels"
         if _run(
             [
                 str(python),
@@ -390,7 +470,8 @@ def verify_product(repo_root: Path, wheel_dir: Path, build_python: Path) -> None
 
 
 def build_product(repo_root: Path, build_args: list[str]) -> int:
-    if "--no-sdl" in build_args:
+    variants, forwarded_build_args = _parse_product_build_args(build_args)
+    if "--no-sdl" in forwarded_build_args:
         raise GraphicsPythonProductError(
             "the Graphics Python product always includes window support; "
             "--no-sdl is not a supported product option"
@@ -411,90 +492,163 @@ def build_product(repo_root: Path, build_args: list[str]) -> int:
         )
 
     product_root = repo_root / "build" / "products" / "graphics-python"
-    sdk_prefix = product_root / "native-prefix"
-    build_dir = product_root / "cmake-build"
-    staging_dir = product_root / "cmake-install-staging"
-    wheel_dir = product_root / "wheels"
-    build_python = prepare_pinned_python_build_environment(repo_root)
-    try:
-        slangc = prepare_slang_toolchain(repo_root, build_python)
-    except SlangToolchainError as error:
-        raise GraphicsPythonProductError(str(error)) from error
-    env = os.environ.copy()
-    env.update(
-        {
-            "SDK_PREFIX": str(sdk_prefix),
-            "BUILD_DIR": str(build_dir),
-            "TERMIN_SDK_INSTALL_STAGING_DIR": str(staging_dir),
-            "TERMIN_RELOCATABLE_PYTHON_WHEELS": "ON",
-            "TERMIN_USE_BUNDLED_SDL2": "ON",
-            "PYTHON_BIN": str(build_python),
-            "PYTHON_EXECUTABLE": str(build_python),
-            "TERMIN_SLANGC": str(slangc),
-        }
-    )
-    command = [
-        str(repo_root / "scripts" / "build" / "bindings.sh"),
-        "--profile=graphics",
-        "--sdl",
-        *build_args,
-    ]
-    if _run(command, cwd=repo_root, env=env) != 0:
-        return 1
-
-    bindings_dir = _resolve_bindings_dir(repo_root, build_dir)
-    result = build_local_wheel_artifact_set(
-        repo_root=repo_root,
-        sdk_prefix=sdk_prefix,
-        bindings_dir=bindings_dir,
-        wheel_dir=wheel_dir,
-        build_python=build_python,
-        packages=packages,
-        run=_run,
-        clear_build_caches=_clear_python_package_build_caches,
-        bundle_runtime_libraries=False,
-    )
-    if result != 0:
-        return result
-
-    requirements = [
-        (artifact.name, artifact.version)
-        for artifact in (inspect_wheel(path) for path in sorted(wheel_dir.glob("*.whl")))
-    ]
-    resource_wheel = build_resource_wheel(
-        sdk_prefix=sdk_prefix,
-        wheel_dir=wheel_dir,
-        requirements=requirements,
-    )
-    wheel_count = len(packages) + 1
-    write_local_wheel_manifest(wheel_dir, sdk_prefix=sdk_prefix, expected_wheel_count=wheel_count)
-    validate_local_wheel_artifact_set(wheel_dir, sdk_prefix=sdk_prefix, expected_wheel_count=wheel_count)
-    artifact_manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
-    missing_window_extensions = [
-        extension
-        for extension in WINDOW_EXTENSIONS
-        if not artifact_manifest.has_extension(extension)
-    ]
-    if missing_window_extensions:
-        raise GraphicsPythonProductError(
-            "window-capable Graphics product is missing native extensions: "
-            + ", ".join(missing_window_extensions)
+    product_root.mkdir(parents=True, exist_ok=True)
+    variant_results: list[dict[str, object]] = []
+    variant_wheel_dirs: list[tuple[str, Path]] = []
+    variant_verifications: list[tuple[Path, Path]] = []
+    for variant in variants:
+        variant_root = product_root / variant
+        sdk_prefix = variant_root / "native-prefix"
+        build_dir = variant_root / "cmake-build"
+        staging_dir = variant_root / "cmake-install-staging"
+        wheel_dir = variant_root / "wheels"
+        external_wheels = variant_root / "external-wheels"
+        build_environment = variant_root / "python-build-env"
+        build_python = prepare_pinned_python_build_environment(
+            repo_root,
+            variant=variant,
+            environment_root=build_environment,
         )
-    verify_product(repo_root, wheel_dir, build_python)
+        prepare_locked_runtime_wheels(
+            repo_root,
+            build_python,
+            wheel_dir=external_wheels,
+        )
+        try:
+            slangc = prepare_slang_toolchain(repo_root, build_python)
+        except SlangToolchainError as error:
+            raise GraphicsPythonProductError(str(error)) from error
+        env = os.environ.copy()
+        env.update(
+            {
+                "SDK_PREFIX": str(sdk_prefix),
+                "BUILD_DIR": str(build_dir),
+                "TERMIN_SDK_INSTALL_STAGING_DIR": str(staging_dir),
+                "TERMIN_RELOCATABLE_PYTHON_WHEELS": "ON",
+                "TERMIN_USE_BUNDLED_SDL2": "ON",
+                "TERMIN_PYTHON_ABI": variant,
+                "PYTHON_BIN": str(build_python),
+                "PYTHON_EXECUTABLE": str(build_python),
+                "TERMIN_SLANGC": str(slangc),
+            }
+        )
+        command = [
+            str(repo_root / "scripts" / "build" / "bindings.sh"),
+            "--profile=graphics",
+            "--sdl",
+            *forwarded_build_args,
+        ]
+        if _run(command, cwd=repo_root, env=env) != 0:
+            return 1
+
+        bindings_dir = _resolve_bindings_dir(repo_root, build_dir)
+        result = build_local_wheel_artifact_set(
+            repo_root=repo_root,
+            sdk_prefix=sdk_prefix,
+            bindings_dir=bindings_dir,
+            wheel_dir=wheel_dir,
+            build_python=build_python,
+            packages=packages,
+            run=_run,
+            clear_build_caches=_clear_python_package_build_caches,
+            bundle_runtime_libraries=False,
+            package_version=PRODUCT_VERSION,
+        )
+        if result != 0:
+            return result
+
+        requirements = [
+            (artifact.name, artifact.version)
+            for artifact in (
+                inspect_wheel(path) for path in sorted(wheel_dir.glob("*.whl"))
+            )
+        ]
+        resource_wheel = build_resource_wheel(
+            sdk_prefix=sdk_prefix,
+            wheel_dir=wheel_dir,
+            requirements=requirements,
+        )
+        wheel_count = len(packages) + 1
+        write_local_wheel_manifest(
+            wheel_dir,
+            sdk_prefix=sdk_prefix,
+            expected_wheel_count=wheel_count,
+        )
+        validate_local_wheel_artifact_set(
+            wheel_dir,
+            sdk_prefix=sdk_prefix,
+            expected_wheel_count=wheel_count,
+        )
+        native_manifest = ArtifactManifest.load(sdk_prefix / SDK_MANIFEST_NAME)
+        actual_abi = native_manifest.python_abi.wheel_abi_tag
+        if actual_abi != variant:
+            raise GraphicsPythonProductError(
+                f"Graphics product variant {variant} produced {actual_abi} native artifacts"
+            )
+        missing_window_extensions = [
+            extension
+            for extension in WINDOW_EXTENSIONS
+            if not native_manifest.has_extension(extension)
+        ]
+        if missing_window_extensions:
+            raise GraphicsPythonProductError(
+                "window-capable Graphics product is missing native extensions: "
+                + ", ".join(missing_window_extensions)
+            )
+        variant_wheel_dirs.append((variant, wheel_dir))
+        variant_verifications.append((build_python, external_wheels))
+        variant_results.append(
+            {
+                "id": variant,
+                "version": PRODUCT_VERSION,
+                "python_abi": native_manifest.python_abi.to_dict(),
+                "native_build_id": native_manifest.native_build_id,
+                "resource_wheel": resource_wheel.name,
+                "wheel_count": wheel_count,
+                "wheels": sorted(path.name for path in wheel_dir.glob("*.whl")),
+            }
+        )
+
+    native_build_ids = {result["native_build_id"] for result in variant_results}
+    if len(native_build_ids) != len(variant_results):
+        raise GraphicsPythonProductError(
+            "Graphics product Python ABI variants unexpectedly share a native_build_id"
+        )
     destination = repo_root / "dist" / "graphics-python"
-    _publish(
-        wheel_dir,
-        destination,
-        {
-            "schema": 1,
-            "product": PRODUCT_DISTRIBUTION,
-            "profile": "graphics",
-            "native_build_id": artifact_manifest.native_build_id,
-            "python_abi": artifact_manifest.python_abi.to_dict(),
-            "resource_wheel": resource_wheel.name,
-            "wheel_count": wheel_count,
-        },
-    )
+    with tempfile.TemporaryDirectory(
+        prefix="graphics-python-publish.",
+        dir=product_root,
+    ) as temporary_root:
+        aggregate = Path(temporary_root) / "wheels"
+        merged_wheels = _merge_variant_wheels(variant_wheel_dirs, aggregate)
+        for build_python, external_wheels in variant_verifications:
+            verify_product(
+                repo_root,
+                aggregate,
+                build_python,
+                external_wheels=external_wheels,
+            )
+        _publish(
+            aggregate,
+            destination,
+            {
+                "schema": PRODUCT_MANIFEST_SCHEMA,
+                "manifest_kind": PRODUCT_MANIFEST_KIND,
+                "product": PRODUCT_DISTRIBUTION,
+                "version": PRODUCT_VERSION,
+                "profile": "graphics",
+                "platform": "linux_x86_64",
+                "python_abi_variants": list(variants),
+                "variants": variant_results,
+                "shared_wheels": [
+                    wheel["filename"]
+                    for wheel in merged_wheels
+                    if len(wheel["python_abis"]) > 1
+                ],
+                "wheels": merged_wheels,
+                "wheel_count": len(merged_wheels),
+            },
+        )
     print(f"Graphics Python product published to {destination}")
     return 0
 

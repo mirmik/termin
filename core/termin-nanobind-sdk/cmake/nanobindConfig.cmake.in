@@ -19,6 +19,8 @@ endif()
 set(_termin_nanobind_expected_python_version
     "@Python_VERSION_MAJOR@.@Python_VERSION_MINOR@")
 set(_termin_nanobind_expected_python_soabi "@Python_SOABI@")
+set(_termin_nanobind_expected_free_threaded
+    "@TERMIN_NANOBIND_PROFILE_FREE_THREADED@")
 if(DEFINED NB_SUFFIX)
     string(FIND "${NB_SUFFIX}"
         ".${_termin_nanobind_expected_python_soabi}"
@@ -66,12 +68,13 @@ if(NOT _termin_nanobind_python_version STREQUAL
        _termin_nanobind_expected_python_version
    OR NOT _termin_nanobind_python_soabi STREQUAL
        _termin_nanobind_expected_python_soabi
-   OR NOT _termin_nanobind_python_free_threaded STREQUAL "1")
+   OR NOT _termin_nanobind_python_free_threaded STREQUAL
+       _termin_nanobind_expected_free_threaded)
     message(FATAL_ERROR
         "termin-nanobind-sdk Python ABI mismatch: package expects "
         "${_termin_nanobind_expected_python_version}|"
         "${_termin_nanobind_expected_python_soabi}|"
-        "1, consumer selected "
+        "${_termin_nanobind_expected_free_threaded}, consumer selected "
         "${_termin_nanobind_python_abi}")
 endif()
 
@@ -84,9 +87,15 @@ if(WIN32)
             set_property(
                 TARGET "${_termin_nanobind_python_target}"
                 APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS
-                    Py_GIL_DISABLED=1
                     Py_NO_LINK_LIB
             )
+            if(_termin_nanobind_expected_free_threaded)
+                set_property(
+                    TARGET "${_termin_nanobind_python_target}"
+                    APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS
+                        Py_GIL_DISABLED=1
+                )
+            endif()
         endif()
     endforeach()
 endif()

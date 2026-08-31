@@ -18,15 +18,19 @@ if(_termin_nanobind_runtime_free_threaded STREQUAL
         "Canonical nanobind runtime target has no ABI metadata: "
         "${TERMIN_NANOBIND_RUNTIME_TARGET}")
 endif()
-if(NOT "${_termin_nanobind_runtime_free_threaded}" STREQUAL "1")
+if(NOT "${_termin_nanobind_runtime_free_threaded}" STREQUAL "0"
+   AND NOT "${_termin_nanobind_runtime_free_threaded}" STREQUAL "1")
     message(FATAL_ERROR
-        "Canonical nanobind runtime target is not free-threaded: "
-        "${TERMIN_NANOBIND_RUNTIME_TARGET}")
+        "Canonical nanobind runtime target has invalid ABI metadata: "
+        "${TERMIN_NANOBIND_RUNTIME_TARGET} is free-threaded="
+        "${_termin_nanobind_runtime_free_threaded}")
 endif()
+set(TERMIN_NANOBIND_PROFILE_FREE_THREADED
+    "${_termin_nanobind_runtime_free_threaded}")
 
 # Termin owns one shared nanobind runtime for the complete native extension
-# graph. Consumers select NB_SHARED; the SDK always supplies the free-threaded
-# CPython 3.14t implementation.
+# graph. Consumers select NB_SHARED, while the selected runtime target owns the
+# ordinary versus free-threaded ABI contract.
 function(termin_nanobind_link_runtime target_name visibility)
     if(NOT TARGET "${target_name}")
         message(FATAL_ERROR
@@ -45,12 +49,15 @@ function(termin_nanobind_link_runtime target_name visibility)
         "${target_name}"
         "${visibility}" "${TERMIN_NANOBIND_RUNTIME_TARGET}"
     )
-    target_compile_definitions(
-        "${target_name}" "${visibility}" NB_FREE_THREADED
-    )
+    if(TERMIN_NANOBIND_PROFILE_FREE_THREADED)
+        target_compile_definitions(
+            "${target_name}" "${visibility}" NB_FREE_THREADED
+        )
+    endif()
     set_target_properties("${target_name}" PROPERTIES
         TERMIN_NANOBIND_PROFILE TRUE
-        TERMIN_NANOBIND_FREE_THREADED 1
+        TERMIN_NANOBIND_FREE_THREADED
+            "${TERMIN_NANOBIND_PROFILE_FREE_THREADED}"
     )
 endfunction()
 
@@ -65,13 +72,19 @@ function(nanobind_add_module name)
             "Use nanobind_add_module(${name} NB_SHARED ...); the SDK selects "
             "the Python threading ABI centrally.")
     endif()
+    if(ARG_FREE_THREADED AND NOT TERMIN_NANOBIND_PROFILE_FREE_THREADED)
+        message(FATAL_ERROR
+            "${name} requested FREE_THREADED, but the SDK nanobind runtime "
+            "was built for a GIL-enabled Python ABI.")
+    endif()
     add_library(${name} MODULE ${ARG_UNPARSED_ARGUMENTS})
     nanobind_compile_options(${name})
     nanobind_link_options(${name})
     set_target_properties(${name} PROPERTIES
         LINKER_LANGUAGE CXX
         TERMIN_NANOBIND_PROFILE TRUE
-        TERMIN_NANOBIND_FREE_THREADED 1
+        TERMIN_NANOBIND_FREE_THREADED
+            "${TERMIN_NANOBIND_PROFILE_FREE_THREADED}"
     )
     nanobind_extension(${name})
 

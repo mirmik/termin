@@ -22,8 +22,8 @@ from .python_abi import PythonAbiError, PythonAbiIdentity
 
 LOCK_RELATIVE_PATH = Path("build-system/python-toolchain-lock.json")
 MANIFEST_NAME = "termin-python-toolchain.json"
-SCHEMA_VERSION = 1
-BUILD_RECIPE_VERSION = 3
+SCHEMA_VERSION = 2
+BUILD_RECIPE_VERSION = 4
 
 
 class PythonToolchainError(RuntimeError):
@@ -119,13 +119,19 @@ class PythonToolchainArtifact:
 @dataclass(frozen=True)
 class PythonToolchainLock:
     version: str
+    variant: str
+    default_variant: str
     abi_version: str
     free_threaded: bool
     py_gil_disabled: bool
     platforms: Mapping[str, PythonToolchainArtifact]
 
     @classmethod
-    def load(cls, path: Path) -> "PythonToolchainLock":
+    def load(
+        cls,
+        path: Path,
+        variant: str | None = None,
+    ) -> "PythonToolchainLock":
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
@@ -137,12 +143,41 @@ class PythonToolchainLock:
                 f"unsupported Python toolchain lock schema in {path}"
             )
         version = value.get("version")
-        abi = value.get("python_abi")
-        platforms = value.get("platforms")
+        default_variant = value.get("default_variant")
+        variants = value.get("variants")
         if not isinstance(version, str):
             raise PythonToolchainError("Python toolchain version must be a string")
+        if not isinstance(default_variant, str):
+            raise PythonToolchainError(
+                "Python toolchain default_variant must be a string"
+            )
+        if not isinstance(variants, dict) or not variants:
+            raise PythonToolchainError(
+                "Python toolchain variants must be a non-empty object"
+            )
+        if default_variant not in variants:
+            raise PythonToolchainError(
+                f"Python toolchain default variant {default_variant!r} is undefined"
+            )
+        selected_variant = variant or default_variant
+        selected = variants.get(selected_variant)
+        if selected is None:
+            available = ", ".join(sorted(str(key) for key in variants))
+            raise PythonToolchainError(
+                f"unknown Python toolchain variant {selected_variant!r}; "
+                f"expected one of: {available}"
+            )
+        if not isinstance(selected, dict):
+            raise PythonToolchainError(
+                f"Python toolchain variants.{selected_variant} must be an object"
+            )
+        abi = selected.get("python_abi")
+        platforms = selected.get("platforms")
         if not isinstance(abi, dict):
-            raise PythonToolchainError("Python toolchain python_abi must be an object")
+            raise PythonToolchainError(
+                f"Python toolchain variants.{selected_variant}.python_abi "
+                "must be an object"
+            )
         abi_version = abi.get("version")
         free_threaded = abi.get("free_threaded")
         py_gil_disabled = abi.get("py_gil_disabled")
@@ -156,9 +191,17 @@ class PythonToolchainLock:
             raise PythonToolchainError(
                 f"Python version {version!r} disagrees with ABI {abi_version!r}"
             )
-        if not free_threaded or not py_gil_disabled:
+        if free_threaded != py_gil_disabled:
             raise PythonToolchainError(
-                "canonical Python toolchain must be free-threaded"
+                "Python toolchain free_threaded and py_gil_disabled disagree"
+            )
+        expected_variant = (
+            f"cp{abi_version.replace('.', '')}{'t' if free_threaded else ''}"
+        )
+        if selected_variant != expected_variant:
+            raise PythonToolchainError(
+                f"Python toolchain variant {selected_variant!r} disagrees with "
+                f"ABI contract {expected_variant!r}"
             )
         if not isinstance(platforms, dict) or not platforms:
             raise PythonToolchainError(
@@ -167,7 +210,9 @@ class PythonToolchainLock:
         parsed_platforms = {
             key: PythonToolchainArtifact.from_mapping(
                 artifact,
-                context=f"Python toolchain platforms.{key}",
+                context=(
+                    f"Python toolchain variants.{selected_variant}.platforms.{key}"
+                ),
             )
             for key, artifact in platforms.items()
             if isinstance(key, str)
@@ -176,6 +221,8 @@ class PythonToolchainLock:
             raise PythonToolchainError("Python toolchain platform names must be strings")
         return cls(
             version=version,
+            variant=selected_variant,
+            default_variant=default_variant,
             abi_version=abi_version,
             free_threaded=free_threaded,
             py_gil_disabled=py_gil_disabled,
@@ -337,6 +384,7 @@ def _cache_fingerprint(
         "schema": SCHEMA_VERSION,
         "build_recipe": BUILD_RECIPE_VERSION,
         "version": lock.version,
+        "variant": lock.variant,
         "platform": key,
         "artifact": artifact.to_dict(),
     }
@@ -352,14 +400,16 @@ def _build_linux_runtime(
     cache_root: Path,
 ) -> Path:
     fingerprint = _cache_fingerprint(lock, artifact, key)
-    runtime_root = cache_root / "runtimes" / f"cpython-{lock.version}t-{fingerprint}"
+    runtime_root = (
+        cache_root / "runtimes" / f"cpython-{lock.version}-{lock.variant}-{fingerprint}"
+    )
     if runtime_root.is_dir():
         return runtime_root
     runtime_root.parent.mkdir(parents=True, exist_ok=True)
     work_parent = cache_root / "work"
     work_parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
-        prefix=f"cpython-{lock.version}t-",
+        prefix=f"cpython-{lock.version}-{lock.variant}-",
         dir=work_parent,
     ) as temporary:
         work_root = Path(temporary)
@@ -412,13 +462,15 @@ def _install_windows_runtime(
     cache_root: Path,
 ) -> Path:
     fingerprint = _cache_fingerprint(lock, artifact, key)
-    runtime_root = cache_root / "runtimes" / f"cpython-{lock.version}t-{fingerprint}"
+    runtime_root = (
+        cache_root / "runtimes" / f"cpython-{lock.version}-{lock.variant}-{fingerprint}"
+    )
     if runtime_root.is_dir():
         return runtime_root
     runtime_root.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
         tempfile.mkdtemp(
-            prefix=f"cpython-{lock.version}t-",
+            prefix=f"cpython-{lock.version}-{lock.variant}-",
             dir=runtime_root.parent,
         )
     )
@@ -491,9 +543,13 @@ def _probe_identity(python_executable: Path) -> tuple[PythonAbiIdentity, bool]:
     return identity, bool(value.get("gil_enabled"))
 
 
-def ensure_python_toolchain(repo_root: Path) -> PythonToolchain:
+def ensure_python_toolchain(
+    repo_root: Path,
+    *,
+    variant: str | None = None,
+) -> PythonToolchain:
     lock_path = repo_root / LOCK_RELATIVE_PATH
-    lock = PythonToolchainLock.load(lock_path)
+    lock = PythonToolchainLock.load(lock_path, variant)
     key = platform_key()
     artifact = lock.platforms.get(key)
     if artifact is None:
@@ -525,17 +581,26 @@ def ensure_python_toolchain(repo_root: Path) -> PythonToolchain:
             f"pinned Python version mismatch: expected {lock.abi_version}, "
             f"got {identity.version}"
         )
-    if not identity.free_threaded or not identity.py_gil_disabled:
+    if (
+        identity.free_threaded != lock.free_threaded
+        or identity.py_gil_disabled != lock.py_gil_disabled
+    ):
         raise PythonToolchainError(
-            f"pinned Python is not free-threaded: {identity.canonical_json()}"
+            f"pinned Python ABI mismatch for {lock.variant}: expected "
+            f"free_threaded={lock.free_threaded}, "
+            f"py_gil_disabled={lock.py_gil_disabled}; got "
+            f"{identity.canonical_json()}"
         )
-    if gil_enabled:
+    if gil_enabled == lock.free_threaded:
         raise PythonToolchainError(
-            "pinned Python started with the GIL enabled"
+            "pinned free-threaded Python started with the GIL enabled"
+            if lock.free_threaded
+            else "pinned regular Python started with the GIL disabled"
         )
     manifest = {
         "schema": SCHEMA_VERSION,
         "version": lock.version,
+        "variant": lock.variant,
         "platform": key,
         "artifact": artifact.to_dict(),
         "python_abi": identity.to_dict(),
@@ -547,7 +612,7 @@ def ensure_python_toolchain(repo_root: Path) -> PythonToolchain:
     )
     print(
         f"Pinned Python toolchain ready: {python_executable} "
-        f"({identity.soabi}, GIL disabled)"
+        f"({identity.soabi}, GIL {'disabled' if not gil_enabled else 'enabled'})"
     )
     return PythonToolchain(
         root=runtime_root,

@@ -2,20 +2,23 @@
 
 Отдельный SDK-артефакт для `nanobind`, который устанавливает:
 
-- free-threaded shared runtime `libnanobind-ft.so`
+- ABI-specific shared runtime: `libnanobind.so` for CPython 3.14 or
+  `libnanobind-ft.so` for CPython 3.14t
 - CMake package `nanobind`
 - headers и исходники `nanobind`, которые нужны `nanobind_add_module(NB_SHARED)`
 
 Идея простая: `nanobind` собирается один раз как общий SDK-компонент, а остальные пакеты `termin-*` больше не вызывают `nanobind_build_library(...)` локально.
 Установленный CMake package поддерживает только канонические `NB_SHARED`-модули
-на CPython 3.14t. Free-threaded ABI централизованно применяется ко всем
-`nanobind_add_module(...)`. Локальные
+на том CPython ABI, для которого собран артефакт. ABI централизованно
+применяется ко всем `nanobind_add_module(...)`. Локальные
 `NB_STATIC`, `STABLE_ABI`, domain-specific runtimes и runtime другого Python
 ABI отвергаются.
 
 ## Локальная сборка
 
-Нужны canonical CPython 3.14t и установленный в нём package `nanobind`.
+Нужны CPython 3.14 нужного ABI и установленный в нём package `nanobind`.
+По умолчанию выбирается `cp314t`; обычный ABI включается через
+`-DTERMIN_PYTHON_ABI=cp314`.
 
 ```bash
 pip install nanobind
@@ -35,8 +38,9 @@ find_package(nanobind CONFIG REQUIRED)
 nanobind_add_module(my_module NB_SHARED ...)
 ```
 
-Передавать `FREE_THREADED` каждому модулю не требуется: wrapper всегда
-добавляет `NB_FREE_THREADED` и связывает модуль с `nanobind-ft`. Обычные
+Передавать `FREE_THREADED` каждому модулю не требуется: wrapper выводит ABI из
+SDK runtime target, при необходимости добавляет `NB_FREE_THREADED` и связывает
+модуль с `nanobind` либо `nanobind-ft`. Обычные
 C++-библиотеки, использующие nanobind API вне `NB_MODULE`, подключают тот же
 профиль через:
 

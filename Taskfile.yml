@@ -74,7 +74,7 @@ tasks:
       - ./scripts/build/wheels.sh {{.CLI_ARGS}}
 
   package:graphics:python:
-    desc: Build the standalone Linux Python Graphics profile
+    desc: Build standalone Linux Graphics wheels for CPython 3.14 and 3.14t
     platforms: [linux]
     cmds:
       - ./scripts/build/graphics-python.sh {{.CLI_ARGS}}
