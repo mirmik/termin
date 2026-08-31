@@ -6,7 +6,7 @@ from setuptools import setup
 setup(
     name="termin-mcp",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Shared MCP helpers for Termin runtime processes",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

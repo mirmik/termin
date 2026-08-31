@@ -6,7 +6,7 @@ from setuptools import setup
 setup(
     name="termin-player",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Standalone/source/headless Termin player runtime",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

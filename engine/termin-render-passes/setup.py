@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-render-passes",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Concrete Termin render pass bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

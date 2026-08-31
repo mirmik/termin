@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-components-animation",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Termin Entity adapter for the portable animation runtime",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

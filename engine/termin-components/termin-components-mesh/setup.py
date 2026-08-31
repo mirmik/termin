@@ -15,7 +15,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-components-mesh",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Mesh components Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

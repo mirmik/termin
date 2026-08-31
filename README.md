@@ -119,3 +119,7 @@ Pass task-specific options after `--`, for example `task build -- --no-wheels`.
 Python редактора и bundled-библиотеки исполняются через
 `sdk/bin/termin_python`. Для тестового source overlay используется
 `task test:python:setup`; root virtual environment проекту не требуется.
+
+## Лицензия
+
+Termin распространяется на условиях [Apache License 2.0](LICENSE).

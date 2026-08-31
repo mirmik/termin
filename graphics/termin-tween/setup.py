@@ -6,7 +6,7 @@ from setuptools import setup
 setup(
     name="termin-tween",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Tweening primitives and manager for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

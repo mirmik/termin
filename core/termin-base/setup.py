@@ -18,7 +18,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="tcbase",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Base types shared between termin libraries",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

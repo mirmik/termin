@@ -6,7 +6,7 @@ from setuptools import find_namespace_packages, setup
 setup(
     name="termin-project-build",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Packaged project build pipeline for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

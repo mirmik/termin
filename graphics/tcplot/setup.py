@@ -22,7 +22,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="tcplot",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Toolkit-neutral plotting engines and retained chart primitives",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

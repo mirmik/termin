@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-voxels",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Voxel grid, voxelization and mesh conversion for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

@@ -6,7 +6,7 @@ from setuptools import find_namespace_packages, setup
 setup(
     name="termin-project-modules",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Project module runtime policy for Termin editor and player hosts",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

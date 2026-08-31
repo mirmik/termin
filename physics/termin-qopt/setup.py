@@ -6,7 +6,7 @@ from setuptools import find_namespace_packages, setup
 setup(
     name="termin-qopt",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Quadratic optimization, FEM, multibody dynamics, and robotics helpers for Termin",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

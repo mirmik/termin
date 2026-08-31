@@ -17,7 +17,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-window",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Framework-neutral native window ownership and Python bindings",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

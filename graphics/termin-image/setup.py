@@ -17,7 +17,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-image",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Native image codecs for Termin texture and tooling paths",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

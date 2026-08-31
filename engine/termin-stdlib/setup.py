@@ -6,7 +6,7 @@ from setuptools import find_namespace_packages, setup
 setup(
     name="termin-stdlib",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Termin standard library resources and deployment helpers",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

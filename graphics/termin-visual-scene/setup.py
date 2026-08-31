@@ -21,7 +21,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-visual-scene",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Retained 2D and 3D visual scene core",
     python_requires=">=3.14",
     packages=["termin.visual_scene"],

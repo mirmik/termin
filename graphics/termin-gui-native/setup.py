@@ -17,7 +17,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-gui-native",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Experimental native Termin UI document Python bindings",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

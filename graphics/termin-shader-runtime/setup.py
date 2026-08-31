@@ -6,7 +6,7 @@ from setuptools import setup
 setup(
     name="termin-shader-runtime",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Shared shader tool resolution and source-project runtime helpers",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

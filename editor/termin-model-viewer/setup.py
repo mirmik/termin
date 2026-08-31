@@ -6,7 +6,7 @@ from setuptools import find_namespace_packages, setup
 setup(
     name="termin-model-viewer",
     version="0.1.0",
-    license="MIT",
+    license="Apache-2.0",
     description="Standalone GLB model viewer for the Termin SDK command line",
     author="mirmik",
     author_email="mirmikns@yandex.ru",

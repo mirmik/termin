@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 setup(
     name="termin-bootstrap",
     version=BuildExt.compute_local_version("0.1.0"),
-    license="MIT",
+    license="Apache-2.0",
     description="Explicit startup bootstrap helpers for Termin runtime/player/editor",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
