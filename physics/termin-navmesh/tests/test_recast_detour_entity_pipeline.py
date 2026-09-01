@@ -10,7 +10,7 @@ import pytest
 try:
     import termin.bootstrap
     from termin.geombase import Pose3, Vec3
-    from termin.mesh import MeshComponent, TcMesh
+    from termin.mesh.components import MeshComponent, TcMesh
     from termin.navmesh import (
         DetourQuerySession,
         MeshSource,
@@ -20,7 +20,7 @@ try:
         navmesh_world_to_bake_point,
     )
     from termin.scene import Entity, TransformKind
-    from tmesh import CubeMesh
+    from termin.mesh import CubeMesh
 except ImportError as exc:  # pragma: no cover - depends on built SDK availability.
     pytestmark = pytest.mark.skip(reason=str(exc))
 

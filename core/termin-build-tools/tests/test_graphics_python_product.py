@@ -86,7 +86,7 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
     wheel = build_resource_wheel(
         sdk_prefix=sdk_prefix,
         wheel_dir=wheel_dir,
-        requirements=[("tgfx", "0.1.0"), ("tcplot", "0.2.0")],
+        requirements=[("tgfx", "0.1.0"), ("termin-plot", "0.2.0")],
     )
 
     artifact = inspect_wheel(wheel)
@@ -113,7 +113,7 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
         assert "TERMIN_BUILTIN_SHADER_ROOT" in module
         assert "TERMIN_SHADER_ARTIFACT_ROOT" in module
         assert 'TERMIN_SHADER_DEV_COMPILE", "0"' in module
-        assert "Requires-Dist: tcplot==0.2.0" in metadata
+        assert "Requires-Dist: termin-plot==0.2.0" in metadata
         assert "Requires-Dist: tgfx==0.1.0" in metadata
         assert "License-File: licenses/SDL2/LICENSE.txt" in metadata
 

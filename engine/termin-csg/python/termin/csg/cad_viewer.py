@@ -20,7 +20,7 @@ from tgfx import (
     draw_tc_mesh,
 )
 from termin.geombase import SrgbColor
-from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
+from termin.mesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
 from termin.csg import to_mesh3
 from termin.csg.document_eval import evaluate_document

@@ -59,10 +59,10 @@ CMAKE_TARGET_TO_DIR = {
 PYTHON_PKG_TO_DIR = {
     "tcbase": "termin-base",
     "tgfx": "termin-graphics",
-    "tmesh": "termin-mesh",
+    "termin-mesh": "termin-mesh",
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
-    "tcplot": "tcplot",
+    "termin-plot": "tcplot",
     "termin": "termin",
     "termin-app": "termin-app",
     "termin-player": "termin-player",
@@ -104,12 +104,12 @@ PYTHON_IMPORT_TO_DIR = {
     # Standalone packages
     "tcbase": "termin-base",
     "tgfx": "termin-graphics",
-    "tmesh": "termin-mesh",
+    "termin.mesh": "termin-mesh",
     "tcnodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "termin_nanobind": "termin-nanobind-sdk",
     "termin_assets": "termin-assets",
-    "tcplot": "tcplot",
+    "termin.plot": "tcplot",
     # termin.* submodules → actual library
     "termin.editor_core": "termin-app",
     "termin.project_build": "termin-project-build",

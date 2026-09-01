@@ -25,7 +25,7 @@ setup(
         "termin-image",
         "termin-visual-scene",
         "termin-window",
-        "tmesh",
+        "termin-mesh",
     ],
     zip_safe=False,
 )

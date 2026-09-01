@@ -17,8 +17,8 @@ from termin.animation_components import AnimationPlayer
 from termin.skeleton import SkeletonInstance, TcSkeleton
 from termin.skeleton_components import SkeletonController
 from termin.scene import Entity
-from termin.mesh import MeshComponent
-from tmesh import TcMesh
+from termin.mesh.components import MeshComponent
+from termin.mesh import TcMesh
 from termin.render_components import MeshRenderer
 from termin.render_components.skinned_mesh_renderer import SkinnedMeshRenderer
 
@@ -172,7 +172,7 @@ def _mesh_tangents_for_material_layout(
 
 
 def _glb_submeshes_to_tc(glb_mesh: "GLBMeshData"):
-    from tmesh import TcSubmesh
+    from termin.mesh import TcSubmesh
 
     return [
         TcSubmesh(
@@ -193,7 +193,7 @@ def _glb_mesh_to_tc_mesh(glb_mesh: "GLBMeshData", uuid: str = "") -> "TcMesh":
         glb_mesh: Mesh data from GLB file
         uuid: Optional UUID to use for TcMesh (if empty, generates new)
     """
-    from tmesh import TcMesh, TcVertexLayout
+    from termin.mesh import TcMesh, TcVertexLayout
 
     vertices = glb_mesh.vertices.astype(np.float32)
     indices = glb_mesh.indices.astype(np.uint32).ravel()
@@ -270,7 +270,7 @@ def _populate_tc_mesh_from_glb(tc_mesh: TcMesh, glb_mesh: "GLBMeshData") -> bool
 
     Returns True if successful, False otherwise.
     """
-    from tmesh import TcVertexLayout, tc_mesh_set_data, tc_mesh_set_submeshes
+    from termin.mesh import TcVertexLayout, tc_mesh_set_data, tc_mesh_set_submeshes
 
     vertices = glb_mesh.vertices.astype(np.float32)
     indices = glb_mesh.indices.astype(np.uint32).ravel()

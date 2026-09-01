@@ -137,13 +137,13 @@ annotation маршрутизируется перед plot navigation.
 Python package:
 
 ```python
-import tcplot
+import termin.plot
 ```
 
 Пакет экспортирует toolkit-neutral `PlotEngine2D`, `PlotEngine3D` и
 `RetainedChart3D`; он не импортирует и не реэкспортирует UI widgets. Python
 адаптеры `Plot2D` и `Plot3D` принадлежат отдельному пакету
-`tcplot_gui_native`. Примеры их создания и встраивания в native UI document
+`termin.plot.gui_native`. Примеры их создания и встраивания в native UI document
 приведены в [README моста](../../tcplot-gui-native/README.md).
 Запускаемая контрольная точка для installed SDK находится в
 [graphics profile showcase](../../../examples/graphics-showcase/README.md) и

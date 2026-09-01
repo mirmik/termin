@@ -1,4 +1,4 @@
-"""Native UI widget adapters for :mod:`tcplot`."""
+"""Native UI widget adapters for :mod:`termin.plot`."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from tcplot import SrgbColor, SurfaceColorMap, default_colors
-from tcplot_gui_native._tcplot_gui_native import Plot2DAccess, Plot3DAccess
+from termin.plot import SrgbColor, SurfaceColorMap, default_colors
+from termin.plot.gui_native._plot_gui_native import Plot2DAccess, Plot3DAccess
 
 
 class Plot2D:

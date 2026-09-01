@@ -28,7 +28,7 @@ from tgfx import (
     Tgfx2ShaderStage,
     draw_tc_mesh,
 )
-from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
+from termin.mesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
 
 _VERT_SRC = """#version 450 core

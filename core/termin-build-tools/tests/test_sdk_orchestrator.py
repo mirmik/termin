@@ -844,10 +844,10 @@ def test_sdk_python_launcher_uses_graphics_smoke_imports(tmp_path, monkeypatch):
 
     assert sdk.verify_sdk_python_launcher(
         sdk_prefix,
-        import_roots=("tcbase", "tcplot", "termin.visual_scene"),
+        import_roots=("tcbase", "termin.plot", "termin.visual_scene"),
     ) == 0
     smoke = commands[1][0][-1]
-    assert "tcplot" in smoke
+    assert "termin.plot" in smoke
     assert "termin.visual_scene" in smoke
     assert "termin.engine" not in smoke
 

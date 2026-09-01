@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.14",
     packages=[],
     install_requires=[
-        "tmesh",
+        "termin-mesh",
         "termin-nanobind",
     ],
     ext_modules=native_extensions_for_source(_DIR),

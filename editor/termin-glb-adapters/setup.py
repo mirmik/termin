@@ -20,7 +20,7 @@ setup(
         "numpy",
         "tcbase",
         "tgfx",
-        "tmesh",
+        "termin-mesh",
         "termin-animation",
         "termin-assets",
         "termin-components-animation",

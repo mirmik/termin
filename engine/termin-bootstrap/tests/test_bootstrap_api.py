@@ -249,7 +249,7 @@ def test_player_bootstrap_publishes_builtin_type_projections_once():
         for _ in range(3):
             bootstrap_player()
 
-            from termin.mesh import MeshComponent
+            from termin.mesh.components import MeshComponent
             from termin.render import DrawableComponent
             from termin.render_passes import UIWidgetPass
 
@@ -293,7 +293,7 @@ def test_player_shutdown_releases_standalone_entity_components():
     _run_python_without_nanobind_leaks(
         """
         import termin.bootstrap
-        from termin.mesh import MeshComponent
+        from termin.mesh.components import MeshComponent
         from termin.scene import Entity
 
         for iteration in range(2):

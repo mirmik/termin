@@ -15,7 +15,8 @@ from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 from termin.scene import Entity, TcScene
-from termin.mesh import TcMesh, MeshComponent
+from termin.mesh import TcMesh
+from termin.mesh.components import MeshComponent
 from termin.mesh.primitives import (
     CubeMesh,
     UVSphereMesh,

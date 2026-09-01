@@ -18,9 +18,9 @@ def test_script_mesh_roundtrip_builds_convex_hull_after_mesh_publication() -> No
         from termin.bootstrap import bootstrap_player, shutdown_runtime
         from termin.colliders import ColliderType
         from termin.colliders.collider_component import ColliderComponent
-        from termin.mesh import MeshComponent, ScriptMeshComponent
+        from termin.mesh.components import MeshComponent, ScriptMeshComponent
         from termin.scene import TcScene
-        from tmesh import TcMesh
+        from termin.mesh import TcMesh
 
         bootstrap_player()
 

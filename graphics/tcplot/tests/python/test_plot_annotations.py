@@ -1,6 +1,6 @@
 import pytest
 
-from tcplot import (
+from termin.plot import (
     MouseButton,
     PlotDataMarker2D,
     PlotEngine2D,

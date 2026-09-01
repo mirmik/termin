@@ -3,7 +3,7 @@
 import numpy as np
 from enum import Enum
 
-from tmesh import Mesh3
+from termin.mesh import Mesh3
 
 # GPU COMPATIBILITY
 
@@ -137,13 +137,7 @@ def mesh3_from_convex_hull(hull) -> Mesh3:
     return Mesh3(vertices, triangles)
 
 
-def show_mesh(mesh: Mesh3):
-    """Show the mesh in a simple viewer application."""
-    from .mesh_viewer_miniapp import show_mesh_app
-    show_mesh_app(mesh)
-
-
-# Re-export primitives for backward compatibility
+# Re-export the canonical primitive constructors from this API module.
 from .primitives import (
     CubeMesh as CubeMesh,
     TexturedCubeMesh as TexturedCubeMesh,

@@ -1,8 +1,8 @@
-# tcplot-gui-native
+# termin-plot-gui-native
 
-`tcplot-gui-native` is the optional desktop bridge that exposes ready-made
+`termin-plot-gui-native` is the optional desktop bridge that exposes ready-made
 2D and 3D charts as `termin-gui-native` widgets. It keeps the dependency direction
-clean: neither the UI core knows about plotting nor `tcplot` knows about
+clean: neither the UI core knows about plotting nor `termin-plot` knows about
 widgets.
 
 The runnable installed-SDK example is the
@@ -11,8 +11,8 @@ contains the six restored plotting scenarios, renders both widgets
 independently, and embeds them into nodegraph bodies; this README keeps the
 smaller API snippets close to the bridge itself.
 
-Python consumers import `Plot2D` and `Plot3D` from `tcplot_gui_native`, not
-from `tcplot`. The core package intentionally contains only engines, retained
+Python consumers import `Plot2D` and `Plot3D` from `termin.plot.gui_native`, not
+from `termin.plot`. The core package intentionally contains only engines, retained
 chart primitives, data types and camera math.
 
 The widget runtime type is `termin.gui.Plot2D`. It owns a `TcVisualScene`, a
@@ -60,7 +60,7 @@ directly in a document or transferred into a `termin-nodegraph` node body:
 
 ```python
 import numpy as np
-from tcplot_gui_native import Plot2D
+from termin.plot.gui_native import Plot2D
 
 plot = Plot2D(document)
 x = np.linspace(0.0, 2.0 * np.pi, 240)
@@ -81,7 +81,7 @@ Python applications normally use the typed adapter:
 
 ```python
 import numpy as np
-from tcplot_gui_native import Plot3D
+from termin.plot.gui_native import Plot3D
 
 plot = Plot3D(document)
 t = np.linspace(0.0, 8.0 * np.pi, 240)

@@ -19,8 +19,8 @@ from tcnodegraph import (
     NodeTemplate,
     build_native_node_graph_view,
 )
-from tcplot import SurfaceColorMap
-from tcplot_gui_native import Plot2D, Plot3D
+from termin.plot import SurfaceColorMap
+from termin.plot.gui_native import Plot2D, Plot3D
 from termin.gui_native import Point, Size, build_python_showcase
 from termin.visual_scene import (
     tc_visual_scene3d_create,
@@ -39,7 +39,7 @@ _REQUIRED_IMPORTS = (
     ("termin-dispatch", "termin.dispatch"),
     ("termin-image", "termin.image"),
     ("termin-tween", "termin.tween"),
-    ("termin-mesh", "tmesh"),
+    ("termin-mesh", "termin.mesh"),
     ("termin-graphics", "tgfx"),
     ("termin-visual-scene", "termin.visual_scene"),
     ("termin-inspect", "termin.inspect"),
@@ -51,8 +51,8 @@ _REQUIRED_IMPORTS = (
     ("termin-window", "termin.window"),
     ("termin-gui-native-window", "termin.gui_native.window"),
     ("termin-nodegraph", "tcnodegraph"),
-    ("tcplot", "tcplot"),
-    ("tcplot-gui-native", "tcplot_gui_native"),
+    ("termin-plot", "termin.plot"),
+    ("termin-plot-gui-native", "termin.plot.gui_native"),
 )
 
 
@@ -123,7 +123,7 @@ def _populate_plot_3d(plot: Plot3D) -> dict[str, object]:
 
 
 def _tcplot_example(application, builder_name: str, facts: dict[str, object]) -> SectionContent:
-    from tcplot_gui_native import gallery
+    from termin.plot.gui_native import gallery
 
     builder = vars(gallery)[builder_name]
     root = builder(application.document)

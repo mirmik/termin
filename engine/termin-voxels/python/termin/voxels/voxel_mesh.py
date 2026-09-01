@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from tmesh import (
+from termin.mesh import (
     TcMesh,
     TcVertexLayout,
     TcAttribType,

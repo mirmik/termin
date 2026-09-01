@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from termin.skeleton import TcSkeleton
     from termin.default_assets.skeleton.asset import SkeletonAsset
     from tgfx import TcTexture
-    from tmesh import TcMesh
+    from termin.mesh import TcMesh
 
 
 class DefaultAssetResourceMixin:

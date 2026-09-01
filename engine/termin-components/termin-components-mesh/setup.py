@@ -20,15 +20,15 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
-    packages=["termin.mesh", "termin_mesh_component_specs"],
+    packages=["termin.mesh.components", "termin_mesh_component_specs"],
     package_dir={
-        "termin.mesh": "python/termin/mesh",
+        "termin.mesh.components": "python/termin/mesh/components",
         "termin_mesh_component_specs": "python/termin_mesh_component_specs",
     },
     install_requires=[
         "termin-nanobind",
         "tcbase",
-        "tmesh",
+        "termin-mesh",
         "tgfx",
         "termin-csg",
         "termin-inspect",

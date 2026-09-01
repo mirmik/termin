@@ -173,7 +173,7 @@ namespace {
 
 } // namespace
 
-NB_MODULE(_tcplot_gui_native, module) {
+NB_MODULE(_plot_gui_native, module) {
     nb::module_::import_("termin.gui_native._gui_native");
     if (!tcplot::gui_native::register_plot_widget_types()) {
         throw std::runtime_error("failed to register tcplot native widget types");

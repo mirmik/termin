@@ -6,7 +6,7 @@ namespace tmesh_bindings {
     void bind_mesh(nb::module_& m);
 }
 
-NB_MODULE(_tmesh_native, m) {
+NB_MODULE(_mesh_native, m) {
     m.doc() = "termin-mesh native Python bindings";
 
     tmesh_bindings::bind_mesh(m);

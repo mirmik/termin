@@ -6,10 +6,10 @@ import math
 
 from tcbase import log
 from termin.inspect import InspectField
-from termin.mesh.mesh_component import MeshComponent
+from termin.mesh.components.mesh_component import MeshComponent
 from termin.scene.python_component import PythonComponent
 from termin.csg import Solid, to_tc_mesh
-from tmesh import TcMesh
+from termin.mesh import TcMesh
 from termin.csg.cad import (
     Contour,
     box,

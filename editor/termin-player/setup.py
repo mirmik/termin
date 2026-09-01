@@ -49,7 +49,7 @@ setup(
         "termin-physics",
         "termin-navmesh",
         "termin-lighting",
-        "tmesh",
+        "termin-mesh",
         "tgfx",
         "numpy",
         "packaging",

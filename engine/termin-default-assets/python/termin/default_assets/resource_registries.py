@@ -99,7 +99,7 @@ class DefaultAssetRegistryFactoryMixin:
         """Create AssetRegistry for meshes."""
         from termin_assets import AssetRegistry
         from termin.default_assets.mesh.asset import MeshAsset
-        from tmesh import TcMesh
+        from termin.mesh import TcMesh
 
         def data_from_asset(asset: MeshAsset) -> TcMesh | None:
             if asset.mesh_data is None:

@@ -5,8 +5,9 @@ import numpy as np
 import pytest
 
 from termin.geombase import Mat44f, Pose3, Vec3
-from termin.mesh import Mesh3, MeshComponent, TcMesh
-from termin.mesh.surface_edge_query import (
+from termin.mesh import Mesh3, TcMesh
+from termin.mesh.components import MeshComponent
+from termin.mesh.components.surface_edge_query import (
     SurfaceEdgeHit,
     find_surface_edge_for_entity,
     _mesh_point_to_world,

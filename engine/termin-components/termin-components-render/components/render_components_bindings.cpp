@@ -200,7 +200,7 @@ NB_MODULE(_components_render_native, m) {
 
     nb::module_::import_("tcbase._geom_native");
     nb::module_::import_("tgfx._tgfx_native");
-    nb::module_::import_("tmesh._tmesh_native");
+    nb::module_::import_("termin.mesh._mesh_native");
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.lighting._lighting_native");
     nb::module_::import_("termin.materials._materials_native");

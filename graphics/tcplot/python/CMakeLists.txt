@@ -15,7 +15,7 @@ set(TCPLOT_PYTHON_BINDING_SOURCES
 
 # CMake normally invalidates objects from source mtimes. Source trees restored
 # by archive/cache tooling can preserve an older mtime even when their content
-# changed, which previously left an obsolete _tcplot_native API in the SDK.
+# changed, which previously left an obsolete _plot_native API in the SDK.
 # Keep a content-derived dependency alongside the normal source dependency so
 # reconfiguration invalidates every binding object when the binding source set
 # changes, independent of filesystem timestamps.
@@ -36,26 +36,26 @@ configure_file(
 set_source_files_properties(${TCPLOT_PYTHON_BINDING_SOURCES} PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/bindings_source_fingerprint")
 
-nanobind_add_module(_tcplot_native NB_SHARED
+nanobind_add_module(_plot_native NB_SHARED
     ${TCPLOT_PYTHON_BINDING_SOURCES}
 )
 
-target_link_libraries(_tcplot_native PRIVATE
+target_link_libraries(_plot_native PRIVATE
     tcplot
     tgfx::termin_graphics2
     tmesh::termin_mesh
     tcbase::termin_base
 )
 if(TGFX2_ENABLE_OPENGL)
-    target_link_libraries(_tcplot_native PRIVATE OpenGL::GL)
+    target_link_libraries(_plot_native PRIVATE OpenGL::GL)
 endif()
-target_include_directories(_tcplot_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_include_directories(_plot_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-termin_set_rpath_pip(_tcplot_native)
+termin_set_rpath_pip(_plot_native)
 
-install(TARGETS _tcplot_native DESTINATION lib/python/tcplot)
+install(TARGETS _plot_native DESTINATION lib/python/termin/plot)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tcplot/
-    DESTINATION lib/python/tcplot
+    DESTINATION lib/python/termin/plot
     PATTERN "__pycache__" EXCLUDE
     PATTERN "*.pyc" EXCLUDE
 )

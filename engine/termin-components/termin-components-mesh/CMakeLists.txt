@@ -60,13 +60,13 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_components_mesh_native PRIVATE termin_components_mesh)
 
     if(TERMIN_COMPONENTS_MESH_PYTHON_PREFIX)
-        set(_py_dest ${TERMIN_COMPONENTS_MESH_PYTHON_PREFIX}/mesh)
+        set(_py_dest ${TERMIN_COMPONENTS_MESH_PYTHON_PREFIX}/mesh/components)
     else()
-        set(_py_dest lib/python/termin/mesh)
+        set(_py_dest lib/python/termin/mesh/components)
     endif()
     install(TARGETS _components_mesh_native DESTINATION ${_py_dest})
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/mesh/
-        DESTINATION lib/python/termin/mesh
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/termin/mesh/components/
+        DESTINATION ${_py_dest}
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE
     )

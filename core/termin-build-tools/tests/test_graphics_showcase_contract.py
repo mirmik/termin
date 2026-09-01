@@ -15,11 +15,11 @@ def _python_sources() -> list[Path]:
 
 def _graphics_profile_example_sources() -> list[Path]:
     roots = (
-        REPO_ROOT / "termin-graphics" / "examples",
-        REPO_ROOT / "termin-gui-native" / "examples",
-        REPO_ROOT / "termin-nodegraph" / "examples",
-        REPO_ROOT / "tcplot" / "examples",
-        REPO_ROOT / "tcplot-gui-native" / "examples",
+        REPO_ROOT / "graphics" / "termin-graphics" / "examples",
+        REPO_ROOT / "graphics" / "termin-gui-native" / "examples",
+        REPO_ROOT / "graphics" / "termin-nodegraph" / "examples",
+        REPO_ROOT / "graphics" / "tcplot" / "examples",
+        REPO_ROOT / "graphics" / "tcplot-gui-native" / "examples",
     )
     return sorted(
         path
@@ -270,4 +270,4 @@ def test_restored_tcplot_example_entry_points_are_complete() -> None:
         "surface_plot",
     ):
         assert f'"{builder}"' in gallery
-    assert "from tcplot_gui_native.gallery import" in gallery
+    assert "from termin.plot.gui_native.gallery import" in gallery

@@ -18,7 +18,7 @@ from termin.materials import TcMaterial as Material
 from termin.render.drawable import RenderItem, RenderItemCollectContext
 from termin.voxels._voxels_native import TcVoxelGrid
 from termin.voxels.voxel_mesh import create_voxel_mesh
-from tmesh import TcMesh
+from termin.mesh import TcMesh
 from termin.inspect import InspectField
 from tcbase import log
 

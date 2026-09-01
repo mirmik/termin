@@ -7,7 +7,7 @@ from typing import Callable
 
 import numpy as np
 from tcbase import log
-from tmesh import Mesh3
+from termin.mesh import Mesh3
 
 from termin.csg._csg_native import (
     Solid,

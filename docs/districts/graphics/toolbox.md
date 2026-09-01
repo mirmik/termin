@@ -14,7 +14,7 @@ GPU, часть строит retained composition, а несколько мод�
 |---|---|---|
 | `termin-image` | Decode, encode и image values | `termin.image`, `termin_image::termin_image` |
 | `termin-tween` | Чистые easing и tween primitives | `termin.tween` |
-| `termin-mesh` | Canonical mesh/resource data | `tmesh`, `tmesh::termin_mesh` |
+| `termin-mesh` | Canonical mesh/resource data | `termin.mesh`, `tmesh::termin_mesh` |
 | `termin-skeleton` | Skeleton hierarchy и bulk publication | `termin.skeleton`, `termin_skeleton::termin_skeleton` |
 | `termin-animation` | Clips, tracks, sampling и serialization | `termin.animation`, `termin_animation::termin_animation` |
 | `termin-glb-native` | Компактный cgltf-backed document boundary | `termin.glb.native` |
@@ -54,8 +54,8 @@ scene-neutral C/C++ execution, а не второй high-level renderer binding.
 | `termin-visual-scene` | Retained 2D/3D object trees и interaction | `termin.visual_scene`, `termin_visual_scene::termin_visual_scene` |
 | `termin-gui-native` | Retained widget/document core и offscreen UI | `termin.gui_native`, `termin_gui_native::termin_gui_native` |
 | `termin-nodegraph` | Headless graph core и optional UI projection | `tcnodegraph`, `termin_nodegraph::core` |
-| `tcplot` | Toolkit-neutral 2D/3D plotting | `tcplot`, `tcplot::tcplot` |
-| `tcplot-gui-native` | Leaf bridge: готовые Plot widgets для native GUI | `tcplot_gui_native`, `tcplot_gui_native::tcplot_gui_native` |
+| `termin-plot` (`tcplot` source) | Toolkit-neutral 2D/3D plotting | `termin.plot`, `tcplot::tcplot` |
+| `termin-plot-gui-native` (`tcplot-gui-native` source) | Leaf bridge: готовые Plot widgets для native GUI | `termin.plot.gui_native`, `tcplot_gui_native::tcplot_gui_native` |
 
 `termin-window` включается для SDL-enabled desktop usage. Headless document
 composition использует GUI offscreen targets без окна.

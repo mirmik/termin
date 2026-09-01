@@ -88,19 +88,19 @@ endif()
 if(TERMIN_BUILD_PYTHON)
     find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
-    nanobind_add_module(_tcplot_gui_native NB_SHARED
+    nanobind_add_module(_plot_gui_native NB_SHARED
         python/bindings/tcplot_gui_native_module.cpp)
-    target_link_libraries(_tcplot_gui_native PRIVATE tcplot_gui_native)
-    target_include_directories(_tcplot_gui_native PRIVATE
+    target_link_libraries(_plot_gui_native PRIVATE tcplot_gui_native)
+    target_include_directories(_plot_gui_native PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include)
     if(COMMAND termin_set_rpath_python)
-        termin_set_rpath_python(_tcplot_gui_native)
+        termin_set_rpath_python(_plot_gui_native)
     endif()
-    install(TARGETS _tcplot_gui_native DESTINATION lib/python/tcplot_gui_native)
+    install(TARGETS _plot_gui_native DESTINATION lib/python/termin/plot/gui_native)
     install(FILES
         python/tcplot_gui_native/__init__.py
         python/tcplot_gui_native/gallery.py
-        DESTINATION lib/python/tcplot_gui_native)
+        DESTINATION lib/python/termin/plot/gui_native)
 endif()
 
 install(TARGETS tcplot_gui_native

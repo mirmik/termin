@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from tcbase._geom_native import Affine3d, LinearColor, Ray3, SrgbColor, Vec3
 from tgfx import PointCloudStyle
-from tmesh import Mesh3
+from termin.mesh import Mesh3
 
 from termin.visual_scene import (
     PointerEventKind3D,

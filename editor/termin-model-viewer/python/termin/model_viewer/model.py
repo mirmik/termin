@@ -235,7 +235,7 @@ def _create_mesh_items(
     decoded_textures,
 ) -> list:
     from tcbase._geom_native import SrgbColor
-    from tmesh import Mesh3
+    from termin.mesh import Mesh3
 
     internal_indices = scene_data.mesh_index_map.get(source_mesh_index)
     if not internal_indices:

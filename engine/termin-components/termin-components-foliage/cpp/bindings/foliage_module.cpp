@@ -62,7 +62,7 @@ NB_MODULE(_foliage_native, m) {
     m.doc() = "Native foliage data and component bindings";
 
     nb::module_::import_("termin.scene._scene_native");
-    nb::module_::import_("tmesh._tmesh_native");
+    nb::module_::import_("termin.mesh._mesh_native");
     nb::module_::import_("tgfx._tgfx_native");
 
     nb::class_<FoliageInstance>(m, "FoliageInstance")

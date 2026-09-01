@@ -16,18 +16,18 @@ class BuildExt(TerminCMakeBuildExt):
 
 
 setup(
-    name="tcplot-gui-native",
+    name="termin-plot-gui-native",
     version=BuildExt.compute_local_version("0.1.0"),
     license="Apache-2.0",
     description="Native Termin UI widgets backed by tcplot",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
-    packages=["tcplot_gui_native"],
-    package_dir={"tcplot_gui_native": "python/tcplot_gui_native"},
+    packages=["termin.plot.gui_native"],
+    package_dir={"termin.plot.gui_native": "python/tcplot_gui_native"},
     install_requires=[
         "numpy",
-        "tcplot",
+        "termin-plot",
         "termin-gui-native",
         "termin-nanobind",
     ],

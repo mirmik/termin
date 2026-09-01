@@ -696,7 +696,7 @@ class NativeGLBDocument:
 
     @staticmethod
     def _mesh_handle(mesh_uuid: str):
-        from tmesh import tc_mesh_get
+        from termin.mesh import tc_mesh_get
 
         mesh = tc_mesh_get(mesh_uuid)
         if mesh is None or not mesh.is_valid:

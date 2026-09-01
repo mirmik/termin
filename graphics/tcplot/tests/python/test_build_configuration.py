@@ -27,4 +27,4 @@ def test_all_native_binding_sources_participate_in_content_invalidation() -> Non
     assert configured_sources == binding_sources
     assert "file(SHA256" in cmake_text
     assert "OBJECT_DEPENDS" in cmake_text
-    assert "nanobind_add_module(_tcplot_native NB_SHARED\n    ${TCPLOT_PYTHON_BINDING_SOURCES}" in cmake_text
+    assert "nanobind_add_module(_plot_native NB_SHARED\n    ${TCPLOT_PYTHON_BINDING_SOURCES}" in cmake_text

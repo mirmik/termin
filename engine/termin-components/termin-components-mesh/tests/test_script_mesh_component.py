@@ -11,7 +11,7 @@ def test_script_mesh_roundtrip_has_one_mesh_and_no_missing_renderer_error() -> N
             textwrap.dedent(
                 """
                 from termin.bootstrap import bootstrap_player, shutdown_runtime
-                from termin.mesh import MeshComponent, ScriptMeshComponent
+                from termin.mesh.components import MeshComponent, ScriptMeshComponent
                 from termin.scene import ComponentRegistry, TcScene
 
                 bootstrap_player()

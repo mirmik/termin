@@ -17,7 +17,7 @@ def test_default_scene_mesh_and_material_refs_survive_editor_roundtrip() -> None
                 from termin.bootstrap import bootstrap_editor, shutdown_editor
                 from termin.default_assets.resource_manager import DefaultResourceManager
                 from termin.materials import TcMaterial
-                from termin.mesh import MeshComponent
+                from termin.mesh.components import MeshComponent
                 from termin.project import make_default_scene
                 from termin.render_components import MeshRenderer
                 from termin.scene import TcScene

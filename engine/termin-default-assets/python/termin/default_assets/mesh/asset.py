@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tcbase import log
-from tmesh import Mesh3, TcMesh
+from termin.mesh import Mesh3, TcMesh
 from termin_assets import DataAsset
 from termin.default_assets.mesh.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z
 
@@ -106,7 +106,7 @@ class MeshAsset(DataAsset[TcMesh]):
 
     def _declare_tc_mesh(self) -> None:
         """Declare TcMesh in the registry for process-wide UUID lazy loading."""
-        from tmesh import (
+        from termin.mesh import (
             tc_mesh_declare,
             tc_mesh_is_loaded,
         )
@@ -144,7 +144,7 @@ class MeshAsset(DataAsset[TcMesh]):
 
     def _populate_or_create_tc_mesh(self, mesh3: Mesh3) -> TcMesh | None:
         """Populate existing declared TcMesh or create new one."""
-        from tmesh import TcMesh
+        from termin.mesh import TcMesh
 
         tc_mesh = self._data
         if (tc_mesh is None or not tc_mesh.is_valid) and self._uuid:

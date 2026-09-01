@@ -17,8 +17,8 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 - Новый пакет по умолчанию использует одинаковые repo path и distribution name
   в стиле `termin-*`; исключения требуют явного обоснования в таблице ниже.
 - Public import namespace выбирается по domain API. Он не обязан совпадать с
-  distribution name: короткие legacy API (`tcbase`, `tmesh`, `tgfx`,
-  `tcplot`) остаются допустимыми исключениями.
+  distribution name: исторический `tcbase` и пока не мигрированный `tgfx`
+  остаются допустимыми исключениями.
 - Component spec packages (`*_component_specs`, `*_render_specs`) являются частью
   owning distribution и не должны становиться отдельными internal dependencies.
 - `termin-app` не является distribution. Его editor/launcher-модули входят в
@@ -50,7 +50,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `engine/termin-assets` | `termin-assets` | `termin_assets` | Asset runtime contracts. |
 | `graphics/termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
 | `engine/termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
-| `graphics/termin-mesh` | `tmesh` | `tmesh` | Legacy short distribution/import name. |
+| `graphics/termin-mesh` | `termin-mesh` | `termin.mesh` | Canonical mesh distribution and namespace. |
 | `graphics/termin-graphics` | `tgfx` | `tgfx` | Legacy short distribution/import name. |
 | `graphics/termin-visual-scene` | `termin-visual-scene` | `termin.visual_scene` | Retained 2D visual identity and interaction. |
 | `engine/termin-voxels` | `termin-voxels` | `termin.voxels` | Voxel core API. |
@@ -98,5 +98,5 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `editor/termin-project-build` | `termin-project-build` | `termin.project_build` | Project build and runtime package export pipeline. |
 | `editor/termin-player` | `termin-player` | `termin.player` | Standalone/source/headless player runtime. |
 | `graphics/termin-nodegraph` | `termin-nodegraph` | `tcnodegraph` | Public import keeps historical short namespace. |
-| `graphics/tcplot` | `tcplot` | `tcplot` | Legacy short distribution/import name. |
-| `graphics/tcplot-gui-native` | `tcplot-gui-native` | `tcplot_gui_native` | Optional native UI adapters for tcplot widgets. |
+| `graphics/tcplot` | `termin-plot` | `termin.plot` | Canonical plotting distribution and namespace. |
+| `graphics/tcplot-gui-native` | `termin-plot-gui-native` | `termin.plot.gui_native` | Optional native UI adapters for plot widgets. |

@@ -12,7 +12,7 @@ class BuildExt(TerminCMakeBuildExt):
     upstream_packages = {
         "tcbase": "libtermin_base",
         "tgfx": "libtermin_graphics2",
-        "tmesh": "libtermin_mesh",
+        "termin-mesh": "libtermin_mesh",
         "termin_nanobind": "libnanobind",
     }
     source_dir = _DIR
@@ -29,7 +29,7 @@ setup(
     install_requires=[
         "tcbase",
         "tgfx",
-        "tmesh",
+        "termin-mesh",
         "termin-nanobind",
     ],
     package_data={

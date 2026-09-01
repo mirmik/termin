@@ -31,7 +31,7 @@ setup(
         "termin-scene",
         "termin-skeleton",
         "termin-voxels",
-        "tmesh",
+        "termin-mesh",
         "numpy",
     ],
     entry_points={

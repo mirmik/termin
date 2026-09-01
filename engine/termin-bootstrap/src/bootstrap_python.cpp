@@ -299,7 +299,7 @@ namespace termin::bootstrap {
 
     void init_python_kind_handlers(const RuntimeKindOptions& options) {
         if (options.mesh && !g_mesh_python_kind_initialized) {
-            nb::module_ mesh_module = nb::module_::import_("tmesh");
+            nb::module_ mesh_module = nb::module_::import_("termin.mesh");
             register_python_uuid_handle_kind<TcMesh>("tc_mesh", mesh_module.attr("TcMesh"));
             g_mesh_python_kind_initialized = true;
         }

@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 
 setup(
-    name="tmesh",
+    name="termin-mesh",
     version=BuildExt.compute_local_version("0.1.0"),
     license="Apache-2.0",
     description="Mesh library with Python bindings",
@@ -24,10 +24,9 @@ setup(
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
     packages=[
-        "tmesh",
         *find_namespace_packages(
             where="python",
-            include=["termin.mesh", "termin.mesh.*"],
+            include=["termin", "termin.mesh", "termin.mesh.*"],
         ),
     ],
     package_dir={
@@ -39,7 +38,7 @@ setup(
         "numpy",
     ],
     package_data={
-        "tmesh": [
+        "termin.mesh": [
             "include/**/*.h",
             "include/**/*.hpp",
             "lib/*.so*",

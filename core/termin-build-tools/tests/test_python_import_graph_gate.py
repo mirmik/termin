@@ -71,7 +71,7 @@ def test_graphics_import_roots_exclude_engine_product(tmp_path):
         product_import_roots=PROFILES.profile("graphics").native_import_roots,
     )
 
-    assert roots == ["tcplot", "termin.visual_scene", "termin.gui_native"]
+    assert roots == ["termin.plot", "termin.visual_scene", "termin.gui_native"]
     assert "termin.engine" not in roots
 
 

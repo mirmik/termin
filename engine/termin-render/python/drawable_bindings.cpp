@@ -33,7 +33,7 @@ namespace termin {
 
     void bind_drawable(nb::module_& m) {
         nb::module_::import_("termin.materials._materials_native");
-        nb::module_::import_("tmesh._tmesh_native");
+        nb::module_::import_("termin.mesh._mesh_native");
 
         m.attr("RENDER_ITEM_KIND_MESH") = nb::int_(static_cast<int>(TC_RENDER_ITEM_KIND_MESH));
         m.attr("RENDER_ITEM_COLLECT_ALLOW_MISSING_MATERIAL_PHASE") =

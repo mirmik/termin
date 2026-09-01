@@ -354,7 +354,7 @@ namespace termin::visual::python {
 
     void bind_visual_scene3d(nb::module_& m) {
         nb::module_::import_("tcbase._geom_native");
-        nb::module_::import_("tmesh._tmesh_native");
+        nb::module_::import_("termin.mesh._mesh_native");
         nb::module_::import_("tgfx._tgfx_native");
 
         nb::class_<VisualItem3DHandle>(m, "VisualItem3DHandle")

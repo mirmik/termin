@@ -101,7 +101,7 @@ def domain_native_kind_registration_functions_remain_available() -> None:
 
 def player_bootstrap_registers_python_type_mappings() -> None:
     import termin.bootstrap
-    import tmesh
+    import termin.mesh
     from termin.inspect import KindRegistry
     from termin.materials import TcMaterial
 
@@ -117,7 +117,7 @@ def player_bootstrap_registers_python_type_mappings() -> None:
         )
 
         registry = KindRegistry.instance()
-        assert registry.kind_for_object(tmesh.TcMesh()) == "tc_mesh"
+        assert registry.kind_for_object(termin.mesh.TcMesh()) == "tc_mesh"
         assert registry.kind_for_object(TcMaterial()) == "tc_material"
     finally:
         termin.bootstrap.shutdown_runtime()

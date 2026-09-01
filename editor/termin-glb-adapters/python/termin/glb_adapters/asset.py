@@ -179,7 +179,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
 
         Also declares meshes for process-wide UUID lazy loading.
         """
-        from tmesh import (
+        from termin.mesh import (
             tc_mesh_declare,
             tc_mesh_is_loaded,
         )
@@ -390,7 +390,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
             _glb_skin_to_tc_skeleton,
             _populate_tc_skeleton_from_glb,
         )
-        from tmesh import tc_mesh_is_loaded
+        from termin.mesh import tc_mesh_is_loaded
         from termin.skeleton._skeleton_native import tc_skeleton_is_loaded
         from termin.animation import clip_from_glb
         from termin.animation._animation_native import tc_animation_is_loaded

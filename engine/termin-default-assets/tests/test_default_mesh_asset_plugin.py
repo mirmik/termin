@@ -17,7 +17,7 @@ from termin.default_assets.mesh.asset_plugin import (
     register_mesh_runtime_plugin,
 )
 from termin.default_assets.mesh.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z, MeshSpec
-from tmesh import Mesh3, TcMesh, tc_mesh_ensure_loaded, tc_mesh_is_loaded
+from termin.mesh import Mesh3, TcMesh, tc_mesh_ensure_loaded, tc_mesh_is_loaded
 
 
 class FakeResourceManager:

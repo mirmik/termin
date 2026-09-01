@@ -2,7 +2,7 @@
 
 import hashlib
 import numpy as np
-from tmesh._tmesh_native import Mesh3
+from termin.mesh._mesh_native import Mesh3
 
 
 def _primitive_uuid(name: str, *args) -> str:
@@ -484,3 +484,4 @@ def RingMesh(
     )
     mesh.compute_normals()
     return mesh
+

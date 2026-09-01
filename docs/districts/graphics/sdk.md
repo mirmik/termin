@@ -60,9 +60,9 @@ Bundled interpreter изолирует native distributions от системн�
 
 ```python
 import tgfx
-import tmesh
+from termin import mesh
 import tcnodegraph
-import tcplot
+from termin import plot
 
 from termin import animation
 from termin import glb
@@ -73,8 +73,8 @@ from termin import visual_scene
 ```
 
 Готовые plot widgets принадлежат отдельному leaf package
-`tcplot_gui_native`. Engine component compatibility names не являются частью
-Graphics contract, даже если старый lazy import ещё способен их найти.
+`termin.plot.gui_native`. Engine mesh components живут отдельно в
+`termin.mesh.components` и не входят в Graphics contract.
 
 ## Product identity
 

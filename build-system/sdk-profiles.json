@@ -107,12 +107,12 @@
       "embedded_python_hosts": [],
       "launcher_import_roots": [
         "tcbase",
-        "tcplot",
+        "termin.plot",
         "termin.visual_scene",
         "termin.tween"
       ],
       "native_import_roots": [
-        "tcplot",
+        "termin.plot",
         "termin.visual_scene",
         "termin.gui_native"
       ],

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import numpy as np
 
-from termin.mesh import MeshComponent, TcMesh
+from termin.mesh.components import MeshComponent, TcMesh
 from termin.render_components import MeshRenderer
 from termin.materials import TcMaterial as Material
 from termin.geombase import SrgbColor

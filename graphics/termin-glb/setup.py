@@ -16,7 +16,7 @@ setup(
     install_requires=[
         "termin-glb-native",
         "tcbase",
-        "tmesh",
+        "termin-mesh",
         "termin-skeleton",
         "termin-animation",
         "termin-nanobind",

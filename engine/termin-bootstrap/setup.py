@@ -32,7 +32,7 @@ setup(
         "termin-collision",
         "termin-input",
         "termin-display",
-        "tmesh",
+        "termin-mesh",
         "tgfx",
         "termin-materials",
         "termin-skeleton",

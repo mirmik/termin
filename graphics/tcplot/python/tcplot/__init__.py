@@ -1,8 +1,8 @@
 """Toolkit-neutral plotting engines and retained chart primitives.
 
 All rendering, camera math and mesh building lives in the native ``tcplot``
-library bound through :mod:`tcplot._tcplot_native`. Ready-made Termin UI
-widgets are provided by the optional :mod:`tcplot_gui_native` package; the
+library bound through :mod:`termin.plot._plot_native`. Ready-made Termin UI
+widgets are provided by the optional :mod:`termin.plot.gui_native` package; the
 core package deliberately does not import a UI toolkit.
 """
 from termin_nanobind.runtime import preload_sdk_libs
@@ -12,7 +12,7 @@ from termin_nanobind.runtime import preload_sdk_libs
 # on termin_graphics2, termin_mesh and termin_base via tcplot.dll.
 preload_sdk_libs("tcplot", "termin_graphics2", "termin_mesh", "termin_base")
 
-from tcplot._tcplot_native import (
+from termin.plot._plot_native import (
     SrgbColor,
     cycle_color,
     jet,

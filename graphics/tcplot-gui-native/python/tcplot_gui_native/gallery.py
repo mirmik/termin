@@ -1,11 +1,11 @@
-"""Reusable builders for the native tcplot example gallery."""
+"""Reusable builders for the native Termin plot example gallery."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from tcplot import SrgbColor, SurfaceColorMap
-from tcplot_gui_native import Plot2D, Plot3D
+from termin.plot import SrgbColor, SurfaceColorMap
+from termin.plot.gui_native import Plot2D, Plot3D
 from termin.gui_native import Size
 
 

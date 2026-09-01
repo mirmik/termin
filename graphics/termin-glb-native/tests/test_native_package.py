@@ -22,7 +22,7 @@ def test_native_distribution_has_only_native_mesh_dependencies() -> None:
         for value in (requires("termin-glb-native") or ())
     }
 
-    assert dependencies == {"tmesh", "termin-nanobind"}
+    assert dependencies == {"termin-mesh", "termin-nanobind"}
     assert dependencies.isdisjoint(
         {"termin-assets", "termin-default-assets", "tcgui"}
     )

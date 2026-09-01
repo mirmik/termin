@@ -235,7 +235,7 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
     )
     from termin.scene._scene_native import component_registry_get_all_info, soa_registry_get_all_info
     from tgfx import shader_get_all_info, shader_program_get_all_info, tc_texture_get_all_info
-    from tmesh import tc_mesh_get_all_info
+    from termin.mesh import tc_mesh_get_all_info
 
     pages = (
         RegistryPage(

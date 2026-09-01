@@ -12,7 +12,7 @@ namespace tcplot_bindings {
     void bind_retained_chart3d(nb::module_& m);
 } // namespace tcplot_bindings
 
-NB_MODULE(_tcplot_native, m) {
+NB_MODULE(_plot_native, m) {
     m.doc() = "tcplot native Python bindings";
 
     nb::module_::import_("tcbase._geom_native");

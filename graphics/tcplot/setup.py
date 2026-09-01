@@ -12,7 +12,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 class BuildExt(TerminCMakeBuildExt):
     upstream_packages = {
         "tcbase": "libtermin_base",
-        "tmesh": "libtermin_mesh",
+        "termin-mesh": "libtermin_mesh",
         "tgfx": "libtermin_graphics2",
         "termin_nanobind": "libnanobind",
     }
@@ -20,24 +20,24 @@ class BuildExt(TerminCMakeBuildExt):
 
 
 setup(
-    name="tcplot",
+    name="termin-plot",
     version=BuildExt.compute_local_version("0.1.0"),
     license="Apache-2.0",
     description="Toolkit-neutral plotting engines and retained chart primitives",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
-    packages=["tcplot"],
-    package_dir={"tcplot": "python/tcplot"},
+    packages=["termin.plot"],
+    package_dir={"termin.plot": "python/tcplot"},
     install_requires=[
         "tcbase",
-        "tmesh",
+        "termin-mesh",
         "tgfx",
         "termin-nanobind",
         "numpy",
     ],
     package_data={
-        "tcplot": [
+        "termin.plot": [
             "*.dll",
             "lib/*.dll",
             "lib/*.so*",

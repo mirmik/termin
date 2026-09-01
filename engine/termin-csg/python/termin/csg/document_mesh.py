@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from tcbase import log
-from tmesh import Mesh3, TcMesh
+from termin.mesh import Mesh3, TcMesh
 
 from termin.csg._csg_native import to_mesh3
 from termin.csg.document_eval import evaluate_document

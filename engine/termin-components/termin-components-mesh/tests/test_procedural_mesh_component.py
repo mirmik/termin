@@ -1,6 +1,6 @@
 from termin.csg.document_edit import set_contour_point
 from termin.csg.procedural_document import ProceduralPlane
-from termin.mesh.procedural_mesh_component import ProceduralMeshComponent
+from termin.mesh.components.procedural_mesh_component import ProceduralMeshComponent
 
 
 class _MeshComponent:

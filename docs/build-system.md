@@ -526,7 +526,7 @@ Python-пакет состоит из двух частей:
 `build-system/packages.json`. Политика именования и полный инвентарь
 `repo path / distribution / import namespace` описаны в
 [Python Package Naming](./python-package-naming.md). В `install_requires` нужно
-указывать distribution name из manifest (`tgfx`, `tmesh`, `tcbase`, ...), а не
+    указывать distribution name из manifest (`tgfx`, `termin-mesh`, `tcbase`, ...), а не
 repo path (`termin-graphics`, `termin-mesh`, `termin-base`) и не случайный
 import namespace.
 

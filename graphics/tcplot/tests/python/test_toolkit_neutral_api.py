@@ -1,4 +1,4 @@
-import tcplot
+import termin.plot as tcplot
 
 
 def test_core_package_does_not_export_ui_widgets() -> None:

@@ -19,7 +19,7 @@ setup(
     install_requires=[
         "numpy",
         "tcbase",
-        "tmesh",
+        "termin-mesh",
         "termin-assets",
         "termin-components-mesh",
         "termin-components-render",

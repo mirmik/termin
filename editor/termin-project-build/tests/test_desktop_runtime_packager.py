@@ -1579,12 +1579,12 @@ def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage
     from termin.bootstrap import bootstrap_player
     from termin.geombase import Mat44, Quat, Vec3
     from termin.materials import TcMaterial
-    from termin.mesh import MeshComponent
+    from termin.mesh.components import MeshComponent
     from termin.render_components import SkinnedMeshRenderer
     from termin.scene import TcScene
     from termin.skeleton import TcSkeleton
     from termin.skeleton_components import SkeletonController
-    from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
+    from termin.mesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
     bootstrap_player()
 
@@ -1846,7 +1846,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     import tgfx
     from termin.materials import TcMaterial
     from termin.geombase import SrgbColor
-    from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
+    from termin.mesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
     project = tmp_path / "LiveResourceGame"
     project.mkdir()

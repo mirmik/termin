@@ -23,7 +23,7 @@ _TCPLOT_PYTHON = os.path.join(_TERMIN_ROOT, "tcplot", "python")
 sys.path.insert(0, _TCPLOT_EXAMPLES)
 sys.path.insert(0, _TCPLOT_PYTHON)
 
-from tcplot import Plot3D
+from termin.plot import Plot3D
 from termin.csg import make_box, subtract, extrude, to_mesh3
 from _host import run_demo
 

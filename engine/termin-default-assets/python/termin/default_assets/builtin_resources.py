@@ -81,7 +81,7 @@ def register_builtin_materials(rm: DefaultAssetsResourceApiMixin) -> None:
 def register_builtin_meshes(rm: DefaultAssetsResourceApiMixin) -> list[str]:
     """Register built-in primitive meshes."""
     from termin.default_assets.mesh.asset import MeshAsset
-    from tmesh import CylinderMesh, PlaneMesh, TexturedCubeMesh, UVSphereMesh
+    from termin.mesh import CylinderMesh, PlaneMesh, TexturedCubeMesh, UVSphereMesh
 
     registered: list[str] = []
 

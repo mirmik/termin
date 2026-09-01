@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.foliage"],
     package_dir={"termin.foliage": "python/termin/foliage"},
-    install_requires=["termin-assets", "termin-nanobind", "termin-scene", "tmesh", "tgfx"],
+    install_requires=["termin-assets", "termin-nanobind", "termin-scene", "termin-mesh", "tgfx"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     entry_points={

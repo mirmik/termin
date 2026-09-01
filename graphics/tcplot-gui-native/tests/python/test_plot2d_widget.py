@@ -7,7 +7,7 @@ from tcnodegraph import (
     NodeBodyLayout,
     build_native_node_graph_view,
 )
-from tcplot_gui_native import Plot2D
+from termin.plot.gui_native import Plot2D
 from termin.gui_native import OffscreenGuiComposition
 
 

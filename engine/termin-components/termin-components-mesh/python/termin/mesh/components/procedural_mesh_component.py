@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from tcbase import log
 from termin.inspect import InspectField
-from tmesh import TcMesh
+from termin.mesh import TcMesh
 
 from termin.csg.document_mesh import document_to_mesh3
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
-from termin.mesh.mesh_component import MeshComponent
+from termin.mesh.components.mesh_component import MeshComponent
 from termin.scene.python_component import PythonComponent
 
 

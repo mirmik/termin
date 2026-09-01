@@ -1,5 +1,5 @@
 from termin.geombase import AABB, Vec3
-from tcplot._tcplot_native import OrbitCamera
+from termin.plot._plot_native import OrbitCamera
 
 
 def test_orbit_camera_double_precision_api():

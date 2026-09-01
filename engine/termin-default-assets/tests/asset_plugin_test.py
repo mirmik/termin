@@ -221,7 +221,7 @@ def test_glb_child_resources_lazy_load_through_canonical_uuid_bridge() -> None:
         tc_animation_is_loaded,
     )
     from termin.skeleton._skeleton_native import tc_skeleton_is_loaded
-    from tmesh import tc_mesh_ensure_loaded, tc_mesh_is_loaded
+    from termin.mesh import tc_mesh_ensure_loaded, tc_mesh_is_loaded
 
     rm = DefaultResourceManager()
     set_resource_manager_factory(lambda: rm)

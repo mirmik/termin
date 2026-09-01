@@ -1,6 +1,6 @@
 import numpy as np
 
-from tcplot import RetainedChart3D, SrgbColor
+from termin.plot import RetainedChart3D, SrgbColor
 
 
 def test_retained_chart3d_accepts_series_before_gpu_attachment():

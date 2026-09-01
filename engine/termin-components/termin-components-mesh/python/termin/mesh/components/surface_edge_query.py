@@ -58,7 +58,7 @@ def _find_surface_edge_for_entity(
     edge_direction: Vec3 | None,
     max_angle_degrees: float,
 ) -> SurfaceEdgeHit | None:
-    from termin.mesh.mesh_component import MeshComponent
+    from termin.mesh.components.mesh_component import MeshComponent
 
     mesh_component = entity.get_component(MeshComponent)
     if mesh_component is None:

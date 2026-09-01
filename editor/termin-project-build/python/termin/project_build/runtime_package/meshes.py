@@ -119,7 +119,7 @@ def export_mesh_spec(
             )
 
     try:
-        from tmesh import TcMesh
+        from termin.mesh import TcMesh
 
         mesh = TcMesh.from_uuid(uuid_value)
         if mesh.is_valid:
