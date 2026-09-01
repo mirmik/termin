@@ -17,7 +17,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-base",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Base types shared between termin libraries",
     author="mirmik",

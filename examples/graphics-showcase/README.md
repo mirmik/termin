@@ -27,18 +27,18 @@ An initial pip-installable Linux product can be built independently of the SDK:
 
 ```bash
 task package:graphics:python
-python3.14t -m pip install --find-links dist/graphics-python termin-graphics-profile
+python3.14t -m pip install --find-links dist/graphics-python termin-graphics
 ```
 
-The metapackage pins the complete matching wheel set and owns precompiled
+The public wheel contains the complete matching module set and owns precompiled
 Vulkan/OpenGL shaders and the UI font. It does not contain `slangc`, Slang
-libraries or `termin_shaderc`. Importing `tgfx` remains side-effect free;
-`tgfx.configure_default_shader_runtime()` activates the wheel artifacts with
-developer compilation disabled. Applications that intentionally compile shader
-sources must install the tools separately and opt into developer compilation.
-This prototype targets the repository's pinned CPython 3.14t ABI and the host
-Linux x86_64 platform. It has not yet been repaired or certified as a manylinux
-artifact for upload to PyPI.
+libraries or `termin_shaderc`. Importing `termin.graphics` remains side-effect
+free; `termin.graphics.configure_default_shader_runtime()` activates the wheel
+artifacts with developer compilation disabled. Applications that intentionally
+compile shader sources must install the tools separately and opt into developer
+compilation. The local product targets both pinned CPython 3.14 ABIs on host
+Linux x86_64; the separate `task package:graphics:python:manylinux` gate creates
+the repaired release candidate.
 
 The product includes `termin-window`, the GUI window adapter, and Termin's
 pinned bundled SDL2. Headless execution remains a required contract: it does

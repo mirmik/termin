@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from setuptools import setup
+from termin_build.versioning import public_version
 
 
 setup(
     name="termin-player",
-    version="0.1.0",
+    version=public_version(),
     license="Apache-2.0",
     description="Standalone/source/headless Termin player runtime",
     author="mirmik",
@@ -50,7 +51,7 @@ setup(
         "termin-navmesh",
         "termin-lighting",
         "termin-mesh",
-        "termin-graphics",
+        "termin-graphics-core",
         "numpy",
         "packaging",
     ],

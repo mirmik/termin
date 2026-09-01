@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-runtime",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Optional Python adapters for the native Termin runtime",
     author="mirmik",

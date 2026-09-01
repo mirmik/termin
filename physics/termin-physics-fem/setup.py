@@ -15,7 +15,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-physics-fem",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Experimental FEM scene physics components for Termin",
     author="mirmik",

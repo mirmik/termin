@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 from dataclasses import dataclass
 import hashlib
 import json
@@ -21,13 +20,15 @@ from .graphics_python_product import (
     PRODUCT_DISTRIBUTION,
     PRODUCT_MANIFEST,
     PRODUCT_MANIFEST_KIND,
+    RESOURCE_DISTRIBUTION,
     SUPPORTED_PYTHON_ABIS,
     GraphicsPythonProductError,
     _publish,
     build_product,
+    compose_product_wheel,
     verify_product,
 )
-from .wheelhouse import WheelArtifact, inspect_wheel
+from .wheelhouse import inspect_wheel
 
 
 LOCK_RELATIVE_PATH = Path("build-system/graphics-python-manylinux-lock.json")
@@ -41,7 +42,7 @@ SLANG_PATCH_RELATIVE_PATH = Path(
 SLANG_VERSION_SCRIPT_RELATIVE_PATH = Path(
     "build-system/manylinux/graphics-python/slang-libstdcxx.map"
 )
-MANYLINUX_PRODUCT_SCHEMA = 3
+MANYLINUX_PRODUCT_SCHEMA = 4
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SAFE_LICENSE_NAME_RE = re.compile(r"^[A-Za-z0-9_.+-]+$")
 
@@ -216,10 +217,6 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _record_digest(payload: bytes) -> str:
-    return base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).decode("ascii").rstrip("=")
 
 
 def _run_checked(
@@ -469,74 +466,6 @@ def _license_sources(
     return sources, provenance
 
 
-def _wheel_metadata_member(names: list[str], suffix: str, *, wheel: Path) -> str:
-    matching = [name for name in names if name.endswith(suffix)]
-    if len(matching) != 1:
-        raise GraphicsPythonManylinuxError(
-            f"wheel {wheel.name} has {len(matching)} {suffix} members"
-        )
-    return matching[0]
-
-
-def _inject_release_licenses(
-    source_wheel: Path,
-    destination: Path,
-    licenses: list[tuple[str, Path]],
-) -> None:
-    try:
-        with zipfile.ZipFile(source_wheel) as archive:
-            names = archive.namelist()
-            metadata_name = _wheel_metadata_member(names, ".dist-info/METADATA", wheel=source_wheel)
-            record_name = _wheel_metadata_member(names, ".dist-info/RECORD", wheel=source_wheel)
-            entries = {
-                info.filename: (archive.read(info.filename), info)
-                for info in archive.infolist()
-                if info.filename != record_name
-            }
-    except (OSError, zipfile.BadZipFile) as error:
-        raise GraphicsPythonManylinuxError(
-            f"cannot add release licenses to {source_wheel.name}: {error}"
-        ) from error
-
-    dist_info = metadata_name.rsplit("/", 1)[0]
-    metadata = entries[metadata_name][0].decode("utf-8")
-    header, separator, body = metadata.partition("\n\n")
-    for name, path in licenses:
-        archive_name = f"{dist_info}/licenses/{name}/{path.name}"
-        entries[archive_name] = (path.read_bytes(), None)
-        field = f"License-File: licenses/{name}/{path.name}"
-        if field not in header.splitlines():
-            header += f"\n{field}"
-    entries[metadata_name] = (
-        (header + (separator + body if separator else "\n")).encode("utf-8"),
-        entries[metadata_name][1],
-    )
-    record_lines = [
-        f"{name},sha256={_record_digest(payload)},{len(payload)}"
-        for name, (payload, _info) in sorted(entries.items())
-    ]
-    record_lines.append(f"{record_name},,")
-    entries[record_name] = (("\n".join(record_lines) + "\n").encode("utf-8"), None)
-
-    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as output:
-        for name, (payload, previous) in sorted(entries.items()):
-            info = zipfile.ZipInfo(name)
-            info.compress_type = zipfile.ZIP_DEFLATED
-            if previous is not None:
-                info.date_time = previous.date_time
-                info.external_attr = previous.external_attr
-            else:
-                info.date_time = (2000, 1, 1, 0, 0, 0)
-                info.external_attr = 0o100644 << 16
-            output.writestr(info, payload)
-
-
-def _is_pure_wheel(artifact: WheelArtifact) -> bool:
-    return artifact.abi_tags == frozenset({"none"}) and all(
-        tag.endswith("-any") for tag in artifact.tags
-    )
-
-
 def _resource_library_names(wheel: Path) -> list[str]:
     try:
         with zipfile.ZipFile(wheel) as archive:
@@ -584,65 +513,62 @@ def _repair_wheelhouse(
     repo_root: Path,
     lock: ManylinuxLock,
     raw_wheelhouse: Path,
+    raw_manifest: dict[str, object],
     raw_build_root: Path,
     destination: Path,
     licenses: list[tuple[str, Path]],
 ) -> tuple[list[dict[str, object]], dict[str, str]]:
-    wheels = sorted(raw_wheelhouse.glob("*.whl"))
-    if not wheels:
-        raise GraphicsPythonManylinuxError(f"raw wheelhouse is empty: {raw_wheelhouse}")
-    artifacts = {wheel: inspect_wheel(wheel) for wheel in wheels}
-    resource_by_abi: dict[str, Path] = {}
-    libraries_by_abi: dict[str, list[str]] = {}
-    for wheel, artifact in artifacts.items():
-        if artifact.name != PRODUCT_DISTRIBUTION:
-            continue
-        native_abis = artifact.abi_tags - {"none"}
-        if len(native_abis) != 1:
-            raise GraphicsPythonManylinuxError(
-                f"resource wheel has ambiguous Python ABI tags: {wheel.name}"
-            )
-        abi = next(iter(native_abis))
-        resource_by_abi[abi] = wheel
-        libraries_by_abi[abi] = _resource_library_names(wheel)
-    if set(resource_by_abi) != set(SUPPORTED_PYTHON_ABIS):
+    raw_variants = raw_manifest.get("variants")
+    if not isinstance(raw_variants, list) or len(raw_variants) != len(
+        SUPPORTED_PYTHON_ABIS
+    ):
         raise GraphicsPythonManylinuxError(
-            "raw wheelhouse does not contain one resource wheel for cp314 and cp314t"
+            "raw wheel manifest does not contain the complete ABI matrix"
         )
-
     destination.mkdir(parents=True, exist_ok=False)
     records: list[dict[str, object]] = []
-    filename_map: dict[str, str] = {}
-    for wheel in wheels:
-        artifact = artifacts[wheel]
-        if _is_pure_wheel(artifact):
-            target = destination / wheel.name
-            shutil.copy2(wheel, target)
-            records.append(
-                {
-                    "filename": target.name,
-                    "sha256": _sha256_file(target),
-                    "python_abis": list(SUPPORTED_PYTHON_ABIS),
-                    "auditwheel": None,
-                }
-            )
-            filename_map[wheel.name] = target.name
-            continue
-
-        native_abis = artifact.abi_tags - {"none"}
-        if len(native_abis) != 1 or next(iter(native_abis)) not in SUPPORTED_PYTHON_ABIS:
+    wheels_by_abi: dict[str, str] = {}
+    for raw_variant in raw_variants:
+        if not isinstance(raw_variant, dict):
+            raise GraphicsPythonManylinuxError("raw ABI variant must be an object")
+        abi = raw_variant.get("id")
+        raw_names = raw_variant.get("wheels")
+        if (
+            abi not in SUPPORTED_PYTHON_ABIS
+            or abi in wheels_by_abi
+            or not isinstance(raw_names, list)
+            or not raw_names
+            or not all(isinstance(name, str) for name in raw_names)
+        ):
             raise GraphicsPythonManylinuxError(
-                f"native wheel has an unexpected Python ABI: {wheel.name}"
+                f"invalid raw Graphics ABI variant: {raw_variant!r}"
             )
-        abi = next(iter(native_abis))
+        raw_wheels = [raw_wheelhouse / name for name in raw_names]
+        missing = [wheel.name for wheel in raw_wheels if not wheel.is_file()]
+        if missing:
+            raise GraphicsPythonManylinuxError(
+                f"raw {abi} variant is missing wheels: {', '.join(missing)}"
+            )
+        resource_wheels = [
+            wheel
+            for wheel in raw_wheels
+            if inspect_wheel(wheel).name == RESOURCE_DISTRIBUTION
+        ]
+        if len(resource_wheels) != 1:
+            raise GraphicsPythonManylinuxError(
+                f"raw {abi} variant has {len(resource_wheels)} resource wheels"
+            )
+        excludes = _resource_library_names(resource_wheels[0])
         library_path = raw_build_root / abi / "native-prefix" / "lib"
-        audit_input = wheel
         with tempfile.TemporaryDirectory(prefix="termin-manylinux-wheel-") as temporary:
             temporary_root = Path(temporary)
-            if artifact.name == PRODUCT_DISTRIBUTION:
-                audit_input = temporary_root / wheel.name
-                _inject_release_licenses(wheel, audit_input, licenses)
-            excludes = libraries_by_abi[abi]
+            audit_input = compose_product_wheel(
+                raw_wheels,
+                temporary_root / "composed",
+                abi=abi,
+                platform_tag="linux_x86_64",
+                licenses=licenses,
+            )
             before = _auditwheel(
                 ["auditwheel", "show", str(audit_input)],
                 repo_root=repo_root,
@@ -670,9 +596,13 @@ def _repair_wheelhouse(
             repaired = sorted(repaired_dir.glob("*.whl"))
             if len(repaired) != 1:
                 raise GraphicsPythonManylinuxError(
-                    f"auditwheel produced {len(repaired)} wheels for {wheel.name}"
+                    f"auditwheel produced {len(repaired)} wheels for {abi}"
                 )
             repaired_artifact = inspect_wheel(repaired[0])
+            if repaired_artifact.name != PRODUCT_DISTRIBUTION:
+                raise GraphicsPythonManylinuxError(
+                    f"repaired wheel has unexpected distribution {repaired_artifact.name}"
+                )
             platforms = {tag.rsplit("-", 1)[-1] for tag in repaired_artifact.tags}
             if platforms != {lock.policy}:
                 raise GraphicsPythonManylinuxError(
@@ -686,7 +616,7 @@ def _repair_wheelhouse(
             )
             target = destination / repaired[0].name
             shutil.copy2(repaired[0], target)
-            filename_map[wheel.name] = target.name
+            wheels_by_abi[abi] = target.name
             records.append(
                 {
                     "filename": target.name,
@@ -707,14 +637,11 @@ def _repair_wheelhouse(
                 }
             )
 
-    for abi, raw_resource in resource_by_abi.items():
-        final_name = filename_map[raw_resource.name]
-        final_resource = destination / final_name
-        with zipfile.ZipFile(final_resource) as archive:
+        with zipfile.ZipFile(target) as archive:
             names = set(archive.namelist())
         missing = [
             soname
-            for soname in libraries_by_abi[abi]
+            for soname in excludes
             if f"termin_graphics_profile/lib/{soname}" not in names
         ]
         if missing:
@@ -731,7 +658,7 @@ def _repair_wheelhouse(
             for candidate in auditwheel_libraries
             if any(
                 _is_auditwheel_alias(soname, candidate)
-                for soname in libraries_by_abi[abi]
+                for soname in excludes
             )
         )
         if duplicates:
@@ -739,7 +666,11 @@ def _repair_wheelhouse(
                 f"repaired {abi} runtime owner contains duplicated internal libraries: "
                 + ", ".join(duplicates)
             )
-    return sorted(records, key=lambda entry: str(entry["filename"])), filename_map
+    if set(wheels_by_abi) != set(SUPPORTED_PYTHON_ABIS):
+        raise GraphicsPythonManylinuxError(
+            "manylinux composition did not produce both public ABI wheels"
+        )
+    return sorted(records, key=lambda entry: str(entry["filename"])), wheels_by_abi
 
 
 def _copy_install_index(
@@ -808,6 +739,7 @@ def _inside_container(repo_root: Path, build_args: list[str]) -> int:
         python_executables=python_paths,
         slang_install_root=slang_root,
         slang_post_extract_script=slang_patch,
+        public_projection=False,
     ) != 0:
         return 1
     try:
@@ -827,10 +759,11 @@ def _inside_container(repo_root: Path, build_args: list[str]) -> int:
     with tempfile.TemporaryDirectory(prefix="graphics-manylinux-publish.", dir=root) as temporary:
         temporary_root = Path(temporary)
         prepared = temporary_root / "wheels"
-        wheel_records, filename_map = _repair_wheelhouse(
+        wheel_records, wheels_by_abi = _repair_wheelhouse(
             repo_root=repo_root,
             lock=lock,
             raw_wheelhouse=raw_wheelhouse,
+            raw_manifest=raw_manifest,
             raw_build_root=raw_build_root,
             destination=prepared,
             licenses=licenses,
@@ -851,12 +784,18 @@ def _inside_container(repo_root: Path, build_args: list[str]) -> int:
 
         variants: list[dict[str, object]] = []
         for raw_variant in raw_manifest["variants"]:
-            variant = dict(raw_variant)
-            variant["resource_wheel"] = filename_map[raw_variant["resource_wheel"]]
-            variant["wheels"] = [filename_map[name] for name in raw_variant["wheels"]]
-            variant["python_runtime"] = python_probes[variant["id"]]
-            variants.append(variant)
-        shared_wheels = [filename_map[name] for name in raw_manifest["shared_wheels"]]
+            abi = raw_variant["id"]
+            variants.append(
+                {
+                    "id": abi,
+                    "version": raw_variant["version"],
+                    "python_abi": raw_variant["python_abi"],
+                    "native_build_id": raw_variant["native_build_id"],
+                    "python_runtime": python_probes[abi],
+                    "wheel": wheels_by_abi[abi],
+                    "wheel_count": 1,
+                }
+            )
         product_data = {
             "schema": MANYLINUX_PRODUCT_SCHEMA,
             "manifest_kind": PRODUCT_MANIFEST_KIND,
@@ -865,8 +804,9 @@ def _inside_container(repo_root: Path, build_args: list[str]) -> int:
             "profile": raw_manifest["profile"],
             "platform": lock.policy,
             "python_abi_variants": list(SUPPORTED_PYTHON_ABIS),
+            "projection": "public-monolith",
             "variants": variants,
-            "shared_wheels": shared_wheels,
+            "shared_wheels": [],
             "wheels": wheel_records,
             "wheel_count": len(wheel_records),
             "manylinux": {

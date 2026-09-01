@@ -41,14 +41,13 @@ build-only `termin-build-tools`) и единый
 корневой CMake-граф, но собирает их в собственные
 `build/products/graphics-python/<abi>/{native-prefix,cmake-build,...}`. У каждого
 ABI также свои build environment и wheelhouse внешних runtime-зависимостей, так
-что несовместимые binary wheels не смешиваются. Готовый набор
-публикуется атомарно в `dist/graphics-python/` и не читает `sdk-graphics/`.
-Совпадающие по имени pure-Python wheels попадают туда единожды только при
-побайтовом совпадении; native wheels обоих ABI сохраняются рядом. Product
-manifest описывает оба ABI, их раздельные `native_build_id` и происхождение
-каждого wheel.
-`termin-graphics-profile` единолично владеет общей native closure (это не даёт
-разным extensions загрузить дублирующие C++ registries), font resources и
+что несовместимые binary wheels не смешиваются. Внутренние modular wheels
+используются как проверяемый staging-граф, после чего их payload без внутренних
+`.dist-info` объединяется в один `termin-graphics` wheel на ABI. Готовые два
+wheel публикуются атомарно в `dist/graphics-python/`; product manifest описывает
+оба ABI, их раздельные `native_build_id` и происхождение каждого wheel.
+Внутренний ресурсный слой `termin-graphics-profile` единолично владеет общей
+native closure (это не даёт разным extensions загрузить дублирующие C++ registries), font resources и
 предварительно собранными Vulkan/OpenGL shader artifacts. Продукт всегда
 включает `termin-window`, GUI window adapter и собранный из pinned submodule
 SDL2; `--no-sdl` для этой операции является ошибкой. Headless остаётся режимом
@@ -78,19 +77,72 @@ GPU хоста и не входит в wheel payload. Pinned Slang archive по�
 build-only compatibility library для старого libstdc++ baseline; Slang также
 не публикуется.
 
-После обычной чистой проверки raw product каждый binary wheel проходит
-`auditwheel show` и `auditwheel repair --plat manylinux_2_28_x86_64`.
-`termin-graphics-profile` остаётся единственным владельцем общей native closure;
-остальные extension wheels сохраняют `DT_NEEDED` на неё и не дублируют C++
-libraries. Затем repaired набор ещё раз устанавливается без сети в чистые venv
-обоих ABI и проходит `pip check`, проверку относительных RPATH, Vulkan headless
-render и SDL-offscreen OpenGL frame.
+После сборки внутреннего raw-графа payload каждого ABI сворачивается в один
+публичный wheel. Только эти два итоговых wheel проходят `auditwheel show` и
+`auditwheel repair --plat manylinux_2_28_x86_64`; общая native closure остаётся
+в `termin_graphics_profile/lib`, а внешние системные зависимости добавляются
+один раз на ABI. Затем repaired wheel устанавливается без сети в чистый venv
+каждого ABI и проходит `pip check`, проверку относительных RPATH, Vulkan
+headless render и SDL-offscreen OpenGL frame.
 
 Успешный набор атомарно появляется в `dist/graphics-python-manylinux/`. Его
 `termin-graphics-python-product.json` фиксирует SHA-256 всех wheel’ов, теги ABI,
 base/builder image identity, версии Python, audit provenance и SHA-256 всех
 вложенных license files. Это готовый к загрузке набор артефактов; сама загрузка
 в PyPI намеренно не является частью build task.
+
+Единая публичная версия всех Termin distributions хранится в
+`build-system/version.toml`. Первый выпуск использует `0.5.0`; локальные SDK
+wheel’ы по-прежнему получают отдельный PEP 440 suffix `+sdk<native_build_id>`.
+Graphics публикуется одним PyPI project `termin-graphics` и содержит всю
+замкнутую внутреннюю dependency graph. Выпуск состоит ровно из двух файлов:
+`cp314` и `cp314t`. Внутреннее имя distribution, владеющего import-пакетом
+`termin.graphics`, — `termin-graphics-core`; оно, как и остальные модульные
+distributions, не является частью публичной PyPI-поверхности.
+
+Перед ручной публикацией кандидат проверяется без сетевых операций:
+
+```bash
+task publish:graphics:python
+```
+
+Команда принимает только manifest-declared wheel’ы из
+`dist/graphics-python-manylinux/` и сверяет schema, глобальную версию, полный
+единственный distribution, два ABI wheel, metadata, manylinux tags и SHA-256.
+Старый 40-wheel, неполный, дополненный посторонним wheel’ом или изменённый после
+сборки каталог отвергается. Для дополнительной проверки metadata через Twine используется
+`task publish:graphics:python -- --check`.
+
+Состояние частично опубликованного выпуска можно безопасно сверить с публичным
+PyPI JSON API без загрузки:
+
+```bash
+task publish:graphics:python -- --remote-status
+```
+
+Удалённый файл считается уже опубликованным только при точном совпадении имени
+и SHA-256 с manifest-кандидатом. Конфликт digest или посторонний файл той же
+версии останавливает процедуру.
+
+Фактическая загрузка требует одновременно явного флага и подтверждения версии:
+
+```bash
+task publish:graphics:python -- --upload --confirm-version 0.5.0
+```
+
+По умолчанию используется Twine repository `pypi`; другой именованный
+repository задаётся `--repository`. Учётные данные берутся самим Twine из
+окружения или пользовательского `.pypirc` и в репозитории не хранятся. Скрипт
+не использует слепой `--skip-existing`: перед продолжением он читает удалённые
+metadata и пропускает только совпавшие файлы. Оба pending wheel’а загружаются
+одной группой единственного distribution.
+HTTP 429 и подтверждённый частичный upload повторяются с экспоненциальной
+паузой; перед каждой повторной попыткой удалённое состояние и hashes читаются
+заново. Поэтому та же команда `--upload --confirm-version 0.5.0` является
+штатной resume-командой после сетевого сбоя или rate limit. Параметры
+`--upload-delay`, `--retry-base-delay` и `--max-retries` позволяют изменить
+период ожидания. Для пользовательского Twine repository необходимо также
+передать соответствующий `--repository-json-base-url`.
 
 Внешний Core SDK и `--core-sdk` для обычной монорепозиторной сборки не
 требуются.
@@ -526,7 +578,8 @@ Python-пакет состоит из двух частей:
 `build-system/packages.json`. Политика именования и полный инвентарь
 `repo path / distribution / import namespace` описаны в
 [Python Package Naming](./python-package-naming.md). В `install_requires` нужно
-    указывать distribution name из manifest (`termin-graphics`, `termin-mesh`, `termin-base`, ...), а не
+указывать distribution name из manifest (`termin-graphics-core`, `termin-mesh`,
+`termin-base`, ...), а не
 repo path (`termin-graphics`, `termin-mesh`, `termin-base`) и не случайный
 import namespace.
 
@@ -685,7 +738,7 @@ ambient host `site-packages` запрещено. Отдельный top-level `t
 частности, graphics/display/GUI subset должен устанавливаться из `sdk/wheels`
 без `termin-app`; внешний Diffusion Editor является consumer gate этого
 контракта. Финальная wheelhouse verification устанавливает representative
-`termin-base`/`termin-graphics`/`termin-display`/`termin-gui-native` subset в чистый target и
+`termin-base`/`termin-graphics-core`/`termin-display`/`termin-gui-native` subset в чистый target и
 отвергает `termin-app` wheel или dependency.
 
 ---

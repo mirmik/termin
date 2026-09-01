@@ -15,7 +15,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-voxels",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Voxel grid, voxelization and mesh conversion for Termin",
     author="mirmik",
@@ -26,7 +26,7 @@ setup(
     install_requires=[
         "numpy",
         "termin-base",
-        "termin-graphics",
+        "termin-graphics-core",
         "termin-mesh",
         "termin-nanobind",
     ],

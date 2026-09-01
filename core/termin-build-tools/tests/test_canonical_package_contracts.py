@@ -23,7 +23,7 @@ def test_canonical_distribution_and_native_extension_identities() -> None:
     ]
 
     graphics = entries["graphics/termin-graphics"]
-    assert graphics.distribution == "termin-graphics"
+    assert graphics.distribution == "termin-graphics-core"
     assert [item.extension for item in graphics.native_extensions] == [
         "termin.graphics._graphics_native",
     ]
@@ -38,7 +38,7 @@ def test_canonical_distribution_and_native_extension_identities() -> None:
 
 def test_graphics_mcp_is_child_namespace_only() -> None:
     entries = {entry.path: entry for entry in load_manifest(REPO_ROOT)}
-    assert entries["graphics/termin-graphics"].distribution == "termin-graphics"
+    assert entries["graphics/termin-graphics"].distribution == "termin-graphics-core"
     assert entries["graphics/termin-graphics-mcp"].distribution == "termin-graphics-mcp"
 
     graphics_root = (

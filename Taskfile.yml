@@ -85,6 +85,12 @@ tasks:
     cmds:
       - ./scripts/build/graphics-python-manylinux.sh {{.CLI_ARGS}}
 
+  publish:graphics:python:
+    desc: Validate or explicitly upload the complete Graphics wheel candidate
+    platforms: [linux]
+    cmds:
+      - ./scripts/publish/graphics-python.sh {{.CLI_ARGS}}
+
   test:
     desc: Run the complete editor SDK test entry point
     cmds:

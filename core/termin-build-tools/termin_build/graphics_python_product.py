@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import base64
+from email.parser import Parser
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -33,15 +35,18 @@ from .sdk import (
 )
 from .sdk_profiles import load_sdk_profiles, select_python_packages
 from .slang_toolchain import SlangToolchainError, prepare_slang_toolchain
+from .versioning import public_version
 from .wheelhouse import inspect_wheel
 
 
-PRODUCT_DISTRIBUTION = "termin-graphics-profile"
+PRODUCT_DISTRIBUTION = "termin-graphics"
+RESOURCE_DISTRIBUTION = "termin-graphics-profile"
 PRODUCT_IMPORT = "termin_graphics_profile"
-PRODUCT_VERSION = "0.1.0"
+PRODUCT_VERSION = public_version()
 PRODUCT_MANIFEST = "termin-graphics-python-product.json"
 PRODUCT_MANIFEST_KIND = "termin-graphics-python-product"
-PRODUCT_MANIFEST_SCHEMA = 2
+PRODUCT_MANIFEST_SCHEMA = 3
+INTERNAL_PRODUCT_MANIFEST_SCHEMA = 2
 SUPPORTED_PYTHON_ABIS = ("cp314", "cp314t")
 BUILD_ONLY_DISTRIBUTIONS = frozenset({"termin-build-tools"})
 WINDOW_EXTENSIONS = (
@@ -49,6 +54,8 @@ WINDOW_EXTENSIONS = (
     "termin.gui_native._gui_native_window",
 )
 LINUX_BUNDLED_RUNTIME_LIBRARIES = ("libSDL2-2.0.so.0",)
+_DISTRIBUTION_NORMALIZE_RE = re.compile(r"[-_.]+")
+_REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 
 class GraphicsPythonProductError(RuntimeError):
@@ -129,6 +136,191 @@ def _merge_variant_wheels(
                 "python_abis": [variant],
             }
     return [merged[name] for name in sorted(merged)]
+
+
+def _normalized_distribution(name: str) -> str:
+    return _DISTRIBUTION_NORMALIZE_RE.sub("-", name).lower()
+
+
+def _wheel_metadata(archive: zipfile.ZipFile, wheel: Path) -> tuple[str, str]:
+    names = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
+    if len(names) != 1:
+        raise GraphicsPythonProductError(
+            f"input wheel has {len(names)} METADATA files: {wheel.name}"
+        )
+    try:
+        return names[0], archive.read(names[0]).decode("utf-8")
+    except (KeyError, UnicodeDecodeError) as error:
+        raise GraphicsPythonProductError(
+            f"cannot read input wheel metadata from {wheel.name}: {error}"
+        ) from error
+
+
+def compose_product_wheel(
+    input_wheels: list[Path],
+    destination: Path,
+    *,
+    abi: str,
+    platform_tag: str,
+    licenses: list[tuple[str, Path]] | None = None,
+) -> Path:
+    """Fuse one ABI's internal wheels into the single public Graphics wheel."""
+    if abi not in SUPPORTED_PYTHON_ABIS:
+        raise GraphicsPythonProductError(f"unsupported product wheel ABI: {abi}")
+    if not input_wheels:
+        raise GraphicsPythonProductError("cannot compose a product wheel from an empty wheel set")
+
+    destination.mkdir(parents=True, exist_ok=True)
+    interpreter = abi.removesuffix("t")
+    dist_info = f"termin_graphics-{PRODUCT_VERSION}.dist-info"
+    output = destination / (
+        f"termin_graphics-{PRODUCT_VERSION}-{interpreter}-{abi}-{platform_tag}.whl"
+    )
+    payloads: dict[str, tuple[bytes, int]] = {}
+    input_metadata: list[tuple[str, str, str]] = []
+
+    for wheel in sorted(input_wheels):
+        try:
+            with zipfile.ZipFile(wheel) as archive:
+                metadata_name, metadata_text = _wheel_metadata(archive, wheel)
+                metadata = Parser().parsestr(metadata_text)
+                distribution = metadata.get("Name")
+                version = metadata.get("Version")
+                if not distribution or not version:
+                    raise GraphicsPythonProductError(
+                        f"input wheel metadata has no Name/Version: {wheel.name}"
+                    )
+                if version != PRODUCT_VERSION:
+                    raise GraphicsPythonProductError(
+                        f"input wheel {wheel.name} has version {version}, "
+                        f"expected {PRODUCT_VERSION}"
+                    )
+                input_metadata.append((distribution, metadata_name, metadata_text))
+                dist_info_root = metadata_name.rsplit("/", 1)[0] + "/"
+                license_root = dist_info_root + "licenses/"
+                normalized = _normalized_distribution(distribution)
+                for info in archive.infolist():
+                    name = info.filename
+                    if info.is_dir():
+                        continue
+                    if name.startswith(dist_info_root):
+                        if not name.startswith(license_root):
+                            continue
+                        relative = name.removeprefix(license_root)
+                        if not relative or ".." in Path(relative).parts:
+                            raise GraphicsPythonProductError(
+                                f"unsafe bundled license path {name!r} in {wheel.name}"
+                            )
+                        name = f"{dist_info}/licenses/{normalized}/{relative}"
+                    elif ".dist-info/" in name or ".data/" in name:
+                        raise GraphicsPythonProductError(
+                            f"unsupported wheel layout entry {name!r} in {wheel.name}"
+                        )
+                    if name.startswith("/") or ".." in Path(name).parts:
+                        raise GraphicsPythonProductError(
+                            f"unsafe payload path {name!r} in {wheel.name}"
+                        )
+                    payload = archive.read(info)
+                    mode = (info.external_attr >> 16) & 0o777 or 0o644
+                    previous = payloads.get(name)
+                    if previous is not None and previous[0] != payload:
+                        raise GraphicsPythonProductError(
+                            f"product payload collision at {name}: {wheel.name} differs"
+                        )
+                    if previous is None:
+                        payloads[name] = (payload, mode)
+        except (OSError, zipfile.BadZipFile) as error:
+            raise GraphicsPythonProductError(
+                f"cannot read input wheel {wheel.name}: {error}"
+            ) from error
+
+    internal_distributions = {
+        _normalized_distribution(distribution)
+        for distribution, _metadata_name, _text in input_metadata
+    }
+    requirements: set[str] = set()
+    requires_python: set[str] = set()
+    for _distribution, _metadata_name, metadata_text in input_metadata:
+        metadata = Parser().parsestr(metadata_text)
+        python_constraint = metadata.get("Requires-Python")
+        if python_constraint:
+            requires_python.add(python_constraint)
+        for requirement in metadata.get_all("Requires-Dist", []):
+            match = _REQUIREMENT_NAME_RE.match(requirement)
+            if match is None:
+                raise GraphicsPythonProductError(
+                    f"cannot parse input Requires-Dist value: {requirement!r}"
+                )
+            if _normalized_distribution(match.group(1)) not in internal_distributions:
+                requirements.add(requirement)
+    if len(requires_python) > 1:
+        raise GraphicsPythonProductError(
+            "input wheels disagree on Requires-Python: " + ", ".join(sorted(requires_python))
+        )
+
+    for license_name, license_path in licenses or []:
+        if Path(license_name).name != license_name or not license_path.is_file():
+            raise GraphicsPythonProductError(
+                f"invalid release license {license_name!r}: {license_path}"
+            )
+        archive_name = f"{dist_info}/licenses/{license_name}/{license_path.name}"
+        payload = license_path.read_bytes()
+        previous = payloads.get(archive_name)
+        if previous is not None and previous[0] != payload:
+            raise GraphicsPythonProductError(
+                f"release license collision at {archive_name}"
+            )
+        payloads[archive_name] = (payload, 0o644)
+
+    license_fields = "".join(
+        f"License-File: {name.removeprefix(dist_info + '/') }\n"
+        for name in sorted(payloads)
+        if name.startswith(f"{dist_info}/licenses/")
+    )
+    requirement_fields = "".join(
+        f"Requires-Dist: {requirement}\n" for requirement in sorted(requirements)
+    )
+    payloads[f"{dist_info}/METADATA"] = (
+        (
+            "Metadata-Version: 2.4\n"
+            f"Name: {PRODUCT_DISTRIBUTION}\n"
+            f"Version: {PRODUCT_VERSION}\n"
+            "Summary: Standalone Python runtime for Termin Graphics\n"
+            "Requires-Python: >=3.14\n"
+            "License-Expression: Apache-2.0\n"
+            "Description-Content-Type: text/markdown\n"
+            "Project-URL: Source, https://github.com/termin-dev/termin\n"
+            f"{license_fields}"
+            f"{requirement_fields}\n"
+            "# Termin Graphics\n\n"
+            "The standalone Python runtime for Termin's modular graphics stack.\n"
+        ).encode("utf-8"),
+        0o644,
+    )
+    payloads[f"{dist_info}/WHEEL"] = (
+        (
+            "Wheel-Version: 1.0\n"
+            "Generator: termin-build-tools\n"
+            "Root-Is-Purelib: false\n"
+            f"Tag: {interpreter}-{abi}-{platform_tag}\n"
+        ).encode("utf-8"),
+        0o644,
+    )
+    record_name = f"{dist_info}/RECORD"
+    record_lines = [
+        f"{name},sha256={_record_digest(payload)},{len(payload)}"
+        for name, (payload, _mode) in sorted(payloads.items())
+    ]
+    record_lines.append(f"{record_name},,")
+    payloads[record_name] = (("\n".join(record_lines) + "\n").encode("utf-8"), 0o644)
+
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, (payload, mode) in sorted(payloads.items()):
+            info = zipfile.ZipInfo(name, date_time=(2000, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (stat.S_IFREG | mode) << 16
+            archive.writestr(info, payload)
+    return output
 
 
 def _resource_module() -> bytes:
@@ -272,7 +464,7 @@ def build_resource_wheel(
     payloads[f"{dist_info}/METADATA"] = (
         (
             "Metadata-Version: 2.3\n"
-            f"Name: {PRODUCT_DISTRIBUTION}\n"
+            f"Name: {RESOURCE_DISTRIBUTION}\n"
             f"Version: {version}\n"
             "Summary: Standalone runtime resources for the Termin Graphics profile\n"
             "Requires-Python: >=3.14\n"
@@ -366,6 +558,7 @@ def verify_product(
     build_python: Path,
     *,
     external_wheels: Path,
+    distribution: str = PRODUCT_DISTRIBUTION,
 ) -> None:
     """Install and render the product without any SDK or checkout Python overlay."""
     with tempfile.TemporaryDirectory(prefix="termin-graphics-python-verify-") as temporary:
@@ -385,7 +578,7 @@ def verify_product(
                 str(wheel_dir),
                 "--find-links",
                 str(external_wheels),
-                PRODUCT_DISTRIBUTION,
+                distribution,
             ],
             cwd=root,
         ) != 0:
@@ -479,6 +672,7 @@ def build_product(
     python_executables: dict[str, Path] | None = None,
     slang_install_root: Path | None = None,
     slang_post_extract_script: Path | None = None,
+    public_projection: bool = True,
 ) -> int:
     variants, forwarded_build_args = _parse_product_build_args(build_args)
     if "--no-sdl" in forwarded_build_args:
@@ -659,26 +853,64 @@ def build_product(
         dir=product_root,
     ) as temporary_root:
         aggregate = Path(temporary_root) / "wheels"
-        merged_wheels = _merge_variant_wheels(variant_wheel_dirs, aggregate)
+        if public_projection:
+            merged_wheels: list[dict[str, object]] = []
+            public_variants: list[dict[str, object]] = []
+            for raw_variant, (variant, wheel_dir) in zip(
+                variant_results, variant_wheel_dirs, strict=True
+            ):
+                wheel = compose_product_wheel(
+                    sorted(wheel_dir.glob("*.whl")),
+                    aggregate,
+                    abi=variant,
+                    platform_tag="linux_x86_64",
+                )
+                merged_wheels.append(
+                    {
+                        "filename": wheel.name,
+                        "sha256": _sha256_file(wheel),
+                        "python_abis": [variant],
+                    }
+                )
+                public_variants.append(
+                    {
+                        "id": variant,
+                        "version": PRODUCT_VERSION,
+                        "python_abi": raw_variant["python_abi"],
+                        "native_build_id": raw_variant["native_build_id"],
+                        "wheel": wheel.name,
+                        "wheel_count": 1,
+                    }
+                )
+            verification_distribution = PRODUCT_DISTRIBUTION
+            published_variants = public_variants
+            manifest_schema = PRODUCT_MANIFEST_SCHEMA
+        else:
+            merged_wheels = _merge_variant_wheels(variant_wheel_dirs, aggregate)
+            verification_distribution = RESOURCE_DISTRIBUTION
+            published_variants = variant_results
+            manifest_schema = INTERNAL_PRODUCT_MANIFEST_SCHEMA
         for build_python, external_wheels in variant_verifications:
             verify_product(
                 repo_root,
                 aggregate,
                 build_python,
                 external_wheels=external_wheels,
+                distribution=verification_distribution,
             )
         _publish(
             aggregate,
             destination,
             {
-                "schema": PRODUCT_MANIFEST_SCHEMA,
+                "schema": manifest_schema,
                 "manifest_kind": PRODUCT_MANIFEST_KIND,
                 "product": PRODUCT_DISTRIBUTION,
                 "version": PRODUCT_VERSION,
                 "profile": "graphics",
                 "platform": "linux_x86_64",
                 "python_abi_variants": list(variants),
-                "variants": variant_results,
+                "projection": "public-monolith" if public_projection else "internal-split",
+                "variants": published_variants,
                 "shared_wheels": [
                     wheel["filename"]
                     for wheel in merged_wheels

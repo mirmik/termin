@@ -14,7 +14,7 @@
       "csharp_profile": "full",
       "wheel_subset": [
         "termin_base-*.whl",
-        "termin_graphics-*.whl",
+        "termin_graphics_core-*.whl",
         "termin_gui_native-*.whl",
         "termin_display-*.whl"
       ],
@@ -101,7 +101,7 @@
       "csharp_profile": "plot-d3d11",
       "wheel_subset": [
         "termin_base-*.whl",
-        "termin_graphics-*.whl",
+        "termin_graphics_core-*.whl",
         "termin_gui_native-*.whl"
       ],
       "embedded_python_hosts": [],

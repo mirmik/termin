@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from setuptools import find_namespace_packages, setup
+from termin_build.versioning import public_version
 
 
 setup(
     name="termin-glb-adapters",
-    version="0.1.0",
+    version=public_version(),
     license="Apache-2.0",
     description="Termin asset, Entity and scene adapters for portable GLB data",
     author="mirmik",
@@ -19,7 +20,7 @@ setup(
     install_requires=[
         "numpy",
         "termin-base",
-        "termin-graphics",
+        "termin-graphics-core",
         "termin-mesh",
         "termin-animation",
         "termin-assets",

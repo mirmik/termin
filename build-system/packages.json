@@ -74,7 +74,7 @@
     },
     {
       "path": "graphics/termin-graphics",
-      "distribution": "termin-graphics",
+      "distribution": "termin-graphics-core",
       "native_extensions": [
         {
           "extension": "termin.graphics._graphics_native",

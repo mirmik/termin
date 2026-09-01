@@ -17,7 +17,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-nodegraph",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Abstract node graph engine and native UI projection",
     author="mirmik",

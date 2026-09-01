@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from setuptools import setup
+from termin_build.versioning import public_version
 
 
 setup(
     name="termin-tween",
-    version="0.1.0",
+    version=public_version(),
     license="Apache-2.0",
     description="Tweening primitives and manager for Termin",
     author="mirmik",

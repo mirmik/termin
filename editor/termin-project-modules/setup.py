@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from setuptools import find_namespace_packages, setup
+from termin_build.versioning import public_version
 
 
 setup(
     name="termin-project-modules",
-    version="0.1.0",
+    version=public_version(),
     license="Apache-2.0",
     description="Project module runtime policy for Termin editor and player hosts",
     author="mirmik",

@@ -17,7 +17,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-plot-gui-native",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Native Termin UI widgets backed by tcplot",
     author="mirmik",

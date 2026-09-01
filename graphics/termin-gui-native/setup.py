@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-gui-native",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Experimental native Termin UI document Python bindings",
     author="mirmik",
@@ -30,7 +30,7 @@ setup(
         "termin-visual-scene",
         "termin-window",
         "termin-base",
-        "termin-graphics",
+        "termin-graphics-core",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},

@@ -16,8 +16,8 @@ class BuildExt(TerminCMakeBuildExt):
 
 
 setup(
-    name="termin-graphics",
-    version=BuildExt.compute_local_version("0.1.0"),
+    name="termin-graphics-core",
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Graphics backend library with Python bindings",
     author="mirmik",

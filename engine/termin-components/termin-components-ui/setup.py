@@ -15,7 +15,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-components-ui",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Widget UI scene components for Termin",
     author="mirmik",

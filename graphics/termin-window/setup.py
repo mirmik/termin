@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-window",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Framework-neutral native window ownership and Python bindings",
     author="mirmik",
@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.window"],
     package_dir={"termin.window": "python/termin/window"},
-    install_requires=["termin-nanobind", "termin-base", "termin-graphics"],
+    install_requires=["termin-nanobind", "termin-base", "termin-graphics-core"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

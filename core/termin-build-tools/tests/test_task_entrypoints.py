@@ -18,6 +18,7 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         "build:web",
         "package:graphics:python",
         "package:graphics:python:manylinux",
+        "publish:graphics:python",
         "docs:build",
         "docs:serve",
     ):
@@ -27,6 +28,7 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
     assert "./scripts/build/sdk.ps1" in taskfile
     assert "./scripts/build/graphics-python.sh" in taskfile
     assert "./scripts/build/graphics-python-manylinux.sh" in taskfile
+    assert "./scripts/publish/graphics-python.sh" in taskfile
     assert "./scripts/test/all.sh" in taskfile
     assert "./scripts/test/all.ps1" in taskfile
     assert "\\" not in taskfile

@@ -14,7 +14,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-display",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Display, viewport, and SDL platform Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
@@ -29,7 +29,7 @@ setup(
         "termin-nanobind",
         "termin-scene",
         "termin-window",
-        "termin-graphics",
+        "termin-graphics-core",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},

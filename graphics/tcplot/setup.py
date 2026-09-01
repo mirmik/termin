@@ -13,7 +13,7 @@ class BuildExt(TerminCMakeBuildExt):
     upstream_packages = {
         "termin-base": "libtermin_base",
         "termin-mesh": "libtermin_mesh",
-        "termin-graphics": "libtermin_graphics2",
+        "termin-graphics-core": "libtermin_graphics2",
         "termin_nanobind": "libnanobind",
     }
     source_dir = _DIR
@@ -21,7 +21,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-plot",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Toolkit-neutral plotting engines and retained chart primitives",
     author="mirmik",
@@ -32,7 +32,7 @@ setup(
     install_requires=[
         "termin-base",
         "termin-mesh",
-        "termin-graphics",
+        "termin-graphics-core",
         "termin-nanobind",
         "numpy",
     ],

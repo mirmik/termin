@@ -50,7 +50,7 @@
 | `graphics/termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
 | `engine/termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
 | `graphics/termin-mesh` | `termin-mesh` | `termin.mesh` | Canonical mesh distribution and namespace. |
-| `graphics/termin-graphics` | `termin-graphics` | `termin.graphics` | Canonical graphics distribution and namespace; owns `termin/graphics/__init__.py`. |
+| `graphics/termin-graphics` | `termin-graphics-core` | `termin.graphics` | Internal graphics component distribution; the public monolithic product keeps the `termin-graphics` name and this package owns `termin/graphics/__init__.py`. |
 | `graphics/termin-visual-scene` | `termin-visual-scene` | `termin.visual_scene` | Retained 2D visual identity and interaction. |
 | `engine/termin-voxels` | `termin-voxels` | `termin.voxels` | Voxel core API. |
 | `core/termin-inspect` | `termin-inspect` | `termin.inspect` | Inspection metadata API. |

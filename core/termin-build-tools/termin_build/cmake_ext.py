@@ -31,6 +31,7 @@ import os
 import shutil
 
 from .artifact_manifest import load_selected_manifest
+from .versioning import package_version, public_version
 
 def _truthy_env(name, default=True):
     value = os.environ.get(name)
@@ -58,7 +59,11 @@ class TerminCMakeBuildExt(build_ext):
     bundle_includes = False
 
     @classmethod
-    def compute_local_version(cls, base_version):
+    def compute_local_version(cls, base_version=None):
+        # ``base_version`` remains accepted for old third-party setup.py files;
+        # in-repository packages use the canonical version by default.
+        explicit_base_version = base_version is not None
+        base_version = public_version() if base_version is None else base_version
         release_version = os.environ.get("TERMIN_PYTHON_PACKAGE_VERSION")
         if release_version:
             return release_version
@@ -69,7 +74,11 @@ class TerminCMakeBuildExt(build_ext):
         # are installed after library wheels and may legitimately be absent
         # while those wheels are being materialized.  Individual extensions
         # are verified by ``resolve_extension`` when build_ext consumes them.
-        return f"{base_version}+sdk{manifest.native_build_id}"
+        if explicit_base_version:
+            # Preserve the compatibility contract for external setup.py files
+            # that still pass their own base version explicitly.
+            return f"{base_version}+sdk{manifest.native_build_id}"
+        return package_version(sdk_build_id=manifest.native_build_id)
 
     def _get_source_dir(self):
         return Path(self.source_dir) if self.source_dir else Path.cwd()

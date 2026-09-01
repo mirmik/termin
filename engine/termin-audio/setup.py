@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-audio",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Audio runtime and asset integration for Termin",
     author="mirmik",

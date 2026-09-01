@@ -11,7 +11,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 class BuildExt(TerminCMakeBuildExt):
     upstream_packages = {
         "termin-base": "libtermin_base",
-        "termin-graphics": "libtermin_graphics2",
+        "termin-graphics-core": "libtermin_graphics2",
         "termin-mesh": "libtermin_mesh",
         "termin_nanobind": "libnanobind",
     }
@@ -20,7 +20,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-visual-scene",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Retained 2D and 3D visual scene core",
     python_requires=">=3.14",
@@ -28,7 +28,7 @@ setup(
     package_dir={"termin.visual_scene": "python/termin/visual_scene"},
     install_requires=[
         "termin-base",
-        "termin-graphics",
+        "termin-graphics-core",
         "termin-mesh",
         "termin-nanobind",
     ],

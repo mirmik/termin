@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from setuptools import setup
+from termin_build.versioning import public_version
 
 
 setup(
     name="termin-assets",
-    version="0.1.0",
+    version=public_version(),
     license="Apache-2.0",
     description="Shared asset-system contracts for Termin",
     author="mirmik",

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from setuptools import setup
+from termin_build.versioning import public_version
 
 
 setup(
     name="termin-graphics-mcp",
-    version="0.1.0",
+    version=public_version(),
     license="Apache-2.0",
     description="Graphics-owned MCP adapters for Termin render consumers",
     author="mirmik",
@@ -16,7 +17,7 @@ setup(
     install_requires=[
         "termin-mcp",
         "termin-image",
-        "termin-graphics",
+        "termin-graphics-core",
         "numpy",
     ],
     zip_safe=False,

@@ -14,7 +14,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-csg",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Constructive solid geometry helpers for Termin",
     author="mirmik",
@@ -29,7 +29,7 @@ setup(
         "termin-gui-native",
         "termin-shader-runtime",
         "termin-display",
-        "termin-graphics",
+        "termin-graphics-core",
         "termin-mesh",
     ],
     ext_modules=native_extensions_for_source(_DIR),

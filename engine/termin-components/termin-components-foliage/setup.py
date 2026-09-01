@@ -16,7 +16,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-components-foliage",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Foliage component asset contracts for Termin",
     author="mirmik",
@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.foliage"],
     package_dir={"termin.foliage": "python/termin/foliage"},
-    install_requires=["termin-assets", "termin-nanobind", "termin-scene", "termin-mesh", "termin-graphics"],
+    install_requires=["termin-assets", "termin-nanobind", "termin-scene", "termin-mesh", "termin-graphics-core"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     entry_points={

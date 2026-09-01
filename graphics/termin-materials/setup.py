@@ -11,7 +11,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 class BuildExt(TerminCMakeBuildExt):
     upstream_packages = {
         "termin-base": "libtermin_base",
-        "termin-graphics": "libtermin_graphics",
+        "termin-graphics-core": "libtermin_graphics",
         "termin_inspect": "libtermin_inspect",
         "termin_nanobind": "libnanobind",
     }
@@ -20,7 +20,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-materials",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="Termin material and shader-format runtime",
     author="mirmik",
@@ -28,7 +28,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.materials"],
     package_dir={"termin.materials": "python/termin/materials"},
-    install_requires=["termin-base", "termin-graphics", "termin-inspect", "termin-nanobind"],
+    install_requires=["termin-base", "termin-graphics-core", "termin-inspect", "termin-nanobind"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

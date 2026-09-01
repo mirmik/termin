@@ -293,8 +293,11 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-physics-fem": ({"termin/physics_fem/__init__.py": "VALUE = 'physics fem seed'\n"}, ["termin-qopt"]),
         "termin-navmesh": ({"termin/navmesh/__init__.py": "VALUE = 'navmesh seed'\n"}, []),
         "termin-lighting": ({"termin/lighting/__init__.py": "VALUE = 'lighting seed'\n"}, []),
-        "tmesh": ({"tmesh/__init__.py": "VALUE = 'tmesh seed'\n"}, []),
-        "termin-graphics": ({"termin/graphics/__init__.py": "VALUE = 'graphics seed'\n"}, []),
+        "termin-mesh": ({"termin/mesh/__init__.py": "VALUE = 'mesh seed'\n"}, []),
+        "termin-graphics-core": (
+            {"termin/graphics/__init__.py": "VALUE = 'graphics seed'\n"},
+            [],
+        ),
         "numpy": ({"numpy/__init__.py": "VALUE = 'numpy seed'\n"}, []),
         "termin-image": ({"termin/image/__init__.py": "VALUE = 'image seed'\n"}, []),
         "scipy": ({"scipy/__init__.py": "VALUE = 'scipy dependency'\n"}, []),

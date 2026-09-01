@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-import base64
-import csv
-import hashlib
-import io
 import json
 from pathlib import Path
-import zipfile
 
 import pytest
 
@@ -18,31 +13,20 @@ from termin_build.graphics_python_manylinux import (
     SLANG_VERSION_SCRIPT_RELATIVE_PATH,
     GraphicsPythonManylinuxError,
     ManylinuxLock,
-    _inject_release_licenses,
     _is_auditwheel_alias,
     _verify_dockerfile,
+    MANYLINUX_PRODUCT_SCHEMA,
 )
+from termin_build.graphics_python_product import PRODUCT_DISTRIBUTION, RESOURCE_DISTRIBUTION
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def _write_minimal_wheel(path: Path) -> None:
-    dist_info = "termin_graphics_profile-0.1.0.dist-info"
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr(
-            f"{dist_info}/METADATA",
-            "Metadata-Version: 2.3\n"
-            "Name: termin-graphics-profile\n"
-            "Version: 0.1.0\n\n",
-        )
-        archive.writestr(
-            f"{dist_info}/WHEEL",
-            "Wheel-Version: 1.0\n"
-            "Root-Is-Purelib: false\n"
-            "Tag: cp314-cp314-linux_x86_64\n",
-        )
-        archive.writestr(f"{dist_info}/RECORD", f"{dist_info}/RECORD,,\n")
+def test_public_manylinux_product_contract_is_monolithic_dual_abi() -> None:
+    assert MANYLINUX_PRODUCT_SCHEMA == 4
+    assert PRODUCT_DISTRIBUTION == "termin-graphics"
+    assert RESOURCE_DISTRIBUTION == "termin-graphics-profile"
 
 
 def test_repository_manylinux_lock_pins_image_tools_and_both_abis() -> None:
@@ -109,34 +93,3 @@ def test_manylinux_lock_rejects_mutable_image_tag(tmp_path: Path) -> None:
 
     with pytest.raises(GraphicsPythonManylinuxError, match="digest-pinned"):
         ManylinuxLock.load(path)
-
-
-def test_release_license_injection_updates_metadata_and_record(tmp_path: Path) -> None:
-    source = tmp_path / "raw.whl"
-    output = tmp_path / "licensed.whl"
-    license_path = tmp_path / "LICENSE.txt"
-    license_path.write_text("license text\n", encoding="utf-8")
-    _write_minimal_wheel(source)
-
-    _inject_release_licenses(source, output, [("Termin", license_path)])
-
-    with zipfile.ZipFile(output) as archive:
-        names = archive.namelist()
-        metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
-        record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
-        license_name = next(name for name in names if "/licenses/Termin/" in name)
-        metadata = archive.read(metadata_name).decode("utf-8")
-        assert "License-File: licenses/Termin/LICENSE.txt" in metadata
-        assert archive.read(license_name) == b"license text\n"
-        records = list(csv.reader(io.StringIO(archive.read(record_name).decode("utf-8"))))
-        declared = {row[0]: row for row in records}
-        for name in (metadata_name, license_name):
-            payload = archive.read(name)
-            algorithm, encoded = declared[name][1].split("=", 1)
-            assert algorithm == "sha256"
-            actual = base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).decode(
-                "ascii"
-            ).rstrip("=")
-            assert encoded == actual
-            assert declared[name][2] == str(len(payload))
-        assert declared[record_name][1:] == ["", ""]

@@ -16,6 +16,7 @@ from termin_build.graphics_python_product import (
     _parse_product_build_args,
     build_product,
     build_resource_wheel,
+    compose_product_wheel,
 )
 from termin_build.python_abi import PythonAbiIdentity
 from termin_build.wheelhouse import inspect_wheel
@@ -86,12 +87,12 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
     wheel = build_resource_wheel(
         sdk_prefix=sdk_prefix,
         wheel_dir=wheel_dir,
-        requirements=[("termin-graphics", "0.1.0"), ("termin-plot", "0.2.0")],
+        requirements=[("numpy", "2.0"), ("PyYAML", "6.0")],
     )
 
     artifact = inspect_wheel(wheel)
-    assert artifact.name == "termin-graphics-profile"
-    assert artifact.version == "0.1.0"
+    assert artifact.name == product_module.RESOURCE_DISTRIBUTION
+    assert artifact.version == product_module.PRODUCT_VERSION
     assert artifact.abi_tags == frozenset({expected_abi})
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
@@ -113,9 +114,95 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
         assert "TERMIN_BUILTIN_SHADER_ROOT" in module
         assert "TERMIN_SHADER_ARTIFACT_ROOT" in module
         assert 'TERMIN_SHADER_DEV_COMPILE", "0"' in module
-        assert "Requires-Dist: termin-plot==0.2.0" in metadata
-        assert "Requires-Dist: termin-graphics==0.1.0" in metadata
+        assert "Requires-Dist: numpy==2.0" in metadata
+        assert "Requires-Dist: PyYAML==6.0" in metadata
         assert "License-File: licenses/SDL2/LICENSE.txt" in metadata
+
+
+def _write_split_wheel(
+    path: Path,
+    distribution: str,
+    payloads: dict[str, bytes],
+    requires: tuple[str, ...] = ("numpy>=2",),
+) -> None:
+    stem = distribution.replace("-", "_")
+    dist_info = f"{stem}-{product_module.PRODUCT_VERSION}.dist-info"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            f"{dist_info}/METADATA",
+            "Metadata-Version: 2.4\n"
+            f"Name: {distribution}\n"
+            f"Version: {product_module.PRODUCT_VERSION}\n"
+            "Requires-Python: >=3.14\n"
+            + "".join(f"Requires-Dist: {requirement}\n" for requirement in requires)
+            + "\n",
+        )
+        archive.writestr(
+            f"{dist_info}/WHEEL",
+            "Wheel-Version: 1.0\nRoot-Is-Purelib: false\n"
+            "Tag: cp314-cp314-manylinux_2_28_x86_64\n",
+        )
+        for name, payload in payloads.items():
+            archive.writestr(name, payload)
+
+
+def test_compose_product_wheel_merges_payload_and_strips_internal_metadata(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "termin_base.whl"
+    second = tmp_path / "termin_graphics_core.whl"
+    _write_split_wheel(first, "termin-base", {"termin/base.py": b"base"})
+    _write_split_wheel(
+        second,
+        "termin-graphics-core",
+        {"termin/graphics.py": b"graphics"},
+        requires=("PyYAML>=6",),
+    )
+    release_license = tmp_path / "LICENSE.txt"
+    release_license.write_text("license text\n", encoding="utf-8")
+
+    output = compose_product_wheel(
+        [first, second],
+        tmp_path / "out",
+        abi="cp314",
+        platform_tag="manylinux_2_28_x86_64",
+        licenses=[("Termin", release_license)],
+    )
+
+    with zipfile.ZipFile(output) as archive:
+        names = set(archive.namelist())
+        assert "termin/base.py" in names
+        assert "termin/graphics.py" in names
+        assert not any(
+            name.endswith(".dist-info/METADATA") and not name.startswith("termin_graphics-")
+            for name in names
+        )
+        metadata = archive.read(
+            f"termin_graphics-{product_module.PRODUCT_VERSION}.dist-info/METADATA"
+        ).decode()
+        assert "Name: termin-graphics\n" in metadata
+        assert "Requires-Dist: numpy>=2\n" in metadata
+        assert "Requires-Dist: PyYAML>=6\n" in metadata
+        assert "License-File: licenses/Termin/LICENSE.txt\n" in metadata
+        assert (
+            archive.read(
+                f"termin_graphics-{product_module.PRODUCT_VERSION}.dist-info/"
+                "licenses/Termin/LICENSE.txt"
+            )
+            == b"license text\n"
+        )
+
+
+def test_compose_product_wheel_rejects_conflicting_payload_collision(tmp_path: Path) -> None:
+    first = tmp_path / "first.whl"
+    second = tmp_path / "second.whl"
+    _write_split_wheel(first, "termin-base", {"termin/shared.py": b"one"})
+    _write_split_wheel(second, "termin-graphics-core", {"termin/shared.py": b"two"})
+
+    with pytest.raises(GraphicsPythonProductError, match="payload collision"):
+        compose_product_wheel(
+            [first, second], tmp_path / "out", abi="cp314", platform_tag="manylinux_2_28_x86_64"
+        )
 
 
 def test_graphics_python_product_cannot_disable_window_support(tmp_path: Path) -> None:
@@ -268,10 +355,14 @@ def test_build_product_uses_isolated_abi_roots_and_verifies_merged_release(
         wheel_dir = Path(str(kwargs["wheel_dir"]))
         variant = sdk_prefix.parent.name
         wheel = wheel_dir / (
-            "termin_graphics_profile-0.1.0-cp314-"
+            f"termin_graphics_profile-{product_module.PRODUCT_VERSION}-cp314-"
             f"{variant}-linux_x86_64.whl"
         )
-        wheel.write_bytes(variant.encode("ascii"))
+        _write_split_wheel(
+            wheel,
+            product_module.RESOURCE_DISTRIBUTION,
+            {"termin/graphics/__init__.py": variant.encode("ascii")},
+        )
         return wheel
 
     def load_native_manifest(path: Path) -> NativeManifest:
@@ -283,11 +374,13 @@ def test_build_product_uses_isolated_abi_roots_and_verifies_merged_release(
         build_python: Path,
         *,
         external_wheels: Path,
+        distribution: str,
     ) -> None:
         assert repo_root == tmp_path
+        assert distribution == product_module.PRODUCT_DISTRIBUTION
         assert {path.name for path in wheel_dir.glob("*.whl")} == {
-            "termin_graphics_profile-0.1.0-cp314-cp314-linux_x86_64.whl",
-            "termin_graphics_profile-0.1.0-cp314-cp314t-linux_x86_64.whl",
+                f"termin_graphics-{product_module.PRODUCT_VERSION}-cp314-cp314-linux_x86_64.whl",
+                f"termin_graphics-{product_module.PRODUCT_VERSION}-cp314-cp314t-linux_x86_64.whl",
         }
         verified.append((wheel_dir, build_python, external_wheels))
 
@@ -333,11 +426,14 @@ def test_build_product_uses_isolated_abi_roots_and_verifies_merged_release(
             encoding="utf-8"
         )
     )
-    assert manifest["schema"] == 2
-    assert manifest["version"] == "0.1.0"
+    assert manifest["schema"] == 3
+    assert manifest["version"] == product_module.PRODUCT_VERSION
     assert manifest["python_abi_variants"] == ["cp314", "cp314t"]
     assert [entry["id"] for entry in manifest["variants"]] == ["cp314", "cp314t"]
     assert {entry["native_build_id"] for entry in manifest["variants"]} == {
         "native-cp314",
         "native-cp314t",
     }
+    assert [entry["wheel_count"] for entry in manifest["variants"]] == [1, 1]
+    assert all("wheel" in entry and "resource_wheel" not in entry for entry in manifest["variants"])
+    assert manifest["wheel_count"] == 2

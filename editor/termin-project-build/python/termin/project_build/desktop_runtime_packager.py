@@ -58,8 +58,8 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-physics",
     "termin-navmesh",
     "termin-lighting",
-    "tmesh",
-    "termin-graphics",
+    "termin-mesh",
+    "termin-graphics-core",
     "numpy",
 )
 

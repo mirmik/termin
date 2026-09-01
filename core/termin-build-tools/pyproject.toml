@@ -4,10 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "termin-build-tools"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Common build utilities for termin SDK Python packages"
 requires-python = ">=3.14"
 dependencies = ["setuptools"]
 
 [tool.setuptools]
 packages = ["termin_build"]
+
+[tool.setuptools.dynamic]
+version = {attr = "termin_build.versioning.public_version"}

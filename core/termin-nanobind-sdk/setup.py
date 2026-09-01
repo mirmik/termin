@@ -9,10 +9,11 @@
 # the logical "nanobind" request accordingly.
 
 from setuptools import setup
+from termin_build.versioning import public_version
 
 setup(
     name="termin-nanobind",
-    version="0.1.0",
+    version=public_version(),
     license="Apache-2.0",
     description="Runtime helpers for termin pip packages (SDK discovery, library preloading)",
     author="mirmik",

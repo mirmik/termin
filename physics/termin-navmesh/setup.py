@@ -18,7 +18,7 @@ class BuildExt(TerminCMakeBuildExt):
 
 setup(
     name="termin-navmesh",
-    version=BuildExt.compute_local_version("0.1.0"),
+    version=BuildExt.compute_local_version(),
     license="Apache-2.0",
     description="NavMesh Python bindings (thin; requires termin SDK at runtime)",
     author="mirmik",
@@ -31,7 +31,7 @@ setup(
     },
     install_requires=[
         "termin-base",
-        "termin-graphics",
+        "termin-graphics-core",
         "termin-assets",
         "termin-components-mesh",
         "termin-inspect",
