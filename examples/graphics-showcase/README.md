@@ -82,13 +82,14 @@ section:
 
 ```bash
 task build:graphics -- --sdl
-sdk-graphics/bin/termin_python -I examples/graphics-showcase/main.py --windowed
+sdk-graphics/bin/termin_python -I examples/graphics-showcase/main.py
 ```
 
-The frontend opens on an overview and exposes every registry section as a tab;
-it uses `termin.window`, while engine-level `termin.display` remains outside
-this profile. For automated checks, `--frames N` and `--seconds N` bound the
-window lifetime.
+Windowed mode is the default; `--windowed` remains available as an explicit
+selection. The frontend opens on an overview and exposes every registry section
+as a tab; it uses `termin.window`, while engine-level `termin.display` remains
+outside this profile. For automated checks, `--frames N` and `--seconds N`
+bound the window lifetime.
 
 The initial standalone Python product is Linux-only. A future Windows wheel
 must keep SDL enabled and use the bundled SDL2 DLL; the following no-SDL recipe

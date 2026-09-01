@@ -4,6 +4,8 @@ import ast
 from pathlib import Path
 import sys
 
+import pytest
+
 
 SHOWCASE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SHOWCASE_ROOT.parents[1]
@@ -85,6 +87,20 @@ def test_graphics_showcase_cli_requires_isolated_product_artifacts() -> None:
     assert "sys.path.insert(0, str(_SHOWCASE_ROOT))" in main_source
     assert '"isolated": bool(sys.flags.isolated)' in runner_source
     assert "sdk-graphics/bin/termin_python -I" in readme
+
+
+def test_graphics_showcase_cli_defaults_to_windowed() -> None:
+    sys.path.insert(0, str(SHOWCASE_ROOT))
+    try:
+        from graphics_showcase.cli import _arguments
+
+        assert _arguments([]).mode == "windowed"
+        assert _arguments(["--windowed"]).mode == "windowed"
+        assert _arguments(["--headless"]).mode == "headless"
+        with pytest.raises(SystemExit):
+            _arguments(["--headless", "--windowed"])
+    finally:
+        sys.path.remove(str(SHOWCASE_ROOT))
 
 
 def test_graphics_showcase_windowed_frontend_uses_the_profile_host() -> None:

@@ -11,17 +11,22 @@ from .runner import run_showcase
 
 def _arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group(required=True)
+    mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--headless",
-        action="store_true",
+        dest="mode",
+        action="store_const",
+        const="headless",
         help="run the required deterministic offscreen showcase",
     )
     mode.add_argument(
         "--windowed",
-        action="store_true",
-        help="open the optional SDL-backed integration showcase",
+        dest="mode",
+        action="store_const",
+        const="windowed",
+        help="open the optional SDL-backed integration showcase (default)",
     )
+    parser.set_defaults(mode="windowed")
     parser.add_argument("--output", type=Path, help="headless integration PNG path")
     parser.add_argument("--report", type=Path, help="headless JSON report path")
     parser.add_argument("--width", type=int, default=1280)
@@ -47,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO,
         format="%(levelname)s %(name)s: %(message)s",
     )
-    if args.windowed:
+    if args.mode == "windowed":
         from .windowed import run_windowed_showcase
 
         try:

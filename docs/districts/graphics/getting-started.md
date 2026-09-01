@@ -51,11 +51,12 @@ JSON report фиксирует exact imports, статус всех секций
 ```console
 task build:graphics -- --sdl
 ./sdk-graphics/bin/termin_python -I \
-  examples/graphics-showcase/main.py --windowed
+  examples/graphics-showcase/main.py
 ```
 
-`--frames N` и `--seconds N` ограничивают жизнь окна для автоматизированных
-проверок. `termin-window` обслуживает platform events и presentation;
+Оконный режим выбирается по умолчанию; `--windowed` остаётся доступен как
+явный флаг. `--frames N` и `--seconds N` ограничивают жизнь окна для
+автоматизированных проверок. `termin-window` обслуживает platform events и presentation;
 engine-owned `termin-display` в Graphics profile не входит.
 
 ## Windows и D3D11
