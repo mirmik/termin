@@ -186,8 +186,14 @@ jobs:
           fi
           echo "TERMIN_WEB_BROWSER=$browser" >> "$GITHUB_ENV"
 
-      - name: Build and run Chromium Web Runtime gate
-        run: xvfb-run -a task build:web -- --browser-smoke
+      - name: Build Web Runtime
+        run: task build:web
+
+      - name: Run Web Runtime Node smoke
+        run: task test:web
+
+      - name: Run Chromium Web Runtime gate
+        run: xvfb-run -a task test:web:browser
 
       - name: Upload Web Runtime gate report
         uses: actions/upload-artifact@v5

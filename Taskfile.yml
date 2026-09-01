@@ -111,6 +111,18 @@ tasks:
     cmds:
       - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/setup-python-env.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/setup-python-env.sh {{.CLI_ARGS}}{{end}}'
 
+  test:web:
+    desc: Run the Termin Web Node lifecycle smoke
+    platforms: [linux]
+    cmds:
+      - ./scripts/test/web.sh {{.CLI_ARGS}}
+
+  test:web:browser:
+    desc: Run the Termin Web Chromium browser gate
+    platforms: [linux]
+    cmds:
+      - ./scripts/test/web.sh --browser {{.CLI_ARGS}}
+
   smoke:
     desc: Verify installed and relocated SDK consumption
     deps:

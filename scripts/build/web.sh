@@ -1,5 +1,5 @@
 #!/bin/bash
-# Configure, build, and smoke-test the portable Termin WebAssembly core.
+# Configure and build the portable Termin WebAssembly core.
 
 set -euo pipefail
 
@@ -10,10 +10,9 @@ NAGA_VERSION="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], 
 EMSDK_DIR="$("$SCRIPT_DIR/scripts/build/setup-web-toolchain.sh" --print-path)"
 BUILD_DIR="${TERMIN_WEB_BUILD_DIR:-$SCRIPT_DIR/build/web-core}"
 HOST_BUILD_DIR="${TERMIN_WEB_HOST_BUILD_DIR:-$BUILD_DIR-host-tools}"
-RUN_BROWSER_SMOKE=0
 
 usage() {
-    echo "Usage: $0 [--setup] [--browser-smoke] [--build-dir PATH]"
+    echo "Usage: $0 [--setup] [--build-dir PATH]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -21,10 +20,6 @@ while [[ $# -gt 0 ]]; do
         --setup)
             "$SCRIPT_DIR/scripts/build/setup-web-toolchain.sh"
             "$SCRIPT_DIR/scripts/build/setup-web-shader-toolchain.sh"
-            shift
-            ;;
-        --browser-smoke)
-            RUN_BROWSER_SMOKE=1
             shift
             ;;
         --build-dir)
@@ -122,10 +117,6 @@ fi
     -DTERMIN_WEB_HOST_SHADERC="$HOST_SHADERC" \
     -DTERMIN_WEB_HOST_SLANGC="$HOST_SLANGC" \
     -DTERMIN_WEB_HOST_WGSL_VALIDATOR="$HOST_WGSL_VALIDATOR"
-cmake --build "$BUILD_DIR" --target termin_web_core_node_smoke
-
-if [[ "$RUN_BROWSER_SMOKE" -eq 1 ]]; then
-    cmake --build "$BUILD_DIR" --target termin_web_core_browser_smoke
-fi
+cmake --build "$BUILD_DIR" --target termin_web_core
 
 echo "Termin Web core: $BUILD_DIR/bin/termin_web_core.mjs"

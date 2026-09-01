@@ -13,24 +13,28 @@ WebGPU. Отсутствие WebGPU в конкретной конфигурац
 
 ## Запуск
 
-Первый запуск устанавливает закреплённый Emscripten toolchain, собирает Wasm,
-исполняет Node lifecycle smoke и полный Chromium gate. Native host tools и
-wasm32 Core при этом собираются непосредственно из текущего checkout:
+Первый запуск устанавливает закреплённый Emscripten toolchain и собирает Wasm.
+Node lifecycle smoke и полный Chromium gate запускаются отдельными задачами.
+Native host tools и wasm32 Core при этом собираются непосредственно из текущего
+checkout:
 
 ```bash
-task build:web -- --setup --browser-smoke
+task build:web -- --setup
+task test:web
+task test:web:browser
 ```
 
-При уже установленном toolchain достаточно:
+При уже собранном Web Runtime полный browser gate запускается отдельной
+командой:
 
 ```bash
-task build:web -- --browser-smoke
+task test:web:browser
 ```
 
 Если браузер не находится в `PATH`, executable задаётся явно:
 
 ```bash
-TERMIN_WEB_BROWSER=/path/to/chrome task build:web -- --browser-smoke
+TERMIN_WEB_BROWSER=/path/to/chrome task test:web:browser
 ```
 
 Gate поднимает временный HTTP server только на loopback, запускает отдельный
@@ -69,8 +73,8 @@ Report schema v1 содержит:
 - input/resize counters и характеристики кадров до/после orbit;
 - статус, длительность gate и ошибку/Chrome stderr при падении.
 
-GitHub Actions job `web-runtime-chromium` запускает этот же публичный build
-wrapper и публикует JSON как artifact `web-runtime-chromium-gate`.
+GitHub Actions job `web-runtime-chromium` запускает те же публичные build и
+test-задачи и публикует JSON как artifact `web-runtime-chromium-gate`.
 
 ## Retained VisualScene2D example
 

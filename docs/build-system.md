@@ -1261,8 +1261,9 @@ Python, editor и launcher targets, чтобы платформенные зав
 
 Точная версия Emscripten закреплена в
 `build-system/emscripten-version.txt`. В чистом checkout toolchain
-устанавливается, артефакт собирается и Node smoke запускается одной командой.
-Native `termin_shaderc` и wasm32 runtime собираются из того же checkout: Core
+устанавливается, а артефакт собирается командой `build:web`. Node и browser
+smoke запускаются отдельными тестовыми задачами. Native `termin_shaderc` и
+wasm32 runtime собираются из того же checkout: Core
 входит в их CMake-граф как исходный район, а не как внешний SDK input:
 
 ```bash
@@ -1270,11 +1271,17 @@ task build:web -- --setup
 ```
 
 Повторные сборки используют `build/toolchains/emsdk`,
-`build/web-core-host-tools` и `build/web-core`. Для дополнительного прогона в
-настоящем браузере нужен Chromium-family browser:
+`build/web-core-host-tools` и `build/web-core`. Детерминированный Node lifecycle
+smoke запускается явно:
 
 ```bash
-task build:web -- --browser-smoke
+task test:web
+```
+
+Для обязательного прогона в настоящем браузере нужен Chromium-family browser:
+
+```bash
+task test:web:browser
 ```
 
 Этот запуск является обязательным Chromium gate и сохраняет machine-readable

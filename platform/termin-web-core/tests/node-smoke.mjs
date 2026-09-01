@@ -218,7 +218,7 @@ if (host.state !== TerminWebHostState.Idle || host.entityCount() !== 0) {
     throw new Error("runtime host teardown did not release the package");
 }
 for (const [fixture, expected] of [
-    ["invalid-package/", "version 2"],
+    ["invalid-package/", "version 3"],
     ["invalid-path-package/", "dot segments"],
     ["unsupported-component-package/", "MeshComponent"],
     ["unsupported-resource-package/", "Texture"],
