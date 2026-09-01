@@ -1,13 +1,13 @@
 """Compatibility helpers for default TcTexture instances.
 
 The historical ``TextureHandle`` wrapper stored Python TextureAsset objects.
-Runtime texture APIs now use ``tgfx.TcTexture`` directly, backed by the C
+Runtime texture APIs now use ``termin.graphics.TcTexture`` directly, backed by the C
 ``tc_texture`` pool.
 """
 
 from __future__ import annotations
 
-from tgfx import TcTexture
+from termin.graphics import TcTexture
 
 
 def get_white_texture_handle(encoding: str = "linear") -> TcTexture:

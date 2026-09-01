@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tcbase import log
+from termin.base import log
 from termin_assets import Asset
 
 

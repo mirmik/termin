@@ -25,8 +25,8 @@ setup(
     package_dir={"termin.voxels": "python/termin/voxels"},
     install_requires=[
         "numpy",
-        "tcbase",
-        "tgfx",
+        "termin-base",
+        "termin-graphics",
         "termin-mesh",
         "termin-nanobind",
     ],

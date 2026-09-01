@@ -19,7 +19,7 @@ from termin.input import INPUT_SOURCE_EDITOR, INPUT_SOURCE_RUNTIME
 from termin.input._input_native import set_input_source_mask
 from termin.render_components import OrbitCameraController
 from termin.render_components.camera import CameraComponent
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene

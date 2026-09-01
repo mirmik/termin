@@ -127,7 +127,7 @@ tc_tensor_free(&positions);
 Python API экспортируется из `tcbase`:
 
 ```python
-import tcbase
+import termin.base
 
 tcbase.log.info("hello")
 tcbase.log.capture_start(2048)

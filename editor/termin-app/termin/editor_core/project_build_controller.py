@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.build_profiles_model import BuildProfileAction
 from termin.project_build import (

@@ -17,6 +17,6 @@ setup(
     ),
     py_modules=["termin.algeom", "termin.closest", "termin.solve"],
     package_dir={"": "python"},
-    install_requires=["numpy", "scipy", "tcbase"],
+    install_requires=["numpy", "scipy", "termin-base"],
     zip_safe=False,
 )

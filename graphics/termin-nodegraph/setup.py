@@ -2,7 +2,7 @@
 
 import os
 
-from setuptools import setup, find_packages
+from setuptools import setup
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
 from termin_build.setup_helpers import native_extensions_for_source
 
@@ -11,7 +11,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    upstream_packages = {"tcbase": "libtermin_base", "termin_nanobind": "libnanobind"}
+    upstream_packages = {"termin-base": "libtermin_base", "termin_nanobind": "libnanobind"}
     source_dir = _DIR
 
 
@@ -23,10 +23,10 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
-    packages=find_packages(where="python"),
+    packages=["termin.nodegraph"],
     package_dir={"": "python"},
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-nanobind",
         "termin-gui-native",
         "termin-visual-scene",

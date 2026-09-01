@@ -128,7 +128,7 @@ def test_installed_core_environment_is_ignored_for_repository_owned_profile(
         packages=(
             PackageEntry(
                 path="core/termin-base",
-                distribution="tcbase",
+                distribution="termin-base",
                 features=(),
                 native_extensions=(),
             ),
@@ -157,7 +157,7 @@ def test_installed_core_environment_is_used_for_external_core_profile(
         packages=(
             PackageEntry(
                 path="termin-base",
-                distribution="tcbase",
+                distribution="termin-base",
                 features=(),
                 native_extensions=(),
                 source="installed-core",
@@ -515,8 +515,8 @@ def test_native_extensions_for_source_reads_manifest():
     extensions = native_extensions_for_source(repo_root / "core/termin-base")
 
     assert [extension.name for extension in extensions] == [
-        "tcbase._tcbase_native",
-        "tcbase._geom_native",
+        "termin.base._base_native",
+        "termin.base._geom_native",
     ]
 
 
@@ -762,7 +762,7 @@ def test_verify_sdk_python_launcher_rejects_missing_launcher(tmp_path, capsys):
     sdk_prefix = tmp_path / "sdk"
 
     assert sdk.verify_sdk_python_launcher(
-        sdk_prefix, import_roots=("tcbase",)
+        sdk_prefix, import_roots=("termin.base",)
     ) == 1
     assert "SDK Python launcher is missing" in capsys.readouterr().err
 
@@ -804,7 +804,7 @@ def test_verify_sdk_python_launcher_checks_platform_layout_isolation_and_imports
     monkeypatch.setattr(sdk.subprocess, "run", fake_run)
 
     assert sdk.verify_sdk_python_launcher(
-        sdk_prefix, import_roots=("tcbase", "termin.engine")
+        sdk_prefix, import_roots=("termin.base", "termin.engine")
     ) == 0
     assert len(commands) == 2
     assert "termin.engine" in commands[1][0][-1]
@@ -844,7 +844,7 @@ def test_sdk_python_launcher_uses_graphics_smoke_imports(tmp_path, monkeypatch):
 
     assert sdk.verify_sdk_python_launcher(
         sdk_prefix,
-        import_roots=("tcbase", "termin.plot", "termin.visual_scene"),
+        import_roots=("termin.base", "termin.plot", "termin.visual_scene"),
     ) == 0
     smoke = commands[1][0][-1]
     assert "termin.plot" in smoke
@@ -1480,8 +1480,8 @@ def test_sdk_python_layout_resolves_free_threaded_stdlib_suffix(
 
 def test_sdk_python_layout_can_require_native_bindings(tmp_path, monkeypatch):
     sdk_prefix = tmp_path / "sdk"
-    tcbase_dir = sdk_prefix / "lib" / "python3.10" / "site-packages" / "tcbase"
-    tcbase_dir.mkdir(parents=True)
+    termin_base_dir = sdk_prefix / "lib" / "python3.10" / "site-packages" / "termin" / "base"
+    termin_base_dir.mkdir(parents=True)
 
     monkeypatch.setattr(sdk_python_layout, "_is_windows", lambda: False)
     monkeypatch.setattr(sdk_python_layout, "_python_executable", lambda: "python")
@@ -1494,13 +1494,13 @@ def test_sdk_python_layout_can_require_native_bindings(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="native bindings were not found"):
         sdk.resolve_sdk_python_layout(sdk_prefix, require_native_bindings=True)
 
-    (tcbase_dir / "_tcbase_native.cpython-310-x86_64-linux-gnu.so").touch()
+    (termin_base_dir / "_base_native.cpython-310-x86_64-linux-gnu.so").touch()
     assert (
         sdk.resolve_sdk_python_layout(
             sdk_prefix,
             require_native_bindings=True,
         )
-        == tcbase_dir.parent
+        == termin_base_dir.parents[1]
     )
 
 
@@ -1511,15 +1511,15 @@ def test_publish_cmake_python_install_normalizes_staged_bindings(
     sdk_prefix = tmp_path / "sdk"
     install_dir = tmp_path / "install"
     site_packages = sdk_prefix / "lib" / "python3.10" / "site-packages"
-    legacy_tcbase = install_dir / "lib" / "python" / "tcbase"
+    legacy_termin_base = install_dir / "lib" / "python" / "termin" / "base"
     staged_package = install_dir / "lib" / "python3.10" / "site-packages" / "termin" / "editor"
     site_packages.mkdir(parents=True)
-    legacy_tcbase.mkdir(parents=True)
+    legacy_termin_base.mkdir(parents=True)
     staged_package.mkdir(parents=True)
-    native_name = "_tcbase_native.cpython-310-x86_64-linux-gnu.so"
-    (legacy_tcbase / native_name).write_bytes(b"native")
-    (legacy_tcbase / "__init__.py").write_text("", encoding="utf-8")
-    cache_dir = legacy_tcbase / "__pycache__"
+    native_name = "_base_native.cpython-310-x86_64-linux-gnu.so"
+    (legacy_termin_base / native_name).write_bytes(b"native")
+    (legacy_termin_base / "__init__.py").write_text("", encoding="utf-8")
+    cache_dir = legacy_termin_base / "__pycache__"
     cache_dir.mkdir()
     (cache_dir / "__init__.cpython-310.pyc").write_bytes(b"bytecode")
     (staged_package / "runtime.py").write_text("VALUE = 1\n", encoding="utf-8")
@@ -1535,7 +1535,7 @@ def test_publish_cmake_python_install_normalizes_staged_bindings(
     result = sdk.publish_cmake_python_install(install_dir, sdk_prefix)
 
     assert result == site_packages
-    assert (site_packages / "tcbase" / native_name).read_bytes() == b"native"
+    assert (site_packages / "termin" / "base" / native_name).read_bytes() == b"native"
     assert (site_packages / "termin" / "editor" / "runtime.py").read_text() == ("VALUE = 1\n")
     assert not (sdk_prefix / "lib" / "python").exists()
     assert not list(site_packages.rglob("__pycache__"))
@@ -1548,10 +1548,10 @@ def test_publish_cmake_python_modules_only_needs_no_bundled_runtime(
 ):
     sdk_prefix = tmp_path / "sdk"
     install_dir = tmp_path / "install"
-    staged_tcbase = install_dir / "lib" / "python" / "tcbase"
-    staged_tcbase.mkdir(parents=True)
-    native_name = "_tcbase_native.cpython-314t-x86_64-linux-gnu.so"
-    (staged_tcbase / native_name).write_bytes(b"native")
+    staged_termin_base = install_dir / "lib" / "python" / "termin" / "base"
+    staged_termin_base.mkdir(parents=True)
+    native_name = "_base_native.cpython-314t-x86_64-linux-gnu.so"
+    (staged_termin_base / native_name).write_bytes(b"native")
 
     monkeypatch.setattr(sdk_python_layout, "_is_windows", lambda: False)
     monkeypatch.setattr(sdk_python_layout, "_python_executable", lambda: "python")
@@ -1569,7 +1569,7 @@ def test_publish_cmake_python_modules_only_needs_no_bundled_runtime(
 
     expected = sdk_prefix / "lib" / "python3.14t" / "site-packages"
     assert result == expected
-    assert (expected / "tcbase" / native_name).read_bytes() == b"native"
+    assert (expected / "termin" / "base" / native_name).read_bytes() == b"native"
 
 
 def test_publish_cmake_python_install_removes_windows_legacy_tree(
@@ -1578,11 +1578,11 @@ def test_publish_cmake_python_install_removes_windows_legacy_tree(
 ):
     sdk_prefix = tmp_path / "sdk"
     site_packages = sdk_prefix / "python" / "Lib" / "site-packages"
-    tcbase_dir = site_packages / "tcbase"
+    termin_base_dir = site_packages / "termin" / "base"
     legacy_package = sdk_prefix / "lib" / "python" / "termin" / "sample"
-    tcbase_dir.mkdir(parents=True)
+    termin_base_dir.mkdir(parents=True)
     legacy_package.mkdir(parents=True)
-    (tcbase_dir / "_tcbase_native.cp310-win_amd64.pyd").write_bytes(b"native")
+    (termin_base_dir / "_base_native.cp310-win_amd64.pyd").write_bytes(b"native")
     (legacy_package / "_sample_native.cp310-win_amd64.pyd").write_bytes(b"sample")
 
     monkeypatch.setattr(sdk_python_layout, "_is_windows", lambda: True)
@@ -1969,7 +1969,7 @@ def test_runtime_manifest_records_distributions_from_composed_sdk_inputs(
     lock_path.parent.mkdir(parents=True)
     lock_path.write_text("numpy==2.2.6\n", encoding="utf-8")
     _write_test_distribution(site_packages, "numpy", "2.2.6", "numpy_stub")
-    _write_test_distribution(site_packages, "tcbase", "0.1.0", "tcbase")
+    _write_test_distribution(site_packages, "termin-base", "0.1.0", "termin.base")
 
     output = sdk.write_python_runtime_manifest(
         repo_root,
@@ -1977,13 +1977,13 @@ def test_runtime_manifest_records_distributions_from_composed_sdk_inputs(
         site_packages,
         runtime_python_abi=artifact_manifest.PythonAbiIdentity.current(),
         packages=(),
-        additional_local_distributions=("tcbase",),
+        additional_local_distributions=("termin-base",),
     )
 
     data = json.loads(output.read_text(encoding="utf-8"))
     assert [(entry["name"], entry["kind"]) for entry in data["distributions"]] == [
         ("numpy", "runtime"),
-        ("tcbase", "termin"),
+        ("termin-base", "termin"),
     ]
 
 

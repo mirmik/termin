@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Callable, Generic, Mapping, TypeVar
 
-from tcbase import log
+from termin.base import log
 
 from termin_assets.asset import Asset
 from termin_assets.asset_store import AssetStore

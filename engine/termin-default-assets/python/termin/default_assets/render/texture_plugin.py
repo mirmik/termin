@@ -39,7 +39,7 @@ class TextureRuntimePlugin:
 
     def register(self, context: "AssetContext", result: "PreLoadResult") -> None:
         from termin.default_assets.render.texture_asset import TextureAsset
-        from tgfx import tc_texture_declare
+        from termin.graphics import tc_texture_declare
 
         rm = context.resource_manager
         name = context.name

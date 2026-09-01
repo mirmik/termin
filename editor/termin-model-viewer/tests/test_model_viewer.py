@@ -176,7 +176,7 @@ def test_parse_options_validates_path_size_and_frame_limit(tmp_path):
 
 
 def test_orbit_interaction_uses_shared_orbit_camera():
-    from tcbase import MouseButton
+    from termin.base import MouseButton
     from termin.geombase import AABB, OrbitCamera, Vec3
     from termin.gui_native import PointerEvent, PointerEventType
 

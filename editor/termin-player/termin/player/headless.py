@@ -70,7 +70,7 @@ class HeadlessRuntime:
         self.exit_code = 0
 
     def initialize(self) -> None:
-        from tcbase import log
+        from termin.base import log
         from termin.bootstrap import bootstrap_player
 
         if self.initialized:
@@ -154,7 +154,7 @@ class HeadlessRuntime:
         self.running = False
 
     def shutdown(self) -> None:
-        from tcbase import log
+        from termin.base import log
 
         if self._session_started and self._engine is not None:
             if not self._engine.end_session():
@@ -200,7 +200,7 @@ class HeadlessRuntime:
         if not self.initialized:
             self.initialize()
 
-        from tcbase import log
+        from termin.base import log
         import termin.player.runtime as player_runtime
 
         previous_runtime = player_runtime._active_runtime
@@ -233,7 +233,7 @@ class HeadlessRuntime:
         return self._materialize_scene(self.scene_name, bind=True)
 
     def _elevate_scene(self, key) -> bool:
-        from tcbase import log
+        from termin.base import log
         from termin.engine import SceneRole
 
         if key.role != SceneRole.RUNTIME:
@@ -279,14 +279,14 @@ class HeadlessRuntime:
             include_render_resources=self.include_render_resources,
         )
         if ignored_extensions:
-            from tcbase import log
+            from termin.base import log
 
             log.info(
                 "[HeadlessRuntime] Ignoring render-only scene extensions: "
                 + ", ".join(ignored_extensions)
             )
         if ignored_components:
-            from tcbase import log
+            from termin.base import log
 
             log.info(
                 "[HeadlessRuntime] Ignoring render-only scene components: "
@@ -441,7 +441,7 @@ def _validate_headless_scene_extensions(scene_extensions: Sequence[int]) -> None
             "Headless runtime cannot attach render-only scene extensions "
             f"without a RenderingManager or graphics host: {', '.join(requested)}"
         )
-        from tcbase import log
+        from termin.base import log
 
         log.error(f"[HeadlessRuntime] {message}")
         raise HeadlessRuntimeError(message)

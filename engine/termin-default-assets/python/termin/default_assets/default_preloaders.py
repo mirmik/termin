@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
-from tcbase import log
+from termin.base import log
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 

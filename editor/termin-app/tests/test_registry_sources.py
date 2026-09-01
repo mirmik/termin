@@ -87,7 +87,7 @@ def test_resource_manager_pages_contain_only_asset_owned_catalogs():
 
 
 def test_core_registry_exposes_all_canonical_resource_pools_by_uuid(monkeypatch):
-    import tgfx
+    import termin.graphics as graphics
     import termin.animation as animation
     import termin.navmesh as navmesh
     import termin.render_framework as render_framework
@@ -95,7 +95,7 @@ def test_core_registry_exposes_all_canonical_resource_pools_by_uuid(monkeypatch)
     import termin.voxels as voxels
 
     monkeypatch.setattr(
-        tgfx,
+        graphics,
         "shader_program_get_all_info",
         lambda: [{"uuid": "program-uuid", "name": "Program", "is_loaded": True}],
     )

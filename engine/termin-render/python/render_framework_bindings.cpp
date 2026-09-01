@@ -78,11 +78,11 @@ namespace termin {
         // nanobind type map for RenderContext2 is still empty because
         // _tgfx_native hasn't been loaded yet at that moment.
         try {
-            nb::module_::import_("tgfx._tgfx_native");
+            nb::module_::import_("termin.graphics._graphics_native");
         } catch (const std::exception& e) {
             // If tgfx isn't available (minimal builds), ctx2 property will
             // degrade but everything else still works.
-            tc::Log::debug("[render_framework] tgfx._tgfx_native import failed (minimal build?): %s", e.what());
+            tc::Log::debug("[render_framework] termin.graphics._graphics_native import failed (minimal build?): %s", e.what());
         }
 
         nb::enum_<TextureFilter>(m, "TextureFilter")
@@ -669,8 +669,8 @@ namespace termin {
 NB_MODULE(_render_framework_native, m) {
     m.doc() = "Native render framework bindings";
 
-    nb::module_::import_("tgfx._tgfx_native");
-    nb::module_::import_("tcbase._geom_native");
+    nb::module_::import_("termin.graphics._graphics_native");
+    nb::module_::import_("termin.base._geom_native");
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.lighting._lighting_native");
 

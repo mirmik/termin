@@ -34,7 +34,7 @@ def _write_manifest(sdk_prefix: Path, *, free_threaded: bool = True) -> None:
     )
     artifacts = [
         {
-            "extension": "tgfx._fake",
+            "extension": "termin.graphics._fake",
             "sha256": "0" * 64,
             "runtime_dependencies": [
                 {
@@ -86,7 +86,7 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
     wheel = build_resource_wheel(
         sdk_prefix=sdk_prefix,
         wheel_dir=wheel_dir,
-        requirements=[("tgfx", "0.1.0"), ("termin-plot", "0.2.0")],
+        requirements=[("termin-graphics", "0.1.0"), ("termin-plot", "0.2.0")],
     )
 
     artifact = inspect_wheel(wheel)
@@ -114,7 +114,7 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
         assert "TERMIN_SHADER_ARTIFACT_ROOT" in module
         assert 'TERMIN_SHADER_DEV_COMPILE", "0"' in module
         assert "Requires-Dist: termin-plot==0.2.0" in metadata
-        assert "Requires-Dist: tgfx==0.1.0" in metadata
+        assert "Requires-Dist: termin-graphics==0.1.0" in metadata
         assert "License-File: licenses/SDL2/LICENSE.txt" in metadata
 
 
@@ -172,8 +172,8 @@ def test_merge_variant_wheels_deduplicates_identical_pure_wheel_bytes(
     shared = "termin_math-0.1.0-py3-none-any.whl"
     (cp314 / shared).write_bytes(b"same pure wheel")
     (cp314t / shared).write_bytes(b"same pure wheel")
-    (cp314 / "tgfx-0.1.0-cp314-cp314-linux_x86_64.whl").write_bytes(b"regular")
-    (cp314t / "tgfx-0.1.0-cp314-cp314t-linux_x86_64.whl").write_bytes(
+    (cp314 / "termin_graphics-0.1.0-cp314-cp314-linux_x86_64.whl").write_bytes(b"regular")
+    (cp314t / "termin_graphics-0.1.0-cp314-cp314t-linux_x86_64.whl").write_bytes(
         b"free-threaded"
     )
 

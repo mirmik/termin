@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from tcbase import Action, MouseButton
+from termin.base import Action, MouseButton
 
 from termin.csg.viewer_camera import OrbitCamera
 

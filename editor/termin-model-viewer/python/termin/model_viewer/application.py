@@ -119,7 +119,7 @@ class _OrbitInteraction:
             self.viewport_height = height
 
     def handle(self, event, _ray) -> bool:
-        from tcbase import MouseButton
+        from termin.base import MouseButton
         from termin.geombase import Rect2, Vec2
         from termin.gui_native import PointerEventType
 
@@ -225,7 +225,7 @@ class _ViewerUi:
 
 
 def _create_view(document, model: VisualModel, request_repaint):
-    from tcbase._geom_native import LinearColor
+    from termin.base._geom_native import LinearColor
     from termin.geombase import OrbitCamera
     from termin.gui_native import SceneView3DCamera, SceneView3DShadingMode, Size, SrgbColor
 
@@ -343,14 +343,14 @@ def _create_view(document, model: VisualModel, request_repaint):
 def run_viewer(options: ViewerOptions) -> int:
     """Open and run the native model-viewer window."""
 
-    import tgfx
+    import termin.graphics
     from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
     from termin.gui_native.window import GuiWindowAdapter
     from termin.window import WindowManager, WindowedGraphicsSession, quit_sdl
 
     if options.backend is not None:
         os.environ["TERMIN_BACKEND"] = options.backend
-    if not tgfx.configure_default_shader_runtime("termin-model-viewer"):
+    if not termin.graphics.configure_default_shader_runtime("termin-model-viewer"):
         raise RuntimeError("failed to configure the Termin graphics shader runtime")
 
     model = None

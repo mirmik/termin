@@ -1,6 +1,6 @@
 import pytest
 
-from tcbase.profiler import FrameProfile, SectionTiming
+from termin.base.profiler import FrameProfile, SectionTiming
 from termin.editor_core.profiler_model import (
     ProfilerController,
     ProfilerPresentationModel,

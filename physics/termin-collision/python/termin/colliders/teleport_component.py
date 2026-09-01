@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tcbase import Action, MouseButton
+from termin.base import Action, MouseButton
 from termin.collision import CollisionWorld
 from termin.input import InputComponent, MouseButtonEvent
 

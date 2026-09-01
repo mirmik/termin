@@ -11,9 +11,9 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from tcnodegraph.controller import GraphController
-from tcnodegraph.model import Graph, Node, Socket
-from tcnodegraph.schema import ConnectionValidator
+from termin.nodegraph.controller import GraphController
+from termin.nodegraph.model import Graph, Node, Socket
+from termin.nodegraph.schema import ConnectionValidator
 
 from termin.editor_core.signal import Signal
 

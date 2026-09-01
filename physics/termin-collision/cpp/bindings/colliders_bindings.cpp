@@ -18,7 +18,7 @@ NB_MODULE(_colliders_native, m) {
     m.doc() = "Native C++ colliders module for termin";
 
     // Import _geom_native for Vec3, Quat, Pose3, GeneralPose3, Ray3
-    nb::module_::import_("tcbase._geom_native");
+    nb::module_::import_("termin.base._geom_native");
 
     // ==================== Результаты запросов ====================
 

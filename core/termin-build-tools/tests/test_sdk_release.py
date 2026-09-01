@@ -15,7 +15,7 @@ def _minimal_sdk(tmp_path: Path, *, platform: str = "win32") -> Path:
     (sdk / "wheels").mkdir()
     launcher = "termin_python.exe" if platform == "win32" else "termin_python"
     (sdk / "bin" / launcher).write_bytes(b"launcher")
-    (sdk / "wheels" / "tgfx-0.1.0-cp314-cp314t-win_amd64.whl").write_bytes(b"wheel")
+    (sdk / "wheels" / "termin_graphics-0.1.0-cp314-cp314t-win_amd64.whl").write_bytes(b"wheel")
     abi = {
         "version": "3.14",
         "soabi": "cp314t-win_amd64",
@@ -100,7 +100,7 @@ def test_release_contract_rejects_regular_cp314_wheel(
 ) -> None:
     sdk = _minimal_sdk(tmp_path)
     wheel = next((sdk / "wheels").glob("*.whl"))
-    wheel.rename(sdk / "wheels" / "tgfx-0.1.0-cp314-cp314-win_amd64.whl")
+    wheel.rename(sdk / "wheels" / "termin_graphics-0.1.0-cp314-cp314-win_amd64.whl")
     monkeypatch.setattr(
         sdk_release.ArtifactManifest,
         "load",

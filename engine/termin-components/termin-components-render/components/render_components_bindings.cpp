@@ -198,8 +198,8 @@ using namespace termin;
 NB_MODULE(_components_render_native, m) {
     m.doc() = "Native render components bindings";
 
-    nb::module_::import_("tcbase._geom_native");
-    nb::module_::import_("tgfx._tgfx_native");
+    nb::module_::import_("termin.base._geom_native");
+    nb::module_::import_("termin.graphics._graphics_native");
     nb::module_::import_("termin.mesh._mesh_native");
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.lighting._lighting_native");
@@ -209,7 +209,7 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("termin.skeleton_components._components_skeleton_native");
     nb::module_::import_("termin.display._display_native");
     nb::module_::import_("termin.viewport._viewport_native");
-    nb::module_::import_("tcbase._tcbase_native");
+    nb::module_::import_("termin.base._base_native");
 
     tc::init_cpp_inspect_vtable();
 

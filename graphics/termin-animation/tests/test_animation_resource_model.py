@@ -7,7 +7,7 @@ from termin.animation._animation_native import (
     tc_animation_ensure_loaded,
     tc_animation_is_loaded,
 )
-from tcbase import clear_resource_loader, set_resource_loader
+from termin.base import clear_resource_loader, set_resource_loader
 from termin.glb.loader import GLBAnimationClip, GLBAnimationTrack
 
 

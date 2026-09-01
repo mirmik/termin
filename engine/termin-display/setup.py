@@ -29,7 +29,7 @@ setup(
         "termin-nanobind",
         "termin-scene",
         "termin-window",
-        "tgfx",
+        "termin-graphics",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},

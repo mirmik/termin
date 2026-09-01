@@ -59,9 +59,9 @@ Bundled interpreter изолирует native distributions от системн�
 Устойчивые точки входа включают:
 
 ```python
-import tgfx
+import termin.graphics
 from termin import mesh
-import tcnodegraph
+import termin.nodegraph
 from termin import plot
 
 from termin import animation

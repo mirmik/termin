@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 from termin_assets import DataAsset
-from tgfx import TcShaderProgram
+from termin.graphics import TcShaderProgram
 
 if TYPE_CHECKING:
     from termin.materials import ShaderMultyPhaseProgramm

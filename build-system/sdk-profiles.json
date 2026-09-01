@@ -13,13 +13,13 @@
       "build_directory_suffix": "",
       "csharp_profile": "full",
       "wheel_subset": [
-        "tcbase-*.whl",
-        "tgfx-*.whl",
+        "termin_base-*.whl",
+        "termin_graphics-*.whl",
         "termin_gui_native-*.whl",
         "termin_display-*.whl"
       ],
       "embedded_python_hosts": ["termin_player"],
-      "launcher_import_roots": ["tcbase", "termin.engine", "termin.tween"],
+      "launcher_import_roots": ["termin.base", "termin.engine", "termin.tween"],
       "native_import_roots": [
         "termin.engine",
         "termin.player",
@@ -45,20 +45,20 @@
       "build_directory_suffix": "core",
       "csharp_profile": null,
       "wheel_subset": [
-        "tcbase-*.whl",
+        "termin_base-*.whl",
         "termin_dispatch-*.whl",
         "termin_inspect-*.whl",
         "termin_mcp-*.whl"
       ],
       "embedded_python_hosts": [],
       "launcher_import_roots": [
-        "tcbase",
+        "termin.base",
         "termin.dispatch",
         "termin.inspect",
         "termin.mcp"
       ],
       "native_import_roots": [
-        "tcbase",
+        "termin.base",
         "termin.dispatch",
         "termin.inspect",
         "termin.mcp"
@@ -100,13 +100,13 @@
       "build_directory_suffix": "graphics",
       "csharp_profile": "plot-d3d11",
       "wheel_subset": [
-        "tcbase-*.whl",
-        "tgfx-*.whl",
+        "termin_base-*.whl",
+        "termin_graphics-*.whl",
         "termin_gui_native-*.whl"
       ],
       "embedded_python_hosts": [],
       "launcher_import_roots": [
-        "tcbase",
+        "termin.base",
         "termin.plot",
         "termin.visual_scene",
         "termin.tween"

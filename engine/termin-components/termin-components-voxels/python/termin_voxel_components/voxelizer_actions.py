@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 from termin_voxel_components.voxelize_enums import VoxelizeMode, VoxelizeSource
 
 

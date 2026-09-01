@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin_assets import Asset
@@ -28,12 +28,12 @@ if TYPE_CHECKING:
     from termin.render.texture import Texture
     from termin.scene import Entity, GeneralTransform3, TcScene
     from termin.render_framework import RenderPipeline
-    from tgfx import TcShaderProgram
+    from termin.graphics import TcShaderProgram
     from termin.voxels._voxels_native import TcVoxelGrid
     from termin.voxels.grid import VoxelGrid
     from termin.skeleton import TcSkeleton
     from termin.default_assets.skeleton.asset import SkeletonAsset
-    from tgfx import TcTexture
+    from termin.graphics import TcTexture
     from termin.mesh import TcMesh
 
 
@@ -673,7 +673,7 @@ class DefaultAssetResourceMixin:
         return self._texture_registry.list_names()
 
     def find_texture_name(self, texture) -> Optional[str]:
-        from tgfx import TcTexture
+        from termin.graphics import TcTexture
 
         if isinstance(texture, TcTexture):
             tex_uuid = texture.uuid

@@ -12,6 +12,6 @@ NB_MODULE(_mesh_native, m) {
     tmesh_bindings::bind_mesh(m);
 
     // Import log from tcbase
-    nb::module_ tcbase = nb::module_::import_("tcbase._tcbase_native");
+    nb::module_ tcbase = nb::module_::import_("termin.base._base_native");
     m.attr("log") = tcbase.attr("log");
 }

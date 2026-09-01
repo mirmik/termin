@@ -1,6 +1,6 @@
 from termin.editor_core.resource_manager import ResourceManager
 from termin.editor_core.resource_loader import register_editor_builtin_resources
-from tgfx import TcTexture
+from termin.graphics import TcTexture
 from termin.bootstrap import bootstrap_editor, shutdown_editor
 from termin.render_framework import tc_pass_registry_get_class
 from termin.scene import ComponentRegistry

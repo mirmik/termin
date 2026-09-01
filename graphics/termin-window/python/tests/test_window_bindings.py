@@ -4,7 +4,7 @@ from termin.window import (
     WindowManager,
     WindowedGraphicsSession,
 )
-from tgfx import GraphicsHost
+from termin.graphics import GraphicsHost
 
 
 def test_window_api_is_owned_by_termin_window():

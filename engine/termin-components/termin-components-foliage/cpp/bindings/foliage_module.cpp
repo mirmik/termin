@@ -63,7 +63,7 @@ NB_MODULE(_foliage_native, m) {
 
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.mesh._mesh_native");
-    nb::module_::import_("tgfx._tgfx_native");
+    nb::module_::import_("termin.graphics._graphics_native");
 
     nb::class_<FoliageInstance>(m, "FoliageInstance")
         .def(nb::init<>())

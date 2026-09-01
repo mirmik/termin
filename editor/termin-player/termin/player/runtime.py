@@ -43,7 +43,7 @@ def request_quit(exit_code: int = 0) -> bool:
     """
     runtime = _active_runtime
     if runtime is None:
-        from tcbase import log
+        from termin.base import log
         log.warning("[PlayerRuntime] Quit requested without an active player runtime")
         return False
 
@@ -100,7 +100,7 @@ def _create_player_backend_window(
 
 
 def _resolve_positive_window_int(value: object, default: int, field_name: str) -> int:
-    from tcbase import log
+    from termin.base import log
 
     if value is None:
         return default
@@ -111,7 +111,7 @@ def _resolve_positive_window_int(value: object, default: int, field_name: str) -
 
 
 def _resolve_window_bool(value: object, default: bool, field_name: str) -> bool:
-    from tcbase import log
+    from termin.base import log
 
     if value is None:
         return default
@@ -217,7 +217,7 @@ class PlayerRuntime:
 
     def initialize(self) -> bool:
         """Initialize transactionally and release every acquired runtime layer on failure."""
-        from tcbase import log
+        from termin.base import log
 
         try:
             return self._initialize()
@@ -228,7 +228,7 @@ class PlayerRuntime:
 
     def _initialize(self) -> bool:
         """Initialize player systems."""
-        from tcbase import log
+        from termin.base import log
         from termin.bootstrap import bootstrap_player
 
         bootstrap_player()
@@ -296,7 +296,7 @@ class PlayerRuntime:
                 vsync=self.vsync,
             )
             manager.render_engine.set_graphics_host(self._graphics_session.graphics)
-            from tgfx import Tgfx2Context
+            from termin.graphics import Tgfx2Context
 
             self.graphics = Tgfx2Context.from_runtime(self._graphics_session.graphics)
             if self.fullscreen:
@@ -333,7 +333,7 @@ class PlayerRuntime:
         return True
 
     def _start_mcp_server(self) -> None:
-        from tcbase import log
+        from termin.base import log
         from termin.player.mcp_server import start_player_mcp_server
 
         executor, server = start_player_mcp_server(
@@ -348,7 +348,7 @@ class PlayerRuntime:
 
     def _runtime_display_factory(self, name: str):
         """Return the player's native display for scene-declared displays."""
-        from tcbase import log
+        from termin.base import log
 
         if self._display is None:
             log.error(f"[PlayerRuntime] Display factory requested '{name}' before display initialization")
@@ -375,13 +375,13 @@ class PlayerRuntime:
         if pipeline is not None:
             return pipeline
 
-        from tcbase import log
+        from termin.base import log
         log.error(f"[PlayerRuntime] Pipeline not found: {name}")
         return None
 
     def _activate_primary_scene(self, manager) -> bool:
         """Commit the initial renderable scene through EngineCore RuntimeSession."""
-        from tcbase import log
+        from termin.base import log
         from termin.engine import require_world_context
 
         if self.scene is None:
@@ -418,7 +418,7 @@ class PlayerRuntime:
 
     def _disable_unrenderable_unused_render_targets(self, manager, viewports) -> None:
         """Keep saved helper render targets from being rendered as standalone outputs."""
-        from tcbase import log
+        from termin.base import log
 
         viewport_render_targets = set()
         for viewport in viewports:
@@ -441,7 +441,7 @@ class PlayerRuntime:
 
     def _configure_backend_default(self) -> None:
         """Use the source-player platform default unless explicitly overridden."""
-        from tcbase import log
+        from termin.base import log
 
         if "TERMIN_BACKEND" in os.environ:
             backend = os.environ["TERMIN_BACKEND"]
@@ -466,13 +466,13 @@ class PlayerRuntime:
 
     def _ensure_texture_registry(self) -> None:
         """Load the tgfx texture registry before app-native modules."""
-        from tgfx import tc_texture_count
+        from termin.graphics import tc_texture_count
 
         tc_texture_count()
 
     def _ensure_engine_core(self) -> bool:
         """Ensure EngineCore exists so RenderingManager has a real backend."""
-        from tcbase import log
+        from termin.base import log
         if self._engine is not None:
             return True
 
@@ -522,7 +522,7 @@ class PlayerRuntime:
         self._engine.scene_manager.set_scene_elevator(self._elevate_scene)
 
     def _elevate_scene(self, key) -> bool:
-        from tcbase import log
+        from termin.base import log
         from termin.engine import SceneRole
 
         if key.role != SceneRole.RUNTIME:
@@ -535,7 +535,7 @@ class PlayerRuntime:
     def _materialize_runtime_scene(self, identity: str, *, bind: bool):
         import json
 
-        from tcbase import log
+        from termin.base import log
         from termin.engine import default_scene_extensions, scene as engine_scene
         from termin.project.scene_paths import project_scene_identity
 
@@ -615,7 +615,7 @@ class PlayerRuntime:
 
     def _setup_input(self):
         """Set up input handling."""
-        from tcbase import log
+        from termin.base import log
         from termin.display import BasicDisplayInputManager
         from termin.display.window import attach_window_input_display
 
@@ -649,7 +649,7 @@ class PlayerRuntime:
 
     def run(self):
         """Run the game loop."""
-        from tcbase import log
+        from termin.base import log
         global _active_runtime
 
         if not self.initialize():
@@ -703,7 +703,7 @@ class PlayerRuntime:
 
     def _reconcile_primary_scene(self) -> None:
         """Publish the RuntimeSession primary scene through the player facade."""
-        from tcbase import log
+        from termin.base import log
         from termin.engine import SceneRole, require_world_context
 
         if self._engine is None or self.scene is None:
@@ -753,7 +753,7 @@ class PlayerRuntime:
 
     def _sync_surface_size(self) -> None:
         """Resize the offscreen display surface to match the window."""
-        from tcbase import log
+        from termin.base import log
 
         if self.window is None or self._display is None:
             return
@@ -773,7 +773,7 @@ class PlayerRuntime:
 
     def shutdown(self):
         """Clean up resources."""
-        from tcbase import log
+        from termin.base import log
 
         log.info("[PlayerRuntime] Shutting down")
 

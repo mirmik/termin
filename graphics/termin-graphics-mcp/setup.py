@@ -16,7 +16,7 @@ setup(
     install_requires=[
         "termin-mcp",
         "termin-image",
-        "tgfx",
+        "termin-graphics",
         "numpy",
     ],
     zip_safe=False,

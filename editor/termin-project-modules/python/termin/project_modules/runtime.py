@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 from termin.engine import TermModulesIntegration
 from termin_modules import (
     CppModuleBackend,

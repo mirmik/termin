@@ -3,7 +3,7 @@ import pytest
 
 from termin.geombase import LinearColor, Mat44, Mat44f, SrgbColor, Vec4
 from termin.materials import TcMaterial
-from tgfx import ShaderLanguage
+from termin.graphics import ShaderLanguage
 
 
 VERTEX = """

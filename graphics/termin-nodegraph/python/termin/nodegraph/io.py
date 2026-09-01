@@ -6,7 +6,7 @@ from copy import deepcopy
 import logging
 from pathlib import Path
 
-from tcnodegraph.model import Graph
+from termin.nodegraph.model import Graph
 
 
 _log = logging.getLogger(__name__)

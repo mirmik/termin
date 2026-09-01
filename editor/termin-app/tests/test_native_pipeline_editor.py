@@ -1,8 +1,8 @@
 from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from pathlib import Path
 
-from tcnodegraph.controller import GraphController
-from tcnodegraph.model import Graph
+from termin.nodegraph.controller import GraphController
+from termin.nodegraph.model import Graph
 from termin.editor_core.pipeline_editor_model import PipelineEditorController
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.pipeline_editor import (

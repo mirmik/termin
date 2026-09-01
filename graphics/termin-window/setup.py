@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.window"],
     package_dir={"termin.window": "python/termin/window"},
-    install_requires=["termin-nanobind", "tcbase", "tgfx"],
+    install_requires=["termin-nanobind", "termin-base", "termin-graphics"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

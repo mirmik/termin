@@ -20,7 +20,7 @@ def test_bootstrap_import_before_tgfx_keeps_builtin_shader_catalog_available():
     code = textwrap.dedent(
         """
         import termin.bootstrap
-        from tgfx import TcShader
+        from termin.graphics import TcShader
 
         shader = TcShader.from_builtin_catalog("termin-engine-voxel-display")
         if not shader.is_valid:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from tcbase import Action, MouseButton
+from termin.base import Action, MouseButton
 from termin.colliders import teleport_component
 from termin.colliders.teleport_component import TeleportComponent
 from termin.geombase import Vec3

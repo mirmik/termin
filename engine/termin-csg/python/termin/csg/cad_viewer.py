@@ -8,9 +8,9 @@ from math import cos, sin, tau
 
 import numpy as np
 
-from tcbase import log
-from tcbase._geom_native import LinearColor, Vec3
-from tgfx import (
+from termin.base import log
+from termin.base._geom_native import LinearColor, Vec3
+from termin.graphics import (
     CULL_NONE,
     ImmediateRenderer,
     PIXEL_D32F,

@@ -73,9 +73,9 @@ def test_player_source_runtime_requires_project_shader_runtime(monkeypatch, tmp_
 
 def test_player_backend_default_uses_d3d11_on_windows(monkeypatch, tmp_path: Path):
     logs: list[str] = []
-    fake_tcbase = types.ModuleType("tcbase")
+    fake_tcbase = types.ModuleType("termin.base")
     fake_tcbase.log = types.SimpleNamespace(info=logs.append)
-    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
+    monkeypatch.setitem(sys.modules, "termin.base", fake_tcbase)
     monkeypatch.delenv("TERMIN_BACKEND", raising=False)
     monkeypatch.setattr(player_runtime.sys, "platform", "win32")
 
@@ -88,9 +88,9 @@ def test_player_backend_default_uses_d3d11_on_windows(monkeypatch, tmp_path: Pat
 
 def test_player_backend_default_uses_vulkan_off_windows(monkeypatch, tmp_path: Path):
     logs: list[str] = []
-    fake_tcbase = types.ModuleType("tcbase")
+    fake_tcbase = types.ModuleType("termin.base")
     fake_tcbase.log = types.SimpleNamespace(info=logs.append)
-    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
+    monkeypatch.setitem(sys.modules, "termin.base", fake_tcbase)
     monkeypatch.delenv("TERMIN_BACKEND", raising=False)
     monkeypatch.setattr(player_runtime.sys, "platform", "linux")
 
@@ -103,9 +103,9 @@ def test_player_backend_default_uses_vulkan_off_windows(monkeypatch, tmp_path: P
 
 def test_player_backend_default_keeps_explicit_backend(monkeypatch, tmp_path: Path):
     logs: list[str] = []
-    fake_tcbase = types.ModuleType("tcbase")
+    fake_tcbase = types.ModuleType("termin.base")
     fake_tcbase.log = types.SimpleNamespace(info=logs.append)
-    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
+    monkeypatch.setitem(sys.modules, "termin.base", fake_tcbase)
     monkeypatch.setenv("TERMIN_BACKEND", "opengl")
     monkeypatch.setattr(player_runtime.sys, "platform", "win32")
 

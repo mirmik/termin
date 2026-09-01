@@ -241,7 +241,7 @@ def material_to_spec(
     shaders: dict[str, ShaderSpec],
     shader_programs: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
+    import termin.graphics  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     phases: list[dict[str, Any]] = []
     for phase in material.phases:
@@ -267,7 +267,7 @@ def material_to_spec(
     }
     program_uuid = material.shader_program_uuid
     if program_uuid:
-        from tgfx import TcShaderProgram, TextureEncoding
+        from termin.graphics import TcShaderProgram, TextureEncoding
 
         program = TcShaderProgram.find(program_uuid)
         if not program.is_valid:

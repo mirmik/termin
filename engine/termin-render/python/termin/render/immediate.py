@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tgfx import ImmediateRenderer as _ImmediateRenderer
+from termin.graphics import ImmediateRenderer as _ImmediateRenderer
 
 
 class ImmediateRenderer(_ImmediateRenderer):

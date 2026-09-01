@@ -7,8 +7,8 @@ from pathlib import Path
 import sys
 import time
 
-import tgfx
-from tcbase._geom_native import LinearColor
+import termin.graphics as tgfx
+from termin.base._geom_native import LinearColor
 from termin.window import WindowedGraphicsSession, quit_sdl
 from termin.gui_native import (
     DrawList,

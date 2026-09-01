@@ -38,7 +38,7 @@ namespace {
 } // namespace
 
 NB_MODULE(_window_native, m) {
-    nb::module_::import_("tgfx._tgfx_native");
+    nb::module_::import_("termin.graphics._graphics_native");
 
     nb::enum_<tgfx::PresentationMode>(m, "PresentationMode")
         .value("VSYNC", tgfx::PresentationMode::VSync)

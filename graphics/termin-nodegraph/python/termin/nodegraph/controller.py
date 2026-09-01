@@ -6,8 +6,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 import logging
 
-from tcnodegraph.model import Graph, Group, Node, Socket, _group_from_dict, _node_from_dict
-from tcnodegraph.schema import (
+from termin.nodegraph.model import Graph, Group, Node, Socket, _group_from_dict, _node_from_dict
+from termin.nodegraph.schema import (
     ConnectionValidator,
     DefaultConnectionValidator,
     NodeSchemaProvider,

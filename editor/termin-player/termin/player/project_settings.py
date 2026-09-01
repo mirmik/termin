@@ -160,12 +160,12 @@ def _project_relative_path(value: object, *, fallback: str, field_name: str) -> 
 
 
 def _log_warning(message: str) -> None:
-    from tcbase import log
+    from termin.base import log
 
     log.warning(message)
 
 
 def _log_error(message: str) -> None:
-    from tcbase import log
+    from termin.base import log
 
     log.error(message)

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import shutil
 
-from tcbase import Settings, log
+from termin.base import Settings, log
 
 
 _configured = False
@@ -108,7 +108,7 @@ def configure_default_shader_runtime(label: str = "python") -> bool:
         log.error(f"[ShaderRuntime] invalid termin-graphics-profile installation: {exc}")
         return False
 
-    import tgfx
+    import termin.graphics as tgfx
 
     if (
         graphics_profile is not None

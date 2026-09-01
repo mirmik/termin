@@ -13,8 +13,8 @@ NB_MODULE(_display_native, m) {
     m.doc() = "Display native module";
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.viewport._viewport_native");
-    nb::module_::import_("tcbase._tcbase_native");
-    nb::module_::import_("tgfx._tgfx_native");
+    nb::module_::import_("termin.base._base_native");
+    nb::module_::import_("termin.graphics._graphics_native");
 
     termin::bind_tc_render_surface(m);
     termin::bind_tc_input_manager(m);

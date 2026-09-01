@@ -9,7 +9,7 @@ from termin.scene import PythonComponent
 from termin.fem.multibody3d_3 import RevoluteJoint3D
 from termin.geombase import Vec3
 from termin.inspect import InspectField
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene

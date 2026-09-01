@@ -1,6 +1,6 @@
 """Settings — persistent JSON-based key-value store with hierarchical keys."""
 
-from tcbase._tcbase_native import Settings as _NativeSettings
+from termin.base._base_native import Settings as _NativeSettings
 
 
 class _SettingsGroup:

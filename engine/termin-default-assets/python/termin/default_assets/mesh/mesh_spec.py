@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 
 DEFAULT_AXIS_X = "x"
 DEFAULT_AXIS_Y = "z"

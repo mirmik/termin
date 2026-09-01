@@ -21,9 +21,9 @@ import ctypes
 import time
 
 import sdl2
-from tcbase._geom_native import LinearColor
+from termin.base._geom_native import LinearColor
 
-from tgfx._tgfx_native import Tgfx2Context, Tgfx2PixelFormat
+from termin.graphics._graphics_native import Tgfx2Context, Tgfx2PixelFormat
 
 from termin.display.window import (
     BackendWindowEntry,

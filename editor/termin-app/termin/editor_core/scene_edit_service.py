@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.editor_commands import TransformEditCommand
 from termin.geombase import GeneralPose3, Quat, Vec3

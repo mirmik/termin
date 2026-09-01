@@ -292,7 +292,7 @@ static void bind_intern_strings(nb::module_& m) {
         "Return all interned strings with their bucket position");
 }
 
-NB_MODULE(_tcbase_native, m) {
+NB_MODULE(_base_native, m) {
     m.doc() = "Base types shared between termin libraries";
 
     nb::enum_<tcbase::MouseButton>(m, "MouseButton", nb::is_arithmetic(), "Mouse button constants")

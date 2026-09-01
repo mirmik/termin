@@ -265,7 +265,7 @@ def default_textures_follow_native_registry_lifecycle() -> None:
         get_normal_texture_handle,
         get_white_texture_handle,
     )
-    from tgfx import TcTexture
+    from termin.graphics import TcTexture
 
     try:
         bootstrap_player()

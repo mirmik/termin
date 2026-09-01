@@ -6,7 +6,7 @@ from typing import List, Tuple
 
 from termin.inspect import InspectField
 from termin.render_components import MaterialPass
-from tcbase import log
+from termin.base import log
 
 __all__ = ["MaterialPass", "get_texture_inputs_for_material"]
 

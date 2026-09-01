@@ -14,7 +14,7 @@ from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.render.shader_asset import ShaderAsset
 from termin.default_assets.render.texture_asset import TextureAsset
 from termin.stdlib import stdlib_root
-from tgfx import TcTexture, TextureEncoding
+from termin.graphics import TcTexture, TextureEncoding
 
 
 def _register_stdlib_shader(rm: DefaultResourceManager, name: str) -> None:

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from tcbase import log
+from termin.base import log
 from termin_assets import AssetRecord, PreLoadResult, read_spec_file, write_spec_file
 
 if TYPE_CHECKING:

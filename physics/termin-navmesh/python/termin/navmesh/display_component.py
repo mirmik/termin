@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 def _get_navmesh_choices() -> list[tuple[str, str]]:
     """Получить список NavMesh для комбобокса."""
-    from tcbase import log
+    from termin.base import log
     from termin_assets import get_resource_manager
 
     rm = get_resource_manager()
@@ -157,7 +157,7 @@ class NavMeshDisplayComponent(DrawableComponent):
     def _get_or_create_material(self) -> Material:
         """Получить или создать материал."""
         if self._material is None:
-            from tgfx import RenderState
+            from termin.graphics import RenderState
             from termin.navmesh.navmesh_shader import navmesh_display_shader
 
             shader = navmesh_display_shader()
@@ -182,7 +182,7 @@ class NavMeshDisplayComponent(DrawableComponent):
     def _get_or_create_contour_material(self) -> Material:
         """Получить или создать материал для контуров."""
         if self._contour_material is None:
-            from tgfx import RenderState
+            from termin.graphics import RenderState
             from termin.navmesh.navmesh_shader import navmesh_display_shader
 
             shader = navmesh_display_shader()
@@ -348,7 +348,7 @@ class NavMeshDisplayComponent(DrawableComponent):
             return None
         self.navmesh.ensure_loaded()
         from termin_assets import get_resource_manager
-        from tcbase import log
+        from termin.base import log
 
         rm = get_resource_manager()
         if rm is None:

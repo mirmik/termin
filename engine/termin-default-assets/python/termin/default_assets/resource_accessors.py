@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 from termin_assets import AssetCreationPlugin
 
 from termin.default_assets.handle_accessors import HandleAccessors
@@ -221,7 +221,7 @@ class DefaultResourceAccessorsMixin:
 
     def _find_tc_texture_name(self, handle: Any) -> Optional[str]:
         """Find name for a TcTexture."""
-        from tgfx import TcTexture
+        from termin.graphics import TcTexture
 
         if isinstance(handle, TcTexture):
             return self.find_texture_name(handle)
@@ -347,7 +347,7 @@ class DefaultResourceAccessorsMixin:
             return self.get_audio_clip_by_uuid(uuid)
 
         if kind in ("texture", "tc_texture"):
-            from tgfx import TcTexture
+            from termin.graphics import TcTexture
 
             asset = self.get_texture_asset_by_uuid(uuid)
             if asset:

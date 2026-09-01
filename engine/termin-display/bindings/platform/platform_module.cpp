@@ -45,9 +45,9 @@ NB_MODULE(_platform_native, m) {
     // window wrapper. Failure (tgfx not on sys.path) is non-fatal —
     // the rest of the SDL bindings stay usable.
     try {
-        nb::module_::import_("tgfx._tgfx_native");
+        nb::module_::import_("termin.graphics._graphics_native");
     } catch (const std::exception& e) {
-        tc::Log::debug("[platform] Failed to import tgfx._tgfx_native: %s (non-fatal, SDL bindings remain usable)",
+        tc::Log::debug("[platform] Failed to import termin.graphics._graphics_native: %s (non-fatal, SDL bindings remain usable)",
                        e.what());
     }
 

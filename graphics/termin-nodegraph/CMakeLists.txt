@@ -42,7 +42,7 @@ if(TERMIN_BUILD_PYTHON)
     target_link_libraries(_nodegraph_native PRIVATE
         termin_nodegraph_core tcbase::termin_base)
     termin_set_rpath_python(_nodegraph_native)
-    install(TARGETS _nodegraph_native DESTINATION lib/python/tcnodegraph)
+    install(TARGETS _nodegraph_native DESTINATION lib/python/termin/nodegraph)
 endif()
 
 if(TERMIN_BUILD_TESTS)

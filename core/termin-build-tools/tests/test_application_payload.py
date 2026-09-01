@@ -90,7 +90,7 @@ def test_representative_library_subset_has_no_termin_app_dependency() -> None:
     repo_root = _repo_root()
     packages = load_manifest(repo_root)
     by_distribution = {entry.distribution: entry for entry in packages}
-    subset = {"tcbase", "tgfx", "termin-display", "termin-gui-native"}
+    subset = {"termin-base", "termin-graphics", "termin-display", "termin-gui-native"}
 
     assert subset <= by_distribution.keys()
     for package in packages:

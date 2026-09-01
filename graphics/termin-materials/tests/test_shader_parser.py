@@ -320,7 +320,7 @@ def test_parse_property_directive_texture2d():
 
 
 def test_create_material_from_unconstrained_texture_property_uses_linear_default():
-    from tgfx import TextureEncoding
+    from termin.graphics import TextureEncoding
 
     program = parse_shader_text("\n".join([
         "@program unconstrained-texture",
@@ -435,7 +435,7 @@ def test_slang_material_texture_declarations_are_synthesized():
 
 def test_shader_interface_compare_separates_source_from_inputs():
     from termin.default_assets.render.shader_interface import compare_shader_interface
-    from tgfx import TcShaderProgram
+    from termin.graphics import TcShaderProgram
 
     def canonical(uuid: str, parsed):
         program = TcShaderProgram.declare(uuid, "test")
@@ -667,7 +667,7 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
 
 
 def test_slang_material_layout_sets_shader_contract_before_sidecar_reflection():
-    import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
+    import termin.graphics  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     shader_text = "\n".join([
         "@program SlangWithRuntimeLayout",
@@ -893,7 +893,7 @@ def test_string_shader_uuid_produces_canonical_distinct_phase_ids():
 
 
 def test_stdlib_slang_material_creates_slang_tc_shader():
-    from tgfx import ShaderArtifactPolicy, ShaderLanguage
+    from termin.graphics import ShaderArtifactPolicy, ShaderLanguage
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.default_assets.resource_manager import DefaultResourceManager
@@ -936,7 +936,7 @@ def test_stdlib_slang_material_creates_slang_tc_shader():
 
 
 def test_stdlib_slang_textured_normal_material_uses_texture_property():
-    from tgfx import ShaderArtifactPolicy, ShaderLanguage
+    from termin.graphics import ShaderArtifactPolicy, ShaderLanguage
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.default_assets.resource_manager import DefaultResourceManager

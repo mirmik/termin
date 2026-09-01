@@ -9,7 +9,7 @@ import uuid as uuid_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from tcbase import log
+from termin.base import log
 
 from termin.prefab._prefab_native import PrefabDocument
 

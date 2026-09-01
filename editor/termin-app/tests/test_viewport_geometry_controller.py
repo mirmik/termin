@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from tcbase._geom_native import Ray3, Rect2, Vec2, Vec3
+from termin.base._geom_native import Ray3, Rect2, Vec2, Vec3
 
 from termin.editor_core.viewport_geometry_controller import ViewportGeometryController
 

@@ -2,7 +2,7 @@
 import numpy
 import math
 
-from tcbase import log
+from termin.base import log
 
 
 def fit_quadric(points, center=None):

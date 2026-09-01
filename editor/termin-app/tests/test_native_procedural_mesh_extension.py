@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tcbase._geom_native import Affine3d, Basis3d, Ray3, Vec3
+from termin.base._geom_native import Affine3d, Basis3d, Ray3, Vec3
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.editor_core.procedural_mesh_editor_extension import ProceduralMeshExtensionModel
 from termin.editor_core.procedural_mesh_viewport_interaction import ProceduralMeshViewportInteraction

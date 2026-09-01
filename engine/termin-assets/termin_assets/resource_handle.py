@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Generic, TypeVar
 
-from tcbase import clear_resource_loader, log, set_resource_loader
+from termin.base import clear_resource_loader, log, set_resource_loader
 from termin_assets.asset import Asset
 
 T = TypeVar("T")

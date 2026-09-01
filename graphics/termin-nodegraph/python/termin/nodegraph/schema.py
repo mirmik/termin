@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from tcnodegraph.model import Graph
+from termin.nodegraph.model import Graph
 
 
 @dataclass

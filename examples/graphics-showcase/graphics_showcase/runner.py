@@ -9,7 +9,7 @@ import sys
 import time
 
 import numpy as np
-import tgfx
+import termin.graphics
 from termin.gui_native import OffscreenGuiComposition
 from termin.image import write_png_rgba8_file
 
@@ -95,7 +95,7 @@ def _render_section(section, config: ShowcaseConfig, font_path: Path) -> dict[st
 def run_showcase(config: ShowcaseConfig) -> dict[str, object]:
     if config.width < 320 or config.height < 240:
         raise ValueError("showcase framebuffer must be at least 320x240")
-    if not tgfx.configure_default_shader_runtime("graphics-profile-showcase"):
+    if not termin.graphics.configure_default_shader_runtime("graphics-profile-showcase"):
         raise RuntimeError("failed to configure the graphics SDK shader runtime")
 
     imports = import_profile_surface()

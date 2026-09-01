@@ -1,4 +1,4 @@
-// tgfx_module.cpp - Main module for _tgfx_native Python bindings
+// tgfx_module.cpp - Main module for _graphics_native Python bindings
 #include <nanobind/nanobind.h>
 
 namespace nb = nanobind;
@@ -12,11 +12,11 @@ namespace tgfx_bindings {
     void bind_immediate(nb::module_& m);
 } // namespace tgfx_bindings
 
-NB_MODULE(_tgfx_native, m) {
+NB_MODULE(_graphics_native, m) {
     m.doc() = "termin-graphics native Python bindings";
 
-    nb::module_::import_("tcbase._tcbase_native");
-    nb::module_::import_("tcbase._geom_native");
+    nb::module_::import_("termin.base._base_native");
+    nb::module_::import_("termin.base._geom_native");
 
     tgfx_bindings::bind_types(m);
     tgfx_bindings::bind_render_state(m);
@@ -25,7 +25,7 @@ NB_MODULE(_tgfx_native, m) {
     tgfx_bindings::bind_tgfx2(m);
     tgfx_bindings::bind_immediate(m);
 
-    // Import log from tcbase
-    nb::module_ tcbase = nb::module_::import_("tcbase._tcbase_native");
-    m.attr("log") = tcbase.attr("log");
+    // Import log from the canonical base module.
+    nb::module_ base = nb::module_::import_("termin.base._base_native");
+    m.attr("log") = base.attr("log");
 }

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple
 
-from tcbase import log
+from termin.base import log
 from termin.glb.loader import load_glb_file, GLBMeshData
 
 

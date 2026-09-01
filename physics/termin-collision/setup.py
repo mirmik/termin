@@ -27,7 +27,7 @@ setup(
         "termin_collision_component_specs": "python/termin_collision_component_specs",
     },
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-input",
         "termin-nanobind",
     ],

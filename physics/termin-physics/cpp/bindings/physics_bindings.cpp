@@ -16,7 +16,7 @@ using namespace termin::physics;
 NB_MODULE(_physics_native, m) {
     m.doc() = "Native C++ physics module for termin";
 
-    nb::module_::import_("tcbase._geom_native");
+    nb::module_::import_("termin.base._geom_native");
     nb::module_::import_("termin.colliders._colliders_native");
 
     m.def(

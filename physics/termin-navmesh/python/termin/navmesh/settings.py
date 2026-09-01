@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
 
-from tcbase import log
+from termin.base import log
 
 NAVMESH_AREA_COUNT = 64
 

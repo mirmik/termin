@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 from collections.abc import Iterable
 
-from tcbase import log
+from termin.base import log
 
 BuiltinTypeSpec = tuple[str, str]
 

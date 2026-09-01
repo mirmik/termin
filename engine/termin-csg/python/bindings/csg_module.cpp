@@ -11,7 +11,7 @@ NB_MODULE(_csg_native, m) {
     m.doc() = "termin-csg native Python bindings";
 
     nb::module_::import_("termin.mesh._mesh_native");
-    nb::module_ geom = nb::module_::import_("tcbase._geom_native");
+    nb::module_ geom = nb::module_::import_("termin.base._geom_native");
     m.attr("Point2") = geom.attr("Vec2");
 
     nb::class_<termin::csg::Solid>(m, "Solid")

@@ -10,7 +10,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    upstream_packages = {"tcbase": "libtermin_base", "termin_nanobind": "libnanobind"}
+    upstream_packages = {"termin-base": "libtermin_base", "termin_nanobind": "libnanobind"}
     bundle_includes = True
     source_dir = _DIR
 
@@ -33,7 +33,7 @@ setup(
         "": "python",
     },
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-nanobind",
         "numpy",
     ],

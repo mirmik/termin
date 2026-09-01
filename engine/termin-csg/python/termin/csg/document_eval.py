@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
-from tcbase import log
+from termin.base import log
 from termin.mesh import Mesh3
 
 from termin.csg._csg_native import (

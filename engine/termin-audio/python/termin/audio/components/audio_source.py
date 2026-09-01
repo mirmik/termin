@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
-from tcbase import log
+from termin.base import log
 from termin.audio import AudioEngine, TcAudioClip, TcAudioVoice
 
 if TYPE_CHECKING:

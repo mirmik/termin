@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from tgfx import TcShader
+from termin.graphics import TcShader
 
 
 VOXEL_DISPLAY_SHADER_UUID = "termin-engine-voxel-display"

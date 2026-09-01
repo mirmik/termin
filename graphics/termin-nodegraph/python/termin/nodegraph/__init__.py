@@ -2,10 +2,10 @@
 
 import logging
 
-from tcnodegraph.controller import ConnectResult, GraphController
-from tcnodegraph.io import graph_from_dict, graph_to_dict, load_graph_json, save_graph_json
-from tcnodegraph.model import Edge, Graph, Group, Node, Socket
-from tcnodegraph.schema import (
+from termin.nodegraph.controller import ConnectResult, GraphController
+from termin.nodegraph.io import graph_from_dict, graph_to_dict, load_graph_json, save_graph_json
+from termin.nodegraph.model import Edge, Graph, Group, Node, Socket
+from termin.nodegraph.schema import (
     ConnectionValidator,
     DictSchemaProvider,
     DefaultConnectionValidator,
@@ -14,7 +14,7 @@ from tcnodegraph.schema import (
 )
 
 try:
-    from tcnodegraph.native_view import (
+    from termin.nodegraph.native_view import (
         NativeNodeGraphView,
         NodeBodyContent,
         NodeBodyContentProvider,
@@ -23,7 +23,7 @@ try:
     )
 except ImportError as e:
     logging.getLogger(__name__).debug(
-        "Optional import tcnodegraph.native_view failed: %s — native GUI features unavailable",
+        "Optional import termin.nodegraph.native_view failed: %s — native GUI features unavailable",
         e,
     )
     NativeNodeGraphView = None

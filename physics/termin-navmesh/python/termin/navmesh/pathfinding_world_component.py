@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
 from termin.geombase import Affine3d, Ray3, Rect2, Vec2, Vec3

@@ -2,7 +2,7 @@
 Настройки редактора.
 
 Централизованное хранение и загрузка настроек между сессиями.
-Использует tcbase.Settings (JSON) для кроссплатформенного хранения.
+Использует termin.base.Settings (JSON) для кроссплатформенного хранения.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from tcbase import Settings
+from termin.base import Settings
 from termin.project_build.user_settings import (
     KEY_BUILD_ADB as USER_KEY_BUILD_ADB,
     KEY_BUILD_ANDROID_HOME as USER_KEY_BUILD_ANDROID_HOME,
@@ -34,7 +34,7 @@ class EditorSettings:
     Менеджер настроек редактора.
 
     Singleton-класс для доступа к настройкам из любого места.
-    Настройки хранятся в JSON-файле через tcbase.Settings.
+    Настройки хранятся в JSON-файле через termin.base.Settings.
     """
 
     _instance: "EditorSettings | None" = None

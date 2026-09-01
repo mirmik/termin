@@ -49,7 +49,7 @@ def test_core_product_boundary_rejects_forbidden_domain_artifact(tmp_path):
 
     result = sdk_verification.verify_forbidden_product_content(
         tmp_path,
-        ("tgfx", "termin/assets", "termin/engine", "termin_graphics"),
+        ("termin-graphics", "termin/assets", "termin/engine", "termin_graphics"),
     )
 
     assert result == 1
@@ -62,7 +62,7 @@ def test_core_product_boundary_accepts_core_artifacts(tmp_path):
 
     result = sdk_verification.verify_forbidden_product_content(
         tmp_path,
-        ("tgfx", "termin/assets", "termin/engine", "termin_graphics"),
+        ("termin-graphics", "termin/assets", "termin/engine", "termin_graphics"),
     )
 
     assert result == 0

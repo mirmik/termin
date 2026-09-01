@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.voxels.grid import VoxelGrid

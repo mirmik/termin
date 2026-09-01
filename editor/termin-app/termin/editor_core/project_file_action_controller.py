@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 from termin.image import SUPPORTED_RGBA8_EXTENSIONS
 
 from termin.editor_core.inspector_model import InspectorModel

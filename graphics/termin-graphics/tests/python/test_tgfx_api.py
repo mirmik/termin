@@ -1,6 +1,6 @@
-import tgfx
+import termin.graphics as tgfx
 import pytest
-from tcbase._geom_native import LinearColor, SrgbColor, Vec3, Vec3f
+from termin.base._geom_native import LinearColor, SrgbColor, Vec3, Vec3f
 
 
 def test_basic_types_and_render_state():

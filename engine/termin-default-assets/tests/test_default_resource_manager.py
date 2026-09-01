@@ -1,7 +1,7 @@
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.handle_accessors import HandleAccessors
 from termin.materials import TcMaterial
-from tgfx import TcTexture
+from termin.graphics import TcTexture
 import pytest
 
 

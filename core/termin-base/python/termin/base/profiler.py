@@ -1,12 +1,12 @@
 """
 Иерархический профайлер, живущий в termin-base.
 
-Делегирует к C ядру (TcProfiler) через биндинг в ``_tcbase_native.profiler``.
+Делегирует к C ядру (TcProfiler) через биндинг в ``_base_native.profiler``.
 Доступен любому модулю, линкующемуся на tcbase, которому не нужно подтягивать
 termin-app ради профайлинга.
 
 Пример:
-    from tcbase.profiler import Profiler
+    from termin.base.profiler import Profiler
 
     profiler = Profiler.instance()
     profiler.enabled = True
@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Dict, List, Iterator, NamedTuple
 
-from tcbase._tcbase_native import profiler as _profiler_mod
+from termin.base._base_native import profiler as _profiler_mod
 
 TcProfiler = _profiler_mod.TcProfiler
 

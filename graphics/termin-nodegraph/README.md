@@ -6,10 +6,10 @@ Abstract node graph library for Termin ecosystem.
 
 1. Native graph/controller and serialization: `termin_nodegraph_core`
 2. Stable language boundary: `termin/nodegraph/c_api.h`
-3. Native Python binding and UI projection: `tcnodegraph`
+3. Native Python binding and UI projection: `termin.nodegraph`
 
 The C++ core depends only on `termin-base` and does not require a UI runtime.
-`tcnodegraph.Graph` owns the C++ graph. Its `nodes`, `edges`, `groups`, and
+`termin.nodegraph.Graph` owns the C++ graph. Its `nodes`, `edges`, `groups`, and
 `data` properties return disconnected Python snapshots; mutations must go
 through `GraphController`, so Python cannot bypass native invariants.
 
@@ -22,7 +22,7 @@ into a staging graph and never partially modify the destination.
 ## Quick start
 
 ```python
-from tcnodegraph import Graph, GraphController
+from termin.nodegraph import Graph, GraphController
 
 graph = Graph()
 ctrl = GraphController(graph)
@@ -37,7 +37,7 @@ ctrl.connect(a.id, "output_res", b.id, "input_res")
 Save/load JSON:
 
 ```python
-from tcnodegraph import save_graph_json, load_graph_json
+from termin.nodegraph import save_graph_json, load_graph_json
 
 save_graph_json(graph, "graph.json")
 graph2 = load_graph_json("graph.json")

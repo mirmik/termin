@@ -13,7 +13,7 @@ import heapq
 import math
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 from termin.navmesh.triangulation import build_2d_basis
 
 

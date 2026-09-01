@@ -221,7 +221,7 @@ class NavMeshRegistrySource:
 
 def build_core_registry_pages() -> tuple[RegistryPage, ...]:
     """Build adapters over the public C++ core registry inspection APIs."""
-    from tcbase import intern_string_get_all_info
+    from termin.base import intern_string_get_all_info
     from termin.animation import tc_animation_get_all_info
     from termin.materials import tc_material_get_all_info
     from termin.navmesh import tc_navmesh_get_all_info
@@ -234,7 +234,7 @@ def build_core_registry_pages() -> tuple[RegistryPage, ...]:
         tc_pipeline_template_get_all_info,
     )
     from termin.scene._scene_native import component_registry_get_all_info, soa_registry_get_all_info
-    from tgfx import shader_get_all_info, shader_program_get_all_info, tc_texture_get_all_info
+    from termin.graphics import shader_get_all_info, shader_program_get_all_info, tc_texture_get_all_info
     from termin.mesh import tc_mesh_get_all_info
 
     pages = (

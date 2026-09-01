@@ -25,7 +25,7 @@ setup(
     package_dir={"termin.bootstrap": "python/termin/bootstrap"},
     install_requires=[
         "termin-nanobind",
-        "tcbase",
+        "termin-base",
         "termin-inspect",
         "termin-scene",
         "termin-render",
@@ -33,7 +33,7 @@ setup(
         "termin-input",
         "termin-display",
         "termin-mesh",
-        "tgfx",
+        "termin-graphics",
         "termin-materials",
         "termin-skeleton",
         "termin-components-skeleton",

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from tcbase import log
-from tgfx import TcShader
+from termin.base import log
+from termin.graphics import TcShader
 
 
 NAVMESH_DISPLAY_SHADER_UUID = "termin-engine-line-default"

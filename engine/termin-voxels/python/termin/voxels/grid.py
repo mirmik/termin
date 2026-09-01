@@ -10,7 +10,7 @@ from __future__ import annotations
 try:
     from termin.voxels._voxels_native import VoxelGrid
 except ImportError as exc:
-    from tcbase import log
+    from termin.base import log
 
     log.error("[termin.voxels.grid] VoxelGrid requires termin.voxels._voxels_native")
     raise ImportError("termin.voxels.grid.VoxelGrid requires termin.voxels._voxels_native") from exc

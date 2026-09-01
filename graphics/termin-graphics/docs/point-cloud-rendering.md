@@ -19,8 +19,8 @@ Upload only when generated data changes, then reuse the same cloud each frame:
 
 ```python
 import numpy as np
-import tgfx
-from tcbase._geom_native import SrgbColor
+import termin.graphics
+from termin.base._geom_native import SrgbColor
 
 positions = np.ascontiguousarray(model_points, dtype=np.float32)  # Nx3
 

@@ -113,7 +113,7 @@ class TextureInspectorController:
             )
             return self._snapshot
 
-        from tgfx import TcTexture, TextureEncoding
+        from termin.graphics import TcTexture, TextureEncoding
         from termin.render.texture import Texture
 
         asset = self._resource_manager.get_texture_asset(name) if name else None

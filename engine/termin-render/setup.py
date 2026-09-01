@@ -28,8 +28,8 @@ setup(
     },
     install_requires=[
         "termin-nanobind",
-        "tcbase",
-        "tgfx",
+        "termin-base",
+        "termin-graphics",
         "termin-materials",
         "termin-scene",
         "termin-inspect",

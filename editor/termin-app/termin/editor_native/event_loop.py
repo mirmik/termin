@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.terminal_interrupt import TerminalInterruptController
 

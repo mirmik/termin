@@ -6,8 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from tcbase import log
-from tcbase._geom_native import Vec3
+from termin.base import log
+from termin.base._geom_native import Vec3
 
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import document_bounds

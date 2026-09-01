@@ -16,21 +16,21 @@ class BuildExt(TerminCMakeBuildExt):
 
 
 setup(
-    name="tcbase",
+    name="termin-base",
     version=BuildExt.compute_local_version("0.1.0"),
     license="Apache-2.0",
     description="Base types shared between termin libraries",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
-    packages=["tcbase", "termin.geombase", "termin.artifacts"],
+    packages=["termin.base", "termin.geombase", "termin.artifacts"],
     package_dir={
-        "tcbase": "python/tcbase",
+        "termin.base": "python/termin/base",
         "termin.geombase": "python/termin/geombase",
         "termin.artifacts": "python/termin/artifacts",
     },
     package_data={
-        "tcbase": [
+        "termin.base": [
             "include/*.h",
             "include/*.hpp",
             "include/**/*.h",

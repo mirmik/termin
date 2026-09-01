@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-import tgfx
+import termin.graphics
 from termin.gui_native import Size, tc_ui_document_create, tc_ui_document_destroy
 
 from .sections import sdk_font_path, section_registry
@@ -100,7 +100,7 @@ def run_windowed_showcase(
         raise ValueError("frame_limit must be non-negative")
     if second_limit < 0.0:
         raise ValueError("second_limit must be non-negative")
-    if not tgfx.configure_default_shader_runtime("graphics-profile-showcase-windowed"):
+    if not termin.graphics.configure_default_shader_runtime("graphics-profile-showcase-windowed"):
         raise RuntimeError("failed to configure the graphics SDK shader runtime")
 
     # Window ownership is part of the public Graphics product. Imports remain

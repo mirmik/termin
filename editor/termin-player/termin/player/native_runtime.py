@@ -7,7 +7,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from tcbase import log
+from termin.base import log
 
 from termin.display import Display
 from termin.engine import _borrow_engine_core

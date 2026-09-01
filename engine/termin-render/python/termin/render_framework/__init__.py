@@ -80,7 +80,7 @@ from termin.render_framework.python_pass import PythonFramePass, deserialize_pas
 
 def shutdown_render_pipelines() -> None:
     """Destroy all live process-global render pipelines."""
-    from tcbase import log
+    from termin.base import log
 
     try:
         pipeline_infos = list(tc_pipeline_registry_get_all_info())

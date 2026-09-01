@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from tcbase import log
+from termin.base import log
 
 
 def material_pass_materials(graph_data: dict | None) -> set[str]:

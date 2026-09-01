@@ -6,7 +6,7 @@ _EXAMPLE_PATH = (
     Path(__file__).resolve().parents[1] / "examples" / "native_nodegraph_demo.py"
 )
 _EXAMPLE_SPEC = importlib.util.spec_from_file_location(
-    "tcnodegraph_native_nodegraph_demo",
+    "termin.nodegraph_native_nodegraph_demo",
     _EXAMPLE_PATH,
 )
 assert _EXAMPLE_SPEC is not None

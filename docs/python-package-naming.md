@@ -2,9 +2,8 @@
 
 Этот документ фиксирует текущий контракт именования Python-части SDK: путь в
 монорепозитории, имя Python distribution и публичные import namespaces. Он
-закрывает повторяющийся класс ошибок, где `install_requires` ссылался на
-repo-directory вроде `termin-graphics`, хотя устанавливаемая distribution
-называется `tgfx`.
+закрывает повторяющийся класс ошибок, где distribution и import namespace
+расходились без явной причины.
 
 ## Policy
 
@@ -16,9 +15,9 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
   а не на repo path и не на import namespace.
 - Новый пакет по умолчанию использует одинаковые repo path и distribution name
   в стиле `termin-*`; исключения требуют явного обоснования в таблице ниже.
-- Public import namespace выбирается по domain API. Он не обязан совпадать с
-  distribution name: исторический `tcbase` и пока не мигрированный `tgfx`
-  остаются допустимыми исключениями.
+- Public import namespace выбирается по domain API. Для migrated base,
+  graphics и nodegraph packages используются canonical namespaces
+  `termin.base`, `termin.graphics` и `termin.nodegraph`.
 - Component spec packages (`*_component_specs`, `*_render_specs`) являются частью
   owning distribution и не должны становиться отдельными internal dependencies.
 - `termin-app` не является distribution. Его editor/launcher-модули входят в
@@ -44,14 +43,14 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 |-------------|--------------|--------------------------|-------|
 | `core/termin-build-tools` | `termin-build-tools` | `termin_build` | Build-time helpers. |
 | `core/termin-nanobind-sdk` | `termin-nanobind` | `termin_nanobind` | Distribution keeps historical short SDK name. |
-| `core/termin-base` | `tcbase` | `tcbase`, `termin.geombase` | Legacy short distribution/import name. |
+| `core/termin-base` | `termin-base` | `termin.base`, `termin.geombase` | Canonical base distribution and namespace. |
 | `core/termin-dispatch` | `termin-dispatch` | `termin.dispatch` | Caller-driven language-neutral deferred dispatcher. |
 | `graphics/termin-image` | `termin-image` | `termin.image` | Native image codecs for texture/tooling paths. |
 | `engine/termin-assets` | `termin-assets` | `termin_assets` | Asset runtime contracts. |
 | `graphics/termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
 | `engine/termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
 | `graphics/termin-mesh` | `termin-mesh` | `termin.mesh` | Canonical mesh distribution and namespace. |
-| `graphics/termin-graphics` | `tgfx` | `tgfx` | Legacy short distribution/import name. |
+| `graphics/termin-graphics` | `termin-graphics` | `termin.graphics` | Canonical graphics distribution and namespace; owns `termin/graphics/__init__.py`. |
 | `graphics/termin-visual-scene` | `termin-visual-scene` | `termin.visual_scene` | Retained 2D visual identity and interaction. |
 | `engine/termin-voxels` | `termin-voxels` | `termin.voxels` | Voxel core API. |
 | `core/termin-inspect` | `termin-inspect` | `termin.inspect` | Inspection metadata API. |
@@ -61,7 +60,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `graphics/termin-gui-native` | `termin-gui-native` | `termin.gui_native` | Canonical native retained UI toolkit. |
 | `engine/termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
 | `core/termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
-| `graphics/termin-graphics-mcp` | `termin-graphics-mcp` | `termin.graphics.mcp` | Graphics-owned MCP capture/readback adapters. |
+| `graphics/termin-graphics-mcp` | `termin-graphics-mcp` | `termin.graphics.mcp` | Graphics-owned MCP adapters; owns only the child namespace. |
 | `engine/termin-prefab` | `termin-prefab` | `termin.prefab` | Namespace package. |
 | `engine/termin-display` | `termin-display` | `termin.display`, `termin.viewport` | Display/windowing API. |
 | `engine/termin-csg` | `termin-csg` | `termin.csg` | CSG API. |
@@ -97,6 +96,6 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `editor/termin-project-modules` | `termin-project-modules` | `termin.project_modules` | Source project module runtime and warmup helpers. |
 | `editor/termin-project-build` | `termin-project-build` | `termin.project_build` | Project build and runtime package export pipeline. |
 | `editor/termin-player` | `termin-player` | `termin.player` | Standalone/source/headless player runtime. |
-| `graphics/termin-nodegraph` | `termin-nodegraph` | `tcnodegraph` | Public import keeps historical short namespace. |
+| `graphics/termin-nodegraph` | `termin-nodegraph` | `termin.nodegraph` | Canonical nodegraph import; distribution remains unchanged. |
 | `graphics/tcplot` | `termin-plot` | `termin.plot` | Canonical plotting distribution and namespace. |
 | `graphics/tcplot-gui-native` | `termin-plot-gui-native` | `termin.plot.gui_native` | Optional native UI adapters for plot widgets. |

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from tgfx import TextureEncoding
+from termin.graphics import TextureEncoding
 
 from termin.default_assets.render.texture_asset import TextureAsset
 from termin.default_assets.render.texture_spec import TextureSpec

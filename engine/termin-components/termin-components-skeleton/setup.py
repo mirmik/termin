@@ -27,7 +27,7 @@ setup(
         "termin_skeleton_component_specs": "python/termin_skeleton_component_specs",
     },
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-inspect",
         "termin-nanobind",
         "termin-render",

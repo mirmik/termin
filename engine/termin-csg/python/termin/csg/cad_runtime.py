@@ -8,11 +8,11 @@ import sys
 import time
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 from termin.display.window import WindowManager, WindowedGraphicsSession, quit_sdl
 from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.gui_native.window import GuiWindowAdapter
-from tgfx import Tgfx2Context
+from termin.graphics import Tgfx2Context
 
 from termin.csg.cad_app import CadApp
 from termin.csg.cad_viewer import CsgSceneRenderer
@@ -65,14 +65,14 @@ def _shader_cache_root() -> Path:
 
 
 def _configure_shader_runtime() -> bool:
-    """Configure the standalone tgfx shader resolver from SDK-owned tools."""
+    """Configure the standalone termin.graphics shader resolver from SDK-owned tools."""
 
     from termin.shader_runtime import (
         resolve_slangc,
         resolve_termin_shaderc,
         slangc_unavailable_message,
     )
-    import tgfx
+    import termin.graphics
 
     compiler = resolve_termin_shaderc(Path(__file__))
     if compiler is None:
@@ -90,7 +90,7 @@ def _configure_shader_runtime() -> bool:
         artifact_root.mkdir(parents=True, exist_ok=True)
         cache_root.mkdir(parents=True, exist_ok=True)
         os.environ["TERMIN_SLANGC"] = str(slangc)
-        tgfx.configure_shader_runtime(
+        termin.graphics.configure_shader_runtime(
             artifact_root=str(artifact_root),
             cache_root=str(cache_root),
             shader_compiler=str(compiler),

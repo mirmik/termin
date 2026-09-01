@@ -8,7 +8,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Dict, Iterator, Literal, Protocol, cast
 
-from tcbase import log
+from termin.base import log
 from termin_assets import DataAsset, EmbeddedAssetSpec, get_resource_manager
 
 if TYPE_CHECKING:

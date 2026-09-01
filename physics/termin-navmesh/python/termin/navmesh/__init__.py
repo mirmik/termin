@@ -105,7 +105,7 @@ def _load_native_exports() -> dict[str, object]:
         )
     except ImportError as exc:
         try:
-            from tcbase import log
+            from termin.base import log
 
             log.error("[termin.navmesh] native bindings are unavailable")
         except ImportError:

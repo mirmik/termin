@@ -13,7 +13,7 @@ import ctypes
 import ctypes.util
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 from termin.geombase import Vec2
 
 # --- libspnav ctypes bindings ---

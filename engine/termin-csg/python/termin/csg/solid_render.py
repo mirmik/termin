@@ -7,7 +7,7 @@ from typing import Callable
 
 import numpy as np
 
-from tcbase._geom_native import Vec3
+from termin.base._geom_native import Vec3
 from termin.geombase import SrgbColor
 
 from termin.csg import Solid, to_mesh3

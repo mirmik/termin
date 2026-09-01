@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Callable
 
-from tcbase import log
-from tcbase._geom_native import Ray3, Rect2, Vec2, Vec3
+from termin.base import log
+from termin.base._geom_native import Ray3, Rect2, Vec2, Vec3
 
 
 _GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")

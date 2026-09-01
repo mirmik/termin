@@ -20,7 +20,7 @@ namespace tcplot_bindings {
     void bind_colors_and_data(nb::module_& m) {
         // Re-export the canonical base type so values cross module boundaries
         // without a competing nanobind registration.
-        nb::module_ geom = nb::module_::import_("tcbase._geom_native");
+        nb::module_ geom = nb::module_::import_("termin.base._geom_native");
         m.attr("SrgbColor") = geom.attr("SrgbColor");
 
         // ---- Palette helpers ----

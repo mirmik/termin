@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from tcnodegraph import DictSchemaProvider, Graph, GraphController, NodeTemplate
+from termin.nodegraph import DictSchemaProvider, Graph, GraphController, NodeTemplate
 
 
 class ControllerTests(unittest.TestCase):
@@ -119,7 +119,7 @@ class ControllerTests(unittest.TestCase):
             ).ok
         )
 
-        with self.assertLogs("tcnodegraph.controller", level="ERROR") as logs:
+        with self.assertLogs("termin.nodegraph.controller", level="ERROR") as logs:
             result = c.connect(
                 source.id,
                 "out",
@@ -140,7 +140,7 @@ class ControllerTests(unittest.TestCase):
         c.add_output_socket(node.id, "out")
         c.add_input_socket(node.id, "in")
 
-        with self.assertLogs("tcnodegraph.controller", level="ERROR"):
+        with self.assertLogs("termin.nodegraph.controller", level="ERROR"):
             result = c.connect(node.id, "out", node.id, "in")
 
         self.assertFalse(result.ok)

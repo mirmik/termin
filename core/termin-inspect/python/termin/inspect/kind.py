@@ -24,12 +24,12 @@ class KindRegistry:
                 from termin_modules.module_context import owner_for_python_module
             except ModuleNotFoundError as exc:
                 if exc.name not in ("termin_modules", "termin_modules.module_context"):
-                    from tcbase import log
+                    from termin.base import log
 
                     log.error("Failed to load module ownership context", exc_info=True)
                 owner = "termin-inspect-python"
             except Exception:
-                from tcbase import log
+                from termin.base import log
 
                 log.error("Failed to load module ownership context", exc_info=True)
                 owner = "termin-inspect-python"

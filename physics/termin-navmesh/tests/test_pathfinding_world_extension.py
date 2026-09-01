@@ -172,7 +172,7 @@ def test_screen_raycast_forwards_canonical_ray_without_flattening() -> None:
 
 
 def test_agent_click_forwards_canonical_ray_without_flattening() -> None:
-    from tcbase import Action, MouseButton
+    from termin.base import Action, MouseButton
     from termin.navmesh.agent_component import NavMeshAgentComponent
 
     ray = Ray3(Vec3(10.0, 20.0, 30.0), Vec3(0.0, -1.0, 0.0))

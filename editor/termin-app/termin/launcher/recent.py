@@ -6,7 +6,7 @@ import json
 import os
 import time
 
-from tcbase import log
+from termin.base import log
 
 MAX_RECENT = 10
 CONFIG_DIR = os.path.join(

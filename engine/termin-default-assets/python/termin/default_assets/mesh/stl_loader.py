@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.default_assets.mesh.mesh_spec import MeshSpec

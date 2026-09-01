@@ -225,7 +225,7 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-player": ({"termin/player/__init__.py": "VALUE = 'player seed'\n"}, ["termin-mcp"]),
         "termin-mcp": ({"termin/mcp/__init__.py": "VALUE = 'mcp seed'\n"}, []),
         "termin-nanobind": ({"termin_nanobind/__init__.py": "VALUE = 'nanobind seed'\n"}, []),
-        "tcbase": ({"tcbase/__init__.py": "VALUE = 'runtime seed'\n"}, []),
+        "termin-base": ({"termin/base/__init__.py": "VALUE = 'runtime seed'\n"}, []),
         "termin-assets": ({"termin_assets_seed/__init__.py": "VALUE = 'assets seed'\n"}, []),
         "termin-default-assets": ({"termin/default_assets/__init__.py": "VALUE = 'default assets seed'\n"}, []),
         "termin-stdlib": (
@@ -294,7 +294,7 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-navmesh": ({"termin/navmesh/__init__.py": "VALUE = 'navmesh seed'\n"}, []),
         "termin-lighting": ({"termin/lighting/__init__.py": "VALUE = 'lighting seed'\n"}, []),
         "tmesh": ({"tmesh/__init__.py": "VALUE = 'tmesh seed'\n"}, []),
-        "tgfx": ({"tgfx/__init__.py": "VALUE = 'tgfx seed'\n"}, []),
+        "termin-graphics": ({"termin/graphics/__init__.py": "VALUE = 'graphics seed'\n"}, []),
         "numpy": ({"numpy/__init__.py": "VALUE = 'numpy seed'\n"}, []),
         "termin-image": ({"termin/image/__init__.py": "VALUE = 'image seed'\n"}, []),
         "scipy": ({"scipy/__init__.py": "VALUE = 'scipy dependency'\n"}, []),
@@ -351,7 +351,7 @@ def test_legacy_app_build_entrypoints_do_not_shadow_sdk_manifest() -> None:
     assert "termin-physics-fem" not in cpp_cmake
     assert "TERMIN_SDK_PYTHON_PACKAGE_DIRS" not in cpp_cmake
     assert "../termin-assets/termin_assets" not in cpp_cmake
-    assert "../termin-nodegraph/python/tcnodegraph" not in cpp_cmake
+    assert "../termin-nodegraph/python/termin.nodegraph" not in cpp_cmake
 
 
 def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:

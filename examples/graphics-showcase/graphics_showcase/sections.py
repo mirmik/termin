@@ -10,7 +10,7 @@ import uuid
 
 import numpy as np
 
-from tcnodegraph import (
+from termin.nodegraph import (
     DictSchemaProvider,
     Graph,
     GraphController,
@@ -35,12 +35,12 @@ from .animated_glb import write_animated_skinned_glb
 
 _REQUIRED_IMPORTS = (
     ("termin-nanobind-sdk", "termin_nanobind"),
-    ("termin-base", "tcbase"),
+    ("termin-base", "termin.base"),
     ("termin-dispatch", "termin.dispatch"),
     ("termin-image", "termin.image"),
     ("termin-tween", "termin.tween"),
     ("termin-mesh", "termin.mesh"),
-    ("termin-graphics", "tgfx"),
+    ("termin-graphics", "termin.graphics"),
     ("termin-visual-scene", "termin.visual_scene"),
     ("termin-inspect", "termin.inspect"),
     ("termin-shader-runtime", "termin.shader_runtime"),
@@ -50,7 +50,7 @@ _REQUIRED_IMPORTS = (
     ("termin-gui-native", "termin.gui_native"),
     ("termin-window", "termin.window"),
     ("termin-gui-native-window", "termin.gui_native.window"),
-    ("termin-nodegraph", "tcnodegraph"),
+    ("termin-nodegraph", "termin.nodegraph"),
     ("termin-plot", "termin.plot"),
     ("termin-plot-gui-native", "termin.plot.gui_native"),
 )
@@ -468,11 +468,11 @@ def _visual_scene_nodegraph(application) -> SectionContent:
 
 
 def _visual_scene3d_widget(application) -> SectionContent:
-    from tcbase import MouseButton
-    from tcbase._geom_native import LinearColor
+    from termin.base import MouseButton
+    from termin.base._geom_native import LinearColor
     from termin.geombase import Mat44, SrgbColor, Vec3
     from termin.gui_native import PointerEventType, SceneView3DCamera
-    from tgfx import PointCloudStyle
+    from termin.graphics import PointCloudStyle
 
     scene = tc_visual_scene3d_create()
     view = application.document.create_scene_view3d(scene)

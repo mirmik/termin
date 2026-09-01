@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult

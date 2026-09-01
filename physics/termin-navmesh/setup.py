@@ -30,8 +30,8 @@ setup(
         "termin_navmesh_component_specs": "python/termin_navmesh_component_specs",
     },
     install_requires=[
-        "tcbase",
-        "tgfx",
+        "termin-base",
+        "termin-graphics",
         "termin-assets",
         "termin-components-mesh",
         "termin-inspect",

@@ -407,7 +407,7 @@ namespace {
 NB_MODULE(_skeleton_native, m) {
     m.doc() = "Native C++ skeleton module (TcSkeleton, SkeletonInstance)";
 
-    nb::module_::import_("tcbase._geom_native");
+    nb::module_::import_("termin.base._geom_native");
 
     // Bind types
     bind_tc_skeleton(m);

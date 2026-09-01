@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
 
 from termin.navmesh.region_growing import (

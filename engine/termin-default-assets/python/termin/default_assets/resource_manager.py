@@ -77,7 +77,7 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         """Remove a runtime asset from its canonical registry."""
         asset = super().unregister_runtime_asset(type_id, name, uuid=uuid)
         if type_id == "ui" and asset is not None and not asset.remove_native():
-            from tcbase import log
+            from termin.base import log
 
             log.error(
                 f"[DefaultResourceManager] Failed to remove native UI document "
@@ -163,7 +163,7 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
     def _destroy_native_ui_documents(self) -> None:
         for asset in tuple(self._ui_registry.iter_assets()):
             if not asset.remove_native():
-                from tcbase import log
+                from termin.base import log
 
                 log.error(
                     f"[DefaultResourceManager] Failed to remove native UI document "

@@ -27,9 +27,9 @@ setup(
     },
     install_requires=[
         "termin-nanobind",
-        "tcbase",
+        "termin-base",
         "termin-mesh",
-        "tgfx",
+        "termin-graphics",
         "termin-csg",
         "termin-inspect",
         "termin-scene",

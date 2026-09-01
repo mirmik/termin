@@ -6,8 +6,8 @@ from typing import Any, Callable, Set
 from termin.inspect import InspectField
 from termin.geombase import SrgbColor, srgb_to_linear
 from termin.render_framework.python_pass import PythonFramePass
-from tgfx import TcShader
-from tgfx._tgfx_native import CULL_NONE, Tgfx2ShaderHandle, tc_shader_ensure_tgfx2
+from termin.graphics import TcShader
+from termin.graphics._graphics_native import CULL_NONE, Tgfx2ShaderHandle, tc_shader_ensure_tgfx2
 
 from termin.render_passes._render_passes_native import tc_picking_id_to_rgb
 
@@ -147,7 +147,7 @@ class HighlightPass(PythonFramePass):
         return int(selected_id) if selected_id is not None else 0
 
     def execute(self, ctx) -> None:
-        from tcbase import log
+        from termin.base import log
 
         if ctx.ctx2 is None:
             log.error("[HighlightPass] ctx.ctx2 is None; pass is tgfx2-only")

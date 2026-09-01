@@ -21,12 +21,12 @@ namespace nb = nanobind;
 namespace tcplot_bindings {
 
     void bind_engines(nb::module_& m) {
-        // tcbase::MouseButton comes from tcbase._tcbase_native — don't
+        // tcbase::MouseButton comes from termin.base._base_native — don't
         // re-bind here. Importing it lazily below gives the engine's
         // mouse-event signatures a nanobind type registration to cast
         // against without forcing tcbase as a module-level dependency.
         {
-            nb::module_ tcbase_native = nb::module_::import_("tcbase._tcbase_native");
+            nb::module_ tcbase_native = nb::module_::import_("termin.base._base_native");
             // Re-export for caller convenience: `tcplot.MouseButton`.
             m.attr("MouseButton") = tcbase_native.attr("MouseButton");
         }

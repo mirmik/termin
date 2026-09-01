@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.engine import (

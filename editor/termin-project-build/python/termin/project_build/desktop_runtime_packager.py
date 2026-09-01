@@ -27,7 +27,7 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-player",
     "termin-mcp",
     "termin-nanobind",
-    "tcbase",
+    "termin-base",
     "termin-assets",
     "termin-default-assets",
     "termin-stdlib",
@@ -59,7 +59,7 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-navmesh",
     "termin-lighting",
     "tmesh",
-    "tgfx",
+    "termin-graphics",
     "numpy",
 )
 

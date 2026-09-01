@@ -11,7 +11,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from tcbase import log
+from termin.base import log
 
 
 @dataclass(frozen=True)

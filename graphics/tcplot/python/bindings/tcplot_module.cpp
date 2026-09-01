@@ -15,8 +15,8 @@ namespace tcplot_bindings {
 NB_MODULE(_plot_native, m) {
     m.doc() = "tcplot native Python bindings";
 
-    nb::module_::import_("tcbase._geom_native");
-    nb::module_::import_("tgfx._tgfx_native");
+    nb::module_::import_("termin.base._geom_native");
+    nb::module_::import_("termin.graphics._graphics_native");
 
     tcplot_bindings::bind_colors_and_data(m);
     tcplot_bindings::bind_camera(m);

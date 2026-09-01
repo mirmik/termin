@@ -1,6 +1,6 @@
 from .transform import Transform3
 from .kinematic import Rotator3, Actuator3
-from tcbase._geom_native import Pose3, Quat, Vec3
+from termin.base._geom_native import Pose3, Quat, Vec3
 
 def from_trent(dct: dict) -> Transform3:
     """Create a Transform3 or KinematicTransform3 from a Trent dictionary representation."""

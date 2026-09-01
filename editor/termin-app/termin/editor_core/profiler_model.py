@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import logging
 from typing import Callable
 
-from tcbase.profiler import FrameProfile, Profiler, SectionStats, SectionTiming
+from termin.base.profiler import FrameProfile, Profiler, SectionStats, SectionTiming
 from .profiler_capture import ProfilerCaptureCoordinator
 
 

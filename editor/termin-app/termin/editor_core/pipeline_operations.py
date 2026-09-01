@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.signal import Signal

@@ -27,7 +27,7 @@ from termin_assets import (
 )
 import termin_assets.plugin_discovery as plugin_discovery
 from termin_assets import asset as asset_module
-from tcbase import request_resource_load
+from termin.base import request_resource_load
 
 
 def test_asset_core_classes_are_exported() -> None:

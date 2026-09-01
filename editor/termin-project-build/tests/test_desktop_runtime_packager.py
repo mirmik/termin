@@ -92,7 +92,7 @@ def test_legacy_app_build_entrypoints_do_not_shadow_sdk_manifest() -> None:
     assert "termin-physics-fem" not in cpp_cmake
     assert "TERMIN_SDK_PYTHON_PACKAGE_DIRS" not in cpp_cmake
     assert "../termin-assets/termin_assets" not in cpp_cmake
-    assert "../termin-nodegraph/python/tcnodegraph" not in cpp_cmake
+    assert "../termin-nodegraph/python/termin.nodegraph" not in cpp_cmake
 
 
 def test_linux_player_launcher_declares_relocatable_sdk_and_bundle_runpath() -> None:
@@ -275,7 +275,7 @@ def test_build_desktop_project_writes_bundle_contract(
         / "termin_kinematic_component_specs"
         / "__init__.py"
     ).exists()
-    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "base" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "image" / "__init__.py").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin_build").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "optional_extra").exists()
@@ -402,7 +402,7 @@ def test_build_desktop_project_writes_bundle_contract(
     )
     assert runtime_manifest["package_policy"] == "minimal_strict"
     assert {
-        "name": "tcbase",
+        "name": "termin-base",
         "version": "1.0",
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
@@ -652,7 +652,7 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
         / "termin_kinematic_component_specs"
         / "__init__.py"
     ).exists()
-    assert (dist_dir / "python" / "Lib" / "site-packages" / "tcbase" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "base" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "image" / "__init__.py").exists()
     assert (
         dist_dir
@@ -1575,7 +1575,7 @@ def test_export_runtime_package_collects_pass_aware_line_shader_usages(
 def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage(
     tmp_path: Path,
 ) -> None:
-    import tgfx
+    import termin.graphics
     from termin.bootstrap import bootstrap_player
     from termin.geombase import Mat44, Quat, Vec3
     from termin.materials import TcMaterial
@@ -1670,14 +1670,14 @@ def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage
         "opaque",
         0,
         shader_uuid=shader_uuid,
-        language=tgfx.ShaderLanguage.SLANG.value,
-        artifact_policy=tgfx.ShaderArtifactPolicy.REQUIRED.value,
+        language=termin.graphics.ShaderLanguage.SLANG.value,
+        artifact_policy=termin.graphics.ShaderArtifactPolicy.REQUIRED.value,
     )
     assert phase is not None
-    shader = tgfx.TcShader.from_uuid(shader_uuid)
+    shader = termin.graphics.TcShader.from_uuid(shader_uuid)
     assert shader.is_valid
-    shader.set_language(tgfx.ShaderLanguage.SLANG)
-    shader.set_artifact_policy(tgfx.ShaderArtifactPolicy.REQUIRED)
+    shader.set_language(termin.graphics.ShaderLanguage.SLANG)
+    shader.set_artifact_policy(termin.graphics.ShaderArtifactPolicy.REQUIRED)
 
     skeleton = TcSkeleton.create("Skinned Depth Skeleton", skeleton_uuid)
     skeleton.set_bones(
@@ -1843,7 +1843,7 @@ def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) 
 
 @full_runtime_package_exporter
 def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -> None:
-    import tgfx
+    import termin.graphics
     from termin.materials import TcMaterial
     from termin.geombase import SrgbColor
     from termin.mesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
@@ -1853,9 +1853,9 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     mesh_uuid = "live-mesh-uuid"
     material_uuid = "live-material-uuid"
     program_uuid = "live-shader-program-uuid"
-    shader_uuid = tgfx.TcShaderProgram.make_phase_uuid(program_uuid, "opaque")
+    shader_uuid = termin.graphics.TcShaderProgram.make_phase_uuid(program_uuid, "opaque")
 
-    program = tgfx.TcShaderProgram.declare(program_uuid, "LiveShaderProgram")
+    program = termin.graphics.TcShaderProgram.declare(program_uuid, "LiveShaderProgram")
     program.set_payload(
         name="LiveShaderProgram",
         source_path="Assets/Live.shader",
@@ -1927,11 +1927,11 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
         "opaque",
         7,
         shader_uuid=shader_uuid,
-        language=tgfx.ShaderLanguage.GLSL.value,
+        language=termin.graphics.ShaderLanguage.GLSL.value,
     )
     assert phase is not None
     material.set_shader_program_dependency(program_uuid, program.version)
-    shader = tgfx.TcShader.from_uuid(shader_uuid)
+    shader = termin.graphics.TcShader.from_uuid(shader_uuid)
     assert shader.is_valid
     shader.set_feature(1)
     material.set_uniform_srgb_color("u_color", SrgbColor(0.25, 0.5, 0.75, 1.0))
@@ -2042,7 +2042,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
 
 @full_runtime_package_exporter
 def test_export_runtime_package_includes_project_texture_referenced_by_material(tmp_path: Path) -> None:
-    import tgfx
+    import termin.graphics
     from termin.image import write_png_rgba8_file
     from termin.materials import TcMaterial
 
@@ -2069,10 +2069,10 @@ def test_export_runtime_package_includes_project_texture_referenced_by_material(
         "opaque",
         0,
         shader_uuid=shader_uuid,
-        language=tgfx.ShaderLanguage.GLSL.value,
+        language=termin.graphics.ShaderLanguage.GLSL.value,
     )
     assert phase is not None
-    texture = tgfx.TcTexture.from_data(
+    texture = termin.graphics.TcTexture.from_data(
         data=np.full((1, 1, 4), 255, dtype=np.uint8),
         width=1,
         height=1,
@@ -2155,7 +2155,7 @@ def test_export_runtime_package_includes_project_texture_referenced_by_material(
 
 @full_runtime_package_exporter
 def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -> None:
-    import tgfx
+    import termin.graphics
     from termin.materials import TcMaterial
 
     project = tmp_path / "SlangRuntimeGame"
@@ -2172,15 +2172,15 @@ def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -
         "opaque",
         3,
         shader_uuid=shader_uuid,
-        language=tgfx.ShaderLanguage.SLANG.value,
-        artifact_policy=tgfx.ShaderArtifactPolicy.REQUIRED.value,
+        language=termin.graphics.ShaderLanguage.SLANG.value,
+        artifact_policy=termin.graphics.ShaderArtifactPolicy.REQUIRED.value,
     )
     assert phase is not None
 
-    shader = tgfx.TcShader.from_uuid(shader_uuid)
+    shader = termin.graphics.TcShader.from_uuid(shader_uuid)
     assert shader.is_valid
-    shader.set_language(tgfx.ShaderLanguage.SLANG)
-    shader.set_artifact_policy(tgfx.ShaderArtifactPolicy.REQUIRED)
+    shader.set_language(termin.graphics.ShaderLanguage.SLANG)
+    shader.set_artifact_policy(termin.graphics.ShaderArtifactPolicy.REQUIRED)
 
     _write_json(
         project / "Main.scene",

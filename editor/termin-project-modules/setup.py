@@ -17,7 +17,7 @@ setup(
     ),
     package_dir={"": "python"},
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-engine",
         "termin-modules",
         "termin-nanobind",

@@ -56,7 +56,7 @@ def _write_core_sdk(root: Path, abi: PythonAbiIdentity) -> str:
                 "native_build_id": build_id,
                 "distributions": [
                     {"name": "packaging", "kind": "runtime"},
-                    {"name": "tcbase", "kind": "termin"},
+                    {"name": "termin-base", "kind": "termin"},
                 ],
             }
         ),
@@ -140,7 +140,7 @@ def test_installed_core_is_validated_staged_and_recorded(tmp_path: Path) -> None
     assert (output / "include" / "core-owned.h").read_text() == "core\n"
     inputs = json.loads((output / SDK_INPUTS_NAME).read_text(encoding="utf-8"))
     assert inputs["inputs"][0]["native_build_id"] == build_id
-    assert inputs["inputs"][0]["distributions"] == ["tcbase"]
+    assert inputs["inputs"][0]["distributions"] == ["termin-base"]
 
 
 def test_installed_core_rejects_unpinned_build_identity(tmp_path: Path) -> None:

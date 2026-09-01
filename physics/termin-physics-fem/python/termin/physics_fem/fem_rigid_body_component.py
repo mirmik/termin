@@ -10,7 +10,7 @@ from termin.fem.multibody3d_3 import RigidBody3D
 from termin.fem.inertia3d import SpatialInertia3D
 from termin.geombase import Pose3
 from termin.inspect import InspectField
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.physics_fem.fem_physics_world_component import FEMPhysicsWorldComponent

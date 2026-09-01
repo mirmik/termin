@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin_assets import DataAsset
-from tgfx import TcTexture, TextureEncoding
+from termin.graphics import TcTexture, TextureEncoding
 
 from termin.default_assets.render.texture_spec import validate_texture_encoding
 

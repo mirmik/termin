@@ -1,7 +1,7 @@
 from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from types import SimpleNamespace
 
-from tcbase import Key
+from termin.base import Key
 from termin.editor_core.modules_panel_model import ModulesPanelController
 from termin.editor_native.modules_panel import build_native_modules_panel
 from termin.editor_native.shell import build_native_editor_shell

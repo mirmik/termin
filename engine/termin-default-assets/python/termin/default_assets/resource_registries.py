@@ -69,7 +69,7 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_shader_registry(self):
         """Create AssetRegistry for shader programs."""
         from termin_assets import AssetRegistry
-        from tgfx import TcShaderProgram
+        from termin.graphics import TcShaderProgram
 
         def data_from_asset(asset):
             if asset.program is None:
@@ -125,7 +125,7 @@ class DefaultAssetRegistryFactoryMixin:
         """Create AssetRegistry for textures."""
         from termin_assets import AssetRegistry
         from termin.default_assets.render.texture_asset import TextureAsset
-        from tgfx import TcTexture
+        from termin.graphics import TcTexture
 
         def data_from_asset(asset: TextureAsset) -> TcTexture | None:
             texture = TcTexture.from_uuid(asset.uuid)

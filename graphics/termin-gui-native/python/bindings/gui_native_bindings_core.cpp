@@ -209,7 +209,7 @@ void bind_gui_native_core(nb::module_& m) {
 
     // Re-export the canonical geombase value; do not register a competing
     // termin::SrgbColor Python class in this extension.
-    nb::module_ geom = nb::module_::import_("tcbase._geom_native");
+    nb::module_ geom = nb::module_::import_("termin.base._geom_native");
     m.attr("SrgbColor") = geom.attr("SrgbColor");
 
     nb::class_<termin::gui_native::EdgeInsets>(m, "EdgeInsets")

@@ -69,7 +69,7 @@ class NavMeshMaterialComponent(DrawableComponent):
 
     def set_material_by_name(self, name: str) -> None:
         """Set material by name from ResourceManager."""
-        from tcbase import log
+        from termin.base import log
         from termin_assets import get_resource_manager
 
         rm = get_resource_manager()
@@ -185,7 +185,7 @@ class NavMeshMaterialComponent(DrawableComponent):
             return None
         self.navmesh.ensure_loaded()
         from termin_assets import get_resource_manager
-        from tcbase import log
+        from termin.base import log
 
         rm = get_resource_manager()
         if rm is None:

@@ -1,6 +1,6 @@
 import logging
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.editor_log_capture import EditorLogCapture
 from termin.editor_core.editor_log_model import EditorLogModel

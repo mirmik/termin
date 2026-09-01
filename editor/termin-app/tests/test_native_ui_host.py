@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tcbase import Key
+from termin.base import Key
 from termin.editor_native.ui_host import (
     EditorWindowRegistry,
     NativeUiEventPolicy,
@@ -614,7 +614,7 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
 
     assert host.context.created[0][:2] == (1, 1)
     assert host.context.created[0][2].tolist() == [[[12, 34, 56, 255]]]
-    from tgfx import TextureEncoding
+    from termin.graphics import TextureEncoding
 
     assert host.context.created[0][3] == TextureEncoding.SRGB
     assert image.textures[0][0] == "preview-texture"
@@ -663,7 +663,7 @@ def test_native_ui_host_can_upload_full_resolution_ui_artwork():
     )
     host._sync_image_previews()
 
-    from tgfx import TextureEncoding
+    from termin.graphics import TextureEncoding
 
     assert host.context.created == [(1200, 800, TextureEncoding.SRGB)]
 

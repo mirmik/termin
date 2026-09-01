@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tcnodegraph.model import Graph
+from termin.nodegraph.model import Graph
 import termin.editor_core.pipeline_editor_model as pipeline_editor_model
 from termin.editor_core.pipeline_editor_model import (
     PipelineConnectionValidator,

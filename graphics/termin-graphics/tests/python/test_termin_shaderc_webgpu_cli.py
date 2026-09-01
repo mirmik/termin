@@ -170,7 +170,7 @@ def _pinned_webgpu_tools() -> tuple[Path, Path]:
             encoding="utf-8"
         )
     )
-    from tcbase import Settings
+    from termin.base import Settings
 
     slangc = Path(Settings("termin").get("Shader/slangCompiler", ""))
     naga = root / "build/toolchains" / f"naga-{web_lock['naga_cli']['version']}" / "bin/naga"

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from tcbase import Settings
+from termin.base import Settings
 from termin import shader_runtime, shader_tools
 
 

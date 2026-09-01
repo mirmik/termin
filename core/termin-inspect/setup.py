@@ -9,7 +9,7 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    upstream_packages = {"tcbase": "libtermin_base", "termin_nanobind": "libnanobind"}
+    upstream_packages = {"termin-base": "libtermin_base", "termin_nanobind": "libnanobind"}
     bundle_includes = True
     source_dir = _DIR
 
@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.inspect"],
     package_dir={"termin.inspect": "python/termin/inspect"},
-    install_requires=["tcbase", "termin-nanobind"],
+    install_requires=["termin-base", "termin-nanobind"],
     package_data={
         "termin.inspect": [
             "include/**/*.h",

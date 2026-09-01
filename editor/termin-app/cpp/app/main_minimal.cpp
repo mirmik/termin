@@ -283,11 +283,11 @@ int main(int argc, char* argv[]) {
     if (is_python_layout_smoke_request(argc, argv)) {
         const char* smoke_code = R"(
 import json
-import tcbase
+import termin.base
 import termin.editor
 import termin.editor._editor_native
 print(json.dumps({
-    "tcbase": tcbase.__file__,
+    "termin.base": termin.base.__file__,
     "termin_editor": termin.editor.__file__,
     "termin_editor_native": termin.editor._editor_native.__file__,
 }))

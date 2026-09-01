@@ -7,7 +7,7 @@ import pytest
 @pytest.mark.parametrize(
     "module_name",
     [
-        "tcbase._geom_native",
+        "termin.base._geom_native",
     ],
 )
 def test_native_import_exits_without_nanobind_leak_diagnostics(module_name: str) -> None:

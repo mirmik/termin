@@ -9,16 +9,16 @@ from pathlib import Path
 import sys
 import time
 
-import tgfx
+import termin.graphics as tgfx
 from termin.gui_native import (
     OffscreenGuiComposition,
     tc_ui_document_create,
     tc_ui_document_destroy,
 )
 
-from tcnodegraph.controller import GraphController
-from tcnodegraph.model import Graph
-from tcnodegraph.native_view import build_native_node_graph_view
+from termin.nodegraph.controller import GraphController
+from termin.nodegraph.model import Graph
+from termin.nodegraph.native_view import build_native_node_graph_view
 
 
 _log = logging.getLogger(__name__)

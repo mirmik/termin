@@ -11,7 +11,7 @@ import platform
 import subprocess
 from pathlib import Path
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.settings import EditorSettings
 

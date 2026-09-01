@@ -12,14 +12,14 @@
     },
     {
       "path": "core/termin-base",
-      "distribution": "tcbase",
+      "distribution": "termin-base",
       "native_extensions": [
         {
-          "extension": "tcbase._tcbase_native",
-          "target": "_tcbase_native"
+          "extension": "termin.base._base_native",
+          "target": "_base_native"
         },
         {
-          "extension": "tcbase._geom_native",
+          "extension": "termin.base._geom_native",
           "target": "_geom_native"
         }
       ]
@@ -74,11 +74,11 @@
     },
     {
       "path": "graphics/termin-graphics",
-      "distribution": "tgfx",
+      "distribution": "termin-graphics",
       "native_extensions": [
         {
-          "extension": "tgfx._tgfx_native",
-          "target": "_tgfx_native"
+          "extension": "termin.graphics._graphics_native",
+          "target": "_graphics_native"
         }
       ]
     },
@@ -528,7 +528,7 @@
       "distribution": "termin-nodegraph",
       "native_extensions": [
         {
-          "extension": "tcnodegraph._nodegraph_native",
+          "extension": "termin.nodegraph._nodegraph_native",
           "target": "_nodegraph_native"
         }
       ]

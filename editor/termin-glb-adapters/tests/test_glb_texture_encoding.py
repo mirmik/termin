@@ -15,7 +15,7 @@ from termin.default_assets.render.shader_asset import ShaderAsset
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.image import encode_png_rgba8
 from termin.stdlib import stdlib_root
-from tgfx import TextureEncoding
+from termin.graphics import TextureEncoding
 
 
 _PNG_1X1 = encode_png_rgba8(

@@ -14,7 +14,7 @@ setup(
     packages=["termin.mcp"],
     package_dir={"termin.mcp": "termin/mcp"},
     install_requires=[
-        "tcbase",
+        "termin-base",
     ],
     zip_safe=False,
 )

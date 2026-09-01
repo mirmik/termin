@@ -186,7 +186,7 @@ def _texture_by_index(scene_data) -> dict[int, object]:
 
 
 def _apply_material(item, mesh, material, textures, decoded_textures) -> None:
-    from tcbase._geom_native import LinearColor
+    from termin.base._geom_native import LinearColor
     from termin.image import decode_rgba8
 
     if material is None:
@@ -234,7 +234,7 @@ def _create_mesh_items(
     textures,
     decoded_textures,
 ) -> list:
-    from tcbase._geom_native import SrgbColor
+    from termin.base._geom_native import SrgbColor
     from termin.mesh import Mesh3
 
     internal_indices = scene_data.mesh_index_map.get(source_mesh_index)

@@ -136,7 +136,7 @@ namespace tgfx_bindings {
             nb::arg("enabled"));
         m.def("get_shader_dev_compile_enabled", []() { return termin::tgfx2_get_shader_dev_compile_enabled(); });
 
-        m.attr("LinePoint3") = nb::module_::import_("tcbase._geom_native").attr("Vec3f");
+        m.attr("LinePoint3") = nb::module_::import_("termin.base._geom_native").attr("Vec3f");
 
         nb::enum_<tgfx::LineCapStyle>(m, "LineCapStyle")
             .value("Butt", tgfx::LineCapStyle::Butt)
@@ -1270,9 +1270,9 @@ namespace tgfx_bindings {
             .value("Linear", tgfx::CanvasTextureSampling::Linear)
             .value("Nearest", tgfx::CanvasTextureSampling::Nearest);
 
-        m.attr("CanvasSrgbColor") = nb::module_::import_("tcbase._geom_native").attr("SrgbColor");
+        m.attr("CanvasSrgbColor") = nb::module_::import_("termin.base._geom_native").attr("SrgbColor");
 
-        m.attr("CanvasVec2") = nb::module_::import_("tcbase._geom_native").attr("Vec2f");
+        m.attr("CanvasVec2") = nb::module_::import_("termin.base._geom_native").attr("Vec2f");
 
         nb::class_<tgfx::Canvas2DRenderer>(m, "Canvas2DRenderer")
             .def(nb::init<tgfx::FontAtlas*>(), nb::arg("font").none() = nb::none(), nb::keep_alive<1, 2>())

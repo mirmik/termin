@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, List
 import numpy as np
 
-from tcbase import log, MouseButton, Action
+from termin.base import log, MouseButton, Action
 from termin.input import InputComponent
 from termin.input import MouseButtonEvent
 from termin.inspect import InspectField

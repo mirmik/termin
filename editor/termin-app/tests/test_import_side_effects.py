@@ -37,7 +37,7 @@ def test_import_side_effect_audit_reports_top_level_runtime_resources(tmp_path: 
             [
                 "import logging",
                 "from dataclasses import field",
-                "from tcbase.profiler import Profiler",
+                "from termin.base.profiler import Profiler",
                 "",
                 "logger = logging.getLogger(__name__)",
                 "safe = field(default_factory=dict)",
@@ -117,7 +117,7 @@ from termin.default_assets.builtin_types import (
     get_default_builtin_component_specs,
     get_default_builtin_frame_pass_specs,
 )
-from tcbase.profiler import Profiler
+from termin.base.profiler import Profiler
 from termin_assets import get_resource_manager
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.render_framework import tc_pass_registry_get_all_instance_info

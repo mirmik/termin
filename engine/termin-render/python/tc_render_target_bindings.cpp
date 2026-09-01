@@ -279,7 +279,7 @@ void bind_tc_render_target(nb::module_& m) {
                          tc_texture_handle t = tc_render_target_get_color_texture(h);
                          if (tc_texture_handle_is_invalid(t))
                              return nb::none();
-                         nb::module_ tgfx = nb::module_::import_("tgfx._tgfx_native");
+                         nb::module_ tgfx = nb::module_::import_("termin.graphics._graphics_native");
                          return tgfx.attr("TcTexture").attr("from_handle")(t.index, t.generation);
                      })
         .def_prop_ro("depth_texture",
@@ -287,7 +287,7 @@ void bind_tc_render_target(nb::module_& m) {
                          tc_texture_handle t = tc_render_target_get_depth_texture(h);
                          if (tc_texture_handle_is_invalid(t))
                              return nb::none();
-                         nb::module_ tgfx = nb::module_::import_("tgfx._tgfx_native");
+                         nb::module_ tgfx = nb::module_::import_("termin.graphics._graphics_native");
                          return tgfx.attr("TcTexture").attr("from_handle")(t.index, t.generation);
                      })
         .def(

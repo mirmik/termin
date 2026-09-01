@@ -22,7 +22,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.scene"],
     package_dir={"termin.scene": "python/termin/scene"},
-    install_requires=["termin-nanobind", "termin-inspect", "tcbase"],
+    install_requires=["termin-nanobind", "termin-inspect", "termin-base"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

@@ -12,6 +12,6 @@ setup(
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
     packages=["termin_assets"],
-    install_requires=["tcbase", "watchdog"],
+    install_requires=["termin-base", "watchdog"],
     zip_safe=False,
 )

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import pytest
-from tcbase import Settings
+from termin.base import Settings
 
 from termin.project_build import ToolchainContext
 from termin.editor_core.settings import EditorSettings

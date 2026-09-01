@@ -453,7 +453,7 @@ task run:python -- -m pytest
 task run:python -- path/to/script.py
 
 # Проверка только установленного SDK, без checkout overlay
-sdk/bin/termin_python -c "import tcbase, termin.engine"
+sdk/bin/termin_python -c "import termin.base, termin.engine"
 ```
 
 На Windows первые две команды также выполняются через `task run:python`.
@@ -526,7 +526,7 @@ Python-пакет состоит из двух частей:
 `build-system/packages.json`. Политика именования и полный инвентарь
 `repo path / distribution / import namespace` описаны в
 [Python Package Naming](./python-package-naming.md). В `install_requires` нужно
-    указывать distribution name из manifest (`tgfx`, `termin-mesh`, `tcbase`, ...), а не
+    указывать distribution name из manifest (`termin-graphics`, `termin-mesh`, `termin-base`, ...), а не
 repo path (`termin-graphics`, `termin-mesh`, `termin-base`) и не случайный
 import namespace.
 
@@ -685,7 +685,7 @@ ambient host `site-packages` запрещено. Отдельный top-level `t
 частности, graphics/display/GUI subset должен устанавливаться из `sdk/wheels`
 без `termin-app`; внешний Diffusion Editor является consumer gate этого
 контракта. Финальная wheelhouse verification устанавливает representative
-`tcbase`/`tgfx`/`termin-display`/`termin-gui-native` subset в чистый target и
+`termin-base`/`termin-graphics`/`termin-display`/`termin-gui-native` subset в чистый target и
 отвергает `termin-app` wheel или dependency.
 
 ---

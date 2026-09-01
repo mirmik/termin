@@ -6,7 +6,7 @@ from pathlib import Path
 import threading
 import time
 
-from tcbase import log
+from termin.base import log
 from termin_assets.identifiable import Identifiable
 
 

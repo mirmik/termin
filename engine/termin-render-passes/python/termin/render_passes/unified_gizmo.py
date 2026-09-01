@@ -7,7 +7,7 @@ from typing import Any, Callable, List, Protocol, Set, Tuple, TYPE_CHECKING
 from termin.render_framework.python_pass import PythonFramePass
 from termin.render import ImmediateRenderer
 from termin.inspect import InspectField
-from tcbase.profiler import Profiler
+from termin.base.profiler import Profiler
 
 if TYPE_CHECKING:
     from termin.render_framework import ExecuteContext
@@ -74,8 +74,8 @@ class UnifiedGizmoPass(PythonFramePass):
 
         with profiler.section("UnifiedGizmoPass"):
             if ctx.ctx2 is None:
-                from tcbase import log
-                log.error("[UnifiedGizmoPass] ctx.ctx2 is None — UnifiedGizmoPass is tgfx2-only")
+                from termin.base import log
+                log.error("[UnifiedGizmoPass] ctx.ctx2 is None — pass is tgfx2-only")
                 return
 
             draw_source = self._get_draw_source()
@@ -85,12 +85,12 @@ class UnifiedGizmoPass(PythonFramePass):
 
             target_tex2 = ctx.tex2_writes.get(self.output_res)
             if not target_tex2:
-                from tcbase import log
+                from termin.base import log
                 log.warn(f"[UnifiedGizmoPass] tex2 write '{self.output_res}' missing, skipping")
                 return
             target_depth_tex2 = ctx.tex2_depth_writes.get(self.output_res)
             if not target_depth_tex2:
-                from tcbase import log
+                from termin.base import log
                 log.error(f"[UnifiedGizmoPass] depth tex2 write '{self.output_res}' missing, skipping")
                 return
 

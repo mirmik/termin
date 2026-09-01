@@ -6,7 +6,7 @@ import atexit
 from dataclasses import dataclass
 from typing import ClassVar
 
-from tcbase import log
+from termin.base import log
 
 from ._engine_native import (
     WorldContext,

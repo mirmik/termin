@@ -11,7 +11,7 @@ from termin.mesh.components import MeshComponent, TcMesh
 from termin.render_components import MeshRenderer
 from termin.materials import TcMaterial as Material
 from termin.geombase import SrgbColor
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.scene import Entity

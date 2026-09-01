@@ -130,13 +130,13 @@ def resolve_sdk_python_layout(
     if not site_packages.is_dir():
         raise RuntimeError(f"SDK site-packages directory was not found: {site_packages}")
     if require_native_bindings:
-        tcbase_dir = site_packages / "tcbase"
-        native_bindings = tuple(tcbase_dir.glob("_tcbase_native*.so")) + tuple(
-            tcbase_dir.glob("_tcbase_native*.pyd")
+        base_dir = site_packages / "termin" / "base"
+        native_bindings = tuple(base_dir.glob("_base_native*.so")) + tuple(
+            base_dir.glob("_base_native*.pyd")
         )
         if not native_bindings:
             raise RuntimeError(
-                f"SDK Python {version} native bindings were not found under {tcbase_dir}"
+                f"SDK Python {version} native bindings were not found under {base_dir}"
             )
     return site_packages
 
@@ -204,13 +204,13 @@ def publish_cmake_python_install(
             bytecode.unlink()
 
     if modules_only:
-        tcbase_dir = site_packages / "tcbase"
-        native_bindings = tuple(tcbase_dir.glob("_tcbase_native*.so")) + tuple(
-            tcbase_dir.glob("_tcbase_native*.pyd")
+        base_dir = site_packages / "termin" / "base"
+        native_bindings = tuple(base_dir.glob("_base_native*.so")) + tuple(
+            base_dir.glob("_base_native*.pyd")
         )
         if not native_bindings:
             raise RuntimeError(
-                f"staged Python native bindings were not found under {tcbase_dir}"
+                f"staged Python native bindings were not found under {base_dir}"
             )
     else:
         resolve_sdk_python_layout(sdk_prefix, require_native_bindings=True)

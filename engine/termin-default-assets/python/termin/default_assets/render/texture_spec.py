@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from tcbase import log
+from termin.base import log
 
 
 TEXTURE_ENCODINGS = frozenset({"srgb", "linear"})

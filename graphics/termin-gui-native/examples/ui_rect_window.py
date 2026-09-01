@@ -8,7 +8,7 @@ import os
 import sys
 import time
 
-import tgfx
+import termin.graphics as tgfx
 from termin.window import WindowedGraphicsSession, quit_sdl
 from termin.gui_native import (
     tc_ui_document_create,

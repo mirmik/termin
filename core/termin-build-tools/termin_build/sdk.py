@@ -2207,7 +2207,7 @@ def main(argv: list[str] | None = None) -> int:
     resolve_python_parser.add_argument(
         "--require-native-bindings",
         action="store_true",
-        help="Require the tcbase native extension in the resolved layout.",
+        help="Require the termin.base native extension in the resolved layout.",
     )
 
     publish_python_parser = subparsers.add_parser(

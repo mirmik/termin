@@ -2,7 +2,7 @@ from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.editor_core.signal import Signal
 from termin.editor_native.game_mode_controller import NativeGameModeController
 from termin.editor_native.shell import build_native_editor_shell
-from tcbase import Key
+from termin.base import Key
 
 
 class _GameModeModel:

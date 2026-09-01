@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tcbase import log
+from termin.base import log
 
 from termin.csg.document_edit import (
     SelectionData,

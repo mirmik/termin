@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from tcbase import log
+from termin.base import log
 from termin.geombase import Vec3
 from termin.inspect import InspectField
 from termin.physics_fem import FEMArticulationComponent

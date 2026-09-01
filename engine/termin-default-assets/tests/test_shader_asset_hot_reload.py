@@ -79,7 +79,7 @@ FragmentOutput main(FragmentInput input)
 
 
 def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) -> None:
-    import tgfx
+    import termin.graphics
     from termin.default_assets.render.shader_asset import make_phase_uuid
     from termin.default_assets.render.shader_plugin import ShaderImportPlugin
     from termin.default_assets.resource_manager import DefaultResourceManager
@@ -118,7 +118,7 @@ def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) 
     assert material.shader_program_version == old_program_version
 
     phase_uuid = make_phase_uuid("hot-reload-shader", "opaque")
-    tc_shader = tgfx.TcShader.from_uuid(phase_uuid)
+    tc_shader = termin.graphics.TcShader.from_uuid(phase_uuid)
     assert tc_shader.is_valid
     old_version = tc_shader.version
     old_hash = tc_shader.source_hash
@@ -129,7 +129,7 @@ def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) 
     assert reload_result is not None
     rm.reload_file(reload_result)
 
-    reloaded = tgfx.TcShader.from_uuid(phase_uuid)
+    reloaded = termin.graphics.TcShader.from_uuid(phase_uuid)
     assert reloaded.is_valid
     assert reloaded.uuid == phase_uuid
     assert reloaded.version > old_version
@@ -172,7 +172,7 @@ def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) 
     assert with_shadow is not None
     shadow_uuid = make_phase_uuid("hot-reload-shader", "shadow")
     assert with_shadow.find_phase("shadow")["shader"].uuid == shadow_uuid
-    shadow_shader = tgfx.TcShader.from_uuid(shadow_uuid)
+    shadow_shader = termin.graphics.TcShader.from_uuid(shadow_uuid)
     assert shadow_shader.is_valid
 
     shader_path.write_text(
@@ -191,7 +191,7 @@ def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) 
     assert shadow_shader.is_valid
 
     published_version = without_shadow.version
-    published_hash = tgfx.TcShader.from_uuid(phase_uuid).source_hash
+    published_hash = termin.graphics.TcShader.from_uuid(phase_uuid).source_hash
     shader_path.write_text("@program Broken\n@language slang\n", encoding="utf-8")
     failed_result = plugin.preload(str(shader_path))
     assert failed_result is not None
@@ -200,7 +200,7 @@ def test_shader_runtime_reload_updates_existing_phase_tc_shader(tmp_path: Path) 
     after_failure = rm.get_shader("HotReload")
     assert after_failure is not None
     assert after_failure.version == published_version
-    assert tgfx.TcShader.from_uuid(phase_uuid).source_hash == published_hash
+    assert termin.graphics.TcShader.from_uuid(phase_uuid).source_hash == published_hash
 
 
 def test_shader_reload_recovers_material_after_initial_shader_parse_failure(
@@ -377,7 +377,7 @@ def test_shader_update_reselects_encoding_aware_symbolic_default(
 
 
 def test_shader_asset_releases_program_without_invalidating_live_handles(tmp_path: Path) -> None:
-    import tgfx
+    import termin.graphics
     from termin.default_assets.render.shader_plugin import ShaderImportPlugin
     from termin.default_assets.resource_manager import DefaultResourceManager
 
@@ -400,8 +400,8 @@ def test_shader_asset_releases_program_without_invalidating_live_handles(tmp_pat
     del removed
     gc.collect()
     assert external.is_valid
-    assert tgfx.TcShaderProgram.find("shader-lifetime-program").is_valid
+    assert termin.graphics.TcShaderProgram.find("shader-lifetime-program").is_valid
 
     del external
     gc.collect()
-    assert not tgfx.TcShaderProgram.find("shader-lifetime-program").is_valid
+    assert not termin.graphics.TcShaderProgram.find("shader-lifetime-program").is_valid

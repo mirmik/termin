@@ -27,7 +27,7 @@ setup(
         "termin_ui_component_specs": "python/termin_ui_component_specs",
     },
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-gui-native",
         "termin-input",
         "termin-inspect",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from tcbase import log
+from termin.base import log
 from termin.inspect import InspectField
 from termin.mesh.components.mesh_component import MeshComponent
 from termin.scene.python_component import PythonComponent

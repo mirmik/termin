@@ -11,9 +11,9 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 class BuildExt(TerminCMakeBuildExt):
     upstream_packages = {
-        "tcbase": "libtermin_base",
+        "termin-base": "libtermin_base",
         "termin-mesh": "libtermin_mesh",
-        "tgfx": "libtermin_graphics2",
+        "termin-graphics": "libtermin_graphics2",
         "termin_nanobind": "libnanobind",
     }
     source_dir = _DIR
@@ -30,9 +30,9 @@ setup(
     packages=["termin.plot"],
     package_dir={"termin.plot": "python/tcplot"},
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-mesh",
-        "tgfx",
+        "termin-graphics",
         "termin-nanobind",
         "numpy",
     ],

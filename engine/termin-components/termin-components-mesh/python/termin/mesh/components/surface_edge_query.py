@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tcbase import log
-from tcbase._geom_native import Mat44f, Vec3
+from termin.base import log
+from termin.base._geom_native import Mat44f, Vec3
 
 
 @dataclass(frozen=True)

@@ -17,7 +17,7 @@ setup(
     ],
     package_dir={"": "."},
     install_requires=[
-        "tcbase",
+        "termin-base",
     ],
     zip_safe=False,
 )

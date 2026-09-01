@@ -21,7 +21,7 @@ from pathlib import Path
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Callable, Dict, Protocol, Set, runtime_checkable
 
-from tcbase import log
+from termin.base import log
 from termin_assets.preload import AssetRegistration, PreLoadResult
 from termin_assets.spec_file import get_uuid_from_spec, read_spec_file, write_spec_file
 

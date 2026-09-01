@@ -419,7 +419,7 @@ namespace termin {
 
 NB_MODULE(_viewport_native, m) {
     m.doc() = "Viewport native module (TcViewport)";
-    nb::module_::import_("tcbase._geom_native");
+    nb::module_::import_("termin.base._geom_native");
     nb::module_::import_("termin.scene._scene_native");
     termin::bind_tc_viewport_class(m);
 }

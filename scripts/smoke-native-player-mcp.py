@@ -182,7 +182,7 @@ def _create_project(sdk_python: Path, temp_root: Path) -> Path:
 
 import os
 
-from tcbase import log
+from termin.base import log
 from termin.engine import WorldController, require_world_context
 from termin.inspect import InspectField
 from termin.scene import PythonComponent

@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Iterator
 
-from tcbase import log
+from termin.base import log
 
 
 # Project descriptors claim package namespaces before importing them. A class

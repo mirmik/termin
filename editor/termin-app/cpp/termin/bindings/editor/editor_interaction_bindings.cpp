@@ -20,7 +20,7 @@ namespace nb = nanobind;
 namespace termin {
 
     void bind_editor_interaction(nb::module_& m) {
-        nb::module_::import_("tcbase._geom_native");
+        nb::module_::import_("termin.base._geom_native");
 
         // SelectionManager
         nb::class_<SelectionManager>(m, "SelectionManager")

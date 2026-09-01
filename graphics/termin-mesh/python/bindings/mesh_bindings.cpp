@@ -49,7 +49,7 @@ namespace {
 namespace tmesh_bindings {
 
     void bind_mesh(nb::module_& m) {
-        nb::module_::import_("tcbase._geom_native");
+        nb::module_::import_("termin.base._geom_native");
 
         // =========================================================================
         // Mesh3 - Pure CPU mesh

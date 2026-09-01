@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 from termin.inspect import InspectField
 from termin.render import RENDER_CATEGORY_NAVMESH
 from termin.scene import PythonComponent

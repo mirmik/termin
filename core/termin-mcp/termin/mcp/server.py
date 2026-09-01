@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from tcbase import log
+from termin.base import log
 
 from termin.mcp.python_executor import PythonExecutionResult, PythonScriptExecutor
 

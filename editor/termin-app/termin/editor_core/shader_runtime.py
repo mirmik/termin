@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from tcbase import log
+from termin.base import log
 
 from termin.shader_runtime import (
     resolve_slangc as resolve_shared_slangc,
@@ -78,9 +78,9 @@ def configure_shader_runtime(
         if render_engine is None:
             # Non-engine tools such as the launcher still own one standalone
             # graphics runtime and use the compatibility resolver.
-            import tgfx
+            import termin.graphics
 
-            tgfx.configure_shader_runtime(
+            termin.graphics.configure_shader_runtime(
                 artifact_root=str(artifact_root),
                 cache_root=str(cache_root),
                 shader_compiler=str(compiler),

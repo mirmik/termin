@@ -18,7 +18,7 @@ _python_pass_registrations: dict[str, tuple[type, str]] = {}
 
 
 def _log_cleanup_error(message: str) -> None:
-    from tcbase import log
+    from termin.base import log
 
     log.error(message)
 
@@ -120,12 +120,12 @@ def _register_python_pass_class(cls: type, owner: str | None = None) -> None:
             from termin_modules.module_context import owner_for_python_module
         except ModuleNotFoundError as exc:
             if exc.name not in ("termin_modules", "termin_modules.module_context"):
-                from tcbase import log
+                from termin.base import log
 
                 log.error("Failed to load module ownership context", exc_info=True)
             owner = "termin-render-python"
         except Exception:
-            from tcbase import log
+            from termin.base import log
 
             log.error("Failed to load module ownership context", exc_info=True)
             owner = "termin-render-python"

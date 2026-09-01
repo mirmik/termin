@@ -1,5 +1,5 @@
 from .kinematic import KinematicTransform3
-from tcbase._geom_native import Pose3, Screw3
+from termin.base._geom_native import Pose3, Screw3
 from .transform import Transform3
 import numpy
 

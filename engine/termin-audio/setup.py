@@ -33,7 +33,7 @@ setup(
         "termin_audio_component_specs": "python/termin_audio_component_specs",
     },
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-nanobind",
     ],
     ext_modules=native_extensions_for_source(_DIR),

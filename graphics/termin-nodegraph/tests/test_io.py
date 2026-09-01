@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tcnodegraph import (
+from termin.nodegraph import (
     Graph,
     GraphController,
     graph_from_dict,
@@ -170,7 +170,7 @@ class IoTests(unittest.TestCase):
 
         for data in invalid_graphs:
             with self.subTest(data=data), self.assertLogs(
-                "tcnodegraph.io", level="ERROR"
+                "termin.nodegraph.io", level="ERROR"
             ) as logs, self.assertRaises(ValueError):
                 graph_from_dict(data)
             self.assertIn("rejected invalid graph", "\n".join(logs.output))

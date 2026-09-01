@@ -3,7 +3,7 @@ import weakref
 
 import pytest
 
-from tcnodegraph import (
+from termin.nodegraph import (
     Graph,
     GraphController,
     NodeBodyContent,

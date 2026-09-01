@@ -14,7 +14,7 @@ setup(
     packages=find_namespace_packages(where="python", include=["termin.project", "termin.project.*"]),
     package_dir={"": "python"},
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-render",
     ],
     zip_safe=False,

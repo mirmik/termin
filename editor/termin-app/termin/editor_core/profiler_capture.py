@@ -6,7 +6,7 @@ models are owned by the native ``FrameProfilerController``.
 
 from __future__ import annotations
 
-from tcbase.profiler import Profiler
+from termin.base.profiler import Profiler
 
 
 class ProfilerCaptureCoordinator:

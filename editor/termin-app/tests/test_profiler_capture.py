@@ -1,4 +1,4 @@
-from tcbase.profiler import FrameProfile
+from termin.base.profiler import FrameProfile
 
 from termin.editor_core.profiler_capture import ProfilerCaptureCoordinator
 from termin.editor_core.profiler_model import ProfilerController

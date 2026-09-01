@@ -11,8 +11,8 @@ import uuid
 
 import numpy as np
 
-from tcbase import Key, MouseButton
-from tcbase._geom_native import LinearColor
+from termin.base import Key, MouseButton
+from termin.base._geom_native import LinearColor
 from termin.csg import Solid, to_mesh3, to_tc_mesh
 from termin.csg.viewer_camera import OrbitCamera
 from termin.display.window import (
@@ -20,7 +20,7 @@ from termin.display.window import (
     quit_sdl,
     wait_sdl_events_timeout,
 )
-from tgfx import (
+from termin.graphics import (
     CULL_NONE,
     PIXEL_D32F,
     PIXEL_RGBA8,

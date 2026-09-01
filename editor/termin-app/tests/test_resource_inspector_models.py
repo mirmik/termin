@@ -57,7 +57,7 @@ def test_texture_inspector_round_trips_full_spec_and_recreates_native_texture(
     from termin.image import write_png_rgba8_file
     from termin.default_assets.resource_manager import DefaultResourceManager
     from termin_assets import set_resource_manager_factory
-    from tgfx import TextureEncoding
+    from termin.graphics import TextureEncoding
 
     texture_path = tmp_path / "albedo.png"
     pixels = np.array([[[128, 128, 128, 64]]], dtype=np.uint8)

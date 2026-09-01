@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from tcbase import Settings, log
+from termin.base import Settings, log
 
 from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
 

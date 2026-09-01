@@ -94,7 +94,7 @@ def configure_resource_manager_factory(factory: Callable[[], object] | None) -> 
 
 def _log_shutdown_error(scope: str, exc: Exception) -> None:
     try:
-        from tcbase import log
+        from termin.base import log
 
         log.error(f"[Bootstrap] failed to shutdown {scope}: {exc}")
     except Exception:

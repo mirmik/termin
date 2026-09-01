@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from tcbase import log
+from termin.base import log
 
 from .editor_log_model import EditorLogModel
 

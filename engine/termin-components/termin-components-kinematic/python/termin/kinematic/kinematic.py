@@ -1,5 +1,5 @@
 from .transform import Transform3
-from tcbase._geom_native import Pose3, Screw3, Vec3, se3_exp
+from termin.base._geom_native import Pose3, Screw3, Vec3, se3_exp
 
 class KinematicTransform3(Transform3):
     """A Transform3 specialized for kinematic chains."""

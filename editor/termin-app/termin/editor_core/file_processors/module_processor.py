@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Set
 
-from tcbase import log
+from termin.base import log
 from termin.editor_core.project_file_watcher import FilePreLoader
 
 

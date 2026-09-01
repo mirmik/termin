@@ -504,13 +504,13 @@ def _load_project_settings(project_root: Path) -> ProjectSettings:
         with open(settings_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception as exc:
-        from tcbase import log
+        from termin.base import log
 
         log.error(f"[DesktopBuild] Failed to read project settings: {exc}")
         return ProjectSettings()
 
     if not isinstance(data, dict):
-        from tcbase import log
+        from termin.base import log
 
         log.error("[DesktopBuild] Project settings root must be an object")
         return ProjectSettings()

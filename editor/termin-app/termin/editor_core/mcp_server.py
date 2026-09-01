@@ -6,7 +6,7 @@ import json
 import os
 import time
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.mcp_contract import editor_mcp_tool_schemas
 from termin.editor_core.project_context import current_project_path

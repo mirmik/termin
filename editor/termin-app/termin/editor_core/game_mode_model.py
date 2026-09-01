@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from tcbase import log
+from termin.base import log
 from termin.editor_core.signal import Signal
 from termin.engine import SceneKey, SceneRole
 

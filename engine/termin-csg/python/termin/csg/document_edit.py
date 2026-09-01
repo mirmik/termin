@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from tcbase import log
+from termin.base import log
 
 from termin.csg.document_raycast import (
     ray_plane_intersection,

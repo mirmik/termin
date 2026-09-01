@@ -57,10 +57,9 @@ CMAKE_TARGET_TO_DIR = {
 
 # Map Python package names to directory names
 PYTHON_PKG_TO_DIR = {
-    "tcbase": "termin-base",
-    "tgfx": "termin-graphics",
     "termin-mesh": "termin-mesh",
-    "tcnodegraph": "termin-nodegraph",
+    "termin-graphics": "termin-graphics",
+    "termin-nodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "termin-plot": "tcplot",
     "termin": "termin",
@@ -102,10 +101,10 @@ EXTERNAL_PKGS = {
 # Longer prefixes are matched first (most specific wins).
 PYTHON_IMPORT_TO_DIR = {
     # Standalone packages
-    "tcbase": "termin-base",
-    "tgfx": "termin-graphics",
+    "termin.base": "termin-base",
+    "termin.graphics": "termin-graphics",
     "termin.mesh": "termin-mesh",
-    "tcnodegraph": "termin-nodegraph",
+    "termin.nodegraph": "termin-nodegraph",
     "termin_modules": "termin-modules",
     "termin_nanobind": "termin-nanobind-sdk",
     "termin_assets": "termin-assets",

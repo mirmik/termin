@@ -20,7 +20,7 @@ from termin.voxels._voxels_native import TcVoxelGrid
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.mesh import TcMesh
 from termin.inspect import InspectField
-from tcbase import log
+from termin.base import log
 
 # Вершины единичного куба (центрирован в origin)
 _CUBE_VERTICES = np.array([
@@ -205,7 +205,7 @@ class VoxelDisplayComponent(DrawableComponent):
         """Получить материал с voxel шейдером."""
         if self._material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from tgfx import RenderState
+            from termin.graphics import RenderState
 
             shader = voxel_display_shader()
             self._material = Material(

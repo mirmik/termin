@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import tcbase
+import termin.base as tcbase
 
 
 def test_input_enums_match_event_integer_values():

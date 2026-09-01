@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 from termin.image import write_png_rgba8_file
 
 

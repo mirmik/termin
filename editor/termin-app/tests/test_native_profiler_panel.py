@@ -1,6 +1,6 @@
 from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
-from tcbase import Key
-from tcbase.profiler import FrameProfile, SectionTiming
+from termin.base import Key
+from termin.base.profiler import FrameProfile, SectionTiming
 from termin.editor_core.profiler_model import ProfilerController
 from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,

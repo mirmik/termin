@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,

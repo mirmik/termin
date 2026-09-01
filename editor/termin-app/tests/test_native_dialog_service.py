@@ -3,7 +3,7 @@ from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 import pytest
 
-from tcbase import MouseButton
+from termin.base import MouseButton
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (

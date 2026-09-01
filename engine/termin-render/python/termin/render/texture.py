@@ -8,7 +8,7 @@ from typing import Optional
 import numpy as np
 
 from termin.default_assets.render.texture_asset import TextureAsset
-from tgfx import TcTexture
+from termin.graphics import TcTexture
 
 
 class Texture:

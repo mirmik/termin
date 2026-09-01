@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tcbase import log
+from termin.base import log
 
 from termin.render_framework._render_framework_native import (
     TcFrameGraphError,

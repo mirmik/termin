@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 from typing import Callable
 
-from tgfx import Tgfx2Context
+from termin.graphics import Tgfx2Context
 from termin.gui_native import OffscreenGuiComposition, Size, StyleRole
 
 
@@ -182,7 +182,7 @@ class OffscreenEditorContent:
                 self._release_image_preview(preview)
                 continue
             if preview.texture is None:
-                from tgfx import TextureEncoding
+                from termin.graphics import TextureEncoding
 
                 height, width, _channels = preview.pixels.shape
                 preview.texture = self.context.create_texture_rgba8(

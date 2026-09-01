@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 
 from termin_assets.asset import Asset
 from termin_assets.asset_store import AssetStore

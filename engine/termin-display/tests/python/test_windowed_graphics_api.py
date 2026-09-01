@@ -5,7 +5,7 @@ from termin.display.window import (
     WindowedGraphicsSession,
     attach_window_input_display,
 )
-from tgfx import GraphicsHost, Tgfx2Context
+from termin.graphics import GraphicsHost, Tgfx2Context
 
 
 def test_windowed_graphics_api_has_one_typed_graphics_host_boundary():

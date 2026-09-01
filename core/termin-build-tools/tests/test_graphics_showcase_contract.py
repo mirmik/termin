@@ -165,7 +165,7 @@ def test_graphics_showcase_scene_view3d_left_drag_orbits_camera() -> None:
 
         from graphics_showcase.sections import _visual_scene3d_widget, sdk_font_path
         from graphics_showcase.windowed import _WindowedApplication
-        from tcbase import MouseButton
+        from termin.base import MouseButton
         from termin.gui_native import (
             EventResult,
             OffscreenGuiComposition,

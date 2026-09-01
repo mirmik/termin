@@ -24,7 +24,7 @@ setup(
     package_dir={"termin.animation": "python/termin/animation"},
     install_requires=[
         "termin-nanobind",
-        "tcbase",
+        "termin-base",
         "termin-inspect",
     ],
     ext_modules=native_extensions_for_source(_DIR),

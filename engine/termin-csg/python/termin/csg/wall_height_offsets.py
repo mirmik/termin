@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tcbase import log
+from termin.base import log
 
 from termin.csg.procedural_document import OPERATION_KIND_WALL, OperationDocument, ProceduralMeshDocument
 

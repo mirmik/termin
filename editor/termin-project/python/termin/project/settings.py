@@ -18,7 +18,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Optional
 
-from tcbase import log
+from termin.base import log
 from termin.project.application_identity import (
     ProjectApplicationIdentity,
     default_project_application_identity,

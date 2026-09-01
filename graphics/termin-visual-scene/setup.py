@@ -10,8 +10,8 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 class BuildExt(TerminCMakeBuildExt):
     upstream_packages = {
-        "tcbase": "libtermin_base",
-        "tgfx": "libtermin_graphics2",
+        "termin-base": "libtermin_base",
+        "termin-graphics": "libtermin_graphics2",
         "termin-mesh": "libtermin_mesh",
         "termin_nanobind": "libnanobind",
     }
@@ -27,8 +27,8 @@ setup(
     packages=["termin.visual_scene"],
     package_dir={"termin.visual_scene": "python/termin/visual_scene"},
     install_requires=[
-        "tcbase",
-        "tgfx",
+        "termin-base",
+        "termin-graphics",
         "termin-mesh",
         "termin-nanobind",
     ],

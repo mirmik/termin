@@ -5,8 +5,8 @@ from array import array
 import numpy as np
 import termin.mesh
 import pytest
-from tcbase import clear_resource_loader, set_resource_loader
-from tcbase._geom_native import Ray3, Vec3
+from termin.base import clear_resource_loader, set_resource_loader
+from termin.base._geom_native import Ray3, Vec3
 
 
 def _v3(value) -> Vec3:

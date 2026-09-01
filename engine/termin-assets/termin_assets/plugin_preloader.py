@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from tcbase import log
+from termin.base import log
 
 from termin_assets.plugin import AssetImportPlugin
 from termin_assets.preload import AssetIdentityPolicy, PreLoadResult

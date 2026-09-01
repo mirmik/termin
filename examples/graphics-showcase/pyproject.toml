@@ -15,5 +15,5 @@ dependencies = [
     "termin-nodegraph",
     "termin-skeleton",
     "termin-visual-scene",
-    "tgfx",
+    "termin-graphics",
 ]

@@ -1,6 +1,6 @@
 import math
 
-from tcbase._geom_native import LinearColor, SrgbColor, linear_to_srgb, srgb_to_linear
+from termin.base._geom_native import LinearColor, SrgbColor, linear_to_srgb, srgb_to_linear
 
 
 def test_color_bindings_expose_typed_values_and_conversion():

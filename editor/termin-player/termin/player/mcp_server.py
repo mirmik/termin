@@ -6,7 +6,7 @@ import json
 import os
 from typing import TYPE_CHECKING, Any
 
-from tcbase import log
+from termin.base import log
 
 from termin.mcp import PythonScriptExecutor, TerminMcpConfig, TerminMcpServer, create_secure_mcp_config
 

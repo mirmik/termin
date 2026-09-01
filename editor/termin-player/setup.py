@@ -14,7 +14,7 @@ setup(
     packages=["termin.player"],
     package_dir={"termin.player": "termin/player"},
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-assets",
         "termin-default-assets",
         "termin-bootstrap",
@@ -50,7 +50,7 @@ setup(
         "termin-navmesh",
         "termin-lighting",
         "termin-mesh",
-        "tgfx",
+        "termin-graphics",
         "numpy",
         "packaging",
     ],

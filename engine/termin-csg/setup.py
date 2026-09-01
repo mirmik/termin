@@ -25,11 +25,11 @@ setup(
     install_requires=[
         "termin-nanobind",
         "numpy",
-        "tcbase",
+        "termin-base",
         "termin-gui-native",
         "termin-shader-runtime",
         "termin-display",
-        "tgfx",
+        "termin-graphics",
         "termin-mesh",
     ],
     ext_modules=native_extensions_for_source(_DIR),

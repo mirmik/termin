@@ -1165,7 +1165,7 @@ def verify_python_wheelhouse(sdk_prefix: Path) -> int:
             print(f"  {error}", file=sys.stderr)
         print(f"FAILED: {len(errors)} wheelhouse provenance error(s)", file=sys.stderr)
         return 1
-    subset_names = ("tcbase", "tgfx", "termin-display", "termin-gui-native")
+    subset_names = ("termin-base", "termin-graphics", "termin-display", "termin-gui-native")
     if not set(subset_names) <= runtime_versions.keys():
         print(
             f"  OK: {len(artifacts_by_distribution)} native wheel versions and "

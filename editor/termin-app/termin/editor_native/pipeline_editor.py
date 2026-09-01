@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 import weakref
 
-from tcnodegraph.native_view import build_native_node_graph_view
+from termin.nodegraph.native_view import build_native_node_graph_view
 from termin.editor_core.pipeline_editor_model import PipelineEditorController
 from termin.gui_native import (
     CommandData,

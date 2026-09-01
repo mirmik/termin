@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tcbase import log
+from termin.base import log
 from termin.inspect import InspectField
 from termin.mesh import TcMesh
 

@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.engine import SceneManager

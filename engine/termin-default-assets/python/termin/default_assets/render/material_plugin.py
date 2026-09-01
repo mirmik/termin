@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult

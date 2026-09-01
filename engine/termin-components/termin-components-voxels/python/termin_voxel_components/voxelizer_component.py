@@ -27,7 +27,7 @@ from termin.navmesh.inspect_fields import (
 from termin_voxel_components.voxelizer_actions import VoxelizerActionService
 from termin_voxel_components.voxelizer_debug_draw import VoxelizerDebugDrawService
 from termin_voxel_components.voxelize_enums import VoxelizeMode, VoxelizeSource
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
@@ -205,7 +205,7 @@ class VoxelizerComponent(DrawableComponent):
         """Создаёт материал для отладочной визуализации."""
         if self._debug_material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from tgfx import RenderState
+            from termin.graphics import RenderState
 
             shader = voxel_display_shader()
             self._debug_material = Material(
@@ -226,7 +226,7 @@ class VoxelizerComponent(DrawableComponent):
         """Создаёт материал для transparent рендеринга (внутренние контуры)."""
         if self._debug_transparent_material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from tgfx import RenderState
+            from termin.graphics import RenderState
 
             shader = voxel_display_shader()
             self._debug_transparent_material = Material(
@@ -248,8 +248,8 @@ class VoxelizerComponent(DrawableComponent):
     def _get_or_create_line_material(self) -> Material:
         """Создаёт материал для отрисовки контурных линий."""
         if self._debug_line_material is None:
-            from tgfx import RenderState
-            from tgfx import TcShader
+            from termin.graphics import RenderState
+            from termin.graphics import TcShader
 
             shader = TcShader.from_builtin_catalog("termin-engine-voxelizer-line")
 

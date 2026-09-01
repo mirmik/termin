@@ -69,7 +69,7 @@ class VoxelGridAsset(DataAsset["VoxelGrid"]):
 
         grid = self.cached_data
         if not isinstance(grid, NativeVoxelGrid):
-            from tcbase import log
+            from termin.base import log
 
             log.error("[VoxelGridAsset] Expected native termin.voxels.VoxelGrid payload")
             raise TypeError("VoxelGridAsset requires native termin.voxels.VoxelGrid payload")

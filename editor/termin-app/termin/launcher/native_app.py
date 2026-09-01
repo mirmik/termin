@@ -512,7 +512,7 @@ def run_native_launcher(controller: LauncherController) -> None:
     from termin.editor_core.application_icon import apply_editor_window_icon
     from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
     from termin.editor_native.ui_host import NativeWidgetContent
-    from tgfx import Tgfx2Context
+    from termin.graphics import Tgfx2Context
 
     configure_sdk_shader_runtime("launcher-native")
     graphics_session = WindowedGraphicsSession.create_native()

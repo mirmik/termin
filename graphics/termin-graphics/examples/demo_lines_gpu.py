@@ -6,10 +6,10 @@ import math
 import os
 import time
 
-from tcbase._geom_native import LinearColor
+from termin.base._geom_native import LinearColor
 from termin.window import WindowedGraphicsSession, quit_sdl
 from termin.geombase import OrbitCamera, Vec3
-from tgfx import (
+from termin.graphics import (
     CULL_NONE,
     LineCapStyle,
     LinePoint3,

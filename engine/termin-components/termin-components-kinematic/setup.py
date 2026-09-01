@@ -27,7 +27,7 @@ setup(
     },
     install_requires=[
         "termin-nanobind",
-        "tcbase",
+        "termin-base",
         "termin-scene",
         "termin-inspect",
         "termin-robotics",

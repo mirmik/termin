@@ -1,6 +1,6 @@
 import numpy as np
 
-from tcnodegraph import (
+from termin.nodegraph import (
     DictSchemaProvider,
     Graph,
     GraphController,

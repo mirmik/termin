@@ -29,7 +29,7 @@ from termin.navmesh.inspect_fields import (
     make_voxelize_source_field,
 )
 from termin.navmesh.settings import NavigationSettingsManager
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.voxels.grid import VoxelGrid
@@ -468,7 +468,7 @@ class NavMeshBuilderComponent(DrawableComponent):
         """Create material for debug visualization."""
         if self._debug_material is None:
             from termin.voxels.voxel_shader import voxel_display_shader
-            from tgfx import RenderState
+            from termin.graphics import RenderState
 
             shader = voxel_display_shader()
             self._debug_material = Material(
@@ -487,8 +487,8 @@ class NavMeshBuilderComponent(DrawableComponent):
     def _get_or_create_line_material(self) -> Material:
         """Create material for contour lines."""
         if self._debug_line_material is None:
-            from tgfx import RenderState
-            from tgfx import TcShader
+            from termin.graphics import RenderState
+            from termin.graphics import TcShader
 
             shader = TcShader.from_builtin_catalog("termin-engine-voxelizer-line")
             if not shader.is_valid:

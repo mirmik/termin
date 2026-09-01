@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 from termin.editor_core.project_operations import sync_stdlib
 from termin.editor_core.settings import EditorSettings
 

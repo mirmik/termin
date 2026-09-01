@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tcbase import log
+from termin.base import log
 
 
 def _metadata_graph(class_name: str) -> dict:

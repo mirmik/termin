@@ -66,13 +66,13 @@ class ImmediateDepthPass(PythonFramePass):
             return
 
         if ctx.ctx2 is None:
-            from tcbase import log
+            from termin.base import log
             log.error("[ImmediateDepthPass] ctx.ctx2 is None — pass is tgfx2-only")
             return
 
         target_tex2 = ctx.tex2_writes.get(self.output_res)
         if not target_tex2:
-            from tcbase import log
+            from termin.base import log
             log.warn(f"[ImmediateDepthPass] tex2 write '{self.output_res}' missing")
             return
 

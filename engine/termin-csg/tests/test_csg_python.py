@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from math import isclose
 from pathlib import Path
 
-from tcbase import Action, MouseButton
+from termin.base import Action, MouseButton
 from termin.gui_native import TreeDropPosition
 
 from termin.csg import (

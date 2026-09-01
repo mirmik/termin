@@ -6,7 +6,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Generic, TypeVar
 
-from tcbase import log
+from termin.base import log
 
 from termin_assets.asset import Asset
 

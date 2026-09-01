@@ -203,9 +203,9 @@ int main(int argc, char* argv[]) {
     if (is_python_layout_smoke_request(argc, argv)) {
         const char* smoke_code = R"(
 import json
-import tcbase
+import termin.base
 import termin.launcher
-print(json.dumps({"tcbase": tcbase.__file__, "termin_launcher": termin.launcher.__file__}))
+print(json.dumps({"termin.base": termin.base.__file__, "termin_launcher": termin.launcher.__file__}))
 )";
         const int result = PyRun_SimpleString(smoke_code);
         if (result != 0) {

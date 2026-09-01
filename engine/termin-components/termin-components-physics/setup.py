@@ -32,7 +32,7 @@ setup(
     package_dir={"": "python"},
     install_requires=[
         "numpy",
-        "tcbase",
+        "termin-base",
         "termin-nanobind",
         "termin-collision",
         "termin-inspect",

@@ -15,7 +15,7 @@ setup(
     package_dir={"": "python"},
     install_requires=[
         "termin-glb-native",
-        "tcbase",
+        "termin-base",
         "termin-mesh",
         "termin-skeleton",
         "termin-animation",

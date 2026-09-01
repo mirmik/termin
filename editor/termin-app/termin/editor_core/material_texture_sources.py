@@ -143,7 +143,7 @@ class MaterialTextureSourceCatalog:
                     asset.encoding,
                 )
             if tag in ("rt_color", "rt_depth"):
-                from tgfx import TextureEncoding
+                from termin.graphics import TextureEncoding
 
                 texture = self.resolve_render_target(
                     name,

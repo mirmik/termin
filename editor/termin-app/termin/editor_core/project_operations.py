@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 
 from termin.editor_core.dialog_service import DialogService
 from termin.stdlib import sync_stdlib as _sync_stdlib

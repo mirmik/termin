@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
-from tcbase import log
+from termin.base import log
 from termin.inspect import InspectField
 
 

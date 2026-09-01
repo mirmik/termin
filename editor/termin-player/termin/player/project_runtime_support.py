@@ -46,7 +46,7 @@ def load_project_modules(
     scene_manager=None,
 ) -> "ProjectModulesRuntime":
     """Load project modules through termin-modules runtime."""
-    from tcbase import log
+    from termin.base import log
     from termin_modules import ModuleKind, ModuleState
     from termin.project_modules.runtime import get_project_modules_runtime
 
@@ -94,7 +94,7 @@ def load_project_modules(
 
 def create_project_world_controller(project_path: str | Path, *, log_prefix: str):
     """Resolve and create the exact controller selected by canonical project settings."""
-    from tcbase import log
+    from termin.base import log
     from termin.project import create_selected_world_controller
     from termin.project.settings import load_project_settings
 
@@ -128,7 +128,7 @@ def close_project_modules(
     if runtime.close():
         return True
 
-    from tcbase import log
+    from termin.base import log
 
     detail = runtime.last_error or "unknown module shutdown failure"
     log.error(f"{log_prefix} Module runtime shutdown failed: {detail}")
@@ -158,7 +158,7 @@ def scan_project_assets(
     include_render_resources: bool = True,
 ) -> int:
     """Scan project directory for source assets and register them."""
-    from tcbase import log
+    from termin.base import log
 
     project_path = Path(project_path)
     rm = DefaultResourceManager.instance()

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 from termin_assets import DataAsset
 
 if TYPE_CHECKING:

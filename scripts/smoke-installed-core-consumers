@@ -150,7 +150,7 @@ def main() -> int:
         _run([str(python), "-I", "-c", probe], env=env)
 
         imports = (
-            "import tcbase, termin.dispatch, termin.inspect, termin.mcp; "
+            "import termin.base, termin.dispatch, termin.inspect, termin.mcp; "
             "print('Core Python imports: OK')"
         )
         _run([str(python), "-I", "-c", imports], env=env)

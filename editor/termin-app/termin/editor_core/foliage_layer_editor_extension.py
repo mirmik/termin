@@ -7,8 +7,8 @@ from dataclasses import dataclass
 import math
 import random
 
-from tcbase import Action, Key, log
-from tcbase._geom_native import Vec3
+from termin.base import Action, Key, log
+from termin.base._geom_native import Vec3
 from termin.geombase import SrgbColor
 
 from termin.foliage import FoliageInstance, TcFoliageData

@@ -1,7 +1,7 @@
 """Font atlas - thin re-export of the C++ tgfx2::FontAtlas.
 
 The atlas class itself lives in C++ (termin-graphics/src/tgfx2/font_atlas.cpp,
-bound as ``FontTextureAtlas`` in ``_tgfx_native``). This module keeps the
+bound as ``FontTextureAtlas`` in ``_graphics_native``). This module keeps the
 public name, plus Python-side convenience helpers for locating a
 system TTF file and producing a lazily-initialised default atlas.
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import sys
 
-from tgfx._tgfx_native import FontTextureAtlas
+from termin.graphics._graphics_native import FontTextureAtlas
 
 __all__ = ["FontTextureAtlas", "find_system_font", "get_default_font"]
 
@@ -61,6 +61,6 @@ def get_default_font(size: int = 14) -> FontTextureAtlas | None:
             try:
                 _default_font_atlas = FontTextureAtlas(path, size)
             except Exception as e:
-                from tgfx import log
+                from termin.graphics import log
                 log.warn(f"[Font] Failed to load system font '{path}': {e}")
     return _default_font_atlas

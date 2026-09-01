@@ -15,7 +15,7 @@ full_runtime_package_exporter = pytest.mark.full(
 
 @full_runtime_package_exporter
 def test_export_runtime_package_can_record_d3d11_shader_artifacts(tmp_path: Path) -> None:
-    import tgfx
+    import termin.graphics
     from termin.materials import TcMaterial
 
     project = tmp_path / "D3D11RuntimeGame"
@@ -32,15 +32,15 @@ def test_export_runtime_package_can_record_d3d11_shader_artifacts(tmp_path: Path
         "opaque",
         3,
         shader_uuid=shader_uuid,
-        language=tgfx.ShaderLanguage.SLANG.value,
-        artifact_policy=tgfx.ShaderArtifactPolicy.REQUIRED.value,
+        language=termin.graphics.ShaderLanguage.SLANG.value,
+        artifact_policy=termin.graphics.ShaderArtifactPolicy.REQUIRED.value,
     )
     assert phase is not None
 
-    shader = tgfx.TcShader.from_uuid(shader_uuid)
+    shader = termin.graphics.TcShader.from_uuid(shader_uuid)
     assert shader.is_valid
-    shader.set_language(tgfx.ShaderLanguage.SLANG)
-    shader.set_artifact_policy(tgfx.ShaderArtifactPolicy.REQUIRED)
+    shader.set_language(termin.graphics.ShaderLanguage.SLANG)
+    shader.set_artifact_policy(termin.graphics.ShaderArtifactPolicy.REQUIRED)
 
     _write_json(
         project / "Main.scene",

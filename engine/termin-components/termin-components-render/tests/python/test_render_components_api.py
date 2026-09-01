@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from tgfx import ShaderLanguage
+from termin.graphics import ShaderLanguage
 
 from termin.bootstrap import bootstrap_player
 
@@ -495,7 +495,7 @@ def test_line_renderer_defaults_to_canonical_world_tube():
 
 
 def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
-    from tgfx import ShaderVariantOp
+    from termin.graphics import ShaderVariantOp
     from termin.render_framework import RenderPipeline, collect_shader_usages_for_pipeline
     from termin.render_passes import ColorPass
     from termin.scene import TcScene

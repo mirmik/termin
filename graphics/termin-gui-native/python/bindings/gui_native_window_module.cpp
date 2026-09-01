@@ -7,7 +7,7 @@
 NB_MODULE(_gui_native_window, m) {
     try {
         nb::module_::import_("termin.gui_native._gui_native");
-        nb::module_::import_("tgfx._tgfx_native");
+        nb::module_::import_("termin.graphics._graphics_native");
         nb::module_::import_("termin.window._window_native");
     } catch (const std::exception& error) {
         tc_log_error("[termin-gui-native/python] failed to initialize window adapter bindings: %s", error.what());

@@ -17,7 +17,7 @@ setup(
     ),
     package_dir={"": "python"},
     install_requires=[
-        "tcbase",
+        "termin-base",
         "termin-project",
         "termin-modules",
         "termin-default-assets",

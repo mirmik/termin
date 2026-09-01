@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable
 
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.editor_core.editor_scene_attachment import EditorSceneAttachment

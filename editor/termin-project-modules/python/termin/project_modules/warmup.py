@@ -132,7 +132,7 @@ def _contains_termin_project_file(directory: Path) -> bool:
 
 def _log_error(message: str) -> None:
     try:
-        from tcbase import log
+        from termin.base import log
     except Exception:
         print(message, file=sys.stderr)
         return

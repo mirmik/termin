@@ -10,24 +10,24 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    upstream_packages = {"tcbase": "libtermin_base", "termin-mesh": "libtermin_mesh", "termin_nanobind": "libnanobind"}
+    upstream_packages = {"termin-base": "libtermin_base", "termin-mesh": "libtermin_mesh", "termin_nanobind": "libnanobind"}
     bundle_includes = True
     source_dir = _DIR
 
 
 setup(
-    name="tgfx",
+    name="termin-graphics",
     version=BuildExt.compute_local_version("0.1.0"),
     license="Apache-2.0",
     description="Graphics backend library with Python bindings",
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.14",
-    packages=["tgfx"],
-    package_dir={"tgfx": "python/tgfx"},
-    install_requires=["tcbase", "termin-mesh", "termin-nanobind", "numpy"],
+    packages=["termin.graphics"],
+    package_dir={"termin.graphics": "python/termin/graphics"},
+    install_requires=["termin-base", "termin-mesh", "termin-nanobind", "numpy"],
     package_data={
-        "tgfx": [
+        "termin.graphics": [
             "lib/*.so*",
             "*.dll",
             "lib/*.dll",

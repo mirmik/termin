@@ -82,7 +82,7 @@ def __getattr__(name: str):
                 tc_voxel_grid_get_all_info,
             )
         except ImportError as exc:
-            from tcbase import log
+            from termin.base import log
             log.error("[termin.voxels] native voxel resources require termin.voxels._voxels_native")
             raise ImportError("termin.voxels native resources require termin.voxels._voxels_native") from exc
         exports = {

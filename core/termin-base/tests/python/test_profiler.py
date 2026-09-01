@@ -1,4 +1,4 @@
-from tcbase.profiler import Profiler
+from termin.base.profiler import Profiler
 
 
 def test_profiler_last_complete_frame_excludes_open_history_slot():

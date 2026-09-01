@@ -13,6 +13,6 @@ setup(
     python_requires=">=3.14",
     packages=["termin.tween"],
     package_dir={"termin.tween": "python/termin/tween"},
-    install_requires=["tcbase"],
+    install_requires=["termin-base"],
     zip_safe=False,
 )

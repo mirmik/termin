@@ -353,9 +353,9 @@ namespace termin::visual::python {
     } // namespace
 
     void bind_visual_scene3d(nb::module_& m) {
-        nb::module_::import_("tcbase._geom_native");
+        nb::module_::import_("termin.base._geom_native");
         nb::module_::import_("termin.mesh._mesh_native");
-        nb::module_::import_("tgfx._tgfx_native");
+        nb::module_::import_("termin.graphics._graphics_native");
 
         nb::class_<VisualItem3DHandle>(m, "VisualItem3DHandle")
             .def_prop_ro("scene_id", [](VisualItem3DHandle value) { return value.scene_id; })

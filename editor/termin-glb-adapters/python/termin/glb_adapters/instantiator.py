@@ -490,7 +490,7 @@ def _unique_glb_texture_name(
 
 
 def _tc_texture_from_asset_name(rm, name: str):
-    from tcbase import log
+    from termin.base import log
 
     asset = rm.get_runtime_asset(TEXTURE_ASSET_TYPE, name)
     if asset is None:
@@ -515,7 +515,7 @@ def _texture_name_for_source_path(
     source_path: Path,
     encoding: TextureEncodingName,
 ) -> str | None:
-    from tcbase import log
+    from termin.base import log
 
     target_path = source_path.resolve()
 
@@ -560,7 +560,7 @@ def _texture_name_for_source_path(
 
 
 def _texture_asset_matches_source_content(asset, source_path: Path) -> bool:
-    from tcbase import log
+    from termin.base import log
 
     asset_source_path = asset.source_path
     if asset_source_path is None:
@@ -587,7 +587,7 @@ def _register_external_texture_asset(
     texture: "GLBTcTexture",
     encoding: TextureEncodingName,
 ) -> str | None:
-    from tcbase import log
+    from termin.base import log
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin_assets import read_spec_file
 
@@ -649,7 +649,7 @@ def _registered_glb_texture(
     texture: "GLBTcTexture",
     encoding: TextureEncodingName,
 ):
-    from tcbase import log
+    from termin.base import log
 
     source_path = texture.source_path
     if source_path is None:
@@ -687,8 +687,8 @@ def _decode_glb_texture(
     """Decode glTF image bytes into a registered TextureAsset."""
     from termin.image import decode_rgba8
     from termin.default_assets.render.texture_asset import TextureAsset
-    from tgfx import TcTexture, TextureEncoding
-    from tcbase import log
+    from termin.graphics import TcTexture, TextureEncoding
+    from termin.base import log
 
     texture_uuid = _stable_glb_texture_uuid(
         texture,
@@ -823,7 +823,7 @@ def _build_texture_lookup(
     scene_data: "GLBSceneData",
 ) -> TextureLookup:
     """Create a (glTF texture index, encoding) to TcTexture map."""
-    from tcbase import log
+    from termin.base import log
 
     texture_names = rm.list_runtime_asset_names(TEXTURE_ASSET_TYPE)
     log.info(
@@ -887,7 +887,7 @@ def _texture_for_index(
         return None
     texture = textures.get((texture_index, encoding))
     if texture is None:
-        from tcbase import log
+        from termin.base import log
         log.warning(
             f"[glb_instantiator] glTF material references missing texture "
             f"index {texture_index} with {encoding} encoding"
@@ -896,7 +896,7 @@ def _texture_for_index(
 
 
 def _set_material_texture_if_present(material, name: str, texture) -> None:
-    from tcbase import log
+    from termin.base import log
 
     if texture is None:
         log.info(f"[glb_instantiator] material override texture skipped: slot='{name}' texture=None")
@@ -922,7 +922,7 @@ def _configure_import_material(
 ) -> None:
     """Apply one glTF material to an already-created Termin material."""
     from termin.geombase import Vec4
-    from tcbase import log
+    from termin.base import log
 
     texture_coordinates = (
         ("baseColor", glb_material.base_color_texture, glb_material.base_color_texcoord),
@@ -1006,7 +1006,7 @@ def _create_import_material_slot(
     texture_lookup: TextureLookup,
 ):
     """Create one material instance for a glTF material slot."""
-    from tcbase import log
+    from termin.base import log
 
     material = base_material.copy("")
     if not material.is_valid:
@@ -1027,7 +1027,7 @@ def _apply_import_material_override(
     texture_lookup: TextureLookup,
 ) -> None:
     """Apply one glTF material as a MeshRenderer material override."""
-    from tcbase import log
+    from termin.base import log
 
     renderer.set_override_material(True)
     material = renderer.get_overridden_material()
@@ -1141,7 +1141,7 @@ def _create_entity_from_node(
             tc_mesh = meshes[mesh_idx]
 
             if glb_mesh.is_skinned and pending_skinned is not None:
-                from tcbase import log
+                from termin.base import log
                 log.info(f"[glb_instantiator] pending skinned mesh={glb_mesh.name} tc_mesh.is_valid={tc_mesh.is_valid} uuid={tc_mesh.uuid}")
                 pending_skinned.append(
                     _PendingSkinnedMesh(
@@ -1226,7 +1226,7 @@ def _resolve_skeleton_root_entity(
     node_to_entity: Dict[int, Entity],
     bone_entities: List[Entity],
 ) -> Optional[Entity]:
-    from tcbase import log
+    from termin.base import log
 
     armature_node_index = skin.armature_node_index
     if armature_node_index is not None:
@@ -1267,7 +1267,7 @@ def instantiate_glb(
     Returns:
         GLBInstantiateResult containing root Entity, SkeletonController, and AnimationPlayer.
     """
-    from tcbase import log
+    from termin.base import log
     from termin_assets import get_resource_manager
 
     # Access scene_data triggers lazy loading and populates child assets
@@ -1396,7 +1396,7 @@ def instantiate_glb(
         skeleton_controllers.append(skeleton_controller)
 
     # Step 3: Setup SkinnedMeshRenderers
-    from tcbase import log
+    from termin.base import log
     for pending in pending_skinned:
         skin_index = pending.skin_index
         if skin_index is None and len(skeleton_controllers) == 1:

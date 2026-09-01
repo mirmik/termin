@@ -18,8 +18,8 @@ setup(
     package_dir={"": "python"},
     install_requires=[
         "numpy",
-        "tcbase",
-        "tgfx",
+        "termin-base",
+        "termin-graphics",
         "termin-glb",
         "termin-gui-native",
         "termin-image",

@@ -50,7 +50,7 @@ def test_core_sdk_profile_owns_minimal_runtime_and_verification_recipe() -> None
     assert profile.csharp_profile is None
     assert profile.embedded_python_hosts == ()
     assert profile.launcher_import_roots == (
-        "tcbase",
+        "termin.base",
         "termin.dispatch",
         "termin.inspect",
         "termin.mcp",

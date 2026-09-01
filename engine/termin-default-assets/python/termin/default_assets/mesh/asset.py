@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from tcbase import log
+from termin.base import log
 from termin.mesh import Mesh3, TcMesh
 from termin_assets import DataAsset
 from termin.default_assets.mesh.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z

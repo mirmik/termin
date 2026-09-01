@@ -1,12 +1,12 @@
 find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(_tcbase_native NB_SHARED
+nanobind_add_module(_base_native NB_SHARED
     bindings/tcbase_module.cpp
     bindings/profiler.cpp
 )
 
-target_link_libraries(_tcbase_native PRIVATE termin_base)
+target_link_libraries(_base_native PRIVATE termin_base)
 
 nanobind_add_module(_geom_native NB_SHARED
     bindings/geom/geom_module.cpp
@@ -33,13 +33,13 @@ nanobind_add_module(_geom_native NB_SHARED
 
 target_link_libraries(_geom_native PRIVATE termin_base)
 
-termin_set_rpath_pip(_tcbase_native)
+termin_set_rpath_pip(_base_native)
 termin_set_rpath_pip(_geom_native)
 
-install(TARGETS _tcbase_native DESTINATION lib/python/tcbase)
-install(TARGETS _geom_native DESTINATION lib/python/tcbase)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tcbase/
-    DESTINATION lib/python/tcbase
+install(TARGETS _base_native DESTINATION lib/python/termin/base)
+install(TARGETS _geom_native DESTINATION lib/python/termin/base)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin/base/
+    DESTINATION lib/python/termin/base
     PATTERN "__pycache__" EXCLUDE
     PATTERN "*.pyc" EXCLUDE
     PATTERN "include" EXCLUDE

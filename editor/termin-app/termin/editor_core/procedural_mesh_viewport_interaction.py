@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from tcbase import MouseButton, log
+from termin.base import MouseButton, log
 from termin.geombase import Affine3d, Ray3, SrgbColor, Vec3
 
 from termin.csg.document_eval import evaluate_document

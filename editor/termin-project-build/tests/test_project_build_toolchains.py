@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from tcbase import Settings
+from termin.base import Settings
 
 from termin.project_build.capability_reports import inspect_profile_capabilities
 from termin.project_build.profile_build import main

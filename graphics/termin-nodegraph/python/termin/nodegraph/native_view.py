@@ -8,7 +8,7 @@ import logging
 import math
 import weakref
 
-from tcbase import MouseButton
+from termin.base import MouseButton
 from termin.gui_native import (
     KeyCode,
     KeyEventType,
@@ -28,8 +28,8 @@ from termin.visual_scene import (
     tc_visual_scene_destroy,
 )
 
-from tcnodegraph.controller import GraphController
-from tcnodegraph.model import Edge, Graph, Node
+from termin.nodegraph.controller import GraphController
+from termin.nodegraph.model import Edge, Graph, Node
 
 
 _BACKGROUND = SrgbColor(0.09, 0.10, 0.12, 1.0)

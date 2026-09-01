@@ -19,11 +19,11 @@ def _load_shader_runtime_module(monkeypatch, settings_values=None):
         def get(self, key, default=None):
             return (settings_values or {}).get(key, default)
 
-    monkeypatch.setitem(sys.modules, "tcbase", types.SimpleNamespace(
+    monkeypatch.setitem(sys.modules, "termin.base", types.SimpleNamespace(
         Settings=FakeSettings,
         log=types.SimpleNamespace(error=lambda message: None, info=lambda message: None)
     ))
-    path = _repo_root() / "termin-graphics" / "python" / "tgfx" / "shader_runtime.py"
+    path = _repo_root() / "termin-graphics" / "python" / "termin" / "graphics" / "shader_runtime.py"
     spec = importlib.util.spec_from_file_location("tgfx_shader_runtime_under_test", path)
     assert spec is not None
     assert spec.loader is not None
@@ -101,8 +101,11 @@ def test_tgfx_shader_runtime_prefers_product_precompiled_artifacts(
     fake_tgfx = types.SimpleNamespace(
         configure_shader_runtime=lambda **kwargs: configured.append(kwargs),
     )
+    import termin
+
     monkeypatch.setitem(sys.modules, "termin_graphics_profile", profile)
-    monkeypatch.setitem(sys.modules, "tgfx", fake_tgfx)
+    monkeypatch.setitem(sys.modules, "termin.graphics", fake_tgfx)
+    monkeypatch.setattr(termin, "graphics", fake_tgfx)
     monkeypatch.delenv("TERMIN_SHADERC", raising=False)
     monkeypatch.delenv("TERMIN_SLANGC", raising=False)
     shader_runtime = _load_shader_runtime_module(monkeypatch)

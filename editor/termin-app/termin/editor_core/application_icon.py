@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tcbase import log
+from termin.base import log
 
 
 _ICON_PATH = Path(__file__).resolve().parents[1] / "resources" / "icons" / "termin-editor-icon.bmp"

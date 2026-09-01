@@ -8,7 +8,7 @@ import sys
 import time
 from typing import Callable
 
-import tgfx
+import termin.graphics as tgfx
 from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 from termin.gui_native.window import GuiWindowAdapter
 from termin.window import WindowManager, WindowedGraphicsSession, quit_sdl

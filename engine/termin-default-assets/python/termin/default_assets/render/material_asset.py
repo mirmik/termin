@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
 from termin_assets import DataAsset
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.materials import TcMaterial

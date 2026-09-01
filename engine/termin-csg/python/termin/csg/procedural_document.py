@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from math import sqrt
 from uuid import uuid4
 
-from tcbase import log
+from termin.base import log
 
 from termin.csg.operation_specs import (
     BOOLEAN_OPERATION_KINDS,

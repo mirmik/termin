@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any, Iterator, TYPE_CHECKING
 
 import numpy as np
-from tcbase import log
+from termin.base import log
 
 if TYPE_CHECKING:
     from termin.scene import Component, Entity

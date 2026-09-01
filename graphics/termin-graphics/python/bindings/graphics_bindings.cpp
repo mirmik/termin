@@ -15,7 +15,7 @@ namespace tgfx_bindings {
         // Re-export the canonical base bindings. Registering the same C++
         // value type again in this extension would create a competing Python
         // identity and make cross-module typed APIs unreliable.
-        nb::module_ geom = nb::module_::import_("tcbase._geom_native");
+        nb::module_ geom = nb::module_::import_("termin.base._geom_native");
         m.attr("SrgbColor") = geom.attr("SrgbColor");
         m.attr("LinearColor") = geom.attr("LinearColor");
 

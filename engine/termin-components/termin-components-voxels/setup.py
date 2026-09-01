@@ -18,7 +18,7 @@ setup(
     package_dir={"": "python"},
     install_requires=[
         "numpy",
-        "tcbase",
+        "termin-base",
         "termin-mesh",
         "termin-assets",
         "termin-components-mesh",

@@ -1,1 +1,1 @@
-from tcbase._geom_native import *  # noqa: F403
+from termin.base._geom_native import *  # noqa: F403

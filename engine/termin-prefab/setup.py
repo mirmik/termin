@@ -29,7 +29,7 @@ setup(
         "termin-inspect",
         "termin-nanobind",
         "termin-scene",
-        "tcbase",
+        "termin-base",
         "numpy",
     ],
     entry_points={

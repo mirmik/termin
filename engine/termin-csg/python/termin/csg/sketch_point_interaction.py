@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from tcbase import log
+from termin.base import log
 
 from termin.csg.document_raycast import ray_plane_intersection
 from termin.csg.procedural_document import OPERATION_KIND_WALL, ProceduralMeshDocument, Vec2Data, Vec3Data

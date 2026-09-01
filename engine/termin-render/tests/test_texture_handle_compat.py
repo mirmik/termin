@@ -1,6 +1,6 @@
 from termin.render.texture_handle import get_normal_texture_handle, get_white_texture_handle
 from termin.render.texture import get_normal_texture, get_white_texture
-from tgfx import TcTexture
+from termin.graphics import TcTexture
 
 
 def test_default_texture_helpers_return_tc_texture() -> None:

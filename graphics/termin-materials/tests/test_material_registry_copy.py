@@ -1,6 +1,6 @@
 from termin.materials import TcMaterial
 import pytest
-from tgfx import ShaderLanguage
+from termin.graphics import ShaderLanguage
 
 
 VERTEX = """
@@ -24,7 +24,7 @@ def test_add_phase_from_sources_requires_explicit_language() -> None:
 
 
 def test_raw_glsl_phase_does_not_infer_engine_resource_layout() -> None:
-    import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
+    import termin.graphics  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     material = TcMaterial.create("RawGlslEngineLayoutMaterial", "")
     phase = material.add_phase_from_sources(

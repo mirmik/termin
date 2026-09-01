@@ -23,7 +23,7 @@ setup(
     python_requires=">=3.14",
     packages=["termin.robotics"],
     package_dir={"termin.robotics": "python/termin/robotics"},
-    install_requires=["termin-nanobind", "tcbase"],
+    install_requires=["termin-nanobind", "termin-base"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

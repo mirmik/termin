@@ -57,7 +57,7 @@ class ShaderRuntimePlugin:
         rm.register_shader_asset(name, asset, source_path=result.path)
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> bool:
-        from tcbase import log
+        from termin.base import log
 
         rm = context.resource_manager
         name = context.name

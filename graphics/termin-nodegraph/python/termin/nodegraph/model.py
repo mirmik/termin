@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
-from tcnodegraph._nodegraph_native import NativeGraph
+from termin.nodegraph._nodegraph_native import NativeGraph
 
 
 @dataclass

@@ -12,7 +12,7 @@
 
 - Headless C++ core в `include/termin/nodegraph` и `src`.
 - Стабильный C ABI в `include/termin/nodegraph/c_api.h`.
-- Native Python binding и snapshot-обёртки в `python/tcnodegraph`.
+- Native Python binding и snapshot-обёртки в `python/termin.nodegraph`.
 - Runnable native example в `examples/native_nodegraph_demo.py`.
 - Tests в `tests/`.
 
@@ -24,7 +24,7 @@ CMake target: `termin_nodegraph::core`. C++ API объявлен в
 Десериализация транзакционна; невалидные ID, endpoints, socket types и
 cardinality отклоняются без частичной замены графа.
 
-Python package: `tcnodegraph` через distribution `termin-nodegraph`.
+Python package: `termin.nodegraph` через distribution `termin-nodegraph`.
 `Graph` владеет C++ core, а Python-объекты узлов, рёбер и групп являются
 отсоединёнными снимками. Все изменения проходят через `GraphController` и
 повторно проверяются native core; прямое изменение снимка граф не меняет.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from tcbase import log
+from termin.base import log
 
 from termin.csg.document_tree_model import document_summary
 from termin.csg.editor_controller import CsgEditorCommandResult, CsgEditorController

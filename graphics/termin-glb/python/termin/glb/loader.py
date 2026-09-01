@@ -18,7 +18,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import numpy as np
 
-from tcbase import log
+from termin.base import log
 
 
 class _GLBLoadTrace:

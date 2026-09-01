@@ -21,7 +21,7 @@ setup(
     },
     install_requires=[
         "numpy",
-        "tcbase",
+        "termin-base",
         "termin-components-kinematic",
     ],
     zip_safe=False,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from tcbase import Action, Key, log
+from termin.base import Action, Key, log
 from termin.engine import WorldController, require_world_context, world_context
 from termin.geombase import Vec3
 from termin.input import InputComponent

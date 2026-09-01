@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 from termin.scene._scene_native import TcComponent, ComponentRegistry
 from termin.inspect import InspectField
-from tcbase import log
+from termin.base import log
 
 
 _registered_python_component_types: list[str] = []

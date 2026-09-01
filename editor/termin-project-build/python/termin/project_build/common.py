@@ -36,7 +36,7 @@ def initialize_project_build_runtime_state(log_prefix: str) -> None:
 
         bootstrap_runtime()
     except Exception:
-        from tcbase import log
+        from termin.base import log
 
         log.error(
             f"{log_prefix} Failed to initialize project build runtime state",
@@ -52,7 +52,7 @@ def initialize_project_build_player_runtime_state(log_prefix: str) -> None:
 
         bootstrap_player()
     except Exception:
-        from tcbase import log
+        from termin.base import log
 
         log.error(
             f"{log_prefix} Failed to initialize desktop player build runtime state",
@@ -100,7 +100,7 @@ def preload_project_resources(project_root: Path, log_prefix: str) -> None:
         for _priority, path in sorted(pending, key=lambda item: (item[0], item[1])):
             by_extension[Path(path).suffix.lower()].on_file_added(path)
     except Exception:
-        from tcbase import log
+        from termin.base import log
         log.error(f"{log_prefix} Failed to preload project resources", exc_info=True)
 
 
@@ -111,7 +111,7 @@ def _register_standard_shaders_for_project_materials(
     log_prefix: str,
 ) -> None:
     """Make stdlib shader assets available before material preloaders run."""
-    from tcbase import log
+    from termin.base import log
     from termin.default_assets.render.shader_asset import ShaderAsset
     for material_path in material_paths:
         try:
@@ -149,7 +149,7 @@ def cleanup_project_build_runtime_state(log_prefix: str) -> None:
         DefaultResourceManager.shutdown_instance()
         gc.collect()
     except Exception:
-        from tcbase import log
+        from termin.base import log
 
         log.error(f"{log_prefix} Failed to clean project build runtime state", exc_info=True)
 
