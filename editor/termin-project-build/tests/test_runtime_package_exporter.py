@@ -1,3 +1,4 @@
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -17,7 +18,10 @@ from termin.project_build.runtime_package.models import ShaderSpec
 from termin.project_build.runtime_package.materials import _shader_source_identity
 from termin.project_build.runtime_package.shaders import (
     ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID,
+    EngineShaderArtifact,
     artifact_path_text,
+    compile_shader_stage,
+    copy_prebuilt_engine_shader_artifacts,
     normalize_shader_targets,
     write_shader,
 )
@@ -31,6 +35,8 @@ from termin.project_build.runtime_package.ui_documents import (
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
 )
+
+
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -64,6 +70,27 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
     )
     compiler.chmod(0o755)
     return compiler
+
+
+def _write_counting_shader_compiler(tmp_path: Path) -> tuple[Path, Path]:
+    compiler = tmp_path / "counting_termin_shaderc.py"
+    calls = tmp_path / "shaderc-calls.txt"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, pathlib, sys\n"
+        f"calls = pathlib.Path({str(calls)!r})\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "target = sys.argv[sys.argv.index('--target') + 1]\n"
+        "stage = sys.argv[sys.argv.index('--stage') + 1]\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_text('compiled-' + target, encoding='utf-8')\n"
+        "layout = {'version': 3 if target == 'webgpu' else 1, 'target': target, 'stage': stage, 'resources': []}\n"
+        "pathlib.Path(str(out) + '.layout.json').write_text(json.dumps(layout), encoding='utf-8')\n"
+        "with calls.open('a', encoding='utf-8') as stream: stream.write('call\\n')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+    return compiler, calls
 
 
 def test_sprite_asset_ref_and_texture_are_exported_together(tmp_path: Path) -> None:
@@ -126,11 +153,7 @@ def test_sprite_asset_ref_and_texture_are_exported_together(tmp_path: Path) -> N
             "path": f"sprites/{sprite_uuid}.sprite.json",
         }
     ]
-    packaged = json.loads(
-        (package / "sprites" / f"{sprite_uuid}.sprite.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    packaged = json.loads((package / "sprites" / f"{sprite_uuid}.sprite.json").read_text(encoding="utf-8"))
     assert packaged["texture"]["uuid"] == texture_uuid
 
 
@@ -191,11 +214,7 @@ def test_native_ui_document_ref_is_compiled_for_runtime(tmp_path: Path) -> None:
             "path": f"ui/{uuid_value}.ui-document.json",
         }
     ]
-    payload = json.loads(
-        (package / "ui" / f"{uuid_value}.ui-document.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    payload = json.loads((package / "ui" / f"{uuid_value}.ui-document.json").read_text(encoding="utf-8"))
     assert payload["ui_document_asset"] == 1
     assert payload["uuid"] == uuid_value
     assert payload["type_dependencies"] == [
@@ -250,7 +269,10 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-audio": ({"termin/audio/__init__.py": "VALUE = 'audio seed'\n"}, []),
         "termin-voxels": ({"termin/voxels/__init__.py": "VALUE = 'voxels seed'\n"}, []),
         "termin-components-voxels": ({"termin/voxel_components/__init__.py": "VALUE = 'voxel components seed'\n"}, []),
-        "termin-components-physics": ({"termin/physics_components/__init__.py": "VALUE = 'physics components seed'\n"}, []),
+        "termin-components-physics": (
+            {"termin/physics_components/__init__.py": "VALUE = 'physics components seed'\n"},
+            [],
+        ),
         "termin-components-ui": (
             {"termin/ui_components/__init__.py": "VALUE = 'ui components seed'\n"},
             ["termin-gui-native"],
@@ -284,7 +306,10 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         ),
         "termin-engine": ({"termin/engine/__init__.py": "VALUE = 'engine seed'\n"}, []),
         "termin-render": ({"termin/render/__init__.py": "VALUE = 'render seed'\n"}, []),
-        "termin-components-render": ({"termin/render_components/__init__.py": "VALUE = 'render components seed'\n"}, []),
+        "termin-components-render": (
+            {"termin/render_components/__init__.py": "VALUE = 'render components seed'\n"},
+            [],
+        ),
         "termin-input": ({"termin/input/__init__.py": "VALUE = 'input seed'\n"}, []),
         "termin-inspect": ({"termin/inspect/__init__.py": "VALUE = 'inspect seed'\n"}, []),
         "termin-collision": ({"termin/collision/__init__.py": "VALUE = 'collision seed'\n"}, []),
@@ -309,6 +334,7 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
     }
     for distribution, (files, requires) in distributions.items():
         _write_fake_distribution(site_packages, distribution, files, requires=requires)
+
 
 def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     sdk = tmp_path / "fake-sdk"
@@ -472,6 +498,164 @@ def test_default_pipeline_exports_world_text_shader() -> None:
     assert ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID in shader_uuids
 
 
+def test_builtin_shader_program_artifact_stages_match_material_parser() -> None:
+    from termin.materials import parse_shader_text
+
+    source_root = Path(__file__).resolve().parents[3] / "graphics/termin-graphics/resources/builtin_shaders"
+    catalog = json.loads((source_root / "engine-shader-catalog.json").read_text(encoding="utf-8"))
+    program_entries = [entry for entry in catalog["shaders"] if entry["language"] == "shader"]
+    assert program_entries
+    for entry in program_entries:
+        program = parse_shader_text((source_root / entry["program"]["path"]).read_text(encoding="utf-8"))
+        assert len(program.phases) == 1
+        for stage_name, artifact_stage in entry["artifact_stages"].items():
+            assert (source_root / artifact_stage["path"]).read_text(encoding="utf-8") == program.phases[0].stages[
+                stage_name
+            ].source
+
+
+def test_prebuilt_engine_shader_artifacts_are_verified_and_copied(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "prebuilt"
+    catalog_path = root / "builtin_shaders/engine-shader-catalog.json"
+    catalog_path.parent.mkdir(parents=True)
+    catalog_path.write_text('{"version": 1, "shaders": []}\n', encoding="utf-8")
+    relative_artifact = "shaders/webgpu/engine-example.vert.wgsl"
+    artifact = root / relative_artifact
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text("@vertex fn main() {}", encoding="utf-8")
+    layout = Path(f"{artifact}.layout.json")
+    layout.write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "target": "webgpu",
+                "stage": "vertex",
+                "resources": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = {
+        "schema_version": 1,
+        "catalog": "builtin_shaders/engine-shader-catalog.json",
+        "catalog_sha256": hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+        "targets": ["webgpu"],
+        "artifacts": [
+            {
+                "uuid": "engine-example",
+                "target": "webgpu",
+                "stage": "vertex",
+                "path": relative_artifact,
+                "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                "layout": f"{relative_artifact}.layout.json",
+                "layout_sha256": hashlib.sha256(layout.read_bytes()).hexdigest(),
+            }
+        ],
+    }
+    _write_json(root / "builtin-shader-artifacts.json", manifest)
+    package = tmp_path / "package"
+    shaders = [
+        EngineShaderArtifact(
+            uuid="engine-example",
+            name="Example",
+            language="slang",
+            vertex_source="source",
+        )
+    ]
+
+    with pytest.raises(FileNotFoundError, match="manifest does not exist"):
+        copy_prebuilt_engine_shader_artifacts(
+            tmp_path / "missing-package",
+            tmp_path / "missing-root",
+            shaders,
+            ("webgpu",),
+        )
+
+    copy_prebuilt_engine_shader_artifacts(package, root, shaders, ("webgpu",))
+
+    copied = package / relative_artifact
+    assert copied.read_bytes() == artifact.read_bytes()
+    assert Path(f"{copied}.layout.json").read_bytes() == layout.read_bytes()
+
+    artifact.write_text("corrupted", encoding="utf-8")
+    with pytest.raises(ValueError, match="hash does not match"):
+        copy_prebuilt_engine_shader_artifacts(tmp_path / "invalid-package", root, shaders, ("webgpu",))
+
+    manifest["schema_version"] = 99
+    _write_json(root / "builtin-shader-artifacts.json", manifest)
+    with pytest.raises(ValueError, match="requires schema version 1"):
+        copy_prebuilt_engine_shader_artifacts(tmp_path / "incompatible-package", root, shaders, ("webgpu",))
+
+
+def test_shader_artifact_cache_hits_and_source_changes_invalidate(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    compiler, calls = _write_counting_shader_compiler(tmp_path)
+    builtin_root = tmp_path / "builtin-shaders"
+    builtin_root.mkdir()
+    builtin_source = builtin_root / "termin_prelude.slang"
+    builtin_source.write_text("builtin-first", encoding="utf-8")
+    monkeypatch.setenv("TGFX2_BUILTIN_SHADER_ROOT", str(builtin_root))
+    source = tmp_path / "shader.slang"
+    source.write_text("first", encoding="utf-8")
+    cache = tmp_path / "cache"
+    output = tmp_path / "one.spv"
+
+    compile_shader_stage(
+        compiler,
+        "slang",
+        "vulkan",
+        "vertex",
+        source,
+        output,
+        "cache-test",
+        artifact_cache_dir=cache,
+    )
+    output.unlink()
+    Path(f"{output}.layout.json").unlink()
+    compile_shader_stage(
+        compiler,
+        "slang",
+        "vulkan",
+        "vertex",
+        source,
+        output,
+        "cache-test",
+        artifact_cache_dir=cache,
+    )
+    builtin_source.write_text("builtin-second", encoding="utf-8")
+    compile_shader_stage(
+        compiler,
+        "slang",
+        "vulkan",
+        "vertex",
+        source,
+        tmp_path / "two.spv",
+        "cache-test",
+        artifact_cache_dir=cache,
+    )
+    source.write_text("second", encoding="utf-8")
+    compile_shader_stage(
+        compiler,
+        "slang",
+        "vulkan",
+        "vertex",
+        source,
+        tmp_path / "three.spv",
+        "cache-test",
+        artifact_cache_dir=cache,
+    )
+
+    assert calls.read_text(encoding="utf-8").splitlines() == ["call", "call", "call"]
+    output_text = capsys.readouterr().out
+    assert "[ShaderArtifact] compiling" in output_text
+    assert "[ShaderArtifact] cache hit" in output_text
+
+
 def test_collect_runtime_refs_accepts_explicit_mesh_material_metadata() -> None:
     diagnostics = []
 
@@ -598,41 +782,28 @@ def test_composed_shader_identity_tracks_every_source_dependency() -> None:
         geometry_entry="",
         vertex_source="// vertex-provider:v1",
         fragment_source=(
-            "// interface:v1\n// evaluator:v1\n// consumer:v1\n"
-            "[shader(\"fragment\")] void fragment_main() {}"
+            '// interface:v1\n// evaluator:v1\n// consumer:v1\n[shader("fragment")] void fragment_main() {}'
         ),
         geometry_source="",
     )
 
-    original = _shader_source_identity(
-        shader, surface_interface_identity="interface:v1"
-    )
+    original = _shader_source_identity(shader, surface_interface_identity="interface:v1")
     evaluator_changed = SimpleNamespace(
         **{
             **vars(shader),
-            "fragment_source": shader.fragment_source.replace(
-                "evaluator:v1", "evaluator:v2"
-            ),
+            "fragment_source": shader.fragment_source.replace("evaluator:v1", "evaluator:v2"),
         }
     )
     consumer_changed = SimpleNamespace(
         **{
             **vars(shader),
-            "fragment_source": shader.fragment_source.replace(
-                "consumer:v1", "consumer:v2"
-            ),
+            "fragment_source": shader.fragment_source.replace("consumer:v1", "consumer:v2"),
         }
     )
 
-    assert _shader_source_identity(
-        shader, surface_interface_identity="interface:v2"
-    ) != original
-    assert _shader_source_identity(
-        evaluator_changed, surface_interface_identity="interface:v1"
-    ) != original
-    assert _shader_source_identity(
-        consumer_changed, surface_interface_identity="interface:v1"
-    ) != original
+    assert _shader_source_identity(shader, surface_interface_identity="interface:v2") != original
+    assert _shader_source_identity(evaluator_changed, surface_interface_identity="interface:v1") != original
+    assert _shader_source_identity(consumer_changed, surface_interface_identity="interface:v1") != original
 
 
 def test_synthetic_surface_pass_variant_compiles_all_targets(tmp_path: Path) -> None:
@@ -667,20 +838,14 @@ def test_synthetic_surface_pass_variant_compiles_all_targets(tmp_path: Path) -> 
     )
 
     assert list(spec["artifacts"]) == ["vulkan", "opengl", "d3d11", "webgpu"]
-    assert all(
-        (package / path).is_file()
-        for target in spec["artifacts"].values()
-        for path in target.values()
-    )
+    assert all((package / path).is_file() for target in spec["artifacts"].values() for path in target.values())
     assert resources == []
     assert spec["artifacts"]["webgpu"] == {
         "vertex": "shaders/webgpu/shv_synthetic_surface.vert.wgsl",
         "fragment": "shaders/webgpu/shv_synthetic_surface.frag.wgsl",
     }
     for artifact in spec["artifacts"]["webgpu"].values():
-        layout = json.loads(
-            Path(f"{package / artifact}.layout.json").read_text(encoding="utf-8")
-        )
+        layout = json.loads(Path(f"{package / artifact}.layout.json").read_text(encoding="utf-8"))
         assert layout["version"] == 3
         assert layout["target"] == "webgpu"
 
@@ -714,15 +879,9 @@ def test_fragment_only_pipeline_variant_compiles_only_fragment_stage(
 
     assert "vertex_source_path" not in spec
     assert "vertex_entry" not in spec
-    assert all(
-        set(artifacts) == {"fragment"}
-        for artifacts in spec["artifacts"].values()
-    )
+    assert all(set(artifacts) == {"fragment"} for artifacts in spec["artifacts"].values())
     assert not list((package / "shaders").rglob("shv_fragment_only.vert.*"))
-    assert all(
-        (package / artifact["fragment"]).is_file()
-        for artifact in spec["artifacts"].values()
-    )
+    assert all((package / artifact["fragment"]).is_file() for artifact in spec["artifacts"].values())
     assert resources == []
 
 
@@ -731,14 +890,8 @@ def test_constrained_gl_shader_targets_have_distinct_package_paths() -> None:
         "opengl330",
         "webgl2",
     )
-    assert (
-        artifact_path_text("shader-uuid", "opengl330", "vertex", "vert")
-        == "shaders/opengl330/shader-uuid.vert.glsl"
-    )
-    assert (
-        artifact_path_text("shader-uuid", "webgl2", "fragment", "frag")
-        == "shaders/webgl2/shader-uuid.frag.glsl"
-    )
+    assert artifact_path_text("shader-uuid", "opengl330", "vertex", "vert") == "shaders/opengl330/shader-uuid.vert.glsl"
+    assert artifact_path_text("shader-uuid", "webgl2", "fragment", "frag") == "shaders/webgl2/shader-uuid.frag.glsl"
 
 
 @full_runtime_package_exporter
@@ -755,32 +908,16 @@ def test_strict_runtime_export_accepts_default_scene_resources(tmp_path: Path) -
     )
 
     assert [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"] == []
-    assert (
-        result.package_dir
-        / "meshes"
-        / "00000000-0000-0000-0003-000000000001.tmesh.json"
-    ).exists()
-    assert (
-        result.package_dir
-        / "meshes"
-        / "00000000-0000-0000-0003-000000000003.tmesh.json"
-    ).exists()
-    assert (
-        result.package_dir
-        / "materials"
-        / "00000000-0001-0000-0001-000000000003.tmat.json"
-    ).exists()
+    assert (result.package_dir / "meshes" / "00000000-0000-0000-0003-000000000001.tmesh.json").exists()
+    assert (result.package_dir / "meshes" / "00000000-0000-0000-0003-000000000003.tmesh.json").exists()
+    assert (result.package_dir / "materials" / "00000000-0001-0000-0001-000000000003.tmat.json").exists()
 
 
 def test_collect_runtime_refs_accepts_canonical_pipeline_template_mount() -> None:
     refs = collect_runtime_refs(
         {
             "extensions": {
-                "render_mount": {
-                    "pipeline_templates": [
-                        {"uuid": "compiled-pipeline-uuid", "name": "Main Pipeline"}
-                    ]
-                }
+                "render_mount": {"pipeline_templates": [{"uuid": "compiled-pipeline-uuid", "name": "Main Pipeline"}]}
             }
         }
     )
@@ -815,10 +952,7 @@ def test_collect_runtime_refs_rejects_legacy_mesh_material_inference() -> None:
 
     assert refs.meshes == {}
     assert refs.materials == {}
-    assert [
-        (diagnostic.level, diagnostic.path, diagnostic.message)
-        for diagnostic in diagnostics
-    ] == [
+    assert [(diagnostic.level, diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
         (
             "error",
             "scene.json",
@@ -942,14 +1076,8 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     ]
     assert all(diagnostic["level"] == "warning" for diagnostic in manifest["diagnostics"])
     diagnostic_messages = [diagnostic["message"] for diagnostic in manifest["diagnostics"]]
-    assert (
-        "Runtime exporter used fallback mesh because registry entry is unavailable"
-        in diagnostic_messages
-    )
-    assert (
-        "Runtime exporter used fallback material because registry entry is unavailable"
-        in diagnostic_messages
-    )
+    assert "Runtime exporter used fallback mesh because registry entry is unavailable" in diagnostic_messages
+    assert "Runtime exporter used fallback material because registry entry is unavailable" in diagnostic_messages
 
 
 @full_runtime_package_exporter
@@ -1093,9 +1221,7 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
         "path": f"materials/{material_uuid}.tmat.json",
     } in manifest["resources"]
     material_spec = json.loads(
-        (result.package_dir / "materials" / f"{material_uuid}.tmat.json").read_text(
-            encoding="utf-8"
-        )
+        (result.package_dir / "materials" / f"{material_uuid}.tmat.json").read_text(encoding="utf-8")
     )
     assert material_spec["textures"]["u_albedo_texture"]["uuid"] == texture_uuid
     assert {
@@ -1103,9 +1229,7 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
         "uuid": texture_uuid,
         "path": f"textures/{texture_uuid}.texture.json",
     } in manifest["resources"]
-    assert (result.package_dir / "textures" / f"{texture_uuid}.png").read_bytes() == (
-        texture_path.read_bytes()
-    )
+    assert (result.package_dir / "textures" / f"{texture_uuid}.png").read_bytes() == (texture_path.read_bytes())
 
 
 @full_runtime_package_exporter
@@ -1141,7 +1265,7 @@ def test_export_runtime_package_reports_missing_resources_as_errors_by_default(t
                                     "kind": "tc_material",
                                 },
                             },
-                        }
+                        },
                     ],
                 }
             ],
@@ -1163,9 +1287,7 @@ def test_export_runtime_package_reports_missing_resources_as_errors_by_default(t
         "path": "meshes/missing-mesh.tmesh.json",
     } not in json.loads(result.manifest_path.read_text(encoding="utf-8"))["resources"]
     assert [
-        (diagnostic.level, diagnostic.path)
-        for diagnostic in result.diagnostics
-        if diagnostic.level == "error"
+        (diagnostic.level, diagnostic.path) for diagnostic in result.diagnostics if diagnostic.level == "error"
     ] == [
         ("error", "meshes/missing-mesh.tmesh.json"),
         ("error", "materials/missing-material.tmat.json"),
@@ -1234,7 +1356,7 @@ def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_pat
                                     "kind": "tc_material",
                                 },
                             },
-                        }
+                        },
                     ],
                 }
             ],
@@ -1320,8 +1442,7 @@ def test_export_runtime_package_reports_malformed_mesh_meta_before_dev_smoke_fal
     assert (result.package_dir / "meshes" / f"{mesh_uuid}.tmesh.json").exists()
     diagnostics = [(diagnostic.path, diagnostic.message) for diagnostic in result.diagnostics]
     assert any(
-        path == "Models/Triangle.obj.meta"
-        and message.startswith("Runtime exporter failed to inspect mesh metadata:")
+        path == "Models/Triangle.obj.meta" and message.startswith("Runtime exporter failed to inspect mesh metadata:")
         for path, message in diagnostics
     )
     assert any(

@@ -84,6 +84,7 @@ if [[ -z "$HOST_WGSL_VALIDATOR" || ! -x "$HOST_WGSL_VALIDATOR" ]]; then
     exit 1
 fi
 
+TERMIN_SLANGC="$HOST_SLANGC" TERMIN_WGSL_VALIDATOR="$HOST_WGSL_VALIDATOR" \
 cmake -S "$SCRIPT_DIR" -B "$HOST_BUILD_DIR" -G "Unix Makefiles" \
     -DCMAKE_BUILD_TYPE=Release \
     -DTERMIN_SDK_PROFILE=graphics \
@@ -93,13 +94,20 @@ cmake -S "$SCRIPT_DIR" -B "$HOST_BUILD_DIR" -G "Unix Makefiles" \
     -DTERMIN_ENABLE_SDL=OFF \
     -DTERMIN_USE_BUNDLED_IMAGE_CODECS=ON \
     -DTERMIN_BUILD_PYTHON=OFF \
+    -DTERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS=ON \
+    -DTERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS="webgpu;webgl2" \
     -DTERMIN_BUILD_TESTS=OFF \
     -DTERMIN_BUILD_TGFX2_TESTS=OFF \
     -DTERMIN_BUILD_WINDOW_TESTS=OFF
-cmake --build "$HOST_BUILD_DIR" --target termin_shaderc
+cmake --build "$HOST_BUILD_DIR" --target termin_builtin_shader_artifacts
 HOST_SHADERC="$HOST_BUILD_DIR/bin/termin_shaderc"
+HOST_BUILTIN_SHADER_ROOT="$HOST_BUILD_DIR/share/termin"
 if [[ ! -x "$HOST_SHADERC" ]]; then
     echo "ERROR: native termin_shaderc was not produced at $HOST_SHADERC" >&2
+    exit 1
+fi
+if [[ ! -f "$HOST_BUILTIN_SHADER_ROOT/builtin-shader-artifacts.json" ]]; then
+    echo "ERROR: built-in shader artifacts were not produced at $HOST_BUILTIN_SHADER_ROOT" >&2
     exit 1
 fi
 
@@ -116,7 +124,7 @@ fi
     -DTERMIN_PLATFORM_WEB=ON \
     -DTERMIN_WEB_HOST_SHADERC="$HOST_SHADERC" \
     -DTERMIN_WEB_HOST_SLANGC="$HOST_SLANGC" \
-    -DTERMIN_WEB_HOST_WGSL_VALIDATOR="$HOST_WGSL_VALIDATOR"
+    -DTERMIN_WEB_HOST_BUILTIN_SHADER_ROOT="$HOST_BUILTIN_SHADER_ROOT"
 cmake --build "$BUILD_DIR" --target termin_web_core
 
 echo "Termin Web core: $BUILD_DIR/bin/termin_web_core.mjs"

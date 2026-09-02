@@ -88,8 +88,8 @@ set(TERMIN_WEB_HOST_SHADERC "" CACHE FILEPATH
     "Native termin_shaderc used to prepare offline WebGL2 artifacts")
 set(TERMIN_WEB_HOST_SLANGC "" CACHE FILEPATH
     "Native slangc used to prepare offline WebGL2 artifacts")
-set(TERMIN_WEB_HOST_WGSL_VALIDATOR "" CACHE FILEPATH
-    "Native Naga executable used to validate offline WebGPU artifacts")
+set(TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT "" CACHE PATH
+    "Canonical native build root containing offline built-in shader artifacts")
 if(TGFX2_ENABLE_WEBGL2)
     if(NOT EXISTS "${TERMIN_WEB_HOST_SHADERC}")
         message(FATAL_ERROR
@@ -101,26 +101,19 @@ if(TGFX2_ENABLE_WEBGL2)
             "WebGL2 packaging requires native TERMIN_WEB_HOST_SLANGC. "
             "Configure through 'task build:web -- ...' or provide the executable explicitly.")
     endif()
-    if(NOT EXISTS "${TERMIN_WEB_HOST_WGSL_VALIDATOR}")
+    if(NOT EXISTS "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}/builtin-shader-artifacts.json")
         message(FATAL_ERROR
-            "Web packaging requires native TERMIN_WEB_HOST_WGSL_VALIDATOR. "
-            "Run 'task toolchain:web-shaders' or configure through 'task build:web -- ...'.")
+            "Web packaging requires TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT with a "
+            "built-in shader artifact manifest. Configure through 'task build:web'.")
     endif()
     set(TERMIN_WEBGL2_FIXTURE_STAMP
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/render-package/.webgl2-artifacts.stamp")
-    file(GLOB_RECURSE TERMIN_WEB_BUILTIN_SHADER_FILES CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../graphics/termin-graphics/resources/builtin_shaders/*")
     add_custom_command(OUTPUT "${TERMIN_WEBGL2_FIXTURE_STAMP}"
         COMMAND "${TERMIN_HOST_PYTHON}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_webgl2_fixture.py"
-            --python "${TERMIN_HOST_PYTHON}"
-            --builtin-script
-                "${CMAKE_CURRENT_SOURCE_DIR}/../../graphics/termin-graphics/cmake/compile_builtin_shader_artifacts.py"
             --shaderc "${TERMIN_WEB_HOST_SHADERC}"
             --slangc "${TERMIN_WEB_HOST_SLANGC}"
-            --wgsl-validator "${TERMIN_WEB_HOST_WGSL_VALIDATOR}"
-            --builtin-source
-                "${CMAKE_CURRENT_SOURCE_DIR}/../../graphics/termin-graphics/resources/builtin_shaders"
+            --builtin-artifact-root "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}"
             --fixture "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/render-package"
         COMMAND "${CMAKE_COMMAND}" -E touch "${TERMIN_WEBGL2_FIXTURE_STAMP}"
         DEPENDS
@@ -129,8 +122,7 @@ if(TGFX2_ENABLE_WEBGL2)
             "${CMAKE_CURRENT_SOURCE_DIR}/web/fixtures/render-package/manifest.json"
             "${TERMIN_WEB_HOST_SHADERC}"
             "${TERMIN_WEB_HOST_SLANGC}"
-            "${TERMIN_WEB_HOST_WGSL_VALIDATOR}"
-            ${TERMIN_WEB_BUILTIN_SHADER_FILES}
+            "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}/builtin-shader-artifacts.json"
         VERBATIM)
     add_custom_target(termin_web_core_webgl2_artifacts
         DEPENDS "${TERMIN_WEBGL2_FIXTURE_STAMP}")

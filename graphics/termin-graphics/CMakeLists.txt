@@ -518,7 +518,7 @@ if(TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS)
             "Use a desktop host build or disable TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS.")
     endif()
     if(NOT Python_EXECUTABLE)
-        termin_require_canonical_python(Interpreter)
+        find_package(Python 3.10 COMPONENTS Interpreter REQUIRED)
     endif()
 
     set(_termin_builtin_shader_artifact_targets
@@ -597,8 +597,12 @@ if(TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS)
         "${TERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS}")
     set(_termin_builtin_shader_artifact_stamp
         "${CMAKE_BINARY_DIR}/share/termin/.builtin_shader_artifacts-${_termin_builtin_shader_artifact_target_key}.stamp")
+    set(_termin_builtin_shader_artifact_manifest
+        "${CMAKE_BINARY_DIR}/share/termin/builtin-shader-artifacts.json")
     add_custom_command(
-        OUTPUT "${_termin_builtin_shader_artifact_stamp}"
+        OUTPUT
+            "${_termin_builtin_shader_artifact_stamp}"
+            "${_termin_builtin_shader_artifact_manifest}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/termin"
         COMMAND "${Python_EXECUTABLE}" "${_termin_builtin_shader_artifact_script}"
                 ${_termin_builtin_shader_artifact_args}
@@ -612,7 +616,9 @@ if(TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS)
         COMMAND_EXPAND_LISTS
     )
     add_custom_target(termin_builtin_shader_artifacts ALL
-        DEPENDS "${_termin_builtin_shader_artifact_stamp}")
+        DEPENDS
+            "${_termin_builtin_shader_artifact_stamp}"
+            "${_termin_builtin_shader_artifact_manifest}")
     add_dependencies(termin_graphics2 termin_builtin_shader_artifacts)
 endif()
 
@@ -1168,6 +1174,10 @@ install(DIRECTORY resources/builtin_shaders
 )
 
 install(DIRECTORY "${CMAKE_BINARY_DIR}/share/termin/shaders"
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/termin
+    OPTIONAL
+)
+install(FILES "${CMAKE_BINARY_DIR}/share/termin/builtin-shader-artifacts.json"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/termin
     OPTIONAL
 )

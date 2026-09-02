@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +24,11 @@ from termin.project_build.runtime_package.models import (
 )
 from termin.project_build.runtime_package.package_files import write_json
 from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
+
+
+BUILTIN_SHADER_ARTIFACT_MANIFEST = "builtin-shader-artifacts.json"
+BUILTIN_SHADER_ARTIFACT_SCHEMA_VERSION = 1
+SHADER_ARTIFACT_CACHE_SCHEMA_VERSION = 1
 
 
 DEFAULT_SHADER_UUID = "termin-runtime-default-color"
@@ -53,9 +60,7 @@ ENGINE_BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite"
 ENGINE_TONEMAP_SHADER_UUID = "termin-engine-tonemap"
 ENGINE_OUTPUT_TRANSFORM_SHADER_UUID = "termin-engine-output-transform"
 ENGINE_MULTIVIEW_TONEMAP_SHADER_UUID = "termin-engine-multiview-tonemap"
-ENGINE_MULTIVIEW_OUTPUT_TRANSFORM_SHADER_UUID = (
-    "termin-engine-multiview-output-transform"
-)
+ENGINE_MULTIVIEW_OUTPUT_TRANSFORM_SHADER_UUID = "termin-engine-multiview-output-transform"
 ENGINE_CANVAS2D_SOLID_SHADER_UUID = "termin-engine-canvas2d-solid"
 ENGINE_CANVAS2D_TEXTURE_SHADER_UUID = "termin-engine-canvas2d-texture"
 ENGINE_TEXT2D_SHADER_UUID = "termin-engine-text2d"
@@ -67,9 +72,7 @@ ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
 # LineRenderer builds its final material variants from one canonical material
 # shader. Its catalog entry owns the runtime source closure for the tube
 # transform and pass-owned output adapters.
-ENGINE_LINE_SHADER_UUIDS = (
-    "termin-engine-line-default",
-)
+ENGINE_LINE_SHADER_UUIDS = ("termin-engine-line-default",)
 
 
 def normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str, ...] | None:
@@ -189,6 +192,7 @@ def write_shaders(
     shader_compiler: str | Path | None,
     requested_targets: tuple[str, ...] | None,
     fxc: Path | None = None,
+    artifact_cache_dir: Path | None = None,
 ) -> None:
     compiler = resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
     for shader in sorted(shaders.values(), key=lambda item: item.uuid):
@@ -200,6 +204,7 @@ def write_shaders(
             compiler,
             requested_targets,
             fxc,
+            artifact_cache_dir,
         )
 
 
@@ -240,9 +245,7 @@ def shader_program_to_spec(program: Any) -> dict[str, Any]:
     for phase in program.phases:
         shader = phase["shader"]
         if shader is None or not shader.is_valid:
-            raise ValueError(
-                f"Shader program '{program.uuid}' has stale phase '{phase['phase_mark']}'"
-            )
+            raise ValueError(f"Shader program '{program.uuid}' has stale phase '{phase['phase_mark']}'")
         state = phase["state"]
         phases.append(
             {
@@ -303,6 +306,7 @@ def write_shader(
     compiler: Path | None,
     requested_targets: tuple[str, ...] | None,
     fxc: Path | None = None,
+    artifact_cache_dir: Path | None = None,
 ) -> dict[str, Any]:
     compile_artifacts = shader.artifact_role != "surface_producer"
     targets = (
@@ -343,9 +347,7 @@ def write_shader(
         fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
     fragment_compile_source_path = fragment_source_path
     if compile_artifacts and shader.surface_interface_source:
-        fragment_compile_source_path = (
-            vulkan_dir / f"{shader.uuid}.frag.compile.{source_ext}"
-        )
+        fragment_compile_source_path = vulkan_dir / f"{shader.uuid}.frag.compile.{source_ext}"
         fragment_compile_source_path.write_text(
             f"{shader.surface_interface_source}\n{shader.fragment_source}",
             encoding="utf-8",
@@ -356,12 +358,7 @@ def write_shader(
         geometry_source_path = vulkan_dir / f"{shader.uuid}.geom.{source_ext}"
         geometry_source_path.write_text(shader.geometry_source, encoding="utf-8")
 
-    if (
-        compile_artifacts
-        and compiler is None
-        and shader.allow_precompiled_default
-        and targets == ("vulkan",)
-    ):
+    if compile_artifacts and compiler is None and shader.allow_precompiled_default and targets == ("vulkan",):
         copy_default_spirv(vulkan_dir / f"{shader.uuid}.vert.spv", "termin-android-scene-color.vert.spv")
         copy_default_spirv(vulkan_dir / f"{shader.uuid}.frag.spv", "termin-android-scene-color.frag.spv")
         diagnostics.append(
@@ -402,6 +399,7 @@ def write_shader(
                     shader.vertex_entry,
                     program_source_paths,
                     fxc,
+                    artifact_cache_dir,
                 )
             compile_shader_stage(
                 compiler,
@@ -414,6 +412,7 @@ def write_shader(
                 shader.fragment_entry,
                 program_source_paths,
                 fxc,
+                artifact_cache_dir,
             )
             if geometry_source_path is not None:
                 compile_shader_stage(
@@ -427,6 +426,7 @@ def write_shader(
                     shader.geometry_entry,
                     program_source_paths,
                     fxc,
+                    artifact_cache_dir,
                 )
 
     shader_spec: dict[str, Any] = {
@@ -455,17 +455,11 @@ def write_shader(
         shader_spec["artifacts"] = {
             target: {
                 **(
-                    {
-                        "vertex": artifact_path_text(
-                            shader.uuid, target, "vertex", "vert"
-                        )
-                    }
+                    {"vertex": artifact_path_text(shader.uuid, target, "vertex", "vert")}
                     if vertex_source_path is not None
                     else {}
                 ),
-                "fragment": artifact_path_text(
-                    shader.uuid, target, "fragment", "frag"
-                ),
+                "fragment": artifact_path_text(shader.uuid, target, "fragment", "frag"),
             }
             for target in targets
         }
@@ -517,25 +511,140 @@ def write_default_pipeline_shader_artifacts(
     shader_compiler: str | Path | None,
     requested_targets: tuple[str, ...] | None = None,
     fxc: Path | None = None,
+    builtin_artifact_root: Path | None = None,
 ) -> dict[str, Any]:
-    compiler = resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
-    if compiler is None:
-        raise FileNotFoundError(
-            "Shader compiler 'termin_shaderc' was not found. "
-            "Default pipeline shaders require precompiled SPIR-V for Android."
+    shaders = default_pipeline_engine_shaders()
+    if builtin_artifact_root is not None:
+        copy_prebuilt_engine_shader_artifacts(
+            package_dir,
+            Path(builtin_artifact_root),
+            shaders,
+            requested_targets,
+        )
+    else:
+        compiler = resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
+        if compiler is None:
+            raise FileNotFoundError(
+                "Shader compiler 'termin_shaderc' was not found. "
+                "Default pipeline shaders require precompiled artifacts or a compiler."
+            )
+        for shader in shaders:
+            write_engine_shader_artifact(
+                package_dir,
+                diagnostics,
+                shader,
+                compiler,
+                requested_targets,
+                fxc,
+            )
+    return write_builtin_shader_contract(package_dir, shaders, requested_targets)
+
+
+def copy_prebuilt_engine_shader_artifacts(
+    package_dir: Path,
+    artifact_root: Path,
+    shaders: list[EngineShaderArtifact],
+    requested_targets: tuple[str, ...] | None,
+) -> None:
+    root = artifact_root.resolve()
+    manifest_path = root / BUILTIN_SHADER_ARTIFACT_MANIFEST
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"Built-in shader artifact manifest does not exist: {manifest_path}")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Built-in shader artifact manifest is invalid: {manifest_path}: {exc}") from exc
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != BUILTIN_SHADER_ARTIFACT_SCHEMA_VERSION:
+        raise ValueError(
+            f"Built-in shader artifact manifest requires schema version "
+            f"{BUILTIN_SHADER_ARTIFACT_SCHEMA_VERSION}: {manifest_path}"
         )
 
-    shaders = default_pipeline_engine_shaders()
+    catalog_path = _prebuilt_manifest_path(root, manifest.get("catalog"), "catalog")
+    expected_catalog_hash = manifest.get("catalog_sha256")
+    if not isinstance(expected_catalog_hash, str) or _file_sha256(catalog_path) != expected_catalog_hash:
+        raise ValueError(f"Built-in shader artifact catalog hash does not match its manifest: {catalog_path}")
+
+    entries = manifest.get("artifacts")
+    if not isinstance(entries, list):
+        raise ValueError(f"Built-in shader artifact manifest has no artifact list: {manifest_path}")
+    index: dict[tuple[str, str, str], dict[str, Any]] = {}
+    manifest_targets = manifest.get("targets")
+    if not isinstance(manifest_targets, list) or not all(isinstance(target, str) for target in manifest_targets):
+        raise ValueError(f"Built-in shader artifact manifest has an invalid target list: {manifest_path}")
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError(f"Built-in shader artifact manifest contains an invalid entry: {manifest_path}")
+        key = (entry.get("uuid"), entry.get("target"), entry.get("stage"))
+        if not all(isinstance(value, str) and value != "" for value in key):
+            raise ValueError(f"Built-in shader artifact manifest contains an incomplete entry: {manifest_path}")
+        if key in index:
+            raise ValueError(f"Built-in shader artifact manifest contains duplicate entry {key}: {manifest_path}")
+        index[key] = entry
+
+    copied = 0
     for shader in shaders:
-        write_engine_shader_artifact(
-            package_dir,
-            diagnostics,
-            shader,
-            compiler,
+        targets = shader_targets_for_language(
+            shader.language,
             requested_targets,
-            fxc,
+            f"Engine shader '{shader.uuid}'",
         )
-    return write_builtin_shader_contract(package_dir, shaders, requested_targets)
+        missing_targets = [target for target in targets if target not in manifest_targets]
+        if missing_targets:
+            raise FileNotFoundError(
+                f"Built-in shader artifact root does not provide target(s) {', '.join(missing_targets)}: {root}"
+            )
+        stages: list[tuple[str, str]] = []
+        if shader.vertex_source != "":
+            stages.append(("vertex", "vert"))
+        if shader.fragment_source != "":
+            stages.append(("fragment", "frag"))
+        for target in targets:
+            for stage, stage_suffix in stages:
+                key = (shader.uuid, target, stage)
+                entry = index.get(key)
+                if entry is None:
+                    raise FileNotFoundError(
+                        f"Built-in shader artifact root has no {shader.uuid}:{stage} for {target}: {root}"
+                    )
+                expected_path = artifact_path_text(shader.uuid, target, stage, stage_suffix)
+                expected_layout = f"{expected_path}.layout.json"
+                if entry.get("path") != expected_path or entry.get("layout") != expected_layout:
+                    raise ValueError(f"Built-in shader artifact entry {key} has incompatible paths")
+                source = _verified_prebuilt_file(root, entry, "path", "sha256")
+                layout = _verified_prebuilt_file(root, entry, "layout", "layout_sha256")
+                destination = package_dir / expected_path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+                shutil.copy2(layout, Path(f"{destination}.layout.json"))
+                _validate_compiled_shader_artifact(destination, target, stage)
+                copied += 1
+    _log_shader_artifact(f"copied {copied} prebuilt engine shader stages from {root}")
+
+
+def _prebuilt_manifest_path(root: Path, value: Any, field: str) -> Path:
+    if not isinstance(value, str) or value == "":
+        raise ValueError(f"Built-in shader artifact manifest field '{field}' must be a path")
+    relative = Path(value)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ValueError(f"Built-in shader artifact manifest field '{field}' is not a safe relative path: {value}")
+    resolved = (root / relative).resolve()
+    if not resolved.is_relative_to(root) or not resolved.is_file():
+        raise FileNotFoundError(f"Built-in shader artifact file does not exist: {resolved}")
+    return resolved
+
+
+def _verified_prebuilt_file(
+    root: Path,
+    entry: dict[str, Any],
+    path_field: str,
+    hash_field: str,
+) -> Path:
+    path = _prebuilt_manifest_path(root, entry.get(path_field), path_field)
+    expected_hash = entry.get(hash_field)
+    if not isinstance(expected_hash, str) or _file_sha256(path) != expected_hash:
+        raise ValueError(f"Built-in shader artifact hash does not match its manifest: {path}")
+    return path
 
 
 def write_builtin_shader_contract(
@@ -598,12 +707,9 @@ def _write_runtime_required_builtin_sources(
 ) -> None:
     runtime_sources = catalog_entry.get("runtime_sources", [])
     if not isinstance(runtime_sources, list) or not all(
-        isinstance(source_path, str) and source_path != ""
-        for source_path in runtime_sources
+        isinstance(source_path, str) and source_path != "" for source_path in runtime_sources
     ):
-        raise ValueError(
-            f"Built-in shader '{shader_uuid}' has invalid runtime source paths"
-        )
+        raise ValueError(f"Built-in shader '{shader_uuid}' has invalid runtime source paths")
     source_paths = set(runtime_sources)
 
     language = catalog_entry.get("language")
@@ -612,6 +718,13 @@ def _write_runtime_required_builtin_sources(
         if not isinstance(program, dict) or not isinstance(program.get("path"), str):
             raise ValueError(f"Built-in shader program '{shader_uuid}' has no source path")
         source_paths.add(program["path"])
+        artifact_stages = catalog_entry.get("artifact_stages", {})
+        if not isinstance(artifact_stages, dict):
+            raise ValueError(f"Built-in shader program '{shader_uuid}' has invalid artifact stages")
+        for stage in artifact_stages.values():
+            if not isinstance(stage, dict) or not isinstance(stage.get("path"), str):
+                raise ValueError(f"Built-in shader program '{shader_uuid}' has invalid artifact stage source")
+            source_paths.add(stage["path"])
     elif language == "glsl":
         stages = catalog_entry.get("stages")
         if not isinstance(stages, dict):
@@ -651,10 +764,7 @@ def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
         builtin_engine_shader_artifact(ENGINE_WORLD2D_SHADER_UUID),
         builtin_engine_shader_artifact(ENGINE_SHADOW_MATERIAL_SHADER_UUID),
     ]
-    shaders.extend(
-        builtin_engine_shader_artifact(shader_uuid)
-        for shader_uuid in ENGINE_LINE_SHADER_UUIDS
-    )
+    shaders.extend(builtin_engine_shader_artifact(shader_uuid) for shader_uuid in ENGINE_LINE_SHADER_UUIDS)
     return shaders
 
 
@@ -830,14 +940,7 @@ def source_extension_for_language(language: str) -> str:
 
 
 def copy_default_spirv(target_path: Path, source_name: str) -> None:
-    source_path = (
-        Path(__file__).resolve().parents[4]
-        / "termin-android"
-        / "assets"
-        / "shaders"
-        / "vulkan"
-        / source_name
-    )
+    source_path = Path(__file__).resolve().parents[4] / "termin-android" / "assets" / "shaders" / "vulkan" / source_name
     if not source_path.exists():
         raise FileNotFoundError(f"Default SPIR-V artifact is missing: {source_path}")
     shutil.copy2(source_path, target_path)
@@ -873,7 +976,31 @@ def compile_shader_stage(
     entry: str = "main",
     program_source_paths: tuple[Path, ...] = (),
     fxc: Path | None = None,
+    artifact_cache_dir: Path | None = None,
 ) -> None:
+    cache_paths: tuple[Path, Path] | None = None
+    if artifact_cache_dir is not None:
+        cache_paths = _shader_cache_paths(
+            artifact_cache_dir,
+            compiler,
+            language,
+            target,
+            stage,
+            entry,
+            debug_name,
+            input_path,
+            program_source_paths,
+            fxc,
+        )
+        cached_artifact, cached_layout = cache_paths
+        if cached_artifact.is_file() and cached_layout.is_file():
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(cached_artifact, output_path)
+            shutil.copy2(cached_layout, Path(f"{output_path}.layout.json"))
+            _validate_compiled_shader_artifact(output_path, target, stage)
+            _log_shader_artifact(f"cache hit target={target} stage={stage} name={debug_name}")
+            return
+
     cmd = executable_command(compiler) + [
         str(compiler),
         "compile",
@@ -896,24 +1023,37 @@ def compile_shader_stage(
         cmd.extend(["--program-source", str(program_source_path)])
     if target == "d3d11" and fxc is not None:
         cmd.extend(["--fxc", str(fxc)])
+    started = time.perf_counter()
+    _log_shader_artifact(f"compiling target={target} stage={stage} name={debug_name}")
     result = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip()
         raise RuntimeError(f"Shader compilation failed for {input_path.name}: {message}")
-    if not output_path.exists():
+    _validate_compiled_shader_artifact(output_path, target, stage)
+    elapsed = time.perf_counter() - started
+    _log_shader_artifact(f"compiled target={target} stage={stage} name={debug_name} duration_s={elapsed:.3f}")
+    if cache_paths is not None:
+        cached_artifact, cached_layout = cache_paths
+        cached_artifact.parent.mkdir(parents=True, exist_ok=True)
+        _copy_atomic(output_path, cached_artifact)
+        _copy_atomic(Path(f"{output_path}.layout.json"), cached_layout)
+
+
+def _validate_compiled_shader_artifact(
+    output_path: Path,
+    target: str,
+    stage: str,
+) -> None:
+    if not output_path.is_file():
         raise RuntimeError(f"Shader compiler did not produce expected output: {output_path}")
     layout_path = Path(f"{output_path}.layout.json")
-    if not layout_path.exists():
-        raise RuntimeError(
-            f"Shader compiler did not produce expected layout sidecar: {layout_path}"
-        )
+    if not layout_path.is_file():
+        raise RuntimeError(f"Shader compiler did not produce expected layout sidecar: {layout_path}")
     if target == "webgpu":
         try:
             layout = json.loads(layout_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError(
-                f"WebGPU shader layout sidecar is invalid: {layout_path}: {exc}"
-            ) from exc
+            raise RuntimeError(f"WebGPU shader layout sidecar is invalid: {layout_path}: {exc}") from exc
         if (
             not isinstance(layout, dict)
             or layout.get("version") != 3
@@ -921,9 +1061,100 @@ def compile_shader_stage(
             or layout.get("stage") != stage
             or not isinstance(layout.get("resources"), list)
         ):
-            raise RuntimeError(
-                f"WebGPU shader layout sidecar has an incompatible contract: {layout_path}"
-            )
+            raise RuntimeError(f"WebGPU shader layout sidecar has an incompatible contract: {layout_path}")
+
+
+def _shader_cache_paths(
+    cache_root: Path,
+    compiler: Path,
+    language: str,
+    target: str,
+    stage: str,
+    entry: str,
+    debug_name: str,
+    input_path: Path,
+    program_source_paths: tuple[Path, ...],
+    fxc: Path | None,
+) -> tuple[Path, Path]:
+    source_paths = tuple(dict.fromkeys((input_path, *program_source_paths)))
+    key_document = {
+        "schema_version": SHADER_ARTIFACT_CACHE_SCHEMA_VERSION,
+        "compiler": _tool_identity(compiler),
+        "builtin_sources": _builtin_shader_source_identity(compiler),
+        "external_tools": {
+            name: _tool_identity(Path(value))
+            for name in ("TERMIN_SLANGC", "TERMIN_WGSL_VALIDATOR", "TERMIN_FXC")
+            if (value := os.environ.get(name))
+        },
+        "fxc": _tool_identity(fxc) if fxc is not None else None,
+        "language": language,
+        "target": target,
+        "stage": stage,
+        "entry": entry,
+        "debug_name": debug_name,
+        "sources": [
+            {
+                "name": path.name,
+                "sha256": _file_sha256(path),
+            }
+            for path in source_paths
+        ],
+    }
+    digest = hashlib.sha256(json.dumps(key_document, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    entry_root = cache_root.resolve() / f"v{SHADER_ARTIFACT_CACHE_SCHEMA_VERSION}" / digest[:2]
+    return entry_root / f"{digest}.artifact", entry_root / f"{digest}.layout.json"
+
+
+def _tool_identity(path: Path) -> dict[str, str]:
+    resolved = path.resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"Shader tool does not exist: {resolved}")
+    return {"path": str(resolved), "sha256": _file_sha256(resolved)}
+
+
+def _builtin_shader_source_identity(compiler: Path) -> dict[str, Any] | None:
+    candidates: list[Path] = []
+    configured = os.environ.get("TGFX2_BUILTIN_SHADER_ROOT")
+    if configured:
+        candidates.append(Path(configured))
+    candidates.append(compiler.resolve().parent.parent / "share/termin/builtin_shaders")
+    sdk_root = os.environ.get("TERMIN_SDK")
+    if sdk_root:
+        candidates.append(Path(sdk_root) / "share/termin/builtin_shaders")
+    for candidate in candidates:
+        root = candidate.resolve()
+        if not root.is_dir():
+            continue
+        files = sorted(path for path in root.rglob("*") if path.is_file())
+        return {
+            "root": str(root),
+            "files": [
+                {
+                    "path": path.relative_to(root).as_posix(),
+                    "sha256": _file_sha256(path),
+                }
+                for path in files
+            ],
+        }
+    return None
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _copy_atomic(source: Path, destination: Path) -> None:
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    shutil.copy2(source, temporary)
+    os.replace(temporary, destination)
+
+
+def _log_shader_artifact(message: str) -> None:
+    print(f"[INFO] [ShaderArtifact] {message}", flush=True)
 
 
 def executable_command(path: Path) -> list[str]:

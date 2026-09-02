@@ -110,6 +110,8 @@ def export_runtime_package(
     resource_policy: str = DEFAULT_RESOURCE_POLICY,
     shader_targets: Iterable[str] | None = None,
     target_platform: tuple[str, str] | None = None,
+    builtin_shader_artifact_root: str | Path | None = None,
+    shader_artifact_cache_dir: str | Path | None = None,
 ) -> RuntimePackageExportResult:
     _validate_resource_policy(resource_policy)
     requested_shader_targets = _normalize_shader_targets(shader_targets)
@@ -214,12 +216,8 @@ def export_runtime_package(
         diagnostics,
     )
     _write_textures(project_root_path, output_dir_path, refs.textures, resources, diagnostics)
-    compiled_pipelines = _write_pipelines(
-        project_root_path, output_dir_path, refs.pipelines, resources, diagnostics
-    )
-    temporary_ui_assets = _stage_ui_documents_for_scene_analysis(
-        output_dir_path, resources, diagnostics
-    )
+    compiled_pipelines = _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
+    temporary_ui_assets = _stage_ui_documents_for_scene_analysis(output_dir_path, resources, diagnostics)
     try:
         for identity, scene_data in scene_documents.items():
             _collect_pipeline_shader_usages(
@@ -238,8 +236,7 @@ def export_runtime_package(
                         level="error",
                         path="ui",
                         message=(
-                            "Runtime exporter failed to release a temporary "
-                            "native UI document used for scene analysis"
+                            "Runtime exporter failed to release a temporary native UI document used for scene analysis"
                         ),
                     )
                 )
@@ -253,6 +250,7 @@ def export_runtime_package(
         shader_compiler,
         requested_shader_targets,
         Path(fxc).resolve() if fxc is not None else None,
+        (Path(shader_artifact_cache_dir).resolve() if shader_artifact_cache_dir is not None else None),
     )
     _write_shader_programs(output_dir_path, shader_programs, resources)
     builtin_shader_contract = _write_default_pipeline_shader_artifacts(
@@ -261,6 +259,7 @@ def export_runtime_package(
         shader_compiler,
         requested_shader_targets,
         Path(fxc).resolve() if fxc is not None else None,
+        (Path(builtin_shader_artifact_root).resolve() if builtin_shader_artifact_root is not None else None),
     )
     resources.sort(key=_resource_sort_key)
 
@@ -268,9 +267,7 @@ def export_runtime_package(
         "version": 3,
         "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
         "entry_scene": entry_identity,
-        "world_controller": (
-            world_controller.to_dict() if world_controller is not None else None
-        ),
+        "world_controller": (world_controller.to_dict() if world_controller is not None else None),
         "builtin_shader_contract": builtin_shader_contract,
         "pipeline_shader_requirements": pipeline_shader_requirements,
         "resources": resources,
@@ -382,9 +379,7 @@ def _collect_pipeline_shader_usages(
                     raise ValueError("compiled pipeline template could not be instantiated")
                 try:
                     _record_pipeline_shader_usages(
-                        collect_shader_usages_for_pipeline(
-                            scene.scene_handle(), pipeline
-                        ),
+                        collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline),
                         shaders,
                         diagnostics,
                         pipeline_shader_requirements,
@@ -408,13 +403,9 @@ def _collect_pipeline_shader_usages(
                 try:
                     pipeline = engine.rendering_manager.create_pipeline(pipeline_name)
                     if pipeline is None:
-                        raise ValueError(
-                            f"built-in pipeline '{pipeline_name}' could not be instantiated"
-                        )
+                        raise ValueError(f"built-in pipeline '{pipeline_name}' could not be instantiated")
                     _record_pipeline_shader_usages(
-                        collect_shader_usages_for_pipeline(
-                            scene.scene_handle(), pipeline
-                        ),
+                        collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline),
                         shaders,
                         diagnostics,
                         pipeline_shader_requirements,
@@ -507,10 +498,7 @@ def _builtin_pipeline_names(scene_data: dict[str, Any]) -> set[str]:
         if (
             isinstance(pipeline_name, str)
             and pipeline_name
-            and (
-                not isinstance(pipeline_uuid, str)
-                or not pipeline_uuid
-            )
+            and (not isinstance(pipeline_uuid, str) or not pipeline_uuid)
         ):
             names.add(pipeline_name)
     return names
@@ -520,8 +508,7 @@ def _validate_resource_policy(resource_policy: str) -> None:
     if resource_policy not in SUPPORTED_RESOURCE_POLICIES:
         supported = ", ".join(sorted(SUPPORTED_RESOURCE_POLICIES))
         raise ValueError(
-            f"Unsupported runtime package resource_policy '{resource_policy}'. "
-            f"Supported values: {supported}"
+            f"Unsupported runtime package resource_policy '{resource_policy}'. Supported values: {supported}"
         )
 
 

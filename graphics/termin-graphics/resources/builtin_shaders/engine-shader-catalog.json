@@ -676,6 +676,17 @@
       "language": "shader",
       "program": {
         "path": "termin-engine-skybox.shader"
+      },
+      "artifact_language": "slang",
+      "artifact_stages": {
+        "vertex": {
+          "path": "termin-engine-skybox.vert.slang",
+          "entry": "main"
+        },
+        "fragment": {
+          "path": "termin-engine-skybox.frag.slang",
+          "entry": "main"
+        }
       }
     },
     {

@@ -24,6 +24,11 @@ task test:web
 task test:web:browser
 ```
 
+Сборка публикует единый проверяемый каталог built-in WebGPU/WebGL2 shaders в
+`build/web-core-host-tools/share/termin`. Render fixture не компилирует этот
+набор повторно: она копирует артефакты из каталога и отдельно собирает только
+свой package-specific shader.
+
 При уже собранном Web Runtime полный browser gate запускается отдельной
 командой:
 

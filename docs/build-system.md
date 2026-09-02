@@ -1424,12 +1424,22 @@ and varying names and compact per-program texture/UBO bindings in their layout
 sidecars. The runtime resolves those names after program link; logical
 cross-backend binding numbers must not be passed directly to GL texture units.
 
-Web build не компилирует Slang в браузере. `build-web-core.sh` сначала строит
+Web build не компилирует Slang в браузере. `task build:web` сначала строит
 native host-tool `termin_shaderc`, использует закреплённые `slangc` и Naga, а
-затем генерирует полные `webgpu` и `webgl2` builtin matrices и
-package-specific material artifacts до упаковки `package.trpkg`. WGSL при этом
-проходит независимую валидацию Naga. Поэтому опубликованный каталог
-самодостаточен и не требует compiler toolchain или сети на машине пользователя.
+затем один раз генерирует полные `webgpu` и `webgl2` builtin matrices в
+`build/web-core-host-tools/share/termin`. Версионированный
+`builtin-shader-artifacts.json` перечисляет каталог, stage artifacts, layout
+sidecars и их SHA-256. Browser fixture и внешние runtime-package exporters
+берут built-in стадии из этого общего корня; несовместимый, неполный или
+изменённый корень отвергается до упаковки.
+
+Package-specific material/pipeline stages по-прежнему собираются во время
+export, потому что зависят от содержимого сцены. Exporter принимает
+`shader_artifact_cache_dir`: content-addressed key включает compiler и внешние
+toolchains, target/language/stage/entry/debug name и содержимое полного набора
+program sources. В логе каждая холодная стадия отмечается как `compiling` с
+длительностью, а повторная — как `cache hit`. Готовый `package.trpkg` остаётся
+самодостаточным и не требует compiler toolchain или сети в браузере.
 
 `termin_web_visual_scene_browser_smoke` принудительно использует software
 WebGL2 только внутри headless CI, проверяет retained VisualScene2D, packaged 3D
