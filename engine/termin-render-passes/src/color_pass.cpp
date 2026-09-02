@@ -355,9 +355,8 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
                 material_pipeline_abi_resource_decl(ShaderAbiResourceId::IblPrefilteredSpecular,
                                                     TC_SHADER_STAGE_FRAGMENT,
                                                     MaterialPipelineResourceOwner::Pass),
-                material_pipeline_abi_resource_decl(ShaderAbiResourceId::IblBrdfLut,
-                                                    TC_SHADER_STAGE_FRAGMENT,
-                                                    MaterialPipelineResourceOwner::Pass),
+                material_pipeline_abi_resource_decl(
+                    ShaderAbiResourceId::IblBrdfLut, TC_SHADER_STAGE_FRAGMENT, MaterialPipelineResourceOwner::Pass),
             };
             contract.surface_consumer = std::move(consumer);
             return contract;
@@ -509,10 +508,10 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
     std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
         return {ResourceSpec{
             input_res,
-            "fbo",                                     // resource_type
-            std::nullopt,                              // size
-            termin::LinearColor{0.2f, 0.2f, 0.2f, 1.0f}, // clear_color
-            1.0f                                       // clear_depth
+            "fbo",                                       // resource_type
+            std::nullopt,                                // size
+            termin::LinearColor{0.0f, 0.0f, 0.0f, 1.0f}, // clear_color
+            1.0f                                         // clear_depth
         }};
     }
 
@@ -812,8 +811,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         // MAX_SHADOW_MAPS = 16 (from lighting_upload.hpp) — hardcoded here
         // so the struct layout can be static_asserted at compile time.
         constexpr size_t SHADOW_UBO_MAX = MAX_SHADOW_MAPS;
-        const size_t active_shadow_budget =
-            std::min<size_t>(SHADOW_UBO_MAX, device.capabilities().max_shadow_maps);
+        const size_t active_shadow_budget = std::min<size_t>(SHADOW_UBO_MAX, device.capabilities().max_shadow_maps);
         struct ShadowBlockStd140 {
             int u_shadow_map_count; // 4
             int _pad0[3];           // 12
@@ -1000,8 +998,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         // decided by reflected resources during binding, not by legacy feature
         // flags that material-pipeline variants may not own at collection time.
         tgfx::BufferHandle lighting_ubo_tgfx2{};
-        const bool environment_lighting_ready =
-            data.environment_lighting && data.environment_lighting->ready();
+        const bool environment_lighting_ready = data.environment_lighting && data.environment_lighting->ready();
         if (!cached_draw_calls_.empty()) {
             lighting_ubo_.create(device);
             lighting_ubo_.update_from_lights(data.lights,
@@ -1068,16 +1065,16 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         std::vector<RenderItemNamedTextureBinding> extra_texture_bindings;
         extra_texture_bindings.reserve(extra_textures.size() + 3u);
         if (environment_lighting_ready) {
-            extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
-                "ibl_diffuse_irradiance",
-                data.environment_lighting->diffuse_irradiance,
-                data.environment_lighting->sampler,
-                true});
-            extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
-                "ibl_prefiltered_specular",
-                data.environment_lighting->prefiltered_specular,
-                data.environment_lighting->sampler,
-                true});
+            extra_texture_bindings.push_back(
+                RenderItemNamedTextureBinding{"ibl_diffuse_irradiance",
+                                              data.environment_lighting->diffuse_irradiance,
+                                              data.environment_lighting->sampler,
+                                              true});
+            extra_texture_bindings.push_back(
+                RenderItemNamedTextureBinding{"ibl_prefiltered_specular",
+                                              data.environment_lighting->prefiltered_specular,
+                                              data.environment_lighting->sampler,
+                                              true});
             extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
                 "ibl_brdf_lut", data.environment_lighting->brdf_lut, data.environment_lighting->sampler, true});
         }
@@ -1319,8 +1316,7 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             tc_scene_render_state* render_state = tc_scene_render_state_get(scene);
             tc_scene_lighting* lighting = render_state ? &render_state->lighting : nullptr;
             if (lighting) {
-                ambient_color =
-                    Vec3{lighting->ambient_color.r, lighting->ambient_color.g, lighting->ambient_color.b};
+                ambient_color = Vec3{lighting->ambient_color.r, lighting->ambient_color.g, lighting->ambient_color.b};
                 ambient_intensity = lighting->ambient_intensity;
                 shadow_settings.method = lighting->shadow_method;
                 shadow_settings.softness = lighting->shadow_softness;

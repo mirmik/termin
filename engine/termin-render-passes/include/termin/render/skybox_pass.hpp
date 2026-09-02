@@ -16,6 +16,7 @@
 #include "termin/render_passes/export.h"
 #include "tgfx2/handles.hpp"
 extern "C" {
+#include <core/tc_scene_skybox.h>
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
@@ -26,6 +27,13 @@ namespace tgfx {
 }
 
 namespace termin {
+
+    // TC_SKYBOX_NONE disables the authored skybox style, but the default
+    // pipeline still needs an opaque background before scene geometry is
+    // drawn. In that case the scene background color is the effective solid
+    // skybox color.
+    TERMIN_RENDER_PASSES_API tc_scene_skybox resolve_skybox_for_render(tc_scene_skybox authored,
+                                                                       tc_srgb_color background);
 
     class TERMIN_RENDER_PASSES_API SkyBoxPass : public CxxFramePass {
     public:
@@ -39,6 +47,7 @@ namespace termin {
         // pass re-creations) so Play/Stop doesn't re-run shaderc.
         tgfx::IRenderDevice* device2_ = nullptr;
         tc_shader_handle skybox_shader_handle_ = tc_shader_handle_invalid();
+        tgfx::BufferHandle params_ubo_{};
         // Parsed from the canonical built-in .shader program at ensure_resources
         // time. The layout drives std140_pack and the UBO block_size.
         MaterialUboLayout skybox_layout_;
@@ -67,10 +76,13 @@ namespace termin {
         std::vector<ResourceSpec> get_resource_specs() const override;
 
         void execute(ExecuteContext& ctx) override;
+        bool get_raster_contract(ExecuteContext& ctx, tc_raster_pass_contract& out_contract) const override;
+        bool record_raster(ExecuteContext& ctx) override;
         void destroy() override;
 
     private:
         void ensure_resources(ExecuteContext& ctx);
+        bool execute_impl(ExecuteContext& ctx, bool raster_scope_already_open);
     };
 
 } // namespace termin

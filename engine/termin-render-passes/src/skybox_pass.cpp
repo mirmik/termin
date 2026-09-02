@@ -20,12 +20,21 @@ extern "C" {
 #include <core/tc_scene_render_state.h>
 #include <core/tc_scene_skybox.h>
 
+#include <termin/geom/color.hpp>
 #include <tcbase/tc_log.hpp>
 
 #include <cstring>
 #include <vector>
 
 namespace termin {
+
+    tc_scene_skybox resolve_skybox_for_render(tc_scene_skybox authored, tc_srgb_color background) {
+        if (authored.type == TC_SKYBOX_NONE) {
+            authored.type = TC_SKYBOX_SOLID;
+            authored.color = background;
+        }
+        return authored;
+    }
 
     constexpr const char* SKYBOX_ENGINE_SHADER_UUID = "termin-engine-skybox";
 
@@ -63,12 +72,12 @@ namespace termin {
     }
 
     std::vector<ResourceSpec> SkyBoxPass::get_resource_specs() const {
-        // Declare a dark-gray clear on the input resource so the framegraph
-        // allocator gives us a well-defined initial state — identical intent
-        // to the legacy Python pass's get_resource_specs.
+        // The pass covers the complete target. Keep the allocator fallback
+        // neutral in case drawing fails; authored scene background is resolved
+        // and drawn explicitly in execute().
         ResourceSpec spec;
         spec.resource = input_res;
-        spec.clear_color = termin::LinearColor{0.2f, 0.2f, 0.2f, 1.0f};
+        spec.clear_color = termin::LinearColor{0.0f, 0.0f, 0.0f, 1.0f};
         spec.clear_depth = 1.0f;
         return {spec};
     }
@@ -145,29 +154,55 @@ namespace termin {
     // ============================================================================
 
     void SkyBoxPass::execute(ExecuteContext& ctx) {
+        (void)execute_impl(ctx, false);
+    }
+
+    bool SkyBoxPass::get_raster_contract(ExecuteContext& ctx, tc_raster_pass_contract& out_contract) const {
+        out_contract = {};
+        out_contract.struct_size = sizeof(out_contract);
+        out_contract.target_resource = output_res.c_str();
+        out_contract.view_count = 1;
+        out_contract.color_load = TC_RASTER_LOAD;
+        out_contract.depth_load = TC_RASTER_CLEAR;
+        const auto color = ctx.tex2_writes.find(output_res);
+        const auto depth = ctx.tex2_depth_writes.find(output_res);
+        out_contract.has_color = color != ctx.tex2_writes.end() && static_cast<bool>(color->second);
+        // SkyBox itself does not test depth, but the fused ColorPass which
+        // follows it does. The first contract owns the physical scope, so it
+        // must attach and initialize depth for all later logical passes.
+        out_contract.has_depth = depth != ctx.tex2_depth_writes.end() && static_cast<bool>(depth->second);
+        out_contract.attachment_barrier_after = false;
+        out_contract.fusion_eligible = true;
+        return !output_res.empty() && out_contract.has_color;
+    }
+
+    bool SkyBoxPass::record_raster(ExecuteContext& ctx) {
+        return execute_impl(ctx, true);
+    }
+
+    bool SkyBoxPass::execute_impl(ExecuteContext& ctx, bool raster_scope_already_open) {
         if (!ctx.ctx2) {
             tc::Log::error("[SkyBoxPass] ctx2 is null — tgfx2 path required");
-            return;
+            return false;
         }
         const SceneRenderServices* services = require_scene_render_services(ctx, "SkyBoxPass");
         if (!services)
-            return;
-        const RenderCamera* primary_view = ctx.view.primary_view();
-        if (!primary_view) {
-            tc::Log::error("[SkyBoxPass] primary render view is missing");
-            return;
-        }
-
+            return false;
         tc_scene_handle scene = services->scene.handle();
 
-        int skybox_type = tc_scene_get_skybox_type(scene);
-        if (skybox_type == TC_SKYBOX_NONE)
-            return;
+        tc_scene_skybox authored_skybox{};
+        if (const tc_scene_skybox* skybox = tc_scene_get_skybox(scene)) {
+            authored_skybox = *skybox;
+        }
+        tc_srgb_color background{};
+        tc_scene_get_background_srgb_color(scene, &background);
+        const tc_scene_skybox skybox = resolve_skybox_for_render(authored_skybox, background);
+        const int skybox_type = skybox.type;
 
         auto out_it = ctx.tex2_writes.find(output_res);
         if (out_it == ctx.tex2_writes.end() || !out_it->second) {
             tc::Log::error("[SkyBoxPass] no tgfx2 output texture for '%s'", output_res.c_str());
-            return;
+            return false;
         }
         tgfx::TextureHandle output_tex2 = out_it->second;
 
@@ -175,11 +210,17 @@ namespace termin {
         const int w = static_cast<int>(out_desc.width);
         const int h = static_cast<int>(out_desc.height);
         if (w <= 0 || h <= 0)
-            return;
+            return false;
+
+        const RenderCamera* primary_view = ctx.view.primary_view();
+        if (!primary_view) {
+            tc::Log::error("[SkyBoxPass] primary render view is missing");
+            return false;
+        }
 
         ensure_resources(ctx);
         if (skybox_layout_.block_size == 0)
-            return;
+            return false;
 
         // Collect material values: variant selector + camera matrices + colors.
         // u_skybox_type is a shader-local variant selector (0=gradient, 1=solid).
@@ -196,16 +237,16 @@ namespace termin {
         tc_srgb_color top_color{};
         tc_srgb_color horizon_color{};
         tc_srgb_color bottom_color{};
-        tc_scene_get_skybox_srgb_color(scene, &solid_color);
-        tc_scene_get_skybox_top_srgb_color(scene, &top_color);
-        tc_scene_get_skybox_horizon_srgb_color(scene, &horizon_color);
-        tc_scene_get_skybox_bottom_srgb_color(scene, &bottom_color);
+        solid_color = skybox.color;
+        top_color = skybox.top_color;
+        horizon_color = skybox.horizon_color;
+        bottom_color = skybox.bottom_color;
         solid_rgb = {solid_color.r, solid_color.g, solid_color.b};
         top_rgb = {top_color.r, top_color.g, top_color.b};
         horizon_rgb = {horizon_color.r, horizon_color.g, horizon_color.b};
         bot_rgb = {bottom_color.r, bottom_color.g, bottom_color.b};
-        const float top_exponent = tc_scene_get_skybox_top_exponent(scene);
-        const float bottom_exponent = tc_scene_get_skybox_bottom_exponent(scene);
+        const float top_exponent = skybox.top_exponent;
+        const float bottom_exponent = skybox.bottom_exponent;
 
         Mat44 view64 = primary_view->get_view_matrix();
         Mat44 proj64 = primary_view->get_projection_matrix();
@@ -228,13 +269,27 @@ namespace termin {
         values.emplace_back("u_skybox_top_exponent", "Float", static_cast<double>(top_exponent));
         values.emplace_back("u_skybox_bottom_exponent", "Float", static_cast<double>(bottom_exponent));
 
-        // Begin pass with LoadOp::Load — inplace alias means input_res already
-        // holds whatever the framegraph allocator cleared it to.
-        ctx.ctx2->begin_pass(output_tex2);
+        // Standalone execution owns its render pass. The normal framegraph path
+        // fuses SkyBoxPass with the following scene-color pass, preserving the
+        // authored background in one physical attachment scope on tile-based
+        // and WebGL backends.
+        if (!raster_scope_already_open) {
+            tgfx::RenderPassDesc pass;
+            tgfx::ColorAttachmentDesc color;
+            color.texture = output_tex2;
+            color.load = tgfx::LoadOp::Load;
+            color.store = tgfx::StoreOp::Store;
+            pass.colors.push_back(color);
+            if (!ctx.ctx2->begin_pass(pass)) {
+                tc::Log::error("[SkyBoxPass] failed to begin standalone raster pass");
+                return false;
+            }
+        }
         ctx.ctx2->set_viewport(0, 0, w, h);
 
-        // Skybox writes the background before the scene depth pass and does not
-        // attach a depth target, so depth testing is semantically disabled here.
+        // The skybox draw itself neither tests nor writes depth. A fused
+        // physical raster pass may still own and clear the depth attachment for
+        // the following scene-color draw.
         ctx.ctx2->set_depth_test(false);
         ctx.ctx2->set_depth_write(false);
         ctx.ctx2->set_depth_func(tgfx::CompareOp::LessEqual);
@@ -245,8 +300,9 @@ namespace termin {
         tc_shader* raw = tc_shader_get(skybox_shader_handle_);
         if (!raw || !tc_shader_ensure_tgfx2(raw, device2_, &sky_vs, &sky_fs)) {
             tc::Log::error("SkyBoxPass: tc_shader_ensure_tgfx2 failed for engine skybox shader");
-            ctx.ctx2->end_pass();
-            return;
+            if (!raster_scope_already_open)
+                ctx.ctx2->end_pass();
+            return false;
         }
 
         ctx.ctx2->clear_resource_bindings();
@@ -255,16 +311,33 @@ namespace termin {
 
         std::vector<uint8_t> material_data(skybox_layout_.block_size, 0);
         std140_pack(skybox_layout_, values, material_data.data());
-        ctx.ctx2->bind_uniform_data(
-            TC_SHADER_RESOURCE_MATERIAL, material_data.data(), static_cast<uint32_t>(material_data.size()));
+        if (!params_ubo_) {
+            tgfx::BufferDesc desc;
+            desc.size = material_data.size();
+            desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
+            params_ubo_ = device2_->create_buffer(desc);
+            if (!params_ubo_) {
+                tc::Log::error("[SkyBoxPass] failed to allocate material UBO");
+                if (!raster_scope_already_open)
+                    ctx.ctx2->end_pass();
+                return false;
+            }
+        }
+        device2_->upload_buffer(params_ubo_, material_data);
+        ctx.ctx2->bind_uniform(TC_SHADER_RESOURCE_MATERIAL, params_ubo_);
 
         ctx.ctx2->draw_fullscreen_quad_with_bound_shader();
-        ctx.ctx2->end_pass();
+        if (!raster_scope_already_open)
+            ctx.ctx2->end_pass();
+        return true;
     }
 
     void SkyBoxPass::destroy() {
         if (device2_) {
             // skybox_shader_handle_ is static engine shader — not released.
+            if (params_ubo_)
+                device2_->destroy(params_ubo_);
+            params_ubo_ = {};
             device2_ = nullptr;
         }
         skybox_layout_ = MaterialUboLayout{};

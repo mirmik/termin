@@ -31,6 +31,9 @@
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/opengl/opengl_render_device.hpp>
+#include <tgfx2/output_transform.hpp>
+#include <tgfx2/pixel_format_utils.hpp>
+#include <tgfx2/render_context.hpp>
 #include <tgfx2/webgpu/webgpu_render_device.hpp>
 
 extern "C" {
@@ -93,6 +96,8 @@ namespace {
         tgfx::IRenderDevice* device = nullptr;
         tgfx::WebGpuRenderDevice* webgpu_device = nullptr;
         tgfx::OpenGLRenderDevice* webgl2_device = nullptr;
+        tgfx::OutputTransformRenderer output_transform;
+        tgfx::TextureHandle webgl2_presentation_texture;
         WebGraphicsBackend backend = WebGraphicsBackend::None;
         std::unique_ptr<termin::EngineCore> engine;
         termin::runtime::RuntimePackageLoadResult package;
@@ -164,6 +169,11 @@ namespace {
             }
         }
         web_player->owned_displays.clear();
+        web_player->output_transform.close();
+        if (web_player->webgl2_presentation_texture && web_player->device) {
+            web_player->device->destroy(web_player->webgl2_presentation_texture);
+            web_player->webgl2_presentation_texture = {};
+        }
         if (web_player->graphics_host) {
             if (web_player->webgl2_context && !web_player->webgl2_context->make_current()) {
                 tc_log_error("TerminWebHost unload: failed to make WebGL2 context current");
@@ -210,18 +220,57 @@ namespace {
             tgfx::TextureHandle canvas = web_player->webgpu_device->acquire_surface_texture();
             const termin::Bounds2i extent{
                 0, 0, static_cast<int>(web_player->width), static_cast<int>(web_player->height)};
-            web_player->webgpu_device->blit_to_texture(
-                canvas, tgfx::TextureHandle{output_texture_id}, extent, extent);
+            web_player->webgpu_device->blit_to_texture(canvas, tgfx::TextureHandle{output_texture_id}, extent, extent);
             web_player->device->present();
         } else if (web_player->backend == WebGraphicsBackend::WebGL2) {
             if (!web_player->webgl2_context->make_current()) {
                 tc_log_error("TerminWebHost: failed to make WebGL2 context current for presentation");
                 return false;
             }
-            web_player->webgl2_device->present_to_default_framebuffer(
+
+            const tgfx::TextureDesc current_desc = web_player->webgl2_presentation_texture
+                                                       ? web_player->device->texture_desc(
+                                                             web_player->webgl2_presentation_texture)
+                                                       : tgfx::TextureDesc{};
+            if (!web_player->webgl2_presentation_texture || current_desc.width != web_player->width ||
+                current_desc.height != web_player->height || current_desc.format != tgfx::PixelFormat::RGBA8_sRGB) {
+                if (web_player->webgl2_presentation_texture) {
+                    web_player->device->destroy(web_player->webgl2_presentation_texture);
+                }
+                tgfx::TextureDesc desc;
+                desc.width = web_player->width;
+                desc.height = web_player->height;
+                desc.format = tgfx::PixelFormat::RGBA8_sRGB;
+                desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled |
+                             tgfx::TextureUsage::CopySrc;
+                web_player->webgl2_presentation_texture = web_player->device->create_texture(desc);
+                if (!web_player->webgl2_presentation_texture) {
+                    tc_log_error("TerminWebHost: failed to allocate WebGL2 sRGB presentation texture");
+                    return false;
+                }
+            }
+
+            tgfx::RenderContext2& output_context = web_player->graphics_host->context();
+            output_context.begin_frame();
+            const bool transformed = web_player->output_transform.record(
+                output_context,
                 tgfx::TextureHandle{output_texture_id},
-                static_cast<int>(web_player->width),
-                static_cast<int>(web_player->height));
+                web_player->webgl2_presentation_texture,
+                tgfx::OutputTransformParams{
+                    .sampled_input_encoding = tgfx::TextureEncoding::Linear,
+                    .target_encoding = tgfx::TextureEncoding::SRGB,
+                    .dither = tgfx::OutputDitherMode::StableSpatial,
+                    .target_rgb_bits = 8,
+                });
+            output_context.end_frame();
+            if (!transformed) {
+                tc_log_error("TerminWebHost: WebGL2 display output transform failed");
+                return false;
+            }
+
+            web_player->webgl2_device->present_to_default_framebuffer(web_player->webgl2_presentation_texture,
+                                                                      static_cast<int>(web_player->width),
+                                                                      static_cast<int>(web_player->height));
             web_player->device->present();
         } else {
             tc_log_error("TerminWebHost: no browser graphics backend selected");
@@ -483,6 +532,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_lifecycle_smoke() {
         const size_t current_pass_type_count = tc_pass_registry_type_count();
         const bool registry_complete = tc_component_registry_has("MeshComponent") &&
                                        tc_component_registry_has("MeshRenderer") && tc_pass_registry_has("ColorPass") &&
+                                       tc_pass_registry_has("SkyBoxPass") &&
                                        tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT) &&
                                        tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_STATE);
         const bool registry_counts_stable = cycle == 0 || (current_component_type_count == component_type_count &&
@@ -611,9 +661,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
             scene_manager.set_mode(key, TC_SCENE_MODE_INACTIVE);
             web_player->registered_scene_keys.push_back(key);
         }
-        scene_manager.set_mode(
-            termin::SceneKey{web_player->package.entry_scene_identity, termin::SceneRole::Runtime},
-            TC_SCENE_MODE_PLAY);
+        scene_manager.set_mode(termin::SceneKey{web_player->package.entry_scene_identity, termin::SceneRole::Runtime},
+                               TC_SCENE_MODE_PLAY);
 
         termin::RenderingManager& manager = web_player->engine->rendering_manager;
         manager.set_display_factory([](const std::string& name) { return create_web_player_display(name); });
@@ -802,9 +851,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint3
     try {
         if (web_player->webgpu_device) {
             web_player->webgpu_device->configure_surface(width, height);
-        } else if (emscripten_set_canvas_element_size(
-                       "#termin-canvas", static_cast<int>(width), static_cast<int>(height)) !=
-                   EMSCRIPTEN_RESULT_SUCCESS) {
+        } else if (emscripten_set_canvas_element_size("#termin-canvas",
+                                                      static_cast<int>(width),
+                                                      static_cast<int>(height)) != EMSCRIPTEN_RESULT_SUCCESS) {
             throw std::runtime_error("failed to resize the WebGL2 canvas drawing buffer");
         }
         if (!tc_display_resize(web_player->presentation_display, static_cast<int>(width), static_cast<int>(height))) {
@@ -898,9 +947,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_visual_scene_render() {
                                                                    web_visual_scene_error);
     if (rendered && web_player->backend == WebGraphicsBackend::WebGL2) {
         web_player->webgl2_device->present_to_default_framebuffer(
-            presentation_texture,
-            static_cast<int>(web_player->width),
-            static_cast<int>(web_player->height));
+            presentation_texture, static_cast<int>(web_player->width), static_cast<int>(web_player->height));
         web_player->device->present();
     }
     if (owns_presentation_texture) {
@@ -913,9 +960,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_visual_scene_error() {
     return web_visual_scene_error.c_str();
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t width,
-                                                                    uint32_t height,
-                                                                    int requested_backend) {
+extern "C" EMSCRIPTEN_KEEPALIVE int
+termin_web_host_graphics_start(uint32_t width, uint32_t height, int requested_backend) {
     if (web_player_graphics_status != 0)
         return web_player_graphics_status;
     if (width == 0 || height == 0) {
@@ -946,8 +992,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_graphics_start(uint32_t widt
             if (!context->make_current()) {
                 throw std::runtime_error("failed to make the WebGL 2 context current");
             }
-            auto device = std::make_unique<tgfx::OpenGLRenderDevice>(
-                tgfx::OpenGLDeviceCreateInfo{tgfx::GlFeatureTier::WebGL2});
+            auto device =
+                std::make_unique<tgfx::OpenGLRenderDevice>(tgfx::OpenGLDeviceCreateInfo{tgfx::GlFeatureTier::WebGL2});
             web_player->device = device.get();
             web_player->webgl2_device = device.get();
             web_player->backend = WebGraphicsBackend::WebGL2;

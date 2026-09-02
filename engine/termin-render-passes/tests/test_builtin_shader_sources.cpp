@@ -3,6 +3,8 @@
 GUARD_TEST_MAIN();
 
 #include "termin/materials/shader_parser.hpp"
+#include "termin/render/color_pass.hpp"
+#include "termin/render/skybox_pass.hpp"
 #include "tgfx2/builtin_shader_sources.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 
@@ -72,10 +74,45 @@ namespace {
 
 } // namespace
 
+TEST_CASE("default scene background replaces disabled skybox without gray fallback") {
+    tc_scene_skybox authored{};
+    authored.type = TC_SKYBOX_NONE;
+    authored.color = tc_srgb_color{0.8f, 0.7f, 0.6f, 1.0f};
+    authored.top_color = tc_srgb_color{0.4f, 0.5f, 0.6f, 1.0f};
+    const tc_srgb_color background{0.012f, 0.027f, 0.035f, 1.0f};
+
+    const tc_scene_skybox resolved = termin::resolve_skybox_for_render(authored, background);
+    CHECK(resolved.type == TC_SKYBOX_SOLID);
+    CHECK(resolved.color.r == background.r);
+    CHECK(resolved.color.g == background.g);
+    CHECK(resolved.color.b == background.b);
+    CHECK(resolved.top_color.r == authored.top_color.r);
+
+    authored.type = TC_SKYBOX_GRADIENT;
+    const tc_scene_skybox gradient = termin::resolve_skybox_for_render(authored, background);
+    CHECK(gradient.type == TC_SKYBOX_GRADIENT);
+    CHECK(gradient.color.r == authored.color.r);
+
+    termin::SkyBoxPass skybox_pass;
+    const auto skybox_specs = skybox_pass.get_resource_specs();
+    REQUIRE(skybox_specs.size() == 1);
+    REQUIRE(skybox_specs.front().clear_color.has_value());
+    CHECK(skybox_specs.front().clear_color->r == 0.0f);
+    CHECK(skybox_specs.front().clear_color->g == 0.0f);
+    CHECK(skybox_specs.front().clear_color->b == 0.0f);
+
+    termin::ColorPass color_pass;
+    const auto color_specs = color_pass.get_resource_specs();
+    REQUIRE(color_specs.size() == 1);
+    REQUIRE(color_specs.front().clear_color.has_value());
+    CHECK(color_specs.front().clear_color->r == 0.0f);
+    CHECK(color_specs.front().clear_color->g == 0.0f);
+    CHECK(color_specs.front().clear_color->b == 0.0f);
+}
+
 TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {
-    const std::string source =
-        read_text(repo_root_from_test_file() /
-                  "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
+    const std::string source = read_text(repo_root_from_test_file() /
+                                         "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
 
     CHECK(source.find("float4 u_light_space_matrix[MAX_SHADOW_MAPS * 4]") != std::string::npos);
     CHECK(source.find("float4x4 u_light_space_matrix[MAX_SHADOW_MAPS]") == std::string::npos);
@@ -83,9 +120,8 @@ TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {
 }
 
 TEST_CASE("shadow helper keeps filtering methods and cascade blending in Slang") {
-    const std::string source =
-        read_text(repo_root_from_test_file() /
-                  "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
+    const std::string source = read_text(repo_root_from_test_file() /
+                                         "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
 
     CHECK(source.find("SHADOW_METHOD_HARD") != std::string::npos);
     CHECK(source.find("POISSON_SAMPLE_COUNT = 16") != std::string::npos);
@@ -706,9 +742,8 @@ TEST_CASE("built-in skybox shader is explicit Slang material shader") {
 }
 
 TEST_CASE("stdlib normal debug material shaders use standard material fragment semantics") {
-    const std::filesystem::path shader_root =
-        repo_root_from_test_file() / "engine" / "termin-stdlib" / "python" / "termin" / "stdlib" /
-        "resources" / "shaders";
+    const std::filesystem::path shader_root = repo_root_from_test_file() / "engine" / "termin-stdlib" / "python" /
+                                              "termin" / "stdlib" / "resources" / "shaders";
 
     const std::string normal_color = read_text(shader_root / "SlangNormalColor.shader");
     CHECK(normal_color.find("world_pos : TEXCOORD0") != std::string::npos);

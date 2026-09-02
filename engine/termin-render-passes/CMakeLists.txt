@@ -103,6 +103,7 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/environment_lighting.cpp
         src/present_pass.cpp
         src/resolve_pass.cpp
+        src/skybox_pass.cpp
         src/tonemap_pass.cpp
         src/lighting_ubo.cpp
         src/shadow_resource.cpp

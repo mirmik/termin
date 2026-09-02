@@ -50,17 +50,21 @@ namespace termin::rendering_manager_detail {
                 "EnvironmentLightingPass", "EnvironmentLighting", {{"output_res", "environment_lighting"}})) {
             adopt_default_pass(ph, p);
         }
+        if (tc_pass* p =
+                create_and_configure_pass("SkyBoxPass", "Skybox", {{"input_res", "empty"}, {"output_res", "skybox"}})) {
+            adopt_default_pass(ph, p);
+        }
         if (tc_pass* p = create_and_configure_pass(
                 "ColorPass",
                 "Color",
-                {{"input_res", "empty"}, {"output_res", "color"}, {"shadow_res", ""}, {"phase_mark", "opaque"}})) {
+                {{"input_res", "skybox"}, {"output_res", "color"}, {"shadow_res", ""}, {"phase_mark", "opaque"}})) {
             adopt_default_pass(ph, p);
         }
         if (tc_pass* p = create_and_configure_pass(
                 "TonemapPass", "Tonemap", {{"input_res", "color"}, {"output_res", "color_tonemapped"}})) {
             adopt_default_pass(ph, p);
         }
-        for (const char* resource : {"empty", "color", "color_tonemapped"}) {
+        for (const char* resource : {"empty", "skybox", "color", "color_tonemapped"}) {
             ResourceSpec spec;
             spec.resource = resource;
             spec.format = "rgba16f";
