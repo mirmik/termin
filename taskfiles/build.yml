@@ -1,0 +1,62 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build the complete editor SDK
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/sdk.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/sdk.sh {{.CLI_ARGS}}{{end}}'
+
+  build:core:
+    desc: Build the standalone Core SDK profile
+    cmds:
+      - task: build
+        vars: {CLI_ARGS: '--profile core {{.CLI_ARGS}}'}
+
+  build:graphics:
+    desc: Build the complete Core plus Graphics SDK profile
+    cmds:
+      - task: build
+        vars: {CLI_ARGS: '--profile graphics {{.CLI_ARGS}}'}
+
+  build:cpp:
+    desc: Build and install native SDK libraries
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/cpp.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/cpp.sh {{.CLI_ARGS}}{{end}}'
+
+  build:bindings:
+    desc: Build and install Python bindings
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/bindings.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/bindings.sh {{.CLI_ARGS}}{{end}}'
+
+  build:csharp:
+    desc: Build and install C# bindings
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/csharp.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/csharp.sh {{.CLI_ARGS}}{{end}}'
+
+  build:android:
+    desc: Build the native Android SDK
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/android.sh {{.CLI_ARGS}}
+
+  build:android:apk:
+    desc: Build an Android APK
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/android-apk.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/android-apk.sh {{.CLI_ARGS}}{{end}}'
+
+  build:quest:
+    desc: Build a Quest OpenXR APK
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/quest-openxr-apk.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/quest-openxr-apk.sh {{.CLI_ARGS}}{{end}}'
+
+  build:web:
+    desc: Build the native Web SDK
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/web.sh {{.CLI_ARGS}}
+
+  build:wheels:
+    desc: Build SDK Python wheels
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/wheels.sh {{.CLI_ARGS}}

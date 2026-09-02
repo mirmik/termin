@@ -1,0 +1,80 @@
+version: '3'
+
+tasks:
+  test:
+    desc: Run the complete editor SDK test entry point
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/all.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/all.sh {{.CLI_ARGS}}{{end}}'
+
+  test:cpp:
+    desc: Build and run C/C++ tests
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/cpp.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/cpp.sh {{.CLI_ARGS}}{{end}}'
+
+  test:python:
+    desc: Run Python tests through the bundled SDK Python
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/python.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/python.sh {{.CLI_ARGS}}{{end}}'
+
+  test:python:setup:
+    desc: Prepare the isolated Python test overlay
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/setup-python-env.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/setup-python-env.sh {{.CLI_ARGS}}{{end}}'
+
+  test:web:
+    desc: Run the Termin Web Node lifecycle smoke
+    platforms: [linux]
+    cmds:
+      - ./scripts/test/web.sh {{.CLI_ARGS}}
+
+  test:web:browser:
+    desc: Run the Termin Web Chromium browser gate
+    platforms: [linux]
+    cmds:
+      - ./scripts/test/web.sh --browser {{.CLI_ARGS}}
+
+  smoke:
+    desc: Verify installed and relocated SDK consumption
+    deps:
+      - smoke:installed
+      - smoke:relocated
+
+  smoke:installed:
+    desc: Verify consumers through installed SDK artifacts
+    cmds:
+      - '{{if eq OS "windows"}}./sdk/bin/termin_python.exe -I scripts/smoke-installed-core-consumers --sdk-root sdk{{else}}./sdk/bin/termin_python -I scripts/smoke-installed-core-consumers --sdk-root sdk{{end}}'
+
+  smoke:relocated:
+    desc: Verify SDK consumption after relocation
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-relocated-sdk.ps1 {{.CLI_ARGS}}{{else}}./scripts/smoke-relocated-sdk {{.CLI_ARGS}}{{end}}'
+
+  lint:cpp:
+    desc: Run repository C/C++ lint checks
+    platforms: [linux]
+    cmds:
+      - ./scripts/test/lint-cpp.sh {{.CLI_ARGS}}
+
+  lint:python:
+    desc: Run repository Python lint checks
+    platforms: [linux]
+    cmds:
+      - ./scripts/test/lint-python.sh {{.CLI_ARGS}}
+
+  check:cpp-layout:
+    desc: Check C++ class layouts
+    platforms: [linux]
+    cmds:
+      - ./scripts/maintenance/cpp-class-layout-check.sh {{.CLI_ARGS}}
+
+  check:duplication:
+    desc: Check source duplication thresholds
+    platforms: [linux]
+    cmds:
+      - ./scripts/maintenance/duplication-check.sh {{.CLI_ARGS}}
+
+  check:webgpu-shaders:
+    desc: Audit WebGPU shader translation
+    platforms: [linux]
+    cmds:
+      - ./scripts/maintenance/audit-webgpu-shaders.sh {{.CLI_ARGS}}

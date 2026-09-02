@@ -1,0 +1,35 @@
+version: '3'
+
+tasks:
+  toolchain:slang:
+    desc: Install the pinned Slang compiler
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/setup-slang-toolchain.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/setup-slang-toolchain.sh {{.CLI_ARGS}}{{end}}'
+
+  toolchain:web-shaders:
+    desc: Install the pinned Slang and Naga shader toolchain
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/setup-web-shader-toolchain.sh {{.CLI_ARGS}}
+
+  toolchain:web:
+    desc: Install the pinned Emscripten toolchain
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/setup-web-toolchain.sh {{.CLI_ARGS}}
+
+  sdk:path:
+    desc: Add the local SDK bin directory to the shell path
+    platforms: [linux]
+    cmds:
+      - ./scripts/install/sdk-path.sh {{.CLI_ARGS}}
+
+  install:packages:
+    desc: Install SDK Python packages
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install/pip-packages.ps1 {{.CLI_ARGS}}{{else}}./scripts/install/pip-packages.sh {{.CLI_ARGS}}{{end}}'
+
+  install:sdk:
+    desc: Install or remove the SDK from the platform user/system location
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install/localappdata.ps1 {{.CLI_ARGS}}{{else}}./scripts/install/opt.sh {{.CLI_ARGS}}{{end}}'

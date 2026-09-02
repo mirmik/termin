@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  docs:setup:
+    desc: Prepare the pinned documentation environment
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/setup-docs-env.sh {{.CLI_ARGS}}
+
+  docs:build:
+    desc: Build the documentation site
+    platforms: [linux]
+    cmds:
+      - ./scripts/build/docs.sh {{.CLI_ARGS}}
+
+  docs:serve:
+    desc: Serve the root documentation site with live reload
+    cmds:
+      - '{{if eq OS "windows"}}python -m mkdocs serve{{else}}python3 -m mkdocs serve{{end}}'

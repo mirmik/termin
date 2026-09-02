@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  run:
+    desc: Launch the editor through the project launcher
+    platforms: [linux]
+    cmds:
+      - ./scripts/run/termin.sh {{.CLI_ARGS}}
+
+  run:python:
+    desc: Run the bundled SDK Python with the checkout overlay
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run/python.ps1 {{.CLI_ARGS}}{{else}}./scripts/run/python.sh {{.CLI_ARGS}}{{end}}'
+
+  android:logcat:
+    desc: Stream Termin-related Android logs
+    platforms: [linux]
+    cmds:
+      - ./scripts/run/android-logcat.sh {{.CLI_ARGS}}

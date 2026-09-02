@@ -1,248 +1,43 @@
 version: '3'
 
+includes:
+  maintenance:
+    taskfile: ./taskfiles/maintenance.yml
+    flatten: true
+
+  build:
+    taskfile: ./taskfiles/build.yml
+    flatten: true
+
+  distribution:
+    taskfile: ./taskfiles/distribution.yml
+    flatten: true
+
+  quality:
+    taskfile: ./taskfiles/quality.yml
+    flatten: true
+
+  docs:
+    taskfile: ./taskfiles/docs.yml
+    flatten: true
+
+  environment:
+    taskfile: ./taskfiles/environment.yml
+    flatten: true
+
+  runtime:
+    taskfile: ./taskfiles/runtime.yml
+    flatten: true
+
+  ci:
+    taskfile: ./taskfiles/ci.yml
+    flatten: true
+
 silent: true
 
 tasks:
   default:
-    desc: Show the Termin monorepo command menu
+    aliases: [help]
+    desc: Show the grouped Termin monorepo command menu
     cmds:
-      - task --list
-
-  ownership:
-    desc: Verify that every package has exactly one district owner
-    cmds:
-      - ./scripts/check-district-ownership.py
-
-  build:
-    desc: Build the complete editor SDK
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/sdk.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/sdk.sh {{.CLI_ARGS}}{{end}}'
-
-  build:core:
-    desc: Build the standalone Core SDK profile
-    cmds:
-      - task: build
-        vars: {CLI_ARGS: '--profile core {{.CLI_ARGS}}'}
-
-  build:graphics:
-    desc: Build the complete Core plus Graphics SDK profile
-    cmds:
-      - task: build
-        vars: {CLI_ARGS: '--profile graphics {{.CLI_ARGS}}'}
-
-  build:cpp:
-    desc: Build and install native SDK libraries
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/cpp.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/cpp.sh {{.CLI_ARGS}}{{end}}'
-
-  build:bindings:
-    desc: Build and install Python bindings
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/bindings.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/bindings.sh {{.CLI_ARGS}}{{end}}'
-
-  build:csharp:
-    desc: Build and install C# bindings
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/csharp.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/csharp.sh {{.CLI_ARGS}}{{end}}'
-
-  build:android:
-    desc: Build the native Android SDK
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/android.sh {{.CLI_ARGS}}
-
-  build:android:apk:
-    desc: Build an Android APK
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/android-apk.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/android-apk.sh {{.CLI_ARGS}}{{end}}'
-
-  build:quest:
-    desc: Build a Quest OpenXR APK
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/quest-openxr-apk.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/quest-openxr-apk.sh {{.CLI_ARGS}}{{end}}'
-
-  build:web:
-    desc: Build the native Web SDK
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/web.sh {{.CLI_ARGS}}
-
-  build:wheels:
-    desc: Build SDK Python wheels
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/wheels.sh {{.CLI_ARGS}}
-
-  package:graphics:python:
-    desc: Build standalone Linux Graphics wheels for CPython 3.14 and 3.14t
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/graphics-python.sh {{.CLI_ARGS}}
-
-  package:graphics:python:manylinux:
-    desc: Build and audit CPython 3.14/3.14t manylinux Graphics wheels
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/graphics-python-manylinux.sh {{.CLI_ARGS}}
-
-  publish:graphics:python:
-    desc: Validate or explicitly upload the complete Graphics wheel candidate
-    platforms: [linux]
-    cmds:
-      - ./scripts/publish/graphics-python.sh {{.CLI_ARGS}}
-
-  test:
-    desc: Run the complete editor SDK test entry point
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/all.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/all.sh {{.CLI_ARGS}}{{end}}'
-
-  test:cpp:
-    desc: Build and run C/C++ tests
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/cpp.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/cpp.sh {{.CLI_ARGS}}{{end}}'
-
-  test:python:
-    desc: Run Python tests through the bundled SDK Python
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/python.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/python.sh {{.CLI_ARGS}}{{end}}'
-
-  test:python:setup:
-    desc: Prepare the isolated Python test overlay
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/setup-python-env.ps1 {{.CLI_ARGS}}{{else}}./scripts/test/setup-python-env.sh {{.CLI_ARGS}}{{end}}'
-
-  test:web:
-    desc: Run the Termin Web Node lifecycle smoke
-    platforms: [linux]
-    cmds:
-      - ./scripts/test/web.sh {{.CLI_ARGS}}
-
-  test:web:browser:
-    desc: Run the Termin Web Chromium browser gate
-    platforms: [linux]
-    cmds:
-      - ./scripts/test/web.sh --browser {{.CLI_ARGS}}
-
-  smoke:
-    desc: Verify installed and relocated SDK consumption
-    deps:
-      - smoke:installed
-      - smoke:relocated
-
-  smoke:installed:
-    desc: Verify consumers through installed SDK artifacts
-    cmds:
-      - '{{if eq OS "windows"}}./sdk/bin/termin_python.exe -I scripts/smoke-installed-core-consumers --sdk-root sdk{{else}}./sdk/bin/termin_python -I scripts/smoke-installed-core-consumers --sdk-root sdk{{end}}'
-
-  smoke:relocated:
-    desc: Verify SDK consumption after relocation
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-relocated-sdk.ps1 {{.CLI_ARGS}}{{else}}./scripts/smoke-relocated-sdk {{.CLI_ARGS}}{{end}}'
-
-  lint:cpp:
-    desc: Run repository C/C++ lint checks
-    platforms: [linux]
-    cmds:
-      - ./scripts/test/lint-cpp.sh {{.CLI_ARGS}}
-
-  lint:python:
-    desc: Run repository Python lint checks
-    platforms: [linux]
-    cmds:
-      - ./scripts/test/lint-python.sh {{.CLI_ARGS}}
-
-  check:cpp-layout:
-    desc: Check C++ class layouts
-    platforms: [linux]
-    cmds:
-      - ./scripts/maintenance/cpp-class-layout-check.sh {{.CLI_ARGS}}
-
-  check:duplication:
-    desc: Check source duplication thresholds
-    platforms: [linux]
-    cmds:
-      - ./scripts/maintenance/duplication-check.sh {{.CLI_ARGS}}
-
-  check:webgpu-shaders:
-    desc: Audit WebGPU shader translation
-    platforms: [linux]
-    cmds:
-      - ./scripts/maintenance/audit-webgpu-shaders.sh {{.CLI_ARGS}}
-
-  docs:setup:
-    desc: Prepare the pinned documentation environment
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/setup-docs-env.sh {{.CLI_ARGS}}
-
-  docs:build:
-    desc: Build the documentation site
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/docs.sh {{.CLI_ARGS}}
-
-  docs:serve:
-    desc: Serve the root documentation site with live reload
-    cmds:
-      - '{{if eq OS "windows"}}python -m mkdocs serve{{else}}python3 -m mkdocs serve{{end}}'
-
-  toolchain:slang:
-    desc: Install the pinned Slang compiler
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/setup-slang-toolchain.ps1 {{.CLI_ARGS}}{{else}}./scripts/build/setup-slang-toolchain.sh {{.CLI_ARGS}}{{end}}'
-
-  toolchain:web-shaders:
-    desc: Install the pinned Slang and Naga shader toolchain
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/setup-web-shader-toolchain.sh {{.CLI_ARGS}}
-
-  toolchain:web:
-    desc: Install the pinned Emscripten toolchain
-    platforms: [linux]
-    cmds:
-      - ./scripts/build/setup-web-toolchain.sh {{.CLI_ARGS}}
-
-  run:
-    desc: Launch the editor through the project launcher
-    platforms: [linux]
-    cmds:
-      - ./scripts/run/termin.sh {{.CLI_ARGS}}
-
-  run:python:
-    desc: Run the bundled SDK Python with the checkout overlay
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run/python.ps1 {{.CLI_ARGS}}{{else}}./scripts/run/python.sh {{.CLI_ARGS}}{{end}}'
-
-  android:logcat:
-    desc: Stream Termin-related Android logs
-    platforms: [linux]
-    cmds:
-      - ./scripts/run/android-logcat.sh {{.CLI_ARGS}}
-
-  sdk:path:
-    desc: Add the local SDK bin directory to the shell path
-    platforms: [linux]
-    cmds:
-      - ./scripts/install/sdk-path.sh {{.CLI_ARGS}}
-
-  install:packages:
-    desc: Install SDK Python packages
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install/pip-packages.ps1 {{.CLI_ARGS}}{{else}}./scripts/install/pip-packages.sh {{.CLI_ARGS}}{{end}}'
-
-  install:sdk:
-    desc: Install or remove the SDK from the platform user/system location
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install/localappdata.ps1 {{.CLI_ARGS}}{{else}}./scripts/install/opt.sh {{.CLI_ARGS}}{{end}}'
-
-  clean:
-    desc: Remove repository build artifacts
-    cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/maintenance/clean.ps1 {{.CLI_ARGS}}{{else}}./scripts/maintenance/clean.sh {{.CLI_ARGS}}{{end}}'
-
-  ci:publish-sdk:
-    desc: Publish SDK artifacts for the CI release workflow
-    platforms: [linux]
-    cmds:
-      - ./scripts/ci/publish-sdk.sh {{.CLI_ARGS}}
+      - '{{if eq OS "windows"}}python ./scripts/task_menu.py {{.CLI_ARGS}}{{else}}python3 ./scripts/task_menu.py {{.CLI_ARGS}}{{end}}'

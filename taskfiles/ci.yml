@@ -1,0 +1,8 @@
+version: '3'
+
+tasks:
+  ci:publish-sdk:
+    desc: Publish SDK artifacts for the CI release workflow
+    platforms: [linux]
+    cmds:
+      - ./scripts/ci/publish-sdk.sh {{.CLI_ARGS}}

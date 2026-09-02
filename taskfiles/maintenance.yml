@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  ownership:
+    desc: Verify that every package has exactly one district owner
+    cmds:
+      - ./scripts/check-district-ownership.py
+
+  clean:
+    desc: Remove repository build artifacts
+    cmds:
+      - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/maintenance/clean.ps1 {{.CLI_ARGS}}{{else}}./scripts/maintenance/clean.sh {{.CLI_ARGS}}{{end}}'
