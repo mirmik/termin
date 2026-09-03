@@ -116,7 +116,8 @@ task publish:graphics:python
 
 Команда принимает только manifest-declared wheel’ы из
 `dist/graphics-python-manylinux/` и сверяет schema, глобальную версию, полный
-единственный distribution, два ABI wheel, metadata, manylinux tags и SHA-256.
+единственный distribution, два ABI wheel, metadata, соответствие каждого
+`License-File` реальному member под `.dist-info/licenses/`, manylinux tags и SHA-256.
 Старый 40-wheel, неполный, дополненный посторонним wheel’ом или изменённый после
 сборки каталог отвергается. Для дополнительной проверки metadata через Twine используется
 `task publish:graphics:python -- --check`.
@@ -150,7 +151,9 @@ HTTP 429 и подтверждённый частичный upload повтор�
 штатной resume-командой после сетевого сбоя или rate limit. Параметры
 `--upload-delay`, `--retry-base-delay` и `--max-retries` позволяют изменить
 период ожидания. Для пользовательского Twine repository необходимо также
-передать соответствующий `--repository-json-base-url`.
+передать соответствующий `--repository-json-base-url`. Upload запускает Twine
+с подробным выводом, чтобы серверная причина необратимого отказа не терялась за
+общим HTTP status.
 
 Внешний Core SDK и `--core-sdk` для обычной монорепозиторной сборки не
 требуются.

@@ -26,7 +26,13 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_wheel(root: Path, distribution: str, abi: str | None) -> Path:
+def _write_wheel(
+    root: Path,
+    distribution: str,
+    abi: str | None,
+    *,
+    license_file: str,
+) -> Path:
     stem = distribution.replace("-", "_")
     if abi is None:
         filename = f"{stem}-{VERSION}-py3-none-any.whl"
@@ -46,7 +52,7 @@ def _write_wheel(root: Path, distribution: str, abi: str | None) -> Path:
             "License-Expression: Apache-2.0\n"
             "Description-Content-Type: text/markdown\n"
             "Requires-Dist: numpy>=2\nRequires-Dist: PyYAML>=6\n"
-            "License-File: licenses/Termin/LICENSE.txt\n",
+            f"License-File: {license_file}\n",
         )
         archive.writestr(f"{dist_info}/licenses/Termin/LICENSE.txt", b"license")
         archive.writestr(
@@ -56,13 +62,18 @@ def _write_wheel(root: Path, distribution: str, abi: str | None) -> Path:
     return path
 
 
-def _candidate(tmp_path: Path) -> Path:
+def _candidate(tmp_path: Path, *, license_file: str = "Termin/LICENSE.txt") -> Path:
     root = tmp_path / "candidate"
     root.mkdir()
     records: list[dict[str, object]] = []
     wheels_by_abi: dict[str, str] = {}
     for abi in ABIS:
-        wheel = _write_wheel(root, PRODUCT_DISTRIBUTION, abi)
+        wheel = _write_wheel(
+            root,
+            PRODUCT_DISTRIBUTION,
+            abi,
+            license_file=license_file,
+        )
         records.append(
             {
                 "filename": wheel.name,
@@ -107,6 +118,16 @@ def test_validate_complete_candidate(tmp_path: Path) -> None:
     assert candidate.version == VERSION
     assert len(candidate.distributions) == 1
     assert len(candidate.wheels) == 2
+
+
+def test_rejects_license_file_with_embedded_wheel_license_root(tmp_path: Path) -> None:
+    root = _candidate(tmp_path, license_file="licenses/Termin/LICENSE.txt")
+
+    with pytest.raises(
+        GraphicsPythonPublishError,
+        match="license metadata does not match archive payloads",
+    ):
+        validate_candidate(REPO_ROOT, root)
 
 
 def test_rejects_undeclared_wheel(tmp_path: Path) -> None:
@@ -157,7 +178,7 @@ def test_twine_receives_exact_manifest_paths(tmp_path: Path) -> None:
     def record(command: list[str], *, cwd: Path) -> None:
         calls.append((command, cwd))
         if command[2:4] == ["twine", "upload"]:
-            for raw_path in command[6:]:
+            for raw_path in _uploaded_paths(command):
                 path = Path(raw_path)
                 distribution = inspect_wheel(path).name
                 remote.setdefault(distribution, {})[path.name] = _sha256(path)
@@ -179,9 +200,17 @@ def test_twine_receives_exact_manifest_paths(tmp_path: Path) -> None:
 
     assert len(calls) == 1 + len(candidate.distributions)
     assert calls[0][0][2:4] == ["twine", "check"]
-    assert calls[1][0][2:6] == ["twine", "upload", "--repository", "testpypi"]
+    assert calls[1][0][2:7] == [
+        "twine",
+        "upload",
+        "--verbose",
+        "--repository",
+        "testpypi",
+    ]
     assert calls[0][0][4:] == [str(path) for path in candidate.wheels]
-    uploaded = [raw_path for command, _cwd in calls[1:] for raw_path in command[6:]]
+    uploaded = [
+        raw_path for command, _cwd in calls[1:] for raw_path in _uploaded_paths(command)
+    ]
     assert uploaded == [str(path) for path in candidate.wheels]
     assert all(cwd == candidate.root for _command, cwd in calls)
 
@@ -192,6 +221,11 @@ def _published_candidate(candidate) -> dict[str, dict[str, str]]:
         distribution = inspect_wheel(wheel).name
         published.setdefault(distribution, {})[wheel.name] = _sha256(wheel)
     return published
+
+
+def _uploaded_paths(command: list[str]) -> list[str]:
+    repository_index = command.index("--repository")
+    return command[repository_index + 2 :]
 
 
 def test_resume_uploads_only_missing_remote_file(tmp_path: Path) -> None:
@@ -205,7 +239,7 @@ def test_resume_uploads_only_missing_remote_file(tmp_path: Path) -> None:
     def record(command: list[str], *, cwd: Path) -> None:
         if command[2:4] == ["twine", "upload"]:
             uploads.append(command)
-            for raw_path in command[6:]:
+            for raw_path in _uploaded_paths(command):
                 path = Path(raw_path)
                 remote[distribution][path.name] = _sha256(path)
 
@@ -222,7 +256,7 @@ def test_resume_uploads_only_missing_remote_file(tmp_path: Path) -> None:
     )
 
     assert len(uploads) == 1
-    assert uploads[0][6:] == [str(missing)]
+    assert _uploaded_paths(uploads[0]) == [str(missing)]
 
 
 def test_resume_rejects_remote_digest_conflict(tmp_path: Path) -> None:
@@ -262,7 +296,7 @@ def test_resume_retries_http_429_with_backoff(tmp_path: Path) -> None:
         upload_attempts += 1
         if upload_attempts == 1:
             raise TwineCommandError(command, 1, "HTTPError: 429 Too Many Requests")
-        for raw_path in command[6:]:
+        for raw_path in _uploaded_paths(command):
             path = Path(raw_path)
             remote[target][path.name] = _sha256(path)
 
@@ -302,7 +336,7 @@ def test_resume_recovers_from_partial_distribution_upload(tmp_path: Path) -> Non
         if command[2:4] != ["twine", "upload"]:
             return
         uploads.append(command)
-        paths = [Path(raw_path) for raw_path in command[6:]]
+        paths = [Path(raw_path) for raw_path in _uploaded_paths(command)]
         if len(uploads) == 1:
             first = paths[0]
             remote[target][first.name] = _sha256(first)
@@ -324,5 +358,5 @@ def test_resume_recovers_from_partial_distribution_upload(tmp_path: Path) -> Non
     )
 
     assert len(uploads) == 2
-    assert uploads[0][6:] == [str(wheel) for wheel in target_wheels]
-    assert uploads[1][6:] == [str(target_wheels[1])]
+    assert _uploaded_paths(uploads[0]) == [str(wheel) for wheel in target_wheels]
+    assert _uploaded_paths(uploads[1]) == [str(target_wheels[1])]

@@ -100,11 +100,12 @@ def _validate_public_metadata(wheel: Path) -> None:
                 archive.read(metadata_names[0]).decode("utf-8")
             )
             dist_info = metadata_names[0].rsplit("/", 1)[0]
-            license_files = [
-                name
+            license_root = f"{dist_info}/licenses/"
+            archived_license_files = {
+                name.removeprefix(license_root)
                 for name in archive.namelist()
-                if name.startswith(f"{dist_info}/licenses/") and not name.endswith("/")
-            ]
+                if name.startswith(license_root) and not name.endswith("/")
+            }
     except (OSError, UnicodeDecodeError, zipfile.BadZipFile) as error:
         raise GraphicsPythonPublishError(
             f"cannot inspect public metadata in {wheel.name}: {error}"
@@ -122,7 +123,41 @@ def _validate_public_metadata(wheel: Path) -> None:
             f"public wheel {wheel.name} has invalid external requirements: "
             f"{sorted(requirement_names)}"
         )
-    if not license_files or metadata.get("License-Expression") != "Apache-2.0":
+    declared_license_files = metadata.get_all("License-File", [])
+    invalid_license_files = [
+        name
+        for name in declared_license_files
+        if (
+            not name
+            or name.startswith("/")
+            or "\\" in name
+            or any(part in {"", ".", ".."} for part in name.split("/"))
+        )
+    ]
+    if invalid_license_files:
+        raise GraphicsPythonPublishError(
+            f"public wheel {wheel.name} has unsafe License-File paths: "
+            f"{sorted(invalid_license_files)}"
+        )
+    duplicate_license_files = sorted(
+        name
+        for name in set(declared_license_files)
+        if declared_license_files.count(name) > 1
+    )
+    if duplicate_license_files:
+        raise GraphicsPythonPublishError(
+            f"public wheel {wheel.name} has duplicate License-File entries: "
+            f"{duplicate_license_files}"
+        )
+    declared_license_set = set(declared_license_files)
+    missing_license_files = sorted(declared_license_set - archived_license_files)
+    undeclared_license_files = sorted(archived_license_files - declared_license_set)
+    if missing_license_files or undeclared_license_files:
+        raise GraphicsPythonPublishError(
+            f"public wheel {wheel.name} license metadata does not match archive payloads; "
+            f"missing={missing_license_files}, undeclared={undeclared_license_files}"
+        )
+    if not declared_license_files or metadata.get("License-Expression") != "Apache-2.0":
         raise GraphicsPythonPublishError(
             f"public wheel {wheel.name} has incomplete license metadata"
         )
@@ -502,13 +537,17 @@ def publish_candidate(
     wheel_args = [str(path) for path in candidate.wheels]
     if check or upload:
         run([sys.executable, "-m", "twine", "check", *wheel_args], cwd=candidate.root)
-    upload_command = [
+    upload_prefix = [
         sys.executable,
         "-m",
         "twine",
         "upload",
+        "--verbose",
         "--repository",
         repository,
+    ]
+    upload_command = [
+        *upload_prefix,
         *wheel_args,
     ]
     if not upload and not remote_status:
@@ -581,7 +620,7 @@ def publish_candidate(
             continue
         attempt = 0
         while pending:
-            command = upload_command[:6] + [str(wheel) for wheel in pending]
+            command = [*upload_prefix, *(str(wheel) for wheel in pending)]
             try:
                 run(command, cwd=candidate.root)
             except TwineCommandError as error:

@@ -183,7 +183,7 @@ def test_compose_product_wheel_merges_payload_and_strips_internal_metadata(
         assert "Name: termin-graphics\n" in metadata
         assert "Requires-Dist: numpy>=2\n" in metadata
         assert "Requires-Dist: PyYAML>=6\n" in metadata
-        assert "License-File: licenses/Termin/LICENSE.txt\n" in metadata
+        assert "License-File: Termin/LICENSE.txt\n" in metadata
         assert (
             archive.read(
                 f"termin_graphics-{product_module.PRODUCT_VERSION}.dist-info/"

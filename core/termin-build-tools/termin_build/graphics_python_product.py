@@ -272,10 +272,11 @@ def compose_product_wheel(
             )
         payloads[archive_name] = (payload, 0o644)
 
+    license_root = f"{dist_info}/licenses/"
     license_fields = "".join(
-        f"License-File: {name.removeprefix(dist_info + '/') }\n"
+        f"License-File: {name.removeprefix(license_root)}\n"
         for name in sorted(payloads)
-        if name.startswith(f"{dist_info}/licenses/")
+        if name.startswith(license_root)
     )
     requirement_fields = "".join(
         f"Requires-Dist: {requirement}\n" for requirement in sorted(requirements)
