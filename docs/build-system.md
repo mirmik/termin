@@ -59,9 +59,12 @@ native closure (это не даёт разным extensions загрузить 
 предварительно собранными Vulkan/OpenGL shader artifacts. Продукт всегда
 включает `termin-window`, GUI window adapter и собранный из pinned submodule
 SDL2; `--no-sdl` для этой операции является ошибкой. Headless остаётся режимом
-исполнения той же поставки. `termin_shaderc`,
-`slangc` и библиотеки Slang являются только build-time inputs и в runtime wheel
-не входят. Эта команда создаёт локальный `linux_x86_64` product и предназначена
+исполнения той же поставки. Ресурсный слой также содержит
+`bin/termin_shaderc`; публичный `shader_compiler_path()` возвращает его
+relocatable-путь, а `activate()` делает этот путь default-ом `TERMIN_SHADERC`.
+`slangc` и библиотеки Slang остаются build-time или внешними runtime inputs и
+в wheel не публикуются. Эта команда создаёт
+локальный `linux_x86_64` product и предназначена
 для быстрой разработки, а не для публикации в package index. Канонический
 Python полного/editor SDK при этом остаётся free-threaded `cp314t`; dual-ABI
 matrix относится только к standalone product.
@@ -90,8 +93,9 @@ build-only compatibility library для старого libstdc++ baseline; Slang
 `auditwheel repair --plat manylinux_2_28_x86_64`; общая native closure остаётся
 в `termin_graphics_profile/lib`, а внешние системные зависимости добавляются
 один раз на ABI. Затем repaired wheel устанавливается без сети в чистый venv
-каждого ABI и проходит `pip check`, проверку относительных RPATH, Vulkan
-headless render и SDL-offscreen OpenGL frame.
+каждого ABI и проходит `pip check`, проверку относительных RPATH, проверку
+доступности упакованного `termin_shaderc` с пустым `PATH`, Vulkan headless render
+и SDL-offscreen OpenGL frame.
 
 Успешный набор атомарно появляется в `dist/graphics-python-manylinux/`. Его
 `termin-graphics-python-product.json` фиксирует SHA-256 всех wheel’ов, теги ABI,

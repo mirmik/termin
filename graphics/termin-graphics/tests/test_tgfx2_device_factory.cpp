@@ -334,6 +334,65 @@ TEST_CASE("shader artifact resolvers isolate runtime roots") {
     first.set_artifact_root("/runtime/first-updated");
     CHECK(first.revision() != second.revision());
     CHECK(second.artifact_root() == "/runtime/second");
+
+    const uint64_t revision = first.revision();
+    first.set_fallback_artifact_roots({"/runtime/installed", "/runtime/shared"});
+    CHECK(first.revision() > revision);
+    const std::vector<std::string> expected_fallback_roots = {"/runtime/installed", "/runtime/shared"};
+    CHECK(first.fallback_artifact_roots() == expected_fallback_roots);
+    CHECK(second.fallback_artifact_roots().empty());
+}
+
+TEST_CASE("shader artifact resolver loads immutable fallback without writing it") {
+    namespace fs = std::filesystem;
+
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::string shader_uuid = "fallback-artifact-shader-" + std::to_string(unique);
+    const fs::path root = fs::temp_directory_path() / ("termin_tgfx2_fallback_shader_" + std::to_string(unique));
+    const fs::path writable_root = root / "writable";
+    const fs::path installed_root = root / "installed";
+    const fs::path installed_artifact =
+        installed_root / "shaders" / "vulkan" / (shader_uuid + ".vert.spv");
+    fs::create_directories(installed_artifact.parent_path());
+    {
+        std::ofstream out(installed_artifact, std::ios::binary);
+        out << "INSTALLED-SPIRV";
+    }
+    {
+        std::ofstream out(installed_artifact.string() + ".layout.json", std::ios::binary);
+        out << R"({"version":1,"resources":[]})";
+    }
+
+    const char* vertex_source = R"(
+float4 main(uint vertex_id : SV_VertexID) : SV_Position {
+    return float4(0.0, 0.0, 0.0, 1.0);
+}
+)";
+    const char* fragment_source = R"(
+float4 main() : SV_Target {
+    return float4(1.0, 1.0, 1.0, 1.0);
+}
+)";
+    const tc_shader_create_desc shader_desc = {
+        {vertex_source, fragment_source, nullptr, "fallback_artifact_shader", nullptr, nullptr, nullptr, nullptr},
+        shader_uuid.c_str(),
+        TC_SHADER_LANGUAGE_SLANG,
+        TC_SHADER_ARTIFACT_REQUIRED};
+    tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+
+    termin::ShaderArtifactResolver resolver(
+        writable_root.string(), (root / "cache").string(), "missing-compiler", true, false, {}, {installed_root.string()});
+    std::vector<uint8_t> bytes;
+    CHECK(termin::tgfx2_load_or_compile_shader_artifact_for_backend(
+        resolver, shader, tgfx::BackendType::Vulkan, tgfx::ShaderStage::Vertex, bytes));
+    CHECK(std::string(bytes.begin(), bytes.end()) == "INSTALLED-SPIRV");
+    CHECK(!fs::exists(writable_root / "shaders" / "vulkan" / (shader_uuid + ".vert.spv")));
+
+    tc_shader_destroy(handle);
+    fs::remove_all(root);
 }
 
 TEST_CASE("backend binding plan separates semantic resources from backend placement") {

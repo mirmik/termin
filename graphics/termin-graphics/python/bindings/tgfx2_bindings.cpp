@@ -106,6 +106,15 @@ namespace tgfx_bindings {
             nb::arg("root"));
         m.def("get_shader_artifact_root", []() { return std::string(termin::tgfx2_get_shader_artifact_root()); });
         m.def(
+            "set_shader_artifact_fallback_roots",
+            [](std::vector<std::string> roots) {
+                termin::tgfx2_set_shader_artifact_fallback_roots(std::move(roots));
+            },
+            nb::arg("roots"));
+        m.def("get_shader_artifact_fallback_roots", []() {
+            return termin::tgfx2_get_shader_artifact_fallback_roots();
+        });
+        m.def(
             "set_shader_cache_root",
             [](const std::string& root) { termin::tgfx2_set_shader_cache_root(root.c_str()); },
             nb::arg("root"));
@@ -120,8 +129,10 @@ namespace tgfx_bindings {
             [](const std::string& artifact_root,
                const std::string& cache_root,
                const std::string& shader_compiler,
-               bool dev_compile) {
+               bool dev_compile,
+               std::vector<std::string> fallback_artifact_roots) {
                 termin::tgfx2_set_shader_artifact_root(artifact_root.c_str());
+                termin::tgfx2_set_shader_artifact_fallback_roots(std::move(fallback_artifact_roots));
                 termin::tgfx2_set_shader_cache_root(cache_root.c_str());
                 termin::tgfx2_set_shader_compiler_path(shader_compiler.c_str());
                 termin::tgfx2_set_shader_dev_compile_enabled(dev_compile);
@@ -129,7 +140,8 @@ namespace tgfx_bindings {
             nb::arg("artifact_root") = "",
             nb::arg("cache_root") = "",
             nb::arg("shader_compiler") = "",
-            nb::arg("dev_compile") = false);
+            nb::arg("dev_compile") = false,
+            nb::arg("fallback_artifact_roots") = std::vector<std::string>{});
         m.def(
             "set_shader_dev_compile_enabled",
             [](bool enabled) { termin::tgfx2_set_shader_dev_compile_enabled(enabled); },

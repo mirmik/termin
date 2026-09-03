@@ -21,10 +21,18 @@ namespace termin {
                                bool dev_compile_enabled,
                                bool environment_fallback = false,
                                ReadCallback read_callback = {});
+        ShaderArtifactResolver(std::string artifact_root,
+                               std::string cache_root,
+                               std::string compiler_path,
+                               bool dev_compile_enabled,
+                               bool environment_fallback,
+                               ReadCallback read_callback,
+                               std::vector<std::string> fallback_artifact_roots);
 
         const std::string& artifact_root() const;
         const std::string& cache_root() const;
         const std::string& compiler_path() const;
+        const std::vector<std::string>& fallback_artifact_roots() const;
         bool dev_compile_enabled() const;
         bool read_artifact(std::string_view path, std::vector<std::uint8_t>& out) const;
         bool has_read_callback() const {
@@ -39,7 +47,14 @@ namespace termin {
                        std::string compiler_path,
                        bool dev_compile_enabled,
                        ReadCallback read_callback = {});
+        void configure(std::string artifact_root,
+                       std::string cache_root,
+                       std::string compiler_path,
+                       bool dev_compile_enabled,
+                       ReadCallback read_callback,
+                       std::vector<std::string> fallback_artifact_roots);
         void set_artifact_root(std::string value);
+        void set_fallback_artifact_roots(std::vector<std::string> values);
         void set_cache_root(std::string value);
         void set_compiler_path(std::string value);
         void set_dev_compile_enabled(bool value);
@@ -55,6 +70,7 @@ namespace termin {
         mutable std::string environment_cache_root_;
         mutable std::string environment_compiler_path_;
         ReadCallback read_callback_;
+        std::vector<std::string> fallback_artifact_roots_;
     };
 
     // Compatibility resolver for legacy standalone tgfx users. Engine/runtime

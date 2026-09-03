@@ -52,6 +52,8 @@ namespace termin {
 
     TGFX2_API void tgfx2_set_shader_artifact_root(const char* root);
     TGFX2_API const char* tgfx2_get_shader_artifact_root(void);
+    TGFX2_API void tgfx2_set_shader_artifact_fallback_roots(std::vector<std::string> roots);
+    TGFX2_API const std::vector<std::string>& tgfx2_get_shader_artifact_fallback_roots(void);
     TGFX2_API void tgfx2_set_shader_cache_root(const char* root);
     TGFX2_API const char* tgfx2_get_shader_cache_root(void);
     TGFX2_API void tgfx2_set_shader_compiler_path(const char* path);

@@ -105,7 +105,8 @@ def test_tgfx_shader_runtime_prefers_product_precompiled_artifacts(
 
     monkeypatch.setitem(sys.modules, "termin_graphics_profile", profile)
     monkeypatch.setitem(sys.modules, "termin.graphics", fake_tgfx)
-    monkeypatch.setattr(termin, "graphics", fake_tgfx)
+    monkeypatch.setattr(termin, "graphics", fake_tgfx, raising=False)
+    monkeypatch.setenv("TERMIN_SHADER_DEV_COMPILE", "0")
     monkeypatch.delenv("TERMIN_SHADERC", raising=False)
     monkeypatch.delenv("TERMIN_SLANGC", raising=False)
     shader_runtime = _load_shader_runtime_module(monkeypatch)
@@ -121,6 +122,50 @@ def test_tgfx_shader_runtime_prefers_product_precompiled_artifacts(
     ]
     assert "TERMIN_SHADERC" not in os.environ
     assert "TERMIN_SLANGC" not in os.environ
+
+
+def test_tgfx_shader_runtime_uses_bundled_shaderc_with_external_slangc_and_writable_cache(
+    monkeypatch, tmp_path: Path
+) -> None:
+    configured = []
+    compiler = tmp_path / _executable_name("termin_shaderc")
+    slangc = tmp_path / _executable_name("slangc")
+    for tool in (compiler, slangc):
+        tool.write_text("#!/bin/sh\n", encoding="utf-8")
+        tool.chmod(0o755)
+    installed_root = tmp_path / "profile" / "share" / "termin"
+    profile = types.SimpleNamespace(
+        activate=lambda: monkeypatch.setenv("TERMIN_SHADERC", str(compiler)),
+        shader_artifact_root=lambda: installed_root,
+    )
+    fake_tgfx = types.SimpleNamespace(
+        configure_shader_runtime=lambda **kwargs: configured.append(kwargs),
+        get_shader_dev_compile_enabled=lambda: False,
+        get_shader_compiler_path=lambda: "",
+    )
+    import termin
+
+    monkeypatch.setitem(sys.modules, "termin_graphics_profile", profile)
+    monkeypatch.setitem(sys.modules, "termin.graphics", fake_tgfx)
+    monkeypatch.setattr(termin, "graphics", fake_tgfx, raising=False)
+    monkeypatch.setenv("TERMIN_SHADER_DEV_COMPILE", "1")
+    monkeypatch.setenv("TERMIN_SLANGC", str(slangc))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))
+    shader_runtime = _load_shader_runtime_module(monkeypatch)
+
+    assert shader_runtime.configure_default_shader_runtime("product")
+    runtime_root = tmp_path / "xdg-cache" / "termin" / "product-shaders"
+    assert configured == [
+        {
+            "artifact_root": str(runtime_root / "artifacts"),
+            "cache_root": str(runtime_root / "cache"),
+            "shader_compiler": str(compiler),
+            "dev_compile": True,
+            "fallback_artifact_roots": [str(installed_root)],
+        }
+    ]
+    assert (runtime_root / "artifacts").is_dir()
+    assert (runtime_root / "cache").is_dir()
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache root uses LOCALAPPDATA")

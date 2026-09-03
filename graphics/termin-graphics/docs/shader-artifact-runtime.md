@@ -6,6 +6,18 @@ cache root, compiler path and dev-compile policy. `RenderEngine` accepts this
 configuration before or after lazy tgfx2 initialization and applies it to the
 runtime device.
 
+The primary artifact root is writable when development compilation is enabled.
+Resolvers may also carry ordered immutable fallback roots. Resolution checks
+the writable root first and then the installed roots, while newly compiled
+artifacts are written only to the primary root. This lets a packaged
+application reuse engine artifacts from an installed wheel and compile its own
+Slang shaders into a user cache without modifying `site-packages` or copying
+the complete engine artifact tree.
+
+The Graphics wheel provides `termin_shaderc`, not the Slang backend compiler.
+Runtime Slang compilation is an explicit development mode and still resolves
+an external `slangc` through `TERMIN_SLANGC`, Termin settings, or `PATH`.
+
 Runtime package loading is transactional with respect to shader resolution:
 `RuntimePackageLoader` validates and loads a package, then returns a
 `ShaderRuntimeConfiguration` in its result. The player, Android and OpenXR

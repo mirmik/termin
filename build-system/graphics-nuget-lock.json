@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "product": "termin-graphics",
+  "platform": "windows-x64",
+  "runtime_identifier": "win-x64",
+  "target_framework": "net8.0-windows7.0",
+  "csharp_profile": "plot-d3d11",
+  "packages": {
+    "runtime": "Termin.Graphics",
+    "wpf": "Termin.Graphics.Wpf"
+  },
+  "managed_assemblies": {
+    "runtime": "csharp/lib/netstandard2.1/Termin.Native.dll",
+    "wpf": "csharp/lib/net8.0-windows/Termin.Wpf.dll"
+  },
+  "native_runtime_root": "csharp/runtimes/win-x64/native",
+  "resource_root": "csharp/share/termin",
+  "required_native_libraries": [
+    "tcplot.dll",
+    "termin.dll",
+    "termin_base.dll",
+    "termin_graphics.dll",
+    "termin_graphics2.dll",
+    "termin_mesh.dll",
+    "termin_visual_scene.dll"
+  ],
+  "forbidden_native_libraries": [
+    "termin_animation.dll",
+    "termin_components_collision.dll",
+    "termin_components_foliage.dll",
+    "termin_components_kinematic.dll",
+    "termin_components_mesh.dll",
+    "termin_components_render.dll",
+    "termin_components_skeleton.dll",
+    "termin_display.dll",
+    "termin_engine.dll",
+    "termin_materials.dll",
+    "termin_render.dll",
+    "termin_render_passes.dll",
+    "termin_scene.dll"
+  ],
+  "required_resources": [
+    "builtin_shaders/engine-shader-catalog.json",
+    "shaders/d3d11/termin-engine-tcplot-3d.vs.cso",
+    "shaders/d3d11/termin-engine-text3d.vs.cso"
+  ],
+  "release_licenses": [
+    {"name": "Termin", "path": "LICENSE"},
+    {"name": "zlib", "path": "termin-thirdparty/zlib/LICENSE"},
+    {"name": "libpng", "path": "termin-thirdparty/libpng/LICENSE"},
+    {"name": "libjpeg-turbo", "path": "termin-thirdparty/libjpeg-turbo/LICENSE.md"},
+    {"name": "libwebp", "path": "termin-thirdparty/libwebp/COPYING"},
+    {"name": "SPIRV-Cross", "path": "termin-thirdparty/spirv-cross/LICENSE"},
+    {"name": "Manifold", "path": "termin-thirdparty/manifold/LICENSE"},
+    {"name": "Clipper2", "path": "termin-thirdparty/clipper2/LICENSE"},
+    {"name": "Eigen", "path": "termin-thirdparty/eigen/COPYING.MPL2"},
+    {"name": "cgltf", "path": "termin-thirdparty/cgltf/LICENSE"}
+  ]
+}

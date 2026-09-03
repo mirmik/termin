@@ -59,11 +59,18 @@ def _write_manifest(sdk_prefix: Path, *, free_threaded: bool = True) -> None:
     )
 
 
+def _write_shader_compiler(sdk_prefix: Path) -> None:
+    shaderc = sdk_prefix / "bin" / "termin_shaderc"
+    shaderc.parent.mkdir(parents=True, exist_ok=True)
+    shaderc.write_bytes(b"shaderc")
+    shaderc.chmod(0o755)
+
+
 @pytest.mark.parametrize(
     ("free_threaded", "expected_abi"),
     [(False, "cp314"), (True, "cp314t")],
 )
-def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
+def test_resource_wheel_owns_precompiled_assets_and_shader_compiler(
     tmp_path: Path,
     free_threaded: bool,
     expected_abi: str,
@@ -83,6 +90,7 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
         path.write_bytes(payload)
     wheel_dir = tmp_path / "wheels"
     wheel_dir.mkdir()
+    _write_shader_compiler(sdk_prefix)
 
     wheel = build_resource_wheel(
         sdk_prefix=sdk_prefix,
@@ -104,19 +112,33 @@ def test_resource_wheel_owns_precompiled_assets_without_shader_toolchain(
             f"termin_graphics_profile/lib/{LINUX_BUNDLED_RUNTIME_LIBRARIES[0]}"
             in names
         )
-        assert not any(name.startswith("termin_graphics_profile/bin/") for name in names)
+        assert "termin_graphics_profile/bin/termin_shaderc" in names
+        assert "termin_graphics_profile/bin/slangc" not in names
         assert not any("/libslang" in name for name in names)
+        assert not any("libstdc++-slang-compat" in name for name in names)
         assert "termin_graphics_profile/share/termin/fonts/DroidSans.ttf" in names
         assert "termin_graphics_profile/share/termin/shaders/vulkan/example.vert.spv" in names
         assert "termin_graphics_profile/native-libraries.json" in names
+        native_libraries = json.loads(
+            archive.read("termin_graphics_profile/native-libraries.json")
+        )
+        assert not any(name.startswith("libslang") for name in native_libraries)
+        assert "libstdc++-slang-compat.so.6" not in native_libraries
+        assert "termin_graphics_profile/shader-toolchain.json" not in names
         assert any(name.endswith(".dist-info/licenses/SDL2/LICENSE.txt") for name in names)
+        assert not any(name.endswith(".dist-info/licenses/Slang/LICENSE") for name in names)
         module = archive.read("termin_graphics_profile/__init__.py").decode("utf-8")
         assert "TERMIN_BUILTIN_SHADER_ROOT" in module
         assert "TERMIN_SHADER_ARTIFACT_ROOT" in module
+        assert "def shader_compiler_path() -> Path:" in module
+        assert "def slang_compiler_path() -> Path:" not in module
+        assert 'TERMIN_SHADERC", str(shader_compiler_path())' in module
+        assert "TERMIN_SLANGC" not in module
         assert 'TERMIN_SHADER_DEV_COMPILE", "0"' in module
         assert "Requires-Dist: numpy==2.0" in metadata
         assert "Requires-Dist: PyYAML==6.0" in metadata
         assert "License-File: licenses/SDL2/LICENSE.txt" in metadata
+        assert "License-File: licenses/Slang/LICENSE" not in metadata
 
 
 def _write_split_wheel(

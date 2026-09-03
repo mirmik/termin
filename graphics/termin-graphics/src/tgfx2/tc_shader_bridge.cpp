@@ -61,12 +61,28 @@ namespace termin {
                                                    bool dev_compile_enabled,
                                                    bool environment_fallback,
                                                    ReadCallback read_callback)
+        : ShaderArtifactResolver(std::move(artifact_root),
+                                 std::move(cache_root),
+                                 std::move(compiler_path),
+                                 dev_compile_enabled,
+                                 environment_fallback,
+                                 std::move(read_callback),
+                                 {}) {}
+
+    ShaderArtifactResolver::ShaderArtifactResolver(std::string artifact_root,
+                                                   std::string cache_root,
+                                                   std::string compiler_path,
+                                                   bool dev_compile_enabled,
+                                                   bool environment_fallback,
+                                                   ReadCallback read_callback,
+                                                   std::vector<std::string> fallback_artifact_roots)
         : artifact_root_(std::move(artifact_root)),
           cache_root_(std::move(cache_root)),
           compiler_path_(std::move(compiler_path)),
           dev_compile_enabled_(dev_compile_enabled),
           environment_fallback_(environment_fallback),
-          read_callback_(std::move(read_callback)) {}
+          read_callback_(std::move(read_callback)),
+          fallback_artifact_roots_(std::move(fallback_artifact_roots)) {}
 
     const std::string& ShaderArtifactResolver::artifact_root() const {
         if (!artifact_root_.empty() || !environment_fallback_)
@@ -96,6 +112,10 @@ namespace termin {
         return environment_compiler_path_;
     }
 
+    const std::vector<std::string>& ShaderArtifactResolver::fallback_artifact_roots() const {
+        return fallback_artifact_roots_;
+    }
+
     bool ShaderArtifactResolver::dev_compile_enabled() const {
         if (dev_compile_enabled_)
             return true;
@@ -120,16 +140,36 @@ namespace termin {
                                            std::string compiler_path,
                                            bool dev_compile_enabled,
                                            ReadCallback read_callback) {
+        configure(std::move(artifact_root),
+                  std::move(cache_root),
+                  std::move(compiler_path),
+                  dev_compile_enabled,
+                  std::move(read_callback),
+                  {});
+    }
+
+    void ShaderArtifactResolver::configure(std::string artifact_root,
+                                           std::string cache_root,
+                                           std::string compiler_path,
+                                           bool dev_compile_enabled,
+                                           ReadCallback read_callback,
+                                           std::vector<std::string> fallback_artifact_roots) {
         artifact_root_ = std::move(artifact_root);
         cache_root_ = std::move(cache_root);
         compiler_path_ = std::move(compiler_path);
         dev_compile_enabled_ = dev_compile_enabled;
         read_callback_ = std::move(read_callback);
+        fallback_artifact_roots_ = std::move(fallback_artifact_roots);
         ++revision_;
     }
 
     void ShaderArtifactResolver::set_artifact_root(std::string value) {
         artifact_root_ = std::move(value);
+        ++revision_;
+    }
+
+    void ShaderArtifactResolver::set_fallback_artifact_roots(std::vector<std::string> values) {
+        fallback_artifact_roots_ = std::move(values);
         ++revision_;
     }
 
@@ -166,6 +206,14 @@ namespace termin {
 
     const char* tgfx2_get_shader_artifact_root(void) {
         return tgfx2_legacy_shader_artifact_resolver().artifact_root().c_str();
+    }
+
+    void tgfx2_set_shader_artifact_fallback_roots(std::vector<std::string> roots) {
+        tgfx2_legacy_shader_artifact_resolver().set_fallback_artifact_roots(std::move(roots));
+    }
+
+    const std::vector<std::string>& tgfx2_get_shader_artifact_fallback_roots(void) {
+        return tgfx2_legacy_shader_artifact_resolver().fallback_artifact_roots();
     }
 
     void tgfx2_set_shader_cache_root(const char* root) {
@@ -1470,19 +1518,14 @@ namespace termin {
                                                      request.dependency_fingerprint);
     }
 
-    bool tgfx2_shader_artifact_path(const ShaderArtifactResolver& resolver,
-                                    const char* shader_uuid,
-                                    tgfx::ShaderArtifactTarget target,
-                                    tgfx::ShaderStage stage,
-                                    std::string& out) {
-        const std::string& root = resolver.artifact_root();
+    static bool shader_artifact_relative_path(const char* shader_uuid,
+                                              tgfx::ShaderArtifactTarget target,
+                                              tgfx::ShaderStage stage,
+                                              std::string& out) {
         if (!shader_uuid || shader_uuid[0] == '\0') {
             tc_log(TC_LOG_ERROR,
                    "tgfx2_shader_artifact_path: missing shader_uuid='%s'",
                    shader_uuid ? shader_uuid : "<null>");
-            return false;
-        }
-        if (root.empty() && !resolver.has_read_callback()) {
             return false;
         }
 
@@ -1497,8 +1540,25 @@ namespace termin {
             return false;
         }
 
-        out = root.empty() ? std::string() : root + "/";
-        out += "shaders/" + std::string(backend_dir) + "/" + shader_uuid + "." + stage_suffix + "." + artifact_ext;
+        out = "shaders/" + std::string(backend_dir) + "/" + shader_uuid + "." + stage_suffix + "." + artifact_ext;
+        return true;
+    }
+
+    bool tgfx2_shader_artifact_path(const ShaderArtifactResolver& resolver,
+                                    const char* shader_uuid,
+                                    tgfx::ShaderArtifactTarget target,
+                                    tgfx::ShaderStage stage,
+                                    std::string& out) {
+        std::string relative_path;
+        if (!shader_artifact_relative_path(shader_uuid, target, stage, relative_path)) {
+            return false;
+        }
+
+        const std::string& root = resolver.artifact_root();
+        if (root.empty() && !resolver.has_read_callback()) {
+            return false;
+        }
+        out = root.empty() ? std::move(relative_path) : root + "/" + relative_path;
         return true;
     }
 
@@ -1525,25 +1585,97 @@ namespace termin {
         return tgfx2_shader_artifact_path(tgfx2_legacy_shader_artifact_resolver(), shader_uuid, backend, stage, out);
     }
 
+    static std::vector<std::filesystem::path>
+    shader_artifact_candidate_paths(const ShaderArtifactResolver& resolver,
+                                    const char* shader_uuid,
+                                    tgfx::ShaderArtifactTarget target,
+                                    tgfx::ShaderStage stage) {
+        std::string relative_path;
+        if (!shader_artifact_relative_path(shader_uuid, target, stage, relative_path)) {
+            return {};
+        }
+
+        std::vector<std::filesystem::path> candidates;
+        const auto append_unique = [&candidates](std::filesystem::path candidate) {
+            const auto duplicate = std::find(candidates.begin(), candidates.end(), candidate);
+            if (duplicate == candidates.end()) {
+                candidates.push_back(std::move(candidate));
+            }
+        };
+        if (!resolver.artifact_root().empty()) {
+            append_unique(std::filesystem::path(resolver.artifact_root()) / relative_path);
+        } else if (resolver.has_read_callback()) {
+            append_unique(relative_path);
+        }
+        for (const std::string& root : resolver.fallback_artifact_roots()) {
+            if (!root.empty()) {
+                append_unique(std::filesystem::path(root) / relative_path);
+            }
+        }
+        return candidates;
+    }
+
     static bool load_shader_artifact_for_target(const ShaderArtifactResolver& resolver,
                                                 const char* shader_uuid,
                                                 tgfx::ShaderArtifactTarget target,
                                                 tgfx::ShaderStage stage,
-                                                std::vector<uint8_t>& out) {
-        std::string path;
-        if (!tgfx2_shader_artifact_path(resolver, shader_uuid, target, stage, path)) {
+                                                std::vector<uint8_t>& out,
+                                                std::filesystem::path* loaded_path = nullptr) {
+        const std::vector<std::filesystem::path> candidates =
+            shader_artifact_candidate_paths(resolver, shader_uuid, target, stage);
+        if (candidates.empty()) {
             return false;
         }
 
-        if (!resolver.read_artifact(path, out)) {
-            tc_log(TC_LOG_ERROR, "tgfx2_load_shader_artifact: missing shader artifact '%s'", path.c_str());
-            return false;
+        for (const std::filesystem::path& path : candidates) {
+            if (resolver.read_artifact(path.string(), out)) {
+                if (out.empty()) {
+                    tc_log(TC_LOG_ERROR, "tgfx2_load_shader_artifact: empty shader artifact '%s'", path.string().c_str());
+                    return false;
+                }
+                if (loaded_path) {
+                    *loaded_path = path;
+                }
+                return true;
+            }
         }
-        if (out.empty()) {
-            tc_log(TC_LOG_ERROR, "tgfx2_load_shader_artifact: empty shader artifact '%s'", path.c_str());
-            return false;
+
+        std::ostringstream roots;
+        for (size_t index = 0; index < candidates.size(); ++index) {
+            if (index != 0) {
+                roots << ", ";
+            }
+            roots << '\'' << candidates[index].string() << '\'';
         }
-        return true;
+        tc_log(TC_LOG_ERROR, "tgfx2_load_shader_artifact: missing shader artifact in [%s]", roots.str().c_str());
+        return false;
+    }
+
+    static bool load_fallback_shader_artifact_for_target(const ShaderArtifactResolver& resolver,
+                                                         const char* shader_uuid,
+                                                         tgfx::ShaderArtifactTarget target,
+                                                         tgfx::ShaderStage stage,
+                                                         const std::filesystem::path& primary_path,
+                                                         std::vector<uint8_t>& out,
+                                                         std::filesystem::path& loaded_path) {
+        for (const std::filesystem::path& candidate :
+             shader_artifact_candidate_paths(resolver, shader_uuid, target, stage)) {
+            if (candidate == primary_path) {
+                continue;
+            }
+            if (!resolver.read_artifact(candidate.string(), out)) {
+                continue;
+            }
+            if (out.empty()) {
+                tc_log(TC_LOG_ERROR,
+                       "tgfx2_load_shader_artifact: empty fallback shader artifact '%s'",
+                       candidate.string().c_str());
+                return false;
+            }
+            loaded_path = candidate;
+            return true;
+        }
+        return false;
     }
 
     bool tgfx2_load_shader_artifact_for_backend(const char* shader_uuid,
@@ -1576,10 +1708,11 @@ namespace termin {
 
         const bool dev_compile = resolver.dev_compile_enabled();
         if (!dev_compile) {
-            if (!load_shader_artifact_for_target(resolver, shader->uuid, target, stage, out)) {
+            std::filesystem::path loaded_path;
+            if (!load_shader_artifact_for_target(resolver, shader->uuid, target, stage, out, &loaded_path)) {
                 return false;
             }
-            return apply_shader_resource_layout_sidecar(resolver, shader, artifact_path);
+            return apply_shader_resource_layout_sidecar(resolver, shader, loaded_path);
         }
 
         const tc_shader_language language = (tc_shader_language)shader->language;
@@ -1604,7 +1737,14 @@ namespace termin {
             if (!supported) {
                 return apply_shader_resource_layout_sidecar(resolver, shader, artifact_path);
             }
-        } else if (!supported) {
+        } else {
+            std::filesystem::path fallback_path;
+            if (load_fallback_shader_artifact_for_target(
+                    resolver, shader->uuid, target, stage, artifact_path, out, fallback_path)) {
+                return apply_shader_resource_layout_sidecar(resolver, shader, fallback_path);
+            }
+        }
+        if (!is_existing_file(artifact_path) && !supported) {
             if (tc_shader_requires_artifacts(shader)) {
                 tc_log(TC_LOG_ERROR,
                        "tgfx2 shader dev compile: missing artifact and unsupported language/target for shader '%s': %s "
@@ -1708,7 +1848,14 @@ namespace termin {
             if (!supported) {
                 return true;
             }
-        } else if (!supported) {
+        } else {
+            std::filesystem::path fallback_path;
+            if (load_fallback_shader_artifact_for_target(
+                    resolver, shader.uuid, target, shader.stage, artifact_path, out, fallback_path)) {
+                return true;
+            }
+        }
+        if (!is_existing_file(artifact_path) && !supported) {
             tc_log(TC_LOG_ERROR,
                    "tgfx2 engine shader dev compile: missing artifact and unsupported language/target for shader '%s': "
                    "%s -> %s",

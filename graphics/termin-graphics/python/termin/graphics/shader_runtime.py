@@ -167,6 +167,11 @@ def configure_default_shader_runtime(label: str = "python") -> bool:
         cache_root=str(cache_root),
         shader_compiler=str(compiler),
         dev_compile=True,
+        fallback_artifact_roots=(
+            [str(graphics_profile.shader_artifact_root())]
+            if graphics_profile is not None
+            else []
+        ),
     )
     _configured = True
     log.info(

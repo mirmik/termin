@@ -357,6 +357,10 @@ def shader_artifact_root() -> Path:
     return path
 
 
+def shader_compiler_path() -> Path:
+    return _required(root() / "bin" / "termin_shaderc", "termin_shaderc")
+
+
 def activate() -> None:
     os.environ.setdefault("TERMIN_UI_FONT", str(font_path()))
     os.environ.setdefault(
@@ -364,6 +368,7 @@ def activate() -> None:
         str(root() / "share" / "termin" / "builtin_shaders"),
     )
     os.environ.setdefault("TERMIN_SHADER_ARTIFACT_ROOT", str(shader_artifact_root()))
+    os.environ.setdefault("TERMIN_SHADERC", str(shader_compiler_path()))
     os.environ.setdefault("TERMIN_SHADER_DEV_COMPILE", "0")
 '''
     return source.encode("utf-8")
@@ -411,6 +416,15 @@ def _add_named_libraries(
         _add_payload(payloads, f"{archive_root}/{name}", source)
 
 
+def _shader_compiler_path(sdk_prefix: Path) -> Path:
+    shaderc = sdk_prefix / "bin" / "termin_shaderc"
+    if not shaderc.is_file() or not os.access(shaderc, os.X_OK):
+        raise GraphicsPythonProductError(
+            f"Graphics SDK prefix is missing executable termin_shaderc: {shaderc}"
+        )
+    return shaderc
+
+
 def build_resource_wheel(
     *,
     sdk_prefix: Path,
@@ -434,10 +448,15 @@ def build_resource_wheel(
     }
     _add_payload(
         payloads,
+        f"{PRODUCT_IMPORT}/bin/termin_shaderc",
+        _shader_compiler_path(sdk_prefix),
+    )
+    _add_payload(
+        payloads,
         f"{dist_info}/licenses/SDL2/LICENSE.txt",
         sdk_prefix / "share" / "licenses" / "SDL2" / "LICENSE.txt",
     )
-    native_library_names = sorted(
+    sdk_native_library_names = sorted(
         {
             dependency["name"]
             for artifact in manifest.data["artifacts"]
@@ -447,14 +466,14 @@ def build_resource_wheel(
         | set(LINUX_BUNDLED_RUNTIME_LIBRARIES)
     )
     payloads[f"{PRODUCT_IMPORT}/native-libraries.json"] = (
-        (json.dumps(native_library_names, indent=2) + "\n").encode("utf-8"),
+        (json.dumps(sdk_native_library_names, indent=2) + "\n").encode("utf-8"),
         0o644,
     )
     _add_named_libraries(
         payloads,
         sdk_prefix / "lib",
         f"{PRODUCT_IMPORT}/lib",
-        native_library_names,
+        sdk_native_library_names,
     )
     _add_tree(payloads, sdk_prefix / "share" / "termin", f"{PRODUCT_IMPORT}/share/termin")
 
@@ -607,15 +626,44 @@ def verify_product(
             raise GraphicsPythonProductError("verification venv has no site-packages")
         _verify_relative_elf_rpaths(site_packages)
         profile_root = site_packages / PRODUCT_IMPORT
-        forbidden_runtime_tools = (
-            profile_root / "bin" / "termin_shaderc",
-            profile_root / "bin" / "slangc",
-        )
-        if any(path.exists() for path in forbidden_runtime_tools) or any(
-            profile_root.joinpath("lib").glob("libslang*")
+        if (profile_root / "bin" / "slangc").exists() or any(
+            (profile_root / "lib").glob("libslang*")
         ):
             raise GraphicsPythonProductError(
-                "runtime product unexpectedly contains the shader compiler toolchain"
+                "runtime product unexpectedly contains the external Slang toolchain"
+            )
+        tool_path_report = root / "shader-tool-path.txt"
+        compile_env = clean_env.copy()
+        compile_env["PATH"] = ""
+        resource_probe = (
+            "import os, pathlib; "
+            "from termin_graphics_profile import shader_compiler_path; "
+            "path = shader_compiler_path(); "
+            "assert path.is_file() and os.access(path, os.X_OK); "
+            "pathlib.Path(__import__('sys').argv[1]).write_text("
+            "str(path), encoding='utf-8')"
+        )
+        if _run(
+            [str(python), "-I", "-c", resource_probe, str(tool_path_report)],
+            cwd=root,
+            env=compile_env,
+        ) != 0:
+            raise GraphicsPythonProductError(
+                "installed product shader compiler resource API failed"
+            )
+        try:
+            shaderc = Path(tool_path_report.read_text(encoding="utf-8"))
+        except OSError as error:
+            raise GraphicsPythonProductError(
+                f"cannot read installed shader compiler resource path: {error}"
+            ) from error
+        if shaderc.name != "termin_shaderc":
+            raise GraphicsPythonProductError(
+                "installed shader compiler resource API returned an invalid path"
+            )
+        if _run([str(shaderc), "--help"], cwd=root, env=compile_env) != 0:
+            raise GraphicsPythonProductError(
+                "installed termin_shaderc executable smoke failed"
             )
 
         showcase = root / "graphics-showcase"

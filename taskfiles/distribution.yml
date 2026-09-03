@@ -18,3 +18,11 @@ tasks:
     platforms: [linux]
     cmds:
       - ./scripts/publish/graphics-python.sh {{.CLI_ARGS}}
+
+  package:graphics:nuget:
+    desc: Build the Windows D3D11 Graphics SDK and deterministic NuGet candidate
+    platforms: [windows]
+    cmds:
+      - task: build:graphics
+        vars: {CLI_ARGS: '--no-sdl --no-vulkan --no-opengl'}
+      - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/graphics-nuget.ps1
