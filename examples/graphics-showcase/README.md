@@ -30,15 +30,18 @@ task package:graphics:python
 python3.14t -m pip install --find-links dist/graphics-python termin-graphics
 ```
 
-The public wheel contains the complete matching module set and owns precompiled
-Vulkan/OpenGL shaders and the UI font. It does not contain `slangc`, Slang
-libraries or `termin_shaderc`. Importing `termin.graphics` remains side-effect
+The public wheel contains the complete matching module set, precompiled
+Vulkan/OpenGL shaders, the UI font, and `termin_shaderc`. It does not contain
+`slangc` or the Slang libraries. Importing `termin.graphics` remains side-effect
 free; `termin.graphics.configure_default_shader_runtime()` activates the wheel
 artifacts with developer compilation disabled. Applications that intentionally
-compile shader sources must install the tools separately and opt into developer
-compilation. The local product targets both pinned CPython 3.14 ABIs on host
-Linux x86_64; the separate `task package:graphics:python:manylinux` gate creates
-the repaired release candidate.
+compile shader sources must provide an external `slangc`, set
+`TERMIN_SHADER_DEV_COMPILE=1`, and call that helper. Generated application
+artifacts then live in the platform user cache while precompiled engine
+artifacts remain in the immutable wheel. The local product targets both pinned
+CPython 3.14 ABIs on host Linux x86_64; the separate
+`task package:graphics:python:manylinux` gate creates the repaired release
+candidate.
 
 The product includes `termin-window`, the GUI window adapter, and Termin's
 pinned bundled SDL2. Headless execution remains a required contract: it does

@@ -102,13 +102,24 @@ def configure_default_shader_runtime(label: str = "python") -> bool:
     if _configured:
         return True
 
+    import termin.graphics as tgfx
+
+    runtime_already_configured = (
+        tgfx.get_shader_dev_compile_enabled()
+        and bool(tgfx.get_shader_artifact_root())
+        and bool(tgfx.get_shader_cache_root())
+        and bool(tgfx.get_shader_compiler_path())
+    )
+
     try:
         graphics_profile = _activate_graphics_profile_resources()
     except RuntimeError as exc:
         log.error(f"[ShaderRuntime] invalid termin-graphics-profile installation: {exc}")
         return False
 
-    import termin.graphics as tgfx
+    if runtime_already_configured:
+        _configured = True
+        return True
 
     if (
         graphics_profile is not None
@@ -126,10 +137,6 @@ def configure_default_shader_runtime(label: str = "python") -> bool:
             f"[ShaderRuntime] {label} configured from precompiled artifacts: "
             f"artifact_root='{artifact_root}' dev_compile=False"
         )
-        return True
-
-    if tgfx.get_shader_dev_compile_enabled() and tgfx.get_shader_compiler_path():
-        _configured = True
         return True
 
     compiler = _resolve_tool(
