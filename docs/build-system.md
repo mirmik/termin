@@ -104,7 +104,7 @@ base/builder image identity, версии Python, audit provenance и SHA-256 в
 в PyPI намеренно не является частью build task.
 
 Единая публичная версия всех Termin distributions хранится в
-`build-system/version.toml`. Текущий выпуск использует `0.5.1`; локальные SDK
+`build-system/version.toml`. Текущий выпуск использует `0.5.2`; локальные SDK
 wheel’ы по-прежнему получают отдельный PEP 440 suffix `+sdk<native_build_id>`.
 Graphics публикуется одним PyPI project `termin-graphics` и содержит всю
 замкнутую внутреннюю dependency graph. Выпуск состоит ровно из двух файлов:
@@ -140,7 +140,7 @@ task publish:graphics:python -- --remote-status
 Фактическая загрузка требует одновременно явного флага и подтверждения версии:
 
 ```bash
-task publish:graphics:python -- --upload --confirm-version 0.5.1
+task publish:graphics:python -- --upload --confirm-version 0.5.2
 ```
 
 По умолчанию используется Twine repository `pypi`; другой именованный
@@ -151,7 +151,7 @@ metadata и пропускает только совпавшие файлы. О�
 одной группой единственного distribution.
 HTTP 429 и подтверждённый частичный upload повторяются с экспоненциальной
 паузой; перед каждой повторной попыткой удалённое состояние и hashes читаются
-заново. Поэтому та же команда `--upload --confirm-version 0.5.1` является
+заново. Поэтому та же команда `--upload --confirm-version 0.5.2` является
 штатной resume-командой после сетевого сбоя или rate limit. Параметры
 `--upload-delay`, `--retry-base-delay` и `--max-retries` позволяют изменить
 период ожидания. Для пользовательского Twine repository необходимо также

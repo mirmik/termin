@@ -18,7 +18,7 @@ from termin_build.wheelhouse import inspect_wheel
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-VERSION = "0.5.1"
+VERSION = "0.5.2"
 ABIS = ("cp314", "cp314t")
 
 
