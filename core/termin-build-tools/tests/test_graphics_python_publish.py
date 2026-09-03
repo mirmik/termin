@@ -18,7 +18,7 @@ from termin_build.wheelhouse import inspect_wheel
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 ABIS = ("cp314", "cp314t")
 
 
@@ -132,7 +132,7 @@ def test_rejects_license_file_with_embedded_wheel_license_root(tmp_path: Path) -
 
 def test_rejects_undeclared_wheel(tmp_path: Path) -> None:
     root = _candidate(tmp_path)
-    (root / "extra-0.5.0-py3-none-any.whl").write_bytes(b"not a wheel")
+    (root / f"extra-{VERSION}-py3-none-any.whl").write_bytes(b"not a wheel")
 
     with pytest.raises(GraphicsPythonPublishError, match="differs from manifest"):
         validate_candidate(REPO_ROOT, root)
@@ -166,7 +166,7 @@ def test_rejects_stale_release_version(tmp_path: Path) -> None:
     manifest["version"] = "0.1.0"
     path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(GraphicsPythonPublishError, match="expected '0.5.0'"):
+    with pytest.raises(GraphicsPythonPublishError, match=f"expected '{VERSION}'"):
         validate_candidate(REPO_ROOT, root)
 
 

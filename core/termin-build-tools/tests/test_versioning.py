@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_public_version_is_canonical() -> None:
-    assert public_version() == "0.5.0"
+    assert public_version() == "0.5.1"
 
 
 def test_distribution_metadata_uses_canonical_version_source() -> None:
@@ -25,4 +25,4 @@ def test_distribution_metadata_uses_canonical_version_source() -> None:
             continue
         text = path.read_text(encoding="utf-8")
         if 'version = "' in text:
-            assert 'version = "0.5.0"' in text, path
+            assert 'version = "0.5.1"' in text, path
