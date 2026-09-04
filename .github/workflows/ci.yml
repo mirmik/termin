@@ -154,6 +154,42 @@ jobs:
         shell: pwsh
         run: task build -- --dry-run
 
+  graphics-nuget-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Setup Task
+        uses: go-task/setup-task@70f2430ad412f838533de8c0515c749ffb2b8bd3
+        with:
+          version: 3.52.0
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build and test Graphics NuGet candidate
+        shell: pwsh
+        run: task test:graphics:nuget
+
+      - name: Upload Graphics NuGet gate evidence
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: graphics-nuget-gate
+          path: |
+            build/graphics-nuget-consumer-gate/
+            dist/graphics-nuget/
+          if-no-files-found: error
+          retention-days: 14
+
   # ── 0e. Chromium Web Runtime gate ──────────────────────────────
   web-runtime-chromium:
     runs-on: ubuntu-latest

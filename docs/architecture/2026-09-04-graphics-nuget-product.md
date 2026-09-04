@@ -55,12 +55,13 @@ scene, display, render-pipeline, and component libraries remain forbidden.
 
 1. `task package:graphics:nuget` builds the canonical Windows graphics SDK with
    SDL, Vulkan, and OpenGL disabled, then creates an atomic local candidate.
-2. A clean PackageReference consumer gate must restore only from that candidate
-   and verify managed references, native loading, shader copying, and the WPF
-   D3D11 smoke.
+2. `task test:graphics:nuget` rebuilds that candidate, copies it into an
+   external temporary feed, and verifies managed references, native loading,
+   shader copying, and a real WPF D3D11 retained-chart frame without access to
+   the checkout or staged SDK at runtime. The gate preserves its report, logs,
+   and exact candidate manifest under `build/graphics-nuget-consumer-gate`.
 3. A guarded publisher may upload only a manifest-complete candidate after an
    explicit version confirmation and must reconcile the remote NuGet package
    content after publication.
 
-Only stage 1 is part of the initial candidate implementation. Consumer runtime
-verification and NuGet.org mutation remain separate release gates.
+NuGet.org mutation remains a separate release gate after stages 1 and 2 pass.

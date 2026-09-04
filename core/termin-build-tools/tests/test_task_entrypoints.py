@@ -8,7 +8,17 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
-    taskfile = (REPO_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+    root_taskfile = (REPO_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+    included_taskfiles = sorted((REPO_ROOT / "taskfiles").glob("*.yml"))
+    taskfile = "\n".join(
+        [
+            root_taskfile,
+            *(path.read_text(encoding="utf-8") for path in included_taskfiles),
+        ]
+    )
+
+    for path in included_taskfiles:
+        assert f"taskfile: ./taskfiles/{path.name}" in root_taskfile
 
     for task_name in (
         "build",
@@ -19,6 +29,8 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         "package:graphics:python",
         "package:graphics:python:manylinux",
         "publish:graphics:python",
+        "package:graphics:nuget",
+        "test:graphics:nuget",
         "docs:build",
         "docs:serve",
     ):
@@ -29,6 +41,8 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
     assert "./scripts/build/graphics-python.sh" in taskfile
     assert "./scripts/build/graphics-python-manylinux.sh" in taskfile
     assert "./scripts/publish/graphics-python.sh" in taskfile
+    assert "./scripts/build/graphics-nuget.ps1" in taskfile
+    assert "./scripts/test/graphics-nuget.ps1" in taskfile
     assert "./scripts/test/all.sh" in taskfile
     assert "./scripts/test/all.ps1" in taskfile
     assert "\\" not in taskfile

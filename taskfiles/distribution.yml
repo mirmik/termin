@@ -26,3 +26,10 @@ tasks:
       - task: build:graphics
         vars: {CLI_ARGS: '--no-sdl --no-vulkan --no-opengl'}
       - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/graphics-nuget.ps1
+
+  test:graphics:nuget:
+    desc: Build and run the clean Windows PackageReference Graphics NuGet gate
+    platforms: [windows]
+    cmds:
+      - task: package:graphics:nuget
+      - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/graphics-nuget.ps1
