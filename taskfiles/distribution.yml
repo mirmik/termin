@@ -33,3 +33,9 @@ tasks:
     cmds:
       - task: package:graphics:nuget
       - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/graphics-nuget.ps1
+
+  publish:graphics:nuget:
+    desc: Validate, reconcile, or explicitly upload the gated Graphics NuGet candidate
+    platforms: [windows]
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/publish/graphics-nuget.ps1 {{.CLI_ARGS}}

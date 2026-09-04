@@ -31,6 +31,7 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         "publish:graphics:python",
         "package:graphics:nuget",
         "test:graphics:nuget",
+        "publish:graphics:nuget",
         "docs:build",
         "docs:serve",
     ):
@@ -43,6 +44,12 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
     assert "./scripts/publish/graphics-python.sh" in taskfile
     assert "./scripts/build/graphics-nuget.ps1" in taskfile
     assert "./scripts/test/graphics-nuget.ps1" in taskfile
+    assert "./scripts/publish/graphics-nuget.ps1" in taskfile
+    graphics_nuget_publish = (
+        REPO_ROOT / "scripts" / "publish" / "graphics-nuget.ps1"
+    ).read_text(encoding="utf-8")
+    assert "sys.path.insert(0, sys.argv.pop(1))" in graphics_nuget_publish
+    assert "NUGET_API_KEY" not in graphics_nuget_publish
     assert "./scripts/test/all.sh" in taskfile
     assert "./scripts/test/all.ps1" in taskfile
     assert "\\" not in taskfile

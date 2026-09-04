@@ -60,8 +60,49 @@ scene, display, render-pipeline, and component libraries remain forbidden.
    shader copying, and a real WPF D3D11 retained-chart frame without access to
    the checkout or staged SDK at runtime. The gate preserves its report, logs,
    and exact candidate manifest under `build/graphics-nuget-consumer-gate`.
-3. A guarded publisher may upload only a manifest-complete candidate after an
-   explicit version confirmation and must reconcile the remote NuGet package
-   content after publication.
+3. `task publish:graphics:nuget` validates the candidate and its passed consumer
+   evidence, checks both remote versions, and prints the exact dry-run plan.
+   `--upload --confirm-version VERSION` enables the irreversible base-then-WPF
+   upload. Publication is bound to the exact package hashes in the passed gate;
+   it never rebuilds or substitutes a different candidate.
 
 NuGet.org mutation remains a separate release gate after stages 1 and 2 pass.
+The publisher preflights both remote versions before the first mutation. It
+downloads every existing or newly visible package and compares every original
+archive member with the gated manifest; only NuGet's `.signature.p7s`
+repository-signature member may be added. This makes a rerun safe after a
+partial base-package publication without relying on `skip duplicate`.
+
+## Publication operations
+
+Run the dry plan on the same machine and workspace that retain the passed
+candidate and `build/graphics-nuget-consumer-gate` evidence:
+
+```powershell
+task publish:graphics:nuget
+```
+
+For upload, create a short-lived NuGet.org API key scoped to push new versions
+of only `Termin.Graphics` and `Termin.Graphics.Wpf`. The release owner supplies
+it through the process environment; it is never accepted as a command-line
+argument or written to evidence:
+
+```powershell
+$env:NUGET_API_KEY = '<scoped secret>'
+task publish:graphics:nuget -- --upload --confirm-version 0.5.2
+Remove-Item Env:NUGET_API_KEY
+```
+
+Keep the key in the release owner's secret store. Do not commit it, paste it
+into task arguments, or expose it to pull-request workflows. A CI migration
+should prefer NuGet.org Trusted Publishing; if a static key is temporarily
+needed, place it in a protected release environment available only to trusted
+tag/ref workflows.
+
+Uploads are non-transactional. If the base package succeeds and the WPF upload
+does not, retain the candidate and evidence unchanged and rerun the same
+command. The publisher proves the existing base content and continues with WPF.
+Any remote member mismatch stops publication for manual reconciliation.
+
+After both pushes are visible, restore both packages from NuGet.org in a clean
+external consumer and repeat the WPF/D3D11 smoke before closing the release.
