@@ -112,6 +112,11 @@ def test_consumer_project_is_deterministic_and_package_reference_only() -> None:
     assert "sceneHost.RenderFailed" in program
     assert "BackendType.D3D11" in program
     assert "Timed out waiting for RetainedScene2DHost.FrameRendered" in program
+    assert "retainedSceneId = chart.Scene.Id" in program
+    assert "retainedItemCount = checked((ulong)chart.Scene.Count)" in program
+    assert (
+        "pointCount = checked((ulong)line.Item.Snapshot.PointCount)" in program
+    )
 
 
 def test_output_validation_records_exact_candidate_hashes(tmp_path: Path) -> None:
