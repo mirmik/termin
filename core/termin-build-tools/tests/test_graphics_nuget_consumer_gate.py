@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import sys
 
 import pytest
 
 from termin_build.graphics_nuget_consumer_gate import (
     GraphicsNugetConsumerGateError,
+    _run_command,
     consumer_project_files,
     isolated_environment,
     validate_consumer_output,
@@ -241,3 +243,25 @@ def test_isolated_environment_scrubs_termin_and_checkout_paths(tmp_path: Path) -
     assert result["NUGET_PLUGINS_CACHE_PATH"] == str(
         workspace / "nuget-plugins-cache"
     )
+
+
+def test_failed_command_reports_bounded_output_tail(tmp_path: Path) -> None:
+    log = tmp_path / "failed.log"
+
+    with pytest.raises(
+        GraphicsNugetConsumerGateError,
+        match="consumer runtime sentinel",
+    ):
+        _run_command(
+            [
+                sys.executable,
+                "-c",
+                "print('consumer runtime sentinel'); raise SystemExit(7)",
+            ],
+            cwd=tmp_path,
+            environment=dict(os.environ),
+            log=log,
+            timeout_seconds=30,
+        )
+
+    assert log.read_text(encoding="utf-8").strip() == "consumer runtime sentinel"

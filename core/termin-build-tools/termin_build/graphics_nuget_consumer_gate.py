@@ -330,8 +330,10 @@ def _run_command(
         ) from error
     log.write_text(output, encoding="utf-8", newline="\n")
     if result.returncode != 0:
+        output_tail = "\n".join(output.splitlines()[-40:]).strip()
+        detail = f"\ncommand output tail:\n{output_tail}" if output_tail else ""
         raise GraphicsNugetConsumerGateError(
-            f"command failed with exit code {result.returncode}; see {log.name}"
+            f"command failed with exit code {result.returncode}; see {log.name}{detail}"
         )
     return output
 
