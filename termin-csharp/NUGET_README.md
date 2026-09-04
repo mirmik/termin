@@ -7,6 +7,11 @@ The initial public product supports .NET 8 applications on Windows x64 and the
 D3D11 backend. It is built from Termin's `plot-d3d11` profile and does not
 include the editor, Python runtime, SDL, Vulkan, or legacy OpenGL.
 
+The native binaries use the dynamic Microsoft C++ runtime. Install the latest
+[Microsoft Visual C++ v14 Redistributable for x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+on the target machine. The `net8.0-windows7.0` asset name states the Windows API
+contract; run it only on a Windows release supported by .NET 8.
+
 Use the base runtime directly for non-WPF hosts:
 
 ```xml

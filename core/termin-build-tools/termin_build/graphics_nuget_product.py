@@ -177,6 +177,14 @@ def load_lock(repo_root: Path) -> GraphicsNugetLock:
         raise GraphicsNugetProductError(
             "the initial Graphics NuGet contract must use the plot-d3d11 profile"
         )
+    required_names = {name.casefold() for name in lock.required_native_libraries}
+    forbidden_names = {name.casefold() for name in lock.forbidden_native_libraries}
+    overlap = sorted(required_names & forbidden_names)
+    if overlap:
+        raise GraphicsNugetProductError(
+            "NuGet product lock lists native libraries as both required and forbidden: "
+            + ", ".join(overlap)
+        )
     return lock
 
 
