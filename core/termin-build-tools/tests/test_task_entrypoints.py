@@ -10,15 +10,25 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
     root_taskfile = (REPO_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
     included_taskfiles = sorted((REPO_ROOT / "taskfiles").glob("*.yml"))
+    included_paths = [
+        REPO_ROOT / relative_path
+        for relative_path in re.findall(
+            r"^\s{4}taskfile:\s+(\./taskfiles/\S+\.yml)\s*$",
+            root_taskfile,
+            flags=re.MULTILINE,
+        )
+    ]
+
+    assert included_paths
+    assert set(included_paths) == set(included_taskfiles)
+    assert root_taskfile.count("    flatten: true") == len(included_paths)
+
     taskfile = "\n".join(
         [
             root_taskfile,
-            *(path.read_text(encoding="utf-8") for path in included_taskfiles),
+            *(path.read_text(encoding="utf-8") for path in included_paths),
         ]
     )
-
-    for path in included_taskfiles:
-        assert f"taskfile: ./taskfiles/{path.name}" in root_taskfile
 
     for task_name in (
         "build",
@@ -35,7 +45,9 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         "docs:build",
         "docs:serve",
     ):
-        assert f"  {task_name}:\n" in taskfile
+        assert re.search(
+            rf"^  {re.escape(task_name)}:\s*$", taskfile, re.MULTILINE
+        )
 
     assert "./scripts/build/sdk.sh" in taskfile
     assert "./scripts/build/sdk.ps1" in taskfile
