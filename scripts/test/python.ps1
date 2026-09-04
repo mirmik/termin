@@ -177,9 +177,13 @@ function New-PytestSuiteArgs {
     param([string]$Name)
 
     $safeName = $Name -replace "[^A-Za-z0-9_.-]", "-"
-    $suiteTempName = [Convert]::ToHexString(
-        [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($safeName))
-    ).Substring(0, 8).ToLowerInvariant()
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $suiteHash = $sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($safeName))
+    } finally {
+        $sha256.Dispose()
+    }
+    $suiteTempName = [BitConverter]::ToString($suiteHash).Replace("-", "").Substring(0, 8).ToLowerInvariant()
     $suiteTempDir = Join-Path $PytestRunTempDir $suiteTempName
     $suiteCacheDir = Join-Path $PytestCacheRoot $safeName
     New-Item -ItemType Directory -Path $suiteTempDir -Force | Out-Null
