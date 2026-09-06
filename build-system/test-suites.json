@@ -320,6 +320,18 @@
         "reason": "Built only with the Vulkan backend."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_readback_memory.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Instrumented non-coherent allocator and failed readback completion/map/invalidate checks."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_readback.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Native buffer/color/depth readback and async publication through completion gates."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_image_sync.cpp",
         "profiles": ["pr", "linux-full"],
         "capabilities": ["vulkan"],

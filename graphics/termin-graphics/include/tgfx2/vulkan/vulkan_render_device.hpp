@@ -707,9 +707,10 @@ namespace tgfx {
 
         // Queue a staging-style VMA buffer for deferred destroy after the
         // frame fence signals. Used by upload_buffer / upload_texture /
-        // blit_to_texture / read_buffer — they fill a staging buffer, batch
+        // blit_to_texture — they fill a staging buffer, batch
         // a copy into immediate_cb_, and must NOT destroy the staging
-        // synchronously because the GPU hasn't executed the copy yet.
+        // synchronously because the GPU hasn't executed the copy yet. Blocking
+        // readback also uses this queue if its GPU completion wait fails.
         void defer_vma_buffer_destroy(VkBuffer buffer, VmaAllocation alloc) {
             if (buffer != VK_NULL_HANDLE) {
                 pending_destroy_current_.vma_buffers.emplace_back(buffer, alloc);
@@ -787,7 +788,16 @@ namespace tgfx {
         // responsible for ensuring GPU has finished using these resources.
         void drain_pending_destroy(PendingDestroyQueue& q);
         uint64_t request_pixel_readback(TextureHandle tex, int x, int y, PixelReadbackKind kind);
-        void complete_pixel_readbacks(std::vector<PendingPixelReadback>& pending);
+        bool create_readback_buffer(size_t size, VkBuffer& buffer, VmaAllocation& allocation);
+        VkCommandBuffer begin_readback_commands();
+        bool finish_readback(VkCommandBuffer cb, VkBuffer staging, VmaAllocation allocation,
+                             VkDeviceSize offset, std::span<uint8_t> output);
+        bool validate_image_readback(const VkTextureResource& image, VkOffset3D offset, VkExtent3D extent);
+        void record_image_readback(VkCommandBuffer cb, VkTextureResource& image, VkBuffer staging,
+                                   VkImageAspectFlags aspect, VkOffset3D offset, VkExtent3D extent, size_t size);
+        bool read_image_bytes(VkTextureResource& image, VkImageAspectFlags aspect, VkOffset3D offset,
+                              VkExtent3D extent, std::span<uint8_t> output);
+        void complete_pixel_readbacks(std::vector<PendingPixelReadback>& pending, VkResult completion);
         void destroy_pixel_readbacks(std::vector<PendingPixelReadback>& pending);
         void prepare_frame_slot(uint32_t slot, SubmitStats* stats);
         void complete_gpu_frame_timing(uint32_t slot);

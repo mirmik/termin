@@ -124,11 +124,28 @@ insert an operation between already recorded draws. Use command-list copy
 operations between render passes for ordered copies. Device blits/readback
 requests consuming a rendered image must follow its producer submission.
 General ordering, abandoned/reordered command lists and global image-layout
-tracking remain an investigation under #2230; host readback visibility is #2202.
+tracking remain an investigation under #2230.
+
+Vulkan readback (#2202) records GPU-write → HOST_READ dependencies, checks GPU
+completion, then maps and invalidates the VMA allocation before copying bytes.
+VMA handles non-coherent atom alignment and coherent-memory no-ops. A failed
+completion/map/invalidate does not modify the output or publish an async result.
+Synchronous producers must be submitted before reading; readback does not execute
+unsubmitted draw/prelude commands. Async requests themselves enter the next
+submission's prelude and become pollable after its frame fence completes or a
+successful `wait_idle()`. An idle device does not complete unsubmitted requests.
+
+Pixel RGBA8 readback accepts RGBA8_UNorm/RGBA8_sRGB; depth readback accepts D32F.
+Images must have CopySrc usage, one sample and initialized contents. Use full
+texture float readback for other supported color formats. Device-local buffer
+readback needs CopySrc; host-visible buffers are read directly after completion.
 
 Native regressions: `tgfx2_vulkan_buffer_sync_test` and
 `tgfx2_vulkan_image_sync_test`, run through root `task test:cpp` with mandatory
 Vulkan synchronization validation.
+`tgfx2_vulkan_readback_test` covers buffer/color/depth sync and async results;
+`tgfx2_vulkan_readback_memory_test` uses an instrumented non-coherent allocator
+to verify cache refresh and failure paths independently of the GPU memory type.
 
 ## Canonical 2D Draw Lists
 

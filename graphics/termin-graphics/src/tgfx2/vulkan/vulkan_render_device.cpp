@@ -289,8 +289,9 @@ namespace tgfx {
         // During normal frame lifecycle `destroy()` queues into
         // pending_destroy_{current,in_flight}_ and the per-submit fence keeps
         // them safe — see VulkanRenderDevice::submit.
-        if (device_)
-            vkDeviceWaitIdle(device_);
+        const VkResult idle_result = device_ ? vkDeviceWaitIdle(device_) : VK_SUCCESS;
+        if (idle_result != VK_SUCCESS)
+            tc_log(TC_LOG_ERROR, "[Vulkan] teardown wait failed: VkResult=%d", int(idle_result));
 
         // Tear down the swapchain first — its sync objects and image
         // views are bound to device_ which is still alive at this point.
@@ -311,7 +312,9 @@ namespace tgfx {
         // lookups are still valid at this point, so drain them through the
         // normal per-type helper.
         for (uint32_t i = 0; i < kFrameSlotCount; ++i) {
-            complete_pixel_readbacks(pixel_readbacks_slots_[i]);
+            // Teardown never needs to publish results. In particular a failed
+            // idle wait must not be mistaken for successful GPU completion.
+            destroy_pixel_readbacks(pixel_readbacks_slots_[i]);
             drain_pending_destroy(pending_destroy_slots_[i]);
         }
         destroy_pixel_readbacks(pixel_readbacks_current_);
@@ -1146,7 +1149,15 @@ namespace tgfx {
         return caps_;
     }
     void VulkanRenderDevice::wait_idle() {
-        vkDeviceWaitIdle(device_);
+        const auto result = vkDeviceWaitIdle(device_);
+        if (result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] device idle wait failed: VkResult=%d", int(result));
+            throw std::runtime_error("Vulkan device idle wait failed");
+        }
+        // Only submitted requests are complete. Requests in the current
+        // prelude still require a submit, even if the device is idle.
+        for (auto& pending : pixel_readbacks_slots_)
+            complete_pixel_readbacks(pending, result);
     }
 
     void VulkanRenderDevice::invalidate_descriptor_cache() {
@@ -1667,13 +1678,22 @@ namespace tgfx {
 
         measured(&SubmitStats::fence_wait_us, [&] {
             if (frame_fence_in_flight_[slot]) {
-                vkWaitForFences(device_, 1, &frame_fences_[slot], VK_TRUE, UINT64_MAX);
-                vkResetFences(device_, 1, &frame_fences_[slot]);
+                const auto wait_result = vkWaitForFences(device_, 1, &frame_fences_[slot], VK_TRUE, UINT64_MAX);
+                if (wait_result != VK_SUCCESS) {
+                    tc_log(TC_LOG_ERROR, "[Vulkan] frame %u fence wait failed: VkResult=%d", slot, int(wait_result));
+                    throw std::runtime_error("Vulkan frame fence wait failed");
+                }
+                const auto reset_result = vkResetFences(device_, 1, &frame_fences_[slot]);
+                if (reset_result != VK_SUCCESS) {
+                    tc_log(TC_LOG_ERROR, "[Vulkan] frame %u fence reset failed: VkResult=%d", slot, int(reset_result));
+                    throw std::runtime_error("Vulkan frame fence reset failed");
+                }
                 frame_fence_in_flight_[slot] = false;
             }
         });
         complete_gpu_frame_timing(slot);
-        measured(&SubmitStats::readback_cleanup_us, [&] { complete_pixel_readbacks(pixel_readbacks_slots_[slot]); });
+        measured(&SubmitStats::readback_cleanup_us,
+                 [&] { complete_pixel_readbacks(pixel_readbacks_slots_[slot], VK_SUCCESS); });
         measured(&SubmitStats::destroy_cleanup_us, [&] { drain_pending_destroy(pending_destroy_slots_[slot]); });
         measured(&SubmitStats::descriptor_cleanup_us, [&] {
             vkResetDescriptorPool(device_, descriptor_pools_[slot], 0);
@@ -1701,8 +1721,6 @@ namespace tgfx {
         // sets should scale with draws (one per pipeline-state change).
         const uint32_t submitted_slot = current_pool_idx_;
         flush_pending_host_writes(submitted_slot);
-        PendingDestroyQueue submitted_destroy = std::move(pending_destroy_current_);
-        pending_destroy_current_ = {};
 
         // Close the immediate cb (copies / transitions / clears accumulated
         // since last submit) and submit it together with the main draw cb in
@@ -1718,7 +1736,11 @@ namespace tgfx {
         }
         VkCommandBuffer submitted_immediate_cb = VK_NULL_HANDLE;
         if (immediate_cb_open_) {
-            vkEndCommandBuffer(immediate_cb_);
+            const auto end_result = vkEndCommandBuffer(immediate_cb_);
+            if (end_result != VK_SUCCESS) {
+                tc_log(TC_LOG_ERROR, "[Vulkan] immediate command end failed: VkResult=%d", int(end_result));
+                throw std::runtime_error("Vulkan immediate command end failed");
+            }
             immediate_cb_open_ = false;
             cbs[cb_count++] = immediate_cb_;
             submitted_immediate_cb = immediate_cb_;
@@ -1736,7 +1758,18 @@ namespace tgfx {
 
         const auto t_submit0 =
             stats_enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        vkQueueSubmit(graphics_queue_, 1, &si, frame_fences_[submitted_slot]);
+        const auto submit_result = vkQueueSubmit(graphics_queue_, 1, &si, frame_fences_[submitted_slot]);
+        if (submit_result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] frame %u submit failed: VkResult=%d", submitted_slot, int(submit_result));
+            // The fence was never submitted: do not mark it in flight and do
+            // not move readbacks into a slot that could publish stale bytes.
+            if (submitted_immediate_cb)
+                defer_cmd_buffer_free(submitted_immediate_cb);
+            destroy_pixel_readbacks(pixel_readbacks_current_);
+            throw std::runtime_error("Vulkan frame submit failed");
+        }
+        PendingDestroyQueue submitted_destroy = std::move(pending_destroy_current_);
+        pending_destroy_current_ = {};
         if (stats_enabled) {
             vulkan_stats_increment(
                 g_submit_us,

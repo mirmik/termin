@@ -2,6 +2,7 @@
 
 #include "tgfx2/pixel_format_utils.hpp"
 #include "tgfx2/vulkan/internal/buffer_transfer_sync.hpp"
+#include "tgfx2/vulkan/internal/readback_memory.hpp"
 #include "tgfx2/vulkan/internal/image_transition_sync.hpp"
 #include "tgfx2/vulkan/vulkan_render_device.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
@@ -11,6 +12,8 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <limits>
+#include <stdexcept>
 #include <span>
 #include <vector>
 
@@ -74,12 +77,22 @@ namespace tgfx {
         ai.commandPool = command_pool_;
         ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         ai.commandBufferCount = 1;
-        vkAllocateCommandBuffers(device_, &ai, &immediate_cb_);
+        const auto allocate_result = vkAllocateCommandBuffers(device_, &ai, &immediate_cb_);
+        if (allocate_result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] immediate command allocation failed: VkResult=%d", int(allocate_result));
+            throw std::runtime_error("Vulkan immediate command allocation failed");
+        }
 
         VkCommandBufferBeginInfo bi{};
         bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(immediate_cb_, &bi);
+        const auto begin_result = vkBeginCommandBuffer(immediate_cb_, &bi);
+        if (begin_result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] immediate command begin failed: VkResult=%d", int(begin_result));
+            vkFreeCommandBuffers(device_, command_pool_, 1, &immediate_cb_);
+            immediate_cb_ = VK_NULL_HANDLE;
+            throw std::runtime_error("Vulkan immediate command begin failed");
+        }
 
         immediate_cb_open_ = true;
         return immediate_cb_;
@@ -451,246 +464,37 @@ namespace tgfx {
 
     // --- Readback ---
 
-    void VulkanRenderDevice::read_buffer(BufferHandle src, std::span<uint8_t> data, uint64_t offset) {
-        auto* res = buffers_.get(src.id);
-        if (!res)
-            return;
-
-        if (res->desc.cpu_visible) {
-            void* mapped;
-            vmaMapMemory(allocator_, res->allocation, &mapped);
-            std::memcpy(data.data(), static_cast<uint8_t*>(mapped) + offset, data.size());
-            vmaUnmapMemory(allocator_, res->allocation);
-        } else {
-            // Blocking readback — caller needs CPU-side bytes right after
-            // this returns. Deliberately NOT routed through the shared
-            // immediate_cb_ path, because that one is batched and drained
-            // asynchronously by submit(). A readback call is rare (screen-
-            // shot / GPU debug) so the extra submit+wait here is fine.
-            VkBufferCreateInfo stage_ci{};
-            stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            stage_ci.size = data.size();
-            stage_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-            VmaAllocationCreateInfo stage_alloc{};
-            stage_alloc.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-
-            VkBuffer staging;
-            VmaAllocation staging_alloc_h;
-            vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc_h, nullptr);
-
-            VkCommandBufferAllocateInfo ai{};
-            ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            ai.commandPool = command_pool_;
-            ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            ai.commandBufferCount = 1;
-            VkCommandBuffer cb;
-            vkAllocateCommandBuffers(device_, &ai, &cb);
-
-            VkCommandBufferBeginInfo bi{};
-            bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            vkBeginCommandBuffer(cb, &bi);
-            VkBufferCopy region{};
-            region.srcOffset = offset;
-            region.size = data.size();
-            vkCmdCopyBuffer(cb, res->buffer, staging, 1, &region);
-            vkEndCommandBuffer(cb);
-
-            VkSubmitInfo si{};
-            si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            si.commandBufferCount = 1;
-            si.pCommandBuffers = &cb;
-            vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-            vkQueueWaitIdle(graphics_queue_);
-
-            void* mapped;
-            vmaMapMemory(allocator_, staging_alloc_h, &mapped);
-            std::memcpy(data.data(), mapped, data.size());
-            vmaUnmapMemory(allocator_, staging_alloc_h);
-            vmaDestroyBuffer(allocator_, staging, staging_alloc_h);
-            vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
-        }
-    }
-
     bool VulkanRenderDevice::read_pixel_rgba8(TextureHandle tex, int x, int y, float out_rgba[4]) {
         auto* res = textures_.get(tex.id);
-        if (!res || !out_rgba)
-            return false;
-
-        // Clamp to texture bounds — caller's (x, y) in pixel coords from the
-        // editor picking path is not guaranteed to land inside the attachment.
-        const int w = static_cast<int>(res->desc.width);
-        const int h = static_cast<int>(res->desc.height);
-        if (x < 0 || y < 0 || x >= w || y >= h)
-            return false;
-
-        VkBufferCreateInfo stage_ci{};
-        stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stage_ci.size = 4;
-        stage_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo stage_alloc{};
-        stage_alloc.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-
-        VkBuffer staging = VK_NULL_HANDLE;
-        VmaAllocation staging_alloc_h = VK_NULL_HANDLE;
-        if (vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc_h, nullptr) != VK_SUCCESS) {
+        if (!res || !out_rgba ||
+            (res->desc.format != PixelFormat::RGBA8_UNorm && res->desc.format != PixelFormat::RGBA8_sRGB)) {
+            tc_log(TC_LOG_ERROR, "[Vulkan readback] RGBA8 pixel requires RGBA8 texture and valid output");
             return false;
         }
-
-        VkCommandBufferAllocateInfo ai{};
-        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        ai.commandPool = command_pool_;
-        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        ai.commandBufferCount = 1;
-        VkCommandBuffer cb = VK_NULL_HANDLE;
-        vkAllocateCommandBuffers(device_, &ai, &cb);
-
-        VkCommandBufferBeginInfo bi{};
-        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cb, &bi);
-
-        // Move the image from whatever layout it is in now into TRANSFER_SRC
-        // for the copy; the end_render_pass hook already transitions color
-        // attachments to SHADER_READ_ONLY_OPTIMAL, so that is the common
-        // source layout, but we don't assume — transition_image_layout
-        // handles the generic case.
-        VkImageLayout prev_layout = res->current_layout;
-        transition_image_layout(
-            cb, res->image, prev_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
-
-        VkBufferImageCopy region{};
-        region.bufferOffset = 0;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
-        region.imageOffset = {x, y, 0};
-        region.imageExtent = {1, 1, 1};
-        vkCmdCopyImageToBuffer(cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
-
-        // Put the image back where we found it so the next frame's
-        // sampling / render-pass-load doesn't start from an unexpected layout.
-        transition_image_layout(
-            cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, prev_layout, VK_IMAGE_ASPECT_COLOR_BIT);
-        res->current_layout = prev_layout;
-
-        vkEndCommandBuffer(cb);
-
-        VkSubmitInfo si{};
-        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &cb;
-        vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-        vkQueueWaitIdle(graphics_queue_);
-
-        void* mapped = nullptr;
-        uint8_t pixel[4] = {0, 0, 0, 0};
-        if (vmaMapMemory(allocator_, staging_alloc_h, &mapped) == VK_SUCCESS && mapped) {
-            std::memcpy(pixel, mapped, 4);
-            vmaUnmapMemory(allocator_, staging_alloc_h);
-        }
-
-        vmaDestroyBuffer(allocator_, staging, staging_alloc_h);
-        vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
-
-        out_rgba[0] = pixel[0] / 255.0f;
-        out_rgba[1] = pixel[1] / 255.0f;
-        out_rgba[2] = pixel[2] / 255.0f;
-        out_rgba[3] = pixel[3] / 255.0f;
+        std::array<uint8_t, 4> pixel{};
+        if (!read_image_bytes(*res, VK_IMAGE_ASPECT_COLOR_BIT, {x, y, 0}, {1, 1, 1}, pixel))
+            return false;
+        for (size_t i = 0; i < pixel.size(); ++i)
+            out_rgba[i] = pixel[i] / 255.0f;
         return true;
     }
 
     bool VulkanRenderDevice::read_pixel_depth_float(TextureHandle tex, int x, int y, float* out_depth) {
         auto* res = textures_.get(tex.id);
-        if (!res || !out_depth)
-            return false;
-        if (res->desc.format != PixelFormat::D32F)
-            return false;
-
-        const int w = static_cast<int>(res->desc.width);
-        const int h = static_cast<int>(res->desc.height);
-        if (x < 0 || y < 0 || x >= w || y >= h)
-            return false;
-
-        VkBufferCreateInfo stage_ci{};
-        stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stage_ci.size = sizeof(float);
-        stage_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo stage_alloc{};
-        stage_alloc.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-
-        VkBuffer staging = VK_NULL_HANDLE;
-        VmaAllocation staging_alloc_h = VK_NULL_HANDLE;
-        if (vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc_h, nullptr) != VK_SUCCESS) {
+        if (!res || !out_depth || res->desc.format != PixelFormat::D32F) {
+            tc_log(TC_LOG_ERROR, "[Vulkan readback] depth pixel requires D32F texture and valid output");
             return false;
         }
-
-        VkCommandBufferAllocateInfo ai{};
-        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        ai.commandPool = command_pool_;
-        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        ai.commandBufferCount = 1;
-        VkCommandBuffer cb = VK_NULL_HANDLE;
-        vkAllocateCommandBuffers(device_, &ai, &cb);
-
-        VkCommandBufferBeginInfo bi{};
-        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cb, &bi);
-
-        VkImageLayout prev_layout = res->current_layout;
-        transition_image_layout(
-            cb, res->image, prev_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-        VkBufferImageCopy region{};
-        region.bufferOffset = 0;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
-        region.imageOffset = {x, y, 0};
-        region.imageExtent = {1, 1, 1};
-        vkCmdCopyImageToBuffer(cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
-
-        transition_image_layout(
-            cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, prev_layout, VK_IMAGE_ASPECT_DEPTH_BIT);
-        res->current_layout = prev_layout;
-
-        vkEndCommandBuffer(cb);
-
-        VkSubmitInfo si{};
-        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &cb;
-        vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-        vkQueueWaitIdle(graphics_queue_);
-
-        float depth = 1.0f;
-        void* mapped = nullptr;
-        if (vmaMapMemory(allocator_, staging_alloc_h, &mapped) == VK_SUCCESS && mapped) {
-            std::memcpy(&depth, mapped, sizeof(float));
-            vmaUnmapMemory(allocator_, staging_alloc_h);
-        }
-
-        vmaDestroyBuffer(allocator_, staging, staging_alloc_h);
-        vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
-
-        *out_depth = depth;
-        return true;
+        return read_image_bytes(*res, VK_IMAGE_ASPECT_DEPTH_BIT, {x, y, 0}, {1, 1, 1},
+                                {reinterpret_cast<uint8_t*>(out_depth), sizeof(float)});
     }
 
     bool VulkanRenderDevice::read_texture_rgba_float(TextureHandle tex, float* out) {
         auto* res = textures_.get(tex.id);
-        if (!res || !out)
+        if (!res || !out) {
+            tc_log(TC_LOG_ERROR, "[Vulkan readback] invalid color texture handle/output");
             return false;
+        }
         if (is_depth_format(res->desc.format)) {
             tc_log(TC_LOG_ERROR, "VulkanRenderDevice::read_texture_rgba_float: texture %u is a depth format", tex.id);
             return false;
@@ -711,86 +515,18 @@ namespace tgfx {
 
         const uint32_t width = res->desc.width;
         const uint32_t height = res->desc.height;
-        const size_t byte_size = static_cast<size_t>(width) * height * bytes_per_pixel;
-
-        VkBufferCreateInfo stage_ci{};
-        stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stage_ci.size = byte_size;
-        stage_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo stage_alloc{};
-        stage_alloc.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-
-        VkBuffer staging = VK_NULL_HANDLE;
-        VmaAllocation staging_alloc_h = VK_NULL_HANDLE;
-        if (vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc_h, nullptr) != VK_SUCCESS) {
-            tc_log(TC_LOG_ERROR,
-                   "VulkanRenderDevice::read_texture_rgba_float: failed to allocate staging buffer for texture %u",
-                   tex.id);
+        const uint64_t pixel_count = uint64_t(width) * height;
+        if (pixel_count > std::numeric_limits<size_t>::max() / std::max<size_t>(bytes_per_pixel, 4 * sizeof(float))) {
+            tc_log(TC_LOG_ERROR, "[Vulkan readback] color texture byte size overflow");
             return false;
         }
-
-        VkCommandBufferAllocateInfo ai{};
-        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        ai.commandPool = command_pool_;
-        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        ai.commandBufferCount = 1;
-        VkCommandBuffer cb = VK_NULL_HANDLE;
-        vkAllocateCommandBuffers(device_, &ai, &cb);
-
-        VkCommandBufferBeginInfo bi{};
-        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cb, &bi);
-
-        VkImageLayout prev_layout = res->current_layout;
-        transition_image_layout(
-            cb, res->image, prev_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
-
-        VkBufferImageCopy region{};
-        region.bufferOffset = 0;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
-        region.imageExtent = {width, height, 1};
-        vkCmdCopyImageToBuffer(cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
-
-        transition_image_layout(
-            cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, prev_layout, VK_IMAGE_ASPECT_COLOR_BIT);
-        res->current_layout = prev_layout;
-
-        vkEndCommandBuffer(cb);
-
-        VkSubmitInfo si{};
-        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &cb;
-        vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-        vkQueueWaitIdle(graphics_queue_);
+        const size_t byte_size = static_cast<size_t>(pixel_count) * bytes_per_pixel;
 
         std::vector<uint8_t> bytes(byte_size);
-        void* mapped = nullptr;
-        bool ok = false;
-        if (vmaMapMemory(allocator_, staging_alloc_h, &mapped) == VK_SUCCESS && mapped) {
-            std::memcpy(bytes.data(), mapped, byte_size);
-            vmaUnmapMemory(allocator_, staging_alloc_h);
-            ok = true;
-        }
-
-        vmaDestroyBuffer(allocator_, staging, staging_alloc_h);
-        vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
-        if (!ok) {
-            tc_log(TC_LOG_ERROR,
-                   "VulkanRenderDevice::read_texture_rgba_float: failed to map staging buffer for texture %u",
-                   tex.id);
+        if (!read_image_bytes(*res, VK_IMAGE_ASPECT_COLOR_BIT, {0, 0, 0}, {width, height, 1}, bytes))
             return false;
-        }
 
-        const uint32_t pixel_count = width * height;
-        for (uint32_t i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             const uint8_t* src = bytes.data() + static_cast<size_t>(i) * bytes_per_pixel;
             float* dst = out + static_cast<size_t>(i) * 4;
             switch (res->desc.format) {
@@ -879,8 +615,10 @@ namespace tgfx {
 
     bool VulkanRenderDevice::read_texture_depth_float(TextureHandle tex, float* out) {
         auto* res = textures_.get(tex.id);
-        if (!res || !out)
+        if (!res || !out) {
+            tc_log(TC_LOG_ERROR, "[Vulkan readback] invalid depth texture handle/output");
             return false;
+        }
         if (res->desc.format != PixelFormat::D32F) {
             tc_log(TC_LOG_ERROR, "VulkanRenderDevice::read_texture_depth_float: texture %u format is not D32F", tex.id);
             return false;
@@ -893,82 +631,15 @@ namespace tgfx {
 
         const uint32_t width = res->desc.width;
         const uint32_t height = res->desc.height;
-        const size_t byte_size = static_cast<size_t>(width) * height * sizeof(float);
-
-        VkBufferCreateInfo stage_ci{};
-        stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stage_ci.size = byte_size;
-        stage_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo stage_alloc{};
-        stage_alloc.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-
-        VkBuffer staging = VK_NULL_HANDLE;
-        VmaAllocation staging_alloc_h = VK_NULL_HANDLE;
-        if (vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc_h, nullptr) != VK_SUCCESS) {
-            tc_log(TC_LOG_ERROR,
-                   "VulkanRenderDevice::read_texture_depth_float: failed to allocate staging buffer for texture %u",
-                   tex.id);
+        const uint64_t pixel_count = uint64_t(width) * height;
+        if (pixel_count > std::numeric_limits<size_t>::max() / sizeof(float)) {
+            tc_log(TC_LOG_ERROR, "[Vulkan readback] depth texture byte size overflow");
             return false;
         }
+        const size_t byte_size = static_cast<size_t>(pixel_count) * sizeof(float);
 
-        VkCommandBufferAllocateInfo ai{};
-        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        ai.commandPool = command_pool_;
-        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        ai.commandBufferCount = 1;
-        VkCommandBuffer cb = VK_NULL_HANDLE;
-        vkAllocateCommandBuffers(device_, &ai, &cb);
-
-        VkCommandBufferBeginInfo bi{};
-        bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cb, &bi);
-
-        VkImageLayout prev_layout = res->current_layout;
-        transition_image_layout(
-            cb, res->image, prev_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-        VkBufferImageCopy region{};
-        region.bufferOffset = 0;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
-        region.imageExtent = {width, height, 1};
-        vkCmdCopyImageToBuffer(cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
-
-        transition_image_layout(
-            cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, prev_layout, VK_IMAGE_ASPECT_DEPTH_BIT);
-        res->current_layout = prev_layout;
-
-        vkEndCommandBuffer(cb);
-
-        VkSubmitInfo si{};
-        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &cb;
-        vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-        vkQueueWaitIdle(graphics_queue_);
-
-        void* mapped = nullptr;
-        bool ok = false;
-        if (vmaMapMemory(allocator_, staging_alloc_h, &mapped) == VK_SUCCESS && mapped) {
-            std::memcpy(out, mapped, byte_size);
-            vmaUnmapMemory(allocator_, staging_alloc_h);
-            ok = true;
-        }
-
-        vmaDestroyBuffer(allocator_, staging, staging_alloc_h);
-        vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
-        if (!ok) {
-            tc_log(TC_LOG_ERROR,
-                   "VulkanRenderDevice::read_texture_depth_float: failed to map staging buffer for texture %u",
-                   tex.id);
-        }
-        return ok;
+        return read_image_bytes(*res, VK_IMAGE_ASPECT_DEPTH_BIT, {0, 0, 0}, {width, height, 1},
+                                {reinterpret_cast<uint8_t*>(out), byte_size});
     }
 
     uint64_t VulkanRenderDevice::request_pixel_rgba8(TextureHandle tex, int x, int y) {
@@ -1015,70 +686,36 @@ namespace tgfx {
 
     uint64_t VulkanRenderDevice::request_pixel_readback(TextureHandle tex, int x, int y, PixelReadbackKind kind) {
         auto* res = textures_.get(tex.id);
-        if (!res)
-            return 0;
-
-        const int w = static_cast<int>(res->desc.width);
-        const int h = static_cast<int>(res->desc.height);
-        if (x < 0 || y < 0 || x >= w || y >= h)
-            return 0;
-        if (kind == PixelReadbackKind::DepthF32 && res->desc.format != PixelFormat::D32F) {
+        const bool depth = kind == PixelReadbackKind::DepthF32;
+        if (!res || (depth ? res->desc.format != PixelFormat::D32F :
+                     (res->desc.format != PixelFormat::RGBA8_UNorm && res->desc.format != PixelFormat::RGBA8_sRGB))) {
+            tc_log(TC_LOG_ERROR, "[Vulkan readback] async pixel format/handle mismatch");
             return 0;
         }
-
-        VkBufferCreateInfo stage_ci{};
-        stage_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stage_ci.size = 4;
-        stage_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo stage_alloc{};
-        stage_alloc.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
-
+        if (!validate_image_readback(*res, {x, y, 0}, {1, 1, 1}))
+            return 0;
+        // Open before allocating staging: a command allocation failure must not
+        // orphan the pixel allocation.
+        const auto cb = ensure_immediate_cb();
         VkBuffer staging = VK_NULL_HANDLE;
-        VmaAllocation staging_alloc_h = VK_NULL_HANDLE;
-        if (vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc_h, nullptr) != VK_SUCCESS) {
-            tc_log(TC_LOG_ERROR, "[VulkanRenderDevice] failed to allocate async pixel readback staging buffer");
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        if (!create_readback_buffer(4, staging, allocation))
             return 0;
-        }
-
-        const VkImageAspectFlags aspect =
-            kind == PixelReadbackKind::DepthF32 ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-        VkCommandBuffer cb = ensure_immediate_cb();
-        VkImageLayout prev_layout = res->current_layout;
-        transition_image_layout(cb, res->image, prev_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, aspect);
-
-        VkBufferImageCopy region{};
-        region.bufferOffset = 0;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
-        region.imageSubresource.aspectMask = aspect;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
-        region.imageOffset = {x, y, 0};
-        region.imageExtent = {1, 1, 1};
-        vkCmdCopyImageToBuffer(cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
-
-        transition_image_layout(cb, res->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, prev_layout, aspect);
-        res->current_layout = prev_layout;
-
+        record_image_readback(cb, *res, staging, depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+                              {x, y, 0}, {1, 1, 1}, 4);
         const uint64_t request_id = next_pixel_readback_id_++;
-        pixel_readbacks_current_.push_back(PendingPixelReadback{request_id, kind, staging, staging_alloc_h});
+        pixel_readbacks_current_.push_back(PendingPixelReadback{request_id, kind, staging, allocation});
         return request_id;
     }
 
-    void VulkanRenderDevice::complete_pixel_readbacks(std::vector<PendingPixelReadback>& pending) {
+    void VulkanRenderDevice::complete_pixel_readbacks(std::vector<PendingPixelReadback>& pending, VkResult completion) {
         for (const PendingPixelReadback& rb : pending) {
             CompletedPixelReadback completed{};
             completed.kind = rb.kind;
-            void* mapped = nullptr;
-            if (vmaMapMemory(allocator_, rb.allocation, &mapped) == VK_SUCCESS && mapped) {
-                std::memcpy(completed.bytes.data(), mapped, completed.bytes.size());
-                vmaUnmapMemory(allocator_, rb.allocation);
+            if (vulkan_detail::copy_completed_readback(completion, allocator_, rb.allocation, 0, completed.bytes)) {
                 completed_pixel_readbacks_[rb.request_id] = completed;
             } else {
-                tc_log(TC_LOG_ERROR,
-                       "[VulkanRenderDevice] failed to map async pixel readback request=%llu",
+                tc_log(TC_LOG_ERROR, "[Vulkan readback] async request failed: %llu",
                        static_cast<unsigned long long>(rb.request_id));
             }
             vmaDestroyBuffer(allocator_, rb.staging, rb.allocation);
