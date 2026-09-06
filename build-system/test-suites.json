@@ -188,6 +188,18 @@
         "reason": "Creates a GLFW window supplied by the build environment."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_depth_state.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for depth readback preserving caller framebuffer state."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_buffer_state.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for buffer transfers preserving VAO/EBO and indexed pixels."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_upload.cpp",
         "profiles": ["linux-full"],
         "capabilities": ["window", "opengl"],

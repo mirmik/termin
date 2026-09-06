@@ -10,6 +10,35 @@
 
 namespace tgfx {
 
+    namespace {
+        struct DepthReadFramebuffer {
+            GLint previous_read = 0;
+            GLint previous_draw = 0;
+            GLuint framebuffer = 0;
+
+            DepthReadFramebuffer(GLenum texture_target, GLuint texture) {
+                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previous_read);
+                glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &previous_draw);
+                glGenFramebuffers(1, &framebuffer);
+                // Draw-buffer selection belongs to the draw FBO. Bind both
+                // targets so configuring this FBO cannot mutate the caller's MRT.
+                glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+                glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, texture, 0);
+                gl_web_compat::set_draw_buffer(GL_NONE);
+                glReadBuffer(GL_NONE);
+            }
+
+            ~DepthReadFramebuffer() {
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previous_read));
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(previous_draw));
+                glDeleteFramebuffers(1, &framebuffer);
+            }
+
+            DepthReadFramebuffer(const DepthReadFramebuffer&) = delete;
+            DepthReadFramebuffer& operator=(const DepthReadFramebuffer&) = delete;
+        };
+    } // namespace
+
     static void flip_rows_in_place(float* data, uint32_t width, uint32_t height, uint32_t channels) {
         if (!data || width == 0 || height < 2 || channels == 0)
             return;
@@ -59,17 +88,7 @@ namespace tgfx {
         if (!t || !out)
             return false;
 
-        GLint prev_read_fbo = 0;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
-
-        GLuint fbo = 0;
-        glGenFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, t->target, t->gl_id, 0);
-        // Depth-only FBO — disable color read/draw explicitly, otherwise
-        // some drivers report incomplete.
-        gl_web_compat::set_draw_buffer(GL_NONE);
-        glReadBuffer(GL_NONE);
+        const DepthReadFramebuffer framebuffer(t->target, t->gl_id);
 
         bool ok = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
         if (ok) {
@@ -83,8 +102,6 @@ namespace tgfx {
             flip_rows_in_place(out, t->desc.width, t->desc.height, 1);
         }
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read_fbo));
-        glDeleteFramebuffers(1, &fbo);
         return ok;
     }
 
@@ -127,15 +144,7 @@ namespace tgfx {
         if (!t || !out_depth)
             return false;
 
-        GLint prev_read_fbo = 0;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read_fbo);
-
-        GLuint fbo = 0;
-        glGenFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, t->target, t->gl_id, 0);
-        gl_web_compat::set_draw_buffer(GL_NONE);
-        glReadBuffer(GL_NONE);
+        const DepthReadFramebuffer framebuffer(t->target, t->gl_id);
 
         bool ok = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
         if (ok) {
@@ -143,8 +152,6 @@ namespace tgfx {
             glReadPixels(x, gl_y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, out_depth);
         }
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read_fbo));
-        glDeleteFramebuffers(1, &fbo);
         return ok;
     }
 

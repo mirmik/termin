@@ -713,15 +713,41 @@ namespace tgfx {
 
     // --- Buffer ---
 
+    namespace {
+        struct CopyBufferBinding {
+            GLenum target;
+            GLint previous = 0;
+
+            CopyBufferBinding(GLenum copy_target, GLuint buffer) : target(copy_target) {
+                // COPY_READ/WRITE_BUFFER are also their binding query enums.
+                glGetIntegerv(target, &previous);
+                glBindBuffer(target, buffer);
+            }
+            ~CopyBufferBinding() {
+                glBindBuffer(target, static_cast<GLuint>(previous));
+            }
+        };
+
+        bool valid_buffer_transfer(const GLBuffer& buffer, uint64_t offset, size_t size) {
+            const auto native_max = static_cast<uint64_t>(std::numeric_limits<GLsizeiptr>::max());
+            return offset <= buffer.desc.size && size <= buffer.desc.size - offset &&
+                   offset <= native_max && size <= native_max - offset;
+        }
+    }
+
     BufferHandle OpenGLRenderDevice::create_buffer(const BufferDesc& desc) {
+        if (desc.size > static_cast<uint64_t>(std::numeric_limits<GLsizeiptr>::max())) {
+            tc_log_error("OpenGLRenderDevice::create_buffer: size exceeds native limit");
+            return {};
+        }
         GLBuffer buf;
         buf.desc = desc;
         buf.target = gl::to_gl_buffer_target(desc.usage);
 
         glGenBuffers(1, &buf.gl_id);
-        glBindBuffer(buf.target, buf.gl_id);
-        glBufferData(buf.target, static_cast<GLsizeiptr>(desc.size), nullptr, gl::to_gl_buffer_usage(desc.cpu_visible));
-        glBindBuffer(buf.target, 0);
+        CopyBufferBinding binding(GL_COPY_WRITE_BUFFER, buf.gl_id);
+        glBufferData(GL_COPY_WRITE_BUFFER, static_cast<GLsizeiptr>(desc.size), nullptr,
+                     gl::to_gl_buffer_usage(desc.cpu_visible));
 
         return {buffers_.add(std::move(buf))};
     }
@@ -1184,12 +1210,15 @@ namespace tgfx {
 
     void OpenGLRenderDevice::upload_buffer(BufferHandle dst, std::span<const uint8_t> data, uint64_t offset) {
         auto* buf = buffers_.get(dst.id);
-        if (!buf)
+        if (!buf || !valid_buffer_transfer(*buf, offset, data.size())) {
+            tc_log_error("OpenGLRenderDevice::upload_buffer: invalid handle or byte range");
             return;
-
-        glBindBuffer(buf->target, buf->gl_id);
-        glBufferSubData(buf->target, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(data.size()), data.data());
-        glBindBuffer(buf->target, 0);
+        }
+        if (data.empty())
+            return;
+        CopyBufferBinding binding(GL_COPY_WRITE_BUFFER, buf->gl_id);
+        glBufferSubData(GL_COPY_WRITE_BUFFER, static_cast<GLintptr>(offset),
+                       static_cast<GLsizeiptr>(data.size()), data.data());
     }
 
     namespace {
@@ -1282,17 +1311,22 @@ namespace tgfx {
 
     void OpenGLRenderDevice::read_buffer(BufferHandle src, std::span<uint8_t> data, uint64_t offset) {
         auto* buf = buffers_.get(src.id);
-        if (!buf)
+        if (!buf || !valid_buffer_transfer(*buf, offset, data.size())) {
+            tc_log_error("OpenGLRenderDevice::read_buffer: invalid handle or byte range");
             return;
-
-        glBindBuffer(buf->target, buf->gl_id);
-        void* mapped = glMapBufferRange(
-            buf->target, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(data.size()), GL_MAP_READ_BIT);
-        if (mapped) {
-            std::memcpy(data.data(), mapped, data.size());
-            glUnmapBuffer(buf->target);
         }
-        glBindBuffer(buf->target, 0);
+        if (data.empty())
+            return;
+        CopyBufferBinding binding(GL_COPY_READ_BUFFER, buf->gl_id);
+        void* mapped = glMapBufferRange(
+            GL_COPY_READ_BUFFER, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(data.size()), GL_MAP_READ_BIT);
+        if (!mapped) {
+            tc_log_error("OpenGLRenderDevice::read_buffer: buffer mapping failed");
+            return;
+        }
+        std::memcpy(data.data(), mapped, data.size());
+        if (glUnmapBuffer(GL_COPY_READ_BUFFER) != GL_TRUE)
+            tc_log_error("OpenGLRenderDevice::read_buffer: buffer contents became invalid during readback");
     }
 
     TextureDesc OpenGLRenderDevice::texture_desc(TextureHandle handle) const {

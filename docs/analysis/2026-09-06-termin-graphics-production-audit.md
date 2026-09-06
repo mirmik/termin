@@ -22,6 +22,9 @@ UBO base offsets/cache и color masks, включая MRT. Обычный CTest:
 В [восьмом пакете](2026-09-06-graphics-repair-pass-8.md) исправлены OpenGL
 packed uploads #2215, MSAA resolve #2216 и borrowed ownership #2217.
 Оконный CTest: 260 passed, 1 прежний OpenGL failure.
+В [девятом пакете](2026-09-06-graphics-repair-pass-9.md) исправлены GL depth
+readback state #2219, buffer transfer state #2220 и contract fixtures #2264.
+Оконный CTest: 262 passed, 1 прежний OpenGL failure.
 
 ## Вывод
 
