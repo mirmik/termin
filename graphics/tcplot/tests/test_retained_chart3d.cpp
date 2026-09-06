@@ -13,6 +13,7 @@
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/device_factory.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
+#include <tgfx2/vulkan/vulkan_render_device.hpp>
 
 #include <termin/camera/orbit_camera.hpp>
 #include <termin/geom/color.hpp>
@@ -65,6 +66,49 @@ namespace {
     void require(bool condition, const char* message) {
         if (!condition)
             throw std::runtime_error(message);
+    }
+
+    uint32_t test_texture_sample_support(tcplot::GpuHost& host) {
+#ifdef TGFX2_HAS_VULKAN
+        auto& device = static_cast<tgfx::VulkanRenderDevice&>(host.device());
+        uint32_t supported_samples = 0;
+        for (uint32_t samples = 1; samples <= 128; samples *= 2) {
+            bool attachments_supported = true;
+            for (const auto format : {tgfx::PixelFormat::RGBA8_UNorm, tgfx::PixelFormat::D32F}) {
+                tgfx::TextureDesc desc;
+                desc.width = 320;
+                desc.height = 240;
+                desc.format = format;
+                desc.sample_count = samples;
+                desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::CopySrc |
+                             tgfx::TextureUsage::CopyDst |
+                             (format == tgfx::PixelFormat::D32F ? tgfx::TextureUsage::DepthStencilAttachment
+                                                              : tgfx::TextureUsage::ColorAttachment);
+                const bool supported = device.supports_texture(desc);
+                attachments_supported &= supported;
+                bool created = false;
+                try {
+                    const auto texture = device.create_texture(desc);
+                    created = static_cast<bool>(texture);
+                    device.destroy(texture);
+                } catch (const std::runtime_error&) {
+                    require(!supported, "supported texture descriptor failed creation");
+                }
+                require(created == supported, "texture creation disagrees with sample support query");
+            }
+            if (attachments_supported)
+                supported_samples |= samples;
+        }
+        require((supported_samples & 1) != 0, "chart attachments require single-sample support");
+        for (uint32_t samples : {2u, 4u, 8u, 16u}) {
+            if ((supported_samples & samples) != 0)
+                return samples;
+        }
+        throw std::runtime_error("no supported multisample chart attachment combination");
+#else
+        (void)host;
+        throw std::runtime_error("Vulkan backend is unavailable");
+#endif
     }
 
     tc_plot_item3d_snapshot snapshot(tc_retained_chart3d* chart, tc_plot_item3d_handle item) {
@@ -234,6 +278,7 @@ int main() {
         termin::tgfx2_set_shader_dev_compile_enabled(true);
 
         tcplot::GpuHost host(TCPLOT_TEST_FONT, tgfx::BackendType::Vulkan);
+        const uint32_t supported_msaa_samples = test_texture_sample_support(host);
         tc_retained_chart3d* detached = tc_retained_chart3d_create(nullptr);
         require(detached != nullptr, "failed to create detached chart");
         const double line_x[] = {-1.0, 0.0, 1.0};
@@ -268,6 +313,8 @@ int main() {
         tc_retained_chart3d* chart = tc_retained_chart3d_create(&host);
         tc_retained_chart3d* other = tc_retained_chart3d_create(&host);
         require(chart != nullptr && other != nullptr, "failed to create charts");
+        require(tc_retained_chart3d_set_msaa_samples(chart, 1) != 0,
+                "failed to select single-sample rendering");
         require(tc_retained_chart3d_scene_id(chart) != tc_retained_chart3d_scene_id(other),
                 "chart scene ids must be unique");
         require(tc_retained_chart3d_item_count(chart) == 1, "chart must create one default grid part");
@@ -698,19 +745,19 @@ int main() {
                     grid_rendered.gpu_revision != 0,
                 "render must synchronize item GPU revisions");
 
-        require(tc_retained_chart3d_set_msaa_samples(chart, 2) != 0 &&
+        require(tc_retained_chart3d_set_msaa_samples(chart, static_cast<int>(supported_msaa_samples)) != 0 &&
                     tc_retained_chart3d_set_msaa_samples(chart, 3) == 0,
                 "retained Chart3D MSAA validation failed");
-        const uint32_t two_sample_render_texture = tc_retained_chart3d_render(chart, 320, 240);
-        tgfx::TextureHandle two_sample_render_handle{};
-        two_sample_render_handle.id = two_sample_render_texture;
-        const std::size_t two_sample_labeled_pixel_count =
-            count_non_clear_pixels(host, two_sample_render_texture, 320, 240);
+        const uint32_t multisample_render_texture = tc_retained_chart3d_render(chart, 320, 240);
+        tgfx::TextureHandle multisample_render_handle{};
+        multisample_render_handle.id = multisample_render_texture;
+        const std::size_t multisample_labeled_pixel_count =
+            count_non_clear_pixels(host, multisample_render_texture, 320, 240);
         const std::vector<float> visible_labels_pixels =
-            read_pixels(host, two_sample_render_texture, 320, 240);
-        require(two_sample_render_texture != 0 &&
-                    host.device().texture_desc(two_sample_render_handle).sample_count == 1 &&
-                    two_sample_labeled_pixel_count > 100,
+            read_pixels(host, multisample_render_texture, 320, 240);
+        require(multisample_render_texture != 0 &&
+                    host.device().texture_desc(multisample_render_handle).sample_count == 1 &&
+                    multisample_labeled_pixel_count > 100,
                 "MSAA Chart3D render was not resolved to a visible single-sample output");
 
         tc_grid_item3d_style grid_style{};

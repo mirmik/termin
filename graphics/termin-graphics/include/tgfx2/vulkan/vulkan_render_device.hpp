@@ -319,6 +319,7 @@ namespace tgfx {
         uint32_t graphics_family_ = 0;
         uint32_t present_family_ = 0;
         uint32_t api_version_ = VK_API_VERSION_1_0;
+        VkPhysicalDeviceFeatures enabled_features_{};
         bool multiview_enabled_ = false;
         uint32_t max_multiview_views_ = 0;
         std::vector<const char*> device_extensions_;
@@ -491,6 +492,9 @@ namespace tgfx {
         void invalidate_render_target_cache() override;
 
         BufferHandle create_buffer(const BufferDesc& desc) override;
+        // Query this device's optimal-tiling 2D image support for the complete
+        // descriptor, including the format/usage/sample-count combination.
+        bool supports_texture(const TextureDesc& desc) const;
         TextureHandle create_texture(const TextureDesc& desc) override;
         TextureHandle register_external_texture(uintptr_t native_handle, const TextureDesc& desc) override;
         bool begin_external_texture_access(TextureHandle handle, const ExternalTextureAccessDesc& access) override;

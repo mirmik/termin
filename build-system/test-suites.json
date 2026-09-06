@@ -320,6 +320,12 @@
         "reason": "Built only with the Vulkan backend."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_capabilities.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Checks enabled features, rejected operations, geometry descriptors and separate image/sampler pixels."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_shader_target.cpp",
         "profiles": ["pr", "linux-full"],
         "capabilities": ["vulkan"],

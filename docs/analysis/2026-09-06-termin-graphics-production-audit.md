@@ -8,6 +8,8 @@
 отдельными работами.
 В [третьем пакете](2026-09-06-graphics-repair-pass-3.md) исправлен readback #2202;
 обычный CTest проходит 239 тестов.
+В [четвёртом пакете](2026-09-06-graphics-repair-pass-4.md) исправлены #2204/#2208:
+Vulkan/SPIR-V baseline и capabilities; обычный CTest проходит 241 тест.
 
 ## Вывод
 

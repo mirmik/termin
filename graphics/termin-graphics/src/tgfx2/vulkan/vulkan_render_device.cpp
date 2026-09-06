@@ -29,6 +29,7 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <cmath>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -219,8 +220,6 @@ namespace tgfx {
         // Query capabilities
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physical_device_, &props);
-        VkPhysicalDeviceFeatures features;
-        vkGetPhysicalDeviceFeatures(physical_device_, &features);
 
         char driver_label[96]{};
         std::snprintf(driver_label,
@@ -246,9 +245,14 @@ namespace tgfx {
         caps_.texture_origin_top_left = true;
         caps_.max_texture_dimension_2d = props.limits.maxImageDimension2D;
         caps_.max_color_attachments = props.limits.maxColorAttachments;
-        caps_.max_texture_units = props.limits.maxBoundDescriptorSets;
-        caps_.supports_compute = true;
-        caps_.supports_geometry_shaders = features.geometryShader;
+        caps_.max_texture_units = std::min(props.limits.maxDescriptorSetSampledImages,
+                                           props.limits.maxDescriptorSetSamplers);
+        caps_.max_fragment_texture_units = std::min(props.limits.maxPerStageDescriptorSampledImages,
+                                                    props.limits.maxPerStageDescriptorSamplers);
+        caps_.max_shadow_maps = caps_.max_fragment_texture_units;
+        // The public pipeline API currently implements graphics only.
+        caps_.supports_compute = false;
+        caps_.supports_geometry_shaders = enabled_features_.geometryShader != VK_FALSE;
         uint32_t queue_family_count = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, nullptr);
         std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
@@ -260,7 +264,7 @@ namespace tgfx {
                                            gpu_timestamp_period_ns_ > 0.0 && gpu_timestamp_valid_bits_ > 0;
         caps_.supports_multisample_resolve = true;
         caps_.supports_dynamic_uniform_offsets = true;
-        caps_.supports_storage_textures = true;
+        caps_.supports_storage_textures = false;
         caps_.supports_texture_arrays = props.limits.maxImageArrayLayers > 1;
         caps_.supports_multiview = multiview_enabled_;
         caps_.max_multiview_views = max_multiview_views_;
@@ -609,7 +613,10 @@ namespace tgfx {
         VkPhysicalDeviceFeatures supported_features{};
         vkGetPhysicalDeviceFeatures(physical_device_, &supported_features);
 
-        VkPhysicalDeviceFeatures features{};
+        auto& features = enabled_features_;
+        features.geometryShader = supported_features.geometryShader;
+        features.samplerAnisotropy = supported_features.samplerAnisotropy;
+        features.depthBiasClamp = supported_features.depthBiasClamp;
         if (supported_features.fillModeNonSolid) {
             features.fillModeNonSolid = VK_TRUE; // for wireframe
         } else {
@@ -1254,9 +1261,45 @@ namespace tgfx {
 
     // --- Texture ---
 
+    bool VulkanRenderDevice::supports_texture(const TextureDesc& desc) const {
+        if (has_flag(desc.usage, TextureUsage::Storage) && !caps_.supports_storage_textures)
+            return false;
+        const VkFormat format = vk::to_vk_format(desc.format);
+        const VkImageUsageFlags usage = vk::to_vk_image_usage(desc.usage);
+        if (format == VK_FORMAT_UNDEFINED || usage == 0 || desc.width == 0 || desc.height == 0 ||
+            desc.array_layers == 0 || desc.mip_levels == 0 || desc.sample_count == 0 ||
+            desc.sample_count > 64 || (desc.sample_count & (desc.sample_count - 1)) != 0 ||
+            (desc.sample_count > 1 && desc.mip_levels != 1)) {
+            return false;
+        }
+        uint32_t max_mip_levels = 1;
+        for (uint32_t extent = std::max(desc.width, desc.height); extent > 1; extent >>= 1)
+            ++max_mip_levels;
+        if (desc.mip_levels > max_mip_levels)
+            return false;
+
+        VkImageFormatProperties properties{};
+        const VkResult result = vkGetPhysicalDeviceImageFormatProperties(physical_device_, format,
+            VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &properties);
+        if (result == VK_ERROR_FORMAT_NOT_SUPPORTED)
+            return false;
+        if (result != VK_SUCCESS) {
+            tc::Log::error("VulkanRenderDevice::supports_texture: format query failed (VkResult=%d)",
+                           static_cast<int>(result));
+            throw std::runtime_error("Vulkan image format support query failed");
+        }
+        return (properties.sampleCounts & desc.sample_count) != 0 &&
+               desc.width <= properties.maxExtent.width && desc.height <= properties.maxExtent.height &&
+               desc.array_layers <= properties.maxArrayLayers && desc.mip_levels <= properties.maxMipLevels;
+    }
+
     TextureHandle VulkanRenderDevice::create_texture(const TextureDesc& desc) {
-        if (desc.array_layers == 0) {
-            throw std::runtime_error("VulkanRenderDevice::create_texture: invalid array layer count");
+        if (!supports_texture(desc)) {
+            tc::Log::error("VulkanRenderDevice::create_texture: unsupported descriptor "
+                           "(format=%u, usage=0x%x, extent=%ux%u, layers=%u, mips=%u, samples=%u)",
+                           static_cast<unsigned>(desc.format), static_cast<unsigned>(desc.usage),
+                           desc.width, desc.height, desc.array_layers, desc.mip_levels, desc.sample_count);
+            throw std::runtime_error("VulkanRenderDevice::create_texture: unsupported texture descriptor");
         }
         VkTextureResource res;
         res.desc = desc;
@@ -1278,6 +1321,7 @@ namespace tgfx {
         alloc_ci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         if (vmaCreateImage(allocator_, &ci, &alloc_ci, &res.image, &res.allocation, nullptr) != VK_SUCCESS) {
+            tc::Log::error("VulkanRenderDevice::create_texture: image allocation failed");
             throw std::runtime_error("Failed to create Vulkan image");
         }
 
@@ -1411,6 +1455,17 @@ namespace tgfx {
     // --- Sampler ---
 
     SamplerHandle VulkanRenderDevice::create_sampler(const SamplerDesc& desc) {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(physical_device_, &properties);
+        if (!std::isfinite(desc.max_anisotropy) || desc.max_anisotropy < 1.0f ||
+            (desc.max_anisotropy > 1.0f &&
+             (!enabled_features_.samplerAnisotropy ||
+              desc.max_anisotropy > properties.limits.maxSamplerAnisotropy))) {
+            tc_log_error("VulkanRenderDevice: unsupported sampler anisotropy=%g (enabled=%d max=%g)",
+                         desc.max_anisotropy, enabled_features_.samplerAnisotropy,
+                         properties.limits.maxSamplerAnisotropy);
+            throw std::runtime_error("Unsupported Vulkan sampler anisotropy");
+        }
         VkSamplerResource res;
 
         VkSamplerCreateInfo ci{};

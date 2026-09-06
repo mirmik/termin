@@ -146,6 +146,8 @@ namespace tgfx {
         std::vector<uint32_t> spirv;
 
         try {
+            if (desc.stage == ShaderStage::Geometry && !enabled_features_.geometryShader)
+                throw std::runtime_error("Vulkan geometry shaders are unsupported by this device");
             if (!desc.bytecode.empty()) {
                 if (const char* error = vulkan_detail::spirv_input_error(desc.bytecode))
                     throw std::runtime_error(error);
@@ -268,8 +270,14 @@ namespace tgfx {
         VkPipelineResource res;
         res.desc = desc;
 
-        // Build per-pipeline VkDescriptorSetLayout from VS+FS SPIR-V reflection.
-        // Merged bindings from both stages; duplicates resolved by binding number.
+        if ((desc.geometry_shader && (!enabled_features_.geometryShader || desc.view_count > 1)) ||
+            (desc.raster.depth_bias_clamp != 0.0f && !enabled_features_.depthBiasClamp) ||
+            (desc.raster.polygon_mode != PolygonMode::Fill && !enabled_features_.fillModeNonSolid)) {
+            tc_log_error("VulkanRenderDevice: pipeline requests a disabled geometry/raster feature");
+            return {};
+        }
+
+        // Reflect every graphics stage, including resources used only by geometry.
         std::vector<VkShaderResource::DescriptorBinding> merged_bindings;
         auto* vs = get_shader(desc.vertex_shader);
         auto* fs = get_shader(desc.fragment_shader);
@@ -280,6 +288,16 @@ namespace tgfx {
         if (fs) {
             merged_bindings.insert(
                 merged_bindings.end(), fs->descriptor_bindings.begin(), fs->descriptor_bindings.end());
+        }
+        if (const auto* gs = get_shader(desc.geometry_shader)) {
+            merged_bindings.insert(
+                merged_bindings.end(), gs->descriptor_bindings.begin(), gs->descriptor_bindings.end());
+        }
+        for (const auto& binding : merged_bindings) {
+            if (binding.descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+                tc_log_error("VulkanRenderDevice: storage texture pipelines are unsupported");
+                return {};
+            }
         }
         res.descriptor_set_layout = get_or_create_descriptor_set_layout(merged_bindings);
         res.layout = get_or_create_pipeline_layout(res.descriptor_set_layout);
@@ -775,11 +793,13 @@ namespace tgfx {
                     w.pBufferInfo = &buf_infos.back();
                     break;
                 }
+                case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
                 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: {
                     TextureHandle texture = ensure_default_sampled_texture();
                     SamplerHandle sampler{};
                     if (provided && provided->kind == BoundResourceKind::SampledTexture) {
-                        texture = provided->texture;
+                        if (provided->texture)
+                            texture = provided->texture;
                         sampler = provided->sampler;
                     }
                     auto* tex = get_texture(texture);
@@ -791,7 +811,7 @@ namespace tgfx {
                         if (samp)
                             samp_vk = samp->sampler;
                     }
-                    if (samp_vk == VK_NULL_HANDLE)
+                    if (samp_vk == VK_NULL_HANDLE && lb.descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                         samp_vk = ensure_default_sampler();
                     img_infos.push_back({samp_vk, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
                     w.pImageInfo = &img_infos.back();
@@ -921,6 +941,23 @@ namespace tgfx {
                     static_cast<unsigned>(b.value.kind),
                     static_cast<unsigned>(slot.placement.vulkan.descriptor_kind),
                     binding);
+                bound_ok = false;
+                return;
+            }
+
+            if (b.value.kind == BoundResourceKind::SampledTexture && b.value.texture) {
+                const auto* texture = get_texture(b.value.texture);
+                if (!texture || !has_flag(texture->desc.usage, TextureUsage::Sampled) || !texture->view) {
+                    tc_log_error("VulkanRenderDevice: resource '%s' requires a valid sampled texture",
+                                 bound_resource_debug_name(b));
+                    bound_ok = false;
+                    return;
+                }
+            }
+            if ((b.value.kind == BoundResourceKind::SampledTexture || b.value.kind == BoundResourceKind::Sampler) &&
+                b.value.sampler && !get_sampler(b.value.sampler)) {
+                tc_log_error("VulkanRenderDevice: resource '%s' references an invalid sampler",
+                             bound_resource_debug_name(b));
                 bound_ok = false;
                 return;
             }

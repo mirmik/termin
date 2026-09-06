@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <stdexcept>
 
 #include <tcbase/tc_log.hpp>
 
@@ -538,7 +539,9 @@ namespace tgfx {
     }
 
     void VulkanCommandList::dispatch(uint32_t group_x, uint32_t group_y, uint32_t group_z) {
-        vkCmdDispatch(cmd_, group_x, group_y, group_z);
+        tc::Log::error("VulkanCommandList::dispatch(%u, %u, %u): compute pipelines are unsupported",
+                       group_x, group_y, group_z);
+        throw std::runtime_error("Vulkan compute dispatch is unsupported");
     }
 
     // --- Copy ---

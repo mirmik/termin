@@ -916,8 +916,8 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Vulkan smoke: dynamic uniform offsets must be advertised\n");
         return 1;
     }
-    if (!caps.supports_storage_textures) {
-        std::fprintf(stderr, "Vulkan smoke: storage textures must be advertised\n");
+    if (caps.supports_storage_textures || caps.supports_compute) {
+        std::fprintf(stderr, "Vulkan smoke: unimplemented storage textures/compute must not be advertised\n");
         return 1;
     }
     printf("Backend: Vulkan, max_tex: %u, compute: %s, geometry: %s\n",
