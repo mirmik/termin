@@ -668,16 +668,29 @@ namespace tgfx {
 
         VkDescriptorSetAllocateInfo ai{};
         ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        ai.descriptorPool = descriptor_pools_[current_pool_idx_];
         ai.descriptorSetCount = 1;
         ai.pSetLayouts = &layout;
 
-        VkResult alloc_result = vkAllocateDescriptorSets(device_, &ai, &res.descriptor_set);
-        if (alloc_result != VK_SUCCESS) {
+        auto& pools = descriptor_pools_[current_pool_idx_];
+        auto& pool_head = descriptor_pool_heads_[current_pool_idx_];
+        for (;;) {
+            const bool fresh_pool = pool_head == pools.size();
+            if (fresh_pool)
+                pools.push_back(create_descriptor_pool(layout_bindings));
+            ai.descriptorPool = pools[pool_head];
+            const VkResult alloc_result = vkAllocateDescriptorSets(device_, &ai, &res.descriptor_set);
+            if (alloc_result == VK_SUCCESS)
+                break;
+            if (!fresh_pool && (alloc_result == VK_ERROR_OUT_OF_POOL_MEMORY ||
+                                alloc_result == VK_ERROR_FRAGMENTED_POOL)) {
+                ++pool_head;
+                continue;
+            }
             tc_log(TC_LOG_ERROR,
-                   "VulkanRenderDevice: vkAllocateDescriptorSets failed result=%d pool=%u cache_size=%zu bindings=%zu",
+                   "VulkanRenderDevice: vkAllocateDescriptorSets failed result=%d slot=%u page=%zu cache_size=%zu bindings=%zu",
                    static_cast<int>(alloc_result),
                    current_pool_idx_,
+                   pool_head,
                    cache.size(),
                    resolved_bindings.size());
             throw std::runtime_error("Failed to allocate descriptor set");

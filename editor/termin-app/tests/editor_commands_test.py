@@ -502,6 +502,51 @@ class TestEditorUndoCommands(unittest.TestCase):
         instance = asset.instantiate(scene=self.scene)
         return source_scene, asset, instance, source_ids
 
+    def test_prefab_transform_override_roundtrips_pose_refresh_and_undo(self) -> None:
+        source_scene, asset, instance, (child_source_id, _) = self._create_prefab_instance()
+        try:
+            state = instance.get_component(PrefabInstanceState)
+            child = state.entity_for_source(child_source_id)
+            original = child.transform.local_pose().copy()
+            edited = GeneralPose3(
+                lin=Vec3(2.5, -3.0, 4.25),
+                ang=_rotation_z(0.73),
+                scale=Vec3(1.2, 2.3, 0.7),
+            )
+
+            def assert_pose(entity, expected):
+                actual = entity.transform.local_pose()
+                np.testing.assert_allclose(list(actual.lin), list(expected.lin), atol=1e-9)
+                np.testing.assert_allclose(list(actual.ang), list(expected.ang), atol=1e-9)
+                np.testing.assert_allclose(list(actual.scale), list(expected.scale), atol=1e-9)
+
+            stack = UndoStack()
+            stack.push(TransformEditCommand(child.transform, original, edited))
+            self.assertEqual(state.property_override_count, 3)
+            assert_pose(child, edited)
+            self.assertTrue(asset.apply_to_instance(instance).ok)
+            assert_pose(state.entity_for_source(child_source_id), edited)
+
+            stack.undo()
+            self.assertEqual(state.property_override_count, 0)
+            assert_pose(state.entity_for_source(child_source_id), original)
+            stack.redo()
+            self.assertEqual(state.property_override_count, 3)
+            assert_pose(state.entity_for_source(child_source_id), edited)
+
+            restored_scene = TcScene.create("prefab-transform-cold-reload")
+            try:
+                self.assertGreater(restored_scene.load_from_data(self.scene.serialize()), 0)
+                restored_instance = restored_scene.get_entity(instance.uuid)
+                restored_state = restored_instance.get_component(PrefabInstanceState)
+                self.assertEqual(restored_state.property_override_count, 3)
+                self.assertTrue(asset.apply_to_instance(restored_instance).ok)
+                assert_pose(restored_state.entity_for_source(child_source_id), edited)
+            finally:
+                restored_scene.destroy()
+        finally:
+            source_scene.destroy()
+
     def test_prefab_property_commands_capture_and_restore_override_metadata(self) -> None:
         source_scene, asset, instance, (child_source_id, component_source_id) = (
             self._create_prefab_instance())

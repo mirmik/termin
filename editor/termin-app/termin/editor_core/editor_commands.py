@@ -313,7 +313,7 @@ class TransformEditCommand(UndoCommand):
         transform.relocate(self._new_pose)
         try:
             if self._prefab_overrides:
-                values = (self._new_pose.lin, self._new_pose.ang, self._new_pose.scale)
+                values = self._new_override_values()
                 for capture, value in zip(self._prefab_overrides, values, strict=True):
                     capture.set(value)
         except Exception:
@@ -333,10 +333,21 @@ class TransformEditCommand(UndoCommand):
             _logger.exception("Failed to restore prefab transform override metadata")
             transform.relocate(self._new_pose)
             if self._prefab_overrides:
-                values = (self._new_pose.lin, self._new_pose.ang, self._new_pose.scale)
+                values = self._new_override_values()
                 for capture, value in zip(self._prefab_overrides, values, strict=True):
                     capture.set(value)
             raise
+
+    def _new_override_values(self) -> tuple[list[float], list[float], list[float]]:
+        # Entity transform overrides use the scene pose wire format, including
+        # xyzw rotation. Native Vec3/Quat are not generic Python kind payloads;
+        # the component inspect quat serializer has a separate wxyz contract.
+        pose = self._new_pose
+        return (
+            [pose.lin.x, pose.lin.y, pose.lin.z],
+            [pose.ang.x, pose.ang.y, pose.ang.z, pose.ang.w],
+            [pose.scale.x, pose.scale.y, pose.scale.z],
+        )
 
     def merge_with(self, other: UndoCommand) -> bool:
         """

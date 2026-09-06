@@ -326,13 +326,10 @@ namespace tgfx {
         VkPhysicalDeviceMemoryProperties memory_properties_ = {};
         VkCommandPool command_pool_ = VK_NULL_HANDLE;
 
-        // Per-frame-slot descriptor pools. Each frame allocates descriptor
-        // sets out of `descriptor_pools_[current_pool_idx_]`; at `submit()`
-        // we advance to the next slot and, after that slot's fence signals,
-        // `vkResetDescriptorPool` returns all sets in one call — cheaper than freeing each
-        // set with `vkFreeDescriptorSets`, and completely removes the "pool
-        // fills up across the frame" failure mode.
-        std::array<VkDescriptorPool, kFrameSlotCount> descriptor_pools_ = {};
+        // Grow each frame slot's pool chain on exhaustion. All pools remain
+        // alive until the slot fence signals, then reset and reuse the chain.
+        std::array<std::vector<VkDescriptorPool>, kFrameSlotCount> descriptor_pools_;
+        std::array<size_t, kFrameSlotCount> descriptor_pool_heads_ = {};
         uint32_t current_pool_idx_ = 0;
 
         // Per-pool descriptor-set cache keyed on the hash of
@@ -756,7 +753,7 @@ namespace tgfx {
         void create_logical_device();
         void create_allocator();
         void create_command_pool();
-        void create_descriptor_pool();
+        VkDescriptorPool create_descriptor_pool(std::span<const VkDescriptorSetLayoutBinding> bindings);
         void create_gpu_timestamp_pools();
         bool record_gpu_timestamp_commands(uint32_t slot);
         ResourceSetHandle create_resolved_resource_set(VkDescriptorSetLayout layout,

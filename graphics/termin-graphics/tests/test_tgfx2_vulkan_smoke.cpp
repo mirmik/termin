@@ -588,8 +588,56 @@ static bool render_bound_resource_set_smoke(tgfx::IRenderDevice& device) {
            pixel[2],
            pixel[3]);
 
-    const bool pass_ok = read_ok && pixel[0] > 0.08f && pixel[0] < 0.30f && pixel[1] > 0.50f && pixel[1] < 0.80f &&
+    bool pass_ok = read_ok && pixel[0] > 0.08f && pixel[0] < 0.30f && pixel[1] > 0.50f && pixel[1] < 0.80f &&
                          pixel[2] > 0.15f && pixel[2] < 0.40f && pixel[3] > 0.90f;
+
+    // More uncached sets than one descriptor page can hold. Draw with sets
+    // from both sides of the page boundary, then revisit every frame slot to
+    // exercise fence-protected reset/reuse (not just first-time pool growth).
+    for (unsigned frame = 0; frame < 8; ++frame) {
+        uint32_t offset = 0;
+        if (!device.ring_ubo_write(color_block, sizeof(color_block), offset))
+            return false;
+        tgfx::BoundResourceBinding ring_binding = material_binding;
+        ring_binding.value.buffer = device.ring_ubo_handle();
+        ring_binding.value.offset = offset;
+        tgfx::BoundResourceSetStorage ring_storage;
+        ring_storage.set_resource_layout_token(resource_layout_token);
+        ring_storage.append_group(tgfx::ShaderResourceScope::Material, true, &ring_binding, 1);
+        std::vector<tgfx::ResourceSetHandle> sets;
+        for (unsigned i = 0; i < 2050; ++i) {
+            auto set = device.create_bound_resource_set(ring_storage.view());
+            if (!set)
+                return false;
+            sets.push_back(set);
+        }
+        auto stress_cmd = device.create_command_list();
+        stress_cmd->begin();
+        stress_cmd->begin_render_pass(pass);
+        stress_cmd->bind_pipeline(pipeline);
+        stress_cmd->bind_vertex_buffer(0, vb);
+        stress_cmd->set_viewport(0, 0, kWidth / 2, kHeight);
+        stress_cmd->bind_resource_set(sets.front());
+        stress_cmd->draw(3);
+        stress_cmd->set_viewport(kWidth / 2, 0, kWidth / 2, kHeight);
+        stress_cmd->bind_resource_set(sets.back());
+        stress_cmd->draw(3);
+        stress_cmd->end_render_pass();
+        stress_cmd->end();
+        for (auto set : sets)
+            device.destroy(set);
+        device.submit(*stress_cmd);
+        device.wait_idle();
+        for (uint32_t x : {kWidth / 4, 3 * kWidth / 4}) {
+            float stress_pixel[4] = {};
+            if (!device.read_pixel_rgba8(rt, x, kHeight / 2, stress_pixel) ||
+                std::abs(stress_pixel[1] - pixel[1]) > 0.02f) {
+                fprintf(stderr, "Descriptor pool rollover pixel mismatch at frame %u x=%u\n", frame, x);
+                pass_ok = false;
+            }
+        }
+    }
+    printf("Vulkan descriptor pool rollover and slot reuse: %s\n", pass_ok ? "ok" : "failed");
 
     device.destroy(resource_set);
     device.destroy(ubo);

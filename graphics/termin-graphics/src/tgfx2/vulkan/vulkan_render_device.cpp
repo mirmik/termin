@@ -184,7 +184,6 @@ namespace tgfx {
         }
         create_allocator();
         create_command_pool();
-        create_descriptor_pool();
         create_ring_ubo();
         create_transient_vertex_ring();
 
@@ -401,8 +400,8 @@ namespace tgfx {
         }
         descriptor_layout_cache_.clear();
         descriptor_layout_bindings_.clear();
-        for (VkDescriptorPool pool : descriptor_pools_) {
-            if (pool)
+        for (const auto& pools : descriptor_pools_) {
+            for (VkDescriptorPool pool : pools)
                 vkDestroyDescriptorPool(device_, pool, nullptr);
         }
         if (command_pool_)
@@ -720,21 +719,11 @@ namespace tgfx {
 
     // --- Descriptor pool ---
 
-    void VulkanRenderDevice::create_descriptor_pool() {
-        // One pool per frame slot. Each frame's draws
-        // allocate from `descriptor_pools_[current_pool_idx_]`; at submit(),
-        // after the next slot's fence signals, we flip and
-        // `vkResetDescriptorPool` it in one call — no individual
-        // `vkFreeDescriptorSets`, no FREE_DESCRIPTOR_SET_BIT flag (the driver
-        // can use a faster bump allocator internally).
-        //
-        // Pool size covers a single frame's worst case for chronosquad-like
-        // scenes: ~30 skinned meshes × 4 shadow cascades + color/depth/id/
-        // normal + UI draws ≈ 500-800 sets. Headroom to 2048 accommodates
-        // heavier future scenes without re-sizing. Each set may touch up to
-        // ~5 UBOs and up to the shared layout's sampled descriptors, hence
-        // the pool-size multipliers below.
-        VkDescriptorPoolSize pool_sizes[] = {
+    VkDescriptorPool VulkanRenderDevice::create_descriptor_pool(
+        std::span<const VkDescriptorSetLayoutBinding> bindings) {
+        // These are page budgets, not scene limits. A page must also fit the
+        // requesting layout, including descriptor types absent from the defaults.
+        std::vector<VkDescriptorPoolSize> pool_sizes = {
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 8 * 2048},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 * 2048},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 512},
@@ -742,19 +731,32 @@ namespace tgfx {
             {VK_DESCRIPTOR_TYPE_SAMPLER, 2 * 2048},
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 40 * 2048},
         };
+        std::unordered_map<VkDescriptorType, uint32_t> required;
+        for (const auto& binding : bindings)
+            required[binding.descriptorType] += binding.descriptorCount;
+        for (const auto& [type, count] : required) {
+            auto it = std::find_if(pool_sizes.begin(), pool_sizes.end(),
+                                   [type](const auto& size) { return size.type == type; });
+            if (it == pool_sizes.end())
+                pool_sizes.push_back({type, count});
+            else
+                it->descriptorCount = std::max(it->descriptorCount, count);
+        }
 
         VkDescriptorPoolCreateInfo ci{};
         ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         ci.flags = 0; // No per-set free — pool reset frees everything at once.
         ci.maxSets = 2048;
-        ci.poolSizeCount = 6;
-        ci.pPoolSizes = pool_sizes;
+        ci.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+        ci.pPoolSizes = pool_sizes.data();
 
-        for (uint32_t i = 0; i < kFrameSlotCount; ++i) {
-            if (vkCreateDescriptorPool(device_, &ci, nullptr, &descriptor_pools_[i]) != VK_SUCCESS) {
-                throw std::runtime_error("Failed to create descriptor pool");
-            }
+        VkDescriptorPool pool = VK_NULL_HANDLE;
+        const VkResult result = vkCreateDescriptorPool(device_, &ci, nullptr, &pool);
+        if (result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR, "VulkanRenderDevice: vkCreateDescriptorPool failed result=%d", result);
+            throw std::runtime_error("Failed to create descriptor pool");
         }
+        return pool;
     }
 
     void VulkanRenderDevice::create_gpu_timestamp_pools() {
@@ -1634,7 +1636,15 @@ namespace tgfx {
         measured(&SubmitStats::readback_cleanup_us, [&] { complete_pixel_readbacks(pixel_readbacks_slots_[slot]); });
         measured(&SubmitStats::destroy_cleanup_us, [&] { drain_pending_destroy(pending_destroy_slots_[slot]); });
         measured(&SubmitStats::descriptor_cleanup_us, [&] {
-            vkResetDescriptorPool(device_, descriptor_pools_[slot], 0);
+            for (VkDescriptorPool pool : descriptor_pools_[slot]) {
+                const VkResult result = vkResetDescriptorPool(device_, pool, 0);
+                if (result != VK_SUCCESS) {
+                    tc_log(TC_LOG_ERROR, "VulkanRenderDevice: vkResetDescriptorPool failed result=%d slot=%u",
+                           result, slot);
+                    throw std::runtime_error("Failed to reset descriptor pool");
+                }
+            }
+            descriptor_pool_heads_[slot] = 0;
             for (const auto& [_, h] : descriptor_cache_[slot]) {
                 resource_sets_.remove(h.id);
             }
