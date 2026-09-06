@@ -54,12 +54,24 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 include(TerminPython)
 
-# --- GLAD (static library) ---
+# --- GLAD ---
 # Kept even when TGFX2_ENABLE_OPENGL=OFF: some legacy headers/bindings still
 # mention GL-only APIs, and glad does not require linking system OpenGL.
-add_library(glad STATIC
+# Native shared libraries must share one set of loader globals. Linking a
+# static GLAD into both termin_graphics and termin_graphics2 duplicates them.
+set(_TGFX_GLAD_LIBRARY_TYPE SHARED)
+if(EMSCRIPTEN)
+    set(_TGFX_GLAD_LIBRARY_TYPE STATIC)
+endif()
+add_library(glad ${_TGFX_GLAD_LIBRARY_TYPE}
     ../../termin-thirdparty/glad/src/glad.c
 )
+if(NOT EMSCRIPTEN)
+    target_compile_definitions(glad PUBLIC GLAD_API_CALL_EXPORT PRIVATE GLAD_API_CALL_EXPORT_BUILD)
+    set_target_properties(glad PROPERTIES OUTPUT_NAME termin_glad
+        VERSION ${PROJECT_VERSION} SOVERSION 0)
+    termin_set_rpath_lib(glad)
+endif()
 if(COMMAND termin_add_alias_if_missing)
     termin_add_alias_if_missing(tgfx::glad glad)
 endif()
@@ -297,6 +309,7 @@ if(TGFX2_ENABLE_VULKAN)
         src/tgfx2/vulkan/vulkan_spirv_reflection.cpp
         src/tgfx2/vulkan/vulkan_type_conversions.cpp
         src/tgfx2/vulkan/vulkan_transfer.cpp
+        src/tgfx2/vulkan/vulkan_readback.cpp
         src/tgfx2/vulkan/vulkan_shader_compiler.cpp
         src/tgfx2/vulkan/vulkan_stats.cpp
         src/tgfx2/vulkan/vulkan_swapchain.cpp
@@ -836,6 +849,36 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
             message(STATUS "tgfx2 OpenGL bound resource set smoke: SDL2 not found; skipping")
         endif()
         if(SDL2_OPENGL_SMOKE_FOUND)
+            foreach(contract IN ITEMS upload resolve ownership depth_state buffer_state)
+                add_executable(tgfx2_opengl_${contract} tests/test_tgfx2_opengl_${contract}.cpp)
+                target_include_directories(tgfx2_opengl_${contract} PRIVATE ${SDL2_OPENGL_SMOKE_INCLUDE_DIR})
+                target_link_libraries(tgfx2_opengl_${contract} PRIVATE termin_graphics2 ${SDL2_OPENGL_SMOKE_LIBRARY})
+                if(SDL2_OPENGL_SMOKE_DLL)
+                    add_custom_command(TARGET tgfx2_opengl_${contract} POST_BUILD
+                        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${SDL2_OPENGL_SMOKE_DLL}" "$<TARGET_FILE_DIR:tgfx2_opengl_${contract}>")
+                endif()
+                termin_set_rpath_test(tgfx2_opengl_${contract})
+                add_test(NAME tgfx2_opengl_${contract} COMMAND tgfx2_opengl_${contract})
+                set_tests_properties(tgfx2_opengl_${contract} PROPERTIES TIMEOUT 30
+                    SKIP_REGULAR_EXPRESSION "${TGFX2_WINDOW_SKIP_RE}")
+                termin_add_test_labels(tgfx2_opengl_${contract} "termin:capability:window" "termin:capability:opengl")
+            endforeach()
+
+            add_executable(tgfx2_opengl_clear_texture tests/test_tgfx2_opengl_clear_texture.cpp)
+            target_include_directories(tgfx2_opengl_clear_texture PRIVATE ${SDL2_OPENGL_SMOKE_INCLUDE_DIR})
+            target_link_libraries(tgfx2_opengl_clear_texture PRIVATE termin_graphics2 ${SDL2_OPENGL_SMOKE_LIBRARY})
+            if(SDL2_OPENGL_SMOKE_DLL)
+                add_custom_command(TARGET tgfx2_opengl_clear_texture POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${SDL2_OPENGL_SMOKE_DLL}" "$<TARGET_FILE_DIR:tgfx2_opengl_clear_texture>")
+            endif()
+            termin_set_rpath_test(tgfx2_opengl_clear_texture)
+            add_test(NAME tgfx2_opengl_clear_texture COMMAND tgfx2_opengl_clear_texture)
+            set_tests_properties(tgfx2_opengl_clear_texture PROPERTIES TIMEOUT 30
+                SKIP_REGULAR_EXPRESSION "${TGFX2_WINDOW_SKIP_RE}")
+            termin_add_test_labels(tgfx2_opengl_clear_texture "termin:capability:window" "termin:capability:opengl")
+
             add_executable(tgfx2_opengl_bound_resource_set
                 tests/test_tgfx2_opengl_bound_resource_set.cpp)
             target_include_directories(tgfx2_opengl_bound_resource_set
@@ -921,6 +964,97 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
             PROPERTIES TIMEOUT 10)
         termin_add_test_labels(tgfx2_vulkan_presentation_transform_test
             "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_validation_test tests/test_tgfx2_vulkan_validation.cpp)
+        target_compile_definitions(tgfx2_vulkan_validation_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_validation_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_validation_test)
+        add_test(NAME tgfx2_vulkan_validation_test COMMAND "${CMAKE_COMMAND}"
+            "-DPROBE=$<TARGET_FILE:tgfx2_vulkan_validation_test>"
+            "-DCTEST=${CMAKE_CTEST_COMMAND}"
+            "-DMETADATA=${CMAKE_SOURCE_DIR}/cmake/TerminTestMetadata.cmake"
+            "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/validation-gate"
+            -P "${CMAKE_SOURCE_DIR}/cmake/tests/GpuValidationGate.cmake")
+        set_tests_properties(tgfx2_vulkan_validation_test PROPERTIES TIMEOUT 120)
+        termin_add_test_labels(tgfx2_vulkan_validation_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_shader_target_test tests/test_tgfx2_vulkan_shader_target.cpp)
+        target_compile_definitions(tgfx2_vulkan_shader_target_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_shader_target_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_shader_target_test)
+        add_test(NAME tgfx2_vulkan_shader_target_test COMMAND tgfx2_vulkan_shader_target_test)
+        set_tests_properties(tgfx2_vulkan_shader_target_test PROPERTIES TIMEOUT 60)
+        termin_add_test_labels(tgfx2_vulkan_shader_target_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_capabilities_test tests/test_tgfx2_vulkan_capabilities.cpp)
+        target_compile_definitions(tgfx2_vulkan_capabilities_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_capabilities_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_capabilities_test)
+        add_test(NAME tgfx2_vulkan_capabilities_test COMMAND tgfx2_vulkan_capabilities_test)
+        set_tests_properties(tgfx2_vulkan_capabilities_test PROPERTIES TIMEOUT 60)
+        termin_add_test_labels(tgfx2_vulkan_capabilities_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_texture_views_test tests/test_tgfx2_vulkan_texture_views.cpp)
+        target_compile_definitions(tgfx2_vulkan_texture_views_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_texture_views_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_texture_views_test)
+        add_test(NAME tgfx2_vulkan_texture_views_test COMMAND tgfx2_vulkan_texture_views_test)
+        set_tests_properties(tgfx2_vulkan_texture_views_test PROPERTIES TIMEOUT 60)
+        termin_add_test_labels(tgfx2_vulkan_texture_views_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_clear_rect_test tests/test_tgfx2_vulkan_clear_rect.cpp)
+        target_compile_definitions(tgfx2_vulkan_clear_rect_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_clear_rect_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_clear_rect_test)
+        add_test(NAME tgfx2_vulkan_clear_rect_test COMMAND tgfx2_vulkan_clear_rect_test)
+        set_tests_properties(tgfx2_vulkan_clear_rect_test PROPERTIES TIMEOUT 60)
+        termin_add_test_labels(tgfx2_vulkan_clear_rect_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_pipeline_contracts_test tests/test_tgfx2_vulkan_pipeline_contracts.cpp)
+        target_compile_definitions(tgfx2_vulkan_pipeline_contracts_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_pipeline_contracts_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_pipeline_contracts_test)
+        add_test(NAME tgfx2_vulkan_pipeline_contracts_test COMMAND tgfx2_vulkan_pipeline_contracts_test)
+        set_tests_properties(tgfx2_vulkan_pipeline_contracts_test PROPERTIES TIMEOUT 60)
+        termin_add_test_labels(tgfx2_vulkan_pipeline_contracts_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_readback_memory_test tests/test_tgfx2_vulkan_readback_memory.cpp)
+        target_include_directories(tgfx2_vulkan_readback_memory_test SYSTEM PRIVATE "${TERMIN_VMA_DIR}/include")
+        target_link_libraries(tgfx2_vulkan_readback_memory_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_readback_memory_test)
+        add_test(NAME tgfx2_vulkan_readback_memory_test COMMAND tgfx2_vulkan_readback_memory_test)
+
+        add_executable(tgfx2_vulkan_readback_test tests/test_tgfx2_vulkan_readback.cpp)
+        target_compile_definitions(tgfx2_vulkan_readback_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_readback_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_readback_test)
+        add_test(NAME tgfx2_vulkan_readback_test COMMAND tgfx2_vulkan_readback_test)
+        set_tests_properties(tgfx2_vulkan_readback_test PROPERTIES TIMEOUT 30)
+        termin_add_test_labels(tgfx2_vulkan_readback_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_image_sync_test tests/test_tgfx2_vulkan_image_sync.cpp)
+        target_compile_definitions(tgfx2_vulkan_image_sync_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_image_sync_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_image_sync_test)
+        add_test(NAME tgfx2_vulkan_image_sync_test COMMAND tgfx2_vulkan_image_sync_test)
+        set_tests_properties(tgfx2_vulkan_image_sync_test PROPERTIES TIMEOUT 30)
+        termin_add_test_labels(tgfx2_vulkan_image_sync_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_buffer_sync_test tests/test_tgfx2_vulkan_buffer_sync.cpp)
+        target_compile_definitions(tgfx2_vulkan_buffer_sync_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_buffer_sync_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_buffer_sync_test)
+        add_test(NAME tgfx2_vulkan_buffer_sync_test COMMAND tgfx2_vulkan_buffer_sync_test)
+        set_tests_properties(tgfx2_vulkan_buffer_sync_test PROPERTIES TIMEOUT 30)
+        termin_add_test_labels(tgfx2_vulkan_buffer_sync_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_shader_input_test tests/test_tgfx2_vulkan_shader_input.cpp)
+        target_compile_definitions(tgfx2_vulkan_shader_input_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_shader_input_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_shader_input_test)
+        add_test(NAME tgfx2_vulkan_shader_input_test COMMAND tgfx2_vulkan_shader_input_test)
+        set_tests_properties(tgfx2_vulkan_shader_input_test PROPERTIES TIMEOUT 20)
+        termin_add_test_labels(tgfx2_vulkan_shader_input_test "termin:capability:vulkan")
 
         add_executable(tgfx2_per_pipeline_layout_test tests/test_per_pipeline_layout.cpp)
         target_compile_definitions(tgfx2_per_pipeline_layout_test PRIVATE TGFX2_HAS_VULKAN)
@@ -1076,6 +1210,23 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
                 TIMEOUT 10
                 SKIP_REGULAR_EXPRESSION "${TGFX2_WINDOW_SKIP_RE}")
             termin_add_test_labels(tgfx2_vulkan_window
+                "termin:capability:window"
+                "termin:capability:vulkan")
+            add_executable(tgfx2_vulkan_swapchain_test tests/test_tgfx2_vulkan_swapchain.cpp)
+            target_include_directories(tgfx2_vulkan_swapchain_test PRIVATE ${SDL2_SMOKE_INCLUDE_DIR})
+            target_compile_definitions(tgfx2_vulkan_swapchain_test PRIVATE TGFX2_HAS_VULKAN)
+            target_link_libraries(tgfx2_vulkan_swapchain_test
+                PRIVATE termin_graphics2 Vulkan::Vulkan ${SDL2_SMOKE_LIBRARY})
+            if(SDL2_SMOKE_DLL)
+                add_custom_command(TARGET tgfx2_vulkan_swapchain_test POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${SDL2_SMOKE_DLL}"
+                        "$<TARGET_FILE_DIR:tgfx2_vulkan_swapchain_test>")
+            endif()
+            termin_set_rpath_test(tgfx2_vulkan_swapchain_test)
+            add_test(NAME tgfx2_vulkan_swapchain_test COMMAND tgfx2_vulkan_swapchain_test)
+            set_tests_properties(tgfx2_vulkan_swapchain_test PROPERTIES TIMEOUT 60)
+            termin_add_test_labels(tgfx2_vulkan_swapchain_test
                 "termin:capability:window"
                 "termin:capability:vulkan")
         endif()

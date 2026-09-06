@@ -7,6 +7,8 @@
 #include "tgfx2/vulkan/vulkan_shader_compiler.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 #include "vulkan_spirv_reflection.hpp"
+#include "tgfx2/vulkan/internal/spirv_input_validation.hpp"
+#include "tgfx2/vulkan/internal/shader_target.hpp"
 #include "vulkan_stats.hpp"
 
 #include <algorithm>
@@ -144,22 +146,37 @@ namespace tgfx {
         std::vector<uint32_t> spirv;
 
         try {
+            if (desc.stage == ShaderStage::Geometry && !enabled_features_.geometryShader)
+                throw std::runtime_error("Vulkan geometry shaders are unsupported by this device");
             if (!desc.bytecode.empty()) {
-                // Use provided SPIR-V
-                spirv.resize(desc.bytecode.size() / 4);
+                if (const char* error = vulkan_detail::spirv_input_error(desc.bytecode))
+                    throw std::runtime_error(error);
+                spirv.resize(desc.bytecode.size() / sizeof(uint32_t));
                 std::memcpy(spirv.data(), desc.bytecode.data(), desc.bytecode.size());
             } else if (!desc.source.empty()) {
                 vk::SpirvCompileResult result;
                 {
                     VulkanStatsTimer timer(g_shader_compile_us);
-                    result = vk::compile_glsl_to_spirv(desc.source, desc.stage, desc.entry_point);
+                    result = vk::compile_glsl_to_spirv(desc.source, desc.stage, api_version_, desc.entry_point);
                 }
                 if (!result.success) {
                     throw std::runtime_error("Shader compilation failed: " + result.error_message);
                 }
                 spirv = std::move(result.spirv);
             } else {
-                return {0};
+                throw std::runtime_error("Shader has neither SPIR-V bytecode nor source");
+            }
+
+            const auto binary = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(spirv.data()),
+                                                         spirv.size() * sizeof(uint32_t));
+            if (const char* error = vulkan_detail::spirv_input_error(binary))
+                throw std::runtime_error(error);
+            const auto target = vulkan_detail::shader_target(api_version_);
+            if (spirv[1] > target.spirv) {
+                throw std::runtime_error("SPIR-V version " + std::to_string((spirv[1] >> 16) & 0xff) + "." +
+                                         std::to_string((spirv[1] >> 8) & 0xff) + " exceeds Vulkan " +
+                                         std::to_string(VK_API_VERSION_MAJOR(api_version_)) + "." +
+                                         std::to_string(VK_API_VERSION_MINOR(api_version_)) + " core baseline");
             }
 
             VkShaderResource res;
@@ -168,6 +185,8 @@ namespace tgfx {
             res.debug_name = desc.debug_name;
             if (!spirv.empty()) {
                 std::string reflected_entry = reflect_spirv_stage_entry_point(spirv, desc.stage);
+                if (reflected_entry.empty())
+                    throw std::runtime_error("SPIR-V has no entry point for the requested shader stage");
                 if (!reflected_entry.empty()) {
                     if (reflected_entry != desc.entry_point && internal::shader_verbose_logging_enabled()) {
                         tc_log(TC_LOG_DEBUG,
@@ -251,8 +270,14 @@ namespace tgfx {
         VkPipelineResource res;
         res.desc = desc;
 
-        // Build per-pipeline VkDescriptorSetLayout from VS+FS SPIR-V reflection.
-        // Merged bindings from both stages; duplicates resolved by binding number.
+        if ((desc.geometry_shader && (!enabled_features_.geometryShader || desc.view_count > 1)) ||
+            (desc.raster.depth_bias_clamp != 0.0f && !enabled_features_.depthBiasClamp) ||
+            (desc.raster.polygon_mode != PolygonMode::Fill && !enabled_features_.fillModeNonSolid)) {
+            tc_log_error("VulkanRenderDevice: pipeline requests a disabled geometry/raster feature");
+            return {};
+        }
+
+        // Reflect every graphics stage, including resources used only by geometry.
         std::vector<VkShaderResource::DescriptorBinding> merged_bindings;
         auto* vs = get_shader(desc.vertex_shader);
         auto* fs = get_shader(desc.fragment_shader);
@@ -263,6 +288,16 @@ namespace tgfx {
         if (fs) {
             merged_bindings.insert(
                 merged_bindings.end(), fs->descriptor_bindings.begin(), fs->descriptor_bindings.end());
+        }
+        if (const auto* gs = get_shader(desc.geometry_shader)) {
+            merged_bindings.insert(
+                merged_bindings.end(), gs->descriptor_bindings.begin(), gs->descriptor_bindings.end());
+        }
+        for (const auto& binding : merged_bindings) {
+            if (binding.descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+                tc_log_error("VulkanRenderDevice: storage texture pipelines are unsupported");
+                return {};
+            }
         }
         res.descriptor_set_layout = get_or_create_descriptor_set_layout(merged_bindings);
         res.layout = get_or_create_pipeline_layout(res.descriptor_set_layout);
@@ -496,8 +531,10 @@ namespace tgfx {
             ba.srcAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.src_alpha);
             ba.dstAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.dst_alpha);
             ba.alphaBlendOp = vk::to_vk_blend_op(desc.blend.alpha_op);
-            ba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-                                VK_COLOR_COMPONENT_A_BIT;
+            ba.colorWriteMask = (desc.color_mask.r ? VK_COLOR_COMPONENT_R_BIT : 0u) |
+                                (desc.color_mask.g ? VK_COLOR_COMPONENT_G_BIT : 0u) |
+                                (desc.color_mask.b ? VK_COLOR_COMPONENT_B_BIT : 0u) |
+                                (desc.color_mask.a ? VK_COLOR_COMPONENT_A_BIT : 0u);
         }
 
         VkPipelineColorBlendStateCreateInfo blend{};
@@ -545,9 +582,9 @@ namespace tgfx {
         static uint64_t hash_resolved_resource_bindings(uintptr_t resource_layout_token,
                                                         std::span<const VulkanResolvedResourceBinding> bindings,
                                                         uint64_t domain) {
-            // FNV-1a over stable descriptor identity. Dynamic UBO offsets are
-            // intentionally excluded because they are supplied to
-            // vkCmdBindDescriptorSets as dynamic offsets, not descriptor writes.
+            // FNV-1a over descriptor identity, including the buffer's base
+            // offset. Bind-time dynamic offsets are supplied independently to
+            // vkCmdBindDescriptorSets. Ring slices bypass this cache entirely.
             uint64_t h = 0xcbf29ce484222325ull;
             auto mix = [&h](uint64_t v) {
                 h ^= v;
@@ -560,9 +597,7 @@ namespace tgfx {
                 mix(static_cast<uint64_t>(b.expected_descriptor_type));
                 mix(static_cast<uint64_t>(b.kind));
                 mix(b.buffer.id);
-                if (b.expected_descriptor_type != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) {
-                    mix(b.offset);
-                }
+                mix(b.offset);
                 mix(b.range);
                 mix(b.texture.id);
                 mix(b.sampler.id);
@@ -745,14 +780,11 @@ namespace tgfx {
                     auto* buf = get_buffer(buffer);
                     if (!buf)
                         continue;
-                    constexpr uint64_t VK_MIN_MAX_UBO_RANGE = 65536;
-                    if (range == 0)
-                        range = std::min<uint64_t>(buf->desc.size, VK_MIN_MAX_UBO_RANGE);
-                    if (range > VK_MIN_MAX_UBO_RANGE)
-                        range = VK_MIN_MAX_UBO_RANGE;
+                    // Explicit bindings were range-checked and normalized
+                    // before allocation/cache lookup. The default ring uses 16.
                     const bool dynamic_ubo = lb.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
                     const bool is_ring = ring_ubo_handle_ && (buffer == ring_ubo_handle_);
-                    buf_infos.push_back({buf->buffer, dynamic_ubo ? 0u : offset, range});
+                    buf_infos.push_back({buf->buffer, dynamic_ubo && is_ring ? 0u : offset, range});
                     w.pBufferInfo = &buf_infos.back();
                     if (dynamic_ubo) {
                         dyn_slots.push_back({lb.binding, is_ring ? static_cast<uint32_t>(offset) : 0u});
@@ -771,11 +803,13 @@ namespace tgfx {
                     w.pBufferInfo = &buf_infos.back();
                     break;
                 }
+                case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
                 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER: {
                     TextureHandle texture = ensure_default_sampled_texture();
                     SamplerHandle sampler{};
                     if (provided && provided->kind == BoundResourceKind::SampledTexture) {
-                        texture = provided->texture;
+                        if (provided->texture)
+                            texture = provided->texture;
                         sampler = provided->sampler;
                     }
                     auto* tex = get_texture(texture);
@@ -787,7 +821,7 @@ namespace tgfx {
                         if (samp)
                             samp_vk = samp->sampler;
                     }
-                    if (samp_vk == VK_NULL_HANDLE)
+                    if (samp_vk == VK_NULL_HANDLE && lb.descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                         samp_vk = ensure_default_sampler();
                     img_infos.push_back({samp_vk, tex->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
                     w.pImageInfo = &img_infos.back();
@@ -921,6 +955,43 @@ namespace tgfx {
                 return;
             }
 
+            if (b.value.kind == BoundResourceKind::SampledTexture && b.value.texture) {
+                const auto* texture = get_texture(b.value.texture);
+                if (!texture || !has_flag(texture->desc.usage, TextureUsage::Sampled) || !texture->view) {
+                    tc_log_error("VulkanRenderDevice: resource '%s' requires a valid sampled texture",
+                                 bound_resource_debug_name(b));
+                    bound_ok = false;
+                    return;
+                }
+            }
+            if ((b.value.kind == BoundResourceKind::SampledTexture || b.value.kind == BoundResourceKind::Sampler) &&
+                b.value.sampler && !get_sampler(b.value.sampler)) {
+                tc_log_error("VulkanRenderDevice: resource '%s' references an invalid sampler",
+                             bound_resource_debug_name(b));
+                bound_ok = false;
+                return;
+            }
+
+            uint64_t range = b.value.range;
+            if (b.value.kind == BoundResourceKind::UniformBuffer) {
+                const auto* buffer = get_buffer(b.value.buffer);
+                if (!buffer || !has_flag(buffer->desc.usage, BufferUsage::Uniform) ||
+                    b.value.offset >= buffer->desc.size || b.value.offset % ubo_alignment_ != 0) {
+                    tc_log_error("VulkanRenderDevice: resource '%s' has invalid UBO handle/base offset=%llu",
+                                 bound_resource_debug_name(b), static_cast<unsigned long long>(b.value.offset));
+                    bound_ok = false;
+                    return;
+                }
+                const uint64_t remaining = buffer->desc.size - b.value.offset;
+                if (range == 0) range = std::min<uint64_t>(remaining, max_ubo_range_);
+                if (range > remaining || range > max_ubo_range_) {
+                    tc_log_error("VulkanRenderDevice: resource '%s' has invalid UBO range=%llu (remaining=%llu max=%u)",
+                                 bound_resource_debug_name(b), static_cast<unsigned long long>(range),
+                                 static_cast<unsigned long long>(remaining), max_ubo_range_);
+                    bound_ok = false;
+                    return;
+                }
+            }
             VulkanResolvedResourceBinding value;
             value.binding = binding;
             value.array_element = b.value.array_element;
@@ -930,7 +1001,7 @@ namespace tgfx {
             value.texture = b.value.texture;
             value.sampler = b.value.sampler;
             value.offset = b.value.offset;
-            value.range = b.value.range;
+            value.range = range;
             resolved_bindings.push_back(value);
         });
         if (!bound_ok) {

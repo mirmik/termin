@@ -5,6 +5,26 @@
 
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
+#include <vector>
+
+extern "C" {
+#include "tgfx/resources/tc_texture_registry.h"
+}
+
+TEST_CASE("sized RGB texture upload expands exactly three source bytes per pixel") {
+    tc_texture texture{};
+    // Separate three-byte heap allocation reproduces the audited ASan case.
+    const std::vector<uint8_t> pixels{10, 20, 30};
+    const tc_texture_pixel_data input{pixels.data(), pixels.size(), 1, 1, 3};
+    REQUIRE(tc_texture_set_data(&texture, &input, nullptr, nullptr));
+    tgfx::TcTextureUpload upload;
+    REQUIRE(tgfx::prepare_tc_texture_upload(&texture, upload));
+    CHECK(upload.format == tgfx::PixelFormat::RGBA8_UNorm);
+    REQUIRE(upload.levels.size() == 1u);
+    CHECK(upload.levels[0] == std::vector<uint8_t>({10, 20, 30, 255}));
+    std::free(texture.data);
+}
 
 #ifdef TGFX2_HAS_OPENGL
 #include "tgfx2/opengl/opengl_type_conversions.hpp"

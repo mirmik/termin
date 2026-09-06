@@ -154,7 +154,7 @@ if(TERMIN_BUILD_TESTS)
 
 endif()
 
-if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL)
+if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL AND TGFX2_ENABLE_OPENGL)
     add_executable(termin_window_manager_live
         tests/test_window_manager_live.cpp)
     target_link_libraries(termin_window_manager_live PRIVATE termin_window)
@@ -217,61 +217,64 @@ endif()
 if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL
    AND TERMIN_BUILD_WINDOW_TESTS)
 
-    add_test(NAME termin_window_opengl33_tier
-        COMMAND termin_window_opengl33_tier)
-    set(_termin_opengl33_test_environment
-        "TERMIN_BACKEND=opengl"
-        "TERMIN_OPENGL_TIER=opengl33")
-    if(UNIX AND NOT APPLE)
-        # Mesa otherwise returns its highest core version even for a 3.3
-        # request. Constrain the CI context so the smoke proves that no 4.x
-        # entry point or GLSL version leaked into the advertised tier.
-        list(APPEND _termin_opengl33_test_environment
-            "MESA_GL_VERSION_OVERRIDE=3.3"
-            "MESA_GLSL_VERSION_OVERRIDE=330")
+    if(TGFX2_ENABLE_OPENGL)
+        add_test(NAME termin_window_opengl33_tier
+            COMMAND termin_window_opengl33_tier)
+        set(_termin_opengl33_test_environment
+            "TERMIN_BACKEND=opengl"
+            "TERMIN_OPENGL_TIER=opengl33")
+        if(UNIX AND NOT APPLE)
+            # Mesa otherwise returns its highest core version even for a 3.3
+            # request. Constrain the CI context so the smoke proves that no 4.x
+            # entry point or GLSL version leaked into the advertised tier.
+            list(APPEND _termin_opengl33_test_environment
+                "MESA_GL_VERSION_OVERRIDE=3.3"
+                "MESA_GLSL_VERSION_OVERRIDE=330")
+        endif()
+        set_tests_properties(termin_window_opengl33_tier PROPERTIES
+            TIMEOUT 10
+            ENVIRONMENT "${_termin_opengl33_test_environment}"
+            SKIP_RETURN_CODE 77
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Could not initialize OpenGL")
+
+        add_test(NAME termin_window_backend_triangle
+            COMMAND termin_window_backend_triangle)
+        set_tests_properties(termin_window_backend_triangle PROPERTIES
+            TIMEOUT 10
+            ENVIRONMENT "TERMIN_BACKEND=opengl"
+            SKIP_RETURN_CODE 77
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL")
+
+        add_test(NAME termin_window_multiwindow_event_routing
+            COMMAND termin_window_multiwindow_event_routing)
+        set_tests_properties(termin_window_multiwindow_event_routing PROPERTIES
+            TIMEOUT 10
+            ENVIRONMENT "TERMIN_BACKEND=opengl"
+            SKIP_RETURN_CODE 77
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Could not initialize OpenGL")
+
+        add_test(NAME termin_window_sdl_window_system_lifecycle
+            COMMAND termin_window_sdl_window_system_lifecycle)
+        set_tests_properties(termin_window_sdl_window_system_lifecycle PROPERTIES
+            TIMEOUT 10
+            ENVIRONMENT "TERMIN_BACKEND=opengl"
+            SKIP_RETURN_CODE 77
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Could not initialize OpenGL")
+
+        add_test(NAME termin_window_backend_triangle_immediate
+            COMMAND termin_window_backend_triangle)
+        if(COMMAND termin_set_test_build_target)
+            termin_set_test_build_target(
+                termin_window_backend_triangle_immediate
+                termin_window_backend_triangle)
+        endif()
+        set_tests_properties(termin_window_backend_triangle_immediate PROPERTIES
+            TIMEOUT 10
+            ENVIRONMENT "TERMIN_BACKEND=opengl;TERMIN_TEST_PRESENTATION_MODE=immediate"
+            SKIP_RETURN_CODE 77
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device")
+
     endif()
-    set_tests_properties(termin_window_opengl33_tier PROPERTIES
-        TIMEOUT 10
-        ENVIRONMENT "${_termin_opengl33_test_environment}"
-        SKIP_RETURN_CODE 77
-        SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Could not initialize OpenGL")
-
-    add_test(NAME termin_window_backend_triangle
-        COMMAND termin_window_backend_triangle)
-    set_tests_properties(termin_window_backend_triangle PROPERTIES
-        TIMEOUT 10
-        ENVIRONMENT "TERMIN_BACKEND=opengl"
-        SKIP_RETURN_CODE 77
-        SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL")
-
-    add_test(NAME termin_window_multiwindow_event_routing
-        COMMAND termin_window_multiwindow_event_routing)
-    set_tests_properties(termin_window_multiwindow_event_routing PROPERTIES
-        TIMEOUT 10
-        ENVIRONMENT "TERMIN_BACKEND=opengl"
-        SKIP_RETURN_CODE 77
-        SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Could not initialize OpenGL")
-
-    add_test(NAME termin_window_sdl_window_system_lifecycle
-        COMMAND termin_window_sdl_window_system_lifecycle)
-    set_tests_properties(termin_window_sdl_window_system_lifecycle PROPERTIES
-        TIMEOUT 10
-        ENVIRONMENT "TERMIN_BACKEND=opengl"
-        SKIP_RETURN_CODE 77
-        SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Could not initialize OpenGL")
-
-    add_test(NAME termin_window_backend_triangle_immediate
-        COMMAND termin_window_backend_triangle)
-    if(COMMAND termin_set_test_build_target)
-        termin_set_test_build_target(
-            termin_window_backend_triangle_immediate
-            termin_window_backend_triangle)
-    endif()
-    set_tests_properties(termin_window_backend_triangle_immediate PROPERTIES
-        TIMEOUT 10
-        ENVIRONMENT "TERMIN_BACKEND=opengl;TERMIN_TEST_PRESENTATION_MODE=immediate"
-        SKIP_RETURN_CODE 77
-        SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device")
 
     if(TGFX2_ENABLE_VULKAN)
         add_test(NAME termin_window_backend_triangle_vulkan_vsync
@@ -302,20 +305,23 @@ if(TERMIN_BUILD_TESTS AND TERMIN_WINDOW_HAS_SDL
     endif()
 
     if(COMMAND termin_add_test_labels)
-        termin_add_test_labels(termin_window_backend_triangle
-            "termin:capability:window")
-        termin_add_test_labels(termin_window_backend_triangle_immediate
-            "termin:capability:window"
-            "termin:capability:opengl")
-        termin_add_test_labels(termin_window_multiwindow_event_routing
-            "termin:capability:window"
-            "termin:capability:opengl")
-        termin_add_test_labels(termin_window_sdl_window_system_lifecycle
-            "termin:capability:window"
-            "termin:capability:opengl")
-        termin_add_test_labels(termin_window_opengl33_tier
-            "termin:capability:window"
-            "termin:capability:opengl")
+        if(TGFX2_ENABLE_OPENGL)
+            termin_add_test_labels(termin_window_backend_triangle
+                "termin:capability:window"
+                "termin:capability:opengl")
+            termin_add_test_labels(termin_window_backend_triangle_immediate
+                "termin:capability:window"
+                "termin:capability:opengl")
+            termin_add_test_labels(termin_window_multiwindow_event_routing
+                "termin:capability:window"
+                "termin:capability:opengl")
+            termin_add_test_labels(termin_window_sdl_window_system_lifecycle
+                "termin:capability:window"
+                "termin:capability:opengl")
+            termin_add_test_labels(termin_window_opengl33_tier
+                "termin:capability:window"
+                "termin:capability:opengl")
+        endif()
         if(TGFX2_ENABLE_VULKAN)
             termin_add_test_labels(termin_window_backend_triangle_vulkan_vsync
                 "termin:capability:window"

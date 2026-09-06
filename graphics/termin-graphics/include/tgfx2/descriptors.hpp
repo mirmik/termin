@@ -106,6 +106,10 @@ namespace tgfx {
 
     // --- Render pass ---
 
+    // Attachments (including resolve and depth/stencil) select mip zero.
+    // Ordinary render passes require single-layer textures; multiview uses
+    // the first view_count layers. Sampled bindings expose the full mip chain
+    // and array range independently of this attachment selection.
     struct ColorAttachmentDesc {
         TextureHandle texture;
         // Optional single-sample target resolved from texture when the

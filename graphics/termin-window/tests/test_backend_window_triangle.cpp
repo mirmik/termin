@@ -115,6 +115,7 @@ void main() {
         pd.topology = tgfx::PrimitiveTopology::TriangleList;
         pd.depth_stencil.depth_test = false;
         pd.depth_stencil.depth_write = false;
+        pd.depth_format = tgfx::PixelFormat::Undefined;
         pd.raster.cull = tgfx::CullMode::None;
         pd.color_formats = {tgfx::PixelFormat::RGBA8_UNorm};
 

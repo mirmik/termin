@@ -23,7 +23,7 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
 
     const uint8_t pixels[4 * 8 * 4] = {};
     termin::TcTexture texture = termin::TcTexture::from_data(termin::TcTextureCreateInfo{
-        {pixels, 8, 4, 4},
+        {pixels, sizeof(pixels), 8, 4, 4},
         {},
         "atlas",
         "",

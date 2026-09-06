@@ -233,8 +233,10 @@ namespace tgfx {
             throw std::runtime_error("blit_to_texture: not supported on this backend");
         }
 
-        // Clear a tgfx2 color texture to `color` inside the given viewport
-        // rect (scissor).
+        // Clear mip 0 of a ColorAttachment texture (all array layers) to color.
+        // The half-open rect uses top-left coordinates and is clipped to the
+        // texture extent. Empty/reversed rects are no-ops. Pixels outside the
+        // rect and other mips are preserved, as is caller graphics state.
         virtual void clear_texture(TextureHandle dst, termin::LinearColor color, termin::Bounds2i viewport) {
             (void)dst;
             (void)color;

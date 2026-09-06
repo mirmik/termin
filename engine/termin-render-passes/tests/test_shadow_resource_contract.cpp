@@ -4,6 +4,9 @@ GUARD_TEST_MAIN();
 
 #include <memory>
 
+#include "render_execution_recording_device.hpp"
+#include <tgfx2/graphics_host.hpp>
+
 #include <termin/lighting/shadow.hpp>
 #include <termin/lighting/environment_lighting.hpp>
 #include <termin/render/builtin_passes.hpp>
@@ -121,7 +124,11 @@ TEST_CASE("ShadowPass receives and reuses its registered generic resource") {
                                   .capabilities = &capabilities,
                               });
 
+    auto device = std::make_unique<termin::test::ExecutionRecordingDevice>();
+    auto* recording_device = device.get();
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
     termin::RenderEngine engine;
+    engine.set_graphics_host(*host);
     engine.execute_pipeline(execution);
     auto resource_it = pipeline.cache().frame_graph_resources.find("shadow_maps");
     REQUIRE(resource_it != pipeline.cache().frame_graph_resources.end());
@@ -133,6 +140,8 @@ TEST_CASE("ShadowPass receives and reuses its registered generic resource") {
     shadow->add_entry(stale_entry);
     engine.execute_pipeline(execution);
     CHECK(shadow->empty());
+    CHECK(recording_device->state.created_textures.empty());
+    CHECK(recording_device->state.scopes.empty());
 
     pipeline.destroy();
     scene.destroy();

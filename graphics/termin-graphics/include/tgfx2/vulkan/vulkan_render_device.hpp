@@ -51,7 +51,8 @@ namespace tgfx {
     struct VkTextureResource {
         VkImage image = VK_NULL_HANDLE;
         VmaAllocation allocation = VK_NULL_HANDLE;
-        VkImageView view = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE; // Full mip chain, sampled depth aspect only.
+        VkImageView attachment_view = VK_NULL_HANDLE; // Mip zero, all attachment aspects/layers.
         TextureDesc desc;
         VkImageLayout current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         bool external = false;
@@ -310,6 +311,7 @@ namespace tgfx {
 
         VkInstance instance_ = VK_NULL_HANDLE;
         VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;
+        std::atomic<uint64_t> validation_error_count_{0};
         VkSurfaceKHR surface_ = VK_NULL_HANDLE;
         VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
         VkDevice device_ = VK_NULL_HANDLE;
@@ -318,6 +320,7 @@ namespace tgfx {
         uint32_t graphics_family_ = 0;
         uint32_t present_family_ = 0;
         uint32_t api_version_ = VK_API_VERSION_1_0;
+        VkPhysicalDeviceFeatures enabled_features_{};
         bool multiview_enabled_ = false;
         uint32_t max_multiview_views_ = 0;
         std::vector<const char*> device_extensions_;
@@ -418,6 +421,7 @@ namespace tgfx {
         BufferHandle ring_ubo_handle_ = {};
         // Cached VkPhysicalDeviceLimits::minUniformBufferOffsetAlignment.
         uint32_t ubo_alignment_ = 256;
+        uint32_t max_ubo_range_ = 0;
         // True when the ring's memory type advertises HOST_COHERENT — the
         // memcpy is immediately visible to the GPU and no vmaFlushAllocation
         // is needed. On desktop Linux (NVIDIA / AMD discrete) the CPU_TO_GPU
@@ -487,6 +491,9 @@ namespace tgfx {
         void invalidate_render_target_cache() override;
 
         BufferHandle create_buffer(const BufferDesc& desc) override;
+        // Query this device's optimal-tiling 2D image support for the complete
+        // descriptor, including the format/usage/sample-count combination.
+        bool supports_texture(const TextureDesc& desc) const;
         TextureHandle create_texture(const TextureDesc& desc) override;
         TextureHandle register_external_texture(uintptr_t native_handle, const TextureDesc& desc) override;
         bool begin_external_texture_access(TextureHandle handle, const ExternalTextureAccessDesc& access) override;
@@ -548,6 +555,9 @@ namespace tgfx {
         // Internal access for command list
         VkDevice device() const {
             return device_;
+        }
+        uint32_t api_version() const {
+            return api_version_;
         }
         VkBufferResource* get_buffer(BufferHandle h) {
             return buffers_.get(h.id);
@@ -619,8 +629,13 @@ namespace tgfx {
                                                 uint32_t height,
                                                 uint32_t layers = 1);
 
-        // Execute a one-shot command buffer (for uploads, layout transitions)
+        // Append to the next submission's prelude (uploads/layout transitions).
+        // Runs before the submitted draw CB, regardless of host recording order.
+        // The callback must record the dependencies its GPU accesses require.
         void execute_immediate(std::function<void(VkCommandBuffer)> fn);
+
+        // Sampling spans the mip chain; attachment views select mip zero.
+        void create_texture_views(VkTextureResource& texture);
 
         // Transition image layout
         void transition_image_layout(VkCommandBuffer cmd,
@@ -701,9 +716,10 @@ namespace tgfx {
 
         // Queue a staging-style VMA buffer for deferred destroy after the
         // frame fence signals. Used by upload_buffer / upload_texture /
-        // blit_to_texture / read_buffer — they fill a staging buffer, batch
+        // blit_to_texture — they fill a staging buffer, batch
         // a copy into immediate_cb_, and must NOT destroy the staging
-        // synchronously because the GPU hasn't executed the copy yet.
+        // synchronously because the GPU hasn't executed the copy yet. Blocking
+        // readback also uses this queue if its GPU completion wait fails.
         void defer_vma_buffer_destroy(VkBuffer buffer, VmaAllocation alloc) {
             if (buffer != VK_NULL_HANDLE) {
                 pending_destroy_current_.vma_buffers.emplace_back(buffer, alloc);
@@ -781,7 +797,16 @@ namespace tgfx {
         // responsible for ensuring GPU has finished using these resources.
         void drain_pending_destroy(PendingDestroyQueue& q);
         uint64_t request_pixel_readback(TextureHandle tex, int x, int y, PixelReadbackKind kind);
-        void complete_pixel_readbacks(std::vector<PendingPixelReadback>& pending);
+        bool create_readback_buffer(size_t size, VkBuffer& buffer, VmaAllocation& allocation);
+        VkCommandBuffer begin_readback_commands();
+        bool finish_readback(VkCommandBuffer cb, VkBuffer staging, VmaAllocation allocation,
+                             VkDeviceSize offset, std::span<uint8_t> output);
+        bool validate_image_readback(const VkTextureResource& image, VkOffset3D offset, VkExtent3D extent);
+        void record_image_readback(VkCommandBuffer cb, VkTextureResource& image, VkBuffer staging,
+                                   VkImageAspectFlags aspect, VkOffset3D offset, VkExtent3D extent, size_t size);
+        bool read_image_bytes(VkTextureResource& image, VkImageAspectFlags aspect, VkOffset3D offset,
+                              VkExtent3D extent, std::span<uint8_t> output);
+        void complete_pixel_readbacks(std::vector<PendingPixelReadback>& pending, VkResult completion);
         void destroy_pixel_readbacks(std::vector<PendingPixelReadback>& pending);
         void prepare_frame_slot(uint32_t slot, SubmitStats* stats);
         void complete_gpu_frame_timing(uint32_t slot);

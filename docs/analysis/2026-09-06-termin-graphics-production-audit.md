@@ -1,5 +1,31 @@
 # Аудит готовности графического стека к production — 2026-09-06
 
+После аудита выполнен [первый пакет исправлений](2026-09-06-graphics-repair-pass-1.md):
+#2197, #2198, #2199 и #2203 закрыты. Ниже сохранены исходные результаты аудита;
+актуальные изменения и результаты проверок приведены в отчёте об исправлениях.
+Во [втором пакете](2026-09-06-graphics-repair-pass-2.md) исправлены #2200/#2201:
+обычный CTest проходит 237 тестов без failures; прочие контракты аудита остаются
+отдельными работами.
+В [третьем пакете](2026-09-06-graphics-repair-pass-3.md) исправлен readback #2202;
+обычный CTest проходит 239 тестов.
+В [четвёртом пакете](2026-09-06-graphics-repair-pass-4.md) исправлены #2204/#2208:
+Vulkan/SPIR-V baseline и capabilities; обычный CTest проходит 241 тест.
+В [пятом пакете](2026-09-06-graphics-repair-pass-5.md) исправлен WSI lifecycle
+#2205/#2206 и реализован split-family path #2207 (остаётся platform gate).
+Расширенный оконный прогон: 253 passed, 1 отдельный OpenGL failure, без Vulkan
+validation errors.
+В [шестом пакете](2026-09-06-graphics-repair-pass-6.md) исправлены #2209/#2210:
+UBO base offsets/cache и color masks, включая MRT. Обычный CTest: 242 passed.
+В [седьмом пакете](2026-09-06-graphics-repair-pass-7.md) реализованы rect clear
+#2211 и sampling/attachment views #2214 (остаётся WebGPU browser gate).
+Оконный CTest: 257 passed, 1 прежний OpenGL failure, без Vulkan validation errors.
+В [восьмом пакете](2026-09-06-graphics-repair-pass-8.md) исправлены OpenGL
+packed uploads #2215, MSAA resolve #2216 и borrowed ownership #2217.
+Оконный CTest: 260 passed, 1 прежний OpenGL failure.
+В [девятом пакете](2026-09-06-graphics-repair-pass-9.md) исправлены GL depth
+readback state #2219, buffer transfer state #2220 и contract fixtures #2264.
+Оконный CTest: 262 passed, 1 прежний OpenGL failure.
+
 ## Вывод
 
 У стека есть пригодная для дальнейшего развития архитектурная основа, но считать

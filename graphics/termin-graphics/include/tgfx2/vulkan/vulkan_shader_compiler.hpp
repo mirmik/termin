@@ -19,7 +19,8 @@ namespace tgfx::vk {
     // Compile GLSL source to SPIR-V bytecode using shaderc.
     // Handles #version 330/450 differences automatically.
     SpirvCompileResult
-    compile_glsl_to_spirv(const std::string& source, ShaderStage stage, const std::string& entry_point = "main");
+    compile_glsl_to_spirv(const std::string& source, ShaderStage stage, uint32_t api_version,
+                         const std::string& entry_point = "main");
 
 } // namespace tgfx::vk
 

@@ -1327,6 +1327,7 @@ namespace termin::runtime {
                 TcTexture texture = TcTexture::from_data(TcTextureCreateInfo{
                     TexturePixelDataView{
                         decoded.pixels.data(),
+                        decoded.pixels.size(),
                         static_cast<std::uint32_t>(decoded.width),
                         static_cast<std::uint32_t>(decoded.height),
                         static_cast<std::uint8_t>(decoded.channels),

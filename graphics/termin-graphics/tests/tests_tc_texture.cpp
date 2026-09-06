@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 extern "C" {
 #include "tcbase/tc_log.h"
@@ -69,6 +70,62 @@ TEST_CASE("tc_texture rejects unknown formats from byte-size calculations") {
     CHECK_EQ(tc_texture_data_size(nullptr), 0u);
 }
 
+TEST_CASE("sized texture input preserves canonical channel formats and bytes") {
+    tc_texture_init();
+    const tc_texture_format formats[] = {TC_TEXTURE_R8, TC_TEXTURE_RG8, TC_TEXTURE_RGB8, TC_TEXTURE_RGBA8};
+    for (uint8_t channels = 1; channels <= 4; ++channels) {
+        std::vector<uint8_t> bytes(6u * channels);
+        for (size_t i = 0; i < bytes.size(); ++i)
+            bytes[i] = static_cast<uint8_t>(i + 10);
+        termin::TcTextureCreateInfo info;
+        info.pixels = {bytes.data(), bytes.size(), 3, 2, channels};
+        info.transform = {false, false, false};
+        auto texture = termin::TcTexture::from_data(info);
+        REQUIRE(texture.is_valid());
+        CHECK_EQ(texture.get()->format, formats[channels - 1]);
+        CHECK_EQ(texture.data_size(), bytes.size());
+        CHECK(std::memcmp(texture.data(), bytes.data(), bytes.size()) == 0);
+        auto [upload, width, height] = texture.get_upload_data();
+        CHECK(upload == bytes);
+        CHECK_EQ(width, 3u);
+        CHECK_EQ(height, 2u);
+    }
+    tc_texture_shutdown();
+}
+
+TEST_CASE("invalid sized texture updates leave the existing payload intact") {
+    tc_texture_init();
+    const auto handle = tc_texture_create("sized-texture-update");
+    auto* texture = tc_texture_get(handle);
+    REQUIRE(texture != nullptr);
+    const uint8_t bytes[] = {10, 20, 30};
+    const tc_texture_pixel_data good{bytes, sizeof(bytes), 1, 1, 3};
+    REQUIRE(tc_texture_set_data(texture, &good, "original", nullptr));
+    const auto* original = texture->data;
+    const uint32_t version = texture->header.version;
+    const tc_texture_pixel_data bad[] = {
+        {bytes, 2, 1, 1, 3}, {bytes, 4, 1, 1, 3},
+        {bytes, 3, 0, 1, 3}, {bytes, 3, 1, 0, 3},
+        {bytes, 3, 1, 1, 0}, {bytes, 3, 1, 1, 5},
+        {bytes, 3, UINT32_MAX, UINT32_MAX, 4}, {nullptr, 3, 1, 1, 3},
+    };
+    for (const auto& input : bad) {
+        CHECK_FALSE(tc_texture_set_data(texture, &input, "invalid", nullptr));
+        CHECK(texture->data == original);
+        CHECK_EQ(texture->header.version, version);
+        CHECK_EQ(texture->format, TC_TEXTURE_RGB8);
+        CHECK(std::memcmp(texture->data, bytes, sizeof(bytes)) == 0);
+        termin::TcTextureCreateInfo info;
+        info.pixels = input;
+        CHECK_FALSE(termin::TcTexture::from_data(info).is_valid());
+    }
+    CHECK_EQ(tc_texture_byte_size(UINT32_MAX, UINT32_MAX, TC_TEXTURE_RGBA16F), 0u);
+    tc_texture_set_size_format(texture, 2, 2, TC_TEXTURE_RGBA8);
+    CHECK(texture->data == nullptr);
+    CHECK_EQ(tc_texture_data_size(texture), 16u);
+    tc_texture_shutdown();
+}
+
 TEST_CASE("tc_texture encoding changes are validated and versioned") {
     tc_texture_init();
     const tc_texture_handle handle = tc_texture_create("texture-encoding-version");
@@ -95,13 +152,13 @@ TEST_CASE("content texture identity includes transfer encoding") {
     const uint8_t pixel[4] = {128, 128, 128, 128};
 
     termin::TcTextureCreateInfo linear_info;
-    linear_info.pixels = {pixel, 1, 1, 4};
+    linear_info.pixels = {pixel, sizeof(pixel), 1, 1, 4};
     linear_info.name = "linear";
     linear_info.encoding = tgfx::TextureEncoding::Linear;
     termin::TcTexture linear = termin::TcTexture::from_data(linear_info);
 
     termin::TcTextureCreateInfo srgb_info;
-    srgb_info.pixels = {pixel, 1, 1, 4};
+    srgb_info.pixels = {pixel, sizeof(pixel), 1, 1, 4};
     srgb_info.name = "srgb";
     srgb_info.encoding = tgfx::TextureEncoding::SRGB;
     termin::TcTexture srgb = termin::TcTexture::from_data(srgb_info);

@@ -18,16 +18,7 @@ extern "C" {
 
 namespace termin {
 
-    struct TexturePixelDataView {
-        const void* data = nullptr;
-        uint32_t width = 0;
-        uint32_t height = 0;
-        uint8_t channels = 4;
-
-        size_t byte_size() const {
-            return static_cast<size_t>(width) * height * channels;
-        }
-    };
+    using TexturePixelDataView = tc_texture_pixel_data;
 
     struct TextureTransformFlags {
         bool flip_x = false;
@@ -36,7 +27,7 @@ namespace termin {
     };
 
     struct TcTextureCreateInfo {
-        TexturePixelDataView pixels;
+        TexturePixelDataView pixels{};
         TextureTransformFlags transform;
         std::string name;
         std::string source_path;
@@ -199,20 +190,14 @@ namespace termin {
         }
 
         // Set texture data
-        bool set_data(const void* pixel_data,
-                      uint32_t w,
-                      uint32_t h,
-                      uint8_t ch,
+        bool set_data(const TexturePixelDataView& pixels,
                       const std::string& tex_name = "",
                       const std::string& src_path = "") {
             tc_texture* t = get();
             if (!t)
                 return false;
             return tc_texture_set_data(t,
-                                       pixel_data,
-                                       w,
-                                       h,
-                                       ch,
+                                       &pixels,
                                        tex_name.empty() ? nullptr : tex_name.c_str(),
                                        src_path.empty() ? nullptr : src_path.c_str());
         }

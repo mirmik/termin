@@ -245,6 +245,7 @@ if(TERMIN_BUILD_TESTS)
     target_include_directories(
         termin_render_passes_shadow_resource_contract_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/support
     )
     target_link_libraries(
         termin_render_passes_shadow_resource_contract_test PRIVATE

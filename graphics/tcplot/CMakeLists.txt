@@ -213,6 +213,11 @@ if(TERMIN_BUILD_TESTS)
             tests/test_retained_chart3d.cpp)
         target_link_libraries(tcplot_retained_chart3d_test PRIVATE
             tcplot)
+        if(TGFX2_ENABLE_VULKAN)
+            find_package(Vulkan REQUIRED)
+            target_compile_definitions(tcplot_retained_chart3d_test PRIVATE TGFX2_HAS_VULKAN)
+            target_link_libraries(tcplot_retained_chart3d_test PRIVATE Vulkan::Vulkan)
+        endif()
         target_compile_definitions(tcplot_retained_chart3d_test PRIVATE
             TCPLOT_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")
         add_dependencies(tcplot_retained_chart3d_test termin_shaderc)

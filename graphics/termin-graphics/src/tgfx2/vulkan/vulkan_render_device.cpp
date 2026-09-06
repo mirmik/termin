@@ -23,11 +23,13 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iterator>
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <cmath>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -86,8 +88,12 @@ namespace tgfx {
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                                          VkDebugUtilsMessageTypeFlagsEXT /*type*/,
                                                          const VkDebugUtilsMessengerCallbackDataEXT* data,
-                                                         void* /*user*/) {
-        if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+                                                         void* user) {
+        if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+            auto* count = static_cast<std::atomic<uint64_t>*>(user);
+            count->fetch_add(1, std::memory_order_relaxed);
+            fprintf(stderr, "[GPU validation error] [Vulkan] %s\n", data->pMessage);
+        } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
             fprintf(stderr, "[Vulkan] %s\n", data->pMessage);
         }
         return VK_FALSE;
@@ -125,7 +131,8 @@ namespace tgfx {
     // --- Constructor / Destructor ---
 
     VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
-        validation_enabled_ = info.enable_validation;
+        const char* required = std::getenv("TGFX2_GPU_VALIDATION_REQUIRED");
+        validation_enabled_ = info.enable_validation || (required && std::strcmp(required, "1") == 0);
         api_version_ = info.api_version != 0 ? info.api_version : TGFX2_VULKAN_DEFAULT_API_VERSION;
         device_extensions_ = info.device_extensions;
         requested_ring_ubo_slot_size_ = info.ring_ubo_slot_size;
@@ -212,8 +219,6 @@ namespace tgfx {
         // Query capabilities
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physical_device_, &props);
-        VkPhysicalDeviceFeatures features;
-        vkGetPhysicalDeviceFeatures(physical_device_, &features);
 
         char driver_label[96]{};
         std::snprintf(driver_label,
@@ -239,9 +244,14 @@ namespace tgfx {
         caps_.texture_origin_top_left = true;
         caps_.max_texture_dimension_2d = props.limits.maxImageDimension2D;
         caps_.max_color_attachments = props.limits.maxColorAttachments;
-        caps_.max_texture_units = props.limits.maxBoundDescriptorSets;
-        caps_.supports_compute = true;
-        caps_.supports_geometry_shaders = features.geometryShader;
+        caps_.max_texture_units = std::min(props.limits.maxDescriptorSetSampledImages,
+                                           props.limits.maxDescriptorSetSamplers);
+        caps_.max_fragment_texture_units = std::min(props.limits.maxPerStageDescriptorSampledImages,
+                                                    props.limits.maxPerStageDescriptorSamplers);
+        caps_.max_shadow_maps = caps_.max_fragment_texture_units;
+        // The public pipeline API currently implements graphics only.
+        caps_.supports_compute = false;
+        caps_.supports_geometry_shaders = enabled_features_.geometryShader != VK_FALSE;
         uint32_t queue_family_count = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, nullptr);
         std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
@@ -253,7 +263,7 @@ namespace tgfx {
                                            gpu_timestamp_period_ns_ > 0.0 && gpu_timestamp_valid_bits_ > 0;
         caps_.supports_multisample_resolve = true;
         caps_.supports_dynamic_uniform_offsets = true;
-        caps_.supports_storage_textures = true;
+        caps_.supports_storage_textures = false;
         caps_.supports_texture_arrays = props.limits.maxImageArrayLayers > 1;
         caps_.supports_multiview = multiview_enabled_;
         caps_.max_multiview_views = max_multiview_views_;
@@ -282,8 +292,9 @@ namespace tgfx {
         // During normal frame lifecycle `destroy()` queues into
         // pending_destroy_{current,in_flight}_ and the per-submit fence keeps
         // them safe — see VulkanRenderDevice::submit.
-        if (device_)
-            vkDeviceWaitIdle(device_);
+        const VkResult idle_result = device_ ? vkDeviceWaitIdle(device_) : VK_SUCCESS;
+        if (idle_result != VK_SUCCESS)
+            tc_log(TC_LOG_ERROR, "[Vulkan] teardown wait failed: VkResult=%d", int(idle_result));
 
         // Tear down the swapchain first — its sync objects and image
         // views are bound to device_ which is still alive at this point.
@@ -304,7 +315,9 @@ namespace tgfx {
         // lookups are still valid at this point, so drain them through the
         // normal per-type helper.
         for (uint32_t i = 0; i < kFrameSlotCount; ++i) {
-            complete_pixel_readbacks(pixel_readbacks_slots_[i]);
+            // Teardown never needs to publish results. In particular a failed
+            // idle wait must not be mistaken for successful GPU completion.
+            destroy_pixel_readbacks(pixel_readbacks_slots_[i]);
             drain_pending_destroy(pending_destroy_slots_[i]);
         }
         destroy_pixel_readbacks(pixel_readbacks_current_);
@@ -332,6 +345,8 @@ namespace tgfx {
             }
         }
         for (auto& [id, r] : textures_) {
+            if (r.attachment_view)
+                vkDestroyImageView(device_, r.attachment_view, nullptr);
             if (r.view)
                 vkDestroyImageView(device_, r.view, nullptr);
             if (r.image && !r.external)
@@ -425,11 +440,30 @@ namespace tgfx {
         }
         if (instance_)
             vkDestroyInstance(instance_, nullptr);
+        if (validation_enabled_) {
+            fprintf(stderr, "[Vulkan validation] errors=%llu\n",
+                    static_cast<unsigned long long>(validation_error_count_.load(std::memory_order_relaxed)));
+        }
     }
 
     // --- Instance ---
 
     void VulkanRenderDevice::init_instance(const VulkanDeviceCreateInfo& info) {
+        if (VK_API_VERSION_VARIANT(api_version_) != 0 || VK_API_VERSION_MAJOR(api_version_) != 1) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] unsupported requested API version: 0x%x", api_version_);
+            throw std::runtime_error("Unsupported Vulkan API version");
+        }
+        uint32_t loader_version = VK_API_VERSION_1_0;
+        const auto enumerate_version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+            vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
+        if (enumerate_version) {
+            const auto result = enumerate_version(&loader_version);
+            if (result != VK_SUCCESS) {
+                tc_log(TC_LOG_ERROR, "[Vulkan] loader API query failed: VkResult=%d", int(result));
+                throw std::runtime_error("Vulkan loader API query failed");
+            }
+        }
+        api_version_ = std::min({api_version_, loader_version, uint32_t(VK_API_VERSION_1_3)});
         VkApplicationInfo app_info{};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app_info.pApplicationName = "tgfx2";
@@ -441,9 +475,30 @@ namespace tgfx {
         std::vector<const char*> extensions = info.instance_extensions;
         std::vector<const char*> layers;
 
+        VkDebugUtilsMessengerCreateInfoEXT dbg_ci{};
+        dbg_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        dbg_ci.messageSeverity =
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        dbg_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        dbg_ci.pfnUserCallback = debug_callback;
+        dbg_ci.pUserData = &validation_error_count_;
+
+        const VkValidationFeatureEnableEXT sync_validation =
+            VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+        VkValidationFeaturesEXT validation_features{};
+        validation_features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        validation_features.enabledValidationFeatureCount = 1;
+        validation_features.pEnabledValidationFeatures = &sync_validation;
+        validation_features.pNext = &dbg_ci;
+
         if (validation_enabled_) {
             layers.push_back("VK_LAYER_KHRONOS_validation");
-            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            if (!contains_extension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+                extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            if (!contains_extension(extensions, VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME))
+                extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
         }
 
         VkInstanceCreateInfo ci{};
@@ -453,25 +508,31 @@ namespace tgfx {
         ci.ppEnabledExtensionNames = extensions.data();
         ci.enabledLayerCount = static_cast<uint32_t>(layers.size());
         ci.ppEnabledLayerNames = layers.data();
+        // Capture vkCreateInstance/vkDestroyInstance diagnostics too. The
+        // explicit messenger below covers the lifetime between those calls.
+        ci.pNext = validation_enabled_ ? &validation_features : nullptr;
 
-        if (vkCreateInstance(&ci, nullptr, &instance_) != VK_SUCCESS) {
+        const VkResult instance_result = vkCreateInstance(&ci, nullptr, &instance_);
+        if (instance_result != VK_SUCCESS) {
+            tc_log_error("%sVulkanRenderDevice: vkCreateInstance failed, result=%d; validation=%s",
+                         validation_enabled_ ? "[GPU validation error] " : "",
+                         static_cast<int>(instance_result), validation_enabled_ ? "required" : "disabled");
             throw std::runtime_error("Failed to create Vulkan instance");
         }
 
         if (validation_enabled_) {
-            VkDebugUtilsMessengerCreateInfoEXT dbg_ci{};
-            dbg_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            dbg_ci.messageSeverity =
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            dbg_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            dbg_ci.pfnUserCallback = debug_callback;
-
             auto func =
                 (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT");
-            if (func)
-                func(instance_, &dbg_ci, nullptr, &debug_messenger_);
+            const VkResult messenger_result = func
+                ? func(instance_, &dbg_ci, nullptr, &debug_messenger_)
+                : VK_ERROR_EXTENSION_NOT_PRESENT;
+            if (messenger_result != VK_SUCCESS) {
+                tc_log_error("[GPU validation error] VulkanRenderDevice: debug messenger creation failed, result=%d",
+                             static_cast<int>(messenger_result));
+                vkDestroyInstance(instance_, nullptr);
+                instance_ = VK_NULL_HANDLE;
+                throw std::runtime_error("Failed to create Vulkan validation messenger");
+            }
         }
     }
 
@@ -553,7 +614,10 @@ namespace tgfx {
         VkPhysicalDeviceFeatures supported_features{};
         vkGetPhysicalDeviceFeatures(physical_device_, &supported_features);
 
-        VkPhysicalDeviceFeatures features{};
+        auto& features = enabled_features_;
+        features.geometryShader = supported_features.geometryShader;
+        features.samplerAnisotropy = supported_features.samplerAnisotropy;
+        features.depthBiasClamp = supported_features.depthBiasClamp;
         if (supported_features.fillModeNonSolid) {
             features.fillModeNonSolid = VK_TRUE; // for wireframe
         } else {
@@ -584,7 +648,10 @@ namespace tgfx {
         // needed.
         VkPhysicalDeviceProperties physical_device_properties{};
         vkGetPhysicalDeviceProperties(physical_device_, &physical_device_properties);
-        const uint32_t effective_api_version = std::min(api_version_, physical_device_properties.apiVersion);
+        api_version_ = std::min(api_version_, physical_device_properties.apiVersion);
+        const uint32_t effective_api_version = api_version_;
+        tc_log(TC_LOG_INFO, "[Vulkan] effective API %u.%u", VK_API_VERSION_MAJOR(api_version_),
+               VK_API_VERSION_MINOR(api_version_));
 
         VkPhysicalDeviceShaderDrawParametersFeatures supported_draw_parameters{};
         supported_draw_parameters.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
@@ -821,6 +888,7 @@ namespace tgfx {
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physical_device_, &props);
         ubo_alignment_ = static_cast<uint32_t>(std::max<VkDeviceSize>(props.limits.minUniformBufferOffsetAlignment, 1));
+        max_ubo_range_ = props.limits.maxUniformBufferRange;
         non_coherent_atom_size_ = static_cast<uint64_t>(std::max<VkDeviceSize>(props.limits.nonCoherentAtomSize, 1));
 
         // Round the requested per-frame budget up to the device's dynamic-offset
@@ -1111,7 +1179,15 @@ namespace tgfx {
         return caps_;
     }
     void VulkanRenderDevice::wait_idle() {
-        vkDeviceWaitIdle(device_);
+        const auto result = vkDeviceWaitIdle(device_);
+        if (result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] device idle wait failed: VkResult=%d", int(result));
+            throw std::runtime_error("Vulkan device idle wait failed");
+        }
+        // Only submitted requests are complete. Requests in the current
+        // prelude still require a submit, even if the device is idle.
+        for (auto& pending : pixel_readbacks_slots_)
+            complete_pixel_readbacks(pending, result);
     }
 
     void VulkanRenderDevice::invalidate_descriptor_cache() {
@@ -1190,9 +1266,45 @@ namespace tgfx {
 
     // --- Texture ---
 
+    bool VulkanRenderDevice::supports_texture(const TextureDesc& desc) const {
+        if (has_flag(desc.usage, TextureUsage::Storage) && !caps_.supports_storage_textures)
+            return false;
+        const VkFormat format = vk::to_vk_format(desc.format);
+        const VkImageUsageFlags usage = vk::to_vk_image_usage(desc.usage);
+        if (format == VK_FORMAT_UNDEFINED || usage == 0 || desc.width == 0 || desc.height == 0 ||
+            desc.array_layers == 0 || desc.mip_levels == 0 || desc.sample_count == 0 ||
+            desc.sample_count > 64 || (desc.sample_count & (desc.sample_count - 1)) != 0 ||
+            (desc.sample_count > 1 && desc.mip_levels != 1)) {
+            return false;
+        }
+        uint32_t max_mip_levels = 1;
+        for (uint32_t extent = std::max(desc.width, desc.height); extent > 1; extent >>= 1)
+            ++max_mip_levels;
+        if (desc.mip_levels > max_mip_levels)
+            return false;
+
+        VkImageFormatProperties properties{};
+        const VkResult result = vkGetPhysicalDeviceImageFormatProperties(physical_device_, format,
+            VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &properties);
+        if (result == VK_ERROR_FORMAT_NOT_SUPPORTED)
+            return false;
+        if (result != VK_SUCCESS) {
+            tc::Log::error("VulkanRenderDevice::supports_texture: format query failed (VkResult=%d)",
+                           static_cast<int>(result));
+            throw std::runtime_error("Vulkan image format support query failed");
+        }
+        return (properties.sampleCounts & desc.sample_count) != 0 &&
+               desc.width <= properties.maxExtent.width && desc.height <= properties.maxExtent.height &&
+               desc.array_layers <= properties.maxArrayLayers && desc.mip_levels <= properties.maxMipLevels;
+    }
+
     TextureHandle VulkanRenderDevice::create_texture(const TextureDesc& desc) {
-        if (desc.array_layers == 0) {
-            throw std::runtime_error("VulkanRenderDevice::create_texture: invalid array layer count");
+        if (!supports_texture(desc)) {
+            tc::Log::error("VulkanRenderDevice::create_texture: unsupported descriptor "
+                           "(format=%u, usage=0x%x, extent=%ux%u, layers=%u, mips=%u, samples=%u)",
+                           static_cast<unsigned>(desc.format), static_cast<unsigned>(desc.usage),
+                           desc.width, desc.height, desc.array_layers, desc.mip_levels, desc.sample_count);
+            throw std::runtime_error("VulkanRenderDevice::create_texture: unsupported texture descriptor");
         }
         VkTextureResource res;
         res.desc = desc;
@@ -1214,24 +1326,15 @@ namespace tgfx {
         alloc_ci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         if (vmaCreateImage(allocator_, &ci, &alloc_ci, &res.image, &res.allocation, nullptr) != VK_SUCCESS) {
+            tc::Log::error("VulkanRenderDevice::create_texture: image allocation failed");
             throw std::runtime_error("Failed to create Vulkan image");
         }
 
-        // Create image view
-        VkImageViewCreateInfo view_ci{};
-        view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        view_ci.image = res.image;
-        view_ci.viewType = desc.array_layers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
-        view_ci.format = ci.format;
-        view_ci.subresourceRange.aspectMask = vk::format_aspect_flags(desc.format);
-        view_ci.subresourceRange.baseMipLevel = 0;
-        view_ci.subresourceRange.levelCount = desc.mip_levels;
-        view_ci.subresourceRange.baseArrayLayer = 0;
-        view_ci.subresourceRange.layerCount = desc.array_layers;
-
-        if (vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
+        try {
+            create_texture_views(res);
+        } catch (...) {
             vmaDestroyImage(allocator_, res.image, res.allocation);
-            throw std::runtime_error("Failed to create image view");
+            throw;
         }
 
         res.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1247,7 +1350,7 @@ namespace tgfx {
         bool is_sampled = (static_cast<uint32_t>(desc.usage) & static_cast<uint32_t>(TextureUsage::Sampled)) != 0;
         if (is_sampled) {
             VkImage image = res.image;
-            VkImageAspectFlags aspect = vk::format_aspect_flags(desc.format);
+            VkImageAspectFlags aspect = vk::format_image_aspect_flags(desc.format);
             execute_immediate([&](VkCommandBuffer cb) {
                 transition_image_layout(cb,
                                         image,
@@ -1277,22 +1380,43 @@ namespace tgfx {
         res.external = true;
         res.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
+        create_texture_views(res);
+        return {textures_.add(std::move(res))};
+    }
+
+    void VulkanRenderDevice::create_texture_views(VkTextureResource& res) {
+        const auto& desc = res.desc;
         VkImageViewCreateInfo view_ci{};
         view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         view_ci.image = res.image;
         view_ci.viewType = desc.array_layers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
         view_ci.format = vk::to_vk_format(desc.format);
-        view_ci.subresourceRange.aspectMask = vk::format_aspect_flags(desc.format);
+        view_ci.subresourceRange.aspectMask = vk::format_image_aspect_flags(desc.format);
         view_ci.subresourceRange.baseMipLevel = 0;
         view_ci.subresourceRange.levelCount = desc.mip_levels;
         view_ci.subresourceRange.baseArrayLayer = 0;
         view_ci.subresourceRange.layerCount = desc.array_layers;
 
-        if (vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
-            throw std::runtime_error("VulkanRenderDevice::register_external_texture: vkCreateImageView failed");
+        const auto create = [&](VkImageView& view) {
+            if (vkCreateImageView(device_, &view_ci, nullptr, &view) != VK_SUCCESS) {
+                if (res.view) vkDestroyImageView(device_, res.view, nullptr);
+                res.view = VK_NULL_HANDLE;
+                tc::Log::error("VulkanRenderDevice::create_texture_views: vkCreateImageView failed");
+                throw std::runtime_error("Failed to create Vulkan texture view");
+            }
+        };
+        if (has_flag(desc.usage, TextureUsage::Sampled) || has_flag(desc.usage, TextureUsage::Storage)) {
+            // A sampled depth/stencil image exposes depth, not both aspects.
+            if (view_ci.subresourceRange.aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT)
+                view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            create(res.view);
         }
-
-        return {textures_.add(std::move(res))};
+        if (has_flag(desc.usage, TextureUsage::ColorAttachment) ||
+            has_flag(desc.usage, TextureUsage::DepthStencilAttachment)) {
+            view_ci.subresourceRange.aspectMask = vk::format_image_aspect_flags(desc.format);
+            view_ci.subresourceRange.levelCount = 1;
+            create(res.attachment_view);
+        }
     }
 
     namespace {
@@ -1342,6 +1466,17 @@ namespace tgfx {
     // --- Sampler ---
 
     SamplerHandle VulkanRenderDevice::create_sampler(const SamplerDesc& desc) {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(physical_device_, &properties);
+        if (!std::isfinite(desc.max_anisotropy) || desc.max_anisotropy < 1.0f ||
+            (desc.max_anisotropy > 1.0f &&
+             (!enabled_features_.samplerAnisotropy ||
+              desc.max_anisotropy > properties.limits.maxSamplerAnisotropy))) {
+            tc_log_error("VulkanRenderDevice: unsupported sampler anisotropy=%g (enabled=%d max=%g)",
+                         desc.max_anisotropy, enabled_features_.samplerAnisotropy,
+                         properties.limits.maxSamplerAnisotropy);
+            throw std::runtime_error("Unsupported Vulkan sampler anisotropy");
+        }
         VkSamplerResource res;
 
         VkSamplerCreateInfo ci{};
@@ -1447,6 +1582,8 @@ namespace tgfx {
         }
         for (auto h : q.textures) {
             if (auto* r = textures_.get(h.id)) {
+                if (r->attachment_view)
+                    vkDestroyImageView(device_, r->attachment_view, nullptr);
                 if (r->view)
                     vkDestroyImageView(device_, r->view, nullptr);
                 if (r->image && !r->external)
@@ -1627,13 +1764,22 @@ namespace tgfx {
 
         measured(&SubmitStats::fence_wait_us, [&] {
             if (frame_fence_in_flight_[slot]) {
-                vkWaitForFences(device_, 1, &frame_fences_[slot], VK_TRUE, UINT64_MAX);
-                vkResetFences(device_, 1, &frame_fences_[slot]);
+                const auto wait_result = vkWaitForFences(device_, 1, &frame_fences_[slot], VK_TRUE, UINT64_MAX);
+                if (wait_result != VK_SUCCESS) {
+                    tc_log(TC_LOG_ERROR, "[Vulkan] frame %u fence wait failed: VkResult=%d", slot, int(wait_result));
+                    throw std::runtime_error("Vulkan frame fence wait failed");
+                }
+                const auto reset_result = vkResetFences(device_, 1, &frame_fences_[slot]);
+                if (reset_result != VK_SUCCESS) {
+                    tc_log(TC_LOG_ERROR, "[Vulkan] frame %u fence reset failed: VkResult=%d", slot, int(reset_result));
+                    throw std::runtime_error("Vulkan frame fence reset failed");
+                }
                 frame_fence_in_flight_[slot] = false;
             }
         });
         complete_gpu_frame_timing(slot);
-        measured(&SubmitStats::readback_cleanup_us, [&] { complete_pixel_readbacks(pixel_readbacks_slots_[slot]); });
+        measured(&SubmitStats::readback_cleanup_us,
+                 [&] { complete_pixel_readbacks(pixel_readbacks_slots_[slot], VK_SUCCESS); });
         measured(&SubmitStats::destroy_cleanup_us, [&] { drain_pending_destroy(pending_destroy_slots_[slot]); });
         measured(&SubmitStats::descriptor_cleanup_us, [&] {
             for (VkDescriptorPool pool : descriptor_pools_[slot]) {
@@ -1669,14 +1815,12 @@ namespace tgfx {
         // sets should scale with draws (one per pipeline-state change).
         const uint32_t submitted_slot = current_pool_idx_;
         flush_pending_host_writes(submitted_slot);
-        PendingDestroyQueue submitted_destroy = std::move(pending_destroy_current_);
-        pending_destroy_current_ = {};
 
         // Close the immediate cb (copies / transitions / clears accumulated
         // since last submit) and submit it together with the main draw cb in
-        // ONE vkQueueSubmit. Queue-submit ordering guarantees immediate_cb's
-        // GPU work completes before the main cb starts — no explicit barrier
-        // needed for the "staging → device UBO, then draw reads UBO" pattern.
+        // ONE vkQueueSubmit. Barriers recorded by the transfer paths make
+        // uploaded data visible to consumers in the main CB. Submission order
+        // alone does not serialize execution or establish memory visibility.
         VkCommandBuffer cbs[4];
         uint32_t cb_count = 0;
         const std::int64_t gpu_timing_frame_number = vcmd.gpu_timing_frame_number();
@@ -1686,7 +1830,11 @@ namespace tgfx {
         }
         VkCommandBuffer submitted_immediate_cb = VK_NULL_HANDLE;
         if (immediate_cb_open_) {
-            vkEndCommandBuffer(immediate_cb_);
+            const auto end_result = vkEndCommandBuffer(immediate_cb_);
+            if (end_result != VK_SUCCESS) {
+                tc_log(TC_LOG_ERROR, "[Vulkan] immediate command end failed: VkResult=%d", int(end_result));
+                throw std::runtime_error("Vulkan immediate command end failed");
+            }
             immediate_cb_open_ = false;
             cbs[cb_count++] = immediate_cb_;
             submitted_immediate_cb = immediate_cb_;
@@ -1704,7 +1852,18 @@ namespace tgfx {
 
         const auto t_submit0 =
             stats_enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        vkQueueSubmit(graphics_queue_, 1, &si, frame_fences_[submitted_slot]);
+        const auto submit_result = vkQueueSubmit(graphics_queue_, 1, &si, frame_fences_[submitted_slot]);
+        if (submit_result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] frame %u submit failed: VkResult=%d", submitted_slot, int(submit_result));
+            // The fence was never submitted: do not mark it in flight and do
+            // not move readbacks into a slot that could publish stale bytes.
+            if (submitted_immediate_cb)
+                defer_cmd_buffer_free(submitted_immediate_cb);
+            destroy_pixel_readbacks(pixel_readbacks_current_);
+            throw std::runtime_error("Vulkan frame submit failed");
+        }
+        PendingDestroyQueue submitted_destroy = std::move(pending_destroy_current_);
+        pending_destroy_current_ = {};
         if (stats_enabled) {
             vulkan_stats_increment(
                 g_submit_us,
@@ -2136,6 +2295,8 @@ namespace tgfx {
 
         VkImageLayout prev_src = src->current_layout;
         VkImageLayout prev_dst = dst->current_layout;
+        const auto final_src = vulkan_detail::image_after_transfer_layout(src->desc, prev_src);
+        const auto final_dst = vulkan_detail::image_after_transfer_layout(dst->desc, prev_dst);
 
         bool msaa_resolve = src->desc.sample_count > 1 && dst->desc.sample_count == 1;
         bool msaa_copy = src->desc.sample_count > 1 && dst->desc.sample_count == src->desc.sample_count;
@@ -2233,76 +2394,74 @@ namespace tgfx {
                                VK_FILTER_LINEAR);
             }
 
-            // Leave both images in SHADER_READ_ONLY_OPTIMAL so downstream
-            // samplers (including bind_resource_set, which cannot transition
-            // from inside a render pass) work without further fix-ups. If
-            // prev_src was COLOR_ATTACHMENT_OPTIMAL the next render-pass
-            // begin will transition it back — one cheap barrier.
+            // Prepare sampled images for their descriptors; keep non-sampled
+            // images in layouts allowed by their usage and previous state.
             transition_image_layout(cb,
                                     src->image,
                                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                    final_src,
                                     VK_IMAGE_ASPECT_COLOR_BIT,
                                     src->desc.array_layers);
             transition_image_layout(cb,
                                     dst->image,
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                    final_dst,
                                     VK_IMAGE_ASPECT_COLOR_BIT,
                                     dst->desc.array_layers);
-            src->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            dst->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            src->current_layout = final_src;
+            dst->current_layout = final_dst;
         });
     }
 
     void VulkanRenderDevice::clear_texture(TextureHandle dst_handle, termin::LinearColor color, termin::Bounds2i viewport) {
         auto* dst = textures_.get(dst_handle.id);
-        if (!dst)
+        if (!dst || !has_flag(dst->desc.usage, TextureUsage::ColorAttachment) ||
+            vk::format_aspect_flags(dst->desc.format) != VK_IMAGE_ASPECT_COLOR_BIT) {
+            tc::Log::error("VulkanRenderDevice::clear_texture: invalid color attachment handle=%u", dst_handle.id);
+            return;
+        }
+        if (viewport.x1 <= viewport.x0 || viewport.y1 <= viewport.y0)
+            return;
+        const int x0 = std::clamp(viewport.x0, 0, static_cast<int>(dst->desc.width));
+        const int y0 = std::clamp(viewport.y0, 0, static_cast<int>(dst->desc.height));
+        const int x1 = std::clamp(viewport.x1, 0, static_cast<int>(dst->desc.width));
+        const int y1 = std::clamp(viewport.y1, 0, static_cast<int>(dst->desc.height));
+        if (x1 <= x0 || y1 <= y0)
             return;
 
-        VkImageLayout prev = dst->current_layout;
-
+        const auto rp = get_or_create_render_pass({dst->desc.format}, PixelFormat::Undefined, false,
+                                                  dst->desc.sample_count, LoadOp::Load, LoadOp::Load);
+        if (!rp)
+            return;
+        const auto fb = get_or_create_framebuffer(rp, {dst->attachment_view}, dst->desc.width,
+                                                  dst->desc.height, dst->desc.array_layers);
+        if (!fb)
+            return;
+        const VkImageLayout prev = dst->current_layout;
         execute_immediate([&](VkCommandBuffer cb) {
-            transition_image_layout(cb,
-                                    dst->image,
-                                    prev,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    VK_IMAGE_ASPECT_COLOR_BIT,
-                                    dst->desc.array_layers);
-
-            VkClearColorValue clear{};
-            clear.float32[0] = color.r;
-            clear.float32[1] = color.g;
-            clear.float32[2] = color.b;
-            clear.float32[3] = color.a;
-
-            // vkCmdClearColorImage requires a full-image range with an
-            // offset-based mechanism — it does not natively support a
-            // viewport subrect. For a subrect clear we'd need a render pass
-            // with LoadOp::Clear + scissor. In practice callers pass the
-            // full texture extent here (display composition clears the whole
-            // display before compositing viewports), so clearing the
-            // whole image is correct; if a future caller needs a true rect
-            // clear, route through begin_pass + scissor instead.
-            (void)viewport;
-
-            VkImageSubresourceRange range{};
-            range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            range.levelCount = 1;
-            range.layerCount = dst->desc.array_layers;
-
-            vkCmdClearColorImage(cb, dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear, 1, &range);
-
-            if (prev != VK_IMAGE_LAYOUT_UNDEFINED) {
-                transition_image_layout(cb,
-                                        dst->image,
-                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                        prev,
-                                        VK_IMAGE_ASPECT_COLOR_BIT,
-                                        dst->desc.array_layers);
-            } else {
-                dst->current_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            }
+            // Even an unchanged layout needs a dependency on earlier attachment writes.
+            transition_image_layout(cb, dst->image, prev, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                    VK_IMAGE_ASPECT_COLOR_BIT, dst->desc.array_layers);
+            VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+            begin.renderPass = rp;
+            begin.framebuffer = fb;
+            begin.renderArea.extent = {dst->desc.width, dst->desc.height};
+            vkCmdBeginRenderPass(cb, &begin, VK_SUBPASS_CONTENTS_INLINE);
+            VkClearAttachment attachment{};
+            attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            attachment.colorAttachment = 0;
+            attachment.clearValue.color = {{color.r, color.g, color.b, color.a}};
+            VkClearRect rect{};
+            rect.rect.offset = {x0, y0};
+            rect.rect.extent = {static_cast<uint32_t>(x1 - x0), static_cast<uint32_t>(y1 - y0)};
+            rect.layerCount = dst->desc.array_layers;
+            vkCmdClearAttachments(cb, 1, &attachment, 1, &rect);
+            vkCmdEndRenderPass(cb);
+            const auto final_layout = prev == VK_IMAGE_LAYOUT_UNDEFINED
+                ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : prev;
+            transition_image_layout(cb, dst->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, final_layout,
+                                    VK_IMAGE_ASPECT_COLOR_BIT, dst->desc.array_layers);
+            dst->current_layout = final_layout;
         });
     }
 

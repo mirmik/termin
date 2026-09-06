@@ -31,6 +31,7 @@ extern "C" {
 #include "tgfx/resources/tc_shader.h"
 #include "tgfx/resources/tc_shader_registry.h"
 #include "tgfx/resources/tc_texture.h"
+#include "tgfx/resources/tc_texture_registry.h"
 }
 
 #ifdef TGFX2_HAS_VULKAN
@@ -963,14 +964,26 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Vulkan smoke: dynamic uniform offsets must be advertised\n");
         return 1;
     }
-    if (!caps.supports_storage_textures) {
-        std::fprintf(stderr, "Vulkan smoke: storage textures must be advertised\n");
+    if (caps.supports_storage_textures || caps.supports_compute) {
+        std::fprintf(stderr, "Vulkan smoke: unimplemented storage textures/compute must not be advertised\n");
         return 1;
     }
     printf("Backend: Vulkan, max_tex: %u, compute: %s, geometry: %s\n",
            caps.max_texture_dimension_2d,
            caps.supports_compute ? "yes" : "no",
            caps.supports_geometry_shaders ? "yes" : "no");
+
+    auto* vulkan_device = static_cast<tgfx::VulkanRenderDevice*>(device.get());
+    const uint8_t rgb8_pixel[] = {17, 99, 231};
+    const tc_texture_pixel_data rgb8_input{rgb8_pixel, sizeof(rgb8_pixel), 1, 1, 3};
+    tc_texture rgb8_texture{};
+    rgb8_texture.header.pool_index = 0x52474208u;
+    if (!tc_texture_set_data(&rgb8_texture, &rgb8_input, nullptr, nullptr))
+        return 1;
+    const std::unique_ptr<void, decltype(&std::free)> rgb8_owner(rgb8_texture.data, &std::free);
+    const auto rgb8_handle = vulkan_device->ensure_tc_texture(&rgb8_texture);
+    if (!rgb8_handle)
+        return 1;
 
     // tc_texture RGB16F has no direct Vulkan image format in the bridge.
     // It must be expanded to RGBA16F with an alpha half-float of 1.0.
@@ -982,7 +995,6 @@ int main(int argc, char** argv) {
     rgb16f_texture.width = 1;
     rgb16f_texture.height = 1;
     rgb16f_texture.format = TC_TEXTURE_RGB16F;
-    auto* vulkan_device = static_cast<tgfx::VulkanRenderDevice*>(device.get());
     const tgfx::TextureHandle rgb16f_handle = vulkan_device->ensure_tc_texture(&rgb16f_texture);
     if (!rgb16f_handle) {
         fprintf(stderr, "Vulkan tc_texture RGB16F bridge upload failed\n");
@@ -993,6 +1005,16 @@ int main(int argc, char** argv) {
     rgb16f_cmd->end();
     device->submit(*rgb16f_cmd);
     rgb16f_cmd.reset();
+
+    float rgb8_readback[4] = {};
+    if (!device->read_pixel_rgba8(rgb8_handle, 0, 0, rgb8_readback) ||
+        std::abs(rgb8_readback[0] * 255.0f - 17.0f) > 0.5f ||
+        std::abs(rgb8_readback[1] * 255.0f - 99.0f) > 0.5f ||
+        std::abs(rgb8_readback[2] * 255.0f - 231.0f) > 0.5f || rgb8_readback[3] < 0.999f) {
+        fprintf(stderr, "Vulkan sized RGB8 upload/readback mismatch\n");
+        return 1;
+    }
+    printf("Vulkan sized RGB8 upload/readback preserved RGB and opaque alpha\n");
 
     float rgb16f_readback[4] = {};
     const bool rgb16f_ok = device->read_texture_rgba_float(rgb16f_handle, rgb16f_readback) &&

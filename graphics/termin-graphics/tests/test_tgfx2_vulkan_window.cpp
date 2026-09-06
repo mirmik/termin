@@ -171,6 +171,7 @@ void main() {
     pipe_desc.topology = tgfx::PrimitiveTopology::TriangleList;
     pipe_desc.depth_stencil.depth_test = false;
     pipe_desc.depth_stencil.depth_write = false;
+    pipe_desc.depth_format = tgfx::PixelFormat::Undefined;
     pipe_desc.raster.cull = tgfx::CullMode::None;
     pipe_desc.color_formats = {tgfx::PixelFormat::RGBA8_UNorm};
 

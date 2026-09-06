@@ -160,6 +160,12 @@ namespace tgfx {
     }
 
     void OpenGLCommandList::end_render_pass() {
+        // Attachment resolves cover the entire target independently of the last
+        // draw's scissor. glBlitFramebuffer applies that global state even though
+        // its source and destination rectangles cover the whole attachment.
+        const bool restore_scissor = !pending_color_resolves_.empty() && glIsEnabled(GL_SCISSOR_TEST);
+        if (restore_scissor)
+            glDisable(GL_SCISSOR_TEST);
         for (const PendingColorResolve& pending : pending_color_resolves_) {
             RenderPassDesc destination_pass;
             ColorAttachmentDesc destination_attachment;
@@ -184,6 +190,8 @@ namespace tgfx {
                               GL_COLOR_BUFFER_BIT,
                               GL_NEAREST);
         }
+        if (restore_scissor)
+            glEnable(GL_SCISSOR_TEST);
         pending_color_resolves_.clear();
         // Restore default framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0);

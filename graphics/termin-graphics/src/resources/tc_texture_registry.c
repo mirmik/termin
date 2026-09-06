@@ -197,7 +197,8 @@ tc_texture_get_builtin_rgba8(const char* uuid, const uint8_t pixel[4], tc_textur
         return tc_texture_handle_invalid();
     }
 
-    if (!tc_texture_set_data(texture, pixel, 1, 1, 4, uuid, NULL)) {
+    const tc_texture_pixel_data pixels = {pixel, 4, 1, 1, 4};
+    if (!tc_texture_set_data(texture, &pixels, uuid, NULL)) {
         tc_log(TC_LOG_ERROR, "tc_texture: failed to initialize built-in texture '%s'", uuid);
         tc_texture_destroy(handle);
         return tc_texture_handle_invalid();
@@ -443,38 +444,58 @@ bool tc_texture_release(tc_texture* tex) {
 // Texture data helpers
 // ============================================================================
 
+size_t tc_texture_byte_size(uint32_t width, uint32_t height, tc_texture_format format) {
+    const size_t bpp = tc_texture_format_bpp(format);
+    if (width == 0 || height == 0 || bpp == 0 || (size_t)width > (size_t)PTRDIFF_MAX / height / bpp)
+        return 0;
+    return (size_t)width * height * bpp;
+}
+
+bool tc_texture_validate_pixel_data(const tc_texture_pixel_data* pixels, tc_texture_format* out_format) {
+    if (!pixels || !pixels->data || pixels->channels < 1 || pixels->channels > 4) {
+        tc_log_error("tc_texture_validate_pixel_data: expected a non-null buffer with 1..4 channels");
+        return false;
+    }
+    const tc_texture_format formats[] = {TC_TEXTURE_R8, TC_TEXTURE_RG8, TC_TEXTURE_RGB8, TC_TEXTURE_RGBA8};
+    const tc_texture_format format = formats[pixels->channels - 1];
+    const size_t expected = tc_texture_byte_size(pixels->width, pixels->height, format);
+    if (expected == 0 || pixels->size_bytes != expected) {
+        tc_log_error("tc_texture_validate_pixel_data: invalid extent/size: %ux%u channels=%u bytes=%zu expected=%zu",
+                     pixels->width, pixels->height, (unsigned)pixels->channels, pixels->size_bytes, expected);
+        return false;
+    }
+    if (out_format)
+        *out_format = format;
+    return true;
+}
+
 bool tc_texture_set_data(tc_texture* tex,
-                         const void* data,
-                         uint32_t width,
-                         uint32_t height,
-                         uint8_t channels,
+                         const tc_texture_pixel_data* pixels,
                          const char* name,
                          const char* source_path) {
-    if (!tex)
+    tc_texture_format format;
+    if (!tex) {
+        tc_log_error("tc_texture_set_data: texture is null");
+        return false;
+    }
+    if (!tc_texture_validate_pixel_data(pixels, &format))
         return false;
 
-    size_t data_size = (size_t)width * height * channels;
-
-    void* new_data = NULL;
-    if (data_size > 0) {
-        new_data = malloc(data_size);
-        if (!new_data)
-            return false;
-        if (data) {
-            memcpy(new_data, data, data_size);
-        } else {
-            memset(new_data, 0, data_size);
-        }
+    void* new_data = malloc(pixels->size_bytes);
+    if (!new_data) {
+        tc_log_error("tc_texture_set_data: allocation failed for %zu bytes", pixels->size_bytes);
+        return false;
     }
+    memcpy(new_data, pixels->data, pixels->size_bytes);
 
     if (tex->data)
         free(tex->data);
 
     tex->data = new_data;
-    tex->width = width;
-    tex->height = height;
-    tex->channels = channels;
-    tex->format = TC_TEXTURE_RGBA8;
+    tex->width = pixels->width;
+    tex->height = pixels->height;
+    tex->channels = pixels->channels;
+    tex->format = (uint8_t)format;
     tex->header.is_loaded = 1;
     tex->header.version++;
 
@@ -541,6 +562,14 @@ bool tc_texture_set_encoding(tc_texture* tex, tc_texture_encoding encoding) {
 void tc_texture_set_size_format(tc_texture* tex, uint32_t width, uint32_t height, tc_texture_format format) {
     if (!tex)
         return;
+    if (tc_texture_byte_size(width, height, format) == 0) {
+        tc_log_error("tc_texture_set_size_format: invalid extent/format %ux%u/%u", width, height, (unsigned)format);
+        return;
+    }
+    if (tex->width != width || tex->height != height || tex->format != (uint8_t)format) {
+        free(tex->data);
+        tex->data = NULL;
+    }
     tex->width = width;
     tex->height = height;
     tex->format = (uint8_t)format;
@@ -642,7 +671,7 @@ static bool collect_texture_info(tc_texture_handle h, tc_texture* tex, void* use
     info->format = tex->format;
     info->encoding = tex->encoding;
     info->is_loaded = tex->header.is_loaded;
-    info->memory_bytes = (size_t)tex->width * tex->height * tex->channels;
+    info->memory_bytes = tex->data ? tc_texture_data_size(tex) : 0;
 
     return true;
 }

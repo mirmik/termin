@@ -19,6 +19,16 @@ using namespace termin;
 
 namespace tgfx_bindings {
 
+    static void require_u8_data(const TcTexture& texture) {
+        const tc_texture* raw = texture.get();
+        if (raw && raw->data &&
+            (raw->format > TC_TEXTURE_R8 || tc_texture_data_size(raw) == 0 ||
+             raw->channels != tc_texture_format_channels(static_cast<tc_texture_format>(raw->format)))) {
+            tc_log_error("TcTexture numpy data requires a valid 8-bit texture");
+            throw nb::value_error("TcTexture numpy data requires a valid 8-bit texture");
+        }
+    }
+
     void bind_texture(nb::module_& m) {
         nb::enum_<tgfx::TextureEncoding>(m, "TextureEncoding", nb::is_arithmetic())
             .value("LINEAR", tgfx::TextureEncoding::Linear)
@@ -49,6 +59,7 @@ namespace tgfx_bindings {
                              if (!self.is_valid() || !self.data()) {
                                  return nb::none();
                              }
+                             require_u8_data(self);
                              size_t size = self.data_size();
                              uint8_t* buf = new uint8_t[size];
                              std::memcpy(buf, self.data(), size);
@@ -83,6 +94,7 @@ namespace tgfx_bindings {
 
             .def("get_upload_data",
                  [](const TcTexture& self) {
+                     require_u8_data(self);
                      auto [data, w, h] = self.get_upload_data();
                      if (data.empty()) {
                          return nb::make_tuple(nb::none(), nb::make_tuple(0, 0));
@@ -116,8 +128,11 @@ namespace tgfx_bindings {
                    const std::string& source_path,
                    const std::string& uuid_hint,
                    tgfx::TextureEncoding encoding) {
+                    const TexturePixelDataView pixels{data.data(), data.nbytes(), width, height, channels};
+                    if (!tc_texture_validate_pixel_data(&pixels, nullptr))
+                        throw nb::value_error("Texture buffer size must match positive width * height * channels (1..4)");
                     return TcTexture::from_data(
-                        TcTextureCreateInfo{TexturePixelDataView{data.data(), width, height, channels},
+                        TcTextureCreateInfo{pixels,
                                             TextureTransformFlags{flip_x, flip_y, transpose},
                                             name,
                                             source_path,

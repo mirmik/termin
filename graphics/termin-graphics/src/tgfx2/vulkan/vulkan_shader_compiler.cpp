@@ -1,6 +1,7 @@
 #ifdef TGFX2_HAS_VULKAN
 
 #include "tgfx2/vulkan/vulkan_shader_compiler.hpp"
+#include "tgfx2/vulkan/internal/shader_target.hpp"
 
 #ifdef TGFX2_HAS_SHADERC
 #include <cstdlib>
@@ -22,7 +23,7 @@ namespace tgfx::vk {
     namespace {
 
         constexpr uint32_t SPIRV_CACHE_MAGIC = 0x54535631u; // "TSV1"
-        constexpr uint32_t SPIRV_CACHE_VERSION = 2;
+        constexpr uint32_t SPIRV_CACHE_VERSION = 3;
 
         static shaderc_shader_kind to_shaderc_kind(ShaderStage stage) {
             switch (stage) {
@@ -102,7 +103,8 @@ namespace tgfx::vk {
         }
 
         static std::filesystem::path
-        shader_cache_path(const std::string& source, ShaderStage stage, const std::string& entry_point) {
+        shader_cache_path(const std::string& source, ShaderStage stage, const std::string& entry_point,
+                          vulkan_detail::ShaderTarget target) {
             std::filesystem::path dir = shader_cache_dir();
             if (dir.empty())
                 return {};
@@ -114,6 +116,8 @@ namespace tgfx::vk {
             h = fnv1a_append(h, &version, sizeof(version));
             h = fnv1a_append(h, &stage_u32, sizeof(stage_u32));
             h = fnv1a_append(h, &opt_u32, sizeof(opt_u32));
+            h = fnv1a_append(h, &target.vulkan, sizeof(target.vulkan));
+            h = fnv1a_append(h, &target.spirv, sizeof(target.spirv));
             h = fnv1a_append(h, entry_point.data(), entry_point.size());
             h = fnv1a_append(h, "\0", 1);
             h = fnv1a_append(h, source.data(), source.size());
@@ -175,10 +179,11 @@ namespace tgfx::vk {
     } // namespace
 
     SpirvCompileResult
-    compile_glsl_to_spirv(const std::string& source, ShaderStage stage, const std::string& entry_point) {
+    compile_glsl_to_spirv(const std::string& source, ShaderStage stage, uint32_t api_version, const std::string& entry_point) {
         SpirvCompileResult result;
 
-        std::filesystem::path cache_path = shader_cache_path(source, stage, entry_point);
+        const auto target = vulkan_detail::shader_target(api_version);
+        std::filesystem::path cache_path = shader_cache_path(source, stage, entry_point, target);
         if (load_spirv_cache(cache_path, result.spirv)) {
             result.success = true;
             return result;
@@ -188,9 +193,8 @@ namespace tgfx::vk {
         static shaderc::Compiler compiler;
         shaderc::CompileOptions options;
 
-        // Target Vulkan 1.2 / SPIR-V 1.5 (compatible with validation layers)
-        options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-        options.SetTargetSpirv(shaderc_spirv_version_1_5);
+        options.SetTargetEnvironment(shaderc_target_env_vulkan, target.vulkan);
+        options.SetTargetSpirv(static_cast<shaderc_spirv_version>(target.spirv));
         options.SetOptimizationLevel(performance_optimization_enabled() ? shaderc_optimization_level_performance
                                                                         : shaderc_optimization_level_zero);
 
@@ -261,7 +265,8 @@ namespace tgfx::vk {
 #else
 
     SpirvCompileResult
-    compile_glsl_to_spirv(const std::string& source, ShaderStage stage, const std::string& entry_point) {
+    compile_glsl_to_spirv(const std::string& source, ShaderStage stage, uint32_t api_version, const std::string& entry_point) {
+        (void)api_version;
         (void)source;
         (void)stage;
         (void)entry_point;

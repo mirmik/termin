@@ -8,6 +8,8 @@ namespace termin {
 
     TcTexture TcTexture::from_data(const TcTextureCreateInfo& info) {
         const TexturePixelDataView& pixels = info.pixels;
+        if (!tc_texture_validate_pixel_data(&pixels, nullptr))
+            return {};
 
         // Compute UUID from content if not provided
         char uuid_buf[40];
@@ -18,7 +20,7 @@ namespace termin {
         } else {
             // Compute content-based UUID
             tc_texture_compute_uuid(pixels.data,
-                                    pixels.byte_size(),
+                                    pixels.size_bytes,
                                     pixels.width,
                                     pixels.height,
                                     pixels.channels,
@@ -33,10 +35,7 @@ namespace termin {
             tc_texture* tex = tc_texture_get(h);
             if (tex) {
                 if (!tc_texture_set_data(tex,
-                                         pixels.data,
-                                         pixels.width,
-                                         pixels.height,
-                                         pixels.channels,
+                                         &pixels,
                                          info.name.empty() ? nullptr : info.name.c_str(),
                                          info.source_path.empty() ? nullptr : info.source_path.c_str())) {
                     tc::Log::error("TcTexture::from_data: failed to set data on declared texture");
@@ -61,10 +60,7 @@ namespace termin {
 
         // Set data
         if (!tc_texture_set_data(tex,
-                                 pixels.data,
-                                 pixels.width,
-                                 pixels.height,
-                                 pixels.channels,
+                                 &pixels,
                                  info.name.empty() ? nullptr : info.name.c_str(),
                                  info.source_path.empty() ? nullptr : info.source_path.c_str())) {
             tc::Log::error("TcTexture::from_data: failed to set data");
@@ -149,8 +145,12 @@ namespace termin {
 
         uint32_t w = tex->width;
         uint32_t h = tex->height;
-        uint8_t ch = tex->channels;
-        size_t size = (size_t)w * h * ch;
+        const size_t ch = tc_texture_format_bpp(static_cast<tc_texture_format>(tex->format));
+        const size_t size = tc_texture_data_size(tex);
+        if (size == 0) {
+            tc_log_error("TcTexture::get_upload_data: invalid extent/format");
+            return {{}, 0, 0};
+        }
 
         std::vector<uint8_t> result(size);
         std::memcpy(result.data(), tex->data, size);
@@ -161,8 +161,8 @@ namespace termin {
             for (uint32_t y = 0; y < h; ++y) {
                 for (uint32_t x = 0; x < w; ++x) {
                     for (uint8_t c = 0; c < ch; ++c) {
-                        size_t src_idx = (y * w + x) * ch + c;
-                        size_t dst_idx = (x * h + y) * ch + c;
+                        size_t src_idx = (static_cast<size_t>(y) * w + x) * ch + c;
+                        size_t dst_idx = (static_cast<size_t>(x) * h + y) * ch + c;
                         transposed[dst_idx] = result[src_idx];
                     }
                 }
@@ -177,8 +177,8 @@ namespace termin {
                 for (uint32_t x = 0; x < w / 2; ++x) {
                     uint32_t x2 = w - 1 - x;
                     for (uint8_t c = 0; c < ch; ++c) {
-                        size_t idx1 = (y * w + x) * ch + c;
-                        size_t idx2 = (y * w + x2) * ch + c;
+                        size_t idx1 = (static_cast<size_t>(y) * w + x) * ch + c;
+                        size_t idx2 = (static_cast<size_t>(y) * w + x2) * ch + c;
                         std::swap(result[idx1], result[idx2]);
                     }
                 }
@@ -191,8 +191,8 @@ namespace termin {
                 uint32_t y2 = h - 1 - y;
                 for (uint32_t x = 0; x < w; ++x) {
                     for (uint8_t c = 0; c < ch; ++c) {
-                        size_t idx1 = (y * w + x) * ch + c;
-                        size_t idx2 = (y2 * w + x) * ch + c;
+                        size_t idx1 = (static_cast<size_t>(y) * w + x) * ch + c;
+                        size_t idx2 = (static_cast<size_t>(y2) * w + x) * ch + c;
                         std::swap(result[idx1], result[idx2]);
                     }
                 }

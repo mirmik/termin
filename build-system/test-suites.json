@@ -44,6 +44,12 @@
     ],
     "source_classifications": [
       {
+        "path": "engine/termin-engine/tests/test_python_world_controller.cpp",
+        "profiles": ["pr", "linux-full", "windows-d3d11"],
+        "capabilities": ["python-bindings"],
+        "reason": "Compiled only with TERMIN_BUILD_PYTHON, like its CTest registration."
+      },
+      {
         "path": "core/termin-inspect/tests/test_python_inspect.cpp",
         "profiles": [
           "pr",
@@ -182,6 +188,42 @@
         "reason": "Creates a GLFW window supplied by the build environment."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_depth_state.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for depth readback preserving caller framebuffer state."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_buffer_state.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for buffer transfers preserving VAO/EBO and indexed pixels."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_upload.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for packed upload pixel and state regressions."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_resolve.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for MRT resolve pixels under poisoned scissor."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_ownership.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL to verify borrowed and owned native object lifetimes."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_clear_texture.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for rectangle clear and caller-state pixel regressions."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_bound_resource_set.cpp",
         "profiles": [
           "linux-full"
@@ -213,6 +255,12 @@
           "vulkan"
         ],
         "reason": "Requires an SDL Vulkan window."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_swapchain.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "vulkan"],
+        "reason": "SDL Vulkan WSI failure injection, image semaphore lifetime, resize and presentation stress."
       },
       {
         "path": "graphics/termin-graphics/tests/test_draw_list2d_pixel_smoke.cpp",
@@ -312,6 +360,72 @@
           "vulkan"
         ],
         "reason": "Built only with the Vulkan backend."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_clear_rect.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Native clipped clear pixels on mipmapped and multisampled Vulkan attachments."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_texture_views.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Native mip-zero attachments, full-chain sampling and depth/stencil aspects."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_pipeline_contracts.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Native aligned UBO slices, descriptor cache identity, additive dynamic offsets and MRT channel masks."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_capabilities.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Checks enabled features, rejected operations, geometry descriptors and separate image/sampler pixels."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_shader_target.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Checks desktop/API1.0 shader targets, precompiled rejection and target-specific shader caches."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_readback_memory.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Instrumented non-coherent allocator and failed readback completion/map/invalidate checks."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_readback.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Native buffer/color/depth readback and async publication through completion gates."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_image_sync.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Checks vertex texture consumers and transfer layout restoration with native pixels."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_buffer_sync.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Checks upload/copy dependencies for repeated vertex, index and uniform reads on Vulkan."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_shader_input.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Checks malformed and valid SPIR-V through the native Vulkan shader API."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_validation.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Requires Vulkan and the Khronos validation layer; verifies the mandatory CTest gate."
       },
       {
         "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_stats.cpp",

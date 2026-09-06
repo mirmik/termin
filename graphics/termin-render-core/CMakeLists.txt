@@ -131,6 +131,8 @@ if(TERMIN_BUILD_TESTS)
     termin_render_core_add_test(pipeline_template test_pipeline_template.cpp)
     termin_render_core_add_test(raster_pass_contract test_raster_pass_contract.cpp)
     termin_render_core_add_test(render_execution test_render_execution.cpp)
+    target_include_directories(termin_render_core_render_execution_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/support)
     termin_render_core_add_test(render_item_snapshot test_render_item_snapshot.cpp)
     termin_render_core_add_test(render_item_submission test_render_item_submission.cpp)
     termin_render_core_add_test(render_task test_render_task.cpp)

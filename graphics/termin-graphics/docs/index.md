@@ -53,6 +53,26 @@ device, но передают его во владение `GraphicsHost`. Он�
 
 ## Texture CPU Sync
 
+CPU creation/update uses `tc_texture_pixel_data` (the C++ name is
+`TexturePixelDataView`): `{data, size_bytes, width, height, channels}`.
+The buffer must be non-null, tightly packed, and contain exactly
+`width * height * channels` bytes, with positive dimensions and 1–4 channels.
+Validation runs before content hashing and copying; invalid input leaves an
+existing texture unchanged. The C setter is
+`tc_texture_set_data(texture, &pixels, name, source_path)`.
+
+The stored format is R8/RG8/RGB8/RGBA8 according to the channel count. RGB stays
+three bytes per CPU pixel and expands to RGBA only in the common GPU upload
+preparation. This descriptor holds one 2D base mip; generated mips are separate
+upload levels. `tc_texture_byte_size` checks format and size arithmetic.
+Changing extent/format through `tc_texture_set_size_format` discards an old CPU
+payload so its allocation cannot be reinterpreted using a larger format.
+
+Python `TcTexture.from_data` passes the actual ndarray size and raises
+`ValueError` for invalid dimensions, channels or byte count. `.data` and
+`get_upload_data()` return copies of 8-bit textures; other CPU formats are
+explicitly rejected by these NumPy accessors.
+
 The process-wide `tc_texture` registry owns the canonical white and flat-normal
 1x1 textures. `tc_texture_get_white_1x1()` and
 `tc_texture_get_normal_1x1()` create them lazily and return their generational
@@ -83,6 +103,49 @@ cache. Python `Texture.sync_to_cpu()` exposes the same operation.
 `IRenderDevice::capabilities()` или Python `Tgfx2Context.texture_origin_top_left`,
 а не ветвление по строке `Tgfx2Context.backend`. Строковый backend оставлен как
 диагностика, не как точка принятия rendering-решений.
+
+### Vulkan transfer synchronization
+
+Buffer uploads and command-list buffer copies record range-scoped dependencies
+before transfer accesses and after transfer writes. Destination usages select
+vertex/index/uniform/storage consumers. This covers both visibility of the new
+bytes and overwriting buffers read by earlier GPU commands, without queue idle.
+Host writes to mapped buffers still require a CPU/GPU lifetime contract; see
+board investigation #2246.
+
+Image transitions include transfer reads and all supported shader stages.
+Copy/blit prepares sampled images for shader reads; non-sampled images preserve
+their previous layout, or receive a usage-compatible layout after their first
+write. Transfer-only images do not have image views.
+
+The current Vulkan device-level `execute_immediate` path records a **prelude to
+the next submission**, before that submission's draw command buffer. It does not
+insert an operation between already recorded draws. Use command-list copy
+operations between render passes for ordered copies. Device blits/readback
+requests consuming a rendered image must follow its producer submission.
+General ordering, abandoned/reordered command lists and global image-layout
+tracking remain an investigation under #2230.
+
+Vulkan readback (#2202) records GPU-write → HOST_READ dependencies, checks GPU
+completion, then maps and invalidates the VMA allocation before copying bytes.
+VMA handles non-coherent atom alignment and coherent-memory no-ops. A failed
+completion/map/invalidate does not modify the output or publish an async result.
+Synchronous producers must be submitted before reading; readback does not execute
+unsubmitted draw/prelude commands. Async requests themselves enter the next
+submission's prelude and become pollable after its frame fence completes or a
+successful `wait_idle()`. An idle device does not complete unsubmitted requests.
+
+Pixel RGBA8 readback accepts RGBA8_UNorm/RGBA8_sRGB; depth readback accepts D32F.
+Images must have CopySrc usage, one sample and initialized contents. Use full
+texture float readback for other supported color formats. Device-local buffer
+readback needs CopySrc; host-visible buffers are read directly after completion.
+
+Native regressions: `tgfx2_vulkan_buffer_sync_test` and
+`tgfx2_vulkan_image_sync_test`, run through root `task test:cpp` with mandatory
+Vulkan synchronization validation.
+`tgfx2_vulkan_readback_test` covers buffer/color/depth sync and async results;
+`tgfx2_vulkan_readback_memory_test` uses an instrumented non-coherent allocator
+to verify cache refresh and failure paths independently of the GPU memory type.
 
 ## Canonical 2D Draw Lists
 

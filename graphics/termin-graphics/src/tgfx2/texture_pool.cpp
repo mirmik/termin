@@ -50,6 +50,18 @@ namespace tgfx {
         clear();
     }
 
+    TexturePool::TexturePool(TexturePool&& other) noexcept {
+        entries.swap(other.entries);
+    }
+
+    TexturePool& TexturePool::operator=(TexturePool&& other) noexcept {
+        if (this != &other) {
+            clear();
+            entries.swap(other.entries);
+        }
+        return *this;
+    }
+
     bool TexturePool::ensure(IRenderDevice& device, std::string_view key, const TextureDesc& desc) {
         for (auto& entry : entries) {
             if (entry.key != key) {
@@ -123,6 +135,18 @@ namespace tgfx {
 
     RenderTargetPool::~RenderTargetPool() {
         clear();
+    }
+
+    RenderTargetPool::RenderTargetPool(RenderTargetPool&& other) noexcept {
+        entries.swap(other.entries);
+    }
+
+    RenderTargetPool& RenderTargetPool::operator=(RenderTargetPool&& other) noexcept {
+        if (this != &other) {
+            clear();
+            entries.swap(other.entries);
+        }
+        return *this;
     }
 
     bool RenderTargetPool::ensure(IRenderDevice& device,

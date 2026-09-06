@@ -1103,7 +1103,19 @@ sanitizer/coverage или другого несовместимого профи
   headless наборе, а тесты, создающие окна/GL-контексты, включаются только
   через `--window-tests` / `--full`.
 
-Window tests настроены так, чтобы пропускаться в headless-окружении без usable video backend, а не валить весь прогон.
+CTest включает обязательную Vulkan validation, в том числе synchronization
+validation. Выбранный Vulkan профиль требует ICD и `VK_LAYER_KHRONOS_validation`;
+отсутствие runtime/layer считается ошибкой. Для окружения без Vulkan используется
+явный профиль `task test:cpp -- --no-vulkan`. Сообщения `[GPU validation error]`
+проваливают тест независимо от exit code executable, включая ошибки создания и
+уничтожения устройства. Полные diagnostics сохраняются в `Testing/Temporary/LastTest.log`
+и JUnit; устройство также печатает число ошибок за свою жизнь.
+`tgfx2_vulkan_validation_test` проверяет чистый запуск и намеренные ошибки native
+API, initialization, shutdown и отсутствие layer через вложенный CTest.
+
+Window tests без обязательного Vulkan runtime могут пропускаться в
+headless-окружении без usable video backend. Для обязательных Vulkan window tests
+следует предоставить оконную среду либо запускать headless набор без `--full`.
 
 ## Общий тестовый цикл
 

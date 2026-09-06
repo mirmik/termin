@@ -1,9 +1,7 @@
 // vulkan_swapchain.hpp - VkSwapchainKHR wrapper for on-screen presentation.
 //
-// Owns the Vulkan swapchain, per-image views, and per-frame sync primitives
-// (image_available / render_finished semaphores + in-flight fence). The
-// host drives frames through acquire()/present(); the render device
-// itself is swapchain-agnostic.
+// Owns per-image views/present semaphores and per-frame acquire/submit resources.
+// The host publishes frames through compose_and_present()/clear_and_present().
 #pragma once
 
 #ifdef TGFX2_HAS_VULKAN
@@ -19,6 +17,7 @@
 #include "tgfx2/enums.hpp"
 #include "tgfx2/handles.hpp"
 #include "tgfx2/tgfx2_api.h"
+#include "tgfx2/vulkan/internal/swapchain_ops.hpp"
 
 namespace tgfx {
 
@@ -50,6 +49,8 @@ namespace tgfx {
 
     private:
         VulkanRenderDevice& device_;
+        vulkan_detail::SwapchainOps ops_;
+        bool failed_ = false;
         VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
         VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
@@ -67,8 +68,13 @@ namespace tgfx {
         // Per-in-flight-frame sync. Indexed by `current_frame_` which
         // wraps on MAX_FRAMES_IN_FLIGHT.
         std::vector<VkSemaphore> image_available_semaphores_;
+        // Indexed by acquired image, not by frame slot. Reacquisition plus the
+        // submit wait proves the previous presentation has consumed this signal.
         std::vector<VkSemaphore> render_finished_semaphores_;
         std::vector<VkFence> in_flight_fences_;
+        std::vector<VkFence> acquire_fences_;
+        std::array<bool, MAX_FRAMES_IN_FLIGHT> submitted_{};
+        std::array<bool, MAX_FRAMES_IN_FLIGHT> acquire_pending_{};
 
         // Per-in-flight-frame command buffer for compose_and_present.
         // Allocated once at swapchain construction, reused each cycle.
@@ -93,45 +99,35 @@ namespace tgfx {
                         VkSurfaceKHR surface,
                         uint32_t width,
                         uint32_t height,
-                        PresentationMode presentation_mode = PresentationMode::VSync);
+                        PresentationMode presentation_mode = PresentationMode::VSync,
+                        const vulkan_detail::SwapchainOps& ops = {});
         ~VulkanSwapchain();
 
         VulkanSwapchain(const VulkanSwapchain&) = delete;
         VulkanSwapchain& operator=(const VulkanSwapchain&) = delete;
 
-        // Acquire the next image. On VK_SUCCESS `out_image_index` is set
-        // and the returned semaphore is the one the caller must wait on
-        // before using the acquired image. On VK_ERROR_OUT_OF_DATE_KHR /
-        // VK_SUBOPTIMAL_KHR the caller should recreate() and retry next
-        // frame. Any other error is fatal (logged + VK_NULL_HANDLE
-        // returned).
+    private:
+        // SUCCESS/SUBOPTIMAL acquire an image; OUT_OF_DATE requests recreation.
+        // TIMEOUT/NOT_READY acquire nothing. Other errors stop this swapchain.
         VkResult acquire(uint32_t* out_image_index, VkSemaphore* out_image_available);
 
         // Present the given image. `render_finished` is the semaphore that
         // the caller signalled when it submitted its command buffer —
         // presentation waits on it before actually putting the image on
-        // screen. Returns the result of vkQueuePresentKHR; OUT_OF_DATE /
-        // SUBOPTIMAL should trigger a recreate() on the next frame.
+        // screen. OUT_OF_DATE requests recreation; SUBOPTIMAL remains usable.
         VkResult present(uint32_t image_index, VkSemaphore render_finished);
 
+    public:
         // Recreate the swapchain at a new size (e.g. on window resize
         // or after an OUT_OF_DATE from acquire/present). Waits for the
         // device to be idle first — safe to call while a previous frame
         // might still be in flight.
         void recreate(uint32_t width, uint32_t height);
 
-        // In-flight frame management. The host calls wait_for_current_frame()
-        // at the start of each frame before recording commands; this
-        // blocks on the matching VkFence until the previous GPU submission
-        // for this frame slot has completed, guaranteeing that the
-        // semaphores and command buffers we're about to reuse are no
-        // longer in use by the GPU. advance_frame() increments the slot
-        // for the next frame and is called after present().
+    private:
         void wait_for_current_frame();
         void advance_frame();
-        VkFence current_fence() const {
-            return in_flight_fences_[current_frame_];
-        }
+    public:
         PresentationMode presentation_mode() const {
             return requested_presentation_mode_;
         }
@@ -182,6 +178,10 @@ namespace tgfx {
         }
 
     private:
+        void check(VkResult result, const char* operation);
+        void require_usable() const;
+        void wait_for_retirement();
+        void submit_frame(VkCommandBuffer commands, uint32_t image_index, VkSemaphore image_available);
         void create_swapchain();
         void destroy_swapchain();
         void create_sync_objects();

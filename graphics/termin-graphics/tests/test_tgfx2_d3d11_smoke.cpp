@@ -789,8 +789,9 @@ int main() {
             128,
             128,
         };
+        const tc_texture_pixel_data texture_input{texture_pixels, sizeof(texture_pixels), 2, 2, 4};
         if (!texture || !tc_texture_set_encoding(texture, TC_TEXTURE_ENCODING_SRGB) ||
-            !tc_texture_set_data(texture, texture_pixels, 2, 2, 4, "D3D11 smoke texture", nullptr)) {
+            !tc_texture_set_data(texture, &texture_input, "D3D11 smoke texture", nullptr)) {
             std::fprintf(stderr, "D3D11 smoke: failed to create tc_texture\n");
             return 1;
         }
@@ -804,7 +805,7 @@ int main() {
         tc_texture_handle linear_texture_handle = tc_texture_create("d3d11-smoke-linear-texture");
         tc_texture* linear_texture = tc_texture_get(linear_texture_handle);
         if (!linear_texture || !tc_texture_set_encoding(linear_texture, TC_TEXTURE_ENCODING_LINEAR) ||
-            !tc_texture_set_data(linear_texture, texture_pixels, 2, 2, 4, "D3D11 smoke linear texture", nullptr)) {
+            !tc_texture_set_data(linear_texture, &texture_input, "D3D11 smoke linear texture", nullptr)) {
             std::fprintf(stderr, "D3D11 smoke: failed to create Linear tc_texture\n");
             return 1;
         }
