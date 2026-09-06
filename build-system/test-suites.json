@@ -221,6 +221,12 @@
         "reason": "Requires an SDL Vulkan window."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_swapchain.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "vulkan"],
+        "reason": "SDL Vulkan WSI failure injection, image semaphore lifetime, resize and presentation stress."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_draw_list2d_pixel_smoke.cpp",
         "profiles": [
           "pr",

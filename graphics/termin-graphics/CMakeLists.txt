@@ -1146,6 +1146,23 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
             termin_add_test_labels(tgfx2_vulkan_window
                 "termin:capability:window"
                 "termin:capability:vulkan")
+            add_executable(tgfx2_vulkan_swapchain_test tests/test_tgfx2_vulkan_swapchain.cpp)
+            target_include_directories(tgfx2_vulkan_swapchain_test PRIVATE ${SDL2_SMOKE_INCLUDE_DIR})
+            target_compile_definitions(tgfx2_vulkan_swapchain_test PRIVATE TGFX2_HAS_VULKAN)
+            target_link_libraries(tgfx2_vulkan_swapchain_test
+                PRIVATE termin_graphics2 Vulkan::Vulkan ${SDL2_SMOKE_LIBRARY})
+            if(SDL2_SMOKE_DLL)
+                add_custom_command(TARGET tgfx2_vulkan_swapchain_test POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${SDL2_SMOKE_DLL}"
+                        "$<TARGET_FILE_DIR:tgfx2_vulkan_swapchain_test>")
+            endif()
+            termin_set_rpath_test(tgfx2_vulkan_swapchain_test)
+            add_test(NAME tgfx2_vulkan_swapchain_test COMMAND tgfx2_vulkan_swapchain_test)
+            set_tests_properties(tgfx2_vulkan_swapchain_test PROPERTIES TIMEOUT 60)
+            termin_add_test_labels(tgfx2_vulkan_swapchain_test
+                "termin:capability:window"
+                "termin:capability:vulkan")
         endif()
     endif()
 

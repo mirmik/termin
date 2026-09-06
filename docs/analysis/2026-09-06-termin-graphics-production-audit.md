@@ -10,6 +10,10 @@
 обычный CTest проходит 239 тестов.
 В [четвёртом пакете](2026-09-06-graphics-repair-pass-4.md) исправлены #2204/#2208:
 Vulkan/SPIR-V baseline и capabilities; обычный CTest проходит 241 тест.
+В [пятом пакете](2026-09-06-graphics-repair-pass-5.md) исправлен WSI lifecycle
+#2205/#2206 и реализован split-family path #2207 (остаётся platform gate).
+Расширенный оконный прогон: 253 passed, 1 отдельный OpenGL failure, без Vulkan
+validation errors.
 
 ## Вывод
 

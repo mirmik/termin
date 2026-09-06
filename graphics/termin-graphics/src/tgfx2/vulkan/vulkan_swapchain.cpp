@@ -72,8 +72,10 @@ namespace tgfx {
                                      VkSurfaceKHR surface,
                                      uint32_t width,
                                      uint32_t height,
-                                     PresentationMode presentation_mode)
+                                     PresentationMode presentation_mode,
+                                     const vulkan_detail::SwapchainOps& ops)
         : device_(dev),
+          ops_(ops),
           surface_(surface),
           requested_presentation_mode_(presentation_mode),
           width_(width),
@@ -82,27 +84,34 @@ namespace tgfx {
         const VkResult support_result = vkGetPhysicalDeviceSurfaceSupportKHR(
             device_.physical_device(), device_.present_queue_family(), surface_, &present_support);
         if (support_result != VK_SUCCESS || present_support != VK_TRUE) {
+            tc_log_error("VulkanSwapchain: present queue does not support surface (VkResult=%d)", int(support_result));
             throw std::runtime_error("VulkanSwapchain: runtime present queue cannot present to this surface");
         }
-        create_swapchain();
-        create_sync_objects();
+        try {
+            create_swapchain();
+            create_sync_objects();
 
-        // Pre-allocate one command buffer per in-flight slot for
-        // compose_and_present; they're reset-and-recorded each frame.
-        compose_command_buffers_.resize(MAX_FRAMES_IN_FLIGHT);
-        VkCommandBufferAllocateInfo ai{};
-        ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        ai.commandPool = device_.command_pool();
-        ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        ai.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-        if (vkAllocateCommandBuffers(device_.device(), &ai, compose_command_buffers_.data()) != VK_SUCCESS) {
-            throw std::runtime_error("VulkanSwapchain: failed to allocate compose command buffers");
+            // Pre-allocate one command buffer per in-flight slot.
+            std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> commands{};
+            VkCommandBufferAllocateInfo ai{};
+            ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            ai.commandPool = device_.command_pool();
+            ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            ai.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+            check(vkAllocateCommandBuffers(device_.device(), &ai, commands.data()), "allocate compose commands");
+            compose_command_buffers_.assign(commands.begin(), commands.end());
+        } catch (const std::exception& error) {
+            tc_log_error("VulkanSwapchain construction failed: %s", error.what());
+            destroy_sync_objects();
+            destroy_swapchain();
+            throw;
         }
     }
 
     VulkanSwapchain::~VulkanSwapchain() {
-        if (device_.device()) {
-            vkDeviceWaitIdle(device_.device());
+        try { wait_for_retirement(); }
+        catch (const std::exception& error) {
+            tc_log_error("VulkanSwapchain shutdown: %s", error.what());
         }
         if (!compose_command_buffers_.empty()) {
             vkFreeCommandBuffers(device_.device(),
@@ -195,7 +204,8 @@ namespace tgfx {
         // TRANSFER_DST so we can blit into the swapchain image; COLOR_ATTACHMENT
         // so we can render directly into it through a VkRenderPass.
         ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        const std::array<uint32_t, 2> families{device_.graphics_queue_family(), device_.present_queue_family()};
+        vulkan_detail::configure_swapchain_sharing(ci, families);
         // The renderer and input pipeline already operate in the SurfaceView's
         // current physical orientation. Asking the presentation engine to apply
         // currentTransform rotates that upright image a second time on Android.
@@ -237,10 +247,19 @@ namespace tgfx {
                 throw std::runtime_error("VulkanSwapchain: vkCreateImageView failed");
             }
         }
+        render_finished_semaphores_.resize(got);
+        VkSemaphoreCreateInfo semaphore_info{};
+        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        for (auto& semaphore : render_finished_semaphores_)
+            check(vkCreateSemaphore(device_.device(), &semaphore_info, nullptr, &semaphore),
+                  "create present semaphore");
     }
 
     void VulkanSwapchain::destroy_swapchain() {
         VkDevice dev = device_.device();
+        for (auto semaphore : render_finished_semaphores_)
+            if (semaphore) vkDestroySemaphore(dev, semaphore, nullptr);
+        render_finished_semaphores_.clear();
         for (auto v : image_views_) {
             if (v)
                 vkDestroyImageView(dev, v, nullptr);
@@ -260,20 +279,19 @@ namespace tgfx {
     void VulkanSwapchain::create_sync_objects() {
         VkDevice dev = device_.device();
         image_available_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
-        render_finished_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
         in_flight_fences_.resize(MAX_FRAMES_IN_FLIGHT);
+        acquire_fences_.resize(MAX_FRAMES_IN_FLIGHT);
 
         VkSemaphoreCreateInfo sem_ci{};
         sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
         VkFenceCreateInfo fence_ci{};
         fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        // Start signalled so the very first wait_for_current_frame() doesn't block.
-        fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        // Only fences belonging to successful submissions are ever waited on.
 
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
             if (vkCreateSemaphore(dev, &sem_ci, nullptr, &image_available_semaphores_[i]) != VK_SUCCESS ||
-                vkCreateSemaphore(dev, &sem_ci, nullptr, &render_finished_semaphores_[i]) != VK_SUCCESS ||
+                vkCreateFence(dev, &fence_ci, nullptr, &acquire_fences_[i]) != VK_SUCCESS ||
                 vkCreateFence(dev, &fence_ci, nullptr, &in_flight_fences_[i]) != VK_SUCCESS) {
                 throw std::runtime_error("VulkanSwapchain: failed to create frame sync objects");
             }
@@ -286,16 +304,14 @@ namespace tgfx {
             if (s)
                 vkDestroySemaphore(dev, s, nullptr);
         }
-        for (auto s : render_finished_semaphores_) {
-            if (s)
-                vkDestroySemaphore(dev, s, nullptr);
-        }
+        for (auto f : acquire_fences_)
+            if (f) vkDestroyFence(dev, f, nullptr);
         for (auto f : in_flight_fences_) {
             if (f)
                 vkDestroyFence(dev, f, nullptr);
         }
         image_available_semaphores_.clear();
-        render_finished_semaphores_.clear();
+        acquire_fences_.clear();
         in_flight_fences_.clear();
     }
 
@@ -304,9 +320,17 @@ namespace tgfx {
     // ---------------------------------------------------------------------------
 
     void VulkanSwapchain::wait_for_current_frame() {
-        VkFence f = in_flight_fences_[current_frame_];
-        vkWaitForFences(device_.device(), 1, &f, VK_TRUE, UINT64_MAX);
-        vkResetFences(device_.device(), 1, &f);
+        require_usable();
+        if (submitted_[current_frame_]) {
+            const VkFence fence = in_flight_fences_[current_frame_];
+            check(ops_.wait_for_fences(device_.device(), 1, &fence, VK_TRUE, UINT64_MAX), "wait frame fence");
+            submitted_[current_frame_] = false;
+        }
+        if (acquire_pending_[current_frame_]) {
+            const VkFence fence = acquire_fences_[current_frame_];
+            check(ops_.wait_for_fences(device_.device(), 1, &fence, VK_TRUE, UINT64_MAX), "wait acquire fence");
+            acquire_pending_[current_frame_] = false;
+        }
     }
 
     void VulkanSwapchain::advance_frame() {
@@ -315,11 +339,15 @@ namespace tgfx {
 
     VkResult VulkanSwapchain::acquire(uint32_t* out_image_index, VkSemaphore* out_image_available) {
         VkSemaphore sem = image_available_semaphores_[current_frame_];
-        VkResult r =
-            vkAcquireNextImageKHR(device_.device(), swapchain_, UINT64_MAX, sem, VK_NULL_HANDLE, out_image_index);
+        const VkFence fence = acquire_fences_[current_frame_];
+        check(ops_.reset_fences(device_.device(), 1, &fence), "reset acquire fence");
+        VkResult r = ops_.acquire_next_image(device_.device(), swapchain_, UINT64_MAX, sem, fence, out_image_index);
         if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) {
+            acquire_pending_[current_frame_] = true;
             if (out_image_available)
                 *out_image_available = sem;
+        } else if (r != VK_ERROR_OUT_OF_DATE_KHR && r != VK_TIMEOUT && r != VK_NOT_READY) {
+            check(r, "acquire image");
         }
         return r;
     }
@@ -332,7 +360,12 @@ namespace tgfx {
         pi.swapchainCount = 1;
         pi.pSwapchains = &swapchain_;
         pi.pImageIndices = &image_index;
-        return vkQueuePresentKHR(device_.present_queue(), &pi);
+        const VkResult result = ops_.queue_present(device_.present_queue(), &pi);
+        if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR)
+            check(result, "present image");
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+            failed_ = true; // Retire this generation before any further acquire.
+        return result;
     }
 
     // ---------------------------------------------------------------------------
@@ -340,11 +373,73 @@ namespace tgfx {
     // ---------------------------------------------------------------------------
 
     void VulkanSwapchain::recreate(uint32_t width, uint32_t height) {
-        vkDeviceWaitIdle(device_.device());
+        failed_ = true;
+        wait_for_retirement();
+        destroy_sync_objects();
         destroy_swapchain();
         width_ = width;
         height_ = height;
-        create_swapchain();
+        try {
+            create_swapchain();
+            create_sync_objects();
+        } catch (...) {
+            destroy_sync_objects();
+            destroy_swapchain();
+            throw;
+        }
+        current_frame_ = 0;
+        submitted_.fill(false);
+        acquire_pending_.fill(false);
+        failed_ = false;
+    }
+
+    void VulkanSwapchain::check(VkResult result, const char* operation) {
+        if (result == VK_SUCCESS) return;
+        failed_ = true;
+        tc_log_error("VulkanSwapchain: %s failed: VkResult=%d; swapchain stopped", operation, int(result));
+        throw std::runtime_error(std::string("VulkanSwapchain: ") + operation + " failed: " + std::to_string(result));
+    }
+
+    void VulkanSwapchain::require_usable() const {
+        if (failed_) {
+            tc_log_error("VulkanSwapchain: cannot publish after failure; recreate or destroy the swapchain");
+            throw std::runtime_error("VulkanSwapchain is stopped");
+        }
+    }
+
+    void VulkanSwapchain::wait_for_retirement() {
+        // A failed submit may leave an acquired image with no queue wait. Its
+        // acquire fence proves the WSI signal operation is complete before the
+        // semaphore is destroyed; an unsignalled submit fence is never waited on.
+        for (uint32_t slot = 0; slot < MAX_FRAMES_IN_FLIGHT; ++slot) {
+            if (acquire_pending_[slot]) {
+                check(ops_.wait_for_fences(device_.device(), 1, &acquire_fences_[slot], VK_TRUE, UINT64_MAX),
+                      "retire acquired image");
+                acquire_pending_[slot] = false;
+            }
+        }
+        check(vkDeviceWaitIdle(device_.device()), "retire swapchain queues");
+    }
+
+    void VulkanSwapchain::submit_frame(VkCommandBuffer commands, uint32_t image_index, VkSemaphore available) {
+        const VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        const VkSemaphore finished = render_finished_semaphores_[image_index];
+        VkSubmitInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        info.waitSemaphoreCount = 1;
+        info.pWaitSemaphores = &available;
+        info.pWaitDstStageMask = &wait_stage;
+        info.commandBufferCount = 1;
+        info.pCommandBuffers = &commands;
+        info.signalSemaphoreCount = 1;
+        info.pSignalSemaphores = &finished;
+        const VkFence fence = in_flight_fences_[current_frame_];
+        check(ops_.reset_fences(device_.device(), 1, &fence), "reset submit fence");
+        check(ops_.queue_submit(device_.graphics_queue(), 1, &info, fence), "submit frame");
+        submitted_[current_frame_] = true;
+        // The acquire fence signal is a distinct WSI operation. Keep it pending
+        // until a host wait proves it can be reset or destroyed, even after the
+        // semaphore wait has been consumed by this submission.
     }
 
     // ---------------------------------------------------------------------------
@@ -352,6 +447,14 @@ namespace tgfx {
     // ---------------------------------------------------------------------------
 
     bool VulkanSwapchain::compose_and_present(tgfx::TextureHandle color_tex) {
+        require_usable();
+        VkTextureResource* rt = device_.get_texture(color_tex);
+        if (!rt || !rt->image || !has_flag(rt->desc.usage, TextureUsage::CopySrc) ||
+            rt->desc.sample_count != 1 || vk::format_aspect_flags(rt->desc.format) != VK_IMAGE_ASPECT_COLOR_BIT ||
+            rt->current_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            tc_log_error("VulkanSwapchain: invalid compose source texture id=%u", color_tex.id);
+            return false; // No image acquired and no synchronization state changed.
+        }
         using Clock = std::chrono::steady_clock;
         const bool stats_enabled = vulkan_stats_enabled();
         const auto timestamp = [stats_enabled] {
@@ -372,32 +475,9 @@ namespace tgfx {
         VkResult ar = acquire(&image_idx, &image_available);
         const auto acquire1 = timestamp();
         if (ar == VK_ERROR_OUT_OF_DATE_KHR) {
-            // Nothing submitted this frame — fence stays signalled after
-            // we reset it above, so re-signal it to keep things balanced.
-            VkSubmitInfo empty{};
-            empty.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            vkQueueSubmit(device_.graphics_queue(), 1, &empty, in_flight_fences_[current_frame_]);
             return true; // caller should recreate
         }
         if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR) {
-            return true;
-        }
-        // 3. Look up the color texture on the device.
-        VkTextureResource* rt = device_.get_texture(color_tex);
-        if (!rt || !rt->image) {
-            tc_log(TC_LOG_ERROR, "[VulkanSwapchain] compose_and_present: missing source texture id=%u", color_tex.id);
-            // Can't compose — just submit an empty batch to signal the
-            // fence and move on. The screen stays on the previous frame
-            // which is fine for a dropped render.
-            VkSubmitInfo empty{};
-            empty.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            empty.waitSemaphoreCount = 1;
-            empty.pWaitSemaphores = &image_available;
-            VkPipelineStageFlags stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-            empty.pWaitDstStageMask = &stage;
-            vkQueueSubmit(device_.graphics_queue(), 1, &empty, in_flight_fences_[current_frame_]);
-            present(image_idx, render_finished_semaphores_[current_frame_]);
-            advance_frame();
             return false;
         }
 
@@ -405,12 +485,12 @@ namespace tgfx {
         //    present-src transition.
         const auto record0 = timestamp();
         VkCommandBuffer cb = compose_command_buffers_[current_frame_];
-        vkResetCommandBuffer(cb, 0);
+        check(vkResetCommandBuffer(cb, 0), "reset compose commands");
 
         VkCommandBufferBeginInfo begin{};
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cb, &begin);
+        check(vkBeginCommandBuffer(cb, &begin), "begin compose commands");
 
         VkImage sc_image = images_[image_idx];
         VkImageSubresourceRange range{};
@@ -421,11 +501,13 @@ namespace tgfx {
         // rt_tex: current layout → TRANSFER_SRC.
         VkImageMemoryBarrier rt_to_src{};
         rt_to_src.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        rt_to_src.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        rt_to_src.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         rt_to_src.oldLayout = rt->current_layout;
         rt_to_src.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         rt_to_src.image = rt->image;
         rt_to_src.subresourceRange = range;
-        rt_to_src.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        rt_to_src.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
         rt_to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         vkCmdPipelineBarrier(cb,
                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -441,6 +523,8 @@ namespace tgfx {
         // swapchain image: UNDEFINED → TRANSFER_DST.
         VkImageMemoryBarrier sc_to_dst{};
         sc_to_dst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        sc_to_dst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        sc_to_dst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         sc_to_dst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         sc_to_dst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         sc_to_dst.image = sc_image;
@@ -448,7 +532,7 @@ namespace tgfx {
         sc_to_dst.srcAccessMask = 0;
         sc_to_dst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         vkCmdPipelineBarrier(cb,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
                              VK_PIPELINE_STAGE_TRANSFER_BIT,
                              0,
                              0,
@@ -500,6 +584,8 @@ namespace tgfx {
         // swapchain image: TRANSFER_DST → PRESENT_SRC.
         VkImageMemoryBarrier sc_to_present{};
         sc_to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        sc_to_present.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        sc_to_present.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         sc_to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         sc_to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         sc_to_present.image = sc_image;
@@ -519,27 +605,15 @@ namespace tgfx {
 
         // Reflect the transition on the tgfx2 side — next render pass
         // will see TRANSFER_SRC and transition appropriately.
-        rt->current_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-
-        vkEndCommandBuffer(cb);
+        check(vkEndCommandBuffer(cb), "end compose commands");
         const auto record1 = timestamp();
 
         // 5. Submit waiting on image_available, signalling render_finished
-        //    for this slot and tripping the in-flight fence.
-        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        VkSemaphore render_done = render_finished_semaphores_[current_frame_];
-
-        VkSubmitInfo si{};
-        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        si.waitSemaphoreCount = 1;
-        si.pWaitSemaphores = &image_available;
-        si.pWaitDstStageMask = &wait_stage;
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &cb;
-        si.signalSemaphoreCount = 1;
-        si.pSignalSemaphores = &render_done;
+        //    for this image and tripping the in-flight fence.
+        VkSemaphore render_done = render_finished_semaphores_[image_idx];
         const auto submit0 = timestamp();
-        vkQueueSubmit(device_.graphics_queue(), 1, &si, in_flight_fences_[current_frame_]);
+        submit_frame(cb, image_idx, image_available);
+        rt->current_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         const auto submit1 = timestamp();
 
         // 6. Present. OUT_OF_DATE requires recreation. SUBOPTIMAL remains usable:
@@ -599,21 +673,18 @@ namespace tgfx {
         VkSemaphore image_available = VK_NULL_HANDLE;
         VkResult ar = acquire(&image_idx, &image_available);
         if (ar == VK_ERROR_OUT_OF_DATE_KHR) {
-            VkSubmitInfo empty{};
-            empty.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            vkQueueSubmit(device_.graphics_queue(), 1, &empty, in_flight_fences_[current_frame_]);
             return true;
         }
         if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR) {
-            return true;
+            return false;
         }
         VkCommandBuffer cb = compose_command_buffers_[current_frame_];
-        vkResetCommandBuffer(cb, 0);
+        check(vkResetCommandBuffer(cb, 0), "reset clear commands");
 
         VkCommandBufferBeginInfo begin{};
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cb, &begin);
+        check(vkBeginCommandBuffer(cb, &begin), "begin clear commands");
 
         VkImageSubresourceRange range{};
         range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -623,6 +694,8 @@ namespace tgfx {
         VkImage image = images_[image_idx];
         VkImageMemoryBarrier to_dst{};
         to_dst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        to_dst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        to_dst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         to_dst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         to_dst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         to_dst.image = image;
@@ -630,7 +703,7 @@ namespace tgfx {
         to_dst.srcAccessMask = 0;
         to_dst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         vkCmdPipelineBarrier(cb,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
                              VK_PIPELINE_STAGE_TRANSFER_BIT,
                              0,
                              0,
@@ -649,6 +722,8 @@ namespace tgfx {
 
         VkImageMemoryBarrier to_present{};
         to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        to_present.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        to_present.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         to_present.image = image;
@@ -666,20 +741,9 @@ namespace tgfx {
                              1,
                              &to_present);
 
-        vkEndCommandBuffer(cb);
-
-        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        VkSemaphore render_done = render_finished_semaphores_[current_frame_];
-        VkSubmitInfo si{};
-        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        si.waitSemaphoreCount = 1;
-        si.pWaitSemaphores = &image_available;
-        si.pWaitDstStageMask = &wait_stage;
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &cb;
-        si.signalSemaphoreCount = 1;
-        si.pSignalSemaphores = &render_done;
-        vkQueueSubmit(device_.graphics_queue(), 1, &si, in_flight_fences_[current_frame_]);
+        check(vkEndCommandBuffer(cb), "end clear commands");
+        VkSemaphore render_done = render_finished_semaphores_[image_idx];
+        submit_frame(cb, image_idx, image_available);
 
         VkResult pr = present(image_idx, render_done);
         const bool should_recreate = swapchain_result_requires_recreate(pr);
