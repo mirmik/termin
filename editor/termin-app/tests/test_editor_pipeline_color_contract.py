@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 
@@ -27,6 +28,25 @@ hover_highlight = pipeline.get_pass_by_name("HoverHighlight").to_python()
 assert isinstance(hover_highlight.color, SrgbColor)
 assert all(abs(actual - expected) < 1.0e-6 for actual, expected in zip(hover_highlight.color, (0.3, 0.8, 1.0, 1.0), strict=True))
 assert all(spec.format == "rgba16f" for spec in pipeline.pipeline_specs)
+# All in-place scene-color passes share the initial HDR attachment. Their
+# clear declarations must agree with the pipeline's allocation specs.
+scene_color_resources = {
+    "empty", "skybox", "color_scene", "color_transparent", "color_world2d",
+    "color_editor", "color_editor_debug", "color_editor_debug_transparent",
+    "color_debug_geometry", "color_immediate_depth", "color",
+}
+clear_colors = []
+for spec in pipeline.pipeline_specs:
+    if spec.resource in scene_color_resources and spec.clear_color is not None:
+        clear_colors.append(tuple(spec.clear_color))
+for name in ("Skybox", "Color", "Transparent", "EditorColor", "EditorDebug", "EditorDebugTransparent"):
+    frame_pass = pipeline.get_pass_by_name(name).to_python()
+    for spec in frame_pass.get_resource_specs():
+        if spec.resource in scene_color_resources and spec.clear_color is not None:
+            clear_colors.append(tuple(spec.clear_color))
+    del frame_pass
+assert clear_colors, "Scene color attachment must have an initialization clear"
+assert len(set(clear_colors)) == 1, f"Conflicting aliased scene-color clears: {clear_colors}"
 assert pipeline.color_exports == [{"resource": "color+widgets", "viewport_name": "", "color_content": "display_linear"}]
 
 del hover_highlight
@@ -37,9 +57,9 @@ pipeline.destroy()
 del pipeline
 shutdown_editor()
 """
-    subprocess.run(
-        [sys.executable, "-c", script],
-        check=True,
+    result = subprocess.run(
+        [sys.executable, "--termin-overlay", os.environ["TERMIN_PYTHON_OVERLAY"], "-c", script],
         capture_output=True,
         text=True,
     )
+    assert result.returncode == 0, result.stdout + result.stderr

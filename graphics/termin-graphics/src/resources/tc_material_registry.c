@@ -986,6 +986,38 @@ void tc_material_foreach(tc_material_iter_fn callback, void* user_data) {
 // Copy
 // ============================================================================
 
+bool tc_material_replace_content(tc_material_handle dst, tc_material_handle src) {
+    tc_material* dst_mat = tc_material_get(dst);
+    tc_material* src_mat = tc_material_get(src);
+    if (!dst_mat || !src_mat) {
+        tc_log(TC_LOG_ERROR, "tc_material_replace_content: invalid source or destination");
+        return false;
+    }
+    if (dst_mat == src_mat)
+        return true;
+
+    // Acquire incoming references before releasing old ones: both materials
+    // may reference the same shaders, and the source stays independently owned.
+    for (size_t i = 0; i < src_mat->phase_count; ++i) {
+        tc_shader* shader = tc_shader_get(src_mat->phases[i].shader);
+        if (shader)
+            tc_shader_add_ref(shader);
+    }
+    material_release_shaders(dst_mat);
+    const tc_resource_header identity = dst_mat->header;
+    *dst_mat = *src_mat;
+    dst_mat->header = identity;
+    dst_mat->header.name = src_mat->header.name;
+    dst_mat->header.is_loaded = src_mat->header.is_loaded;
+    dst_mat->header.version++;
+    dst_mat->self_handle = dst;
+    for (size_t i = 0; i < dst_mat->phase_count; ++i) {
+        dst_mat->phases[i].owner_material = dst;
+        dst_mat->phases[i].owner_phase_index = i;
+    }
+    return true;
+}
+
 tc_material_handle tc_material_copy(tc_material_handle src, const char* new_uuid) {
     tc_material* src_mat = tc_material_get(src);
     if (!src_mat) {

@@ -197,8 +197,8 @@ class _RecordingMaterial:
     def __init__(self):
         self.assigned = {}
 
-    def set_uniform_vec4(self, name, value):
-        pass
+    def set_uniform_srgb_color(self, name, value):
+        self.assigned[name] = value
 
     def set_uniform_float(self, name, value):
         pass
@@ -400,3 +400,21 @@ def test_external_metadata_mismatch_creates_immutable_runtime_texture(
     assert lookup[(0, "linear")].encoding == TextureEncoding.LINEAR
     assert lookup[(0, "linear")].uuid != "project-srgb"
     assert len(rm.by_uuid) == 1
+
+
+def test_gltf_linear_factors_use_typed_srgb_material_uniforms():
+    from termin.geombase import SrgbColor, srgb_to_linear
+
+    material = _RecordingMaterial()
+    base = np.array([0.18, 0.5, 0.8, 0.7], dtype=np.float32)
+    emission = np.array([0.03, 0.2, 0.6], dtype=np.float32)
+    _configure_import_material(material, GLBMaterialData(
+        "Colored", base_color=base, emissive_factor=emission,
+    ), {})
+    color = material.assigned["u_color"]
+    glow = material.assigned["u_emission_color"]
+    assert isinstance(color, SrgbColor)
+    assert isinstance(glow, SrgbColor)
+    assert color.r == pytest.approx(0.461356, abs=1e-5)
+    assert srgb_to_linear(color).tolist() == pytest.approx(base.tolist(), abs=1e-6)
+    assert srgb_to_linear(glow).tolist() == pytest.approx([*emission.tolist(), 1.0], abs=1e-6)

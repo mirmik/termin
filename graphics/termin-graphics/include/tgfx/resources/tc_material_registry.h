@@ -99,6 +99,10 @@ static inline void tc_material_bump_version(tc_material* mat) {
 
 TGFX_API tc_material_handle tc_material_copy(tc_material_handle src, const char* new_uuid);
 
+// Replace authored content while preserving destination identity and ownership.
+// Source remains unchanged. Callers must serialize replacement with rendering.
+TGFX_API bool tc_material_replace_content(tc_material_handle dst, tc_material_handle src);
+
 #ifdef __cplusplus
 }
 #endif

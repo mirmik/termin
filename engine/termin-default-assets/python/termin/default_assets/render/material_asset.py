@@ -433,6 +433,30 @@ def _parse_material_content(
     name: str | None = None,
     source_path: str | None = None,
 ) -> tuple["TcMaterial", str | None]:
+    """Build new content before publishing it to an existing UUID handle."""
+    from termin.materials import TcMaterial
+
+    data = json.loads(content)
+    file_uuid = data.get("uuid")
+    existing = TcMaterial.from_uuid(file_uuid) if file_uuid else None
+    if existing is None or not existing.is_valid:
+        return _build_material_content(content, name, source_path)
+
+    # Parsing may fail partway through phase or texture construction. Keep the
+    # live material untouched until all incoming content has been validated.
+    del data["uuid"]
+    staged, _ = _build_material_content(json.dumps(data), name, source_path)
+    if not existing.replace_content(staged):
+        log.error(f"[MaterialAsset] Failed to replace material content: {file_uuid}")
+        raise RuntimeError(f"Failed to replace material content: {file_uuid}")
+    return existing, file_uuid
+
+
+def _build_material_content(
+    content: str,
+    name: str | None = None,
+    source_path: str | None = None,
+) -> tuple["TcMaterial", str | None]:
     """
     Parse material from JSON content string.
 

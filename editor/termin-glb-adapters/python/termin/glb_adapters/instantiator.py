@@ -921,7 +921,7 @@ def _configure_import_material(
     texture_lookup: TextureLookup,
 ) -> None:
     """Apply one glTF material to an already-created Termin material."""
-    from termin.geombase import Vec4
+    from termin.geombase import LinearColor, linear_to_srgb
     from termin.base import log
 
     texture_coordinates = (
@@ -953,13 +953,13 @@ def _configure_import_material(
         emissive_factor = np.array([0.0, 0.0, 0.0], dtype=np.float32)
     emission_intensity = 1.0 if float(np.linalg.norm(emissive_factor)) > 0.0 else 0.0
 
-    color = Vec4(
+    color = LinearColor(
         float(base_color[0]),
         float(base_color[1]),
         float(base_color[2]),
         float(base_color[3]),
     )
-    emission_color = Vec4(
+    emission_color = LinearColor(
         float(emissive_factor[0]),
         float(emissive_factor[1]),
         float(emissive_factor[2]),
@@ -986,11 +986,12 @@ def _configure_import_material(
         f"emissive_index={glb_material.emissive_texture}"
     )
 
-    material.set_uniform_vec4("u_color", color)
+    # glTF factors are linear; standard surface properties are typed sRGB colors.
+    material.set_uniform_srgb_color("u_color", linear_to_srgb(color))
     material.set_uniform_float("u_metallic", float(glb_material.metallic_factor))
     material.set_uniform_float("u_roughness", float(glb_material.roughness_factor))
     material.set_uniform_float("u_normal_strength", float(glb_material.normal_scale))
-    material.set_uniform_vec4("u_emission_color", emission_color)
+    material.set_uniform_srgb_color("u_emission_color", linear_to_srgb(emission_color))
     material.set_uniform_float("u_emission_intensity", emission_intensity)
 
     _set_material_texture_if_present(material, "u_albedo_texture", base_color_texture)

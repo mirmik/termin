@@ -6,6 +6,7 @@
 
 - [Module Map](../../../docs/modules.md#termin-graphics--tgfx)
 - [Architecture notes](architecture/index.md)
+- [Аудит готовности графического стека к production, 2026-09-06](../../../docs/analysis/2026-09-06-termin-graphics-production-audit.md)
 - [Line rendering plan](line-rendering-plan.md)
 - [Point-cloud rendering](point-cloud-rendering.md)
 - [Shader artifact runtime](shader-artifact-runtime.md)

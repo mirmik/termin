@@ -1225,6 +1225,7 @@ namespace termin {
                 [](TcMaterial& self) -> tc_material_phase* { return self.default_phase(); },
                 nb::rv_policy::reference)
             .def("clear_phases", &TcMaterial::clear_phases)
+            .def("replace_content", &TcMaterial::replace_content, nb::arg("source"))
             .def(
                 "add_phase",
                 [](TcMaterial& self, TcShader& shader, const std::string& phase_mark, int priority)

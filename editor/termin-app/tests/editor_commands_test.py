@@ -144,6 +144,61 @@ class TestEditorUndoCommands(unittest.TestCase):
         self.assertIsNotNone(restored)
         self.assertEqual(restored.transform.parent.entity.uuid, parent_uuid)
 
+    def test_add_entity_repeated_undo_redo_preserves_subtree(self) -> None:
+        parent = self.scene.create_entity("parent")
+        root = parent.create_child("added-root")
+        child = root.create_child("child")
+        grandchild = child.create_child("grandchild")
+        child.transform.set_local_position(Vec3(2.0, 3.0, 4.0))
+        probe = _editor_prefab_probe_class()()
+        grandchild.add_component(probe)
+        grandchild.layer = 4
+        parent_uuid = parent.uuid
+        root_uuid, child_uuid, grandchild_uuid = root.uuid, child.uuid, grandchild.uuid
+        subtree_uuids = (root_uuid, child_uuid, grandchild_uuid)
+
+        stack = UndoStack()
+        command = AddEntityCommand(self.scene, root)
+        stack.push(command)
+
+        for cycle in range(3):
+            with self.subTest(cycle=cycle):
+                stack.undo()
+                self.assertIsNone(command.entity)
+                for uuid in subtree_uuids:
+                    self.assertIsNone(self.scene.get_entity(uuid))
+                self.assertEqual(
+                    [entity.uuid for entity in self.scene.root_entities],
+                    [parent_uuid],
+                )
+                self.assertEqual(list(parent.transform.children), [])
+
+                stack.redo()
+                restored_root = self.scene.get_entity(root_uuid)
+                restored_child = self.scene.get_entity(child_uuid)
+                restored_grandchild = self.scene.get_entity(grandchild_uuid)
+                self.assertIsNotNone(restored_root)
+                self.assertIsNotNone(restored_child)
+                self.assertIsNotNone(restored_grandchild)
+                self.assertEqual(command.entity.uuid, root_uuid)
+                for owner, descendant in (
+                    (parent, restored_root),
+                    (restored_root, restored_child),
+                    (restored_child, restored_grandchild),
+                ):
+                    self.assertEqual(descendant.transform.parent.entity.uuid, owner.uuid)
+                    self.assertEqual(
+                        [item.entity.uuid for item in owner.transform.children],
+                        [descendant.uuid],
+                    )
+                np.testing.assert_allclose(
+                    tuple(restored_child.transform.local_pose().lin),
+                    (2.0, 3.0, 4.0),
+                )
+                restored_probe = restored_grandchild.get_tc_component("EditorPrefabProbe")
+                self.assertIsNotNone(restored_probe)
+                self.assertEqual(restored_grandchild.layer, 4)
+
     def test_reparent_command_survives_parent_restore(self) -> None:
         parent = self.scene.create_entity("parent")
         child = self.scene.create_entity("child")
@@ -495,6 +550,58 @@ class TestEditorUndoCommands(unittest.TestCase):
                 self.assertEqual(restored_child.name, "Customized")
             finally:
                 restored_scene.destroy()
+        finally:
+            source_scene.destroy()
+
+    def test_prefab_root_snapshot_restore_preserves_mapping_and_overrides(self) -> None:
+        source_scene, asset, instance, (child_source_id, component_source_id) = (
+            self._create_prefab_instance())
+        try:
+            parent = self.scene.create_entity("LocalParent")
+            instance.transform.set_parent(parent.transform)
+            instance_uuid = instance.uuid
+            state = instance.get_component(PrefabInstanceState)
+            child = state.entity_for_source(child_source_id)
+            child_uuid = child.uuid
+            edit = EntityPropertyEditCommand(child, "name", child.name, "Customized")
+            edit.do()
+
+            for command in (DeleteEntityCommand, AddEntityCommand):
+                with self.subTest(command=command.__name__):
+                    stack = UndoStack()
+                    stack.push(command(self.scene, self.scene.get_entity(instance_uuid)))
+                    for _ in range(2):
+                        if command is AddEntityCommand:
+                            stack.undo()
+                            self.assertIsNone(self.scene.get_entity(instance_uuid))
+                            stack.redo()
+                        else:
+                            self.assertIsNone(self.scene.get_entity(instance_uuid))
+                            stack.undo()
+                        restored = self.scene.get_entity(instance_uuid)
+                        restored_state = restored.get_component(PrefabInstanceState)
+                        self.assertTrue(restored_state.mapping_valid)
+                        self.assertEqual(restored.transform.parent.entity.uuid, parent.uuid)
+                        self.assertEqual(restored_state.entity_for_source(child_source_id).uuid, child_uuid)
+                        self.assertEqual(restored_state.component_owner_for_source(component_source_id).uuid, child_uuid)
+                        self.assertEqual(restored_state.property_override_count, 1)
+                        self.assertTrue(asset.apply_to_instance(restored).ok)
+                        self.assertEqual(restored_state.entity_for_source(child_source_id).name, "Customized")
+                        if command is DeleteEntityCommand:
+                            stack.redo()
+                    if command is DeleteEntityCommand:
+                        stack.undo()
+
+            cold_scene = TcScene.create("prefab-snapshot-cold-reload")
+            try:
+                self.assertGreater(cold_scene.load_from_data(self.scene.serialize()), 0)
+                restored = cold_scene.get_entity(instance_uuid)
+                restored_state = restored.get_component(PrefabInstanceState)
+                self.assertTrue(restored_state.mapping_valid)
+                self.assertTrue(asset.apply_to_instance(restored).ok)
+                self.assertEqual(restored_state.entity_for_source(child_source_id).name, "Customized")
+            finally:
+                cold_scene.destroy()
         finally:
             source_scene.destroy()
 

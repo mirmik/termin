@@ -233,10 +233,11 @@ def _deserialize_entity_snapshot(
     with_children: bool = False,
 ) -> Entity:
     payload = copy.deepcopy(data)
-    if with_children:
-        entity = Entity.deserialize_with_children(payload, context=None, scene=scene)
-    else:
-        entity = Entity.deserialize(payload, context=None, scene=scene)
+    if not with_children:
+        payload.pop("children", None)
+    # Restore the entire hierarchy before resolving component entity references.
+    # The canonical native path also preserves component source IDs and typed data.
+    entity = Entity.deserialize_hierarchy(payload, scene=scene)
     if entity is None or not entity.valid():
         name = data.get("name", "entity")
         _logger.error("Failed to restore entity '%s' while applying undo command '%s'", name, command_text)
@@ -912,7 +913,7 @@ class SkyboxTypeEditCommand(ScenePropertyEditCommand):
 
 class AddEntityCommand(UndoCommand):
     """
-    Добавление сущности в сцену.
+    Добавление сущности вместе с её потомками в сцену.
 
     В do() сущность добавляется, в undo() — удаляется.
     """
@@ -954,6 +955,7 @@ class AddEntityCommand(UndoCommand):
                 self._serialized_data,
                 self._parent_uuid,
                 self.text,
+                with_children=True,
             )
         self._entity_uuid = _entity_uuid(self._entity)
 
@@ -965,7 +967,7 @@ class AddEntityCommand(UndoCommand):
             _logger.warning("AddEntityCommand.undo: entity uuid=%s is already absent", self._entity_uuid)
             return
         self._serialized_data = _snapshot_entity(entity)
-        self._scene.remove(entity)
+        _remove_entity_tree(self._scene, entity)
         self._entity = None
 
 

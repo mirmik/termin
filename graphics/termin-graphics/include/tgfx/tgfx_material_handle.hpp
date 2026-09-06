@@ -197,6 +197,10 @@ namespace termin {
             return m ? tc_material_find_phase(m, mark) : nullptr;
         }
 
+        bool replace_content(const TcMaterial& source) {
+            return tc_material_replace_content(handle, source.handle);
+        }
+
         void clear_phases() {
             tc_material* m = get();
             if (m) {

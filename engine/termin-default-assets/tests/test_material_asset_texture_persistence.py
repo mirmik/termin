@@ -166,10 +166,8 @@ def test_material_typed_colors_save_and_reload_without_losing_semantics(tmp_path
     assert saved["uniforms"]["u_numeric"] == [0.25, 0.5, 0.75, 1.0]
 
     reload_data = dict(saved)
-    # The native registry rejects two live materials with the same UUID; use a
-    # fresh identity for this in-process reload while preserving the payload.
-    reload_data["uuid"] = "typed-persistence-reloaded"
     reloaded = _parse_material_content(json.dumps(reload_data), name="TypedPersistence")[0]
+    assert reloaded.uuid == material.uuid
     assert isinstance(reloaded.uniforms["u_authored"], SrgbColor)
     assert isinstance(reloaded.uniforms["u_radiance"], LinearColor)
     assert isinstance(reloaded.uniforms["u_numeric"], Vec4)
@@ -359,3 +357,49 @@ def test_stdlib_normalized_pbr_applies_material_uniform_override() -> None:
     assert material.default_phase().shader.name.startswith(
         "CookTorrancePBRSubsurface/"
     )
+
+
+def test_material_asset_reload_replaces_live_material_in_place(tmp_path) -> None:
+    from termin.default_assets.render.material_asset import MaterialAsset
+
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
+    _register_stdlib_shader(rm, "CookTorrancePBR")
+    material_path = tmp_path / "reload.material"
+    payload = {
+        "uuid": "material-live-reload-regression",
+        "shader": "CookTorrancePBR",
+        "uniforms": {"u_color": [0.65, 0.65, 0.65, 1.0], "u_removed": 3.0},
+        "texture_refs": {
+            "u_albedo_texture": {"kind": "render_target", "target": "OldTarget", "channel": "color"},
+        },
+    }
+    material_path.write_text(json.dumps(payload), encoding="utf-8")
+    asset = MaterialAsset.from_file(material_path)
+    live_material = asset.material
+    assert live_material is not None
+    phase_count = live_material.phase_count
+    assert phase_count > 0
+    assert "u_removed" in live_material.uniforms
+    original_version = live_material.version
+
+    payload["uniforms"] = {"u_color": [0.826, 0.8, 0.7, 1.0]}
+    payload.pop("texture_refs")
+    material_path.write_text(json.dumps(payload), encoding="utf-8")
+    for _ in range(3):
+        assert asset.reload()
+        assert asset.material.uuid == live_material.uuid
+        assert live_material.phase_count == phase_count
+        assert tuple(live_material.uniforms["u_color"]) == pytest.approx([0.826, 0.8, 0.7, 1.0])
+        assert "u_removed" not in live_material.uniforms
+        assert "u_albedo_texture" not in live_material.texture_sources
+        assert live_material.version > original_version
+        original_version = live_material.version
+
+    # A parse failure must preserve the last successfully published content.
+    payload["uniforms"] = {"u_color": [0.1, 0.2, 0.3]}
+    material_path.write_text(json.dumps(payload), encoding="utf-8")
+    assert not asset.reload()
+    assert live_material.version == original_version
+    assert live_material.phase_count == phase_count
+    assert tuple(live_material.uniforms["u_color"]) == pytest.approx([0.826, 0.8, 0.7, 1.0])
