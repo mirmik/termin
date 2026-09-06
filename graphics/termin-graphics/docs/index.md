@@ -104,6 +104,32 @@ cache. Python `Texture.sync_to_cpu()` exposes the same operation.
 а не ветвление по строке `Tgfx2Context.backend`. Строковый backend оставлен как
 диагностика, не как точка принятия rendering-решений.
 
+### Vulkan transfer synchronization
+
+Buffer uploads and command-list buffer copies record range-scoped dependencies
+before transfer accesses and after transfer writes. Destination usages select
+vertex/index/uniform/storage consumers. This covers both visibility of the new
+bytes and overwriting buffers read by earlier GPU commands, without queue idle.
+Host writes to mapped buffers still require a CPU/GPU lifetime contract; see
+board investigation #2246.
+
+Image transitions include transfer reads and all supported shader stages.
+Copy/blit prepares sampled images for shader reads; non-sampled images preserve
+their previous layout, or receive a usage-compatible layout after their first
+write. Transfer-only images do not have image views.
+
+The current Vulkan device-level `execute_immediate` path records a **prelude to
+the next submission**, before that submission's draw command buffer. It does not
+insert an operation between already recorded draws. Use command-list copy
+operations between render passes for ordered copies. Device blits/readback
+requests consuming a rendered image must follow its producer submission.
+General ordering, abandoned/reordered command lists and global image-layout
+tracking remain an investigation under #2230; host readback visibility is #2202.
+
+Native regressions: `tgfx2_vulkan_buffer_sync_test` and
+`tgfx2_vulkan_image_sync_test`, run through root `task test:cpp` with mandatory
+Vulkan synchronization validation.
+
 ## Canonical 2D Draw Lists
 
 `tgfx::DrawList2DBuilder` записывает backend-neutral команды и атомарно

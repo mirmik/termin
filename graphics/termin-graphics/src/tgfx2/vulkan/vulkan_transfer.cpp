@@ -1,6 +1,7 @@
 #ifdef TGFX2_HAS_VULKAN
 
 #include "tgfx2/pixel_format_utils.hpp"
+#include "tgfx2/vulkan/internal/buffer_transfer_sync.hpp"
 #include "tgfx2/vulkan/internal/image_transition_sync.hpp"
 #include "tgfx2/vulkan/vulkan_render_device.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
@@ -87,8 +88,9 @@ namespace tgfx {
     void VulkanRenderDevice::execute_immediate(std::function<void(VkCommandBuffer)> fn) {
         // Record into the shared immediate cb. No submit, no wait — the cb
         // gets submitted together with the main draw cb in `submit()`, as
-        // entry 0 of a multi-cb `vkQueueSubmit` so the copies/transitions
-        // complete before the draws that depend on them.
+        // entry 0 of a multi-cb `vkQueueSubmit`. Transfer commands must record
+        // their own memory dependencies; CB order alone does not provide them.
+        // This is a submission prelude, not an insertion into a recording draw CB.
         //
         // Callers that used to do `staging; execute_immediate; destroy
         // staging;` must now push staging into `defer_vma_buffer_destroy` —
@@ -136,15 +138,22 @@ namespace tgfx {
             src_stage = vulkan_detail::depth_stencil_attachment_stages();
         } else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
             barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            src_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            src_stage = vulkan_detail::image_shader_stages();
+        } else if (old_layout == VK_IMAGE_LAYOUT_GENERAL) {
+            barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
         }
 
         if (new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
             barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        } else if (new_layout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         } else if (new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
             barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dst_stage = vulkan_detail::image_shader_stages();
+        } else if (new_layout == VK_IMAGE_LAYOUT_GENERAL) {
+            barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
         } else if (new_layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
             barrier.dstAccessMask = vulkan_detail::color_attachment_accesses();
             dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -225,11 +234,14 @@ namespace tgfx {
             vmaUnmapMemory(allocator_, staging_alloc);
 
             execute_immediate([&](VkCommandBuffer cmd) {
+                vulkan_detail::buffer_before_transfer(cmd, res->buffer, res->desc.usage, offset, data.size(),
+                                                      VK_ACCESS_TRANSFER_WRITE_BIT);
                 VkBufferCopy region{};
                 region.srcOffset = 0;
                 region.dstOffset = offset;
                 region.size = data.size();
                 vkCmdCopyBuffer(cmd, staging, res->buffer, 1, &region);
+                vulkan_detail::buffer_after_transfer_write(cmd, res->buffer, res->desc.usage, offset, data.size());
             });
 
             // Defer staging destroy — GPU runs the copy after the frame submit.

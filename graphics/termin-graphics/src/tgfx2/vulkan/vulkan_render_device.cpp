@@ -1252,7 +1252,8 @@ namespace tgfx {
             throw std::runtime_error("Failed to create Vulkan image");
         }
 
-        // Create image view
+        // Transfer-only images have no descriptor/attachment view; Vulkan
+        // forbids vkCreateImageView for that usage combination.
         VkImageViewCreateInfo view_ci{};
         view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         view_ci.image = res.image;
@@ -1264,8 +1265,10 @@ namespace tgfx {
         view_ci.subresourceRange.baseArrayLayer = 0;
         view_ci.subresourceRange.layerCount = desc.array_layers;
 
-        if (vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
+        if (vulkan_detail::image_needs_view(desc.usage) &&
+            vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
             vmaDestroyImage(allocator_, res.image, res.allocation);
+            tc::Log::error("VulkanRenderDevice::create_texture: failed to create image view");
             throw std::runtime_error("Failed to create image view");
         }
 
@@ -1323,7 +1326,9 @@ namespace tgfx {
         view_ci.subresourceRange.baseArrayLayer = 0;
         view_ci.subresourceRange.layerCount = desc.array_layers;
 
-        if (vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
+        if (vulkan_detail::image_needs_view(desc.usage) &&
+            vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
+            tc::Log::error("VulkanRenderDevice::register_external_texture: failed to create image view");
             throw std::runtime_error("VulkanRenderDevice::register_external_texture: vkCreateImageView failed");
         }
 
@@ -1701,9 +1706,9 @@ namespace tgfx {
 
         // Close the immediate cb (copies / transitions / clears accumulated
         // since last submit) and submit it together with the main draw cb in
-        // ONE vkQueueSubmit. Queue-submit ordering guarantees immediate_cb's
-        // GPU work completes before the main cb starts — no explicit barrier
-        // needed for the "staging → device UBO, then draw reads UBO" pattern.
+        // ONE vkQueueSubmit. Barriers recorded by the transfer paths make
+        // uploaded data visible to consumers in the main CB. Submission order
+        // alone does not serialize execution or establish memory visibility.
         VkCommandBuffer cbs[4];
         uint32_t cb_count = 0;
         const std::int64_t gpu_timing_frame_number = vcmd.gpu_timing_frame_number();
@@ -2163,6 +2168,8 @@ namespace tgfx {
 
         VkImageLayout prev_src = src->current_layout;
         VkImageLayout prev_dst = dst->current_layout;
+        const auto final_src = vulkan_detail::image_after_transfer_layout(src->desc, prev_src);
+        const auto final_dst = vulkan_detail::image_after_transfer_layout(dst->desc, prev_dst);
 
         bool msaa_resolve = src->desc.sample_count > 1 && dst->desc.sample_count == 1;
         bool msaa_copy = src->desc.sample_count > 1 && dst->desc.sample_count == src->desc.sample_count;
@@ -2260,25 +2267,22 @@ namespace tgfx {
                                VK_FILTER_LINEAR);
             }
 
-            // Leave both images in SHADER_READ_ONLY_OPTIMAL so downstream
-            // samplers (including bind_resource_set, which cannot transition
-            // from inside a render pass) work without further fix-ups. If
-            // prev_src was COLOR_ATTACHMENT_OPTIMAL the next render-pass
-            // begin will transition it back — one cheap barrier.
+            // Prepare sampled images for their descriptors; keep non-sampled
+            // images in layouts allowed by their usage and previous state.
             transition_image_layout(cb,
                                     src->image,
                                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                    final_src,
                                     VK_IMAGE_ASPECT_COLOR_BIT,
                                     src->desc.array_layers);
             transition_image_layout(cb,
                                     dst->image,
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                    final_dst,
                                     VK_IMAGE_ASPECT_COLOR_BIT,
                                     dst->desc.array_layers);
-            src->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            dst->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            src->current_layout = final_src;
+            dst->current_layout = final_dst;
         });
     }
 

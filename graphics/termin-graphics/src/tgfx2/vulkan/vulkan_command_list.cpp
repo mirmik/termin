@@ -2,6 +2,7 @@
 
 #include "tgfx2/vulkan/vulkan_command_list.hpp"
 #include "tgfx2/vulkan/internal/image_transition_sync.hpp"
+#include "tgfx2/vulkan/internal/buffer_transfer_sync.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 #include "vulkan_stats.hpp"
 
@@ -546,14 +547,23 @@ namespace tgfx {
         BufferHandle src, BufferHandle dst, uint64_t size, uint64_t src_offset, uint64_t dst_offset) {
         auto* s = device_.get_buffer(src);
         auto* d = device_.get_buffer(dst);
-        if (!s || !d)
+        if (!s || !d || in_render_pass_ || size == 0 || src_offset > s->desc.size ||
+            size > s->desc.size - src_offset || dst_offset > d->desc.size || size > d->desc.size - dst_offset ||
+            (s->buffer == d->buffer && src_offset < dst_offset + size && dst_offset < src_offset + size)) {
+            tc::Log::error("VulkanCommandList::copy_buffer: invalid handles/ranges or active render pass");
             return;
+        }
 
+        vulkan_detail::buffer_before_transfer(cmd_, s->buffer, s->desc.usage, src_offset, size,
+                                              VK_ACCESS_TRANSFER_READ_BIT);
+        vulkan_detail::buffer_before_transfer(cmd_, d->buffer, d->desc.usage, dst_offset, size,
+                                              VK_ACCESS_TRANSFER_WRITE_BIT);
         VkBufferCopy region{};
         region.srcOffset = src_offset;
         region.dstOffset = dst_offset;
         region.size = size;
         vkCmdCopyBuffer(cmd_, s->buffer, d->buffer, 1, &region);
+        vulkan_detail::buffer_after_transfer_write(cmd_, d->buffer, d->desc.usage, dst_offset, size);
     }
 
     void VulkanCommandList::copy_texture(TextureHandle src, TextureHandle dst) {
@@ -588,6 +598,8 @@ namespace tgfx {
 
         VkImageLayout prev_src = s->current_layout;
         VkImageLayout prev_dst = d->current_layout;
+        const auto final_src = vulkan_detail::image_after_transfer_layout(s->desc, prev_src);
+        const auto final_dst = vulkan_detail::image_after_transfer_layout(d->desc, prev_dst);
 
         device_.transition_image_layout(
             cmd_, s->image, prev_src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, src_aspect, s->desc.array_layers);
@@ -669,39 +681,37 @@ namespace tgfx {
             device_.transition_image_layout(cmd_,
                                             s->image,
                                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                            final_src,
                                             src_aspect,
                                             s->desc.array_layers);
             device_.transition_image_layout(cmd_,
                                             d->image,
                                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                            final_dst,
                                             dst_aspect,
                                             d->desc.array_layers);
-            s->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            d->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            s->current_layout = final_src;
+            d->current_layout = final_dst;
             return;
         }
 
-        // Leave both images in SHADER_READ_ONLY_OPTIMAL. Downstream
-        // bind_resource_set requires sampled textures to be in this layout
-        // already (it cannot transition inside a render pass), and most
-        // callers of copy_texture intend to sample the dst next.
+        // Only sampled images enter shader-read layout. Preserve other image
+        // usages, including non-sampled attachments and transfer-only targets.
         device_.transition_image_layout(cmd_,
                                         s->image,
                                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                        final_src,
                                         src_aspect,
                                         s->desc.array_layers);
         device_.transition_image_layout(cmd_,
                                         d->image,
                                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                        final_dst,
                                         dst_aspect,
                                         d->desc.array_layers);
 
-        s->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        d->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        s->current_layout = final_src;
+        d->current_layout = final_dst;
     }
 
     // --- Dynamic state ---

@@ -54,7 +54,7 @@
 ```bash
 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
 VK_LOADER_LAYERS_DISABLE='~implicit~' \
-TERMIN_SHADER_ARTIFACT_ROOT="$PWD/sdk/share/termin/shaders" \
+TERMIN_SHADER_ARTIFACT_ROOT="$PWD/sdk/share/termin" \
 CTEST_PARALLEL_LEVEL=4 BUILD_JOBS=8 BUILD_DIR="$PWD/build/graphics-asan" \
 CFLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \
 CXXFLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer' \

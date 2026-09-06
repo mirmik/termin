@@ -623,7 +623,9 @@ namespace tgfx {
                                                 uint32_t height,
                                                 uint32_t layers = 1);
 
-        // Execute a one-shot command buffer (for uploads, layout transitions)
+        // Append to the next submission's prelude (uploads/layout transitions).
+        // Runs before the submitted draw CB, regardless of host recording order.
+        // The callback must record the dependencies its GPU accesses require.
         void execute_immediate(std::function<void(VkCommandBuffer)> fn);
 
         // Transition image layout
