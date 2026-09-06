@@ -346,6 +346,8 @@ namespace tgfx {
             }
         }
         for (auto& [id, r] : textures_) {
+            if (r.attachment_view)
+                vkDestroyImageView(device_, r.attachment_view, nullptr);
             if (r.view)
                 vkDestroyImageView(device_, r.view, nullptr);
             if (r.image && !r.external)
@@ -1326,24 +1328,11 @@ namespace tgfx {
             throw std::runtime_error("Failed to create Vulkan image");
         }
 
-        // Transfer-only images have no descriptor/attachment view; Vulkan
-        // forbids vkCreateImageView for that usage combination.
-        VkImageViewCreateInfo view_ci{};
-        view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        view_ci.image = res.image;
-        view_ci.viewType = desc.array_layers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
-        view_ci.format = ci.format;
-        view_ci.subresourceRange.aspectMask = vk::format_aspect_flags(desc.format);
-        view_ci.subresourceRange.baseMipLevel = 0;
-        view_ci.subresourceRange.levelCount = desc.mip_levels;
-        view_ci.subresourceRange.baseArrayLayer = 0;
-        view_ci.subresourceRange.layerCount = desc.array_layers;
-
-        if (vulkan_detail::image_needs_view(desc.usage) &&
-            vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
+        try {
+            create_texture_views(res);
+        } catch (...) {
             vmaDestroyImage(allocator_, res.image, res.allocation);
-            tc::Log::error("VulkanRenderDevice::create_texture: failed to create image view");
-            throw std::runtime_error("Failed to create image view");
+            throw;
         }
 
         res.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1359,7 +1348,7 @@ namespace tgfx {
         bool is_sampled = (static_cast<uint32_t>(desc.usage) & static_cast<uint32_t>(TextureUsage::Sampled)) != 0;
         if (is_sampled) {
             VkImage image = res.image;
-            VkImageAspectFlags aspect = vk::format_aspect_flags(desc.format);
+            VkImageAspectFlags aspect = vk::format_image_aspect_flags(desc.format);
             execute_immediate([&](VkCommandBuffer cb) {
                 transition_image_layout(cb,
                                         image,
@@ -1389,24 +1378,43 @@ namespace tgfx {
         res.external = true;
         res.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
+        create_texture_views(res);
+        return {textures_.add(std::move(res))};
+    }
+
+    void VulkanRenderDevice::create_texture_views(VkTextureResource& res) {
+        const auto& desc = res.desc;
         VkImageViewCreateInfo view_ci{};
         view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         view_ci.image = res.image;
         view_ci.viewType = desc.array_layers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
         view_ci.format = vk::to_vk_format(desc.format);
-        view_ci.subresourceRange.aspectMask = vk::format_aspect_flags(desc.format);
+        view_ci.subresourceRange.aspectMask = vk::format_image_aspect_flags(desc.format);
         view_ci.subresourceRange.baseMipLevel = 0;
         view_ci.subresourceRange.levelCount = desc.mip_levels;
         view_ci.subresourceRange.baseArrayLayer = 0;
         view_ci.subresourceRange.layerCount = desc.array_layers;
 
-        if (vulkan_detail::image_needs_view(desc.usage) &&
-            vkCreateImageView(device_, &view_ci, nullptr, &res.view) != VK_SUCCESS) {
-            tc::Log::error("VulkanRenderDevice::register_external_texture: failed to create image view");
-            throw std::runtime_error("VulkanRenderDevice::register_external_texture: vkCreateImageView failed");
+        const auto create = [&](VkImageView& view) {
+            if (vkCreateImageView(device_, &view_ci, nullptr, &view) != VK_SUCCESS) {
+                if (res.view) vkDestroyImageView(device_, res.view, nullptr);
+                res.view = VK_NULL_HANDLE;
+                tc::Log::error("VulkanRenderDevice::create_texture_views: vkCreateImageView failed");
+                throw std::runtime_error("Failed to create Vulkan texture view");
+            }
+        };
+        if (has_flag(desc.usage, TextureUsage::Sampled) || has_flag(desc.usage, TextureUsage::Storage)) {
+            // A sampled depth/stencil image exposes depth, not both aspects.
+            if (view_ci.subresourceRange.aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT)
+                view_ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            create(res.view);
         }
-
-        return {textures_.add(std::move(res))};
+        if (has_flag(desc.usage, TextureUsage::ColorAttachment) ||
+            has_flag(desc.usage, TextureUsage::DepthStencilAttachment)) {
+            view_ci.subresourceRange.aspectMask = vk::format_image_aspect_flags(desc.format);
+            view_ci.subresourceRange.levelCount = 1;
+            create(res.attachment_view);
+        }
     }
 
     namespace {
@@ -1572,6 +1580,8 @@ namespace tgfx {
         }
         for (auto h : q.textures) {
             if (auto* r = textures_.get(h.id)) {
+                if (r->attachment_view)
+                    vkDestroyImageView(device_, r->attachment_view, nullptr);
                 if (r->view)
                     vkDestroyImageView(device_, r->view, nullptr);
                 if (r->image && !r->external)
@@ -2395,52 +2405,53 @@ namespace tgfx {
 
     void VulkanRenderDevice::clear_texture(TextureHandle dst_handle, termin::LinearColor color, termin::Bounds2i viewport) {
         auto* dst = textures_.get(dst_handle.id);
-        if (!dst)
+        if (!dst || !has_flag(dst->desc.usage, TextureUsage::ColorAttachment) ||
+            vk::format_aspect_flags(dst->desc.format) != VK_IMAGE_ASPECT_COLOR_BIT) {
+            tc::Log::error("VulkanRenderDevice::clear_texture: invalid color attachment handle=%u", dst_handle.id);
+            return;
+        }
+        if (viewport.x1 <= viewport.x0 || viewport.y1 <= viewport.y0)
+            return;
+        const int x0 = std::clamp(viewport.x0, 0, static_cast<int>(dst->desc.width));
+        const int y0 = std::clamp(viewport.y0, 0, static_cast<int>(dst->desc.height));
+        const int x1 = std::clamp(viewport.x1, 0, static_cast<int>(dst->desc.width));
+        const int y1 = std::clamp(viewport.y1, 0, static_cast<int>(dst->desc.height));
+        if (x1 <= x0 || y1 <= y0)
             return;
 
-        VkImageLayout prev = dst->current_layout;
-
+        const auto rp = get_or_create_render_pass({dst->desc.format}, PixelFormat::Undefined, false,
+                                                  dst->desc.sample_count, LoadOp::Load, LoadOp::Load);
+        if (!rp)
+            return;
+        const auto fb = get_or_create_framebuffer(rp, {dst->attachment_view}, dst->desc.width,
+                                                  dst->desc.height, dst->desc.array_layers);
+        if (!fb)
+            return;
+        const VkImageLayout prev = dst->current_layout;
         execute_immediate([&](VkCommandBuffer cb) {
-            transition_image_layout(cb,
-                                    dst->image,
-                                    prev,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    VK_IMAGE_ASPECT_COLOR_BIT,
-                                    dst->desc.array_layers);
-
-            VkClearColorValue clear{};
-            clear.float32[0] = color.r;
-            clear.float32[1] = color.g;
-            clear.float32[2] = color.b;
-            clear.float32[3] = color.a;
-
-            // vkCmdClearColorImage requires a full-image range with an
-            // offset-based mechanism — it does not natively support a
-            // viewport subrect. For a subrect clear we'd need a render pass
-            // with LoadOp::Clear + scissor. In practice callers pass the
-            // full texture extent here (display composition clears the whole
-            // display before compositing viewports), so clearing the
-            // whole image is correct; if a future caller needs a true rect
-            // clear, route through begin_pass + scissor instead.
-            (void)viewport;
-
-            VkImageSubresourceRange range{};
-            range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            range.levelCount = 1;
-            range.layerCount = dst->desc.array_layers;
-
-            vkCmdClearColorImage(cb, dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear, 1, &range);
-
-            if (prev != VK_IMAGE_LAYOUT_UNDEFINED) {
-                transition_image_layout(cb,
-                                        dst->image,
-                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                        prev,
-                                        VK_IMAGE_ASPECT_COLOR_BIT,
-                                        dst->desc.array_layers);
-            } else {
-                dst->current_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            }
+            // Even an unchanged layout needs a dependency on earlier attachment writes.
+            transition_image_layout(cb, dst->image, prev, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                    VK_IMAGE_ASPECT_COLOR_BIT, dst->desc.array_layers);
+            VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+            begin.renderPass = rp;
+            begin.framebuffer = fb;
+            begin.renderArea.extent = {dst->desc.width, dst->desc.height};
+            vkCmdBeginRenderPass(cb, &begin, VK_SUBPASS_CONTENTS_INLINE);
+            VkClearAttachment attachment{};
+            attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            attachment.colorAttachment = 0;
+            attachment.clearValue.color = {{color.r, color.g, color.b, color.a}};
+            VkClearRect rect{};
+            rect.rect.offset = {x0, y0};
+            rect.rect.extent = {static_cast<uint32_t>(x1 - x0), static_cast<uint32_t>(y1 - y0)};
+            rect.layerCount = dst->desc.array_layers;
+            vkCmdClearAttachments(cb, 1, &attachment, 1, &rect);
+            vkCmdEndRenderPass(cb);
+            const auto final_layout = prev == VK_IMAGE_LAYOUT_UNDEFINED
+                ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : prev;
+            transition_image_layout(cb, dst->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, final_layout,
+                                    VK_IMAGE_ASPECT_COLOR_BIT, dst->desc.array_layers);
+            dst->current_layout = final_layout;
         });
     }
 

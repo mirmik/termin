@@ -28,7 +28,10 @@ namespace tgfx::vk {
     TGFX2_API VkBufferUsageFlags to_vk_buffer_usage(BufferUsage usage);
     TGFX2_API VkImageUsageFlags to_vk_image_usage(TextureUsage usage);
 
+    // Single data aspect for sampling and transfer regions (depth for D24/S8).
     TGFX2_API VkImageAspectFlags format_aspect_flags(PixelFormat fmt);
+    // All aspects for attachment views and whole-image layout transitions.
+    TGFX2_API VkImageAspectFlags format_image_aspect_flags(PixelFormat fmt);
 
 } // namespace tgfx::vk
 

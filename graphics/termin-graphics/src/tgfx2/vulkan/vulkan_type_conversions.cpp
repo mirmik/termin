@@ -320,6 +320,12 @@ namespace tgfx::vk {
         return VK_IMAGE_ASPECT_COLOR_BIT;
     }
 
+    VkImageAspectFlags format_image_aspect_flags(PixelFormat fmt) {
+        if (fmt == PixelFormat::D24_UNorm_S8_UInt)
+            return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        return format_aspect_flags(fmt);
+    }
+
 } // namespace tgfx::vk
 
 #endif // TGFX2_HAS_VULKAN

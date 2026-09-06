@@ -862,9 +862,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
         const int width = static_cast<int>(dst->desc.width);
         const int height = static_cast<int>(dst->desc.height);
-        if (viewport.width() <= 0 || viewport.height() <= 0) {
-            fail("clear_texture requires a non-empty viewport");
-        }
+        if (viewport.x1 <= viewport.x0 || viewport.y1 <= viewport.y0)
+            return;
         const int x0 = std::clamp(viewport.x0, 0, width);
         const int y0 = std::clamp(viewport.y0, 0, height);
         const int x1 = std::clamp(viewport.x1, 0, width);
@@ -1016,8 +1015,24 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         wgpu::Texture object = device_.CreateTexture(&native);
         if (!object)
             fail("CreateTexture failed");
-        wgpu::TextureView view = object.CreateView();
-        return {textures_.add({std::move(object), std::move(view), desc, false})};
+        wgpu::TextureView view;
+        wgpu::TextureView attachment_view;
+        wgpu::TextureViewDescriptor view_desc;
+        view_desc.baseMipLevel = 0;
+        view_desc.mipLevelCount = desc.mip_levels;
+        view_desc.baseArrayLayer = 0;
+        view_desc.arrayLayerCount = 1;
+        if (has_flag(desc.usage, TextureUsage::Sampled) || has_flag(desc.usage, TextureUsage::Storage)) {
+            view_desc.aspect = color_format(desc.format) ? wgpu::TextureAspect::All : wgpu::TextureAspect::DepthOnly;
+            view = object.CreateView(&view_desc);
+        }
+        if (has_flag(desc.usage, TextureUsage::ColorAttachment) ||
+            has_flag(desc.usage, TextureUsage::DepthStencilAttachment)) {
+            view_desc.aspect = wgpu::TextureAspect::All;
+            view_desc.mipLevelCount = 1;
+            attachment_view = object.CreateView(&view_desc);
+        }
+        return {textures_.add({std::move(object), std::move(view), std::move(attachment_view), desc, false})};
     }
 
     SamplerHandle WebGpuRenderDevice::create_sampler(const SamplerDesc& desc) {
@@ -1456,8 +1471,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         desc.height = surface_height_;
         desc.format = surface_pixel_format();
         desc.usage = TextureUsage::ColorAttachment | TextureUsage::CopyDst;
-        wgpu::TextureView view = surface_texture.texture.CreateView();
-        acquired_surface_texture_ = {textures_.add({std::move(surface_texture.texture), std::move(view), desc, true})};
+        wgpu::TextureViewDescriptor view_desc;
+        view_desc.mipLevelCount = 1;
+        view_desc.arrayLayerCount = 1;
+        wgpu::TextureView attachment_view = surface_texture.texture.CreateView(&view_desc);
+        acquired_surface_texture_ = {
+            textures_.add({std::move(surface_texture.texture), {}, std::move(attachment_view), desc, true})};
         return acquired_surface_texture_;
     }
 

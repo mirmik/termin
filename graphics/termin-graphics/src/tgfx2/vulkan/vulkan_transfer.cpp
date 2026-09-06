@@ -320,7 +320,7 @@ namespace tgfx {
                                     res->image,
                                     res->current_layout,
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    vk::format_aspect_flags(res->desc.format));
+                                    vk::format_image_aspect_flags(res->desc.format));
 
             VkBufferImageCopy region{};
             region.imageSubresource.aspectMask = vk::format_aspect_flags(res->desc.format);
@@ -336,7 +336,7 @@ namespace tgfx {
                                         res->image,
                                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                         final_layout,
-                                        vk::format_aspect_flags(res->desc.format));
+                                        vk::format_image_aspect_flags(res->desc.format));
             }
         });
 
@@ -432,8 +432,9 @@ namespace tgfx {
         vmaUnmapMemory(allocator_, staging_alloc);
 
         const VkImageAspectFlags aspect = vk::format_aspect_flags(res->desc.format);
+        const auto image_aspects = vk::format_image_aspect_flags(res->desc.format);
         execute_immediate([&](VkCommandBuffer cmd) {
-            transition_image_layout(cmd, res->image, res->current_layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, aspect);
+            transition_image_layout(cmd, res->image, res->current_layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, image_aspects);
 
             VkBufferImageCopy region{};
             region.bufferOffset = 0;
@@ -454,7 +455,7 @@ namespace tgfx {
 
             VkImageLayout final_layout = texture_post_upload_layout(res->desc);
             if (final_layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-                transition_image_layout(cmd, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, final_layout, aspect);
+                transition_image_layout(cmd, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, final_layout, image_aspects);
             }
         });
 

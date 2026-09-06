@@ -65,12 +65,12 @@ namespace tgfx {
             const WebGpuTexture* texture = device_.textures_.get(source.texture.id);
             if (!texture)
                 command_fail("render pass references an invalid color texture");
-            colors[index].view = texture->view;
+            colors[index].view = texture->attachment_view;
             if (source.resolve_texture) {
                 const WebGpuTexture* resolve = device_.textures_.get(source.resolve_texture.id);
                 if (!resolve)
                     command_fail("render pass references an invalid color resolve texture");
-                colors[index].resolveTarget = resolve->view;
+                colors[index].resolveTarget = resolve->attachment_view;
             }
             colors[index].loadOp = load_op(source.load);
             colors[index].storeOp = store_op(source.store);
@@ -82,7 +82,7 @@ namespace tgfx {
             const WebGpuTexture* texture = device_.textures_.get(pass.depth.texture.id);
             if (!texture)
                 command_fail("render pass references an invalid depth texture");
-            depth.view = texture->view;
+            depth.view = texture->attachment_view;
             depth.depthLoadOp = load_op(pass.depth.load);
             depth.depthStoreOp = store_op(pass.depth.store);
             depth.depthClearValue = pass.depth.clear_depth;

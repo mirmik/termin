@@ -380,10 +380,14 @@ namespace {
         state.device->upload_texture(source, pixels);
 
         tgfx::TextureDesc copy_desc = source_desc;
+        // Exercise mip-zero attachment views while subsequent blits sample
+        // through a view exposing the complete chain.
+        copy_desc.mip_levels = 4;
         copy_desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment |
                           tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
         const tgfx::TextureHandle copy = state.device->create_texture(copy_desc);
         const termin::Bounds2i full_source = termin::Bounds2i::from_size(texture_size, texture_size);
+        state.device->clear_texture(copy, {0.0f, 0.0f, 0.0f, 1.0f}, full_source);
         state.device->blit_to_texture(copy, source, full_source, full_source);
 
         const tgfx::TextureHandle surface = state.device->acquire_surface_texture();

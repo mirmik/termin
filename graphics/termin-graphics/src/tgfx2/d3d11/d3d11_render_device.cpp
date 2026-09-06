@@ -1439,8 +1439,7 @@ float4 main(VSOut input) : SV_Target {
             tc::Log::error("D3D11RenderDevice::clear_texture: invalid color texture handle=%u", dst_handle.id);
             return;
         }
-        if (viewport.width() <= 0 || viewport.height() <= 0) {
-            tc::Log::error("D3D11RenderDevice::clear_texture: invalid empty viewport");
+        if (viewport.x1 <= viewport.x0 || viewport.y1 <= viewport.y0) {
             return;
         }
 

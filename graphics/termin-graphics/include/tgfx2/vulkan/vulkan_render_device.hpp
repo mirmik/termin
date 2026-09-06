@@ -51,7 +51,8 @@ namespace tgfx {
     struct VkTextureResource {
         VkImage image = VK_NULL_HANDLE;
         VmaAllocation allocation = VK_NULL_HANDLE;
-        VkImageView view = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE; // Full mip chain, sampled depth aspect only.
+        VkImageView attachment_view = VK_NULL_HANDLE; // Mip zero, all attachment aspects/layers.
         TextureDesc desc;
         VkImageLayout current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         bool external = false;
@@ -635,6 +636,9 @@ namespace tgfx {
         // Runs before the submitted draw CB, regardless of host recording order.
         // The callback must record the dependencies its GPU accesses require.
         void execute_immediate(std::function<void(VkCommandBuffer)> fn);
+
+        // Sampling spans the mip chain; attachment views select mip zero.
+        void create_texture_views(VkTextureResource& texture);
 
         // Transition image layout
         void transition_image_layout(VkCommandBuffer cmd,

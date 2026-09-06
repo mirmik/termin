@@ -16,6 +16,9 @@ Vulkan/SPIR-V baseline и capabilities; обычный CTest проходит 24
 validation errors.
 В [шестом пакете](2026-09-06-graphics-repair-pass-6.md) исправлены #2209/#2210:
 UBO base offsets/cache и color masks, включая MRT. Обычный CTest: 242 passed.
+В [седьмом пакете](2026-09-06-graphics-repair-pass-7.md) реализованы rect clear
+#2211 и sampling/attachment views #2214 (остаётся WebGPU browser gate).
+Оконный CTest: 257 passed, 1 прежний OpenGL failure, без Vulkan validation errors.
 
 ## Вывод
 

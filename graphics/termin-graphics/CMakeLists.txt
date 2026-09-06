@@ -837,6 +837,20 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
             message(STATUS "tgfx2 OpenGL bound resource set smoke: SDL2 not found; skipping")
         endif()
         if(SDL2_OPENGL_SMOKE_FOUND)
+            add_executable(tgfx2_opengl_clear_texture tests/test_tgfx2_opengl_clear_texture.cpp)
+            target_include_directories(tgfx2_opengl_clear_texture PRIVATE ${SDL2_OPENGL_SMOKE_INCLUDE_DIR})
+            target_link_libraries(tgfx2_opengl_clear_texture PRIVATE termin_graphics2 ${SDL2_OPENGL_SMOKE_LIBRARY})
+            if(SDL2_OPENGL_SMOKE_DLL)
+                add_custom_command(TARGET tgfx2_opengl_clear_texture POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${SDL2_OPENGL_SMOKE_DLL}" "$<TARGET_FILE_DIR:tgfx2_opengl_clear_texture>")
+            endif()
+            termin_set_rpath_test(tgfx2_opengl_clear_texture)
+            add_test(NAME tgfx2_opengl_clear_texture COMMAND tgfx2_opengl_clear_texture)
+            set_tests_properties(tgfx2_opengl_clear_texture PROPERTIES TIMEOUT 30
+                SKIP_REGULAR_EXPRESSION "${TGFX2_WINDOW_SKIP_RE}")
+            termin_add_test_labels(tgfx2_opengl_clear_texture "termin:capability:window" "termin:capability:opengl")
+
             add_executable(tgfx2_opengl_bound_resource_set
                 tests/test_tgfx2_opengl_bound_resource_set.cpp)
             target_include_directories(tgfx2_opengl_bound_resource_set
@@ -951,6 +965,22 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         add_test(NAME tgfx2_vulkan_capabilities_test COMMAND tgfx2_vulkan_capabilities_test)
         set_tests_properties(tgfx2_vulkan_capabilities_test PROPERTIES TIMEOUT 60)
         termin_add_test_labels(tgfx2_vulkan_capabilities_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_texture_views_test tests/test_tgfx2_vulkan_texture_views.cpp)
+        target_compile_definitions(tgfx2_vulkan_texture_views_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_texture_views_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_texture_views_test)
+        add_test(NAME tgfx2_vulkan_texture_views_test COMMAND tgfx2_vulkan_texture_views_test)
+        set_tests_properties(tgfx2_vulkan_texture_views_test PROPERTIES TIMEOUT 60)
+        termin_add_test_labels(tgfx2_vulkan_texture_views_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_clear_rect_test tests/test_tgfx2_vulkan_clear_rect.cpp)
+        target_compile_definitions(tgfx2_vulkan_clear_rect_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_clear_rect_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_clear_rect_test)
+        add_test(NAME tgfx2_vulkan_clear_rect_test COMMAND tgfx2_vulkan_clear_rect_test)
+        set_tests_properties(tgfx2_vulkan_clear_rect_test PROPERTIES TIMEOUT 60)
+        termin_add_test_labels(tgfx2_vulkan_clear_rect_test "termin:capability:vulkan")
 
         add_executable(tgfx2_vulkan_pipeline_contracts_test tests/test_tgfx2_vulkan_pipeline_contracts.cpp)
         target_compile_definitions(tgfx2_vulkan_pipeline_contracts_test PRIVATE TGFX2_HAS_VULKAN)

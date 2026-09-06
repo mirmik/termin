@@ -64,7 +64,8 @@ namespace tgfx {
 
     struct WebGpuTexture {
         wgpu::Texture object;
-        wgpu::TextureView view;
+        wgpu::TextureView view; // Full mip chain, sampled depth aspect only.
+        wgpu::TextureView attachment_view; // Mip zero, all attachment aspects.
         TextureDesc desc;
         bool surface_texture = false;
     };

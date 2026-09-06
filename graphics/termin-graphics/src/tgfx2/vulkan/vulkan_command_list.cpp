@@ -233,7 +233,7 @@ namespace tgfx {
             color_fmts.push_back(tex->desc.format);
             color_loads.push_back(c.load);
             color_stores.push_back(c.store);
-            views.push_back(tex->view);
+            views.push_back(tex->attachment_view);
             width = tex->desc.width;
             height = tex->desc.height;
             sample_count = tex->desc.sample_count;
@@ -260,7 +260,7 @@ namespace tgfx {
                 continue;
             auto* tex = device_.get_texture(c.resolve_texture);
             color_resolve_mask |= (1u << i);
-            views.push_back(tex->view);
+            views.push_back(tex->attachment_view);
             if (tex->current_layout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
                 device_.transition_image_layout(cmd_,
                                                 tex->image,
@@ -280,7 +280,7 @@ namespace tgfx {
             auto* tex = device_.get_texture(pass.depth.texture);
             depth_fmt = tex->desc.format;
             depth_load = pass.depth.load;
-            views.push_back(tex->view);
+            views.push_back(tex->attachment_view);
             if (width == 0) {
                 width = tex->desc.width;
                 height = tex->desc.height;
@@ -294,7 +294,7 @@ namespace tgfx {
             // the pass starts. Without this, a shadow-depth texture left
             // in SHADER_READ_ONLY_OPTIMAL by a previous sampler use
             // survives into the next shadow pass's render-pass load op.
-            VkImageAspectFlags dep_aspect = vk::format_aspect_flags(tex->desc.format);
+            VkImageAspectFlags dep_aspect = vk::format_image_aspect_flags(tex->desc.format);
             if (tex->current_layout != VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
                 device_.transition_image_layout(cmd_,
                                                 tex->image,
@@ -430,7 +430,7 @@ namespace tgfx {
                                                 tex->image,
                                                 tex->current_layout,
                                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                vk::format_aspect_flags(tex->desc.format),
+                                                vk::format_image_aspect_flags(tex->desc.format),
                                                 tex->desc.array_layers);
                 tex->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             }
@@ -598,6 +598,8 @@ namespace tgfx {
 
         VkImageAspectFlags src_aspect = vk::format_aspect_flags(s->desc.format);
         VkImageAspectFlags dst_aspect = vk::format_aspect_flags(d->desc.format);
+        const auto src_image_aspects = vk::format_image_aspect_flags(s->desc.format);
+        const auto dst_image_aspects = vk::format_image_aspect_flags(d->desc.format);
 
         VkImageLayout prev_src = s->current_layout;
         VkImageLayout prev_dst = d->current_layout;
@@ -605,9 +607,9 @@ namespace tgfx {
         const auto final_dst = vulkan_detail::image_after_transfer_layout(d->desc, prev_dst);
 
         device_.transition_image_layout(
-            cmd_, s->image, prev_src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, src_aspect, s->desc.array_layers);
+            cmd_, s->image, prev_src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, src_image_aspects, s->desc.array_layers);
         device_.transition_image_layout(
-            cmd_, d->image, prev_dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dst_aspect, d->desc.array_layers);
+            cmd_, d->image, prev_dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dst_image_aspects, d->desc.array_layers);
 
         uint32_t w = std::min(s->desc.width, d->desc.width);
         uint32_t h = std::min(s->desc.height, d->desc.height);
@@ -685,13 +687,13 @@ namespace tgfx {
                                             s->image,
                                             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                             final_src,
-                                            src_aspect,
+                                            src_image_aspects,
                                             s->desc.array_layers);
             device_.transition_image_layout(cmd_,
                                             d->image,
                                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                             final_dst,
-                                            dst_aspect,
+                                            dst_image_aspects,
                                             d->desc.array_layers);
             s->current_layout = final_src;
             d->current_layout = final_dst;
@@ -704,13 +706,13 @@ namespace tgfx {
                                         s->image,
                                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                         final_src,
-                                        src_aspect,
+                                        src_image_aspects,
                                         s->desc.array_layers);
         device_.transition_image_layout(cmd_,
                                         d->image,
                                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                         final_dst,
-                                        dst_aspect,
+                                        dst_image_aspects,
                                         d->desc.array_layers);
 
         s->current_layout = final_src;

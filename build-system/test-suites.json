@@ -188,6 +188,12 @@
         "reason": "Creates a GLFW window supplied by the build environment."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_clear_texture.cpp",
+        "profiles": ["linux-full"],
+        "capabilities": ["window", "opengl"],
+        "reason": "Requires SDL OpenGL for rectangle clear and caller-state pixel regressions."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_tgfx2_opengl_bound_resource_set.cpp",
         "profiles": [
           "linux-full"

@@ -1526,28 +1526,62 @@ namespace tgfx {
 
     void OpenGLRenderDevice::clear_texture(TextureHandle dst_color, termin::LinearColor color, termin::Bounds2i viewport) {
         GLTexture* dst = textures_.get(dst_color.id);
-        if (!dst)
+        if (!dst) {
+            tc_log_error("OpenGLRenderDevice::clear_texture: invalid texture handle %u", dst_color.id);
+            return;
+        }
+        if (is_depth_format(dst->desc.format) || !has_flag(dst->desc.usage, TextureUsage::ColorAttachment)) {
+            tc_log_error("OpenGLRenderDevice::clear_texture: requires a color attachment texture");
+            return;
+        }
+        const int width = static_cast<int>(dst->desc.width);
+        const int height = static_cast<int>(dst->desc.height);
+        const int x0 = std::clamp(viewport.x0, 0, width);
+        const int y0 = std::clamp(viewport.y0, 0, height);
+        const int x1 = std::clamp(viewport.x1, 0, width);
+        const int y1 = std::clamp(viewport.y1, 0, height);
+        if (x1 <= x0 || y1 <= y0)
             return;
 
         GLint prev_draw = 0;
         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
-        GLint prev_vp[4] = {0, 0, 0, 0};
-        glGetIntegerv(GL_VIEWPORT, prev_vp);
+        GLint prev_scissor[4] = {};
+        glGetIntegerv(GL_SCISSOR_BOX, prev_scissor);
+        const GLboolean prev_scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
 
         GLuint fbo = 0;
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
         glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dst->target, dst->gl_id, 0);
-        glViewport(viewport.x0, viewport.y0, viewport.width(), viewport.height());
-        glClearColor(color.r, color.g, color.b, color.a);
+        if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            tc_log_error("OpenGLRenderDevice::clear_texture: incomplete color framebuffer");
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prev_draw));
+            glDeleteFramebuffers(1, &fbo);
+            return;
+        }
+        const auto rect = gl_native_framebuffer_rect(gl_coordinates_, height, {x0, y0, x1 - x0, y1 - y0});
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(rect.x, rect.y, rect.width, rect.height);
         GLboolean prev_color_mask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+#if defined(__EMSCRIPTEN__)
         glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+#else
+        glGetBooleani_v(GL_COLOR_WRITEMASK, 0, prev_color_mask);
+        glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+#endif
 
-        glClear(GL_COLOR_BUFFER_BIT);
+        const GLfloat clear[4] = {color.r, color.g, color.b, color.a};
+        glClearBufferfv(GL_COLOR, 0, clear);
 
+#if defined(__EMSCRIPTEN__)
         glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
-        glViewport(prev_vp[0], prev_vp[1], prev_vp[2], prev_vp[3]);
+#else
+        glColorMaski(0, prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+#endif
+        glScissor(prev_scissor[0], prev_scissor[1], prev_scissor[2], prev_scissor[3]);
+        if (!prev_scissor_enabled)
+            glDisable(GL_SCISSOR_TEST);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prev_draw));
         glDeleteFramebuffers(1, &fbo);
     }
