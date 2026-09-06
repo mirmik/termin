@@ -19,9 +19,13 @@
     "tcplot.dll",
     "termin.dll",
     "termin_base.dll",
+    "termin_graphics_binding_policy.dll",
     "termin_graphics.dll",
     "termin_graphics2.dll",
+    "termin_inspect.dll",
+    "termin_materials.dll",
     "termin_mesh.dll",
+    "termin_render_core.dll",
     "termin_visual_scene.dll"
   ],
   "forbidden_native_libraries": [
@@ -34,7 +38,6 @@
     "termin_components_skeleton.dll",
     "termin_display.dll",
     "termin_engine.dll",
-    "termin_materials.dll",
     "termin_render.dll",
     "termin_render_passes.dll",
     "termin_scene.dll"

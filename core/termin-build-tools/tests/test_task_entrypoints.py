@@ -8,7 +8,27 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
-    taskfile = (REPO_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+    root_taskfile = (REPO_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
+    included_taskfiles = sorted((REPO_ROOT / "taskfiles").glob("*.yml"))
+    included_paths = [
+        REPO_ROOT / relative_path
+        for relative_path in re.findall(
+            r"^\s{4}taskfile:\s+(\./taskfiles/\S+\.yml)\s*$",
+            root_taskfile,
+            flags=re.MULTILINE,
+        )
+    ]
+
+    assert included_paths
+    assert set(included_paths) == set(included_taskfiles)
+    assert root_taskfile.count("    flatten: true") == len(included_paths)
+
+    taskfile = "\n".join(
+        [
+            root_taskfile,
+            *(path.read_text(encoding="utf-8") for path in included_paths),
+        ]
+    )
 
     for task_name in (
         "build",
@@ -19,16 +39,29 @@ def test_taskfile_is_the_cross_platform_public_command_interface() -> None:
         "package:graphics:python",
         "package:graphics:python:manylinux",
         "publish:graphics:python",
+        "package:graphics:nuget",
+        "test:graphics:nuget",
+        "publish:graphics:nuget",
         "docs:build",
         "docs:serve",
     ):
-        assert f"  {task_name}:\n" in taskfile
+        assert re.search(
+            rf"^  {re.escape(task_name)}:\s*$", taskfile, re.MULTILINE
+        )
 
     assert "./scripts/build/sdk.sh" in taskfile
     assert "./scripts/build/sdk.ps1" in taskfile
     assert "./scripts/build/graphics-python.sh" in taskfile
     assert "./scripts/build/graphics-python-manylinux.sh" in taskfile
     assert "./scripts/publish/graphics-python.sh" in taskfile
+    assert "./scripts/build/graphics-nuget.ps1" in taskfile
+    assert "./scripts/test/graphics-nuget.ps1" in taskfile
+    assert "./scripts/publish/graphics-nuget.ps1" in taskfile
+    graphics_nuget_publish = (
+        REPO_ROOT / "scripts" / "publish" / "graphics-nuget.ps1"
+    ).read_text(encoding="utf-8")
+    assert "sys.path.insert(0, sys.argv.pop(1))" in graphics_nuget_publish
+    assert "NUGET_API_KEY" not in graphics_nuget_publish
     assert "./scripts/test/all.sh" in taskfile
     assert "./scripts/test/all.ps1" in taskfile
     assert "\\" not in taskfile

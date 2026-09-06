@@ -23,6 +23,19 @@ from termin_build.versioning import public_version
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SOURCE_REVISION = "1" * 40
 VERSION = public_version()
+PLOT_D3D11_RUNTIME_LIBRARIES = (
+    "tcplot.dll",
+    "termin.dll",
+    "termin_base.dll",
+    "termin_graphics_binding_policy.dll",
+    "termin_graphics.dll",
+    "termin_graphics2.dll",
+    "termin_inspect.dll",
+    "termin_materials.dll",
+    "termin_mesh.dll",
+    "termin_render_core.dll",
+    "termin_visual_scene.dll",
+)
 
 
 def _write_file(root: Path, relative: Path | str, payload: bytes = b"payload") -> Path:
@@ -65,6 +78,16 @@ def _build(tmp_path: Path, name: str = "candidate") -> Path:
     )
 
 
+def test_lock_matches_plot_d3d11_runtime_closure() -> None:
+    lock = load_lock(REPO_ROOT)
+
+    assert lock.required_native_libraries == PLOT_D3D11_RUNTIME_LIBRARIES
+    assert not (
+        {name.casefold() for name in lock.required_native_libraries}
+        & {name.casefold() for name in lock.forbidden_native_libraries}
+    )
+
+
 def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> None:
     candidate = _build(tmp_path)
     manifest = validate_candidate(REPO_ROOT, candidate)
@@ -90,8 +113,10 @@ def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> Non
     with zipfile.ZipFile(runtime_package) as archive:
         names = set(archive.namelist())
         assert "lib/net8.0-windows7.0/Termin.Native.dll" in names
-        assert "runtimes/win-x64/native/termin.dll" in names
-        assert "runtimes/win-x64/native/termin_graphics2.dll" in names
+        assert {
+            f"runtimes/win-x64/native/{name}"
+            for name in PLOT_D3D11_RUNTIME_LIBRARIES
+        } <= names
         assert "share/termin/builtin_shaders/engine-shader-catalog.json" in names
         assert "licenses/Termin/LICENSE" in names
         assert "licenses/Clipper2/LICENSE" in names
