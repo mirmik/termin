@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <tcbase/tc_log.h>
@@ -173,6 +174,18 @@ namespace tgfx {
             throw std::runtime_error("OpenGL backend could not establish its clip-space contract: " + error);
     }
 
+    static void release_buffer(GLBuffer& buffer) {
+        if (buffer.gl_id && !buffer.external)
+            glDeleteBuffers(1, &buffer.gl_id);
+        buffer.gl_id = 0;
+    }
+
+    static void release_texture(GLTexture& texture) {
+        if (texture.gl_id && !texture.external)
+            glDeleteTextures(1, &texture.gl_id);
+        texture.gl_id = 0;
+    }
+
     OpenGLRenderDevice::~OpenGLRenderDevice() {
         tc_shader_registry_remove_destroy_hook(&opengl_invalidate_tc_shader_trampoline, this);
         tc_mesh_registry_remove_destroy_hook(&opengl_invalidate_tc_mesh_trampoline, this);
@@ -218,38 +231,13 @@ namespace tgfx {
             push_ring_buf_ = 0;
         }
 
-        // Clean up transient vertex ring
-        if (transient_vb_gl_) {
-            glDeleteBuffers(1, &transient_vb_gl_);
-            transient_vb_gl_ = 0;
-            // Release the BufferHandle slot in our HandlePool too.
-            if (transient_vb_handle_) {
-                // Don't route through destroy(BufferHandle) — that would
-                // glDeleteBuffers the id we just freed above. Just drop the
-                // slot.
-                buffers_.remove(transient_vb_handle_.id);
-                transient_vb_handle_ = {};
-            }
-        }
-
-        // Clean up dynamic UBO ring
-        if (ring_ubo_gl_) {
-            glDeleteBuffers(1, &ring_ubo_gl_);
-            ring_ubo_gl_ = 0;
-            if (ring_ubo_handle_) {
-                buffers_.remove(ring_ubo_handle_.id);
-                ring_ubo_handle_ = {};
-            }
-        }
-
-        // Clean up all remaining GL resources
+        // The buffer pool owns the transient vertex and dynamic UBO rings too;
+        // their cached GL names are aliases, not separate owners.
         for (auto& [id, buf] : buffers_) {
-            if (buf.gl_id)
-                glDeleteBuffers(1, &buf.gl_id);
+            release_buffer(buf);
         }
         for (auto& [id, tex] : textures_) {
-            if (tex.gl_id)
-                glDeleteTextures(1, &tex.gl_id);
+            release_texture(tex);
         }
         for (auto& [id, s] : samplers_) {
             if (s.gl_id)
@@ -1083,9 +1071,20 @@ namespace tgfx {
 
     void OpenGLRenderDevice::destroy(BufferHandle handle) {
         if (auto* buf = buffers_.get(handle.id)) {
-            if (buf->gl_id && !buf->external)
-                glDeleteBuffers(1, &buf->gl_id);
+            release_buffer(*buf);
             buffers_.remove(handle.id);
+            if (handle.id == transient_vb_handle_.id) {
+                transient_vb_handle_ = {};
+                transient_vb_gl_ = 0;
+                transient_vb_offset_ = 0;
+                transient_vb_initialized_ = false;
+            }
+            if (handle.id == ring_ubo_handle_.id) {
+                ring_ubo_handle_ = {};
+                ring_ubo_gl_ = 0;
+                ring_ubo_offset_ = 0;
+                ring_ubo_initialized_ = false;
+            }
         }
     }
 
@@ -1093,8 +1092,7 @@ namespace tgfx {
         if (auto* tex = textures_.get(handle.id)) {
             const GLuint deleted_gl_id = tex->gl_id;
 
-            if (tex->gl_id && !tex->external)
-                glDeleteTextures(1, &tex->gl_id);
+            release_texture(*tex);
             textures_.remove(handle.id);
 
             // Drop any FBO cache entry that referenced this GL texture id.
@@ -1194,42 +1192,51 @@ namespace tgfx {
         glBindBuffer(buf->target, 0);
     }
 
-    // Fill `dst` with the byte-reversed rows of `src`. Caller supplies
-    // `row_bytes` (bytes per row) and `rows` (number of rows). dst and src
-    // must not overlap. Used by the OpenGL backend to Y-flip upload payloads
-    // so that sampling (also Y-flipped in shaders) pairs up to produce
-    // Vulkan-native behaviour — see docs/coord_system.md §4.
-    static void flip_rows(uint8_t* dst, const uint8_t* src, uint32_t row_bytes, uint32_t rows) {
-        for (uint32_t r = 0; r < rows; ++r) {
-            std::memcpy(dst + r * row_bytes, src + (rows - 1 - r) * row_bytes, row_bytes);
-        }
+    namespace {
+        struct PackedTextureUploadState {
+            GLint values[8]{};
+            GLint buffer = 0;
+            GLint texture = 0;
+            static constexpr GLenum names[] = {
+                GL_UNPACK_ALIGNMENT, GL_UNPACK_ROW_LENGTH, GL_UNPACK_IMAGE_HEIGHT,
+                GL_UNPACK_SKIP_PIXELS, GL_UNPACK_SKIP_ROWS, GL_UNPACK_SKIP_IMAGES,
+#if !defined(__EMSCRIPTEN__)
+                GL_UNPACK_SWAP_BYTES, GL_UNPACK_LSB_FIRST,
+#endif
+            };
+            PackedTextureUploadState() {
+                glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &buffer);
+                glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+                for (size_t i = 0; i < std::size(names); ++i) {
+                    glGetIntegerv(names[i], &values[i]);
+                    glPixelStorei(names[i], names[i] == GL_UNPACK_ALIGNMENT ? 1 : 0);
+                }
+            }
+            ~PackedTextureUploadState() {
+                for (size_t i = 0; i < std::size(names); ++i)
+                    glPixelStorei(names[i], values[i]);
+                glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(texture));
+                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, static_cast<GLuint>(buffer));
+            }
+        };
+    }
+
+    // Reverse row order for GL sampling's Y convention. Source and destination
+    // must not overlap; bytes within each row keep their original order.
+    static void flip_rows(uint8_t* dst, const uint8_t* src, size_t row_bytes, uint32_t rows) {
+        for (uint32_t r = 0; r < rows; ++r)
+            std::memcpy(dst + size_t(r) * row_bytes, src + size_t(rows - 1 - r) * row_bytes, row_bytes);
     }
 
     void OpenGLRenderDevice::upload_texture(TextureHandle dst, std::span<const uint8_t> data, uint32_t mip) {
         auto* tex = textures_.get(dst.id);
-        if (!tex)
+        if (!tex || mip >= tex->desc.mip_levels || mip >= 32) {
+            tc_log_error("OpenGLRenderDevice::upload_texture: invalid handle or mip");
             return;
-
-        auto fmt = gl::to_gl_format(tex->desc.format);
-        uint32_t w = std::max(1u, tex->desc.width >> mip);
-        uint32_t h = std::max(1u, tex->desc.height >> mip);
-        uint32_t row_bytes = w * gl::pixel_bytes(tex->desc.format);
-
-        // Y-flip the payload: user supplies row 0 = top of image (Vulkan
-        // convention), but GL sampling is Y-flipped as well (see the GLSL
-        // macro injection in create_shader), so storing the image upside
-        // down here cancels out and gives v=0 = user's top on sampling.
-        std::vector<uint8_t> flipped;
-        const uint8_t* upload_ptr = data.data();
-        if (row_bytes > 0 && h > 1 && data.size() >= static_cast<size_t>(row_bytes) * h) {
-            flipped.resize(static_cast<size_t>(row_bytes) * h);
-            flip_rows(flipped.data(), data.data(), row_bytes, h);
-            upload_ptr = flipped.data();
         }
-
-        glBindTexture(tex->target, tex->gl_id);
-        glTexSubImage2D(tex->target, mip, 0, 0, w, h, fmt.format, fmt.type, upload_ptr);
-        glBindTexture(tex->target, 0);
+        upload_texture_region(dst, 0, 0, std::max(1u, tex->desc.width >> mip),
+                              std::max(1u, tex->desc.height >> mip), data, mip);
     }
 
     void OpenGLRenderDevice::upload_texture_region(TextureHandle dst,
@@ -1240,37 +1247,35 @@ namespace tgfx {
                                                    std::span<const uint8_t> data,
                                                    uint32_t mip) {
         auto* tex = textures_.get(dst.id);
-        if (!tex)
+        if (!tex || mip >= tex->desc.mip_levels || mip >= 32 ||
+            tex->desc.sample_count != 1 || tex->target != GL_TEXTURE_2D) {
+            tc_log_error("OpenGLRenderDevice::upload_texture_region: invalid handle, mip or texture target");
             return;
-
-        auto fmt = gl::to_gl_format(tex->desc.format);
-        uint32_t row_bytes = w * gl::pixel_bytes(tex->desc.format);
-
-        // Flip the region's rows in place (so data's row 0 = top of the
-        // sub-image ends up at the bottom of the GL upload) and translate
-        // the destination Y from top-left to bottom-left framebuffer coords.
+        }
+        const uint32_t tex_w = std::max(1u, tex->desc.width >> mip);
+        const uint32_t tex_h = std::max(1u, tex->desc.height >> mip);
+        const size_t pixel_bytes = gl::pixel_bytes(tex->desc.format);
+        if (!w || !h || x > tex_w || y > tex_h || w > tex_w - x || h > tex_h - y ||
+            !pixel_bytes || w > std::numeric_limits<size_t>::max() / pixel_bytes ||
+            h > std::numeric_limits<size_t>::max() / (size_t(w) * pixel_bytes) ||
+            data.size() != size_t(w) * pixel_bytes * h) {
+            tc_log_error("OpenGLRenderDevice::upload_texture_region: invalid region or packed byte size");
+            return;
+        }
+        const auto fmt = gl::to_gl_format(tex->desc.format);
+        const size_t row_bytes = size_t(w) * pixel_bytes;
         std::vector<uint8_t> flipped;
         const uint8_t* upload_ptr = data.data();
-        if (row_bytes > 0 && h > 1 && data.size() >= static_cast<size_t>(row_bytes) * h) {
-            flipped.resize(static_cast<size_t>(row_bytes) * h);
+        if (h > 1) {
+            flipped.resize(data.size());
             flip_rows(flipped.data(), data.data(), row_bytes, h);
             upload_ptr = flipped.data();
         }
-
-        uint32_t tex_h = std::max(1u, tex->desc.height >> mip);
-        uint32_t gl_y = (tex_h > y + h) ? (tex_h - y - h) : 0;
-
-        glBindTexture(tex->target, tex->gl_id);
-        glTexSubImage2D(tex->target,
-                        mip,
-                        static_cast<GLint>(x),
-                        static_cast<GLint>(gl_y),
-                        static_cast<GLsizei>(w),
-                        static_cast<GLsizei>(h),
-                        fmt.format,
-                        fmt.type,
-                        upload_ptr);
-        glBindTexture(tex->target, 0);
+        // CPU spans are packed and native-endian, regardless of caller PBO/pixel-store state.
+        PackedTextureUploadState state;
+        glBindTexture(GL_TEXTURE_2D, tex->gl_id);
+        glTexSubImage2D(GL_TEXTURE_2D, mip, static_cast<GLint>(x), static_cast<GLint>(tex_h - y - h),
+                       static_cast<GLsizei>(w), static_cast<GLsizei>(h), fmt.format, fmt.type, upload_ptr);
     }
 
     // --- Readback ---

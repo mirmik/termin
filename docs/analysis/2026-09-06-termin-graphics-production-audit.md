@@ -19,6 +19,9 @@ UBO base offsets/cache и color masks, включая MRT. Обычный CTest:
 В [седьмом пакете](2026-09-06-graphics-repair-pass-7.md) реализованы rect clear
 #2211 и sampling/attachment views #2214 (остаётся WebGPU browser gate).
 Оконный CTest: 257 passed, 1 прежний OpenGL failure, без Vulkan validation errors.
+В [восьмом пакете](2026-09-06-graphics-repair-pass-8.md) исправлены OpenGL
+packed uploads #2215, MSAA resolve #2216 и borrowed ownership #2217.
+Оконный CTest: 260 passed, 1 прежний OpenGL failure.
 
 ## Вывод
 

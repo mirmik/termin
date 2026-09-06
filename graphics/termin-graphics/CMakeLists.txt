@@ -54,12 +54,24 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 include(TerminPython)
 
-# --- GLAD (static library) ---
+# --- GLAD ---
 # Kept even when TGFX2_ENABLE_OPENGL=OFF: some legacy headers/bindings still
 # mention GL-only APIs, and glad does not require linking system OpenGL.
-add_library(glad STATIC
+# Native shared libraries must share one set of loader globals. Linking a
+# static GLAD into both termin_graphics and termin_graphics2 duplicates them.
+set(_TGFX_GLAD_LIBRARY_TYPE SHARED)
+if(EMSCRIPTEN)
+    set(_TGFX_GLAD_LIBRARY_TYPE STATIC)
+endif()
+add_library(glad ${_TGFX_GLAD_LIBRARY_TYPE}
     ../../termin-thirdparty/glad/src/glad.c
 )
+if(NOT EMSCRIPTEN)
+    target_compile_definitions(glad PUBLIC GLAD_API_CALL_EXPORT PRIVATE GLAD_API_CALL_EXPORT_BUILD)
+    set_target_properties(glad PROPERTIES OUTPUT_NAME termin_glad
+        VERSION ${PROJECT_VERSION} SOVERSION 0)
+    termin_set_rpath_lib(glad)
+endif()
 if(COMMAND termin_add_alias_if_missing)
     termin_add_alias_if_missing(tgfx::glad glad)
 endif()
@@ -837,6 +849,22 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
             message(STATUS "tgfx2 OpenGL bound resource set smoke: SDL2 not found; skipping")
         endif()
         if(SDL2_OPENGL_SMOKE_FOUND)
+            foreach(contract IN ITEMS upload resolve ownership)
+                add_executable(tgfx2_opengl_${contract} tests/test_tgfx2_opengl_${contract}.cpp)
+                target_include_directories(tgfx2_opengl_${contract} PRIVATE ${SDL2_OPENGL_SMOKE_INCLUDE_DIR})
+                target_link_libraries(tgfx2_opengl_${contract} PRIVATE termin_graphics2 ${SDL2_OPENGL_SMOKE_LIBRARY})
+                if(SDL2_OPENGL_SMOKE_DLL)
+                    add_custom_command(TARGET tgfx2_opengl_${contract} POST_BUILD
+                        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                            "${SDL2_OPENGL_SMOKE_DLL}" "$<TARGET_FILE_DIR:tgfx2_opengl_${contract}>")
+                endif()
+                termin_set_rpath_test(tgfx2_opengl_${contract})
+                add_test(NAME tgfx2_opengl_${contract} COMMAND tgfx2_opengl_${contract})
+                set_tests_properties(tgfx2_opengl_${contract} PROPERTIES TIMEOUT 30
+                    SKIP_REGULAR_EXPRESSION "${TGFX2_WINDOW_SKIP_RE}")
+                termin_add_test_labels(tgfx2_opengl_${contract} "termin:capability:window" "termin:capability:opengl")
+            endforeach()
+
             add_executable(tgfx2_opengl_clear_texture tests/test_tgfx2_opengl_clear_texture.cpp)
             target_include_directories(tgfx2_opengl_clear_texture PRIVATE ${SDL2_OPENGL_SMOKE_INCLUDE_DIR})
             target_link_libraries(tgfx2_opengl_clear_texture PRIVATE termin_graphics2 ${SDL2_OPENGL_SMOKE_LIBRARY})
