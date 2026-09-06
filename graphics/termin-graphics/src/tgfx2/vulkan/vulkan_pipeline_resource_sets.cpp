@@ -8,6 +8,7 @@
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 #include "vulkan_spirv_reflection.hpp"
 #include "tgfx2/vulkan/internal/spirv_input_validation.hpp"
+#include "tgfx2/vulkan/internal/shader_target.hpp"
 #include "vulkan_stats.hpp"
 
 #include <algorithm>
@@ -154,7 +155,7 @@ namespace tgfx {
                 vk::SpirvCompileResult result;
                 {
                     VulkanStatsTimer timer(g_shader_compile_us);
-                    result = vk::compile_glsl_to_spirv(desc.source, desc.stage, desc.entry_point);
+                    result = vk::compile_glsl_to_spirv(desc.source, desc.stage, api_version_, desc.entry_point);
                 }
                 if (!result.success) {
                     throw std::runtime_error("Shader compilation failed: " + result.error_message);
@@ -162,6 +163,18 @@ namespace tgfx {
                 spirv = std::move(result.spirv);
             } else {
                 throw std::runtime_error("Shader has neither SPIR-V bytecode nor source");
+            }
+
+            const auto binary = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(spirv.data()),
+                                                         spirv.size() * sizeof(uint32_t));
+            if (const char* error = vulkan_detail::spirv_input_error(binary))
+                throw std::runtime_error(error);
+            const auto target = vulkan_detail::shader_target(api_version_);
+            if (spirv[1] > target.spirv) {
+                throw std::runtime_error("SPIR-V version " + std::to_string((spirv[1] >> 16) & 0xff) + "." +
+                                         std::to_string((spirv[1] >> 8) & 0xff) + " exceeds Vulkan " +
+                                         std::to_string(VK_API_VERSION_MAJOR(api_version_)) + "." +
+                                         std::to_string(VK_API_VERSION_MINOR(api_version_)) + " core baseline");
             }
 
             VkShaderResource res;

@@ -444,6 +444,21 @@ namespace tgfx {
     // --- Instance ---
 
     void VulkanRenderDevice::init_instance(const VulkanDeviceCreateInfo& info) {
+        if (VK_API_VERSION_VARIANT(api_version_) != 0 || VK_API_VERSION_MAJOR(api_version_) != 1) {
+            tc_log(TC_LOG_ERROR, "[Vulkan] unsupported requested API version: 0x%x", api_version_);
+            throw std::runtime_error("Unsupported Vulkan API version");
+        }
+        uint32_t loader_version = VK_API_VERSION_1_0;
+        const auto enumerate_version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+            vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
+        if (enumerate_version) {
+            const auto result = enumerate_version(&loader_version);
+            if (result != VK_SUCCESS) {
+                tc_log(TC_LOG_ERROR, "[Vulkan] loader API query failed: VkResult=%d", int(result));
+                throw std::runtime_error("Vulkan loader API query failed");
+            }
+        }
+        api_version_ = std::min({api_version_, loader_version, uint32_t(VK_API_VERSION_1_3)});
         VkApplicationInfo app_info{};
         app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         app_info.pApplicationName = "tgfx2";
@@ -625,7 +640,10 @@ namespace tgfx {
         // needed.
         VkPhysicalDeviceProperties physical_device_properties{};
         vkGetPhysicalDeviceProperties(physical_device_, &physical_device_properties);
-        const uint32_t effective_api_version = std::min(api_version_, physical_device_properties.apiVersion);
+        api_version_ = std::min(api_version_, physical_device_properties.apiVersion);
+        const uint32_t effective_api_version = api_version_;
+        tc_log(TC_LOG_INFO, "[Vulkan] effective API %u.%u", VK_API_VERSION_MAJOR(api_version_),
+               VK_API_VERSION_MINOR(api_version_));
 
         VkPhysicalDeviceShaderDrawParametersFeatures supported_draw_parameters{};
         supported_draw_parameters.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;

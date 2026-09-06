@@ -553,6 +553,9 @@ namespace tgfx {
         VkDevice device() const {
             return device_;
         }
+        uint32_t api_version() const {
+            return api_version_;
+        }
         VkBufferResource* get_buffer(BufferHandle h) {
             return buffers_.get(h.id);
         }
