@@ -14,6 +14,8 @@ Vulkan/SPIR-V baseline и capabilities; обычный CTest проходит 24
 #2205/#2206 и реализован split-family path #2207 (остаётся platform gate).
 Расширенный оконный прогон: 253 passed, 1 отдельный OpenGL failure, без Vulkan
 validation errors.
+В [шестом пакете](2026-09-06-graphics-repair-pass-6.md) исправлены #2209/#2210:
+UBO base offsets/cache и color masks, включая MRT. Обычный CTest: 242 passed.
 
 ## Вывод
 

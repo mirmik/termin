@@ -69,8 +69,10 @@ namespace tgfx {
         // declared by the pipeline's descriptor set layout for this set, in
         // ascending-binding order. Callers must check
         // BackendCapabilities::supports_dynamic_uniform_offsets before passing
-        // offsets. Unsupported backends log an error and leave the set unbound;
-        // they never silently ignore offsets or bind the wrong buffer range.
+        // offsets. Each explicit dynamic offset is added to the corresponding
+        // descriptor's buffer base offset. Unsupported backends log an error
+        // and leave the set unbound; they never silently ignore offsets or bind
+        // the wrong buffer range.
         virtual void bind_resource_set(ResourceSetHandle set,
                                        uint32_t set_index = 0,
                                        const uint32_t* dynamic_offsets = nullptr,

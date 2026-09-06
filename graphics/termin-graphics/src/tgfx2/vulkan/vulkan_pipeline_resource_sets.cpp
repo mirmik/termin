@@ -531,8 +531,10 @@ namespace tgfx {
             ba.srcAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.src_alpha);
             ba.dstAlphaBlendFactor = vk::to_vk_blend_factor(desc.blend.dst_alpha);
             ba.alphaBlendOp = vk::to_vk_blend_op(desc.blend.alpha_op);
-            ba.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-                                VK_COLOR_COMPONENT_A_BIT;
+            ba.colorWriteMask = (desc.color_mask.r ? VK_COLOR_COMPONENT_R_BIT : 0u) |
+                                (desc.color_mask.g ? VK_COLOR_COMPONENT_G_BIT : 0u) |
+                                (desc.color_mask.b ? VK_COLOR_COMPONENT_B_BIT : 0u) |
+                                (desc.color_mask.a ? VK_COLOR_COMPONENT_A_BIT : 0u);
         }
 
         VkPipelineColorBlendStateCreateInfo blend{};
@@ -580,9 +582,9 @@ namespace tgfx {
         static uint64_t hash_resolved_resource_bindings(uintptr_t resource_layout_token,
                                                         std::span<const VulkanResolvedResourceBinding> bindings,
                                                         uint64_t domain) {
-            // FNV-1a over stable descriptor identity. Dynamic UBO offsets are
-            // intentionally excluded because they are supplied to
-            // vkCmdBindDescriptorSets as dynamic offsets, not descriptor writes.
+            // FNV-1a over descriptor identity, including the buffer's base
+            // offset. Bind-time dynamic offsets are supplied independently to
+            // vkCmdBindDescriptorSets. Ring slices bypass this cache entirely.
             uint64_t h = 0xcbf29ce484222325ull;
             auto mix = [&h](uint64_t v) {
                 h ^= v;
@@ -595,9 +597,7 @@ namespace tgfx {
                 mix(static_cast<uint64_t>(b.expected_descriptor_type));
                 mix(static_cast<uint64_t>(b.kind));
                 mix(b.buffer.id);
-                if (b.expected_descriptor_type != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) {
-                    mix(b.offset);
-                }
+                mix(b.offset);
                 mix(b.range);
                 mix(b.texture.id);
                 mix(b.sampler.id);
@@ -767,14 +767,11 @@ namespace tgfx {
                     auto* buf = get_buffer(buffer);
                     if (!buf)
                         continue;
-                    constexpr uint64_t VK_MIN_MAX_UBO_RANGE = 65536;
-                    if (range == 0)
-                        range = std::min<uint64_t>(buf->desc.size, VK_MIN_MAX_UBO_RANGE);
-                    if (range > VK_MIN_MAX_UBO_RANGE)
-                        range = VK_MIN_MAX_UBO_RANGE;
+                    // Explicit bindings were range-checked and normalized
+                    // before allocation/cache lookup. The default ring uses 16.
                     const bool dynamic_ubo = lb.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
                     const bool is_ring = ring_ubo_handle_ && (buffer == ring_ubo_handle_);
-                    buf_infos.push_back({buf->buffer, dynamic_ubo ? 0u : offset, range});
+                    buf_infos.push_back({buf->buffer, dynamic_ubo && is_ring ? 0u : offset, range});
                     w.pBufferInfo = &buf_infos.back();
                     if (dynamic_ubo) {
                         dyn_slots.push_back({lb.binding, is_ring ? static_cast<uint32_t>(offset) : 0u});
@@ -962,6 +959,26 @@ namespace tgfx {
                 return;
             }
 
+            uint64_t range = b.value.range;
+            if (b.value.kind == BoundResourceKind::UniformBuffer) {
+                const auto* buffer = get_buffer(b.value.buffer);
+                if (!buffer || !has_flag(buffer->desc.usage, BufferUsage::Uniform) ||
+                    b.value.offset >= buffer->desc.size || b.value.offset % ubo_alignment_ != 0) {
+                    tc_log_error("VulkanRenderDevice: resource '%s' has invalid UBO handle/base offset=%llu",
+                                 bound_resource_debug_name(b), static_cast<unsigned long long>(b.value.offset));
+                    bound_ok = false;
+                    return;
+                }
+                const uint64_t remaining = buffer->desc.size - b.value.offset;
+                if (range == 0) range = std::min<uint64_t>(remaining, max_ubo_range_);
+                if (range > remaining || range > max_ubo_range_) {
+                    tc_log_error("VulkanRenderDevice: resource '%s' has invalid UBO range=%llu (remaining=%llu max=%u)",
+                                 bound_resource_debug_name(b), static_cast<unsigned long long>(range),
+                                 static_cast<unsigned long long>(remaining), max_ubo_range_);
+                    bound_ok = false;
+                    return;
+                }
+            }
             VulkanResolvedResourceBinding value;
             value.binding = binding;
             value.array_element = b.value.array_element;
@@ -971,7 +988,7 @@ namespace tgfx {
             value.texture = b.value.texture;
             value.sampler = b.value.sampler;
             value.offset = b.value.offset;
-            value.range = b.value.range;
+            value.range = range;
             resolved_bindings.push_back(value);
         });
         if (!bound_ok) {

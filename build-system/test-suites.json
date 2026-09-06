@@ -326,6 +326,12 @@
         "reason": "Built only with the Vulkan backend."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_pipeline_contracts.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Native aligned UBO slices, descriptor cache identity, additive dynamic offsets and MRT channel masks."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_capabilities.cpp",
         "profiles": ["pr", "linux-full"],
         "capabilities": ["vulkan"],

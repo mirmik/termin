@@ -884,6 +884,7 @@ namespace tgfx {
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physical_device_, &props);
         ubo_alignment_ = static_cast<uint32_t>(std::max<VkDeviceSize>(props.limits.minUniformBufferOffsetAlignment, 1));
+        max_ubo_range_ = props.limits.maxUniformBufferRange;
         non_coherent_atom_size_ = static_cast<uint64_t>(std::max<VkDeviceSize>(props.limits.nonCoherentAtomSize, 1));
 
         // Round the requested per-frame budget up to the device's dynamic-offset
