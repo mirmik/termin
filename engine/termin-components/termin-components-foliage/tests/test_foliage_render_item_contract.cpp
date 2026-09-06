@@ -215,6 +215,25 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     layer->material = termin::TcMaterial(material_handle);
     entity.add_component(layer);
 
+    const auto still_bounds = layer->compute_world_bounds();
+    REQUIRE(still_bounds.has_value());
+    layer->wind_strength = 0.3;
+    layer->interaction_strength = 0.7;
+    layer->interaction_radius = 2.0;
+    const auto motion_bounds = layer->compute_world_bounds();
+    REQUIRE(motion_bounds.has_value());
+    for (size_t axis = 0; axis < 3; ++axis) {
+        CHECK(std::abs((*motion_bounds)[axis] - ((*still_bounds)[axis] - 1.0f)) < 0.0001f);
+        CHECK(std::abs((*motion_bounds)[axis + 3] - ((*still_bounds)[axis + 3] + 1.0f)) < 0.0001f);
+    }
+    layer->motion_time = -123.0;
+    CHECK(layer->compute_world_bounds() == motion_bounds);
+    foliage.get()->instances.front().scale = 2.0f;
+    const auto scaled_bounds = layer->compute_world_bounds();
+    REQUIRE(scaled_bounds.has_value());
+    CHECK((*scaled_bounds)[0] < (*motion_bounds)[0]);
+    CHECK((*scaled_bounds)[5] > (*motion_bounds)[5]);
+
     CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_OPAQUE));
     CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_DEPTH));
     CHECK(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_ID));

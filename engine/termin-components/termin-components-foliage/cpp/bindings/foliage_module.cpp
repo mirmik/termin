@@ -1,6 +1,8 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/stl/array.h>
+#include <nanobind/stl/optional.h>
 
 #include <termin/bindings/entity_helpers.hpp>
 #include <termin/foliage/foliage_data.hpp>
@@ -95,6 +97,11 @@ NB_MODULE(_foliage_native, m) {
         .def("reload", &TcFoliageData::reload)
         .def("save", &save_handle)
         .def("add_instance", &add_instance, nb::arg("instance"))
+        .def("set_instances", [](TcFoliageData& handle, const std::vector<FoliageInstance>& instances) {
+            // Full replacement also initializes a newly declared in-memory asset.
+            FoliageData* data = handle.get();
+            return data && data->set_instances(instances);
+        }, nb::arg("instances"))
         .def("remove_instances_in_radius",
              &remove_instances_in_radius,
              nb::arg("x"),
@@ -105,6 +112,7 @@ NB_MODULE(_foliage_native, m) {
     nb::class_<FoliageLayerComponent, CxxComponent>(m, "FoliageLayerComponent")
         .def("__init__", [](nb::handle self) { cxx_component_init<FoliageLayerComponent>(self); })
         .def_rw("enabled", &FoliageLayerComponent::enabled)
+        .def("compute_world_bounds", &FoliageLayerComponent::compute_world_bounds)
         .def_rw("foliage_uuid", &FoliageLayerComponent::foliage_uuid)
         .def_rw("prototype_mesh", &FoliageLayerComponent::prototype_mesh)
         .def_rw("material", &FoliageLayerComponent::material)
@@ -113,5 +121,16 @@ NB_MODULE(_foliage_native, m) {
         .def_rw("min_spacing", &FoliageLayerComponent::min_spacing)
         .def_rw("scale_min", &FoliageLayerComponent::scale_min)
         .def_rw("scale_max", &FoliageLayerComponent::scale_max)
-        .def_rw("slope_limit_degrees", &FoliageLayerComponent::slope_limit_degrees);
+        .def_rw("slope_limit_degrees", &FoliageLayerComponent::slope_limit_degrees)
+        .def_rw("motion_time", &FoliageLayerComponent::motion_time)
+        .def_rw("prototype_height", &FoliageLayerComponent::prototype_height)
+        .def_rw("wind_strength", &FoliageLayerComponent::wind_strength)
+        .def_rw("wind_speed", &FoliageLayerComponent::wind_speed)
+        .def_rw("wind_wavelength", &FoliageLayerComponent::wind_wavelength)
+        .def_rw("wind_direction_degrees", &FoliageLayerComponent::wind_direction_degrees)
+        .def_rw("interaction_x", &FoliageLayerComponent::interaction_x)
+        .def_rw("interaction_y", &FoliageLayerComponent::interaction_y)
+        .def_rw("interaction_z", &FoliageLayerComponent::interaction_z)
+        .def_rw("interaction_radius", &FoliageLayerComponent::interaction_radius)
+        .def_rw("interaction_strength", &FoliageLayerComponent::interaction_strength);
 }

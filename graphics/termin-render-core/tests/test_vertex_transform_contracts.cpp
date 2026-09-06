@@ -120,6 +120,8 @@ TEST_CASE("Foliage material provider is modular and declares instanced resources
 
     REQUIRE_EQ(contract.instance_streams.size(), 1u);
     CHECK_EQ(contract.instance_streams[0].name, std::string("foliage_instances"));
+    CHECK_EQ(contract.instance_streams[0].stride, 48u);
+    CHECK_EQ(foliage_draw->requirement.size, 176u);
 }
 
 TEST_CASE("Foliage auxiliary providers expose only the pass-required mesh ABI") {

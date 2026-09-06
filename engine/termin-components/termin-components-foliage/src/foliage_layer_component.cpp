@@ -36,14 +36,17 @@ namespace termin {
         constexpr int FOLIAGE_GEOMETRY_ID = 0;
 
         struct FoliageGpuInstance {
-            // Shader storage-buffer ABI: two packed float3+scalar lanes.
+            // Shader storage-buffer ABI: three packed 16-byte lanes.
             float position[3];
             float yaw;
             float normal[3];
             float seed;
+            float scale;
+            float padding[3];
         };
 
-        static_assert(sizeof(FoliageGpuInstance) == sizeof(float) * 8);
+        static_assert(sizeof(FoliageGpuInstance) == sizeof(float) * 12);
+        static_assert(offsetof(FoliageGpuInstance, scale) == sizeof(float) * 8);
         static_assert(offsetof(FoliageGpuInstance, position) == 0);
         static_assert(offsetof(FoliageGpuInstance, yaw) == sizeof(float) * 3);
         static_assert(offsetof(FoliageGpuInstance, normal) == sizeof(float) * 4);
@@ -150,6 +153,7 @@ namespace termin {
             gpu.position[1] = instance.py;
             gpu.position[2] = instance.pz;
             gpu.yaw = instance.yaw;
+            gpu.scale = instance.scale;
 
             float nx = instance.nx;
             float ny = instance.ny;
@@ -368,6 +372,28 @@ namespace termin {
                                                        "Slope Limit",
                                                        "double");
         }
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::motion_time, "motion_time", "motion time", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::prototype_height, "prototype_height", "prototype height", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::wind_strength, "wind_strength", "wind strength", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::wind_speed, "wind_speed", "wind speed", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::wind_wavelength, "wind_wavelength", "wind wavelength", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::wind_direction_degrees, "wind_direction_degrees", "wind direction degrees", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::interaction_x, "interaction_x", "interaction x", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::interaction_y, "interaction_y", "interaction y", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::interaction_z, "interaction_z", "interaction z", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::interaction_radius, "interaction_radius", "interaction radius", "double");
+        inspect.add<FoliageLayerComponent, double>("FoliageLayerComponent",
+            &FoliageLayerComponent::interaction_strength, "interaction_strength", "interaction strength", "double");
         inspect.add_with_accessors<FoliageLayerComponent, std::string>(
             "FoliageLayerComponent",
             "foliage",
@@ -376,6 +402,36 @@ namespace termin {
             [](FoliageLayerComponent* self) { return self->foliage_uuid; },
             [](FoliageLayerComponent* self, std::string value) { self->foliage_uuid = std::move(value); });
         (void)descriptor.commit();
+    }
+
+    std::optional<std::array<float, 6>> FoliageLayerComponent::compute_world_bounds() const {
+        TcFoliageData foliage = TcFoliageData::from_uuid(foliage_uuid);
+        tc_mesh* mesh = prototype_mesh.get();
+        if (!mesh || !foliage.ensure_loaded() || foliage.instance_count() == 0) return std::nullopt;
+        float radius = 0.0f;
+        for (size_t i = 0; i < mesh->vertex_count; ++i) {
+            tc_vec3f p{};
+            if (!tc_mesh_get_position3f(mesh, static_cast<uint32_t>(i), &p)) {
+                tc::Log::error("[FoliageLayerComponent] cannot compute bounds: invalid prototype position");
+                return std::nullopt;
+            }
+            radius = std::max(radius, std::sqrt(p.x*p.x + p.y*p.y + p.z*p.z));
+        }
+        const Mat44f model = layer_exact_position_model(entity());
+        const float motion_radius = static_cast<float>(std::abs(wind_strength) +
+            (interaction_radius > 0.0 ? std::abs(interaction_strength) : 0.0));
+        const float inf = std::numeric_limits<float>::infinity();
+        std::array<float, 6> result{inf, inf, inf, -inf, -inf, -inf};
+        for (const FoliageInstance& instance : foliage.get()->instances) {
+            const Vec3f p = model.transform_point(instance.position());
+            const float extent = radius * std::abs(instance.scale) + motion_radius;
+            const float axes[] = {p.x, p.y, p.z};
+            for (size_t axis = 0; axis < 3; ++axis) {
+                result[axis] = std::min(result[axis], axes[axis] - extent);
+                result[axis + 3] = std::max(result[axis + 3], axes[axis] + extent);
+            }
+        }
+        return result;
     }
 
     tc_phase_mask FoliageLayerComponent::get_phase_mask() const {
@@ -527,8 +583,8 @@ namespace termin {
         if (!data || data->instances.empty()) {
             return true;
         }
-        if (data->instances.size() > static_cast<size_t>(std::numeric_limits<uint32_t>::max())) {
-            tc::Log::error("[FoliageLayerComponent] cannot draw foliage: instance count %zu exceeds uint32 draw limit",
+        if (data->instances.size() > static_cast<size_t>(std::numeric_limits<uint32_t>::max()) / sizeof(FoliageGpuInstance)) {
+            tc::Log::error("[FoliageLayerComponent] cannot draw foliage: instance count %zu exceeds uint32 buffer byte limit",
                            data->instances.size());
             return false;
         }
@@ -594,12 +650,27 @@ namespace termin {
         struct ColorPushData {
             float u_position_model[16];
             float u_vector_model[16];
+            float wind[4]; // direction XY, amplitude, time phase
+            float motion[4]; // spatial frequency, prototype height, interaction strength, reserved
+            float interaction[4]; // world center XYZ, radius
         };
         ColorPushData push{};
         Mat44f position_model = layer_exact_position_model(entity());
         Mat44f vector_model = layer_logical_orientation_model(entity());
         std::memcpy(push.u_position_model, position_model.data, sizeof(push.u_position_model));
         std::memcpy(push.u_vector_model, vector_model.data, sizeof(push.u_vector_model));
+        const double angle = wind_direction_degrees * 3.14159265358979323846 / 180.0;
+        push.wind[0] = static_cast<float>(std::cos(angle));
+        push.wind[1] = static_cast<float>(std::sin(angle));
+        push.wind[2] = static_cast<float>(wind_strength);
+        push.wind[3] = static_cast<float>(std::remainder(motion_time * wind_speed, 6.283185307179586));
+        push.motion[0] = static_cast<float>(6.283185307179586 / std::max(wind_wavelength, 0.001));
+        push.motion[1] = static_cast<float>(std::max(prototype_height, 0.001));
+        push.motion[2] = static_cast<float>(interaction_strength);
+        push.interaction[0] = static_cast<float>(interaction_x);
+        push.interaction[1] = static_cast<float>(interaction_y);
+        push.interaction[2] = static_cast<float>(interaction_z);
+        push.interaction[3] = static_cast<float>(std::max(interaction_radius, 0.0));
 
         ctx2.clear_resource_bindings();
         ctx2.use_shader_resource_layout(shader_binding.shader);

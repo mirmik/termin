@@ -789,14 +789,13 @@ TEST_CASE("shared modular skinned transform owns the bone resource") {
     CHECK(source.find("termin_skinned_world_position_normal") != std::string::npos);
 }
 
-TEST_CASE("modular foliage shadow transform owns instance placement resources") {
+TEST_CASE("modular foliage shadow transform shares placement and motion with other passes") {
     const std::filesystem::path shader_root =
         repo_root_from_test_file() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders";
     const std::string source = read_text(shader_root / "termin_shadow_foliage_transform.slang");
 
-    CHECK(source.find("import termin_prelude;") != std::string::npos);
-    CHECK(source.find("ConstantBuffer<FoliagePushData> foliage_draw;") != std::string::npos);
-    CHECK(source.find("StructuredBuffer<FoliageInstance> foliage_instances;") != std::string::npos);
+    CHECK(source.find("import termin_foliage_material_transform;") != std::string::npos);
+    CHECK(source.find("return termin_foliage_world_position(position, instance_id);") != std::string::npos);
     CHECK(source.find("termin_shadow_foliage_world_position") != std::string::npos);
     CHECK(source.find("per_frame") == std::string::npos);
 }

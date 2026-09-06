@@ -273,7 +273,7 @@ struct VertexInput {
                                      TC_SHADER_RESOURCE_CONSTANT_BUFFER,
                                      TC_SHADER_RESOURCE_SCOPE_DRAW,
                                      TC_SHADER_STAGE_VERTEX,
-                                     128u));
+                                     176u));
         resources.push_back(resource("foliage_instances",
                                      TC_SHADER_RESOURCE_STORAGE_BUFFER,
                                      TC_SHADER_RESOURCE_SCOPE_DRAW,
@@ -349,7 +349,7 @@ struct VertexInput {
         provider.produced_fragment_input = material_pipeline_standard_material_fragment_interface();
         provider.produced_world_semantics = material_pipeline_standard_material_fragment_interface();
         provider.resources = material_pipeline_foliage_vertex_resources();
-        provider.instance_streams.push_back({"foliage_instances", 32u});
+        provider.instance_streams.push_back({"foliage_instances", 48u});
         std::erase_if(provider.resources, [](const MaterialPipelineResourceDecl& resource) {
             return resource.requirement.name == TC_SHADER_RESOURCE_PER_FRAME;
         });

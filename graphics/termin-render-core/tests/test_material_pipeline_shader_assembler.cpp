@@ -831,7 +831,7 @@ TEST_CASE("material pipeline assembler attaches foliage instance contract") {
     const tc_shader_resource_requirement* instances = contract_resource(view, "foliage_instances");
     REQUIRE(instances != nullptr);
     CHECK_EQ(instances->kind, TC_SHADER_RESOURCE_STORAGE_BUFFER);
-    CHECK_EQ(instances->element_stride, 32u);
+    CHECK_EQ(instances->element_stride, 48u);
     CHECK(!tc_shader_has_resource_layout(result.shader.get()));
     CHECK(tc_shader_find_resource_binding(result.shader.get(), "foliage_instances") == nullptr);
 
@@ -1099,7 +1099,7 @@ TEST_CASE("material pipeline assembler composes shadow providers with one output
     const tc_shader_resource_requirement* instances = contract_resource(foliage_view, "foliage_instances");
     REQUIRE(instances != nullptr);
     CHECK_EQ(instances->scope, TC_SHADER_RESOURCE_SCOPE_DRAW);
-    CHECK_EQ(instances->element_stride, 32u);
+    CHECK_EQ(instances->element_stride, 48u);
 
     tc_shader_destroy(static_result.shader.handle);
     tc_shader_destroy(skinned_result.shader.handle);
