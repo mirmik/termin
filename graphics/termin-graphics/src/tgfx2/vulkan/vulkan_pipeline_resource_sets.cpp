@@ -7,6 +7,7 @@
 #include "tgfx2/vulkan/vulkan_shader_compiler.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 #include "vulkan_spirv_reflection.hpp"
+#include "tgfx2/vulkan/internal/spirv_input_validation.hpp"
 #include "vulkan_stats.hpp"
 
 #include <algorithm>
@@ -145,8 +146,9 @@ namespace tgfx {
 
         try {
             if (!desc.bytecode.empty()) {
-                // Use provided SPIR-V
-                spirv.resize(desc.bytecode.size() / 4);
+                if (const char* error = vulkan_detail::spirv_input_error(desc.bytecode))
+                    throw std::runtime_error(error);
+                spirv.resize(desc.bytecode.size() / sizeof(uint32_t));
                 std::memcpy(spirv.data(), desc.bytecode.data(), desc.bytecode.size());
             } else if (!desc.source.empty()) {
                 vk::SpirvCompileResult result;
@@ -159,7 +161,7 @@ namespace tgfx {
                 }
                 spirv = std::move(result.spirv);
             } else {
-                return {0};
+                throw std::runtime_error("Shader has neither SPIR-V bytecode nor source");
             }
 
             VkShaderResource res;
@@ -168,6 +170,8 @@ namespace tgfx {
             res.debug_name = desc.debug_name;
             if (!spirv.empty()) {
                 std::string reflected_entry = reflect_spirv_stage_entry_point(spirv, desc.stage);
+                if (reflected_entry.empty())
+                    throw std::runtime_error("SPIR-V has no entry point for the requested shader stage");
                 if (!reflected_entry.empty()) {
                     if (reflected_entry != desc.entry_point && internal::shader_verbose_logging_enabled()) {
                         tc_log(TC_LOG_DEBUG,

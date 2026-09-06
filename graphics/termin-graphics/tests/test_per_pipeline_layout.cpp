@@ -203,6 +203,7 @@ int main() {
     bool test_passed = ok && pixel[0] > 0.5f && pixel[1] < 0.2f; // red
 
     // Cleanup
+    cmd.reset();
     device->destroy(rset);
     device->destroy(ubo);
     device->destroy(pipeline);

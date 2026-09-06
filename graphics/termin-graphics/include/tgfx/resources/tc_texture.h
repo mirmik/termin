@@ -96,13 +96,29 @@ TGFX_API size_t tc_texture_format_bpp(tc_texture_format format);
 // Get channel count for format
 TGFX_API uint8_t tc_texture_format_channels(tc_texture_format format);
 
+// Tightly packed, single-layer base mip. Returns zero for invalid dimensions,
+// unknown formats or a size that cannot be represented by pointer arithmetic.
+TGFX_API size_t tc_texture_byte_size(uint32_t width, uint32_t height, tc_texture_format format);
+
+// Sized CPU input for 8-bit textures. Every source must declare its actual
+// buffer size; channels determine the stored format, without implicit padding.
+typedef struct tc_texture_pixel_data {
+    const void* data;
+    size_t size_bytes;
+    uint32_t width;
+    uint32_t height;
+    uint8_t channels;
+} tc_texture_pixel_data;
+
+TGFX_API bool tc_texture_validate_pixel_data(const tc_texture_pixel_data* pixels, tc_texture_format* out_format);
+
 // Calculate the base-mip CPU payload size in bytes. tc_texture represents a
 // single-layer 2D image; generated mip levels and GPU-only texture storage do
 // not have a CPU payload here.
 static inline size_t tc_texture_data_size(const tc_texture* tex) {
     if (!tex)
         return 0;
-    return (size_t)tex->width * (size_t)tex->height * tc_texture_format_bpp((tc_texture_format)tex->format);
+    return tc_texture_byte_size(tex->width, tex->height, (tc_texture_format)tex->format);
 }
 
 // ============================================================================

@@ -97,10 +97,7 @@ TGFX_API void tc_texture_registry_remove_destroy_hook(tc_texture_destroy_hook_fn
 // ============================================================================
 
 TGFX_API bool tc_texture_set_data(tc_texture* tex,
-                                  const void* data,
-                                  uint32_t width,
-                                  uint32_t height,
-                                  uint8_t channels,
+                                  const tc_texture_pixel_data* pixels,
                                   const char* name,
                                   const char* source_path);
 

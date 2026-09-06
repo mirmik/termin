@@ -23,6 +23,7 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iterator>
 #include <set>
@@ -86,8 +87,12 @@ namespace tgfx {
     static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                                          VkDebugUtilsMessageTypeFlagsEXT /*type*/,
                                                          const VkDebugUtilsMessengerCallbackDataEXT* data,
-                                                         void* /*user*/) {
-        if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+                                                         void* user) {
+        if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+            auto* count = static_cast<std::atomic<uint64_t>*>(user);
+            count->fetch_add(1, std::memory_order_relaxed);
+            fprintf(stderr, "[GPU validation error] [Vulkan] %s\n", data->pMessage);
+        } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
             fprintf(stderr, "[Vulkan] %s\n", data->pMessage);
         }
         return VK_FALSE;
@@ -125,7 +130,8 @@ namespace tgfx {
     // --- Constructor / Destructor ---
 
     VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
-        validation_enabled_ = info.enable_validation;
+        const char* required = std::getenv("TGFX2_GPU_VALIDATION_REQUIRED");
+        validation_enabled_ = info.enable_validation || (required && std::strcmp(required, "1") == 0);
         api_version_ = info.api_version != 0 ? info.api_version : TGFX2_VULKAN_DEFAULT_API_VERSION;
         device_extensions_ = info.device_extensions;
         requested_ring_ubo_slot_size_ = info.ring_ubo_slot_size;
@@ -426,6 +432,10 @@ namespace tgfx {
         }
         if (instance_)
             vkDestroyInstance(instance_, nullptr);
+        if (validation_enabled_) {
+            fprintf(stderr, "[Vulkan validation] errors=%llu\n",
+                    static_cast<unsigned long long>(validation_error_count_.load(std::memory_order_relaxed)));
+        }
     }
 
     // --- Instance ---
@@ -442,9 +452,30 @@ namespace tgfx {
         std::vector<const char*> extensions = info.instance_extensions;
         std::vector<const char*> layers;
 
+        VkDebugUtilsMessengerCreateInfoEXT dbg_ci{};
+        dbg_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        dbg_ci.messageSeverity =
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        dbg_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        dbg_ci.pfnUserCallback = debug_callback;
+        dbg_ci.pUserData = &validation_error_count_;
+
+        const VkValidationFeatureEnableEXT sync_validation =
+            VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+        VkValidationFeaturesEXT validation_features{};
+        validation_features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        validation_features.enabledValidationFeatureCount = 1;
+        validation_features.pEnabledValidationFeatures = &sync_validation;
+        validation_features.pNext = &dbg_ci;
+
         if (validation_enabled_) {
             layers.push_back("VK_LAYER_KHRONOS_validation");
-            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            if (!contains_extension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+                extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            if (!contains_extension(extensions, VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME))
+                extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
         }
 
         VkInstanceCreateInfo ci{};
@@ -454,25 +485,31 @@ namespace tgfx {
         ci.ppEnabledExtensionNames = extensions.data();
         ci.enabledLayerCount = static_cast<uint32_t>(layers.size());
         ci.ppEnabledLayerNames = layers.data();
+        // Capture vkCreateInstance/vkDestroyInstance diagnostics too. The
+        // explicit messenger below covers the lifetime between those calls.
+        ci.pNext = validation_enabled_ ? &validation_features : nullptr;
 
-        if (vkCreateInstance(&ci, nullptr, &instance_) != VK_SUCCESS) {
+        const VkResult instance_result = vkCreateInstance(&ci, nullptr, &instance_);
+        if (instance_result != VK_SUCCESS) {
+            tc_log_error("%sVulkanRenderDevice: vkCreateInstance failed, result=%d; validation=%s",
+                         validation_enabled_ ? "[GPU validation error] " : "",
+                         static_cast<int>(instance_result), validation_enabled_ ? "required" : "disabled");
             throw std::runtime_error("Failed to create Vulkan instance");
         }
 
         if (validation_enabled_) {
-            VkDebugUtilsMessengerCreateInfoEXT dbg_ci{};
-            dbg_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            dbg_ci.messageSeverity =
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            dbg_ci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            dbg_ci.pfnUserCallback = debug_callback;
-
             auto func =
                 (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT");
-            if (func)
-                func(instance_, &dbg_ci, nullptr, &debug_messenger_);
+            const VkResult messenger_result = func
+                ? func(instance_, &dbg_ci, nullptr, &debug_messenger_)
+                : VK_ERROR_EXTENSION_NOT_PRESENT;
+            if (messenger_result != VK_SUCCESS) {
+                tc_log_error("[GPU validation error] VulkanRenderDevice: debug messenger creation failed, result=%d",
+                             static_cast<int>(messenger_result));
+                vkDestroyInstance(instance_, nullptr);
+                instance_ = VK_NULL_HANDLE;
+                throw std::runtime_error("Failed to create Vulkan validation messenger");
+            }
         }
     }
 

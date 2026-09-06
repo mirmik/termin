@@ -53,6 +53,26 @@ device, но передают его во владение `GraphicsHost`. Он�
 
 ## Texture CPU Sync
 
+CPU creation/update uses `tc_texture_pixel_data` (the C++ name is
+`TexturePixelDataView`): `{data, size_bytes, width, height, channels}`.
+The buffer must be non-null, tightly packed, and contain exactly
+`width * height * channels` bytes, with positive dimensions and 1–4 channels.
+Validation runs before content hashing and copying; invalid input leaves an
+existing texture unchanged. The C setter is
+`tc_texture_set_data(texture, &pixels, name, source_path)`.
+
+The stored format is R8/RG8/RGB8/RGBA8 according to the channel count. RGB stays
+three bytes per CPU pixel and expands to RGBA only in the common GPU upload
+preparation. This descriptor holds one 2D base mip; generated mips are separate
+upload levels. `tc_texture_byte_size` checks format and size arithmetic.
+Changing extent/format through `tc_texture_set_size_format` discards an old CPU
+payload so its allocation cannot be reinterpreted using a larger format.
+
+Python `TcTexture.from_data` passes the actual ndarray size and raises
+`ValueError` for invalid dimensions, channels or byte count. `.data` and
+`get_upload_data()` return copies of 8-bit textures; other CPU formats are
+explicitly rejected by these NumPy accessors.
+
 The process-wide `tc_texture` registry owns the canonical white and flat-normal
 1x1 textures. `tc_texture_get_white_1x1()` and
 `tc_texture_get_normal_1x1()` create them lazily and return their generational

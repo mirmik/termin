@@ -238,6 +238,11 @@ namespace tgfx {
 
             const auto source_format = static_cast<tc_texture_format>(texture->format);
             const auto encoding = static_cast<tc_texture_encoding>(texture->encoding);
+            // Check both input size and the largest normalized pixel format
+            // before any allocation or pointer arithmetic (RGB16F -> RGBA16F).
+            if (tc_texture_data_size(texture) == 0 ||
+                tc_texture_byte_size(texture->width, texture->height, TC_TEXTURE_RGBA16F) == 0)
+                return false;
             const size_t pixel_count = static_cast<size_t>(texture->width) * texture->height;
             const auto* source = static_cast<const uint8_t*>(texture->data);
 

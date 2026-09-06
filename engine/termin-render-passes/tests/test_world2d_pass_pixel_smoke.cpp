@@ -129,7 +129,7 @@ namespace {
             255,
         };
         termin::TcTexture texture = termin::TcTexture::from_data(termin::TcTextureCreateInfo{
-            {red_pixels, 2, 2, 4},
+            {red_pixels, sizeof(red_pixels), 2, 2, 4},
             {},
             "World2DPassPixelSmokeTexture",
             "",

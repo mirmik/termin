@@ -922,6 +922,27 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         termin_add_test_labels(tgfx2_vulkan_presentation_transform_test
             "termin:capability:vulkan")
 
+        add_executable(tgfx2_vulkan_validation_test tests/test_tgfx2_vulkan_validation.cpp)
+        target_compile_definitions(tgfx2_vulkan_validation_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_validation_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_validation_test)
+        add_test(NAME tgfx2_vulkan_validation_test COMMAND "${CMAKE_COMMAND}"
+            "-DPROBE=$<TARGET_FILE:tgfx2_vulkan_validation_test>"
+            "-DCTEST=${CMAKE_CTEST_COMMAND}"
+            "-DMETADATA=${CMAKE_SOURCE_DIR}/cmake/TerminTestMetadata.cmake"
+            "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/validation-gate"
+            -P "${CMAKE_SOURCE_DIR}/cmake/tests/GpuValidationGate.cmake")
+        set_tests_properties(tgfx2_vulkan_validation_test PROPERTIES TIMEOUT 120)
+        termin_add_test_labels(tgfx2_vulkan_validation_test "termin:capability:vulkan")
+
+        add_executable(tgfx2_vulkan_shader_input_test tests/test_tgfx2_vulkan_shader_input.cpp)
+        target_compile_definitions(tgfx2_vulkan_shader_input_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_shader_input_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_shader_input_test)
+        add_test(NAME tgfx2_vulkan_shader_input_test COMMAND tgfx2_vulkan_shader_input_test)
+        set_tests_properties(tgfx2_vulkan_shader_input_test PROPERTIES TIMEOUT 20)
+        termin_add_test_labels(tgfx2_vulkan_shader_input_test "termin:capability:vulkan")
+
         add_executable(tgfx2_per_pipeline_layout_test tests/test_per_pipeline_layout.cpp)
         target_compile_definitions(tgfx2_per_pipeline_layout_test PRIVATE TGFX2_HAS_VULKAN)
         target_link_libraries(tgfx2_per_pipeline_layout_test PRIVATE termin_graphics2 Vulkan::Vulkan)

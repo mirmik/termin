@@ -44,6 +44,12 @@
     ],
     "source_classifications": [
       {
+        "path": "engine/termin-engine/tests/test_python_world_controller.cpp",
+        "profiles": ["pr", "linux-full", "windows-d3d11"],
+        "capabilities": ["python-bindings"],
+        "reason": "Compiled only with TERMIN_BUILD_PYTHON, like its CTest registration."
+      },
+      {
         "path": "core/termin-inspect/tests/test_python_inspect.cpp",
         "profiles": [
           "pr",
@@ -312,6 +318,18 @@
           "vulkan"
         ],
         "reason": "Built only with the Vulkan backend."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_shader_input.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Checks malformed and valid SPIR-V through the native Vulkan shader API."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_validation.cpp",
+        "profiles": ["pr", "linux-full"],
+        "capabilities": ["vulkan"],
+        "reason": "Requires Vulkan and the Khronos validation layer; verifies the mandatory CTest gate."
       },
       {
         "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_stats.cpp",

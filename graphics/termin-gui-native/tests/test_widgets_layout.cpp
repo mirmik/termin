@@ -1336,10 +1336,12 @@ namespace termin_gui_native_test {
         root.add_child(child);
 
         assert(tc_ui_document_live_widget_count(document.get()) == 2);
-        assert(tc_ui_document_destroy_widget_recursive(document.get(), root.handle()));
+        const auto root_handle = root.handle();
+        const auto child_handle = child.handle();
+        assert(tc_ui_document_destroy_widget_recursive(document.get(), root_handle));
         assert(tc_ui_document_live_widget_count(document.get()) == 0);
-        assert(!tc_ui_document_is_alive(document.get(), root.handle()));
-        assert(!tc_ui_document_is_alive(document.get(), child.handle()));
+        assert(!tc_ui_document_is_alive(document.get(), root_handle));
+        assert(!tc_ui_document_is_alive(document.get(), child_handle));
 
         tc_ui_document_destroy(document_handle);
     }

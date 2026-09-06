@@ -672,3 +672,76 @@ TEST_CASE("render target pool allocates only requested attachments") {
     CHECK_FALSE(targets.ensure(device, "empty", empty));
     CHECK(device.create_texture_count == 2u);
 }
+
+TEST_CASE("texture pool moves release displaced ownership exactly once") {
+    PipelineCacheStatsDevice first_device;
+    PipelineCacheStatsDevice second_device;
+    tgfx::TextureDesc desc;
+    desc.width = 4;
+    desc.height = 4;
+    {
+        tgfx::TexturePool destination;
+        REQUIRE(destination.ensure(first_device, "old", desc));
+        const auto displaced = destination.get("old");
+        {
+            tgfx::TexturePool source;
+            REQUIRE(source.ensure(second_device, "new", desc));
+            const auto moved = source.get("new");
+            destination = std::move(source);
+            REQUIRE(first_device.destroyed_textures.size() == 1u);
+            CHECK(first_device.destroyed_textures[0] == displaced);
+            CHECK(second_device.destroyed_textures.empty());
+            CHECK(destination.get("new") == moved);
+            CHECK_FALSE(source.get("new"));
+            auto& same = destination;
+            destination = std::move(same);
+            CHECK(destination.get("new") == moved);
+            CHECK(second_device.destroyed_textures.empty());
+        }
+        CHECK(second_device.destroyed_textures.empty());
+        tgfx::TexturePool moved_again(std::move(destination));
+        CHECK_FALSE(destination.get("new"));
+        REQUIRE(moved_again.get("new"));
+    }
+    CHECK(first_device.destroyed_textures.size() == 1u);
+    CHECK(second_device.destroyed_textures.size() == 1u);
+}
+
+TEST_CASE("render target pool moves preserve borrowed color and owned depth") {
+    PipelineCacheStatsDevice device;
+    tgfx::TextureDesc color_desc;
+    color_desc.width = 4;
+    color_desc.height = 4;
+    const auto external = device.create_texture(color_desc);
+    tgfx::RenderTargetPoolDesc desc;
+    desc.width = 4;
+    desc.height = 4;
+    {
+        tgfx::RenderTargetPool destination;
+        REQUIRE(destination.ensure(device, "old", desc));
+        {
+            tgfx::RenderTargetPool source;
+            REQUIRE(source.ensure(device, "new", desc, external));
+            const auto depth = source.depth("new");
+            destination = std::move(source);
+            CHECK(device.destroyed_textures.size() == 2u);
+            CHECK(destination.color("new") == external);
+            CHECK(destination.depth("new") == depth);
+            CHECK_FALSE(source.depth("new"));
+            auto& same = destination;
+            destination = std::move(same);
+            CHECK(destination.depth("new") == depth);
+            CHECK(device.destroyed_textures.size() == 2u);
+        }
+        tgfx::RenderTargetPool moved_again(std::move(destination));
+        CHECK_FALSE(destination.depth("new"));
+        tgfx::RenderTargetPool empty;
+        moved_again = std::move(empty);
+        CHECK(device.destroyed_textures.size() == 3u);
+    }
+    REQUIRE(device.destroyed_textures.size() == 3u);
+    for (const auto destroyed : device.destroyed_textures)
+        CHECK(destroyed != external);
+    device.destroy(external);
+    CHECK(device.destroyed_textures.size() == device.create_texture_count);
+}

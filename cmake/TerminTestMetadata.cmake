@@ -1,5 +1,30 @@
 include_guard(GLOBAL)
 
+# Keep native diagnostics fatal even when a test executable returns success.
+# CTest retains the complete output (including constructor/destructor errors)
+# in LastTest.log and the central runner's JUnit report.
+function(termin_require_gpu_validation test)
+    set_property(TEST "${test}" APPEND PROPERTY ENVIRONMENT
+        "TGFX2_GPU_VALIDATION_REQUIRED=1"
+        "TGFX2_VULKAN_VALIDATION=1")
+    set_property(TEST "${test}" APPEND PROPERTY FAIL_REGULAR_EXPRESSION
+        "\\[GPU validation error\\]")
+
+    get_property(_termin_labels TEST "${test}" PROPERTY LABELS)
+    if("termin:capability:vulkan" IN_LIST _termin_labels)
+        # A selected Vulkan profile requires its runtime and validation layer.
+        # SKIP_REGULAR_EXPRESSION takes precedence over failure in CTest, so
+        # the old runtime-unavailable patterns must become failures as well.
+        get_property(_termin_skip TEST "${test}" PROPERTY SKIP_REGULAR_EXPRESSION)
+        if(_termin_skip)
+            set_property(TEST "${test}" APPEND PROPERTY FAIL_REGULAR_EXPRESSION
+                "${_termin_skip}")
+            set_property(TEST "${test}" PROPERTY SKIP_REGULAR_EXPRESSION "")
+        endif()
+        set_property(TEST "${test}" PROPERTY SKIP_RETURN_CODE)
+    endif()
+endfunction()
+
 function(_termin_test_backend_capability_is_configured capability output)
     if(capability STREQUAL "vulkan")
         set(_termin_available "${TGFX2_ENABLE_VULKAN}")
@@ -31,6 +56,7 @@ function(termin_label_tests_in_directory module)
         endif()
 
         get_property(_termin_labels TEST "${_termin_test}" PROPERTY LABELS)
+        termin_require_gpu_validation("${_termin_test}")
         set(_termin_build_target "")
         set(_termin_requires_python_bindings FALSE)
         set(_termin_requires_window FALSE)

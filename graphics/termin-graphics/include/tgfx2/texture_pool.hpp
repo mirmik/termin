@@ -31,8 +31,8 @@ namespace tgfx {
         std::vector<TexturePoolEntry> entries;
 
         TexturePool() = default;
-        TexturePool(TexturePool&&) = default;
-        TexturePool& operator=(TexturePool&&) = default;
+        TexturePool(TexturePool&& other) noexcept;
+        TexturePool& operator=(TexturePool&& other) noexcept;
         TexturePool(const TexturePool&) = delete;
         TexturePool& operator=(const TexturePool&) = delete;
         ~TexturePool();
@@ -74,8 +74,8 @@ namespace tgfx {
         std::vector<RenderTargetEntry> entries;
 
         RenderTargetPool() = default;
-        RenderTargetPool(RenderTargetPool&&) = default;
-        RenderTargetPool& operator=(RenderTargetPool&&) = default;
+        RenderTargetPool(RenderTargetPool&& other) noexcept;
+        RenderTargetPool& operator=(RenderTargetPool&& other) noexcept;
         RenderTargetPool(const RenderTargetPool&) = delete;
         RenderTargetPool& operator=(const RenderTargetPool&) = delete;
         ~RenderTargetPool();
