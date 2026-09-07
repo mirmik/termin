@@ -8,7 +8,7 @@ import pytest
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    return Path(__file__).resolve().parents[4]
 
 
 def _termin_shaderc() -> Path:
@@ -59,7 +59,7 @@ def _resolve_fxc() -> Path:
 
 
 def _builtin_shader_stage_jobs() -> list[tuple[Path, str, str]]:
-    source_root = _repo_root() / "termin-graphics" / "resources" / "builtin_shaders"
+    source_root = _repo_root() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders"
     attr_re = re.compile(r'\[shader\("(?P<stage>vertex|fragment|geometry|compute)"\)\]')
     entry_re = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(")
     jobs: list[tuple[Path, str, str]] = []
@@ -79,7 +79,7 @@ def test_builtin_slang_shaders_compile_to_d3d11_cso(tmp_path: Path) -> None:
     shaderc = _termin_shaderc()
     slangc = _resolve_slangc()
     fxc = _resolve_fxc()
-    source_root = _repo_root() / "termin-graphics" / "resources" / "builtin_shaders"
+    source_root = _repo_root() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders"
     stage_suffix = {
         "vertex": "vs",
         "fragment": "ps",
@@ -128,3 +128,59 @@ def test_builtin_slang_shaders_compile_to_d3d11_cso(tmp_path: Path) -> None:
             )
 
     assert not failures, "\n\n".join(failures)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="D3D11 .cso artifact matrix is Windows-only")
+def test_shadow_helper_compiles_to_d3d11_without_fxc_warnings(tmp_path: Path) -> None:
+    shaderc = _termin_shaderc()
+    slangc = _resolve_slangc()
+    fxc = _resolve_fxc()
+    source_root = _repo_root() / "graphics" / "termin-graphics" / "resources" / "builtin_shaders"
+    shader = tmp_path / "shadow-warning-smoke.slang"
+    shader.write_text(
+        "import termin_shadows;\n"
+        "struct FragmentInput { float3 world_pos : TEXCOORD0; };\n"
+        '[shader("fragment")]\n'
+        "float4 fs_main(FragmentInput input) : SV_Target0 {\n"
+        "    float visibility = compute_shadow_auto(0, input.world_pos);\n"
+        "    return float4(visibility, visibility, visibility, 1.0);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "shadow-warning-smoke.ps.cso"
+
+    result = subprocess.run(
+        [
+            str(shaderc),
+            "compile",
+            "--language",
+            "slang",
+            "--target",
+            "d3d11",
+            "--stage",
+            "fragment",
+            "--entry",
+            "fs_main",
+            "--input",
+            str(shader),
+            "--output",
+            str(output),
+            "--slangc",
+            str(slangc),
+            "--fxc",
+            str(fxc),
+            "--include-dir",
+            str(source_root),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    diagnostics = result.stdout + result.stderr
+    assert result.returncode == 0, diagnostics
+    assert output.is_file()
+    assert Path(f"{output}.layout.json").is_file()
+    assert "warning X3570" not in diagnostics
+    assert "warning X4000" not in diagnostics
+    assert "compilation object save succeeded" in diagnostics

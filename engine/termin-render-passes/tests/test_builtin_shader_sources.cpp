@@ -127,6 +127,8 @@ TEST_CASE("shadow helper keeps filtering methods and cascade blending in Slang")
     CHECK(source.find("POISSON_SAMPLE_COUNT = 16") != std::string::npos);
     CHECK(source.find("visibility / 25.0") != std::string::npos);
     CHECK(source.find("get_shadow_softness()") != std::string::npos);
+    CHECK(source.find("SampleCmpLevelZero") != std::string::npos);
+    CHECK(source.find(".SampleCmp(") == std::string::npos);
     CHECK(source.find("get_light_cascade_blend(light_index)") != std::string::npos);
     CHECK(source.find("u_camera_view_depth") != std::string::npos);
     CHECK(source.find("return lerp(primary, secondary, blend)") != std::string::npos);
