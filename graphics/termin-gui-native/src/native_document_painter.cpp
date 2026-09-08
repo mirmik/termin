@@ -12,6 +12,7 @@
 #include <termin/gui_native/widget.hpp>
 #include <tgfx2/font_atlas.hpp>
 #include <tgfx2/render_context.hpp>
+#include <tcbase/profiler_scope.hpp>
 
 namespace termin::gui_native {
     namespace {
@@ -319,7 +320,10 @@ namespace termin::gui_native {
                 return left_handle.generation < right_handle.generation;
             });
 
-        impl_->synchronize_text_measurers(ordered);
+        {
+            const tc::ProfilerScope scope("UI Text Measurer Sync");
+            impl_->synchronize_text_measurers(ordered);
+        }
         tc_ui_draw_list_clear(impl_->draw_list.get());
         std::vector<UiDrawListBatch> batches;
         batches.reserve(ordered.size());
@@ -338,8 +342,14 @@ namespace termin::gui_native {
                 continue;
             }
             const std::size_t first = tc_ui_draw_list_command_count(impl_->draw_list.get());
-            submission.document.layout_roots(layout_rect);
-            submission.document.paint(impl_->paint_context.get());
+            {
+                const tc::ProfilerScope scope("UI Widget Layout");
+                submission.document.layout_roots(layout_rect);
+            }
+            {
+                const tc::ProfilerScope scope("UI Widget Paint Commands");
+                submission.document.paint(impl_->paint_context.get());
+            }
             const std::size_t last = tc_ui_draw_list_command_count(impl_->draw_list.get());
             batches.push_back(UiDrawListBatch{
                 first,
@@ -347,7 +357,10 @@ namespace termin::gui_native {
                 submission.presentation_metrics,
             });
         }
-        impl_->renderer.render(context, impl_->draw_list.get(), width, height, batches);
+        {
+            const tc::ProfilerScope scope("UI DrawList Render");
+            impl_->renderer.render(context, impl_->draw_list.get(), width, height, batches);
+        }
         return batches.size();
     }
 

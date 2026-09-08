@@ -161,6 +161,22 @@ Geometric clip не является scissor rectangle. `Canvas2DRenderer::execu
 rotated/sheared clips и `NonZero`/`EvenOdd` path fills. Device scissor может
 быть только эквивалентной оптимизацией, но не заменой произвольного clip path.
 
+Для стека прямоугольников, чьи рёбра после transform точно параллельны осям,
+`execute()` использует накопленное пересечение и одну обрезку треугольника
+по четырём полуплоскостям. Промежуточные вершины помещаются в стековые буферы;
+UV интерполируются, дробные границы не округляются до scissor pixels.
+Распознавание требует одного замкнутого контура `MoveTo, LineTo×3, Close`
+с четырьмя различными углами и прямоугольным порядком рёбер. При наличии
+произвольного clip применяется общий геометрический алгоритм. Scope
+`Canvas CPU Clipping` показывает стоимость обоих путей; UI scopes разделяют
+layout, paint commands, lowering и Canvas execution. В редакторе для их
+просмотра нужно включить Include UI (`engine.profile_ui`).
+
+Пиксельный тест `tgfx2_draw_list2d_pixel_smoke` проверяет вложенные и дробные
+прямоугольники, UV, пустое пересечение, pop и смешанные клипы с отверстиями.
+Известное ограничение общей tessellation самопересекающихся paths отслеживается
+в карточке #2316; прямоугольная оптимизация его не исправляет.
+
 Persistent resource identity в draw list не хранится. Image command получает
 уже разрешённый device-local `TextureHandle`; text command получает
 resolver-local `FontHandle`, который `DrawResourceResolver2D` превращает в

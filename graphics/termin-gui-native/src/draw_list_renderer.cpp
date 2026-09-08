@@ -3,6 +3,7 @@
 #include <termin/gui_native/ui_icon_registry.hpp>
 
 #include <algorithm>
+#include <tcbase/profiler_scope.hpp>
 #include <cmath>
 #include <exception>
 #include <optional>
@@ -326,7 +327,10 @@ namespace termin::gui_native {
             return;
         }
 
-        canvas_.begin(context, width, height);
+        {
+            const tc::ProfilerScope scope("UI Canvas Begin");
+            canvas_.begin(context, width, height);
+        }
         const size_t count = tc_ui_draw_list_command_count(draw_list);
         for (const UiDrawListBatch& batch : batches) {
             if (!tc_ui_presentation_metrics_is_valid(&batch.presentation_metrics) || batch.first_command > count ||
@@ -353,6 +357,7 @@ namespace termin::gui_native {
             tc_ui_rect failed_rect{};
             const char* failure_reason = "command lowering failed";
             try {
+                const tc::ProfilerScope scope("UI DrawList Lower");
                 evaluator.begin_batch(&builder);
                 tgfx::CompositionLayer2D density_layer;
                 density_layer.transform = termin::Affine2f::scaling(batch.presentation_metrics.density_scale);
@@ -693,13 +698,23 @@ namespace termin::gui_native {
                 continue;
             }
 
-            auto lowered = builder.freeze();
+            std::optional<tgfx::DrawList2D> lowered;
+            {
+                const tc::ProfilerScope scope("UI DrawList Freeze");
+                lowered = builder.freeze();
+            }
             UiDrawResources resources(canvas_.default_font());
-            if (!lowered || !canvas_.execute(*lowered, resources, batch.presentation_metrics.font_scale)) {
-                tc_log_error("[termin-gui-native] failed to execute lowered UI DrawList2D batch");
+            {
+                const tc::ProfilerScope scope("UI Canvas Execute");
+                if (!lowered || !canvas_.execute(*lowered, resources, batch.presentation_metrics.font_scale)) {
+                    tc_log_error("[termin-gui-native] failed to execute lowered UI DrawList2D batch");
+                }
             }
         }
-        canvas_.end();
+        {
+            const tc::ProfilerScope scope("UI Canvas End");
+            canvas_.end();
+        }
     }
 
     void UiDrawListRenderer::release_gpu() {

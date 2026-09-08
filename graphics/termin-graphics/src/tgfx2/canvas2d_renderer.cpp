@@ -23,6 +23,7 @@ extern "C" {
 }
 
 #include <tcbase/tc_log.hpp>
+#include <tcbase/profiler_scope.hpp>
 
 namespace tgfx {
 
@@ -79,7 +80,10 @@ namespace tgfx {
             NativeClip2D result = parent;
             if (parent.unsupported)
                 return result;
-            if (path.points().size() != 4) {
+            constexpr std::array rectangle_verbs{
+                Path2Verb::MoveTo, Path2Verb::LineTo, Path2Verb::LineTo, Path2Verb::LineTo, Path2Verb::Close};
+            if (path.points().size() != 4 ||
+                !std::equal(path.verbs().begin(), path.verbs().end(), rectangle_verbs.begin(), rectangle_verbs.end())) {
                 result.unsupported = true;
                 return result;
             }
@@ -97,14 +101,23 @@ namespace tgfx {
                 top = std::min(top, point.y);
                 bottom = std::max(bottom, point.y);
             }
-            constexpr float epsilon = 1.0e-4f;
-            for (const auto point : points) {
-                const bool x_edge = std::fabs(point.x - left) <= epsilon || std::fabs(point.x - right) <= epsilon;
-                const bool y_edge = std::fabs(point.y - top) <= epsilon || std::fabs(point.y - bottom) <= epsilon;
-                if (!x_edge || !y_edge) {
+            unsigned corners = 0;
+            for (std::size_t index = 0; index < points.size(); ++index) {
+                const auto point = points[index];
+                const auto next = points[(index + 1) % points.size()];
+                const bool x_edge = point.x == left || point.x == right;
+                const bool y_edge = point.y == top || point.y == bottom;
+                // Exact axes only: approximating a rotated edge changes clipping coverage.
+                if (!std::isfinite(point.x) || !std::isfinite(point.y) || !x_edge || !y_edge ||
+                    ((point.x == next.x) == (point.y == next.y))) {
                     result.unsupported = true;
                     return result;
                 }
+                corners |= 1u << ((point.x == right ? 1u : 0u) | (point.y == bottom ? 2u : 0u));
+            }
+            if (corners != 15u) {
+                result.unsupported = true;
+                return result;
             }
             termin::Rect2f rect{left, top, right - left, bottom - top};
             if (rect.width <= 0.0f || rect.height <= 0.0f) {
@@ -255,10 +268,77 @@ namespace tgfx {
             return fragments;
         }
 
+        void append_rect_clipped(const DrawTriangle2D& triangle, termin::Rect2f rect,
+                                 std::vector<DrawVertex2D>& output) {
+            if (rect.width <= 0.0f || rect.height <= 0.0f)
+                return;
+            const float right = rect.x + rect.width;
+            const float bottom = rect.y + rect.height;
+            bool all_inside = true;
+            for (const auto& vertex : triangle) {
+                all_inside = all_inside && vertex.position.x >= rect.x && vertex.position.x <= right &&
+                             vertex.position.y >= rect.y && vertex.position.y <= bottom;
+            }
+            if (all_inside) {
+                output.insert(output.end(), triangle.begin(), triangle.end());
+                return;
+            }
+            // Convex triangle intersected with four half-planes has at most seven vertices.
+            // No per-triangle/per-edge heap allocations, and no internal clip diagonal.
+            std::array<DrawVertex2D, 8> current{}, next{};
+            std::copy(triangle.begin(), triangle.end(), current.begin());
+            std::size_t count = 3;
+            for (int edge = 0; edge < 4 && count; ++edge) {
+                const auto distance = [&](const DrawVertex2D& vertex) {
+                    switch (edge) {
+                    case 0: return vertex.position.x - rect.x;
+                    case 1: return right - vertex.position.x;
+                    case 2: return vertex.position.y - rect.y;
+                    default: return bottom - vertex.position.y;
+                    }
+                };
+                std::size_t next_count = 0;
+                auto previous = current[count - 1];
+                float previous_distance = distance(previous);
+                for (std::size_t index = 0; index < count; ++index) {
+                    const auto vertex = current[index];
+                    const float vertex_distance = distance(vertex);
+                    const bool inside = vertex_distance >= 0.0f;
+                    const bool previous_inside = previous_distance >= 0.0f;
+                    if (inside != previous_inside && previous_distance != 0.0f && vertex_distance != 0.0f) {
+                        next[next_count++] = interpolate(previous, vertex,
+                            previous_distance / (previous_distance - vertex_distance));
+                    }
+                    if (inside)
+                        next[next_count++] = vertex;
+                    previous = vertex;
+                    previous_distance = vertex_distance;
+                }
+                std::swap(current, next);
+                count = next_count;
+            }
+            for (std::size_t index = 2; index < count; ++index) {
+                output.push_back(current[0]);
+                output.push_back(current[index - 1]);
+                output.push_back(current[index]);
+            }
+        }
+
         std::vector<DrawVertex2D> flatten_and_clip(std::span<const DrawTriangle2D> triangles,
-                                                   const std::vector<ClipMesh2D>& clips) {
+                                                   const std::vector<ClipMesh2D>& clips,
+                                                   const NativeClip2D& native_clip) {
+            tc::ProfilerScope profile("Canvas CPU Clipping");
             std::vector<DrawVertex2D> result;
+            result.reserve(triangles.size() * 3);
             for (const auto& triangle : triangles) {
+                if (clips.empty()) {
+                    result.insert(result.end(), triangle.begin(), triangle.end());
+                    continue;
+                }
+                if (!native_clip.unsupported && native_clip.has_rect) {
+                    append_rect_clipped(triangle, native_clip.rect, result);
+                    continue;
+                }
                 const auto fragments = apply_clips(triangle, clips);
                 for (const auto& fragment : fragments) {
                     result.insert(result.end(), fragment.begin(), fragment.end());
@@ -464,11 +544,11 @@ namespace tgfx {
         std::vector<ClipMesh2D> clips;
         std::vector<NativeClip2D> native_clips{{}};
 
-        const auto emit = [this, &clips](std::span<const DrawTriangle2D> triangles,
+        const auto emit = [this, &clips, &native_clips](std::span<const DrawTriangle2D> triangles,
                                          termin::LinearColor color,
                                          TextureHandle texture = {},
                                          CanvasTextureSampling sampling = CanvasTextureSampling::Linear) {
-            const auto vertices = flatten_and_clip(triangles, clips);
+            const auto vertices = flatten_and_clip(triangles, clips, native_clips.back());
             append_mesh_(vertices, color, texture, sampling);
         };
 
@@ -678,7 +758,7 @@ namespace tgfx {
                             triangles.push_back({{a, c, d}});
                             cursor_x += glyph->advance_px / raster_scale;
                         }
-                        const auto clipped = flatten_and_clip(triangles, clips);
+                        const auto clipped = flatten_and_clip(triangles, clips, native_clips.back());
                         if (clipped.empty())
                             return true;
                         flush_();
