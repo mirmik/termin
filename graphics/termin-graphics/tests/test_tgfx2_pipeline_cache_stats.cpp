@@ -279,6 +279,48 @@ TEST_CASE("PipelineCache treats color resolve topology as Vulkan-compatible iden
     CHECK(device.created_pipeline_descs[1].color_resolve_mask == 1u);
 }
 
+TEST_CASE("PipelineCache identity includes complete raster state") {
+    PipelineCacheStatsDevice device;
+    tgfx::PipelineCache cache(device);
+
+    tgfx::PipelineCacheLookupKey key;
+    key.vertex_shader = tgfx::ShaderHandle{1};
+    key.fragment_shader = tgfx::ShaderHandle{2};
+    const tgfx::RasterState baseline = key.raster;
+
+    const tgfx::PipelineHandle initial = cache.get(key);
+    REQUIRE(initial);
+    CHECK(cache.get(key) == initial);
+
+    key.raster.polygon_mode = tgfx::PolygonMode::Line;
+    CHECK(cache.get(key) != initial);
+
+    key.raster = baseline;
+    key.raster.depth_bias_enabled = true;
+    const tgfx::PipelineHandle enabled = cache.get(key);
+    CHECK(enabled);
+
+    key.raster.depth_bias_constant = 2.0f;
+    const tgfx::PipelineHandle constant = cache.get(key);
+    CHECK(constant);
+    CHECK(constant != enabled);
+
+    key.raster.depth_bias_slope = 1.5f;
+    const tgfx::PipelineHandle slope = cache.get(key);
+    CHECK(slope);
+    CHECK(slope != constant);
+
+    key.raster.depth_bias_clamp = 0.25f;
+    const tgfx::PipelineHandle clamp = cache.get(key);
+    CHECK(clamp);
+    CHECK(clamp != slope);
+
+    CHECK(device.create_pipeline_count == 6u);
+    CHECK(cache.size() == 6u);
+    CHECK(cache.get(key) == clamp);
+    CHECK(device.create_pipeline_count == 6u);
+}
+
 TEST_CASE("PipelineCache rejects missing required shaders before backend creation") {
     PipelineCacheStatsDevice device;
     tgfx::PipelineCache cache(device);

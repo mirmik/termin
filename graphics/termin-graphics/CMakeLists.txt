@@ -797,9 +797,11 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         tests/test_tgfx2_pipeline_cache_stats.cpp
         tests/test_tgfx2_texture_encoding.cpp
         tests/test_tgfx2_tc_mesh_bridge.cpp
+        tests/test_tgfx2_webgpu_raster_state.cpp
     )
     target_include_directories(tgfx2_device_factory_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
     )
     target_link_libraries(tgfx2_device_factory_test PRIVATE termin_graphics2)

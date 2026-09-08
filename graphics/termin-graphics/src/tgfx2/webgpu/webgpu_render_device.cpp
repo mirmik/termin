@@ -1,6 +1,7 @@
 #include "tgfx2/webgpu/webgpu_render_device.hpp"
 
 #include "tgfx2/webgpu/webgpu_command_list.hpp"
+#include "webgpu_raster_state.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1191,6 +1192,24 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
         wgpu::DepthStencilState depth_state;
         wgpu::RenderPipelineDescriptor native;
+
+        webgpu::NativeRasterState raster_state;
+        switch (webgpu::map_raster_state(desc.raster, raster_state)) {
+        case webgpu::RasterStateError::None:
+            break;
+        case webgpu::RasterStateError::UnsupportedPolygonMode:
+            fail("only fill polygon mode is supported");
+        case webgpu::RasterStateError::NonFiniteDepthBias:
+            fail("depth bias values must be finite");
+        case webgpu::RasterStateError::FractionalDepthBiasConstant:
+            fail("depth bias constant must be an integer for WebGPU");
+        case webgpu::RasterStateError::DepthBiasConstantOutOfRange:
+            fail("depth bias constant is outside the WebGPU i32 range");
+        }
+        if (desc.raster.depth_bias_enabled && desc.depth_format == PixelFormat::Undefined) {
+            fail("depth bias requires a depth attachment");
+        }
+
         native.layout = pipeline_layout;
         native.vertex.module = vertex->object;
         native.vertex.entryPoint = std::string_view(vertex->desc.entry_point);
@@ -1210,6 +1229,9 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             depth_state.depthWriteEnabled = desc.depth_stencil.depth_write;
             depth_state.depthCompare = desc.depth_stencil.depth_test ? compare(desc.depth_stencil.depth_compare)
                                                                      : wgpu::CompareFunction::Always;
+            depth_state.depthBias = raster_state.depth_bias;
+            depth_state.depthBiasSlopeScale = raster_state.depth_bias_slope_scale;
+            depth_state.depthBiasClamp = raster_state.depth_bias_clamp;
             native.depthStencil = &depth_state;
         }
         wgpu::RenderPipeline object = device_.CreateRenderPipeline(&native);
