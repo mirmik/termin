@@ -154,6 +154,7 @@ namespace {
         std::size_t commit_count = 0;
         std::size_t unilateral_solution_count = 0;
         bool make_infeasible = false;
+        bool force_position_projection = false;
         double velocity = 0.0;
         std::array<double, 3> reactions{};
         std::array<double, 3> tight_mask{};
@@ -261,6 +262,10 @@ namespace {
             }
             velocity = source[info.offset];
             return AssemblyDiagnostic::None;
+        }
+
+        double position_error_linf() const noexcept override {
+            return force_position_projection ? 1.0 : 0.0;
         }
 
         AssemblyDiagnostic
@@ -680,6 +685,26 @@ int main() {
     TERMIN_QOPT_CHECK(transient_state->velocity == 4.0);
     TERMIN_QOPT_CHECK(transient_state->rollback_count == 1);
     TERMIN_QOPT_CHECK(transient_state->commit_count == 1);
+
+    DynamicsSystem failed_position_system;
+    auto failed_position = std::make_unique<TransientRowsContribution>();
+    TransientRowsContribution* failed_position_state = failed_position.get();
+    failed_position_state->requested_rows = 2;
+    failed_position_state->make_infeasible = true;
+    failed_position_state->force_position_projection = true;
+    TERMIN_QOPT_CHECK(failed_position_system.add_contribution(std::move(failed_position)) ==
+                      DynamicsSystemDiagnostic::None);
+    TERMIN_QOPT_CHECK(failed_position_system.finalize() == DynamicsSystemDiagnostic::None);
+    const DynamicsSystemStepResult failed_position_result = failed_position_system.step();
+    TERMIN_QOPT_CHECK(failed_position_result.status == QpStatus::Infeasible);
+    TERMIN_QOPT_CHECK(failed_position_result.diagnostic == DynamicsSystemDiagnostic::PositionProjectionFailure);
+    TERMIN_QOPT_CHECK(failed_position_result.position_iterations == 1);
+    TERMIN_QOPT_CHECK(failed_position_result.position_constraint_linf == 1.0);
+    TERMIN_QOPT_CHECK(failed_position_result.unilateral_constraint_count == 2);
+    TERMIN_QOPT_CHECK(failed_position_result.position_projection.status == QpStatus::Infeasible);
+    TERMIN_QOPT_CHECK(failed_position_result.position_projection.diagnostic ==
+                      QpDiagnostic::InconsistentInequalities);
+    TERMIN_QOPT_CHECK(failed_position_state->rollback_count == 1);
 
     transient_state->make_infeasible = false;
     transient_state->requested_rows = 0;

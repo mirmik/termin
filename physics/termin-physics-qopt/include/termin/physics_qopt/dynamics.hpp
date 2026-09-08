@@ -417,6 +417,7 @@ namespace termin::physics_qopt {
         QpStatus status = QpStatus::InvalidInput;
         DynamicsSystemDiagnostic diagnostic = DynamicsSystemDiagnostic::ModelNotFinalized;
         QpSolveResult dynamics;
+        QpSolveResult position_projection;
         QpSolveResult velocity_projection;
         QpSolveResult friction_projection;
         double position_constraint_linf = 0.0;

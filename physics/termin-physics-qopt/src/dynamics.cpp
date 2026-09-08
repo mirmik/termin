@@ -488,7 +488,11 @@ namespace termin::physics_qopt {
                 solution.constraint_reaction[index] = -equality_dual[index];
             }
             for (std::size_t index = 0; index < unilateral_count; ++index) {
-                solution.unilateral_reaction[index] = unilateral_dual[index];
+                // The active-set solve has already validated dual feasibility with
+                // its scale-aware tolerance. Canonicalize tolerated roundoff at the
+                // physical API boundary: a unilateral reaction is never negative,
+                // and downstream friction uses it as a cone radius.
+                solution.unilateral_reaction[index] = std::max(unilateral_dual[index], 0.0);
                 if (!solution.tight_unilateral_mask.empty()) {
                     solution.tight_unilateral_mask[index] = tight_mask[index];
                 }
@@ -1203,6 +1207,29 @@ namespace termin::physics_qopt {
             result.unilateral_constraint_count = unilateral_constraint_count;
             result.friction_cone_facets = options.friction_cone_facets;
             QpSolveResult second_dynamics;
+            // Inner QPs need enough precision headroom for their independently
+            // scaled residuals and for the subsequent friction correction while
+            // still avoiding meaningless 1e-12 failures in collapsed contact.
+            const double position_projection_accuracy = options.position_tolerance * 0.1;
+            const double velocity_projection_accuracy = options.velocity_tolerance * 0.1;
+            QpTolerance position_projection_tolerance = options.qp_tolerance;
+            position_projection_tolerance.absolute =
+                std::max(position_projection_tolerance.absolute, position_projection_accuracy);
+            position_projection_tolerance.relative =
+                std::max(position_projection_tolerance.relative, position_projection_accuracy);
+            QpTolerance velocity_projection_tolerance = options.qp_tolerance;
+            velocity_projection_tolerance.absolute =
+                std::max(velocity_projection_tolerance.absolute, velocity_projection_accuracy);
+            velocity_projection_tolerance.relative =
+                std::max(velocity_projection_tolerance.relative, velocity_projection_accuracy);
+            ActiveSetQpOptions position_projection_qp_options;
+            position_projection_qp_options.tolerance = position_projection_tolerance;
+            position_projection_qp_options.active_tolerance =
+                std::max(position_projection_qp_options.active_tolerance, position_projection_accuracy);
+            ActiveSetQpOptions velocity_projection_qp_options;
+            velocity_projection_qp_options.tolerance = velocity_projection_tolerance;
+            velocity_projection_qp_options.active_tolerance =
+                std::max(velocity_projection_qp_options.active_tolerance, velocity_projection_accuracy);
 
             // The first pass predicts the endpoint configuration and solves
             // contact velocities there. Friction can then correct the
@@ -1239,7 +1266,7 @@ namespace termin::physics_qopt {
                                                                         1,
                                                                     },
                                                                 },
-                                                                options.qp_tolerance);
+                                                                position_projection_tolerance);
                     } else {
                         projection = solve_unilateral_velocity(assembly.system(),
                                                                assembly.unilateral_constraints(),
@@ -1266,13 +1293,21 @@ namespace termin::physics_qopt {
                                                                    },
                                                                },
                                                                {},
-                                                               {.tolerance = options.qp_tolerance});
+                                                               position_projection_qp_options);
                     }
                     ++result.position_iterations;
+                    result.position_projection = projection;
                     if (projection.status != QpStatus::Optimal) {
                         rollback();
-                        return dynamics_system_failure(
-                            projection.status, DynamicsSystemDiagnostic::PositionProjectionFailure, first_dynamics);
+                        DynamicsSystemStepResult failure =
+                            dynamics_system_failure(projection.status,
+                                                    DynamicsSystemDiagnostic::PositionProjectionFailure,
+                                                    first_dynamics,
+                                                    unilateral_constraint_count);
+                        failure.position_projection = projection;
+                        failure.position_constraint_linf = result.position_constraint_linf;
+                        failure.position_iterations = result.position_iterations;
+                        return failure;
                     }
                     if (impl_->apply_position_correction(options.time_step) != DynamicsSystemDiagnostic::None ||
                         impl_->write_velocity(configuration_view()) != DynamicsSystemDiagnostic::None ||
@@ -1286,9 +1321,15 @@ namespace termin::physics_qopt {
                 result.position_constraint_linf = impl_->max_position_error();
                 if (result.position_constraint_linf > options.position_tolerance) {
                     rollback();
-                    return dynamics_system_failure(QpStatus::NumericalFailure,
-                                                   DynamicsSystemDiagnostic::PositionProjectionFailure,
-                                                   first_dynamics);
+                    DynamicsSystemStepResult failure =
+                        dynamics_system_failure(QpStatus::NumericalFailure,
+                                                DynamicsSystemDiagnostic::PositionProjectionFailure,
+                                                first_dynamics,
+                                                unilateral_constraint_count);
+                    failure.position_projection = result.position_projection;
+                    failure.position_constraint_linf = result.position_constraint_linf;
+                    failure.position_iterations = result.position_iterations;
+                    return failure;
                 }
 
                 // Position projection changes only the trial configuration. The
@@ -1418,7 +1459,7 @@ namespace termin::physics_qopt {
                                                       },
                                                   },
                                                   warm_start,
-                                                  {.tolerance = options.qp_tolerance});
+                                                  velocity_projection_qp_options);
                     if (velocity_projection.status != QpStatus::Optimal &&
                         velocity_projection.diagnostic == QpDiagnostic::InvalidWarmStart &&
                         !warm_start.primal.empty()) {
@@ -1432,7 +1473,7 @@ namespace termin::physics_qopt {
                                 {impl_->unilateral_tight_mask.data(), impl_->unilateral_tight_mask.size(), 1},
                             },
                             {},
-                            {.tolerance = options.qp_tolerance});
+                            velocity_projection_qp_options);
                     }
                     result.velocity_projection = velocity_projection;
                     if (velocity_projection.status != QpStatus::Optimal) {
@@ -1485,14 +1526,14 @@ namespace termin::physics_qopt {
                             }
                         }
 
-                        QpTolerance friction_tolerance = options.qp_tolerance;
-                        const double friction_accuracy = options.velocity_tolerance * 1.0e-2;
-                        friction_tolerance.absolute = std::max(friction_tolerance.absolute, friction_accuracy);
-                        friction_tolerance.relative = std::max(friction_tolerance.relative, friction_accuracy);
+                        // Friction is another velocity projection, so it shares the
+                        // tolerance and headroom established above.
                         const std::size_t friction_support_count = static_cast<std::size_t>(std::count_if(
                             impl_->friction_normal_impulse.begin(),
                             impl_->friction_normal_impulse.end(),
-                            [](double impulse) { return impulse > ActiveSetQpOptions{}.active_tolerance; }));
+                            [active_tolerance = velocity_projection_qp_options.active_tolerance](double impulse) {
+                                return impulse > active_tolerance;
+                            }));
                         const std::size_t friction_inequality_count =
                             unilateral_constraint_count - friction_support_count +
                             friction_contact_count * (options.friction_cone_facets + 1);
@@ -1536,7 +1577,8 @@ namespace termin::physics_qopt {
                                 .cone_facets = options.friction_cone_facets,
                                 .qp =
                                     {
-                                        .tolerance = friction_tolerance,
+                                        .tolerance = velocity_projection_tolerance,
+                                        .active_tolerance = velocity_projection_qp_options.active_tolerance,
                                         .max_iterations = friction_max_iterations,
                                     },
                             });
@@ -1612,6 +1654,10 @@ namespace termin::physics_qopt {
                                             unilateral_constraint_count);
                 failure.velocity_projection = result.velocity_projection;
                 failure.friction_projection = result.friction_projection;
+                failure.position_projection = result.position_projection;
+                failure.position_constraint_linf = result.position_constraint_linf;
+                failure.velocity_constraint_linf = result.velocity_constraint_linf;
+                failure.position_iterations = result.position_iterations;
                 failure.friction_contact_count = result.friction_contact_count;
                 failure.friction_cone_facets = result.friction_cone_facets;
                 return failure;

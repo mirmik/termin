@@ -403,6 +403,14 @@ namespace {
         TERMIN_QOPT_CHECK(result.diagnostic == QpDiagnostic::InvalidWarmStart);
         TERMIN_QOPT_CHECK(fixture.solved_velocity[0] == 7.0);
         TERMIN_QOPT_CHECK(fixture.tangent_impulse[0] == 10.0);
+
+        OneContactFixture relaxed;
+        relaxed.velocity[2] = -1.01e-8;
+        const QpSolveResult relaxed_result = solve_contact_friction(
+            relaxed.problem(),
+            relaxed.solution(),
+            {.qp = {.tolerance = {.absolute = 1e-8, .relative = 1e-8}, .active_tolerance = 1e-8}});
+        TERMIN_QOPT_CHECK(relaxed_result.status == QpStatus::Optimal);
     }
 
     void test_roundoff_negative_normal_impulse_is_clamped() {
@@ -418,6 +426,15 @@ namespace {
         const QpSolveResult invalid = solve_contact_friction(fixture.problem(), fixture.solution());
         TERMIN_QOPT_CHECK(invalid.status == QpStatus::InvalidInput);
         TERMIN_QOPT_CHECK(invalid.diagnostic == QpDiagnostic::InvalidBounds);
+
+        OneContactFixture relaxed;
+        relaxed.normal_impulse[0] = -1.01e-8;
+        const QpSolveResult relaxed_result = solve_contact_friction(
+            relaxed.problem(),
+            relaxed.solution(),
+            {.qp = {.tolerance = {.absolute = 1e-8, .relative = 1e-8}, .active_tolerance = 1e-8}});
+        TERMIN_QOPT_CHECK(relaxed_result.status == QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(relaxed.solved_normal_impulse[0] == 0.0);
     }
 } // namespace
 

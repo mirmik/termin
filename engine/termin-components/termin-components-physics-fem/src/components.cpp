@@ -1412,11 +1412,43 @@ namespace termin {
         if (result.status != physics_qopt::QpStatus::Optimal ||
             result.diagnostic != physics_qopt::DynamicsSystemDiagnostic::None) {
             tc::Log::error("[FEMPhysicsWorldComponent] native step failed: status=%s "
-                           "diagnostic=%s position_error=%g position_iterations=%zu",
+                           "diagnostic=%s successful_steps=%llu contacts=%zu "
+                           "position_error=%g position_iterations=%zu "
+                           "position_qp_status=%s position_qp_diagnostic=%s "
+                           "position_qp_iterations=%zu position_qp_active=%zu "
+                           "position_qp_stationarity=%g position_qp_equality=%g "
+                           "position_qp_inequality=%g position_qp_dual=%g "
+                           "position_qp_complementarity=%g velocity_error=%g "
+                           "velocity_qp_status=%s velocity_qp_diagnostic=%s "
+                           "velocity_qp_iterations=%zu velocity_qp_active=%zu "
+                           "velocity_qp_stationarity=%g velocity_qp_equality=%g "
+                           "velocity_qp_inequality=%g velocity_qp_dual=%g "
+                           "velocity_qp_complementarity=%g",
                            physics_qopt::qp_status_name(result.status).data(),
                            physics_qopt::dynamics_system_diagnostic_name(result.diagnostic).data(),
+                           static_cast<unsigned long long>(successful_steps_),
+                           result.unilateral_constraint_count,
                            result.position_constraint_linf,
-                           result.position_iterations);
+                           result.position_iterations,
+                           physics_qopt::qp_status_name(result.position_projection.status).data(),
+                           physics_qopt::qp_diagnostic_name(result.position_projection.diagnostic).data(),
+                           result.position_projection.iterations,
+                           result.position_projection.active_set_size,
+                           result.position_projection.stationarity_linf,
+                           result.position_projection.equality_linf,
+                           result.position_projection.inequality_linf,
+                           result.position_projection.dual_linf,
+                           result.position_projection.complementarity_linf,
+                           result.velocity_constraint_linf,
+                           physics_qopt::qp_status_name(result.velocity_projection.status).data(),
+                           physics_qopt::qp_diagnostic_name(result.velocity_projection.diagnostic).data(),
+                           result.velocity_projection.iterations,
+                           result.velocity_projection.active_set_size,
+                           result.velocity_projection.stationarity_linf,
+                           result.velocity_projection.equality_linf,
+                           result.velocity_projection.inequality_linf,
+                           result.velocity_projection.dual_linf,
+                           result.velocity_projection.complementarity_linf);
             initialized_ = false;
             return;
         }

@@ -92,6 +92,13 @@ namespace termin::physics_qopt {
         }
         std::vector<double> base_normal_impulse(contacts);
         std::vector<bool> normal_row_claimed(normal_constraints, false);
+        double normal_impulse_scale = 1.0;
+        for (std::size_t contact = 0; contact < contacts; ++contact) {
+            normal_impulse_scale = std::max(normal_impulse_scale, std::abs(problem.normal_impulse[contact]));
+        }
+        const double normal_impulse_tolerance =
+            std::max(options.qp.active_tolerance,
+                     options.qp.tolerance.absolute + options.qp.tolerance.relative * normal_impulse_scale);
         for (std::size_t contact = 0; contact < contacts; ++contact) {
             const std::size_t normal_row = problem.contact_normal_rows[contact];
             if (normal_row >= normal_constraints || normal_row_claimed[normal_row]) {
@@ -106,8 +113,15 @@ namespace termin::physics_qopt {
                     return invalid_result(QpDiagnostic::DimensionMismatch);
                 }
             }
-            if (problem.normal_impulse[contact] < -options.qp.active_tolerance ||
+            if (problem.normal_impulse[contact] < -normal_impulse_tolerance ||
                 problem.friction_coefficient[contact] < 0.0) {
+                std::fprintf(stderr,
+                             "[termin-qopt] contact friction input has invalid bounds: "
+                             "contact=%zu normal_impulse=%.17g friction=%g tolerance=%g\n",
+                             contact,
+                             problem.normal_impulse[contact],
+                             problem.friction_coefficient[contact],
+                             normal_impulse_tolerance);
                 return invalid_result(QpDiagnostic::InvalidBounds);
             }
             // The preceding unilateral solve is feasible only up to the QP
@@ -120,7 +134,20 @@ namespace termin::physics_qopt {
             for (std::size_t dof = 0; dof < dofs; ++dof) {
                 normal_velocity += problem.normal_jacobian(row, dof) * problem.normal_projected_velocity[dof];
             }
-            if (normal_velocity + options.qp.active_tolerance < problem.minimum_normal_velocity[row]) {
+            const double velocity_scale =
+                std::max(std::abs(normal_velocity), std::abs(problem.minimum_normal_velocity[row]));
+            const double normal_velocity_tolerance =
+                std::max(options.qp.active_tolerance,
+                         options.qp.tolerance.absolute +
+                             options.qp.tolerance.relative * std::max(1.0, velocity_scale));
+            if (normal_velocity + normal_velocity_tolerance < problem.minimum_normal_velocity[row]) {
+                std::fprintf(stderr,
+                             "[termin-qopt] contact friction input violates normal velocity: "
+                             "row=%zu velocity=%.17g minimum=%.17g tolerance=%g\n",
+                             row,
+                             normal_velocity,
+                             problem.minimum_normal_velocity[row],
+                             normal_velocity_tolerance);
                 return invalid_result(QpDiagnostic::InvalidWarmStart);
             }
         }

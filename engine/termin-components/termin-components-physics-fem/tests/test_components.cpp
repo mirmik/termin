@@ -899,16 +899,31 @@ TEST_CASE("FEM floating robot stands on servo-controlled frictional legs") {
     for (FEMJointServoComponent* servo : fixture.servos) {
         servo->set_enabled(false);
     }
-    constexpr int maximum_collapse_steps = 1500;
+    constexpr int collapse_survival_steps = 5000;
     const double collapse_height = standing_position.z - 0.25;
     int collapse_steps = 0;
-    while (collapse_steps < maximum_collapse_steps && fixture.root.transform().global_position().z >= collapse_height) {
+    double minimum_contact_gap = 0.0;
+    while (collapse_steps < collapse_survival_steps) {
         fixture.world->fixed_update(0.002F);
+        minimum_contact_gap = std::min(minimum_contact_gap, fixture.world->telemetry().minimum_contact_gap);
         ++collapse_steps;
+        if (fixture.root.transform().global_position().z < collapse_height) {
+            break;
+        }
     }
     const Vec3 fallen_position = fixture.root.transform().global_position();
-    CHECK(fixture.world->telemetry().successful_steps == standing_steps + collapse_steps);
     CHECK(fallen_position.z < collapse_height);
+
+    while (collapse_steps < collapse_survival_steps) {
+        fixture.world->fixed_update(0.002F);
+        minimum_contact_gap = std::min(minimum_contact_gap, fixture.world->telemetry().minimum_contact_gap);
+        ++collapse_steps;
+    }
+    const FEMPhysicsTelemetry collapsed = fixture.world->telemetry();
+    CHECK(collapsed.initialized);
+    CHECK(collapsed.successful_steps == standing_steps + collapse_survival_steps);
+    CHECK(std::isfinite(minimum_contact_gap));
+    CHECK(minimum_contact_gap >= -1.0e-7);
 
     fixture.scene.destroy();
 }
