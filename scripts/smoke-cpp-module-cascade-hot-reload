@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -15,6 +14,11 @@ import textwrap
 import time
 from pathlib import Path
 from typing import Any, Callable
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
+
+from termin_build.managed_process import ManagedProcess  # noqa: E402
 
 
 class SmokeError(RuntimeError):
@@ -30,7 +34,7 @@ LEAF_MODULE = "native_leaf"
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return REPO_ROOT
 
 
 def _shared_library_name(stem: str) -> str:
@@ -477,25 +481,6 @@ def _editor_command(
     return [str(editor), str(project_file)]
 
 
-def _terminate_process(process: subprocess.Popen[str]) -> None:
-    if process.poll() is not None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=8.0)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-    process.wait(timeout=5.0)
-
-
 def _event_index(events: list[list[str]], kind: str, module_id: str) -> int:
     for index, event in enumerate(events):
         if len(event) >= 2 and event[0] == kind and event[1] == module_id:
@@ -563,7 +548,7 @@ def main() -> int:
     env.setdefault("TERMIN_BACKEND", "opengl")
     env.setdefault("TERMIN_SDK", str(root / "sdk"))
 
-    process: subprocess.Popen[str] | None = None
+    managed: ManagedProcess | None = None
     try:
         command = _editor_command(
             editor,
@@ -577,14 +562,13 @@ def main() -> int:
         print("[smoke] command:", " ".join(command), flush=True)
 
         with editor_log.open("w", encoding="utf-8") as log_file:
-            process = subprocess.Popen(
+            managed = ManagedProcess.start(
                 command,
                 cwd=root,
                 env=env,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 text=True,
-                start_new_session=True,
             )
 
             _wait_for_mcp(helper, session_file, env, args.timeout)
@@ -627,8 +611,8 @@ def main() -> int:
         print("[smoke] PASS", flush=True)
         return 0
     except Exception:
-        if process is not None and process.poll() is not None:
-            print(f"[smoke] editor exited with code {process.returncode}", file=sys.stderr)
+        if managed is not None and managed.process.poll() is not None:
+            print(f"[smoke] editor exited with code {managed.process.returncode}", file=sys.stderr)
         if editor_log.exists():
             print(f"[smoke] editor log tail ({editor_log}):", file=sys.stderr)
             lines = editor_log.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -636,8 +620,8 @@ def main() -> int:
                 print(line, file=sys.stderr)
         raise
     finally:
-        if process is not None:
-            _terminate_process(process)
+        if managed is not None:
+            managed.close()
         if args.keep_temp:
             print("[smoke] kept temp:", tmp_dir, flush=True)
         elif tmp_handle is not None:

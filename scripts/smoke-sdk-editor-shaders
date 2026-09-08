@@ -6,11 +6,15 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
+
+from termin_build.managed_process import run_managed_process  # noqa: E402
 
 
 class SmokeError(RuntimeError):
@@ -42,7 +46,7 @@ SHADER_FAILURE_MARKERS = (
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return REPO_ROOT
 
 
 def _write_project(project_root: Path) -> Path:
@@ -87,25 +91,6 @@ def _editor_command(editor: Path, project_file: Path, *, allow_xvfb: bool) -> li
         "No DISPLAY/WAYLAND_DISPLAY is available and virtual-display launch "
         "was disabled. Run without --no-xvfb or use a graphical display."
     )
-
-
-def _terminate_process(process: subprocess.Popen[str]) -> None:
-    if process.poll() is not None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=8.0)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-    process.wait(timeout=5.0)
 
 
 def _expected_paths(project_root: Path) -> tuple[Path, ...]:
@@ -164,7 +149,6 @@ def main() -> int:
     environment["TERMIN_BACKEND"] = "opengl"
     environment["TERMIN_SDK"] = str(root / "sdk")
 
-    process: subprocess.Popen[str] | None = None
     succeeded = False
     try:
         command = _editor_command(editor, project_file, allow_xvfb=not args.no_xvfb)
@@ -172,22 +156,21 @@ def main() -> int:
         print("[smoke] editor log:", log_path, flush=True)
         print("[smoke] command:", " ".join(command), flush=True)
         with log_path.open("w", encoding="utf-8") as log_file:
-            process = subprocess.Popen(
-                command,
-                cwd=root,
-                env=environment,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                start_new_session=True,
-            )
             try:
-                returncode = process.wait(timeout=args.timeout)
+                result = run_managed_process(
+                    command,
+                    cwd=root,
+                    env=environment,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=args.timeout,
+                )
             except subprocess.TimeoutExpired as exc:
-                _terminate_process(process)
                 raise SmokeError(
                     f"Editor smoke did not exit within {args.timeout:.1f} seconds"
                 ) from exc
+            returncode = result.returncode
         if returncode != 0:
             raise SmokeError(f"Editor smoke exited with code={returncode}")
         _assert_shader_outputs(project_root)
@@ -199,8 +182,6 @@ def main() -> int:
         log_text = log_path.read_text(encoding="utf-8", errors="replace")
         raise SmokeError(f"{exc}\nEditor log:\n{log_text}") from exc
     finally:
-        if process is not None:
-            _terminate_process(process)
         if args.keep_temp or not succeeded:
             print("[smoke] kept temp:", temp_dir, flush=True)
         else:

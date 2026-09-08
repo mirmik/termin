@@ -16,6 +16,11 @@ import tempfile
 import time
 import zlib
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
+
+from termin_build.managed_process import ManagedProcess  # noqa: E402
+
 
 class SmokeError(RuntimeError):
     pass
@@ -29,12 +34,13 @@ class EditorInstance:
     session_file: Path
     screenshot_file: Path
     log_file: Path
+    managed: ManagedProcess
     process: subprocess.Popen[str]
     log_stream: object
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return REPO_ROOT
 
 
 def _write_project(project_root: Path, name: str) -> Path:
@@ -111,18 +117,18 @@ def _launch_instance(
     ]
     log_stream = log_file.open("w", encoding="utf-8")
     try:
-        process = subprocess.Popen(
+        managed = ManagedProcess.start(
             command,
             cwd=_repo_root(),
             env=environment,
             stdout=log_stream,
             stderr=subprocess.STDOUT,
             text=True,
-            start_new_session=True,
         )
     except Exception:
         log_stream.close()
         raise
+    process = managed.process
     print(f"[offscreen-mcp-smoke] {name} pid: {process.pid}", flush=True)
     print(f"[offscreen-mcp-smoke] {name} log: {log_file}", flush=True)
     return EditorInstance(
@@ -132,6 +138,7 @@ def _launch_instance(
         session_file=session_file,
         screenshot_file=screenshot_file,
         log_file=log_file,
+        managed=managed,
         process=process,
         log_stream=log_stream,
     )
@@ -554,14 +561,10 @@ def main() -> int:
         _print_log_tails(instances)
         raise
     finally:
-        for instance in instances:
-            if instance.process.poll() is None:
-                instance.process.terminate()
-                try:
-                    instance.process.wait(timeout=8.0)
-                except subprocess.TimeoutExpired:
-                    instance.process.kill()
-                    instance.process.wait(timeout=5.0)
+        # ManagedProcess signal handlers form a stack; close in reverse launch
+        # order so the previous handlers are restored correctly.
+        for instance in reversed(instances):
+            instance.managed.close()
             instance.log_stream.close()
         if args.keep_temp or not success:
             print("[offscreen-mcp-smoke] kept temp:", temp_root, flush=True)

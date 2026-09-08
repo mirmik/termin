@@ -7,12 +7,16 @@ import argparse
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Mapping
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
+
+from termin_build.managed_process import ManagedProcess  # noqa: E402
 
 
 DEFAULT_SCREEN = "1920x1080x24"
@@ -26,7 +30,7 @@ class VirtualDisplayError(RuntimeError):
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return REPO_ROOT
 
 
 def _require_program(name: str, *, purpose: str) -> Path:
@@ -205,20 +209,6 @@ def _run_inside_xvfb(
     raise AssertionError("os.execve returned")
 
 
-def _forward_and_wait(process: subprocess.Popen[bytes], signum: int) -> int:
-    if process.poll() is None:
-        process.send_signal(signum)
-    try:
-        return process.wait(timeout=12.0)
-    except subprocess.TimeoutExpired:
-        process.terminate()
-    try:
-        return process.wait(timeout=5.0)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        return process.wait(timeout=5.0)
-
-
 def _run_outer(
     *,
     args: argparse.Namespace,
@@ -264,15 +254,12 @@ def _run_outer(
         flush=True,
     )
     print("[virtual-display] Xvfb command:", " ".join(command), flush=True)
-    process = subprocess.Popen(command, env=child_environment)
+    managed = ManagedProcess.start(command, env=child_environment)
     try:
-        return process.wait()
-    except KeyboardInterrupt:
-        return _forward_and_wait(process, signal.SIGINT)
+        return managed.process.wait()
     finally:
-        if process.poll() is None:
-            _forward_and_wait(process, signal.SIGTERM)
-        if process.returncode and xvfb_log.is_file():
+        managed.close()
+        if managed.process.returncode and xvfb_log.is_file():
             diagnostic = xvfb_log.read_text(encoding="utf-8", errors="replace").strip()
             if diagnostic:
                 print("[virtual-display] Xvfb diagnostics:", file=sys.stderr)

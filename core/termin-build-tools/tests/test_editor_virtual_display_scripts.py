@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import runpy
 import struct
+from types import SimpleNamespace
 import zlib
 from pathlib import Path
 
@@ -16,6 +17,16 @@ VirtualDisplayError = WRAPPER_GLOBALS["VirtualDisplayError"]
 _editor_environment = WRAPPER_GLOBALS["_editor_environment"]
 _validate_glxinfo = WRAPPER_GLOBALS["_validate_glxinfo"]
 _png_has_visible_pixel = SMOKE_GLOBALS["_png_has_visible_pixel"]
+_run_outer = WRAPPER_GLOBALS["_run_outer"]
+
+MANAGED_LAUNCHERS = (
+    "smoke-python-module-hot-reload",
+    "smoke-cpp-module-cascade-hot-reload",
+    "smoke-sdk-editor-shaders",
+    "smoke-editor-mcp-offscreen",
+    "smoke-editor-virtual-display",
+    "termin-editor-virtual-display",
+)
 
 
 def _glxinfo(*, vendor: str = "Mesa", renderer: str = "llvmpipe") -> str:
@@ -71,6 +82,69 @@ def test_editor_environment_forces_isolated_mcp_and_software_opengl(
     assert environment["TERMIN_EDITOR_MCP"] == "1"
     assert environment["TERMIN_EDITOR_MCP_PORT"] == "0"
     assert environment["TERMIN_EDITOR_MCP_SESSION_FILE"] == str(tmp_path / "session.json")
+
+
+@pytest.mark.parametrize("script_name", MANAGED_LAUNCHERS)
+def test_linux_smoke_launcher_uses_shared_process_ownership(script_name: str) -> None:
+    source = (REPOSITORY_ROOT / "scripts" / script_name).read_text(encoding="utf-8")
+
+    assert "termin_build.managed_process import" in source
+    assert "start_new_session" not in source
+    assert "os.killpg" not in source
+    assert ".terminate()" not in source
+    assert ".kill()" not in source
+
+
+def test_virtual_display_wrapper_closes_managed_xvfb_group(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[object] = []
+
+    class FakeProcess:
+        returncode = 0
+
+        def wait(self) -> int:
+            events.append("wait")
+            return self.returncode
+
+    class FakeManaged:
+        process = FakeProcess()
+
+        @classmethod
+        def start(cls, command: list[str], **options: object) -> FakeManaged:
+            events.append((command, options))
+            return cls()
+
+        def close(self) -> None:
+            events.append("close")
+
+    monkeypatch.setitem(_run_outer.__globals__, "ManagedProcess", FakeManaged)
+    monkeypatch.setitem(
+        _run_outer.__globals__,
+        "_require_program",
+        lambda name, *, purpose: Path("/usr/bin") / name,
+    )
+
+    result = _run_outer(
+        args=SimpleNamespace(
+            screen="640x360x24",
+            mesa_gl_version="4.6",
+            mesa_glsl_version="460",
+            editor_args=[],
+        ),
+        editor=tmp_path / "termin_editor",
+        project=tmp_path / "Project.terminproj",
+        environment={"TERMIN_EDITOR_MCP_SESSION_FILE": str(tmp_path / "session.json")},
+        runtime_dir=tmp_path,
+        shader_compiler=tmp_path / "termin_shaderc",
+    )
+
+    assert result == 0
+    command, options = events[0]
+    assert command[0] == "/usr/bin/xvfb-run"
+    assert options["env"]["TERMIN_VIRTUAL_DISPLAY_INTERNAL"] == "1"
+    assert events[-2:] == ["wait", "close"]
 
 
 def _write_rgb_png(path: Path, pixel: tuple[int, int, int]) -> None:
