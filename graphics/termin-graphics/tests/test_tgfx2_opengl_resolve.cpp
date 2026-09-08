@@ -11,6 +11,8 @@
 namespace {
     constexpr int width = 7;
     constexpr int height = 5;
+    constexpr int destination_width = 11;
+    constexpr int destination_height = 8;
 
     void require(bool ok, const char* message) {
         if (!ok)
@@ -46,6 +48,157 @@ namespace {
         glGetBooleani_v(GL_COLOR_WRITEMASK, 1, result.mask1.data());
         result.scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
         return result;
+    }
+
+    struct BlitState {
+        GLint read_framebuffer = 0;
+        GLint draw_framebuffer = 0;
+        std::array<GLint, 4> scissor{};
+        GLboolean scissor_enabled = GL_FALSE;
+        bool operator==(const BlitState&) const = default;
+    };
+
+    BlitState blit_state() {
+        BlitState result;
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &result.read_framebuffer);
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &result.draw_framebuffer);
+        glGetIntegerv(GL_SCISSOR_BOX, result.scissor.data());
+        result.scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+        return result;
+    }
+
+    bool matches(const float pixel[4], termin::LinearColor expected) {
+        return std::abs(pixel[0] - expected.r) < 0.01f && std::abs(pixel[1] - expected.g) < 0.01f &&
+               std::abs(pixel[2] - expected.b) < 0.01f && std::abs(pixel[3] - expected.a) < 0.01f;
+    }
+
+    void expect_rect(tgfx::OpenGLRenderDevice& device,
+                     tgfx::TextureHandle texture,
+                     termin::Bounds2i rect,
+                     termin::LinearColor inside,
+                     termin::LinearColor outside,
+                     const char* message) {
+        for (int y = 0; y < destination_height; ++y) {
+            for (int x = 0; x < destination_width; ++x) {
+                float pixel[4] = {};
+                require(device.read_pixel_rgba8(texture, x, y, pixel), "blit destination readback failed");
+                const bool is_inside = x >= rect.x0 && x < rect.x1 && y >= rect.y0 && y < rect.y1;
+                const auto expected = is_inside ? inside : outside;
+                if (!matches(pixel, expected)) {
+                    std::fprintf(stderr,
+                                 "%s at (%d, %d): got %.3f %.3f %.3f %.3f, expected %.3f %.3f %.3f %.3f\n",
+                                 message,
+                                 x,
+                                 y,
+                                 pixel[0],
+                                 pixel[1],
+                                 pixel[2],
+                                 pixel[3],
+                                 expected.r,
+                                 expected.g,
+                                 expected.b,
+                                 expected.a);
+                    throw std::runtime_error(message);
+                }
+            }
+        }
+    }
+
+    tgfx::TextureHandle make_texture(tgfx::OpenGLRenderDevice& device,
+                                     int texture_width,
+                                     int texture_height,
+                                     uint32_t samples = 1) {
+        tgfx::TextureDesc desc;
+        desc.width = static_cast<uint32_t>(texture_width);
+        desc.height = static_cast<uint32_t>(texture_height);
+        desc.sample_count = samples;
+        desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc |
+                     tgfx::TextureUsage::CopyDst;
+        const auto texture = device.create_texture(desc);
+        require(bool(texture), "blit texture creation failed");
+        return texture;
+    }
+
+    void test_blit_to_texture(tgfx::OpenGLRenderDevice& device) {
+        const termin::LinearColor black{0, 0, 0, 1};
+        const termin::LinearColor red{1, 0, 0, 1};
+        const termin::LinearColor green{0, 1, 0, 1};
+        const termin::LinearColor blue{0, 0, 1, 1};
+        const termin::LinearColor yellow{1, 1, 0, 1};
+        const termin::Bounds2i source_top_rect{1, 0, 5, 2};
+
+        const auto source = make_texture(device, width, height);
+        const auto second_source = make_texture(device, width, height);
+        const auto destination = make_texture(device, destination_width, destination_height);
+        device.clear_texture(source, blue, {0, 0, width, height});
+        // Leave a one-pixel red guard around the selected source region so
+        // linear filtering at the scaled rectangle edge cannot sample blue.
+        device.clear_texture(source, red, {0, 0, width, 3});
+        device.clear_texture(second_source, green, {0, 0, width, height});
+        device.clear_texture(destination, black, {0, 0, destination_width, destination_height});
+
+        GLuint sentinel_framebuffers[2] = {};
+        glGenFramebuffers(2, sentinel_framebuffers);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, sentinel_framebuffers[0]);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, sentinel_framebuffers[1]);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(1, 2, 1, 1);
+        const BlitState before = blit_state();
+
+        // This simultaneously exercises top-left source and destination
+        // conversion, partial rectangles, asymmetric extents and linear scaling.
+        const termin::Bounds2i scaled_destination{2, 3, 8, 7};
+        device.blit_to_texture(destination, source, source_top_rect, scaled_destination);
+        require(blit_state() == before, "blit_to_texture changed caller framebuffer or scissor state");
+        expect_rect(device,
+                    destination,
+                    scaled_destination,
+                    red,
+                    black,
+                    "scaled partial blit produced unexpected top-left pixels");
+
+        // Model the display presenter's asymmetric multi-viewport composition.
+        device.clear_texture(destination, black, {0, 0, destination_width, destination_height});
+        const termin::Bounds2i top_left_viewport{0, 0, 3, 2};
+        const termin::Bounds2i bottom_right_viewport{6, 5, 11, 8};
+        device.blit_to_texture(destination, second_source, {0, 0, width, height}, top_left_viewport);
+        device.blit_to_texture(destination, source, source_top_rect, bottom_right_viewport);
+        for (int y = 0; y < destination_height; ++y) {
+            for (int x = 0; x < destination_width; ++x) {
+                float pixel[4] = {};
+                require(device.read_pixel_rgba8(destination, x, y, pixel), "viewport composite readback failed");
+                const bool in_top_left = x < 3 && y < 2;
+                const bool in_bottom_right = x >= 6 && y >= 5;
+                const auto expected = in_top_left ? green : (in_bottom_right ? red : black);
+                require(matches(pixel, expected), "asymmetric viewport composite produced unexpected pixels");
+            }
+        }
+
+        // MSAA resolves cannot scale. An equal-size partial resolve remains a
+        // valid blit and must use the same public top-left rectangle contract.
+        const auto multisample_source = make_texture(device, width, height, 4);
+        device.clear_texture(multisample_source, blue, {0, 0, width, height});
+        device.clear_texture(multisample_source, yellow, {0, 0, width, 3});
+        device.clear_texture(destination, black, {0, 0, destination_width, destination_height});
+        const termin::Bounds2i resolve_destination{3, 4, 7, 6};
+        device.blit_to_texture(destination, multisample_source, source_top_rect, resolve_destination);
+        require(blit_state() == before, "MSAA blit changed caller framebuffer or scissor state");
+        expect_rect(device,
+                    destination,
+                    resolve_destination,
+                    yellow,
+                    black,
+                    "partial MSAA resolve produced unexpected top-left pixels");
+
+        require(glGetError() == GL_NO_ERROR, "blit_to_texture generated a GL error");
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDisable(GL_SCISSOR_TEST);
+        glDeleteFramebuffers(2, sentinel_framebuffers);
+        device.destroy(multisample_source);
+        device.destroy(destination);
+        device.destroy(second_source);
+        device.destroy(source);
     }
 
     void run(tgfx::GlFeatureTier tier) {
@@ -113,6 +266,7 @@ namespace {
         }
         glDisable(GL_SCISSOR_TEST);
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        test_blit_to_texture(device);
         commands.reset();
         for (auto texture : sources)
             device.destroy(texture);
@@ -146,6 +300,6 @@ int main() {
         std::fprintf(stderr, "OpenGL MRT resolve: %s\n", error.what());
         return 1;
     }
-    std::puts("OpenGL MRT resolve scissor and state regressions passed");
+    std::puts("OpenGL MRT resolve and top-left partial blit regressions passed");
     return 0;
 }

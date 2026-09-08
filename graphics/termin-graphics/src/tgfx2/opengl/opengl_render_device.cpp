@@ -1504,9 +1504,69 @@ namespace tgfx {
             return;
         }
 
+        if (src == dst) {
+            tc_log_error("OpenGLRenderDevice::blit_to_texture: self-blit is not supported");
+            return;
+        }
+        if (is_depth_format(src->desc.format) || is_depth_format(dst->desc.format)) {
+            tc_log_error("OpenGLRenderDevice::blit_to_texture: color textures are required");
+            return;
+        }
+        if (src->desc.width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+            src->desc.height > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+            dst->desc.width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+            dst->desc.height > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
+            tc_log_error("OpenGLRenderDevice::blit_to_texture: texture extent exceeds the native integer limit");
+            return;
+        }
+
+        const int src_width = static_cast<int>(src->desc.width);
+        const int src_height = static_cast<int>(src->desc.height);
+        const int dst_width = static_cast<int>(dst->desc.width);
+        const int dst_height = static_cast<int>(dst->desc.height);
+        const bool source_in_bounds =
+            src_rect.x0 >= 0 && src_rect.y0 >= 0 && src_rect.x1 <= src_width && src_rect.y1 <= src_height &&
+            src_rect.x1 > src_rect.x0 && src_rect.y1 > src_rect.y0;
+        const bool destination_in_bounds = dst_rect.x0 >= 0 && dst_rect.y0 >= 0 && dst_rect.x1 <= dst_width &&
+                                           dst_rect.y1 <= dst_height && dst_rect.x1 > dst_rect.x0 &&
+                                           dst_rect.y1 > dst_rect.y0;
+        if (!source_in_bounds || !destination_in_bounds) {
+            tc_log_error("OpenGLRenderDevice::blit_to_texture: requires non-empty in-bounds regions");
+            return;
+        }
+        const int src_region_width = src_rect.x1 - src_rect.x0;
+        const int src_region_height = src_rect.y1 - src_rect.y0;
+        const int dst_region_width = dst_rect.x1 - dst_rect.x0;
+        const int dst_region_height = dst_rect.y1 - dst_rect.y0;
+
+        const bool src_multisampled = src->desc.sample_count > 1;
+        const bool dst_multisampled = dst->desc.sample_count > 1;
+        if (!src_multisampled && dst_multisampled) {
+            tc_log_error("OpenGLRenderDevice::blit_to_texture: single-sample to MSAA blit is not supported");
+            return;
+        }
+        if (src_multisampled || dst_multisampled) {
+            const bool resolve = src_multisampled && !dst_multisampled;
+            const bool matching_samples = src->desc.sample_count == dst->desc.sample_count;
+            if ((!resolve && !matching_samples) || src->desc.format != dst->desc.format ||
+                src_region_width != dst_region_width || src_region_height != dst_region_height) {
+                tc_log_error("OpenGLRenderDevice::blit_to_texture: MSAA blits require matching formats and region "
+                             "sizes, and either equal sample counts or an MSAA-to-single-sample resolve");
+                return;
+            }
+        }
+
+        const auto native_src = gl_native_framebuffer_rect(
+            gl_coordinates_, src_height, {src_rect.x0, src_rect.y0, src_region_width, src_region_height});
+        const auto native_dst = gl_native_framebuffer_rect(
+            gl_coordinates_, dst_height, {dst_rect.x0, dst_rect.y0, dst_region_width, dst_region_height});
+
         GLint prev_read = 0, prev_draw = 0;
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prev_read);
         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw);
+        const GLboolean prev_scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+        if (prev_scissor_enabled)
+            glDisable(GL_SCISSOR_TEST);
 
         GLuint fbos[2] = {0, 0};
         glGenFramebuffers(2, fbos);
@@ -1518,6 +1578,7 @@ namespace tgfx {
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbos[1]);
         glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dst->target, dst->gl_id, 0);
+        gl_web_compat::set_draw_buffer(GL_COLOR_ATTACHMENT0);
         GLenum draw_status = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
 
         if (read_status != GL_FRAMEBUFFER_COMPLETE || draw_status != GL_FRAMEBUFFER_COMPLETE) {
@@ -1533,16 +1594,16 @@ namespace tgfx {
                          static_cast<unsigned>(src->target),
                          static_cast<unsigned>(dst->target));
         } else {
-            glBlitFramebuffer(src_rect.x0,
-                              src_rect.y0,
-                              src_rect.x1,
-                              src_rect.y1,
-                              dst_rect.x0,
-                              dst_rect.y0,
-                              dst_rect.x1,
-                              dst_rect.y1,
+            glBlitFramebuffer(native_src.x,
+                              native_src.y,
+                              native_src.x + native_src.width,
+                              native_src.y + native_src.height,
+                              native_dst.x,
+                              native_dst.y,
+                              native_dst.x + native_dst.width,
+                              native_dst.y + native_dst.height,
                               GL_COLOR_BUFFER_BIT,
-                              GL_LINEAR);
+                              src_multisampled || dst_multisampled ? GL_NEAREST : GL_LINEAR);
             GLenum err = glGetError();
             if (err != GL_NO_ERROR) {
                 tc_log_error("OpenGLRenderDevice::blit_to_texture: glBlitFramebuffer "
@@ -1561,6 +1622,8 @@ namespace tgfx {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(prev_read));
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prev_draw));
         glDeleteFramebuffers(2, fbos);
+        if (prev_scissor_enabled)
+            glEnable(GL_SCISSOR_TEST);
     }
 
     void OpenGLRenderDevice::clear_texture(TextureHandle dst_color, termin::LinearColor color, termin::Bounds2i viewport) {
