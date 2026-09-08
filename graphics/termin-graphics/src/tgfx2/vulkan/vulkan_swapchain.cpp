@@ -138,17 +138,15 @@ namespace tgfx {
         VkSurfaceCapabilitiesKHR caps{};
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface_, &caps);
 
-        // Clamp requested extent to the surface's min/max. currentExtent
-        // is authoritative on most platforms unless it's the special
-        // 0xFFFFFFFF value (Wayland in particular) — in which case we
-        // use our own size clamped to min/max.
-        VkExtent2D extent;
-        if (caps.currentExtent.width != UINT32_MAX) {
-            extent = caps.currentExtent;
-        } else {
-            extent.width = std::clamp(width_, caps.minImageExtent.width, caps.maxImageExtent.width);
-            extent.height = std::clamp(height_, caps.minImageExtent.height, caps.maxImageExtent.height);
-        }
+        // Some compositors publish a fixed surface extent which is authoritative
+        // even when SDL reports a persistently different drawable size. Others
+        // let the application choose a clamped extent. Preserve that distinction
+        // so the window host does not recreate a fixed-size swapchain forever.
+        const SwapchainExtentSelection extent_selection = select_swapchain_extent(caps, {width_, height_});
+        const VkExtent2D extent = extent_selection.extent;
+        minimum_extent_ = caps.minImageExtent;
+        maximum_extent_ = caps.maxImageExtent;
+        surface_extent_authoritative_ = extent_selection.surface_authoritative;
         width_ = extent.width;
         height_ = extent.height;
 

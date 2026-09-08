@@ -6,6 +6,7 @@
 
 #ifdef TGFX2_HAS_VULKAN
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <span>
@@ -36,6 +37,40 @@ namespace tgfx {
         return result == VK_ERROR_OUT_OF_DATE_KHR;
     }
 
+    struct SwapchainExtentSelection {
+        VkExtent2D extent{};
+        bool surface_authoritative = false;
+    };
+
+    constexpr SwapchainExtentSelection select_swapchain_extent(const VkSurfaceCapabilitiesKHR& capabilities,
+                                                               VkExtent2D requested) noexcept {
+        if (capabilities.currentExtent.width != UINT32_MAX) {
+            return {capabilities.currentExtent, true};
+        }
+        return {
+            {
+                std::clamp(requested.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+                std::clamp(requested.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height),
+            },
+            false,
+        };
+    }
+
+    constexpr bool requested_swapchain_extent_changed(VkExtent2D current,
+                                                      VkExtent2D requested,
+                                                      VkExtent2D minimum,
+                                                      VkExtent2D maximum,
+                                                      bool surface_authoritative) noexcept {
+        if (surface_authoritative) {
+            return false;
+        }
+        const VkExtent2D clamped{
+            std::clamp(requested.width, minimum.width, maximum.width),
+            std::clamp(requested.height, minimum.height, maximum.height),
+        };
+        return current.width != clamped.width || current.height != clamped.height;
+    }
+
     TGFX2_API VkSurfaceFormatKHR
     select_swapchain_surface_format(std::span<const VkSurfaceFormatKHR> formats) noexcept;
 
@@ -61,6 +96,9 @@ namespace tgfx {
         VkSurfaceTransformFlagBitsKHR pre_transform_ = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         uint32_t width_ = 0;
         uint32_t height_ = 0;
+        VkExtent2D minimum_extent_{};
+        VkExtent2D maximum_extent_{};
+        bool surface_extent_authoritative_ = false;
 
         std::vector<VkImage> images_;
         std::vector<VkImageView> image_views_;
@@ -166,6 +204,13 @@ namespace tgfx {
         }
         uint32_t height() const {
             return height_;
+        }
+        bool surface_extent_authoritative() const {
+            return surface_extent_authoritative_;
+        }
+        bool requested_extent_requires_recreate(uint32_t width, uint32_t height) const {
+            return requested_swapchain_extent_changed(
+                {width_, height_}, {width, height}, minimum_extent_, maximum_extent_, surface_extent_authoritative_);
         }
         uint32_t image_count() const {
             return static_cast<uint32_t>(images_.size());

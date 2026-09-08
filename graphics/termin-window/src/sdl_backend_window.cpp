@@ -946,6 +946,14 @@ namespace termin {
 #ifdef TGFX2_HAS_VULKAN
         else if (impl_->backend == tgfx::BackendType::Vulkan) {
             SDL_Vulkan_GetDrawableSize(window_, &w, &h);
+            // VkSurfaceCapabilitiesKHR::currentExtent is the physical
+            // presentation extent when fixed. KDE Wayland can report a
+            // different SDL drawable size persistently; expose the Vulkan
+            // extent so render targets and DPI metadata follow the surface.
+            if (impl_->swapchain && impl_->swapchain->surface_extent_authoritative()) {
+                w = static_cast<int>(impl_->swapchain->width());
+                h = static_cast<int>(impl_->swapchain->height());
+            }
         }
 #endif
         else {
@@ -1132,8 +1140,7 @@ namespace termin {
 
 #ifdef TGFX2_HAS_VULKAN
         if (impl_->backend == tgfx::BackendType::Vulkan && impl_->swapchain &&
-            (impl_->swapchain->width() != static_cast<uint32_t>(w) ||
-             impl_->swapchain->height() != static_cast<uint32_t>(h))) {
+            impl_->swapchain->requested_extent_requires_recreate(static_cast<uint32_t>(w), static_cast<uint32_t>(h))) {
             impl_->swapchain->recreate(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
         }
 #endif

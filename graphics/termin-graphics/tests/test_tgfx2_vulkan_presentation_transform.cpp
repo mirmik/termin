@@ -4,6 +4,8 @@
 #include <cstdio>
 
 int main() {
+    using tgfx::requested_swapchain_extent_changed;
+    using tgfx::select_swapchain_extent;
     using tgfx::select_swapchain_pre_transform;
     using tgfx::select_swapchain_surface_format;
     using tgfx::swapchain_result_requires_recreate;
@@ -30,6 +32,40 @@ int main() {
     if (swapchain_result_requires_recreate(VK_SUCCESS) || swapchain_result_requires_recreate(VK_SUBOPTIMAL_KHR) ||
         !swapchain_result_requires_recreate(VK_ERROR_OUT_OF_DATE_KHR)) {
         std::fprintf(stderr, "swapchain recreate policy is inconsistent\n");
+        return 1;
+    }
+
+    VkSurfaceCapabilitiesKHR fixed_capabilities{};
+    fixed_capabilities.currentExtent = {2560, 1358};
+    fixed_capabilities.minImageExtent = {64, 64};
+    fixed_capabilities.maxImageExtent = {4096, 4096};
+    const auto fixed_extent = select_swapchain_extent(fixed_capabilities, {1700, 950});
+    if (!fixed_extent.surface_authoritative || fixed_extent.extent.width != 2560 ||
+        fixed_extent.extent.height != 1358 ||
+        requested_swapchain_extent_changed(
+            fixed_extent.extent, {1700, 950}, {64, 64}, {4096, 4096}, fixed_extent.surface_authoritative)) {
+        std::fprintf(stderr, "fixed surface extent followed a conflicting SDL drawable size\n");
+        return 1;
+    }
+
+    VkSurfaceCapabilitiesKHR variable_capabilities = fixed_capabilities;
+    variable_capabilities.currentExtent = {UINT32_MAX, UINT32_MAX};
+    variable_capabilities.minImageExtent = {320, 200};
+    variable_capabilities.maxImageExtent = {1920, 1080};
+    const auto variable_extent = select_swapchain_extent(variable_capabilities, {2560, 100});
+    if (variable_extent.surface_authoritative || variable_extent.extent.width != 1920 ||
+        variable_extent.extent.height != 200 ||
+        requested_swapchain_extent_changed(variable_extent.extent,
+                                           {2500, 150},
+                                           variable_capabilities.minImageExtent,
+                                           variable_capabilities.maxImageExtent,
+                                           variable_extent.surface_authoritative) ||
+        !requested_swapchain_extent_changed(variable_extent.extent,
+                                            {1280, 720},
+                                            variable_capabilities.minImageExtent,
+                                            variable_capabilities.maxImageExtent,
+                                            variable_extent.surface_authoritative)) {
+        std::fprintf(stderr, "application-selected surface extent recreate policy is inconsistent\n");
         return 1;
     }
 
