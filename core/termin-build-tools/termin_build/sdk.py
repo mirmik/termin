@@ -107,6 +107,8 @@ LEGACY_SOURCE_NATIVE_ARTIFACTS = {
     "editor/termin-app": ("termin/_native",),
 }
 
+_SUPPORTED_SDK_BUILD_PYTHON_ABIS = frozenset({"cp314", "cp314t"})
+
 
 _SDK_PROFILE_CONTEXT: ContextVar[str | None] = ContextVar(
     "termin_sdk_profile",
@@ -817,12 +819,33 @@ def _install_python_layer_packages(
 
 
 def prepare_build_python_runtime(sdk_prefix: Path) -> int:
+    py_exec = _python_executable()
+    try:
+        info = _python_version_and_paths(py_exec)
+        python_abi = PythonAbiIdentity.from_runtime_probe(
+            info,
+            context="SDK build Python",
+        )
+        if (
+            python_abi.version != "3.14"
+            or python_abi.wheel_abi_tag not in _SUPPORTED_SDK_BUILD_PYTHON_ABIS
+        ):
+            supported = ", ".join(sorted(_SUPPORTED_SDK_BUILD_PYTHON_ABIS))
+            raise PythonAbiError(
+                "SDK build Python must use Python 3.14 with one of the "
+                f"supported ABIs ({supported}); got Python {python_abi.version} "
+                f"with ABI {python_abi.wheel_abi_tag}"
+            )
+    except (OSError, RuntimeError) as error:
+        print(f"ERROR: failed to validate SDK build Python: {error}", file=sys.stderr)
+        return 1
+
     if _is_windows():
-        py_exec = _python_executable()
         try:
             bundled_py_dir = ensure_bundled_python_runtime(
                 sdk_prefix,
                 python_executable=Path(py_exec),
+                runtime_info=info,
             )
         except (OSError, RuntimeError) as error:
             print(
@@ -836,8 +859,6 @@ def prepare_build_python_runtime(sdk_prefix: Path) -> int:
         )
         return 0
 
-    py_exec = _python_executable()
-    info = _python_version_and_paths(py_exec)
     _remove_incompatible_bundled_python_runtimes(sdk_prefix, info)
     try:
         bundled_py_dir = _find_bundled_python_dir(
@@ -853,6 +874,7 @@ def prepare_build_python_runtime(sdk_prefix: Path) -> int:
             bundled_py_dir = ensure_bundled_python_runtime(
                 sdk_prefix,
                 python_executable=Path(py_exec),
+                runtime_info=info,
             )
         else:
             _remove_linux_python_config_artifacts(bundled_py_dir)

@@ -1278,15 +1278,15 @@ def test_prepare_build_python_runtime_sanitizes_sdk_before_cmake(
     monkeypatch,
 ):
     sdk_prefix = tmp_path / "sdk"
-    bundled_py_dir = sdk_prefix / "lib" / "python3.10"
-    config_dir = bundled_py_dir / "config-3.10-x86_64-linux-gnu"
+    bundled_py_dir = sdk_prefix / "lib" / "python3.14"
+    config_dir = bundled_py_dir / "config-3.14-x86_64-linux-gnu"
     host_libdir = tmp_path / "host" / "lib"
     config_dir.mkdir(parents=True)
     (bundled_py_dir / "ensurepip").mkdir()
     (bundled_py_dir / "os.py").write_text("", encoding="utf-8")
-    (config_dir / "libpython3.10.a").write_bytes(b"static")
+    (config_dir / "libpython3.14.a").write_bytes(b"static")
     host_libdir.mkdir(parents=True)
-    (host_libdir / "libpython3.10.so").write_bytes(b"shared")
+    (host_libdir / "libpython3.14.so").write_bytes(b"shared")
 
     monkeypatch.setattr(sdk, "_is_windows", lambda: False)
     monkeypatch.setattr(sdk_bundled_python, "_is_windows", lambda: False)
@@ -1296,7 +1296,10 @@ def test_prepare_build_python_runtime_sanitizes_sdk_before_cmake(
         sdk,
         "_python_version_and_paths",
         lambda _py_exec: {
-            "version": "3.10",
+            "version": "3.14",
+            "soabi": "cpython-314-x86_64-linux-gnu",
+            "free_threaded": False,
+            "py_gil_disabled": False,
             "stdlib": str(tmp_path / "unused"),
             "libdir": str(host_libdir),
             "sitepackages": [],
@@ -1312,7 +1315,7 @@ def test_prepare_build_python_runtime_sanitizes_sdk_before_cmake(
 
     assert result == 0
     assert not config_dir.exists()
-    assert (sdk_prefix / "lib" / "libpython3.10.so").read_bytes() == b"shared"
+    assert (sdk_prefix / "lib" / "libpython3.14.so").read_bytes() == b"shared"
 
 
 def test_prepare_build_python_runtime_copies_windows_runtime_for_consumers(
@@ -1325,6 +1328,17 @@ def test_prepare_build_python_runtime_copies_windows_runtime_for_consumers(
 
     monkeypatch.setattr(sdk, "_is_windows", lambda: True)
     monkeypatch.setattr(sdk, "_python_executable", lambda: "python")
+    runtime_info = {
+        "version": "3.14",
+        "soabi": "cp314t-win_amd64",
+        "free_threaded": True,
+        "py_gil_disabled": True,
+    }
+    monkeypatch.setattr(
+        sdk,
+        "_python_version_and_paths",
+        lambda _py_exec: runtime_info,
+    )
     monkeypatch.setattr(
         sdk,
         "ensure_bundled_python_runtime",
@@ -1335,8 +1349,87 @@ def test_prepare_build_python_runtime_copies_windows_runtime_for_consumers(
 
     assert result == 0
     assert calls == [
-        (sdk_prefix, {"python_executable": Path("python")}),
+        (
+            sdk_prefix,
+            {
+                "python_executable": Path("python"),
+                "runtime_info": runtime_info,
+            },
+        ),
     ]
+
+
+def test_prepare_build_python_runtime_rejects_unsupported_python_without_mutation(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    sdk_prefix = tmp_path / "sdk"
+    bundled_py_dir = sdk_prefix / "lib" / "python3.14t"
+    (bundled_py_dir / "site-packages").mkdir(parents=True)
+    (bundled_py_dir / "os.py").write_bytes(b"existing stdlib\n")
+    (bundled_py_dir / "site-packages" / "installed.py").write_bytes(
+        b"existing package\n"
+    )
+    (sdk_prefix / "lib" / "libpython3.14t.so.1.0").write_bytes(
+        b"existing shared library"
+    )
+    header = sdk_prefix / "include" / "python3.14t" / "Python.h"
+    header.parent.mkdir(parents=True)
+    header.write_bytes(b"existing header\n")
+
+    host_root = tmp_path / "host"
+    host_stdlib = host_root / "lib" / "python3.10"
+    host_include = host_root / "include" / "python3.10"
+    (host_stdlib / "ensurepip").mkdir(parents=True)
+    (host_stdlib / "os.py").write_bytes(b"unsupported stdlib\n")
+    host_include.mkdir(parents=True)
+    (host_include / "Python.h").write_bytes(b"unsupported header\n")
+    (host_root / "lib" / "libpython3.10.so.1.0").write_bytes(
+        b"unsupported shared library"
+    )
+    unsupported_info = {
+        "version": "3.10",
+        "soabi": "cpython-310-x86_64-linux-gnu",
+        "free_threaded": False,
+        "py_gil_disabled": False,
+        "stdlib": str(host_stdlib),
+        "include": str(host_include),
+        "platinclude": str(host_include),
+        "libdir": str(host_root / "lib"),
+        "sitepackages": [],
+    }
+
+    def snapshot() -> dict[str, bytes | None]:
+        return {
+            path.relative_to(sdk_prefix).as_posix(): (
+                None if path.is_dir() else path.read_bytes()
+            )
+            for path in sorted(sdk_prefix.rglob("*"))
+        }
+
+    before = snapshot()
+    monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk_bundled_python, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk, "_python_executable", lambda: "python3.10")
+    monkeypatch.setattr(
+        sdk,
+        "_python_version_and_paths",
+        lambda _py_exec: unsupported_info,
+    )
+    monkeypatch.setattr(
+        sdk_bundled_python,
+        "_python_version_and_paths",
+        lambda _py_exec: unsupported_info,
+    )
+
+    result = sdk.prepare_build_python_runtime(sdk_prefix)
+
+    assert result == 1
+    assert snapshot() == before
+    error = capsys.readouterr().err
+    assert "failed to validate SDK build Python" in error
+    assert "got Python 3.10 with ABI cp310" in error
 
 
 def test_prepare_build_python_runtime_creates_runtime_for_clean_sdk(
@@ -1344,11 +1437,11 @@ def test_prepare_build_python_runtime_creates_runtime_for_clean_sdk(
     monkeypatch,
 ):
     sdk_prefix = tmp_path / "sdk"
-    stdlib = tmp_path / "host" / "lib" / "python3.10"
+    stdlib = tmp_path / "host" / "lib" / "python3.14"
     host_libdir = tmp_path / "host" / "lib"
     (stdlib / "ensurepip").mkdir(parents=True)
     (stdlib / "os.py").write_text("", encoding="utf-8")
-    (host_libdir / "libpython3.10.so").write_bytes(b"shared")
+    (host_libdir / "libpython3.14.so").write_bytes(b"shared")
 
     monkeypatch.setattr(sdk, "_is_windows", lambda: False)
     monkeypatch.setattr(sdk_bundled_python, "_is_windows", lambda: False)
@@ -1358,7 +1451,10 @@ def test_prepare_build_python_runtime_creates_runtime_for_clean_sdk(
         sdk,
         "_python_version_and_paths",
         lambda _py_exec: {
-            "version": "3.10",
+            "version": "3.14",
+            "soabi": "cpython-314-x86_64-linux-gnu",
+            "free_threaded": False,
+            "py_gil_disabled": False,
             "stdlib": str(stdlib),
             "libdir": str(host_libdir),
             "sitepackages": [],
@@ -1373,9 +1469,9 @@ def test_prepare_build_python_runtime_creates_runtime_for_clean_sdk(
     result = sdk.prepare_build_python_runtime(sdk_prefix)
 
     assert result == 0
-    assert (sdk_prefix / "lib" / "python3.10" / "os.py").is_file()
-    assert (sdk_prefix / "lib" / "python3.10" / "site-packages").is_dir()
-    assert (sdk_prefix / "lib" / "libpython3.10.so").read_bytes() == b"shared"
+    assert (sdk_prefix / "lib" / "python3.14" / "os.py").is_file()
+    assert (sdk_prefix / "lib" / "python3.14" / "site-packages").is_dir()
+    assert (sdk_prefix / "lib" / "libpython3.14.so").read_bytes() == b"shared"
 
 
 def test_prepare_build_python_runtime_migrates_to_free_threaded_layout(

@@ -249,13 +249,18 @@ def ensure_bundled_python_runtime(
     sdk_prefix: Path,
     *,
     python_executable: Path | None = None,
+    runtime_info: Mapping[str, object] | None = None,
 ) -> Path:
     py_exec = (
         str(python_executable)
         if python_executable is not None
         else _python_executable()
     )
-    info = _python_version_and_paths(py_exec)
+    info = (
+        dict(runtime_info)
+        if runtime_info is not None
+        else _python_version_and_paths(py_exec)
+    )
     version = str(info["version"])
     stdlib = Path(str(info["stdlib"]))
 
