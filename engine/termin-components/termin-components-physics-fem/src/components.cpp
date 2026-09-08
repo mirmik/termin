@@ -122,6 +122,15 @@ namespace termin {
         CxxComponent::on_destroy();
     }
 
+    void FEMArticulationComponent::on_removed() {
+        if (world_ != nullptr) {
+            world_->detach(*this);
+        }
+        shared_articulation_.reset();
+        legacy_articulation_.reset();
+        CxxComponent::on_removed();
+    }
+
     bool FEMArticulationComponent::initialized() const noexcept {
         return articulation_ != nullptr && dynamics_ != nullptr;
     }
@@ -229,6 +238,13 @@ namespace termin {
             world_->detach(*this);
         }
         CxxComponent::on_destroy();
+    }
+
+    void FEMArticulationMotorComponent::on_removed() {
+        if (world_ != nullptr) {
+            world_->detach(*this);
+        }
+        CxxComponent::on_removed();
     }
 
     bool FEMArticulationMotorComponent::initialized() const noexcept {
@@ -379,13 +395,25 @@ namespace termin {
         CxxComponent::on_destroy();
     }
 
+    void FEMJointServoComponent::on_removed() {
+        if (world_ != nullptr) {
+            world_->detach(*this);
+        }
+        CxxComponent::on_removed();
+    }
+
     bool FEMJointServoComponent::initialized() const noexcept {
-        return world_ != nullptr && joint_ != nullptr && motor_component_ != nullptr && articulation_ != nullptr;
+        Entity joint_entity = joint_entity_;
+        return world_ != nullptr && joint_entity.valid() &&
+               joint_entity.get_component<KinematicUnitComponent>() != nullptr && motor_component_ != nullptr &&
+               articulation_ != nullptr;
     }
 
     double FEMJointServoComponent::position_error() const noexcept {
-        return joint_ != nullptr ? target_coordinate - joint_->get_coordinate()
-                                 : std::numeric_limits<double>::quiet_NaN();
+        Entity joint_entity = joint_entity_;
+        KinematicUnitComponent* joint =
+            joint_entity.valid() ? joint_entity.get_component<KinematicUnitComponent>() : nullptr;
+        return joint != nullptr ? target_coordinate - joint->get_coordinate() : std::numeric_limits<double>::quiet_NaN();
     }
 
     double FEMJointServoComponent::commanded_effort() const noexcept {
@@ -443,6 +471,13 @@ namespace termin {
             world_->detach(*this);
         }
         CxxComponent::on_destroy();
+    }
+
+    void FEMRigidBodyComponent::on_removed() {
+        if (world_ != nullptr) {
+            world_->detach(*this);
+        }
+        CxxComponent::on_removed();
     }
 
     bool FEMRigidBodyComponent::initialized() const noexcept {
@@ -545,6 +580,13 @@ namespace termin {
         CxxComponent::on_destroy();
     }
 
+    void FEMFixedJointComponent::on_removed() {
+        if (world_ != nullptr) {
+            world_->detach(*this);
+        }
+        CxxComponent::on_removed();
+    }
+
     void FEMFixedJointComponent::prepare_render(const RenderPrepareContext& context) {
         DebugGeometryDrawer drawer = context.debug_geometry(fem_joint_debug_geometry_type().type_id());
         if (!drawer) {
@@ -617,6 +659,13 @@ namespace termin {
             world_->detach(*this);
         }
         CxxComponent::on_destroy();
+    }
+
+    void FEMRevoluteJointComponent::on_removed() {
+        if (world_ != nullptr) {
+            world_->detach(*this);
+        }
+        CxxComponent::on_removed();
     }
 
     void FEMRevoluteJointComponent::prepare_render(const RenderPrepareContext& context) {
@@ -707,9 +756,19 @@ namespace termin {
             initialized_ = false;
             return;
         }
+        if (!runtime_topology_enabled()) {
+            tc::Log::warn("[FEMPhysicsWorldComponent] an active body, joint, or articulation was disabled or "
+                          "removed; rebuild the physics world before continuing");
+            invalidate_simulation();
+            return;
+        }
         for (const FEMArticulationComponent* articulation : articulations_) {
+            ArticulationComponent* current_owner = articulation != nullptr
+                                                       ? articulation->entity().get_component<ArticulationComponent>()
+                                                       : nullptr;
             if (articulation != nullptr && articulation->articulation_owner_ != nullptr &&
-                articulation->articulation_owner_->articulation() != articulation->articulation_) {
+                (current_owner != articulation->articulation_owner_ ||
+                 current_owner->articulation() != articulation->articulation_)) {
                 tc::Log::error("[FEMPhysicsWorldComponent] ArticulationComponent on "
                                "'%s' was rebuilt while its FEM model was active; rebuild "
                                "the physics world before continuing",
@@ -722,21 +781,17 @@ namespace termin {
     }
 
     void FEMPhysicsWorldComponent::on_destroy() {
-        initialized_ = false;
-        system_ = physics_qopt::Multibody3DSystem();
-        clear_runtime_links();
-        simulated_time_ = 0.0;
-        initial_total_energy_ = 0.0;
-        successful_steps_ = 0;
-        motor_work_ = 0.0;
-        contacts_ = nullptr;
-        warned_contact_colliders_.clear();
+        shutdown_simulation();
         CxxComponent::on_destroy();
     }
 
+    void FEMPhysicsWorldComponent::on_removed() {
+        shutdown_simulation();
+        CxxComponent::on_removed();
+    }
+
     bool FEMPhysicsWorldComponent::rebuild_simulation() {
-        system_ = physics_qopt::Multibody3DSystem();
-        clear_runtime_links();
+        invalidate_simulation();
         simulated_time_ = 0.0;
         initial_total_energy_ = 0.0;
         successful_steps_ = 0;
@@ -1151,7 +1206,7 @@ namespace termin {
             }
             if (binding.servo != nullptr && binding.servo->enabled()) {
                 binding.servo->world_ = this;
-                binding.servo->joint_ = binding.joint;
+                binding.servo->joint_entity_ = binding.joint_entity;
                 binding.servo->motor_component_ = binding.motor;
                 binding.servo->articulation_ = component.dynamics_;
                 binding.servo->dof_index_ = joint_index;

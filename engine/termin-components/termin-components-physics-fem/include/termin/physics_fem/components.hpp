@@ -72,6 +72,7 @@ namespace termin {
 
         static void register_type();
         void on_destroy() override;
+        void on_removed() override;
 
         [[nodiscard]] bool initialized() const noexcept;
         [[nodiscard]] std::size_t unit_count() const noexcept;
@@ -115,6 +116,7 @@ namespace termin {
 
         static void register_type();
         void on_destroy() override;
+        void on_removed() override;
 
         [[nodiscard]] bool initialized() const noexcept;
         [[nodiscard]] double applied_effort() const noexcept;
@@ -167,6 +169,7 @@ namespace termin {
 
         static void register_type();
         void on_destroy() override;
+        void on_removed() override;
 
         [[nodiscard]] bool initialized() const noexcept;
         [[nodiscard]] double position_error() const noexcept;
@@ -178,7 +181,7 @@ namespace termin {
     private:
         friend class FEMPhysicsWorldComponent;
         FEMPhysicsWorldComponent* world_ = nullptr;
-        KinematicUnitComponent* joint_ = nullptr;
+        Entity joint_entity_;
         FEMArticulationMotorComponent* motor_component_ = nullptr;
         physics_qopt::Articulation3DDynamicsContribution* articulation_ = nullptr;
         std::size_t dof_index_ = 0;
@@ -201,6 +204,7 @@ namespace termin {
 
         static void register_type();
         void on_destroy() override;
+        void on_removed() override;
 
         [[nodiscard]] bool initialized() const noexcept;
         [[nodiscard]] Screw3 velocity_local() const noexcept;
@@ -227,6 +231,7 @@ namespace termin {
 
         static void register_type();
         void on_destroy() override;
+        void on_removed() override;
         void prepare_render(const RenderPrepareContext& context) override;
 
     private:
@@ -249,6 +254,7 @@ namespace termin {
 
         static void register_type();
         void on_destroy() override;
+        void on_removed() override;
         void prepare_render(const RenderPrepareContext& context) override;
 
     private:
@@ -279,6 +285,7 @@ namespace termin {
         void start() override;
         void fixed_update(float dt) override;
         void on_destroy() override;
+        void on_removed() override;
 
         [[nodiscard]] FEMPhysicsTelemetry telemetry() const noexcept;
 
@@ -316,6 +323,9 @@ namespace termin {
         bool refresh_contacts();
         void step_simulation(double dt);
         [[nodiscard]] double total_energy() const noexcept;
+        [[nodiscard]] bool runtime_topology_enabled() const noexcept;
+        void invalidate_simulation() noexcept;
+        void shutdown_simulation() noexcept;
         void clear_runtime_links();
         void detach(FEMArticulationComponent& component) noexcept;
         void detach(FEMArticulationMotorComponent& component) noexcept;

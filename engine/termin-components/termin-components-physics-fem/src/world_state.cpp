@@ -4,6 +4,8 @@
 #include <cmath>
 #include <limits>
 
+#include <components/kinematic_unit_component.hpp>
+
 namespace termin {
     FEMPhysicsTelemetry FEMPhysicsWorldComponent::telemetry() const noexcept {
         return {
@@ -215,6 +217,64 @@ namespace termin {
         return result;
     }
 
+    bool FEMPhysicsWorldComponent::runtime_topology_enabled() const noexcept {
+        for (const FEMRigidBodyComponent* body : bodies_) {
+            if (body == nullptr || !body->enabled()) {
+                return false;
+            }
+        }
+        for (const FEMFixedJointComponent* joint : fixed_joints_) {
+            if (joint == nullptr || !joint->enabled()) {
+                return false;
+            }
+        }
+        for (const FEMRevoluteJointComponent* joint : revolute_joints_) {
+            if (joint == nullptr || !joint->enabled()) {
+                return false;
+            }
+        }
+        for (const FEMArticulationComponent* articulation : articulations_) {
+            if (articulation == nullptr || !articulation->enabled() ||
+                (articulation->base_body_ != nullptr && !articulation->base_body_->enabled())) {
+                return false;
+            }
+            for (const FEMRigidBodyComponent* body : articulation->bodies_) {
+                // Direct ArticulationComponent units own their inertia and do
+                // not require a neighboring FEMRigidBodyComponent.
+                if (body != nullptr && !body->enabled()) {
+                    return false;
+                }
+            }
+            for (Entity joint_entity : articulation->joint_entities_) {
+                KinematicUnitComponent* joint =
+                    joint_entity.valid() ? joint_entity.get_component<KinematicUnitComponent>() : nullptr;
+                if (joint == nullptr || !joint->enabled()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    void FEMPhysicsWorldComponent::invalidate_simulation() noexcept {
+        initialized_ = false;
+        // Contributions borrow each other and scene-owned articulation data.
+        // Destroy the complete solver while every component link is still
+        // valid, then clear the non-owning links on those components.
+        system_ = physics_qopt::Multibody3DSystem();
+        clear_runtime_links();
+    }
+
+    void FEMPhysicsWorldComponent::shutdown_simulation() noexcept {
+        invalidate_simulation();
+        simulated_time_ = 0.0;
+        initial_total_energy_ = 0.0;
+        successful_steps_ = 0;
+        motor_work_ = 0.0;
+        contacts_ = nullptr;
+        warned_contact_colliders_.clear();
+    }
+
     void FEMPhysicsWorldComponent::clear_runtime_links() {
         for (FEMRigidBodyComponent* body : bodies_) {
             if (body != nullptr && body->world_ == this) {
@@ -278,7 +338,7 @@ namespace termin {
             for (FEMJointServoComponent* servo : articulation->servos_) {
                 if (servo != nullptr && servo->world_ == this) {
                     servo->world_ = nullptr;
-                    servo->joint_ = nullptr;
+                    servo->joint_entity_ = Entity();
                     servo->motor_component_ = nullptr;
                     servo->articulation_ = nullptr;
                     servo->position_effort_ = 0.0;
@@ -303,117 +363,32 @@ namespace termin {
     }
 
     void FEMPhysicsWorldComponent::detach(FEMArticulationComponent&) noexcept {
-        // Dynamics contributions borrow their Articulation3D from the scene
-        // component. Destroy the complete solver before that component can
-        // release its model; a partially detached finalized system is not a
-        // valid runtime state.
-        initialized_ = false;
-        system_ = physics_qopt::Multibody3DSystem();
-        clear_runtime_links();
+        invalidate_simulation();
     }
 
     void FEMPhysicsWorldComponent::detach(FEMArticulationMotorComponent& component) noexcept {
-        initialized_ = false;
-        for (FEMArticulationComponent* articulation : articulations_) {
-            if (articulation == nullptr) {
-                continue;
-            }
-            for (FEMArticulationMotorComponent*& motor : articulation->motors_) {
-                if (motor == &component) {
-                    motor = nullptr;
-                }
-            }
-            for (FEMJointServoComponent* servo : articulation->servos_) {
-                if (servo != nullptr && servo->motor_component_ == &component) {
-                    servo->world_ = nullptr;
-                    servo->joint_ = nullptr;
-                    servo->motor_component_ = nullptr;
-                    servo->articulation_ = nullptr;
-                    servo->position_effort_ = 0.0;
-                    servo->velocity_effort_ = 0.0;
-                    servo->integral_effort_ = 0.0;
-                    servo->commanded_effort_ = 0.0;
-                }
-            }
-        }
-        component.world_ = nullptr;
-        component.articulation_ = nullptr;
-        component.motor_ = nullptr;
+        (void)component;
+        invalidate_simulation();
     }
 
     void FEMPhysicsWorldComponent::detach(FEMJointServoComponent& component) noexcept {
-        initialized_ = false;
-        for (FEMArticulationComponent* articulation : articulations_) {
-            if (articulation == nullptr) {
-                continue;
-            }
-            for (FEMJointServoComponent*& servo : articulation->servos_) {
-                if (servo == &component) {
-                    servo = nullptr;
-                }
-            }
-        }
-        component.world_ = nullptr;
-        component.joint_ = nullptr;
-        component.motor_component_ = nullptr;
-        component.articulation_ = nullptr;
-        component.position_effort_ = 0.0;
-        component.velocity_effort_ = 0.0;
-        component.integral_effort_ = 0.0;
-        component.commanded_effort_ = 0.0;
+        (void)component;
+        invalidate_simulation();
     }
 
     void FEMPhysicsWorldComponent::detach(FEMRigidBodyComponent& component) noexcept {
-        initialized_ = false;
-        for (FEMRigidBodyComponent*& candidate : bodies_) {
-            if (candidate == &component) {
-                candidate = nullptr;
-            }
-        }
-        for (FEMArticulationComponent* articulation : articulations_) {
-            if (articulation == nullptr) {
-                continue;
-            }
-            if (articulation->base_body_ == &component) {
-                articulation->base_body_ = nullptr;
-            }
-            for (FEMRigidBodyComponent*& candidate : articulation->bodies_) {
-                if (candidate == &component) {
-                    candidate = nullptr;
-                }
-            }
-        }
-        component.body_ = nullptr;
-        component.force_ = nullptr;
-        component.articulation_ = nullptr;
-        component.articulation_unit_index_ = robotics::articulation_root_frame;
-        component.articulation_base_ = false;
-        component.world_ = nullptr;
+        (void)component;
+        invalidate_simulation();
     }
 
     void FEMPhysicsWorldComponent::detach(FEMFixedJointComponent& component) noexcept {
-        initialized_ = false;
-        for (FEMFixedJointComponent*& candidate : fixed_joints_) {
-            if (candidate == &component) {
-                candidate = nullptr;
-            }
-        }
-        component.joint_ = nullptr;
-        component.body_ = nullptr;
-        component.world_ = nullptr;
+        (void)component;
+        invalidate_simulation();
     }
 
     void FEMPhysicsWorldComponent::detach(FEMRevoluteJointComponent& component) noexcept {
-        initialized_ = false;
-        for (FEMRevoluteJointComponent*& candidate : revolute_joints_) {
-            if (candidate == &component) {
-                candidate = nullptr;
-            }
-        }
-        component.joint_ = nullptr;
-        component.body_a_ = nullptr;
-        component.body_b_ = nullptr;
-        component.world_ = nullptr;
+        (void)component;
+        invalidate_simulation();
     }
 
 } // namespace termin

@@ -1557,6 +1557,115 @@ TEST_CASE("scene articulation compiler rejects an implicit missing body") {
     scene.destroy();
 }
 
+TEST_CASE("FEM joint disable and removal invalidate the solver before rebuild") {
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("FEM joint lifecycle");
+
+    Entity body_entity = scene.create_entity("Body");
+    body_entity.add_component(new FEMRigidBodyComponent());
+
+    Entity joint_entity = scene.create_entity("Fixed Joint");
+    auto* joint = new FEMFixedJointComponent();
+    joint->body_entity_name = "Body";
+    joint_entity.add_component(joint);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = Vec3::zero();
+    world_entity.add_component(world);
+
+    world->start();
+    REQUIRE(world->telemetry().initialized);
+    REQUIRE(world->telemetry().joint_count == 1U);
+
+    joint->set_enabled(false);
+    world->fixed_update(0.001F);
+    CHECK(!world->telemetry().initialized);
+
+    world->start();
+    REQUIRE(world->telemetry().initialized);
+    CHECK(world->telemetry().joint_count == 0U);
+
+    joint->set_enabled(true);
+    world->start();
+    REQUIRE(world->telemetry().initialized);
+    REQUIRE(world->telemetry().joint_count == 1U);
+
+    joint_entity.remove_component(joint);
+    joint = nullptr;
+    CHECK(!world->telemetry().initialized);
+
+    world->start();
+    REQUIRE(world->telemetry().initialized);
+    CHECK(world->telemetry().joint_count == 0U);
+    world->fixed_update(0.001F);
+    CHECK(world->telemetry().successful_steps == 1U);
+
+    scene.destroy();
+}
+
+TEST_CASE("removing a reduced joint invalidates servo queries without stale pointers") {
+    using namespace termin;
+
+    register_test_component_types();
+    DoublePendulumScene fixture = make_double_pendulum_scene();
+    Entity joint_entity = fixture.joint_a->entity();
+
+    auto* motor = new FEMArticulationMotorComponent();
+    joint_entity.add_component(motor);
+    auto* servo = new FEMJointServoComponent();
+    servo->target_coordinate = 0.25;
+    joint_entity.add_component(servo);
+
+    fixture.world->start();
+    REQUIRE(fixture.world->telemetry().initialized);
+    REQUIRE(servo->initialized());
+    REQUIRE(std::isfinite(servo->position_error()));
+
+    joint_entity.remove_component(fixture.joint_a);
+    fixture.joint_a = nullptr;
+    CHECK(!servo->initialized());
+    CHECK(std::isnan(servo->position_error()));
+
+    fixture.world->fixed_update(0.001F);
+    CHECK(!fixture.world->telemetry().initialized);
+    fixture.scene.destroy();
+}
+
+TEST_CASE("removing an active FEM world releases component runtime links") {
+    using namespace termin;
+
+    register_test_component_types();
+    TcSceneRef scene = TcSceneRef::create("FEM world removal lifecycle");
+
+    Entity body_entity = scene.create_entity("Body");
+    auto* body = new FEMRigidBodyComponent();
+    body_entity.add_component(body);
+
+    Entity joint_entity = scene.create_entity("Fixed Joint");
+    auto* joint = new FEMFixedJointComponent();
+    joint->body_entity_name = "Body";
+    joint_entity.add_component(joint);
+
+    Entity world_entity = scene.create_entity("Physics World");
+    auto* world = new FEMPhysicsWorldComponent();
+    world->gravity = Vec3::zero();
+    world_entity.add_component(world);
+    world->start();
+    REQUIRE(body->initialized());
+    REQUIRE(world->telemetry().joint_count == 1U);
+
+    world_entity.remove_component(world);
+    world = nullptr;
+    CHECK(!body->initialized());
+
+    // The remaining components must no longer call through a dangling world
+    // pointer during the scene's on_destroy/on_removed shutdown sequence.
+    scene.destroy();
+}
+
 TEST_CASE("FEM joints publish registry-controlled debug geometry") {
     using namespace termin;
 
