@@ -8,6 +8,7 @@ Native UI является единственным frontend редактора.
 ## Актуальные документы
 
 - [Архитектура редактора](editor-architecture.md)
+- [Навигационный куб viewport](orientation-cube.md)
 - [Project build manifest](project-build-manifest.md)
 - [Editor MCP diagnostics](editor-mcp.md)
 - [Плоская модель Viewport / RenderTarget](rendering-flat-viewport-target-model.md)
@@ -21,6 +22,7 @@ Native UI является единственным frontend редактора.
 getting-started
 concepts
 editor-architecture
+orientation-cube
 project-build-manifest
 editor-mcp
 rendering-flat-viewport-target-model

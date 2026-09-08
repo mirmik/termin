@@ -14,6 +14,34 @@ namespace nb = nanobind;
 namespace termin {
 
     void bind_orbit_camera_controller(nb::module_& m) {
+        nb::enum_<ViewDirection>(m, "ViewDirection")
+            .value("NORTH", ViewDirection::North)
+            .value("SOUTH", ViewDirection::South)
+            .value("EAST", ViewDirection::East)
+            .value("WEST", ViewDirection::West)
+            .value("TOP", ViewDirection::Top)
+            .value("BOTTOM", ViewDirection::Bottom)
+            .value("NORTH_EAST", ViewDirection::NorthEast)
+            .value("NORTH_WEST", ViewDirection::NorthWest)
+            .value("SOUTH_EAST", ViewDirection::SouthEast)
+            .value("SOUTH_WEST", ViewDirection::SouthWest)
+            .value("TOP_NORTH", ViewDirection::TopNorth)
+            .value("TOP_SOUTH", ViewDirection::TopSouth)
+            .value("TOP_EAST", ViewDirection::TopEast)
+            .value("TOP_WEST", ViewDirection::TopWest)
+            .value("BOTTOM_NORTH", ViewDirection::BottomNorth)
+            .value("BOTTOM_SOUTH", ViewDirection::BottomSouth)
+            .value("BOTTOM_EAST", ViewDirection::BottomEast)
+            .value("BOTTOM_WEST", ViewDirection::BottomWest)
+            .value("TOP_NORTH_EAST", ViewDirection::TopNorthEast)
+            .value("TOP_NORTH_WEST", ViewDirection::TopNorthWest)
+            .value("TOP_SOUTH_EAST", ViewDirection::TopSouthEast)
+            .value("TOP_SOUTH_WEST", ViewDirection::TopSouthWest)
+            .value("BOTTOM_NORTH_EAST", ViewDirection::BottomNorthEast)
+            .value("BOTTOM_NORTH_WEST", ViewDirection::BottomNorthWest)
+            .value("BOTTOM_SOUTH_EAST", ViewDirection::BottomSouthEast)
+            .value("BOTTOM_SOUTH_WEST", ViewDirection::BottomSouthWest);
+
         nb::class_<OrbitCameraController, CxxComponent>(m, "OrbitCameraController")
             .def(
                 "__init__",
@@ -33,6 +61,8 @@ namespace termin {
             .def_rw("pan_mouse_button", &OrbitCameraController::pan_mouse_button)
 
             // Camera operations
+            .def("snap_view", &OrbitCameraController::snap_view, nb::arg("direction"),
+                 "Snap to a camera-side cube direction, preserving target, radius and projection")
             .def("orbit",
                  &OrbitCameraController::orbit,
                  nb::arg("delta_azimuth"),

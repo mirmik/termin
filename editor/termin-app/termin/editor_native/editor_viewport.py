@@ -64,6 +64,7 @@ class NativeEditorViewport:
         self._resize_connection = None
         self._ui_overlays: dict[str, object] = {}
         self._camera_overlay = None
+        self._orientation_cube = None
         self._overlay_drawer: Callable[[], bool] | None = None
         self._closed = False
         from termin.editor_core.viewport_geometry_controller import (
@@ -183,6 +184,9 @@ class NativeEditorViewport:
             )
 
             runtime._camera_overlay = NativeEditorCameraOverlayProjection.create(runtime)
+            from termin.editor_native.orientation_cube import NativeOrientationCube
+
+            runtime._orientation_cube = NativeOrientationCube(runtime)
         except Exception:
             _logger.exception("Native editor camera controls failed to initialize")
             runtime.close()
@@ -293,9 +297,13 @@ class NativeEditorViewport:
             raise RuntimeError("failed to rebind editor viewport input manager")
         if self._camera_overlay is not None:
             self._camera_overlay.rebind_camera()
+        if self._orientation_cube is not None:
+            self._orientation_cube.rebind_camera()
 
     def unbind_camera_overlay(self) -> None:
         """Release scene-bound overlay capabilities before a scene switch."""
+        if self._orientation_cube is not None:
+            self._orientation_cube.unbind_camera()
         if self._camera_overlay is not None:
             self._camera_overlay.unbind_camera()
 
@@ -310,6 +318,9 @@ class NativeEditorViewport:
         from termin.editor._editor_native import EditorInteractionSystem
 
         self._overlay_drawer = None
+        if self._orientation_cube is not None:
+            self._orientation_cube.close()
+            self._orientation_cube = None
         if self._camera_overlay is not None:
             self._camera_overlay.close()
             self._camera_overlay = None

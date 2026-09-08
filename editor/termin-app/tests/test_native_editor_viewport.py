@@ -256,6 +256,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     import termin.editor._editor_native as editor_native
     import termin.editor_core.editor_scene_attachment as attachment_module
     import termin.editor_native.camera_overlay as camera_overlay_module
+    import termin.editor_native.orientation_cube as orientation_cube_module
 
     class CameraOverlay:
         instances = []
@@ -306,6 +307,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
         "NativeEditorCameraOverlayProjection",
         CameraOverlay,
     )
+    monkeypatch.setattr(orientation_cube_module, "NativeOrientationCube", CameraOverlay)
     _Attachment.instances.clear()
     _Interaction._instance = None
 
