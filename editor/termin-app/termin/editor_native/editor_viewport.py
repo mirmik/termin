@@ -319,9 +319,9 @@ class NativeEditorViewport:
             if not self.widget.disconnect_before_resize(self._resize_connection):
                 _logger.error("Native editor viewport resize handler was already detached")
             self._resize_connection = None
+        self.input_manager.detach()
         self.interaction.clear_callbacks()
         self.widget.detach_surface()
-        self.input_manager.detach()
         self.attachment.close()
         self.rendering_manager.remove_editor_display(self.display)
         self.display.destroy()

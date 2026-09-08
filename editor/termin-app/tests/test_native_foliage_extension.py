@@ -107,10 +107,80 @@ def test_native_component_extension_context_dispatches_latest_handler_first():
     assert context.dispatch_viewport_click(object())
     assert calls == ["second", "first"]
     calls.clear()
-    assert context.dispatch_viewport_pointer(object())
+    assert context.dispatch_viewport_pointer(SimpleNamespace(phase="down", button=0))
     assert calls == ["second", "first"]
     context.remove_viewport_pointer_handler(second)
     context.remove_viewport_pointer_handler(first)
     context.remove_viewport_click_interceptor(second)
     context.remove_viewport_click_interceptor(first)
+    tc_ui_document_destroy(document)
+
+
+def test_native_component_extension_context_retains_pointer_owner_until_terminal_event():
+    document = tc_ui_document_create()
+    context = NativeComponentExtensionContext(
+        engine=object(),
+        document=document,
+        request_render=lambda: None,
+        resource_manager=object(),
+    )
+    calls: list[tuple[str, str, int]] = []
+    late_enabled = False
+
+    def owner(event: object) -> bool:
+        calls.append(("owner", event.phase, event.button))
+        return event.phase == "down"
+
+    def late(event: object) -> bool:
+        calls.append(("late", event.phase, event.button))
+        return late_enabled
+
+    context.add_viewport_pointer_handler(owner)
+    context.add_viewport_pointer_handler(late)
+    down = SimpleNamespace(phase="down", button=0)
+    move = SimpleNamespace(phase="move", button=-1)
+    wrong_up = SimpleNamespace(phase="up", button=1)
+    up = SimpleNamespace(phase="up", button=0)
+
+    assert context.dispatch_viewport_pointer(down)
+    late_enabled = True
+    assert context.dispatch_viewport_pointer(move)
+    assert context.dispatch_viewport_pointer(wrong_up)
+    assert context.dispatch_viewport_pointer(up)
+    assert calls == [
+        ("late", "down", 0),
+        ("owner", "down", 0),
+        ("owner", "move", -1),
+        ("owner", "up", 1),
+        ("owner", "up", 0),
+    ]
+
+    assert context.dispatch_viewport_pointer(down)
+    assert context.dispatch_viewport_pointer(SimpleNamespace(phase="cancel", button=0))
+    assert calls[-2:] == [("late", "down", 0), ("late", "cancel", 0)]
+    tc_ui_document_destroy(document)
+
+
+def test_native_component_extension_context_retains_provisional_owner_after_down_failure():
+    document = tc_ui_document_create()
+    context = NativeComponentExtensionContext(
+        engine=object(),
+        document=document,
+        request_render=lambda: None,
+        resource_manager=object(),
+    )
+    phases: list[str] = []
+
+    def failing_owner(event: object) -> bool:
+        phases.append(event.phase)
+        if event.phase == "down":
+            raise RuntimeError("expected down failure")
+        return True
+
+    context.add_viewport_pointer_handler(failing_owner)
+    with pytest.raises(RuntimeError, match="expected down failure"):
+        context.dispatch_viewport_pointer(SimpleNamespace(phase="down", button=0))
+    assert context.dispatch_viewport_pointer(SimpleNamespace(phase="cancel", button=0))
+    assert phases == ["down", "cancel"]
+    assert context._pointer_owner is None
     tc_ui_document_destroy(document)

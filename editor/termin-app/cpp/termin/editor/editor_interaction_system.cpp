@@ -25,6 +25,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 
 namespace termin {
 
@@ -146,7 +147,7 @@ namespace termin {
     }
 
     EditorInteractionSystem::~EditorInteractionSystem() {
-        _cancel_overlay_pointer_state(false, "editor interaction shutdown");
+        _cancel_pointer_sequence(false, "editor interaction shutdown");
         _clear_component_visual_gizmos();
         _destroy_transform_gizmo_visual();
 
@@ -169,6 +170,7 @@ namespace termin {
     }
 
     void EditorInteractionSystem::clear_callbacks() {
+        _cancel_pointer_sequence(false, "editor callback shutdown");
         selection.on_selection_changed = nullptr;
         selection.on_hover_changed = nullptr;
         on_request_update = nullptr;
@@ -184,6 +186,12 @@ namespace termin {
 
     void EditorInteractionSystem::set_gizmo_target(Entity entity) {
         const std::uint64_t transition_revision = ++_overlay_transition_revision;
+        if (_pointer_sequence_owner == PointerSequenceOwner::Overlay) {
+            if (_pointer_sequence_button)
+                _cancelled_pointer_buttons.insert(*_pointer_sequence_button);
+            _pointer_sequence_owner = PointerSequenceOwner::None;
+            _pointer_sequence_button.reset();
+        }
         _cancel_overlay_pointer_state(true, "gizmo target change");
         if (_overlay_transition_revision != transition_revision)
             return;
@@ -267,14 +275,8 @@ namespace termin {
     void EditorInteractionSystem::_cancel_overlay_pointer_state(bool quarantine_active_sequence, const char* context) {
         auto& interaction = _overlay_scene.interaction();
         const bool active = interaction.pressed_hit(1).has_value() || interaction.captured_hit(1).has_value();
-        // Publish ownership termination before callbacks. A Cancel handler may
-        // synchronously select another gizmo target and must observe the old
-        // sequence as already finished.
-        if (active) {
-            _overlay_pointer_cancelled_until_up = quarantine_active_sequence;
-        } else if (!quarantine_active_sequence) {
-            _overlay_pointer_cancelled_until_up = false;
-        }
+        if (active && quarantine_active_sequence && _pointer_sequence_button)
+            _cancelled_pointer_buttons.insert(*_pointer_sequence_button);
 
         // Always invalidate the interaction epoch. During Enter the hover map
         // is not published yet, but a visual rebuild still has to stop that
@@ -286,11 +288,36 @@ namespace termin {
         }
     }
 
+    void EditorInteractionSystem::_cancel_pointer_sequence(bool quarantine_active_sequence, const char* context) {
+        const PointerSequenceOwner owner = _pointer_sequence_owner;
+        const std::optional<int> button = _pointer_sequence_button;
+
+        // Publish the terminal state before callbacks. Cancel handlers are
+        // allowed to rebuild tools or synchronously start unrelated work.
+        _pointer_sequence_owner = PointerSequenceOwner::None;
+        _pointer_sequence_button.reset();
+        if (quarantine_active_sequence && button)
+            _cancelled_pointer_buttons.insert(*button);
+        else if (!quarantine_active_sequence)
+            _cancelled_pointer_buttons.clear();
+
+        _has_press = false;
+        _pending_press.valid = false;
+        _pending_release.valid = false;
+        _pending_hover.valid = false;
+
+        if (owner == PointerSequenceOwner::ViewportHandler) {
+            _dispatch_viewport_pointer(ViewportPointerEvent{
+                "cancel", _last_pointer_screen, Vec2f{0.0f, 0.0f}, button.value_or(-1), -1, _last_pointer_mods});
+        }
+        _cancel_overlay_pointer_state(false, context);
+    }
+
     // ============================================================================
     // Events from EditorViewportInputManager
     // ============================================================================
 
-    void EditorInteractionSystem::on_mouse_button(int button,
+    bool EditorInteractionSystem::on_mouse_button(int button,
                                                   int action,
                                                   int mods,
                                                   uint32_t click_count,
@@ -298,57 +325,141 @@ namespace termin {
                                                   float y,
                                                   tc_viewport_handle vp,
                                                   tc_display_handle display) {
-        const auto overlay_kind = action == TC_INPUT_PRESS ? visual::PointerEventKind3D::Down
-                                                           : visual::PointerEventKind3D::Up;
-        if (_route_overlay_pointer(overlay_kind, Vec2f{x, y}, button, vp)) {
-            _request_update();
-            return;
+        _last_pointer_screen = Vec2f{x, y};
+        _last_pointer_mods = mods;
+        const bool is_down = action == TC_INPUT_PRESS;
+
+        if (_cancelled_pointer_buttons.contains(button)) {
+            if (is_down) {
+                tc_log(TC_LOG_WARN,
+                       "[EditorInteractionSystem] received a new Down before the cancelled pointer sequence's Up; "
+                       "ending stale event suppression for button %d",
+                       button);
+                _cancelled_pointer_buttons.erase(button);
+            } else {
+                _cancelled_pointer_buttons.erase(button);
+                return true;
+            }
         }
-        const std::string phase = action == TC_INPUT_PRESS ? "down" : "up";
-        if (_dispatch_viewport_pointer(
-                ViewportPointerEvent{phase, Vec2f{x, y}, Vec2f{0.0f, 0.0f}, button, action, mods})) {
+
+        const auto overlay_kind =
+            action == TC_INPUT_PRESS ? visual::PointerEventKind3D::Down : visual::PointerEventKind3D::Up;
+        const ViewportPointerEvent viewport_event{
+            is_down ? "down" : "up", Vec2f{x, y}, Vec2f{0.0f, 0.0f}, button, action, mods};
+
+        if (_pointer_sequence_owner != PointerSequenceOwner::None) {
+            if (!_pointer_sequence_button || button != *_pointer_sequence_button)
+                return true;
+
+            const PointerSequenceOwner owner = _pointer_sequence_owner;
+            if (!is_down) {
+                _pointer_sequence_owner = PointerSequenceOwner::None;
+                _pointer_sequence_button.reset();
+            }
+            _route_owned_pointer_button(owner, overlay_kind, viewport_event, vp, display);
             _request_update();
-            return;
+            return true;
+        }
+
+        if (!is_down)
+            return false;
+
+        if (_route_overlay_pointer(overlay_kind, Vec2f{x, y}, button, vp)) {
+            const bool overlay_active = _overlay_scene.interaction().pressed_hit(1).has_value() ||
+                                        _overlay_scene.interaction().captured_hit(1).has_value();
+            if (overlay_active) {
+                _pointer_sequence_owner = PointerSequenceOwner::Overlay;
+                _pointer_sequence_button = button;
+            } else {
+                _cancelled_pointer_buttons.insert(button);
+            }
+            _request_update();
+            return true;
+        }
+
+        bool callback_failed = false;
+        if (_dispatch_viewport_pointer(viewport_event, &callback_failed)) {
+            _pointer_sequence_owner = PointerSequenceOwner::ViewportHandler;
+            _pointer_sequence_button = button;
+            _request_update();
+            return true;
+        }
+        if (callback_failed) {
+            _dispatch_viewport_pointer(
+                ViewportPointerEvent{"cancel", Vec2f{x, y}, Vec2f{0.0f, 0.0f}, button, -1, mods});
+            _cancelled_pointer_buttons.insert(button);
+            return true;
         }
 
         if (button == tcbase::mouse_button_value(tcbase::MouseButton::LEFT)) {
-            if (action == TC_INPUT_PRESS) {
-                _pending_press = {Vec2f{x, y}, vp, display, true};
+            _pointer_sequence_owner = PointerSequenceOwner::Picking;
+            _pointer_sequence_button = button;
+            _pending_press = {Vec2f{x, y}, vp, display, true};
 
-                if (click_count == 2) {
-                    _handle_double_click(Vec2f{x, y}, vp, display);
-                }
-            }
-            if (action == TC_INPUT_RELEASE) {
-                _pending_release = {Vec2f{x, y}, vp, display, true};
-            }
+            if (click_count == 2)
+                _handle_double_click(Vec2f{x, y}, vp, display);
+
+            _request_update();
+            return true;
         }
 
         _request_update();
+        return false;
     }
 
-    void EditorInteractionSystem::on_mouse_move(
+    bool EditorInteractionSystem::on_mouse_move(
         float x, float y, float dx, float dy, tc_viewport_handle vp, tc_display_handle display) {
+        _last_pointer_screen = Vec2f{x, y};
+        if (_pointer_sequence_owner == PointerSequenceOwner::Overlay) {
+            const bool was_active = _overlay_scene.interaction().pressed_hit(1).has_value() ||
+                                    _overlay_scene.interaction().captured_hit(1).has_value();
+            _route_overlay_pointer(visual::PointerEventKind3D::Move, Vec2f{x, y}, 0, vp);
+            const bool remains_active = _overlay_scene.interaction().pressed_hit(1).has_value() ||
+                                        _overlay_scene.interaction().captured_hit(1).has_value();
+            if (was_active && !remains_active) {
+                if (_pointer_sequence_button)
+                    _cancelled_pointer_buttons.insert(*_pointer_sequence_button);
+                _pointer_sequence_owner = PointerSequenceOwner::None;
+                _pointer_sequence_button.reset();
+            }
+            _request_update();
+            return true;
+        }
+        if (_pointer_sequence_owner == PointerSequenceOwner::ViewportHandler) {
+            bool callback_failed = false;
+            _dispatch_viewport_pointer(
+                ViewportPointerEvent{"move", Vec2f{x, y}, Vec2f{dx, dy}, -1, -1, _last_pointer_mods}, &callback_failed);
+            if (callback_failed)
+                _cancel_pointer_sequence(true, "viewport pointer callback failure");
+            _request_update();
+            return true;
+        }
+        if (_pointer_sequence_owner == PointerSequenceOwner::Picking) {
+            _pending_hover = {Vec2f{x, y}, vp, display, true};
+            _request_update();
+            return true;
+        }
+
+        if (!_cancelled_pointer_buttons.empty())
+            return true;
+
         if (_route_overlay_pointer(visual::PointerEventKind3D::Move, Vec2f{x, y}, 0, vp)) {
             _request_update();
-            return;
+            return true;
         }
         if (_dispatch_viewport_pointer(ViewportPointerEvent{"move", Vec2f{x, y}, Vec2f{dx, dy}, -1, -1, 0})) {
             _request_update();
-            return;
+            return true;
         }
 
         _pending_hover = {Vec2f{x, y}, vp, display, true};
 
         _request_update();
+        return false;
     }
 
     void EditorInteractionSystem::on_focus_lost() {
-        _cancel_overlay_pointer_state(true, "viewport focus loss");
-        _has_press = false;
-        _pending_press.valid = false;
-        _pending_release.valid = false;
-        _pending_hover.valid = false;
+        _cancel_pointer_sequence(true, "viewport focus loss");
         _request_update();
     }
 
@@ -450,9 +561,9 @@ namespace termin {
     }
 
     void EditorInteractionSystem::render_overlays(ImmediateRenderer* renderer,
-                                                   tgfx::RenderContext2* render_context,
-                                                   const Mat44f& view,
-                                                   const Mat44f& projection) {
+                                                  tgfx::RenderContext2* render_context,
+                                                  const Mat44f& view,
+                                                  const Mat44f& projection) {
         const int width = render_context ? render_context->viewport_width() : 0;
         const int height = render_context ? render_context->viewport_height() : 0;
         if (_overlay_scene.scene().size() > 0 &&
@@ -551,8 +662,46 @@ namespace termin {
         return on_entity_click(event);
     }
 
-    bool EditorInteractionSystem::_dispatch_viewport_pointer(const ViewportPointerEvent& event) {
-        return on_viewport_pointer_event ? on_viewport_pointer_event(event) : false;
+    bool EditorInteractionSystem::_dispatch_viewport_pointer(const ViewportPointerEvent& event, bool* callback_failed) {
+        if (callback_failed)
+            *callback_failed = false;
+        if (!on_viewport_pointer_event)
+            return false;
+        try {
+            return on_viewport_pointer_event(event);
+        } catch (const std::exception& error) {
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] viewport pointer '%s' callback failed: %s",
+                   event.phase.c_str(),
+                   error.what());
+        } catch (...) {
+            tc_log(TC_LOG_ERROR,
+                   "[EditorInteractionSystem] viewport pointer '%s' callback failed with an unknown exception",
+                   event.phase.c_str());
+        }
+        if (callback_failed)
+            *callback_failed = true;
+        return false;
+    }
+
+    bool EditorInteractionSystem::_route_owned_pointer_button(PointerSequenceOwner owner,
+                                                              visual::PointerEventKind3D overlay_kind,
+                                                              const ViewportPointerEvent& event,
+                                                              tc_viewport_handle viewport,
+                                                              tc_display_handle display) {
+        switch (owner) {
+        case PointerSequenceOwner::Overlay:
+            return _route_overlay_pointer(overlay_kind, event.screen, event.button, viewport);
+        case PointerSequenceOwner::ViewportHandler:
+            return _dispatch_viewport_pointer(event);
+        case PointerSequenceOwner::Picking:
+            if (event.phase == "up")
+                _pending_release = {event.screen, viewport, display, true};
+            return true;
+        case PointerSequenceOwner::None:
+            return false;
+        }
+        return false;
     }
 
     bool EditorInteractionSystem::_route_overlay_pointer(visual::PointerEventKind3D kind,
@@ -560,19 +709,6 @@ namespace termin {
                                                          int button,
                                                          tc_viewport_handle viewport) {
         constexpr visual::PointerId3D overlay_pointer = 1;
-        if (_overlay_pointer_cancelled_until_up) {
-            if (kind == visual::PointerEventKind3D::Down) {
-                tc_log(TC_LOG_WARN,
-                       "[EditorInteractionSystem] received a new overlay Down before the cancelled sequence's Up; "
-                       "ending stale event suppression");
-                _overlay_pointer_cancelled_until_up = false;
-            } else {
-                if (kind == visual::PointerEventKind3D::Up || kind == visual::PointerEventKind3D::Cancel)
-                    _overlay_pointer_cancelled_until_up = false;
-                return true;
-            }
-        }
-
         auto& interaction = _overlay_scene.interaction();
         const auto reconcile_failed_ray = [&](const char* reason) {
             const bool active = interaction.pressed_hit(overlay_pointer).has_value() ||
@@ -595,8 +731,6 @@ namespace termin {
                 tc_log(TC_LOG_ERROR,
                        "[EditorInteractionSystem] overlay cancellation callback failed after screen ray loss");
             }
-            _overlay_pointer_cancelled_until_up =
-                active && kind != visual::PointerEventKind3D::Up && kind != visual::PointerEventKind3D::Cancel;
             return active;
         };
 
@@ -613,9 +747,7 @@ namespace termin {
             // visual/target replacement from that callback invalidates the
             // route, so explicitly retain ownership of the physical tail.
             if (kind == visual::PointerEventKind3D::Down) {
-                _overlay_pointer_cancelled_until_up = true;
-            } else if (kind == visual::PointerEventKind3D::Up || kind == visual::PointerEventKind3D::Cancel) {
-                _overlay_pointer_cancelled_until_up = false;
+                _cancelled_pointer_buttons.insert(button);
             }
             return true;
         }

@@ -30,6 +30,8 @@ class NativeComponentExtensionContext:
     viewport_geometry: object | None = None
     _click_interceptors: list[Callable[[object], bool]] = field(default_factory=list)
     _pointer_handlers: list[Callable[[object], bool]] = field(default_factory=list)
+    _pointer_owner: Callable[[object], bool] | None = None
+    _pointer_owner_button: int | None = None
     _key_handlers: list[Callable[[object], bool]] = field(default_factory=list)
     _overlay_drawers: list[Callable[[], None]] = field(default_factory=list)
     _active_tools: int = 0
@@ -52,6 +54,9 @@ class NativeComponentExtensionContext:
 
     def remove_viewport_pointer_handler(self, callback: Callable[[object], bool]) -> None:
         self._remove_callback(self._pointer_handlers, callback, "pointer handler")
+        if self._pointer_owner == callback:
+            self._pointer_owner = None
+            self._pointer_owner_button = None
 
     def add_viewport_overlay_drawer(self, callback: Callable[[], None]) -> None:
         self._overlay_drawers.append(callback)
@@ -92,7 +97,38 @@ class NativeComponentExtensionContext:
         return any(callback(event) for callback in reversed(tuple(self._key_handlers)))
 
     def dispatch_viewport_pointer(self, event: object) -> bool:
-        return any(callback(event) for callback in reversed(tuple(self._pointer_handlers)))
+        phase = event.phase
+        button = int(event.button)
+        owner = self._pointer_owner
+
+        if owner is not None:
+            terminal = phase == "cancel" or (
+                phase == "up" and button == self._pointer_owner_button
+            )
+            if terminal:
+                # Publish termination before the callback so reentrant detach or
+                # registration cannot retain or replace the old sequence.
+                self._pointer_owner = None
+                self._pointer_owner_button = None
+            owner(event)
+            return True
+
+        if phase in ("up", "cancel"):
+            return False
+        if phase != "down":
+            return any(callback(event) for callback in reversed(tuple(self._pointer_handlers)))
+
+        for callback in reversed(tuple(self._pointer_handlers)):
+            # Install a provisional owner before entering extension code. If
+            # the callback raises after starting a tool, the native coordinator
+            # can still deliver its terminal Cancel to this exact callback.
+            self._pointer_owner = callback
+            self._pointer_owner_button = button
+            if callback(event):
+                return True
+            self._pointer_owner = None
+            self._pointer_owner_button = None
+        return False
 
     def draw_viewport_overlays(self) -> bool:
         for callback in tuple(self._overlay_drawers):

@@ -17,6 +17,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 namespace termin {
@@ -99,8 +100,7 @@ namespace {
         std::shared_ptr<RecordingGizmoState> state;
     };
 
-    class TestOverlayItem final : public termin::visual::NativeVisualItem3D,
-                                  public termin::EditorOverlayDrawable3D {
+    class TestOverlayItem final : public termin::visual::NativeVisualItem3D, public termin::EditorOverlayDrawable3D {
     public:
         TestOverlayItem(double distance, std::uint64_t part)
             : NativeVisualItem3D("termin.editor.test.OverlayItem3D"),
@@ -111,8 +111,7 @@ namespace {
             return termin::visual::VisualBounds3D{{-1.0, -1.0, -1.0}, {1.0, 1.0, 1.0}};
         }
 
-        std::optional<termin::visual::HitCandidate3D>
-        hit_test(const termin::visual::HitTestContext3D&) const override {
+        std::optional<termin::visual::HitCandidate3D> hit_test(const termin::visual::HitTestContext3D&) const override {
             if (!hittable)
                 return std::nullopt;
             return termin::visual::HitCandidate3D{distance, part};
@@ -531,6 +530,67 @@ TEST_CASE("Editor interaction focus loss cancels an active overlay capture") {
     CHECK_EQ(viewport_events.front(), "move");
 }
 
+TEST_CASE("Editor viewport handler owns its initiating button through cancel") {
+    termin::EditorInteractionSystem interaction;
+    std::vector<std::pair<std::string, int>> events;
+    interaction.on_viewport_pointer_event = [&](const termin::ViewportPointerEvent& event) {
+        events.emplace_back(event.phase, event.button);
+        return event.phase == "down";
+    };
+
+    CHECK(interaction.on_mouse_button(
+        0, TC_INPUT_PRESS, 0, 1, 10.0f, 20.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    CHECK(interaction.on_mouse_move(12.0f, 23.0f, 2.0f, 3.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+
+    // A chord release is neither terminal nor delivered as the initiating
+    // button's Up.
+    CHECK(interaction.on_mouse_button(
+        1, TC_INPUT_RELEASE, 0, 1, 12.0f, 23.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    REQUIRE_EQ(events.size(), 2);
+    CHECK(events[0] == std::make_pair(std::string("down"), 0));
+    CHECK(events[1] == std::make_pair(std::string("move"), -1));
+
+    interaction.on_focus_lost();
+    REQUIRE_EQ(events.size(), 3);
+    CHECK(events.back() == std::make_pair(std::string("cancel"), 0));
+
+    // The physical tail remains contained, and an unrelated button cannot
+    // release the initiating button's quarantine.
+    CHECK(interaction.on_mouse_move(15.0f, 25.0f, 3.0f, 2.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    CHECK_FALSE(interaction.on_mouse_button(
+        1, TC_INPUT_RELEASE, 0, 1, 15.0f, 25.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    CHECK(interaction.on_mouse_button(
+        0, TC_INPUT_RELEASE, 0, 1, 15.0f, 25.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    CHECK_EQ(events.size(), 3);
+
+    CHECK(interaction.on_mouse_button(
+        0, TC_INPUT_PRESS, 0, 1, 30.0f, 40.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    CHECK(interaction.on_mouse_button(
+        0, TC_INPUT_RELEASE, 0, 1, 30.0f, 40.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    REQUIRE_EQ(events.size(), 5);
+    CHECK(events[3] == std::make_pair(std::string("down"), 0));
+    CHECK(events[4] == std::make_pair(std::string("up"), 0));
+}
+
+TEST_CASE("Editor viewport callback failure terminates and quarantines its sequence") {
+    termin::EditorInteractionSystem interaction;
+    std::vector<std::string> phases;
+    interaction.on_viewport_pointer_event = [&](const termin::ViewportPointerEvent& event) {
+        phases.push_back(event.phase);
+        if (event.phase == "move")
+            throw std::runtime_error("expected viewport callback failure");
+        return event.phase == "down" || event.phase == "cancel";
+    };
+
+    CHECK(interaction.on_mouse_button(
+        0, TC_INPUT_PRESS, 0, 1, 1.0f, 2.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    CHECK(interaction.on_mouse_move(2.0f, 3.0f, 1.0f, 1.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    REQUIRE(phases == std::vector<std::string>({"down", "move", "cancel"}));
+    CHECK(interaction.on_mouse_button(
+        0, TC_INPUT_RELEASE, 0, 1, 2.0f, 3.0f, TC_VIEWPORT_HANDLE_INVALID, TC_DISPLAY_HANDLE_INVALID));
+    CHECK_EQ(phases.size(), 3);
+}
+
 TEST_CASE("Editor gizmo target change invalidates an in-flight overlay Enter") {
     tc_scene_handle scene = tc_scene_new_named("editor-overlay-enter-reentrant-test");
     REQUIRE(tc_scene_alive(scene));
@@ -630,15 +690,13 @@ TEST_CASE("TransformGizmo drag is captured and cancelled by the editor overlay")
     interaction.set_gizmo_target(target);
 
     const termin::Ray3 press_ray{{0.5, 0.0, -0.2}, {0.0, 0.0, 1.0}};
-    REQUIRE(interaction.overlay_scene().route_pointer(
-        termin::visual::PointerEventKind3D::Down, press_ray, 1));
+    REQUIRE(interaction.overlay_scene().route_pointer(termin::visual::PointerEventKind3D::Down, press_ray, 1));
     REQUIRE(interaction.overlay_scene().interaction().captured_hit(1).has_value());
     CHECK_EQ(interaction.overlay_scene().interaction().captured_hit(1)->part,
              static_cast<std::uint64_t>(termin::TransformElement::TRANSLATE_X));
 
     const termin::Ray3 drag_ray{{0.8, 0.0, -0.2}, {0.0, 0.0, 1.0}};
-    REQUIRE(interaction.overlay_scene().route_pointer(
-        termin::visual::PointerEventKind3D::Move, drag_ray, 1));
+    REQUIRE(interaction.overlay_scene().route_pointer(termin::visual::PointerEventKind3D::Move, drag_ray, 1));
     CHECK(target.transform().global_position().x > 0.2);
 
     CHECK_FALSE(interaction.overlay_scene().interaction().cancel_all(interaction.overlay_scene().scene()));
@@ -663,11 +721,9 @@ TEST_CASE("Gizmo visual item routes stable collider parts through retained inter
     CHECK_EQ(state->clicks.back(), 1);
 
     // Capture retains part 1 even while the current ray misses every collider.
-    CHECK(overlay.route_pointer(
-        termin::visual::PointerEventKind3D::Move, test_ray_from(0.0, 5.0), 1));
+    CHECK(overlay.route_pointer(termin::visual::PointerEventKind3D::Move, test_ray_from(0.0, 5.0), 1));
     CHECK_EQ(state->drags, 1);
-    CHECK(overlay.route_pointer(
-        termin::visual::PointerEventKind3D::Up, test_ray_from(0.0, 5.0), 1));
+    CHECK(overlay.route_pointer(termin::visual::PointerEventKind3D::Up, test_ray_from(0.0, 5.0), 1));
     CHECK_EQ(state->releases.back(), 1);
 
     CHECK(overlay.route_pointer(termin::visual::PointerEventKind3D::Move, test_ray_from(7.0)));
@@ -699,15 +755,12 @@ TEST_CASE("OffMeshLink provider contributes two safe retained endpoint parts") {
     REQUIRE(static_cast<bool>(contribution.bind_controller));
     contribution.bind_controller(overlay.interaction(), *handle);
 
-    CHECK(overlay.route_pointer(
-        termin::visual::PointerEventKind3D::Down, {{-2.0, 0.0, 0.0}, {1.0, 0.0, 0.0}}, 1));
+    CHECK(overlay.route_pointer(termin::visual::PointerEventKind3D::Down, {{-2.0, 0.0, 0.0}, {1.0, 0.0, 0.0}}, 1));
     CHECK(transform_gizmo.has_target());
     CHECK(overlay.interaction().captured_hit(1)->part == 1);
-    CHECK(overlay.route_pointer(
-        termin::visual::PointerEventKind3D::Up, {{-2.0, 0.0, 0.0}, {1.0, 0.0, 0.0}}, 1));
+    CHECK(overlay.route_pointer(termin::visual::PointerEventKind3D::Up, {{-2.0, 0.0, 0.0}, {1.0, 0.0, 0.0}}, 1));
 
-    CHECK(overlay.route_pointer(
-        termin::visual::PointerEventKind3D::Down, {{-2.0, 1.0, -1.0}, {1.0, 0.0, 0.0}}, 1));
+    CHECK(overlay.route_pointer(termin::visual::PointerEventKind3D::Down, {{-2.0, 1.0, -1.0}, {1.0, 0.0, 0.0}}, 1));
     CHECK(transform_gizmo.has_target());
     CHECK(overlay.interaction().captured_hit(1)->part == 2);
 
@@ -716,8 +769,7 @@ TEST_CASE("OffMeshLink provider contributes two safe retained endpoint parts") {
     tc_component* component = link->c_component();
     entity.remove_component_ptr(component);
     CHECK_FALSE(transform_gizmo.has_target());
-    CHECK(overlay.route_pointer(
-        termin::visual::PointerEventKind3D::Move, {{-2.0, 1.0, -1.0}, {1.0, 0.0, 0.0}}, 1));
+    CHECK(overlay.route_pointer(termin::visual::PointerEventKind3D::Move, {{-2.0, 1.0, -1.0}, {1.0, 0.0, 0.0}}, 1));
     overlay.clear();
     tc_entity_free(entity.handle());
 }

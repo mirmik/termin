@@ -151,6 +151,8 @@ class ProceduralMeshViewportInteraction:
             )
             return True
         if phase == "up":
+            if button != MouseButton.LEFT.value:
+                return self._tool_active
             wall_drag = self._wall_height_drag
             if wall_drag is not None:
                 self._drag_wall_height_to_viewport(x, y)
@@ -174,6 +176,15 @@ class ProceduralMeshViewportInteraction:
                 "[ProceduralMeshEditor] sketch point drag finished "
                 f"kind='{drag.kind}' item='{drag.item_id}' index={drag.point_index}"
             )
+            return True
+        if phase == "cancel":
+            if self._wall_height_drag is None and self._sketch_point_drag is None:
+                return False
+            self._wall_height_drag = None
+            self._sketch_point_drag = None
+            self._end_tool()
+            self._model.set_status("Viewport drag cancelled")
+            log.info("[ProceduralMeshEditor] viewport drag cancelled")
             return True
         return False
 

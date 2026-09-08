@@ -13,6 +13,8 @@
 #include <tgfx2/immediate_renderer.hpp>
 #include <tgfx2/render_context.hpp>
 
+#include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace nb = nanobind;
@@ -251,7 +253,13 @@ namespace termin {
                     nb::callable fn = nb::cast<nb::callable>(cb);
                     s.on_viewport_pointer_event = [fn = std::move(fn)](const ViewportPointerEvent& event) -> bool {
                         nb::gil_scoped_acquire gil;
-                        return nb::cast<bool>(fn(event));
+                        try {
+                            return nb::cast<bool>(fn(event));
+                        } catch (const nb::python_error& error) {
+                            const std::string message = error.what();
+                            PyErr_Clear();
+                            throw std::runtime_error(message);
+                        }
                     };
                 });
     }

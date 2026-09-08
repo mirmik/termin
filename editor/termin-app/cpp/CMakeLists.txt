@@ -326,6 +326,7 @@ if(TERMIN_BUILD_TESTS)
         termin/editor/component_editor_visual.cpp
         termin/editor/camera_frustum_debug_gizmo.cpp
         termin/editor/editor_interaction_system.cpp
+        termin/editor/editor_viewport_input_manager.cpp
         termin/editor/frame_graph_debugger_view.cpp
         termin/editor/frame_graph_debugger_source.cpp
         termin/editor/remote_frame_graph_debugger_source.cpp
@@ -339,6 +340,7 @@ if(TERMIN_BUILD_TESTS)
         termin/render/solid_primitive_renderer.cpp
         tests/tests_general_pose3.cpp
         tests/tests_editor_interaction_system.cpp
+        tests/tests_editor_viewport_input_manager.cpp
         tests/tests_selection_manager.cpp
         tests/tests_inspect_registry.cpp
         tests/tests_orbit_camera_controller.cpp

@@ -114,6 +114,14 @@ class _Geometry:
         return Vec3((x - 100.0) / 100.0, (y - 100.0) / 100.0, 0.0)
 
 
+class _WallGeometry(_Geometry):
+    def project_world_point_to_viewport(self, point):
+        return (
+            100.0 + float(point.x) * 100.0,
+            100.0 + float(point.y) * 100.0 - float(point.z) * 100.0,
+        )
+
+
 def _viewport_pointer(phase: str, x: float, y: float, button: int = 0):
     return SimpleNamespace(
         phase=phase,
@@ -464,6 +472,51 @@ def test_native_procedural_viewport_drag_uses_shared_interaction_and_updates_pan
     assert status.name == "Status: Contour point P2 moved"
     assert component.dirty_count == 1
     assert component.regenerate_count == 1
+    extension.detach()
+    tc_ui_document_destroy(document)
+
+
+@pytest.mark.parametrize("drag_kind", ["sketch", "wall_height"])
+def test_native_procedural_viewport_cancel_ends_drag_without_final_update(drag_kind: str):
+    component = _Component()
+    contour = component.document.add_contour_on_plane_from_points(
+        [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)],
+        ProceduralPlane(),
+    )
+    assert contour is not None
+    document = tc_ui_document_create()
+    tool_states: list[int] = []
+    context = NativeComponentExtensionContext(
+        engine=object(),
+        document=document,
+        request_render=lambda: None,
+        resource_manager=SimpleNamespace(),
+        viewport_geometry=_Geometry(),
+        on_viewport_tool_state_changed=tool_states.append,
+    )
+    extension = ProceduralMeshExtensionModel()
+    extension.attach(context, _Entity(), _ComponentRef(component))
+    if drag_kind == "sketch":
+        assert extension.select_node(("contour", contour.id))
+        down = _viewport_pointer("down", 200.0, 200.0)
+    else:
+        sketch = component.document.items[0]
+        wall = component.document.add_wall_operation_for_sketch(sketch.id, height=1.0)
+        assert wall is not None
+        assert extension.select_node(("operation", wall.id))
+        context.viewport_geometry = _WallGeometry()
+        down = _viewport_pointer("down", 100.0, 0.0)
+
+    before = component.document.to_dict()
+    assert context.dispatch_viewport_pointer(down)
+    assert context.active_viewport_tools == 1
+    assert context.dispatch_viewport_pointer(_viewport_pointer("cancel", 250.0, 225.0))
+
+    assert context.active_viewport_tools == 0
+    assert tool_states == [1, 0]
+    assert component.document.to_dict() == before
+    assert extension.snapshot.status == "Viewport drag cancelled"
+    assert not context.dispatch_viewport_pointer(_viewport_pointer("move", 300.0, 300.0))
     extension.detach()
     tc_ui_document_destroy(document)
 

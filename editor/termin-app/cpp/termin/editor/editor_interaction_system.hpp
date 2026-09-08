@@ -23,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 struct tc_mesh_hit;
@@ -77,12 +78,22 @@ namespace termin {
         }
 
     private:
+        enum class PointerSequenceOwner {
+            None,
+            Overlay,
+            ViewportHandler,
+            Picking,
+        };
+
         EditorOverlayScene3D _overlay_scene;
-        // A failed ray invalidates an active overlay capture immediately, but
-        // the rest of that physical pointer sequence still belongs to the
-        // overlay. Suppress it until Up so ordinary viewport handlers never
-        // receive an unmatched Move/Up.
-        bool _overlay_pointer_cancelled_until_up = false;
+        PointerSequenceOwner _pointer_sequence_owner = PointerSequenceOwner::None;
+        std::optional<int> _pointer_sequence_button;
+        // Cancellation ends logical ownership immediately, while the matching
+        // physical Up still has to be contained. Keep its initiating button so
+        // an unrelated chord release cannot end suppression.
+        std::unordered_set<int> _cancelled_pointer_buttons;
+        Vec2f _last_pointer_screen{0.0f, 0.0f};
+        int _last_pointer_mods = 0;
         // A gizmo-target transition may be reentered by an overlay callback.
         // The newest transition owns the retained visuals; older callers stop
         // when their revision no longer matches.
@@ -180,7 +191,7 @@ namespace termin {
         handle_key_event(const KeyEvent& event, Vec2f cursor, tc_viewport_handle viewport, tc_display_handle display);
 
         // Called by EditorViewportInputManager instances
-        void on_mouse_button(int button,
+        bool on_mouse_button(int button,
                              int action,
                              int mods,
                              uint32_t click_count,
@@ -188,7 +199,7 @@ namespace termin {
                              float y,
                              tc_viewport_handle vp,
                              tc_display_handle display);
-        void on_mouse_move(float x, float y, float dx, float dy, tc_viewport_handle vp, tc_display_handle display);
+        bool on_mouse_move(float x, float y, float dx, float dy, tc_viewport_handle vp, tc_display_handle display);
         void on_focus_lost();
 
     private:
@@ -196,7 +207,7 @@ namespace termin {
         void _process_pending_release();
         void _process_pending_hover();
         bool _dispatch_entity_click(Vec2f screen, const SurfacePickResult& pick);
-        bool _dispatch_viewport_pointer(const ViewportPointerEvent& event);
+        bool _dispatch_viewport_pointer(const ViewportPointerEvent& event, bool* callback_failed = nullptr);
         bool
         _route_overlay_pointer(visual::PointerEventKind3D kind, Vec2f screen, int button, tc_viewport_handle viewport);
         bool _start_async_entity_pick(Vec2f screen, tc_viewport_handle vp, tc_display_handle display);
@@ -208,6 +219,12 @@ namespace termin {
         void _clear_component_visual_gizmos();
         void _destroy_transform_gizmo_visual();
         void _cancel_overlay_pointer_state(bool quarantine_active_sequence, const char* context);
+        void _cancel_pointer_sequence(bool quarantine_active_sequence, const char* context);
+        bool _route_owned_pointer_button(PointerSequenceOwner owner,
+                                         visual::PointerEventKind3D overlay_kind,
+                                         const ViewportPointerEvent& event,
+                                         tc_viewport_handle viewport,
+                                         tc_display_handle display);
         bool _snap_transform_gizmo_target(Vec2f cursor, tc_viewport_handle viewport, tc_display_handle display);
 
         bool _window_to_fbo_coords(Vec2f screen, tc_viewport_handle vp, tc_display_handle display, Vec2i& fbo);

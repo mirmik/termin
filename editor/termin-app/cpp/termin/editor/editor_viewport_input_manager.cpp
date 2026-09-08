@@ -118,6 +118,7 @@ namespace termin {
         _last_cursor_y = 0.0;
         _has_cursor = false;
         _current_mods = 0;
+        _cancelled_pointer_buttons.clear();
         tc_viewport_set_input_manager(_viewport, &_tc_im);
         if (tc_viewport_get_input_manager(_viewport) != &_tc_im) {
             tc_log_error("[EditorViewportInputManager] failed to attach to viewport");
@@ -142,34 +143,79 @@ namespace termin {
     // ============================================================================
 
     void EditorViewportInputManager::on_mouse_button(int button, int action, int mods, uint32_t click_count) {
-        if (!tc_viewport_alive(_viewport))
+        if (!tc_viewport_alive(_viewport)) {
+            if (_pointer_owner.kind != PointerOwnerKind::None)
+                _quarantine_pointer_owner("the viewport died");
             return;
+        }
 
         double x = _last_cursor_x;
         double y = _last_cursor_y;
 
-        // Dispatch to viewport-local editor entities, then scene components
-        // explicitly opted into editor input via input_source_mask.
+        if (_cancelled_pointer_buttons.contains(button)) {
+            if (action == TC_INPUT_PRESS) {
+                tc_log(TC_LOG_WARN,
+                       "[EditorViewportInputManager] received a new Down before the cancelled pointer sequence's Up; "
+                       "ending stale event suppression for button %d",
+                       button);
+                _cancelled_pointer_buttons.erase(button);
+            } else {
+                _cancelled_pointer_buttons.erase(button);
+                return;
+            }
+        }
+
         MouseButtonEvent event(
             MouseButtonEventInit{_viewport, x, y, button, action, mods, TC_INPUT_SOURCE_EDITOR, click_count});
         event.platform_services = &_tc_im.platform_services;
-        _dispatch_to_internal_entities(&event);
-        if (event.handled)
+
+        if (_pointer_owner.kind != PointerOwnerKind::None) {
+            if (button != _pointer_owner.button)
+                return;
+            const bool terminal = action != TC_INPUT_PRESS;
+            const PointerOwner owner = _pointer_owner;
+            if (terminal)
+                _pointer_owner = {};
+            const bool delivered = _dispatch_to_pointer_owner(owner, &event);
+            if (!delivered && !terminal)
+                _quarantine_pointer_owner("its owner disappeared");
             return;
-        _dispatch_to_editor_components(&event);
-        if (event.handled)
+        }
+
+        if (action != TC_INPUT_PRESS)
             return;
 
-        // Delegate to EditorInteractionSystem for picking/gizmo
+        // Down chooses one exact owner. Later events bypass ordinary priority
+        // dispatch until the initiating button reaches Up or Cancel.
+        PointerOwner owner = _dispatch_to_internal_entities(&event);
+        if (event.handled) {
+            _pointer_owner = owner;
+            _pointer_owner.button = button;
+            return;
+        }
+        owner = _dispatch_to_editor_components(&event);
+        if (event.handled) {
+            _pointer_owner = owner;
+            _pointer_owner.button = button;
+            return;
+        }
+
         auto* sys = EditorInteractionSystem::instance();
-        if (sys) {
-            sys->on_mouse_button(button, action, mods, click_count, (float)x, (float)y, _viewport, _display);
+        if (sys &&
+            sys->on_mouse_button(
+                button, action, mods, click_count, static_cast<float>(x), static_cast<float>(y), _viewport, _display)) {
+            _pointer_owner.kind = PointerOwnerKind::EditorInteraction;
+            _pointer_owner.interaction = sys;
+            _pointer_owner.button = button;
         }
     }
 
     void EditorViewportInputManager::on_mouse_move(double x, double y) {
-        if (!tc_viewport_alive(_viewport))
+        if (!tc_viewport_alive(_viewport)) {
+            if (_pointer_owner.kind != PointerOwnerKind::None)
+                _quarantine_pointer_owner("the viewport died");
             return;
+        }
 
         double dx = 0.0, dy = 0.0;
         if (_has_cursor) {
@@ -182,6 +228,15 @@ namespace termin {
 
         MouseMoveEvent event(_viewport, x, y, dx, dy, TC_INPUT_SOURCE_EDITOR);
         event.platform_services = &_tc_im.platform_services;
+
+        if (_pointer_owner.kind != PointerOwnerKind::None) {
+            if (!_dispatch_to_pointer_owner(_pointer_owner, &event))
+                _quarantine_pointer_owner("its owner disappeared");
+            return;
+        }
+        if (!_cancelled_pointer_buttons.empty())
+            return;
+
         _dispatch_to_internal_entities(&event);
         if (event.handled)
             return;
@@ -272,15 +327,22 @@ namespace termin {
     }
 
     void EditorViewportInputManager::on_focus_lost() {
-        if (!tc_viewport_alive(_viewport))
-            return;
-        tc_input_focus_event event;
-        tc_input_focus_event_init_source(&event, _viewport, TC_INPUT_SOURCE_EDITOR);
-        event.platform_services = &_tc_im.platform_services;
-        _dispatch_to_internal_entities(&event);
-        _dispatch_to_editor_components(&event);
-        if (auto* sys = EditorInteractionSystem::instance()) {
-            sys->on_focus_lost();
+        const bool viewport_alive = tc_viewport_alive(_viewport);
+        const bool owned_editor_interaction = _pointer_owner.kind == PointerOwnerKind::EditorInteraction;
+        if (_pointer_owner.kind != PointerOwnerKind::None) {
+            _cancelled_pointer_buttons.insert(_pointer_owner.button);
+            _pointer_owner = {};
+        }
+        if (viewport_alive) {
+            tc_input_focus_event event;
+            tc_input_focus_event_init_source(&event, _viewport, TC_INPUT_SOURCE_EDITOR);
+            event.platform_services = &_tc_im.platform_services;
+            _dispatch_to_internal_entities(&event);
+            _dispatch_to_editor_components(&event);
+        }
+        if (viewport_alive || owned_editor_interaction) {
+            if (auto* sys = EditorInteractionSystem::instance())
+                sys->on_focus_lost();
         }
         _has_cursor = false;
         _current_mods = 0;
@@ -290,21 +352,35 @@ namespace termin {
     // Dispatch helpers - Editor components opted into editor input source
     // ============================================================================
 
-    void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_button_event* ev) {
+    EditorViewportInputManager::PointerOwner
+    EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_button_event* ev) {
         tc_scene_handle scene = tc_viewport_get_scene(_viewport);
         if (!tc_scene_handle_valid(scene))
-            return;
+            return {};
+        PointerOwner owner;
+        owner.kind = PointerOwnerKind::SceneComponent;
+        struct DispatchState {
+            tc_mouse_button_event* event;
+            PointerOwner* owner;
+        } state{ev, &owner};
         tc_scene_foreach_input_handler(
             scene,
             [](tc_component* c, void* ud) -> bool {
-                auto* ev = static_cast<tc_mouse_button_event*>(ud);
+                auto* state = static_cast<DispatchState*>(ud);
+                auto* ev = state->event;
                 if (tc_component_accepts_input_source(c, ev->source)) {
+                    const tc_entity_handle entity = c->owner;
                     tc_component_on_mouse_button(c, ev);
+                    if (ev->handled) {
+                        state->owner->component = c;
+                        state->owner->entity = entity;
+                    }
                 }
                 return !ev->handled;
             },
-            ev,
+            &state,
             TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+        return owner;
     }
 
     void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_move_event* ev) {
@@ -396,20 +472,34 @@ namespace termin {
     // Dispatch helpers - Internal entities
     // ============================================================================
 
-    void EditorViewportInputManager::_dispatch_to_internal_entities(tc_mouse_button_event* ev) {
+    EditorViewportInputManager::PointerOwner
+    EditorViewportInputManager::_dispatch_to_internal_entities(tc_mouse_button_event* ev) {
         tc_entity_handle ent = tc_viewport_get_internal_entities(_viewport);
         if (!tc_entity_handle_valid(ent))
-            return;
+            return {};
+        PointerOwner owner;
+        owner.kind = PointerOwnerKind::InternalComponent;
+        struct DispatchState {
+            tc_mouse_button_event* event;
+            PointerOwner* owner;
+        } state{ev, &owner};
         tc_entity_foreach_input_handler_subtree(
             ent,
             [](tc_component* c, void* ud) -> bool {
-                auto* ev = static_cast<tc_mouse_button_event*>(ud);
+                auto* state = static_cast<DispatchState*>(ud);
+                auto* ev = state->event;
                 if (tc_component_accepts_input_source(c, ev->source)) {
+                    const tc_entity_handle entity = c->owner;
                     tc_component_on_mouse_button(c, ev);
+                    if (ev->handled) {
+                        state->owner->component = c;
+                        state->owner->entity = entity;
+                    }
                 }
                 return !ev->handled;
             },
-            ev);
+            &state);
+        return owner;
     }
 
     void EditorViewportInputManager::_dispatch_to_internal_entities(tc_mouse_move_event* ev) {
@@ -490,6 +580,73 @@ namespace termin {
                 return true;
             },
             ev);
+    }
+
+    tc_component* EditorViewportInputManager::_resolve_pointer_component(const PointerOwner& owner) const {
+        if (!owner.component || !tc_entity_handle_valid(owner.entity))
+            return nullptr;
+        const size_t count = tc_entity_component_count(owner.entity);
+        for (size_t index = 0; index < count; ++index) {
+            if (tc_entity_component_at(owner.entity, index) == owner.component)
+                return owner.component;
+        }
+        return nullptr;
+    }
+
+    bool EditorViewportInputManager::_dispatch_to_pointer_owner(const PointerOwner& owner, tc_mouse_button_event* ev) {
+        if (owner.kind == PointerOwnerKind::EditorInteraction) {
+            if (!owner.interaction || EditorInteractionSystem::instance() != owner.interaction)
+                return false;
+            owner.interaction->on_mouse_button(ev->button,
+                                               ev->action,
+                                               ev->mods,
+                                               ev->click_count,
+                                               static_cast<float>(ev->x),
+                                               static_cast<float>(ev->y),
+                                               _viewport,
+                                               _display);
+            return true;
+        }
+        tc_component* component = _resolve_pointer_component(owner);
+        if (!component)
+            return false;
+        tc_component_on_mouse_button(component, ev);
+        return true;
+    }
+
+    bool EditorViewportInputManager::_dispatch_to_pointer_owner(const PointerOwner& owner, tc_mouse_move_event* ev) {
+        if (owner.kind == PointerOwnerKind::EditorInteraction) {
+            if (!owner.interaction || EditorInteractionSystem::instance() != owner.interaction)
+                return false;
+            owner.interaction->on_mouse_move(static_cast<float>(ev->x),
+                                             static_cast<float>(ev->y),
+                                             static_cast<float>(ev->dx),
+                                             static_cast<float>(ev->dy),
+                                             _viewport,
+                                             _display);
+            return true;
+        }
+        tc_component* component = _resolve_pointer_component(owner);
+        if (!component)
+            return false;
+        tc_component_on_mouse_move(component, ev);
+        return true;
+    }
+
+    void EditorViewportInputManager::_quarantine_pointer_owner(const char* reason) {
+        if (_pointer_owner.kind == PointerOwnerKind::None)
+            return;
+        const bool owned_editor_interaction = _pointer_owner.kind == PointerOwnerKind::EditorInteraction;
+        tc_log(TC_LOG_WARN,
+               "[EditorViewportInputManager] pointer sequence cancelled because %s; suppressing button %d until Up",
+               reason ? reason : "its owner became unavailable",
+               _pointer_owner.button);
+        _cancelled_pointer_buttons.insert(_pointer_owner.button);
+        _pointer_owner = {};
+        if (owned_editor_interaction) {
+            if (auto* sys = EditorInteractionSystem::instance())
+                sys->on_focus_lost();
+        }
     }
 
 } // namespace termin

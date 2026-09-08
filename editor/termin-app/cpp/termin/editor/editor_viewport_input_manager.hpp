@@ -10,7 +10,11 @@
 #include "render/tc_viewport.h"
 #include "termin/input/input_events.hpp"
 
+#include <unordered_set>
+
 namespace termin {
+
+    class EditorInteractionSystem;
 
     class EditorViewportInputManager {
     public:
@@ -19,10 +23,27 @@ namespace termin {
         tc_display_handle _display = TC_DISPLAY_HANDLE_INVALID;
 
     private:
+        enum class PointerOwnerKind {
+            None,
+            InternalComponent,
+            SceneComponent,
+            EditorInteraction,
+        };
+
+        struct PointerOwner {
+            PointerOwnerKind kind = PointerOwnerKind::None;
+            tc_component* component = nullptr;
+            tc_entity_handle entity = TC_ENTITY_HANDLE_INVALID;
+            EditorInteractionSystem* interaction = nullptr;
+            int button = -1;
+        };
+
         double _last_cursor_x = 0.0;
         double _last_cursor_y = 0.0;
         bool _has_cursor = false;
         int _current_mods = 0;
+        PointerOwner _pointer_owner;
+        std::unordered_set<int> _cancelled_pointer_buttons;
 
         static tc_input_manager_vtable _vtable;
 
@@ -53,7 +74,7 @@ namespace termin {
 
     private:
         // Dispatch to scene components opted into editor input source.
-        void _dispatch_to_editor_components(tc_mouse_button_event* ev);
+        PointerOwner _dispatch_to_editor_components(tc_mouse_button_event* ev);
         void _dispatch_to_editor_components(tc_mouse_move_event* ev);
         void _dispatch_to_editor_components(tc_scroll_event* ev);
         void _dispatch_to_editor_components(tc_key_event* ev);
@@ -61,12 +82,16 @@ namespace termin {
         void _dispatch_to_editor_components(tc_input_focus_event* ev);
 
         // Dispatch to viewport's internal entities
-        void _dispatch_to_internal_entities(tc_mouse_button_event* ev);
+        PointerOwner _dispatch_to_internal_entities(tc_mouse_button_event* ev);
         void _dispatch_to_internal_entities(tc_mouse_move_event* ev);
         void _dispatch_to_internal_entities(tc_scroll_event* ev);
         void _dispatch_to_internal_entities(tc_key_event* ev);
         void _dispatch_to_internal_entities(tc_text_event* ev);
         void _dispatch_to_internal_entities(tc_input_focus_event* ev);
+        tc_component* _resolve_pointer_component(const PointerOwner& owner) const;
+        bool _dispatch_to_pointer_owner(const PointerOwner& owner, tc_mouse_button_event* ev);
+        bool _dispatch_to_pointer_owner(const PointerOwner& owner, tc_mouse_move_event* ev);
+        void _quarantine_pointer_owner(const char* reason);
     };
 
 } // namespace termin
