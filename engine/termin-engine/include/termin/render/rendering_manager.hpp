@@ -19,6 +19,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_topology.hpp"
 #include "termin/render/viewport_render_state.hpp"
+#include <termin/render/static_mesh_batch.hpp>
 #include <termin/lighting/light.hpp>
 
 extern "C" {
@@ -153,6 +154,7 @@ namespace termin {
         std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
         std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
         std::vector<RenderExecutionObserver*> render_execution_observers_;
+        StaticMeshBatchCache static_mesh_batches_;
 
     public:
         explicit RenderingManager(RenderTopology& topology);

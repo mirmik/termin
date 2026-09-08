@@ -111,6 +111,15 @@ namespace tgfx {
         uint64_t range = 0;
     };
 
+    // Native descriptors are slot-owned; each draw keeps its own immutable
+    // dynamic-offset wrapper. Exact signatures protect against hash collisions.
+    struct VkRingDescriptorCacheEntry {
+        uintptr_t layout_token = 0;
+        uint64_t domain = 0;
+        std::vector<VulkanResolvedResourceBinding> bindings;
+        VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    };
+
     struct VkFramebufferCacheKey {
         VkRenderPass render_pass = VK_NULL_HANDLE;
         uint32_t width = 0;
@@ -347,6 +356,8 @@ namespace tgfx {
         // vkAllocateDescriptorSets + vkUpdateDescriptorSets. Cleared when
         // the corresponding pool is reset in `submit()`.
         std::array<std::unordered_map<uint64_t, ResourceSetHandle>, kFrameSlotCount> descriptor_cache_;
+        std::array<std::unordered_map<uint64_t, std::vector<VkRingDescriptorCacheEntry>>, kFrameSlotCount>
+            ring_descriptor_cache_;
 
         // Lazy-created default sampler (see ensure_default_sampler()).
         VkSampler default_sampler_ = VK_NULL_HANDLE;

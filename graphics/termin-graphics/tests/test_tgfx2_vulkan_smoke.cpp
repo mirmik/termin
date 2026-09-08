@@ -592,55 +592,126 @@ static bool render_bound_resource_set_smoke(tgfx::IRenderDevice& device) {
     bool pass_ok = read_ok && pixel[0] > 0.08f && pixel[0] < 0.30f && pixel[1] > 0.50f && pixel[1] < 0.80f &&
                          pixel[2] > 0.15f && pixel[2] < 0.40f && pixel[3] > 0.90f;
 
-    // More uncached sets than one descriptor page can hold. Draw with sets
-    // from both sides of the page boundary, then revisit every frame slot to
-    // exercise fence-protected reset/reuse (not just first-time pool growth).
+    // The smoke intentionally uses tiny ring slots to test overflow later.
+    // A dedicated buffer supplies valid ranges large enough for pool rollover.
+    tgfx::BufferDesc rollover_desc = ubo_desc;
+    rollover_desc.size = 4096;
+    const auto rollover_ubo = device.create_buffer(rollover_desc);
+    device.upload_buffer(rollover_ubo,
+                         std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(color_block), sizeof(color_block)));
+
+    // Repeated dynamic slices share native descriptors but retain independent
+    // bind-time offsets. Also exhaust a descriptor page using distinct ranges,
+    // then revisit all slots to exercise fence-protected reset/reuse.
     for (unsigned frame = 0; frame < 8; ++frame) {
         uint32_t offset = 0;
+        uint32_t alternate_offset = 0;
+        const float alternate_color[] = {0.85f, 0.15f, 0.45f, 1.0f};
         if (!device.ring_ubo_write(color_block, sizeof(color_block), offset))
+            return false;
+        if (!device.ring_ubo_write(alternate_color, sizeof(alternate_color), alternate_offset))
             return false;
         tgfx::BoundResourceBinding ring_binding = material_binding;
         ring_binding.value.buffer = device.ring_ubo_handle();
         ring_binding.value.offset = offset;
-        tgfx::BoundResourceSetStorage ring_storage;
-        ring_storage.set_resource_layout_token(resource_layout_token);
-        ring_storage.append_group(tgfx::ShaderResourceScope::Material, true, &ring_binding, 1);
         std::vector<tgfx::ResourceSetHandle> sets;
         for (unsigned i = 0; i < 2050; ++i) {
+            ring_binding.value.offset = i % 2 == 0 ? offset : alternate_offset;
+            tgfx::BoundResourceSetStorage ring_storage;
+            ring_storage.set_resource_layout_token(resource_layout_token);
+            ring_storage.append_group(tgfx::ShaderResourceScope::Material, true, &ring_binding, 1);
             auto set = device.create_bound_resource_set(ring_storage.view());
             if (!set)
                 return false;
             sets.push_back(set);
         }
+#ifdef TGFX2_HAS_VULKAN
+        auto& native = static_cast<tgfx::VulkanRenderDevice&>(device);
+        const auto* first = native.get_resource_set(sets.front());
+        const auto* last = native.get_resource_set(sets.back());
+        if (!first || !last || first->descriptor_set != last->descriptor_set ||
+            first->dynamic_offset_count != 1 || last->dynamic_offset_count != 1 ||
+            first->dynamic_offsets[0] != offset || last->dynamic_offsets[0] != alternate_offset) {
+            fprintf(stderr, "Native descriptor sharing or immutable dynamic offsets failed at frame %u\n", frame);
+            return false;
+        }
+#endif
+        std::vector<tgfx::ResourceSetHandle> rollover_sets;
+        ring_binding.value.offset = offset;
+        ring_binding.value.range = sizeof(color_block) + 1;
+        tgfx::BoundResourceSetStorage changed_ring_range;
+        changed_ring_range.set_resource_layout_token(resource_layout_token);
+        changed_ring_range.append_group(tgfx::ShaderResourceScope::Material, true, &ring_binding, 1);
+        const auto changed_ring_set = device.create_bound_resource_set(changed_ring_range.view());
+        if (!changed_ring_set) return false;
+#ifdef TGFX2_HAS_VULKAN
+        if (native.get_resource_set(changed_ring_set)->descriptor_set ==
+            native.get_resource_set(sets.front())->descriptor_set) {
+            fprintf(stderr, "Ring descriptor cache incorrectly ignored a changed UBO range\n");
+            return false;
+        }
+#endif
+        ring_binding.value.buffer = rollover_ubo;
+        ring_binding.value.offset = 0;
+        for (unsigned i = 0; i < 2050; ++i) {
+            ring_binding.value.range = sizeof(color_block) + i + 1;
+            tgfx::BoundResourceSetStorage storage;
+            storage.set_resource_layout_token(resource_layout_token);
+            storage.append_group(tgfx::ShaderResourceScope::Material, true, &ring_binding, 1);
+            auto set = device.create_bound_resource_set(storage.view());
+            if (!set) return false;
+            rollover_sets.push_back(set);
+        }
+#ifdef TGFX2_HAS_VULKAN
+        if (native.get_resource_set(rollover_sets.front())->descriptor_set ==
+            native.get_resource_set(rollover_sets.back())->descriptor_set) {
+            fprintf(stderr, "Descriptor cache incorrectly ignored a changed UBO range\n");
+            return false;
+        }
+#endif
         auto stress_cmd = device.create_command_list();
         stress_cmd->begin();
         stress_cmd->begin_render_pass(pass);
         stress_cmd->bind_pipeline(pipeline);
         stress_cmd->bind_vertex_buffer(0, vb);
-        stress_cmd->set_viewport(0, 0, kWidth / 2, kHeight);
+        stress_cmd->set_viewport(0, 0, kWidth / 4, kHeight);
         stress_cmd->bind_resource_set(sets.front());
         stress_cmd->draw(3);
-        stress_cmd->set_viewport(kWidth / 2, 0, kWidth / 2, kHeight);
+        stress_cmd->set_viewport(kWidth / 4, 0, kWidth / 4, kHeight);
         stress_cmd->bind_resource_set(sets.back());
+        stress_cmd->draw(3);
+        stress_cmd->set_viewport(kWidth / 2, 0, kWidth / 4, kHeight);
+        stress_cmd->bind_resource_set(rollover_sets.front());
+        stress_cmd->draw(3);
+        stress_cmd->set_viewport(3 * kWidth / 4, 0, kWidth / 4, kHeight);
+        stress_cmd->bind_resource_set(rollover_sets.back());
         stress_cmd->draw(3);
         stress_cmd->end_render_pass();
         stress_cmd->end();
         for (auto set : sets)
             device.destroy(set);
+        for (auto set : rollover_sets)
+            device.destroy(set);
+        device.destroy(changed_ring_set);
         device.submit(*stress_cmd);
         device.wait_idle();
-        for (uint32_t x : {kWidth / 4, 3 * kWidth / 4}) {
+        for (uint32_t quadrant = 0; quadrant < 4; ++quadrant) {
+            const uint32_t x = (2 * quadrant + 1) * kWidth / 8;
+            const float* expected = quadrant == 1 ? alternate_color : color_block;
             float stress_pixel[4] = {};
             if (!device.read_pixel_rgba8(rt, x, kHeight / 2, stress_pixel) ||
-                std::abs(stress_pixel[1] - pixel[1]) > 0.02f) {
+                std::abs(stress_pixel[0] - expected[0]) > 0.02f ||
+                std::abs(stress_pixel[1] - expected[1]) > 0.02f ||
+                std::abs(stress_pixel[2] - expected[2]) > 0.02f) {
                 fprintf(stderr, "Descriptor pool rollover pixel mismatch at frame %u x=%u\n", frame, x);
                 pass_ok = false;
             }
         }
     }
-    printf("Vulkan descriptor pool rollover and slot reuse: %s\n", pass_ok ? "ok" : "failed");
+    printf("Vulkan dynamic descriptor sharing, pool rollover and slot reuse: %s\n", pass_ok ? "ok" : "failed");
 
     device.destroy(resource_set);
+    device.destroy(rollover_ubo);
     device.destroy(ubo);
     device.destroy(vb);
     device.destroy(rt);

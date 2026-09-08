@@ -15,6 +15,7 @@ namespace termin {
         // Lazy tgfx2 resources used by execute_with_data_tgfx2.
         tgfx::IRenderDevice* device2_ = nullptr;
         mutable tc_shader_handle id_shader_handle_ = tc_shader_handle_invalid();
+        mutable tc_shader_handle batched_id_shader_handle_ = tc_shader_handle_invalid();
 
     public:
         static void register_type();
@@ -59,6 +60,7 @@ namespace termin {
         }
         MaterialPipelinePassContract shader_pass_contract() const override;
         tc_shader_handle shader_usage_base_shader() const override;
+        std::optional<BatchedGeometryShader> batched_geometry_shader() const override;
 
         bool entity_filter(const Entity& ent) const override {
             return ent.pickable();

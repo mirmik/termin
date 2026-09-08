@@ -1217,6 +1217,7 @@ namespace tgfx {
     }
 
     void VulkanRenderDevice::invalidate_descriptor_cache() {
+        for (auto& cache : ring_descriptor_cache_) cache.clear();
         for (auto& cache : descriptor_cache_) {
             for (const auto& [_, handle] : cache) {
                 resource_sets_.remove(handle.id);
@@ -1817,6 +1818,7 @@ namespace tgfx {
                 resource_sets_.remove(h.id);
             }
             descriptor_cache_[slot].clear();
+            ring_descriptor_cache_[slot].clear();
         });
 
         ring_ubo_heads_[slot].store(0, std::memory_order_relaxed);
@@ -1932,6 +1934,8 @@ namespace tgfx {
             uint64_t render_passes = g_render_pass_count.exchange(0, std::memory_order_relaxed);
             uint64_t attachment_resolves = g_attachment_resolve_count.exchange(0, std::memory_order_relaxed);
             uint64_t rsets = g_resource_set_count.exchange(0, std::memory_order_relaxed);
+            uint64_t ring_hits = g_ring_descriptor_cache_hit_count.exchange(0, std::memory_order_relaxed);
+            uint64_t descriptor_updates = g_descriptor_update_count.exchange(0, std::memory_order_relaxed);
             uint64_t pipes = g_pipeline_count.exchange(0, std::memory_order_relaxed);
             uint64_t pipe_hits = g_pipeline_cache_hit_count.exchange(0, std::memory_order_relaxed);
             uint64_t pipe_misses = g_pipeline_cache_miss_count.exchange(0, std::memory_order_relaxed);
@@ -1953,7 +1957,7 @@ namespace tgfx {
                    "[tgfx2-vulkan] submit stats: submits=%llu draws=%llu render_passes=%llu "
                    "attachment_resolves=%llu "
                    "pipelines=%llu pipeline_cache_hit=%llu pipeline_cache_miss=%llu "
-                   "new_vertex_layouts=%llu resource_sets=%llu bind_pipeline=%llu "
+                   "new_vertex_layouts=%llu resource_sets=%llu ring_descriptor_hits=%llu descriptor_updates=%llu bind_pipeline=%llu "
                    "bind_rset=%llu bind_vbo=%llu bind_ibo=%llu push_constants=%llu "
                    "record_ms=%.3f submit_ms=%.3f fence_wait_ms=%.3f "
                    "readback_cleanup_ms=%.3f destroy_cleanup_ms=%.3f "
@@ -1967,6 +1971,8 @@ namespace tgfx {
                    static_cast<unsigned long long>(pipe_misses),
                    static_cast<unsigned long long>(pipe_layouts),
                    static_cast<unsigned long long>(rsets),
+                   static_cast<unsigned long long>(ring_hits),
+                   static_cast<unsigned long long>(descriptor_updates),
                    static_cast<unsigned long long>(bp),
                    static_cast<unsigned long long>(brs),
                    static_cast<unsigned long long>(bvb),

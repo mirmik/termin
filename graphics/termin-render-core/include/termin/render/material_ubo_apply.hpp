@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 #include <termin/render/material_texture_source.hpp>
 #include <termin/render/render_export.hpp>
@@ -12,6 +13,7 @@ extern "C" {
 }
 
 namespace tgfx {
+    class FrameDataCache;
     class IRenderDevice;
     class RenderContext2;
 } // namespace tgfx
@@ -26,6 +28,13 @@ namespace termin {
     // mismatch and logs the incompatible uniform/reflected field types.
     RENDER_CORE_API bool
     pack_material_uniform_value_to_std140_field(const tc_uniform_value& uniform, const char* field_type, uint8_t* dst);
+
+    // Packs uniforms with frame-owned reuse. Exact source and layout snapshots
+    // detect edits even when registry versions do not change. Returned bytes are
+    // valid until the same cache key is replaced or the frame cache is cleared.
+    // Empty output means no usable layout or a packing error (logged).
+    RENDER_CORE_API std::span<const uint8_t> pack_material_phase_uniforms(
+        const tc_material_phase* phase, const tc_shader* shader, tgfx::FrameDataCache& cache);
 
     // Dispatch entry point: if `shader` declares a material UBO layout,
     // packs + binds the phase's uniforms. Textures from phase->textures[] are

@@ -21,6 +21,7 @@ namespace termin {
         TcMaterial material;
         std::vector<TcMaterial> materials;
         bool cast_shadow = true;
+        bool static_batching = false;
         bool _override_material = false;
         TcMaterial _overridden_material;
         tc_value _pending_override_data = {TC_VALUE_NIL, {}};

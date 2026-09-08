@@ -22,6 +22,8 @@
 #include <span>
 #include <string_view>
 #include <vector>
+#include <unordered_map>
+#include "tgfx2/frame_data_cache.hpp"
 
 #include "tgfx2/backend_binding_plan.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -143,6 +145,16 @@ namespace tgfx {
         // re-pushed after a state change — visible as pushC ~1.4 per draw.
         bool push_constants_dirty_ = false;
 
+        struct UniformUploadEntry {
+            std::vector<uint8_t> bytes;
+            BoundResourceValue value;
+        };
+        // Immutable upload slices are reusable only while this command list is
+        // recording. Compare bytes after hashing; never trust a caller pointer.
+        std::unordered_multimap<size_t, UniformUploadEntry> uniform_upload_cache_;
+        size_t uniform_upload_cache_bytes_ = 0;
+        FrameDataCache derived_data_cache_;
+
         // Per-frame deferred-destruction list for non-owning external
         // wrappers (register_external_texture / register_external_buffer)
         // created and used inside a single frame. Drained in end_frame().
@@ -212,6 +224,8 @@ namespace tgfx {
         RenderContext2& operator=(const RenderContext2&) = delete;
 
         // --- Frame lifecycle ---
+        FrameDataCache& derived_data_cache() { return derived_data_cache_; }
+
         void begin_frame();
         void end_frame(); // submits command list
         // True between begin_frame() and end_frame() — i.e. command list

@@ -107,6 +107,14 @@ namespace termin {
         virtual MaterialPipelinePassContract shader_pass_contract() const = 0;
 
         virtual tc_shader_handle shader_usage_base_shader() const = 0;
+        struct BatchedGeometryShader {
+            tc_shader_handle base_shader = tc_shader_handle_invalid();
+            MaterialPipelinePassContract contract;
+        };
+        // Most geometry passes accept the ordinary static transform for merged
+        // meshes. Picking can supply a shader consuming original per-vertex IDs.
+        virtual std::optional<BatchedGeometryShader> batched_geometry_shader() const { return std::nullopt; }
+
         virtual std::optional<std::string> fbo_format() const;
 
         virtual bool entity_filter(const Entity& ent) const;

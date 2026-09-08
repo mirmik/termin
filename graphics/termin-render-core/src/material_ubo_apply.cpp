@@ -7,6 +7,7 @@
 
 #include "tcbase/tc_log.hpp"
 #include "tgfx2/i_render_device.hpp"
+#include "tgfx2/frame_data_cache.hpp"
 #include "tgfx2/render_context.hpp"
 
 #include <cstdint>
@@ -372,6 +373,54 @@ namespace termin {
 
     } // namespace
 
+    std::span<const uint8_t> pack_material_phase_uniforms(
+        const tc_material_phase* phase, const tc_shader* shader, tgfx::FrameDataCache& cache) {
+        if (!phase || !shader)
+            return {};
+        const tc_shader_resource_binding* material_rb =
+            find_shader_abi_resource_binding(shader, ShaderAbiResourceId::MaterialParams);
+        const bool authored = shader->material_ubo_entry_count > 0 && shader->material_ubo_block_size > 0;
+        const bool reflected = material_rb && material_rb->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER &&
+                               material_rb->field_count > 0 && material_rb->fields && material_rb->size > 0;
+        if (!authored && !reflected)
+            return {};
+        if (phase->uniform_count > TC_MATERIAL_MAX_UNIFORMS ||
+            (authored && !shader->material_ubo_entries)) {
+            tc::Log::error("[MaterialPipeline] invalid uniform or layout storage for shader '%s'",
+                           shader_debug_name(shader));
+            return {};
+        }
+        const uint32_t block_size = authored ? shader->material_ubo_block_size : material_rb->size;
+        const uint32_t metadata[] = {shader->version, block_size, authored ? 1u : 0u};
+        const tgfx::FrameDataInput inputs[] = {
+            {metadata, sizeof(metadata)},
+            {phase->uniforms, phase->uniform_count * sizeof(tc_uniform_value)},
+            {authored ? static_cast<const void*>(shader->material_ubo_entries)
+                      : static_cast<const void*>(material_rb->fields),
+             authored ? shader->material_ubo_entry_count * sizeof(tc_material_ubo_entry)
+                      : material_rb->field_count * sizeof(tc_shader_resource_field)},
+        };
+        static const uint8_t domain = 0;
+        const size_t phase_hint = reinterpret_cast<uintptr_t>(phase);
+        const size_t shader_hint = reinterpret_cast<uintptr_t>(shader);
+        const size_t hint = phase_hint ^ (shader_hint + size_t{0x9e3779b9} + (phase_hint << 6) + (phase_hint >> 2));
+        const std::span<const uint8_t> cached = cache.find(&domain, hint, inputs);
+        if (!cached.empty())
+            return cached;
+
+        const tc::ProfilerScope profile_scope("Material UBO packing miss");
+        std::vector<uint8_t> staging(block_size, 0);
+        const bool packed = authored
+                                ? pack_material_ubo_from_legacy_entries(phase, shader, staging.data(), block_size)
+                                : pack_material_ubo_from_reflected_fields(phase, shader, material_rb, staging.data(), block_size);
+        if (!packed) {
+            tc::Log::error("[MaterialPipeline] failed to pack material UBO for shader '%s'; "
+                           "the invalid buffer will not be bound", shader_debug_name(shader));
+            return {};
+        }
+        return cache.store(&domain, hint, inputs, std::move(staging));
+    }
+
     bool apply_material_phase_ubo(tc_material_phase* phase,
                                   const tc_shader* shader,
                                   tgfx::IRenderDevice& device,
@@ -392,18 +441,10 @@ namespace termin {
             material_rb->fields && material_rb->size > 0;
 
         if (has_authored_material_ubo_layout || has_reflected_material_fields) {
-            const uint32_t block_size =
-                has_authored_material_ubo_layout ? shader->material_ubo_block_size : material_rb->size;
-            std::vector<uint8_t> staging(block_size, 0);
-            const bool packed_layout =
-                has_authored_material_ubo_layout
-                    ? pack_material_ubo_from_legacy_entries(phase, shader, staging.data(), block_size)
-                    : pack_material_ubo_from_reflected_fields(phase, shader, material_rb, staging.data(), block_size);
-
-            if (!packed_layout) {
-                tc::Log::error("[MaterialPipeline] failed to pack material UBO for shader '%s'; "
-                               "the invalid buffer will not be bound",
-                               shader_debug_name(shader));
+            const std::span<const uint8_t> staging =
+                pack_material_phase_uniforms(phase, shader, ctx.derived_data_cache());
+            if (staging.empty()) {
+                // Packing errors are logged by pack_material_phase_uniforms.
             } else if (material_rb && material_rb->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER) {
                 ctx.bind_uniform_data(material_rb, staging.data(), static_cast<uint32_t>(staging.size()));
                 bound_any = true;

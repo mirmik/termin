@@ -52,6 +52,8 @@ namespace tgfx {
     };
 
     extern std::atomic<uint64_t> g_resource_set_count;
+    extern std::atomic<uint64_t> g_ring_descriptor_cache_hit_count;
+    extern std::atomic<uint64_t> g_descriptor_update_count;
     extern std::atomic<uint64_t> g_pipeline_count;
     extern std::atomic<uint64_t> g_pipeline_cache_hit_count;
     extern std::atomic<uint64_t> g_pipeline_cache_miss_count;

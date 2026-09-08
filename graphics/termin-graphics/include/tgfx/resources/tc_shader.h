@@ -187,6 +187,7 @@ typedef enum tc_shader_contract_value_type {
     TC_SHADER_CONTRACT_VALUE_FLOAT3 = 3,
     TC_SHADER_CONTRACT_VALUE_FLOAT4 = 4,
     TC_SHADER_CONTRACT_VALUE_MATRIX4 = 5,
+    TC_SHADER_CONTRACT_VALUE_UINT = 6,
 } tc_shader_contract_value_type;
 
 typedef struct tc_shader_contract_vertex_input {

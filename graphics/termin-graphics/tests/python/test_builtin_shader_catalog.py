@@ -28,7 +28,8 @@ def test_builtin_shader_manifest_is_complete_and_resolves_every_source() -> None
     catalog = json.loads((source_root / "engine-shader-catalog.json").read_text())
 
     assert _catalog_module().validate_catalog(catalog, source_root) == []
-    assert len(catalog["shaders"]) == 60
+    assert len(catalog["shaders"]) == 61
+    assert any(shader["uuid"] == "termin-engine-id-batched" for shader in catalog["shaders"])
     assert any(shader["uuid"] == "termin-engine-multiview-output-transform" for shader in catalog["shaders"])
     assert all(shader["uuid"] != "termin-engine-foliage-shadow" for shader in catalog["shaders"])
 

@@ -95,6 +95,28 @@ Backend исправляет собственные upload/sampling/readback р�
 строка backend-а годится для лога; она не годится на должность главного
 архитектора rendering decisions.
 
+## Переиспользование данных при записи кадра
+
+`RenderContext2` владеет CPU `FrameDataCache` и кэшем uniform uploads.
+Оба очищаются на границах `begin_frame` / `end_frame`. Material UBO packing
+в render core сравнивает снимки значений uniforms и полей authored/reflected
+layout; указатели служат только подсказкой для поиска. Правка публичного массива
+без bump версии тоже обнаруживается. Сохранённые байты используются немедленно;
+span нельзя удерживать после замены записи или очистки кэша.
+
+Uniform uploads для Frame/Pass/Material сравниваются по содержимому после hash
+lookup и переиспользуют неизменяемый buffer slice внутри записи кадра. Draw и
+Transient в этот кэш не входят. Снимки ограничены 4 MiB на кадр; превышение
+лимита продолжает обычную загрузку без добавления новых записей. GPU lifetime
+остаётся у device, CPU-кэш не продлевает жизнь transient ресурсов.
+
+Vulkan хранит отдельный кэш native descriptor sets для ring UBO на submit-slot.
+Identity включает layout, ресурсы и ranges; только dynamic ring offset вынесен
+из ключа. Каждый вызов получает wrapper со своими неизменяемыми offsets.
+Кэш очищается при инвалидировании ресурсов и после fence перед повторным
+использованием descriptor pool. `TGFX2_VULKAN_STATS` публикует native allocations
+(`resource_sets`), `ring_descriptor_hits` и `descriptor_updates`.
+
 ## Где начинается Engine
 
 Если код:

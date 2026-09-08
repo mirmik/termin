@@ -1137,7 +1137,7 @@ namespace termin {
                                                 internal_entities_by_context,
                                                 lights,
                                                 first_viewport_name,
-                                                capture_requests);
+                                                capture_requests, &static_mesh_batches_);
         finish_render_execution(execution, capture_requests);
     }
 
@@ -1245,7 +1245,7 @@ namespace termin {
                                                 internal_entities_by_context,
                                                 lights,
                                                 default_context,
-                                                capture_requests);
+                                                capture_requests, &static_mesh_batches_);
         finish_render_execution(execution, capture_requests);
     }
 
@@ -1310,7 +1310,7 @@ namespace termin {
                                                 internal_entities_by_context,
                                                 lights,
                                                 default_context,
-                                                capture_requests);
+                                                capture_requests, &static_mesh_batches_);
         finish_render_execution(execution, capture_requests);
     }
 
@@ -1342,6 +1342,7 @@ namespace termin {
     }
 
     void RenderingManager::detach_scene(tc_scene_handle scene) {
+        static_mesh_batches_.clear_scene(scene);
         if (!tc_scene_handle_valid(scene))
             return;
         topology_.detach_scene(scene);

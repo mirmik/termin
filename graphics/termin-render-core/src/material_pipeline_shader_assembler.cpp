@@ -29,6 +29,8 @@ namespace termin {
                 return TC_SHADER_CONTRACT_VALUE_FLOAT4;
             case MaterialPipelineValueType::Matrix4:
                 return TC_SHADER_CONTRACT_VALUE_MATRIX4;
+            case MaterialPipelineValueType::UInt:
+                return TC_SHADER_CONTRACT_VALUE_UINT;
             }
             return TC_SHADER_CONTRACT_VALUE_UNKNOWN;
         }
@@ -101,6 +103,8 @@ namespace termin {
                 return MaterialPipelineValueType::Float4;
             case TC_SHADER_CONTRACT_VALUE_MATRIX4:
                 return MaterialPipelineValueType::Matrix4;
+            case TC_SHADER_CONTRACT_VALUE_UINT:
+                return MaterialPipelineValueType::UInt;
             default:
                 return std::nullopt;
             }

@@ -60,6 +60,7 @@ namespace termin {
             tc_value layout = tc_value_list_new();
             tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("material"));
             tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("cast_shadow"));
+            tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("static_batching"));
             tc_value_list_push(&layout, make_mesh_renderer_inspector_section("Material Override"));
             tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("_override_material"));
             tc_value_list_push(&layout,
@@ -113,6 +114,10 @@ namespace termin {
             if (!inspect.find_field("MeshRenderer", "cast_shadow")) {
                 tc::stage_inspect_field(
                     inspect, &MeshRenderer::cast_shadow, "MeshRenderer", "cast_shadow", "Cast Shadow", "bool");
+            }
+            if (!inspect.find_field("MeshRenderer", "static_batching")) {
+                tc::stage_inspect_field(inspect, &MeshRenderer::static_batching,
+                    "MeshRenderer", "static_batching", "Static Batching", "bool");
             }
             if (!inspect.find_field("MeshRenderer", "_override_material")) {
                 inspect.add_with_callbacks<MeshRenderer, bool>(
@@ -654,7 +659,9 @@ namespace termin {
                                                                          const tc_phase_mask* requested_phase);
 
     void MeshRenderer::populate_mesh_render_item(tc_render_item& item) {
-        (void)item;
+        if (static_batching) {
+            item.flags |= TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE;
+        }
     }
 
     bool MeshRenderer::collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) {

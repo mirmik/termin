@@ -159,6 +159,8 @@ struct VertexInput {
             return "float4";
         case MaterialPipelineValueType::Matrix4:
             return "matrix4";
+        case MaterialPipelineValueType::UInt:
+            return "uint";
         }
         return "unknown";
     }

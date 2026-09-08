@@ -144,6 +144,7 @@ namespace termin {
         SkinnedFullMaterial,
         SkinnedPositionJointsWeights,
         SkinnedPositionNormalJointsWeights,
+        PositionPickId,
     };
 
     RENDER_CORE_API MaterialMeshVertexInput material_mesh_vertex_input_for_shader(const tc_shader* shader,

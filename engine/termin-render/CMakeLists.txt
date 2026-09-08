@@ -72,6 +72,7 @@ set(TERMIN_RENDER_SOURCES
     src/graph_data.cpp
     src/graph_node_def.cpp
     src/render_scene_item_collector.cpp
+    src/static_mesh_batch.cpp
     src/scene_render_services.cpp
     src/scene_render_execution.cpp
     src/shader_usage_collector.cpp
@@ -221,6 +222,9 @@ if(TERMIN_BUILD_TESTS)
     add_executable(
         termin_render_scene_item_snapshot_test
         tests/test_render_scene_item_snapshot.cpp)
+    add_executable(termin_render_static_mesh_batch_test tests/test_static_mesh_batch.cpp)
+    target_link_libraries(termin_render_static_mesh_batch_test PRIVATE termin_render)
+    add_test(NAME termin_render_static_mesh_batch_test COMMAND termin_render_static_mesh_batch_test)
     target_link_libraries(
         termin_render_scene_item_snapshot_test
         PRIVATE termin_render)
@@ -234,6 +238,7 @@ if(TERMIN_BUILD_TESTS)
         termin_render_camera_capability_test
         termin_render_project_surface_contract_test
         termin_render_scene_item_snapshot_test
+        termin_render_static_mesh_batch_test
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )
 endif()

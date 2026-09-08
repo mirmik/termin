@@ -563,6 +563,7 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
         TERMIN_RENDER_PASSES_TEST_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf"
     )
     target_link_libraries(termin_render_passes_id_pass_line_pixel_smoke PRIVATE
+        termin_bootstrap::termin_bootstrap
         termin_render_passes
         termin_components_render
     )

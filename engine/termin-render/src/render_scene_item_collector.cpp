@@ -1,4 +1,5 @@
 #include <termin/render/render_scene_item_collector.hpp>
+#include <termin/render/static_mesh_batch.hpp>
 
 #include <cstring>
 #include <tcbase/tc_log.hpp>
@@ -85,9 +86,11 @@ namespace termin {
 
     TcSceneRenderItemSource::TcSceneRenderItemSource(tc_scene_handle scene,
                                                      const void* scene_context,
-                                                     int scene_filter_flags)
+                                                     int scene_filter_flags,
+                                                     StaticMeshBatchCache* batches)
         : scene_(scene),
           scene_context_(scene_context),
+          batches_(batches),
           scene_filter_flags_(scene_filter_flags) {}
 
     const char* TcSceneRenderItemSource::source_name() const noexcept {
@@ -114,6 +117,10 @@ namespace termin {
         }
         counters.source_traversals = collector.last_scene_traversals();
         counters.producers = collector.last_drawable_producers();
+        if (batches_ && !batches_->apply(output, scene_, request.layer_mask, request.render_category_mask, scene_filter_flags_)) {
+            tc::Log::error("[TcSceneRenderItemSource] static mesh batching failed");
+            return false;
+        }
         return true;
     }
 

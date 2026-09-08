@@ -127,6 +127,9 @@ namespace tgfx {
     // ============================================================================
 
     void RenderContext2::begin_frame() {
+        uniform_upload_cache_.clear();
+        uniform_upload_cache_bytes_ = 0;
+        derived_data_cache_.clear();
         cmd_ = device_.create_command_list();
         cmd_->begin();
         const tc_frame_profile* profiler_frame = tc_profiler_current_frame();
@@ -148,6 +151,9 @@ namespace tgfx {
         cmd_->end();
         device_.submit(*cmd_);
         cmd_.reset();
+        uniform_upload_cache_.clear();
+        uniform_upload_cache_bytes_ = 0;
+        derived_data_cache_.clear();
         GpuFrameTiming gpu_timing;
         while (device_.take_completed_gpu_frame_timing(gpu_timing)) {
             tc_profiler_publish_gpu_frame_timing(static_cast<int>(gpu_timing.frame_number), gpu_timing.duration_ms);
@@ -1079,6 +1085,24 @@ namespace tgfx {
         if (!plan_entry)
             return;
 
+        const ResourceScope scope = scope_from_shader_resource(rb->scope);
+        const BackendBoundResourceSlot slot = bound_resource_slot_from_plan_entry(*plan_entry);
+        const bool reusable = cmd_ && (scope == ResourceScope::Frame || scope == ResourceScope::Pass ||
+                                       scope == ResourceScope::Material);
+        size_t hash = 0;
+        if (reusable) {
+            hash = std::hash<std::string_view>{}(std::string_view(static_cast<const char*>(data), size));
+            const auto [begin, end] = uniform_upload_cache_.equal_range(hash);
+            for (auto it = begin; it != end; ++it) {
+                const auto& entry = it->second;
+                if (entry.bytes.size() == size && std::memcmp(entry.bytes.data(), data, size) == 0) {
+                    upsert_pending_planned_binding(scope, slot, entry.value);
+                    return;
+                }
+            }
+        }
+
+        const tc::ProfilerScope upload_scope("Upload uniform data");
         BufferHandle buffer = device_.ring_ubo_handle();
         uint32_t ring_offset = 0;
         const bool ring_write_succeeded = buffer.id != 0 && device_.ring_ubo_write(data, size, ring_offset);
@@ -1104,8 +1128,15 @@ namespace tgfx {
         value.buffer = buffer;
         value.offset = offset;
         value.range = size;
-        const BackendBoundResourceSlot slot = bound_resource_slot_from_plan_entry(*plan_entry);
-        upsert_pending_planned_binding(scope_from_shader_resource(rb->scope), slot, value);
+        upsert_pending_planned_binding(scope, slot, value);
+        // Bound snapshot memory even for workloads with many unique pass/material
+        // values. Uncached uploads remain valid; GPU storage is still frame-owned.
+        constexpr size_t max_snapshot_bytes = 4u * 1024u * 1024u;
+        if (reusable && buffer && size <= max_snapshot_bytes - uniform_upload_cache_bytes_) {
+            const auto* bytes = static_cast<const uint8_t*>(data);
+            uniform_upload_cache_.emplace(hash, UniformUploadEntry{{bytes, bytes + size}, value});
+            uniform_upload_cache_bytes_ += size;
+        }
     }
 
     void RenderContext2::set_push_constants(const void* data, uint32_t size) {

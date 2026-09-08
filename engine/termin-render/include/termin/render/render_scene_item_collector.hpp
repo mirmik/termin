@@ -14,6 +14,7 @@ extern "C" {
 }
 
 namespace termin {
+    class StaticMeshBatchCache;
 
     struct RenderSceneItemCollectRequest {
         tc_scene_handle scene{};
@@ -78,6 +79,7 @@ namespace termin {
     private:
         tc_scene_handle scene_{};
         const void* scene_context_ = nullptr;
+        StaticMeshBatchCache* batches_ = nullptr;
         int scene_filter_flags_ = TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_VISIBLE | TC_SCENE_FILTER_ENTITY_ENABLED;
 
     protected:
@@ -90,7 +92,8 @@ namespace termin {
         explicit TcSceneRenderItemSource(tc_scene_handle scene,
                                          const void* scene_context = nullptr,
                                          int scene_filter_flags = TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_VISIBLE |
-                                                                  TC_SCENE_FILTER_ENTITY_ENABLED);
+                                                                 TC_SCENE_FILTER_ENTITY_ENABLED,
+                                         StaticMeshBatchCache* batches = nullptr);
     };
 
     RENDER_API tc_component* render_scene_item_component(const tc_render_item& item);

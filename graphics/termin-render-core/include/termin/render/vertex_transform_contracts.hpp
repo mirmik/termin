@@ -30,6 +30,7 @@ namespace termin {
         Float3,
         Float4,
         Matrix4,
+        UInt,
     };
 
     struct MaterialPipelineSemantic {

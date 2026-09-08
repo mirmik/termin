@@ -98,4 +98,8 @@ can record `ResourceView` and `FboComposition` metadata in `PipelineRenderCache`
 
 ## Связь с termin-graphics
 
+Объединение статических scene items описано в
+[Static mesh batching](static-mesh-batching.md): opt-in, ownership кэша,
+инвалидация и сохранение отдельных ID для picking.
+
 `termin-render` использует backend-neutral primitives из `termin-graphics`. Generic GPU utilities без знания frame graph обычно должны жить в `termin-graphics`; frame graph, render pipeline и debugger logic остаются здесь.

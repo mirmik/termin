@@ -3,6 +3,9 @@
 #include "guard_c.h"
 #include "tc_picking.h"
 
+typedef uint32_t uint;
+#include "../../../graphics/termin-graphics/resources/builtin_shaders/termin_pick_encoding.slang"
+
 static int color_distance(int ar, int ag, int ab, int br, int bg, int bb) {
     return abs(ar - br) + abs(ag - bg) + abs(ab - bb);
 }
@@ -78,8 +81,22 @@ GUARD_C_TEST(test_picking_low_ids_are_visually_distinct) {
     return 0;
 }
 
+GUARD_C_TEST(test_shader_picking_encoding_matches_cpu) {
+    // Cover consecutive low IDs, the full 24-bit range at varied strides, and
+    // the zero-permutation edge case by checking every valid ID.
+    for (uint32_t id = 0; id <= 0xffffffu; ++id) {
+        int r, g, b;
+        tc_picking_id_to_rgb((int)id, &r, &g, &b);
+        uint32_t expected = (uint32_t)r | ((uint32_t)g << 8) | ((uint32_t)b << 16);
+        GUARD_C_CHECK_EQ_INT(expected, termin_pick_encode(id));
+    }
+    GUARD_C_CHECK_EQ_INT(0, termin_pick_encode(0x1000000u));
+    return 0;
+}
+
 int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_shader_picking_encoding_matches_cpu);
     GUARD_C_RUN(test_picking_zero_is_background);
     GUARD_C_RUN(test_picking_roundtrip_without_cache);
     GUARD_C_RUN(test_picking_low_ids_are_visually_distinct);

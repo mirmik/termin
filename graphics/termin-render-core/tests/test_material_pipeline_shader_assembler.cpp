@@ -449,6 +449,41 @@ TEST_CASE("assembled material shader preserves authored color semantics") {
     tc_shader_shutdown();
 }
 
+TEST_CASE("picking batch shader selects compact position and original uint ID view") {
+    tc_shader_init();
+    termin::TcShaderCreateInfo create_info;
+    create_info.sources.vertex = "void main() {}";
+    create_info.sources.fragment = "void main() {}";
+    create_info.sources.name = "batched-picking-input";
+    create_info.uuid = "batched-picking-input-selection";
+    create_info.language = TC_SHADER_LANGUAGE_GLSL;
+    tc_shader_contract_vertex_input inputs[3]{};
+    std::snprintf(inputs[0].semantic, sizeof(inputs[0].semantic), "position");
+    inputs[0].type = TC_SHADER_CONTRACT_VALUE_FLOAT3;
+    inputs[0].required = 1;
+    std::snprintf(inputs[1].semantic, sizeof(inputs[1].semantic), "pick_id");
+    inputs[1].type = TC_SHADER_CONTRACT_VALUE_UINT;
+    inputs[1].required = 1;
+    std::snprintf(inputs[2].semantic, sizeof(inputs[2].semantic), "color");
+    inputs[2].type = TC_SHADER_CONTRACT_VALUE_FLOAT3;
+    inputs[2].required = 1;
+    tc_shader_contract_desc contract{};
+    contract.schema_version = TC_SHADER_CONTRACT_SCHEMA_VERSION;
+    contract.source_kind = TC_SHADER_CONTRACT_SOURCE_DECLARED;
+    contract.vertex_inputs = inputs;
+    contract.vertex_input_count = 2;
+    create_info.declared_contract = &contract;
+    auto shader = termin::TcShader::from_sources(create_info);
+    REQUIRE(shader.is_valid());
+    CHECK(termin::material_mesh_vertex_input_for_shader(shader.get(), termin::MaterialMeshVertexInput::Position) ==
+          termin::MaterialMeshVertexInput::PositionPickId);
+    contract.vertex_input_count = 3;
+    REQUIRE(tc_shader_set_contract(shader.get(), &contract));
+    CHECK(termin::material_mesh_vertex_input_for_shader(shader.get(), termin::MaterialMeshVertexInput::Position) ==
+          termin::MaterialMeshVertexInput::FullMaterial);
+    tc_shader_shutdown();
+}
+
 TEST_CASE("surface producer composes with distinct pass consumers") {
     tc_shader_init();
     tc_surface_contract_registry_clear();

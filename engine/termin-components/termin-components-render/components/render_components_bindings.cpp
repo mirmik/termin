@@ -634,6 +634,7 @@ NB_MODULE(_components_render_native, m) {
             [](MeshRenderer& self, const TcMaterial& v) { self.set_material(v); },
             nb::rv_policy::reference_internal)
         .def_rw("cast_shadow", &MeshRenderer::cast_shadow)
+        .def_rw("static_batching", &MeshRenderer::static_batching)
         .def_prop_rw(
             "_override_material",
             [](MeshRenderer& self) { return self._override_material; },

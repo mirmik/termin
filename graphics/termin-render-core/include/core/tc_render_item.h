@@ -29,6 +29,8 @@ typedef enum tc_render_item_flags {
     TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES = 1u << 2,
     TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR = 1u << 3,
     TC_RENDER_ITEM_FLAG_HAS_INLINE_UNIFORM = 1u << 4,
+    TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE = 1u << 5,
+    TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY = 1u << 6,
 } tc_render_item_flags;
 
 typedef enum tc_render_item_source_domain {

@@ -91,6 +91,37 @@ namespace termin {
             return contract;
         }
 
+        MaterialPipelinePassContract batched_id_material_pass_contract() {
+            MaterialPipelinePassContract contract;
+            contract.debug_name = "id_batched";
+            VertexOutputAdapter adapter;
+            adapter.debug_name = "id_batched_clip_output";
+            adapter.source_module = {"termin_id_batched_vertex_output_adapter",
+                                     "builtin_shaders/termin_id_batched_vertex_output_adapter.slang"};
+            adapter.output_type_name = "VertexOutput";
+            adapter.output_function = "termin_id_batched_vertex_output";
+            adapter.consumed_world_semantics = id_world_position_interface();
+            adapter.consumed_world_semantics.semantics.push_back({"pick_id", MaterialPipelineValueType::UInt});
+            adapter.produced_output_semantics.semantics = {
+                {"clip_position", MaterialPipelineValueType::Float4}, {"pick_id", MaterialPipelineValueType::UInt}};
+            adapter.resources.push_back(material_pipeline_abi_resource_decl(
+                ShaderAbiResourceId::PerFrame, TC_SHADER_STAGE_VERTEX, MaterialPipelineResourceOwner::Pass));
+            contract.vertex_output_adapter = std::move(adapter);
+            auto provider = material_pipeline_make_static_mesh_vertex_transform_provider(
+                "static_batched_id", MeshVertexTransformProfile::Position, "id_model.model");
+            provider.vertex_inputs.mesh_attributes.push_back({"pick_id", MaterialPipelineValueType::UInt});
+            provider.entry_input_declaration = R"(
+struct VertexInput {
+    float3 position : POSITION;
+    uint a_pick_id : TEXCOORD7;
+};)";
+            provider.adapter_input_expression += ", input.a_pick_id";
+            provider.produced_world_semantics.semantics.push_back({"pick_id", MaterialPipelineValueType::UInt});
+            provider.resources.push_back(material_pipeline_draw_resource_decl("id_model", TC_SHADER_STAGE_VERTEX, 64u));
+            contract.static_vertex_transform = std::move(provider);
+            return contract;
+        }
+
     } // anonymous namespace
 
     MaterialPipelinePassContract IdPass::shader_pass_contract() const {
@@ -102,6 +133,12 @@ namespace termin {
             id_shader_handle_ = tgfx::register_builtin_shader_from_catalog(ID_ENGINE_SHADER_UUID);
         }
         return id_shader_handle_;
+    }
+
+    std::optional<GeometryPassBase::BatchedGeometryShader> IdPass::batched_geometry_shader() const {
+        if (tc_shader_handle_is_invalid(batched_id_shader_handle_))
+            batched_id_shader_handle_ = tgfx::register_builtin_shader_from_catalog("termin-engine-id-batched");
+        return BatchedGeometryShader{batched_id_shader_handle_, batched_id_material_pass_contract()};
     }
 
     void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
@@ -259,7 +296,7 @@ namespace termin {
             std::array<RenderItemNamedUniformBinding, 3> base_draw_uniforms{{
                 {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
                 {"id_model", &model, static_cast<uint32_t>(sizeof(model)), "id_model"},
-                {"id_pick", &pick, static_cast<uint32_t>(sizeof(pick))},
+                {"id_pick", &pick, static_cast<uint32_t>(sizeof(pick)), "id_pick"},
             }};
 
             MaterialPipelineResourceView draw_material_resources{};
@@ -274,7 +311,8 @@ namespace termin {
             draw_context.projection = projection;
             std::memcpy(draw_context.model.data, model.u_model, sizeof(model.u_model));
             draw_context.phase = TC_PHASE_ID;
-            draw_context.pass_contract = shader_pass_contract();
+            draw_context.pass_contract = (item.flags & TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY)
+                                             ? batched_id_material_pass_contract() : shader_pass_contract();
             draw_context.current_tc_shader = dc.final_shader;
             draw_context.layer_mask = layer_mask;
             draw_context.render_category_mask = render_category_mask;

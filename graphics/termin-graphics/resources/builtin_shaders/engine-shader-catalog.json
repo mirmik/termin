@@ -578,6 +578,22 @@
       }
     },
     {
+      "uuid": "termin-engine-id-batched",
+      "name": "IdBatchedEngineVSFS",
+      "language": "slang",
+      "runtime_sources": [
+        "termin-engine-id-batched.slang",
+        "termin_id_batched_vertex_output_adapter.slang",
+        "termin_pick_encoding.slang",
+        "termin_vertex_transform.slang",
+        "termin_prelude.slang"
+      ],
+      "stages": {
+        "vertex": {"path": "termin-engine-id-batched.slang", "entry": "vs_main"},
+        "fragment": {"path": "termin-engine-id-batched.slang", "entry": "fs_main"}
+      }
+    },
+    {
       "uuid": "termin-engine-id",
       "name": "IdEngineVSFS",
       "language": "slang",

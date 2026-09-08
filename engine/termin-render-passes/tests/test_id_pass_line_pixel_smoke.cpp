@@ -1,5 +1,11 @@
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/id_pass.hpp>
+#include <termin/render/mesh_renderer.hpp>
+#include <termin/render/static_mesh_batch.hpp>
+#include <components/mesh_component.hpp>
+#include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx/tgfx_mesh_handle.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/scene_render_services.hpp>
@@ -404,6 +410,124 @@ namespace {
         return 0;
     }
 
+
+    int run_batched_mesh_smoke(const char* argv0) {
+        const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+        const ScopedTempDirectory artifact_root{std::filesystem::temp_directory_path() /
+                                                ("termin-id-batched-smoke-" + std::to_string(unique))};
+        configure_shader_artifacts(argv0, artifact_root.path);
+        termin::MeshComponent::register_type();
+        termin::MeshRenderer::register_type();
+        auto material = termin::TcMaterial::create("BatchedPickMaterial", "batched-pick-material");
+        auto* phase = material.add_phase(tc_shader_handle_invalid(), "opaque", 0);
+        if (!phase) return 1;
+        phase->state = tc_render_state_opaque();
+        phase->state.cull = 0;
+        auto scene = termin::TcSceneRef::create("batched-pick-scene");
+        uint32_t ids[2]{};
+        for (uint32_t member = 0; member < 2; ++member) {
+            const float x = member == 0 ? 0.1f : 0.55f;
+            const float vertices[] = {
+                x, 0.1f, 0.5f, 0, 0, 1, 0, 0,
+                x + 0.3f, 0.1f, 0.5f, 0, 0, 1, 1, 0,
+                x + 0.3f, 0.6f, 0.5f, 0, 0, 1, 1, 1,
+                x, 0.6f, 0.5f, 0, 0, 1, 0, 1,
+            };
+            // IdPass enforces back-face culling; use the engine's front-facing winding.
+            const uint32_t indices[] = {0, 2, 1, 0, 3, 2};
+            auto layout = tc_vertex_layout_pos_normal_uv();
+            termin::TcMeshCreateInfo info;
+            info.data = termin::TcMeshInterleavedDataView{vertices, 4, indices, 6, &layout};
+            const std::string name = "BatchedPick" + std::to_string(member);
+            info.name = name;
+            info.uuid_hint = name;
+            auto mesh = termin::TcMesh::from_interleaved(info);
+            if (!mesh.is_valid()) return 1;
+            auto entity = scene.create_entity(name);
+            entity.set_pickable(true);
+            ids[member] = entity.pick_id();
+            auto* mesh_component = new termin::MeshComponent();
+            mesh_component->set_mesh(mesh);
+            entity.add_component(mesh_component);
+            auto* renderer = new termin::MeshRenderer();
+            renderer->static_batching = true;
+            renderer->set_material(material);
+            entity.add_component(renderer);
+        }
+        termin::RenderItemSnapshot control_snapshot;
+        termin::TcSceneRenderItemSource control_source(scene.handle());
+        if (!control_source.publish(control_snapshot, {})) return 1;
+        termin::StaticMeshBatchCache batches;
+        termin::RenderItemSnapshot snapshot;
+        termin::TcSceneRenderItemSource source(scene.handle(), nullptr, TC_SCENE_FILTER_NONE, &batches);
+        if (!source.publish(snapshot, {})) return 1;
+        bool saw_batch = false;
+        for (const auto& item : snapshot.items()) {
+            if (item.flags & TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY) saw_batch = true;
+        }
+        if (!saw_batch) {
+            std::fprintf(stderr, "IdPass batch smoke: merger did not produce batched geometry\n");
+            return 1;
+        }
+        auto device = tgfx::create_device(tgfx::BackendType::Vulkan);
+        tgfx::TextureDesc color_desc;
+        color_desc.width = kWidth;
+        color_desc.height = kHeight;
+        color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        color_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+        auto color = device->create_texture(color_desc);
+        auto depth_desc = color_desc;
+        depth_desc.format = tgfx::PixelFormat::D32F;
+        depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
+        auto depth = device->create_texture(depth_desc);
+        tgfx::PipelineCache cache(*device);
+        tgfx::RenderContext2 render_ctx(*device, cache);
+        termin::IdPass pass("empty", "id", "IdPassBatchedSmoke");
+        termin::ExecuteContext exec_ctx;
+        exec_ctx.ctx2 = &render_ctx;
+        exec_ctx.render_item_snapshot = &snapshot;
+        exec_ctx.tex2_writes.emplace("id", color);
+        exec_ctx.tex2_depth_writes.emplace("id", depth);
+        exec_ctx.render_rect = {0, 0, int(kWidth), int(kHeight)};
+        const termin::SceneRenderServices services(scene);
+        termin::RenderExecutionCapabilities capabilities;
+        capabilities.add(services);
+        exec_ctx.capabilities = &capabilities;
+        bool all_ok = true;
+        for (bool batched : {false, true}) {
+            exec_ctx.render_item_snapshot = batched ? &snapshot : &control_snapshot;
+            render_ctx.begin_frame();
+            pass.execute_with_data_tgfx2(exec_ctx, exec_ctx.render_rect, scene.handle(),
+                                        termin::Mat44f::identity(), termin::Mat44f::identity(),
+                                        termin::Vec3{0, 0, 0}, UINT64_MAX);
+            render_ctx.end_frame();
+            device->wait_idle();
+            bool found[2]{};
+            bool ok = true;
+            for (int member = 0; member < 2; ++member) {
+                // Test both native image origins. Exactly one of these points
+                // lies inside the quad, and must decode to its source entity.
+                for (int y : {20, 44}) {
+                    float pixel[4]{};
+                    ok = device->read_pixel_rgba8(color, member == 0 ? 40 : 54, y, pixel) && ok;
+                    const int decoded = tc_picking_rgb_to_id(int(std::lround(pixel[0] * 255)),
+                                                            int(std::lround(pixel[1] * 255)),
+                                                            int(std::lround(pixel[2] * 255)));
+                    if (decoded == int(ids[member])) found[member] = true;
+                    if (decoded != 0 && decoded != int(ids[member])) ok = false;
+                }
+            }
+            ok = ok && found[0] && found[1] && pass.entity_names.size() == (batched ? 1u : 2u);
+            if (!ok) std::fprintf(stderr, "IdPass %s smoke failed: original IDs %u/%u, found %d/%d, draws %zu\n",
+                                  batched ? "batch" : "control", ids[0], ids[1], found[0], found[1], pass.entity_names.size());
+            all_ok = all_ok && ok;
+        }
+        pass.destroy();
+        device->destroy(depth);
+        device->destroy(color);
+        return all_ok ? 0 : 1;
+    }
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -414,15 +538,13 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    tc_shader_init();
-    tc_material_init();
-    tc_scene_pool_init();
+    termin::bootstrap::bootstrap_runtime();
 
     const int line_result = run_smoke(argc > 0 ? argv[0] : nullptr);
     const int world_text_result = run_world_text_smoke(argc > 0 ? argv[0] : nullptr);
 
-    tc_scene_pool_shutdown();
-    tc_material_shutdown();
-    tc_shader_shutdown();
-    return line_result != 0 || world_text_result != 0 ? 1 : 0;
+    const int batch_result = run_batched_mesh_smoke(argc > 0 ? argv[0] : nullptr);
+
+    termin::bootstrap::shutdown_runtime();
+    return line_result != 0 || world_text_result != 0 || batch_result != 0 ? 1 : 0;
 }

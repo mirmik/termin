@@ -14,6 +14,7 @@ extern "C" {
 }
 
 namespace termin {
+    class StaticMeshBatchCache;
 
     using SceneInternalEntityMap = std::unordered_map<std::string, tc_entity_handle>;
 
@@ -28,6 +29,7 @@ namespace termin {
                                     const SceneInternalEntityMap& internal_entities,
                                     const std::vector<Light>& lights,
                                     const std::string& default_render_target = "",
-                                    const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests = {});
+                                    const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests = {},
+                                    StaticMeshBatchCache* batches = nullptr);
 
 } // namespace termin

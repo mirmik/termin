@@ -563,6 +563,14 @@ namespace termin {
             return MaterialMeshVertexInput::SkinnedPositionJointsWeights;
         }
 
+        // Picking batches append the original uint ID after the source mesh
+        // attributes. A full layout can alias compact shader location 1 to the
+        // mesh normal instead. Filter both semantics and let shader reflection
+        // supply their actual locations, as with compact skinned views.
+        if (contract.vertex_input_count == 2 && contract_has_vertex_input(contract, "pick_id")) {
+            return MaterialMeshVertexInput::PositionPickId;
+        }
+
         // Compact predefined views are valid only for the standard material
         // semantics they enumerate. Authored inputs such as vertex color must
         // preserve the mesh's complete layout; otherwise the planner accepts the
@@ -586,6 +594,8 @@ namespace termin {
             return ::termin::draw_tc_mesh(ctx, mesh);
         case MaterialMeshVertexInput::Position:
             return ::termin::draw_tc_mesh(ctx, mesh, {"position"});
+        case MaterialMeshVertexInput::PositionPickId:
+            return ::termin::draw_tc_mesh(ctx, mesh, {"position", "pick_id"}, true);
         case MaterialMeshVertexInput::PositionNormal:
             return ::termin::draw_tc_mesh(ctx, mesh, {"position", "normal"});
         case MaterialMeshVertexInput::SkinnedFullMaterial:
@@ -608,6 +618,8 @@ namespace termin {
             return ::termin::draw_tc_submesh(ctx, mesh, submesh_index);
         case MaterialMeshVertexInput::Position:
             return ::termin::draw_tc_submesh(ctx, mesh, submesh_index, {"position"});
+        case MaterialMeshVertexInput::PositionPickId:
+            return ::termin::draw_tc_submesh(ctx, mesh, submesh_index, {"position", "pick_id"}, true);
         case MaterialMeshVertexInput::PositionNormal:
             return ::termin::draw_tc_submesh(ctx, mesh, submesh_index, {"position", "normal"});
         case MaterialMeshVertexInput::SkinnedFullMaterial:

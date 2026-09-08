@@ -577,15 +577,37 @@ namespace tgfx {
 
         struct DynSlot {
             uint32_t binding = 0;
+            uint32_t array_element = 0;
             uint32_t offset = 0;
         };
 
+        static uint64_t descriptor_base_offset(const VulkanResolvedResourceBinding& binding, BufferHandle ring) {
+            return ring && binding.buffer == ring &&
+                           binding.expected_descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+                       ? 0u : binding.offset;
+        }
+
+        static bool same_descriptor_bindings(std::span<const VulkanResolvedResourceBinding> a,
+                                             std::span<const VulkanResolvedResourceBinding> b, BufferHandle ring) {
+            if (a.size() != b.size()) return false;
+            for (size_t i = 0; i < a.size(); ++i) {
+                const auto& x = a[i];
+                const auto& y = b[i];
+                if (x.binding != y.binding || x.array_element != y.array_element ||
+                    x.expected_descriptor_type != y.expected_descriptor_type || x.kind != y.kind ||
+                    x.buffer != y.buffer || x.texture != y.texture || x.sampler != y.sampler ||
+                    x.range != y.range || descriptor_base_offset(x, ring) != descriptor_base_offset(y, ring))
+                    return false;
+            }
+            return true;
+        }
+
         static uint64_t hash_resolved_resource_bindings(uintptr_t resource_layout_token,
                                                         std::span<const VulkanResolvedResourceBinding> bindings,
-                                                        uint64_t domain) {
+                                                        uint64_t domain, BufferHandle ring) {
             // FNV-1a over descriptor identity, including the buffer's base
             // offset. Bind-time dynamic offsets are supplied independently to
-            // vkCmdBindDescriptorSets. Ring slices bypass this cache entirely.
+            // vkCmdBindDescriptorSets. Ring UBO slices share a zero base offset.
             uint64_t h = 0xcbf29ce484222325ull;
             auto mix = [&h](uint64_t v) {
                 h ^= v;
@@ -598,7 +620,7 @@ namespace tgfx {
                 mix(static_cast<uint64_t>(b.expected_descriptor_type));
                 mix(static_cast<uint64_t>(b.kind));
                 mix(b.buffer.id);
-                mix(b.offset);
+                mix(descriptor_base_offset(b, ring));
                 mix(b.range);
                 mix(b.texture.id);
                 mix(b.sampler.id);
@@ -693,8 +715,58 @@ namespace tgfx {
             }
         }
 
-        const uint64_t key = hash_resolved_resource_bindings(resource_layout_token, resolved_bindings, cache_domain);
+        auto find_resolved_binding = [&](uint32_t binding,
+                                         uint32_t array_element) -> const VulkanResolvedResourceBinding* {
+            for (const VulkanResolvedResourceBinding& b : resolved_bindings) {
+                if (b.binding == binding && b.array_element == array_element) return &b;
+            }
+            return nullptr;
+        };
+        // Build draw-local offsets before cache lookup; never modify a wrapper
+        // that may already have been recorded by an earlier draw.
+        std::array<DynSlot, VkResourceSetResource::MAX_DYNAMIC_OFFSETS> dyn_slots{};
+        uint32_t dyn_count = 0;
+        for (const auto& lb : layout_bindings) {
+            if (lb.descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) continue;
+            for (uint32_t element = 0; element < std::max(lb.descriptorCount, 1u); ++element) {
+                if (dyn_count == dyn_slots.size()) {
+                    tc_log_error("VulkanRenderDevice: dynamic descriptor count exceeds supported limit=%u",
+                                 VkResourceSetResource::MAX_DYNAMIC_OFFSETS);
+                    return {};
+                }
+                const auto* provided = find_resolved_binding(lb.binding, element);
+                const uint64_t offset = provided && ring_ubo_handle_ && provided->buffer == ring_ubo_handle_
+                                            ? provided->offset : 0u;
+                if (offset > UINT32_MAX) {
+                    tc_log_error("VulkanRenderDevice: dynamic UBO offset exceeds uint32 range");
+                    return {};
+                }
+                dyn_slots[dyn_count++] = {lb.binding, element, static_cast<uint32_t>(offset)};
+            }
+        }
+        std::sort(dyn_slots.begin(), dyn_slots.begin() + dyn_count, [](const DynSlot& a, const DynSlot& b) {
+            return a.binding != b.binding ? a.binding < b.binding : a.array_element < b.array_element;
+        });
+        res.dynamic_offset_count = dyn_count;
+        for (uint32_t i = 0; i < dyn_count; ++i) res.dynamic_offsets[i] = dyn_slots[i].offset;
+
+        const uint64_t key = hash_resolved_resource_bindings(resource_layout_token, resolved_bindings, cache_domain,
+                                                            ring_ubo_handle_);
         auto& cache = descriptor_cache_[current_pool_idx_];
+        auto& ring_cache = ring_descriptor_cache_[current_pool_idx_];
+        if (has_ring) {
+            if (auto it = ring_cache.find(key); it != ring_cache.end()) {
+                for (const auto& entry : it->second) {
+                    if (entry.layout_token == resource_layout_token && entry.domain == cache_domain &&
+                        same_descriptor_bindings(entry.bindings, resolved_bindings, ring_ubo_handle_)) {
+                        res.descriptor_set = entry.descriptor_set;
+                        res.descriptor_cache_owned = false;
+                        vulkan_stats_increment(g_ring_descriptor_cache_hit_count);
+                        return {resource_sets_.add(std::move(res))};
+                    }
+                }
+            }
+        }
         if (!has_ring) {
             if (auto it = cache.find(key); it != cache.end()) {
                 return it->second;
@@ -743,18 +815,6 @@ namespace tgfx {
         buf_infos.reserve(layout_descriptor_count);
         img_infos.reserve(layout_descriptor_count);
 
-        std::vector<DynSlot> dyn_slots;
-
-        auto find_resolved_binding = [&](uint32_t binding,
-                                         uint32_t array_element) -> const VulkanResolvedResourceBinding* {
-            for (const VulkanResolvedResourceBinding& b : resolved_bindings) {
-                if (b.binding == binding && b.array_element == array_element) {
-                    return &b;
-                }
-            }
-            return nullptr;
-        };
-
         for (const VkDescriptorSetLayoutBinding& lb : layout_bindings) {
             const uint32_t descriptor_count = std::max(lb.descriptorCount, 1u);
             for (uint32_t element = 0; element < descriptor_count; ++element) {
@@ -788,9 +848,6 @@ namespace tgfx {
                     const bool is_ring = ring_ubo_handle_ && (buffer == ring_ubo_handle_);
                     buf_infos.push_back({buf->buffer, dynamic_ubo && is_ring ? 0u : offset, range});
                     w.pBufferInfo = &buf_infos.back();
-                    if (dynamic_ubo) {
-                        dyn_slots.push_back({lb.binding, is_ring ? static_cast<uint32_t>(offset) : 0u});
-                    }
                     break;
                 }
                 case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
@@ -849,15 +906,16 @@ namespace tgfx {
 
         if (!writes.empty()) {
             vkUpdateDescriptorSets(device_, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+            vulkan_stats_increment(g_descriptor_update_count);
         }
-
-        std::sort(dyn_slots.begin(), dyn_slots.end(), [](const DynSlot& a, const DynSlot& b) {
-            return a.binding < b.binding;
-        });
-        res.dynamic_offset_count = static_cast<uint32_t>(
-            std::min(dyn_slots.size(), static_cast<size_t>(VkResourceSetResource::MAX_DYNAMIC_OFFSETS)));
-        for (uint32_t i = 0; i < res.dynamic_offset_count; ++i) {
-            res.dynamic_offsets[i] = dyn_slots[i].offset;
+        if (has_ring) {
+            VkRingDescriptorCacheEntry entry;
+            entry.layout_token = resource_layout_token;
+            entry.domain = cache_domain;
+            entry.bindings.assign(resolved_bindings.begin(), resolved_bindings.end());
+            for (auto& binding : entry.bindings) binding.offset = descriptor_base_offset(binding, ring_ubo_handle_);
+            entry.descriptor_set = res.descriptor_set;
+            ring_cache[key].push_back(std::move(entry));
         }
 
         const bool cache_owned = !has_ring;

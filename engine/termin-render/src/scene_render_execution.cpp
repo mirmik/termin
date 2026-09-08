@@ -14,7 +14,8 @@ namespace termin {
                                     const SceneInternalEntityMap& internal_entities,
                                     const std::vector<Light>& lights,
                                     const std::string& default_render_target,
-                                    const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests) {
+                                    const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests,
+                                    StaticMeshBatchCache* batches) {
         if (!tc_scene_handle_valid(scene)) {
             tc::Log::error("render_scene_pipeline_offscreen: invalid scene handle");
             return;
@@ -48,7 +49,8 @@ namespace termin {
             scene_services.emplace_back(
                 TcSceneRef(scene), internal, lights, target.layer_mask, target.render_category_mask);
 
-            TcSceneRenderItemSource item_source(scene, &scene_services.back().scene);
+            TcSceneRenderItemSource item_source(scene, &scene_services.back().scene,
+                TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_VISIBLE | TC_SCENE_FILTER_ENTITY_ENABLED, batches);
             RenderItemSourceRequest source_request{};
             source_request.view = &target.view;
             source_request.layer_mask = target.layer_mask;

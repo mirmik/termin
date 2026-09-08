@@ -84,6 +84,8 @@ namespace termin {
                 return TC_SHADER_CONTRACT_VALUE_FLOAT4;
             if (value_type == "float4x4")
                 return TC_SHADER_CONTRACT_VALUE_MATRIX4;
+            if (value_type == "uint")
+                return TC_SHADER_CONTRACT_VALUE_UINT;
             tc::Log::error("Unsupported parsed surface input type '%s'", value_type.c_str());
             throw std::runtime_error("Unsupported parsed surface input type: " + value_type);
         }

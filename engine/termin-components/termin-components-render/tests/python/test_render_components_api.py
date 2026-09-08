@@ -644,6 +644,8 @@ def test_mesh_renderer_preconfigured_component_survives_entity_add_component():
     try:
         entity = source_scene.create_entity("mesh")
         renderer = MeshRenderer(material=legacy_material, cast_shadow=False)
+        assert renderer.static_batching is False
+        renderer.static_batching = True
         renderer.set_material_slot(0, slot0_material)
         renderer.set_material_slot(2, slot2_material)
 
@@ -653,6 +655,7 @@ def test_mesh_renderer_preconfigured_component_survives_entity_add_component():
 
         assert component_data["material"]["uuid"] == legacy_material.uuid
         assert component_data["cast_shadow"] is False
+        assert component_data["static_batching"] is True
         assert [slot["type"] for slot in component_data["materials"]] == ["uuid", "none", "uuid"]
         assert component_data["materials"][0]["uuid"] == slot0_material.uuid
         assert component_data["materials"][2]["uuid"] == slot2_material.uuid
@@ -666,6 +669,7 @@ def test_mesh_renderer_preconfigured_component_survives_entity_add_component():
 
         assert restored.material.uuid == legacy_material.uuid
         assert restored.cast_shadow is False
+        assert restored.static_batching is True
         assert restored.material_slot_count == 3
         assert restored.materials[0].uuid == slot0_material.uuid
         assert restored.materials[1].is_valid is False

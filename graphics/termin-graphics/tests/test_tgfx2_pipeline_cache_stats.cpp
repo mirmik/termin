@@ -1,6 +1,7 @@
 #include "guard_main.h"
 
 #include <memory>
+#include <cstring>
 #include <span>
 #include <unordered_map>
 #include <utility>
@@ -135,7 +136,10 @@ namespace {
         }
         void destroy(tgfx::ResourceSetHandle) override {}
 
-        void upload_buffer(tgfx::BufferHandle, std::span<const uint8_t>, uint64_t = 0) override {}
+        void upload_buffer(tgfx::BufferHandle, std::span<const uint8_t> bytes, uint64_t = 0) override {
+            uniform_uploads.emplace_back(bytes.begin(), bytes.end());
+        }
+        std::vector<std::vector<uint8_t>> uniform_uploads;
         void upload_texture(tgfx::TextureHandle, std::span<const uint8_t>, uint32_t = 0) override {}
         void upload_texture_region(tgfx::TextureHandle,
                                    uint32_t,
@@ -964,4 +968,46 @@ TEST_CASE("render target pool moves preserve borrowed color and owned depth") {
         CHECK(destroyed != external);
     device.destroy(external);
     CHECK(device.destroyed_textures.size() == device.create_texture_count);
+}
+
+TEST_CASE("RenderContext2 reuses immutable uniform bytes only inside a frame") {
+    PipelineCacheStatsDevice device;
+    tgfx::PipelineCache cache(device);
+    tgfx::RenderContext2 context(device, cache);
+    tc_shader_resource_binding rb{};
+    std::strcpy(rb.name, "material");
+    rb.kind = TC_SHADER_RESOURCE_CONSTANT_BUFFER;
+    rb.scope = TC_SHADER_RESOURCE_SCOPE_MATERIAL;
+    rb.stage_mask = TC_SHADER_STAGE_FRAGMENT;
+    rb.size = 16;
+    tc_shader shader{};
+    shader.has_resource_layout = 1;
+    shader.resource_bindings = &rb;
+    shader.resource_binding_count = 1;
+    std::array<float, 4> data{1, 2, 3, 4};
+    context.begin_frame();
+    context.use_shader_resource_layout(&shader);
+    context.bind_uniform_data(&rb, data.data(), sizeof(data));
+    REQUIRE(device.uniform_uploads.size() == 1);
+    const auto copy = data;
+    context.bind_uniform_data(&rb, copy.data(), sizeof(copy));
+    CHECK(device.uniform_uploads.size() == 1);
+    data[0] = 7;
+    context.bind_uniform_data(&rb, data.data(), sizeof(data));
+    REQUIRE(device.uniform_uploads.size() == 2);
+    CHECK(device.uniform_uploads[0] != device.uniform_uploads[1]);
+    context.bind_uniform_data(&rb, copy.data(), sizeof(copy));
+    CHECK(device.uniform_uploads.size() == 2);
+    context.end_frame();
+    context.begin_frame();
+    context.use_shader_resource_layout(&shader);
+    context.bind_uniform_data(&rb, copy.data(), sizeof(copy));
+    CHECK(device.uniform_uploads.size() == 3);
+    // Per-draw traffic is intentionally not retained in the content cache.
+    rb.scope = TC_SHADER_RESOURCE_SCOPE_DRAW;
+    context.use_shader_resource_layout(&shader);
+    context.bind_uniform_data(&rb, copy.data(), sizeof(copy));
+    context.bind_uniform_data(&rb, copy.data(), sizeof(copy));
+    CHECK(device.uniform_uploads.size() == 5);
+    context.end_frame();
 }

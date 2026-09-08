@@ -212,6 +212,12 @@ namespace termin {
         UsageContext context{this, &emit, base_shader, shader_pass_contract(), collect_phase, get_pass_name()};
 
         tc_scene_foreach_drawable(scene, callback, &context, TC_SCENE_FILTER_NONE, 0);
+        if (const auto batch_shader = batched_geometry_shader()) {
+            MaterialShaderVariantBatch batch(batch_shader->contract);
+            const TcShader shader = batch.resolve(TcShader(batch_shader->base_shader), VertexTransformKind::StaticMesh,
+                                                  get_pass_name().c_str());
+            if (shader.is_valid()) emit(shader);
+        }
     }
 
     void GeometryPassBase::collect_draw_calls(tc_scene_handle scene,
@@ -246,6 +252,13 @@ namespace termin {
         MaterialShaderVariantBatch shader_variants(pass_contract);
         const std::string pass_name = get_pass_name();
         const auto& items = snapshot.items();
+        const bool has_batched_items = std::any_of(items.begin(), items.end(), [](const tc_render_item& item) {
+            return (item.flags & TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY) != 0;
+        });
+        const auto batch_shader = has_batched_items ? batched_geometry_shader() : std::nullopt;
+        std::optional<MaterialShaderVariantBatch> batch_shader_variants;
+        if (batch_shader) batch_shader_variants.emplace(batch_shader->contract);
+
 
         for (size_t group_begin = 0; group_begin < items.size();) {
             const tc_render_item& representative = items[group_begin];
@@ -275,7 +288,9 @@ namespace termin {
             }
             const tc_render_item& item = items[selected_index];
             tc_material_phase* selected_phase = nullptr;
-            tc_shader_handle original_shader = base_shader;
+            const bool use_batch_shader = batch_shader && (item.flags & TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY);
+            tc_shader_handle original_shader = use_batch_shader ? batch_shader->base_shader : base_shader;
+            MaterialShaderVariantBatch& selected_variants = use_batch_shader ? *batch_shader_variants : shader_variants;
             if (uses_material_phase_shader_override() && render_item_matches_phase(item, collect_phase)) {
                 selected_phase = resolve_render_item_material_phase(item);
                 if (selected_phase && !tc_shader_handle_is_invalid(selected_phase->shader)) {
@@ -288,9 +303,9 @@ namespace termin {
                                           selected_phase,
                                           original_shader,
                                           collect_phase,
-                                          pass_contract,
+                                          selected_variants.contract(),
                                           pass_name.c_str(),
-                                          planned_shader, &shader_variants)) {
+                                          planned_shader, &selected_variants)) {
                 DrawCall dc;
                 dc.entity = ent;
                 dc.component = component;
