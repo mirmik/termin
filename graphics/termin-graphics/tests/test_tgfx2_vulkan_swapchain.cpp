@@ -115,8 +115,11 @@ namespace {
         trace.image_signals.resize(swapchain.image_count(), VK_NULL_HANDLE);
     }
 
-    void
-    exercise(tgfx::VulkanRenderDevice& device, VkSurfaceKHR surface, SDL_Window* window, tgfx::PresentationMode mode) {
+    void exercise(tgfx::VulkanRenderDevice& device,
+                  VkSurfaceKHR surface,
+                  SDL_Window* window,
+                  tgfx::PresentationMode mode,
+                  bool finish_with_terminal_failure) {
         tgfx::vulkan_detail::SwapchainOps ops;
         ops.acquire_next_image = acquire;
         ops.queue_submit = submit;
@@ -159,23 +162,16 @@ namespace {
         }
         restore();
 
-        for (unsigned failure = 0; failure < 6; ++failure) {
+        // Acquire/present failures belong to this swapchain generation and a
+        // recreate may recover them. Submit/fence failures are exercised once
+        // at the end because they now poison the shared render device.
+        for (unsigned failure : {0u, 2u}) {
             if (failure == 0)
                 trace.acquire_result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
-            if (failure == 1)
-                trace.submit_result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
             if (failure == 2)
                 trace.present_result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
-            if (failure == 3)
-                trace.fail_reset_after = 1; // Acquire fence.
-            if (failure == 4)
-                trace.fail_reset_after = 2; // Submit fence.
-            if (failure == 5) {
-                require(!clear() && !clear(), "could not seed in-flight frame slots");
-                trace.fail_wait = true;
-            }
             throws(clear);
-            if (failure < 2)
+            if (failure == 0)
                 require(trace.presents == 0, "failed acquire/submit reached present");
             const std::array<unsigned, 5> calls{
                 trace.acquires, trace.submits, trace.presents, trace.waits, trace.resets};
@@ -211,10 +207,20 @@ namespace {
             require(trace.valid, "presentation semaphore mismatch");
         }
         require(trace.presents > 0, "stress loop presented no images");
-        // Leave a reset-but-unsubmitted fence for the destructor: a fence wait
-        // here would hang even though vkDeviceWaitIdle can complete normally.
-        trace.submit_result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
-        throws(clear);
+        if (finish_with_terminal_failure) {
+            // Leave a reset-but-unsubmitted fence for teardown. The failed
+            // submit poisons both this swapchain and the shared device; every
+            // retry must stop before another native operation.
+            trace.submit_result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+            throws(clear);
+            require(device.has_terminal_error(), "swapchain submit failure did not poison shared device");
+            const std::array<unsigned, 5> calls{
+                trace.acquires, trace.submits, trace.presents, trace.waits, trace.resets};
+            throws(clear);
+            require(calls ==
+                        std::array<unsigned, 5>{trace.acquires, trace.submits, trace.presents, trace.waits, trace.resets},
+                    "terminal device retry issued native swapchain work");
+        }
         device.wait_idle();
         device.destroy(source);
     }
@@ -258,8 +264,6 @@ int main() {
                 require(sharing.imageSharingMode == VK_SHARING_MODE_EXCLUSIVE && sharing.queueFamilyIndexCount == 0 &&
                             sharing.pQueueFamilyIndices == nullptr,
                         "same family sharing incorrect");
-                exercise(device, surface, window, tgfx::PresentationMode::VSync);
-                require(trace.valid, "destructor waited on an unsubmitted fence");
                 uint32_t mode_count = 0;
                 require(vkGetPhysicalDeviceSurfacePresentModesKHR(
                             device.physical_device(), surface, &mode_count, nullptr) == VK_SUCCESS,
@@ -268,8 +272,12 @@ int main() {
                 require(vkGetPhysicalDeviceSurfacePresentModesKHR(
                             device.physical_device(), surface, &mode_count, modes.data()) == VK_SUCCESS,
                         "present modes query failed");
-                if (std::find(modes.begin(), modes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR) != modes.end()) {
-                    exercise(device, surface, window, tgfx::PresentationMode::Immediate);
+                const bool has_immediate =
+                    std::find(modes.begin(), modes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR) != modes.end();
+                exercise(device, surface, window, tgfx::PresentationMode::VSync, !has_immediate);
+                require(trace.valid, "destructor waited on an unsubmitted fence");
+                if (has_immediate) {
+                    exercise(device, surface, window, tgfx::PresentationMode::Immediate, true);
                     require(trace.valid, "destructor waited on an unsubmitted fence");
                     std::puts("Immediate stress passed");
                 } else {

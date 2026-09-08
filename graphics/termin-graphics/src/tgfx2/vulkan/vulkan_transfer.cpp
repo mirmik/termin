@@ -3,6 +3,7 @@
 #include "tgfx2/pixel_format_utils.hpp"
 #include "tgfx2/vulkan/internal/buffer_transfer_sync.hpp"
 #include "tgfx2/vulkan/internal/readback_memory.hpp"
+#include "tgfx2/vulkan/internal/upload_memory.hpp"
 #include "tgfx2/vulkan/internal/image_transition_sync.hpp"
 #include "tgfx2/vulkan/vulkan_render_device.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
@@ -64,6 +65,7 @@ namespace tgfx {
     // --- Immediate command execution ---
 
     VkCommandBuffer VulkanRenderDevice::ensure_immediate_cb() {
+        device_failure_.require_operational("immediate command recording");
         if (immediate_cb_open_)
             return immediate_cb_;
 
@@ -181,6 +183,7 @@ namespace tgfx {
     // --- Upload ---
 
     void VulkanRenderDevice::upload_buffer(BufferHandle dst, std::span<const uint8_t> data, uint64_t offset) {
+        device_failure_.require_operational("buffer upload");
         auto* res = buffers_.get(dst.id);
         if (!res) {
             tc_log(TC_LOG_ERROR, "VulkanRenderDevice::upload_buffer: invalid buffer handle %u", dst.id);
@@ -223,10 +226,12 @@ namespace tgfx {
         } else if (res->desc.cpu_visible) {
             // Fallback: host-visible but not persistently mapped (e.g. buffer
             // registered externally). Keep the old explicit map path.
-            void* mapped;
-            vmaMapMemory(allocator_, res->allocation, &mapped);
-            std::memcpy(static_cast<uint8_t*>(mapped) + offset, data.data(), data.size());
-            vmaUnmapMemory(allocator_, res->allocation);
+            if (!vulkan_detail::copy_to_mapped_allocation(allocator_, res->allocation, offset, data)) {
+                tc_log(TC_LOG_ERROR,
+                       "VulkanRenderDevice::upload_buffer: failed to map buffer %u",
+                       dst.id);
+                return;
+            }
         } else {
             // Staging buffer
             VkBufferCreateInfo stage_ci{};
@@ -237,25 +242,31 @@ namespace tgfx {
             VmaAllocationCreateInfo stage_alloc{};
             stage_alloc.usage = VMA_MEMORY_USAGE_CPU_ONLY;
 
-            VkBuffer staging;
-            VmaAllocation staging_alloc;
-            vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc, &staging, &staging_alloc, nullptr);
+            VkBuffer staging = VK_NULL_HANDLE;
+            VmaAllocation staging_alloc = VK_NULL_HANDLE;
+            if (!vulkan_detail::create_and_fill_upload_buffer(
+                    allocator_, stage_ci, stage_alloc, data, staging, staging_alloc)) {
+                tc_log(TC_LOG_ERROR,
+                       "VulkanRenderDevice::upload_buffer: failed to prepare staging buffer for buffer %u",
+                       dst.id);
+                return;
+            }
 
-            void* mapped;
-            vmaMapMemory(allocator_, staging_alloc, &mapped);
-            std::memcpy(mapped, data.data(), data.size());
-            vmaUnmapMemory(allocator_, staging_alloc);
-
-            execute_immediate([&](VkCommandBuffer cmd) {
-                vulkan_detail::buffer_before_transfer(cmd, res->buffer, res->desc.usage, offset, data.size(),
-                                                      VK_ACCESS_TRANSFER_WRITE_BIT);
-                VkBufferCopy region{};
-                region.srcOffset = 0;
-                region.dstOffset = offset;
-                region.size = data.size();
-                vkCmdCopyBuffer(cmd, staging, res->buffer, 1, &region);
-                vulkan_detail::buffer_after_transfer_write(cmd, res->buffer, res->desc.usage, offset, data.size());
-            });
+            try {
+                execute_immediate([&](VkCommandBuffer cmd) {
+                    vulkan_detail::buffer_before_transfer(cmd, res->buffer, res->desc.usage, offset, data.size(),
+                                                          VK_ACCESS_TRANSFER_WRITE_BIT);
+                    VkBufferCopy region{};
+                    region.srcOffset = 0;
+                    region.dstOffset = offset;
+                    region.size = data.size();
+                    vkCmdCopyBuffer(cmd, staging, res->buffer, 1, &region);
+                    vulkan_detail::buffer_after_transfer_write(cmd, res->buffer, res->desc.usage, offset, data.size());
+                });
+            } catch (...) {
+                vmaDestroyBuffer(allocator_, staging, staging_alloc);
+                throw;
+            }
 
             // Defer staging destroy — GPU runs the copy after the frame submit.
             defer_vma_buffer_destroy(staging, staging_alloc);
@@ -263,6 +274,7 @@ namespace tgfx {
     }
 
     void VulkanRenderDevice::upload_texture(TextureHandle dst, std::span<const uint8_t> data, uint32_t mip) {
+        device_failure_.require_operational("texture upload");
         auto* res = textures_.get(dst.id);
         if (!res) {
             tc_log(TC_LOG_ERROR, "VulkanRenderDevice::upload_texture: invalid texture handle %u", dst.id);
@@ -306,39 +318,45 @@ namespace tgfx {
         VmaAllocationCreateInfo stage_alloc_ci{};
         stage_alloc_ci.usage = VMA_MEMORY_USAGE_CPU_ONLY;
 
-        VkBuffer staging;
-        VmaAllocation staging_alloc;
-        vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc_ci, &staging, &staging_alloc, nullptr);
+        VkBuffer staging = VK_NULL_HANDLE;
+        VmaAllocation staging_alloc = VK_NULL_HANDLE;
+        if (!vulkan_detail::create_and_fill_upload_buffer(
+                allocator_, stage_ci, stage_alloc_ci, data, staging, staging_alloc)) {
+            tc_log(TC_LOG_ERROR,
+                   "VulkanRenderDevice::upload_texture: failed to prepare staging buffer for texture %u",
+                   dst.id);
+            return;
+        }
 
-        void* mapped;
-        vmaMapMemory(allocator_, staging_alloc, &mapped);
-        std::memcpy(mapped, data.data(), data.size());
-        vmaUnmapMemory(allocator_, staging_alloc);
-
-        execute_immediate([&](VkCommandBuffer cmd) {
-            transition_image_layout(cmd,
-                                    res->image,
-                                    res->current_layout,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    vk::format_image_aspect_flags(res->desc.format));
-
-            VkBufferImageCopy region{};
-            region.imageSubresource.aspectMask = vk::format_aspect_flags(res->desc.format);
-            region.imageSubresource.mipLevel = mip;
-            region.imageSubresource.layerCount = 1;
-            region.imageExtent = {w, h, 1};
-
-            vkCmdCopyBufferToImage(cmd, staging, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-            VkImageLayout final_layout = texture_post_upload_layout(res->desc);
-            if (final_layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        try {
+            execute_immediate([&](VkCommandBuffer cmd) {
                 transition_image_layout(cmd,
                                         res->image,
+                                        res->current_layout,
                                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                        final_layout,
                                         vk::format_image_aspect_flags(res->desc.format));
-            }
-        });
+
+                VkBufferImageCopy region{};
+                region.imageSubresource.aspectMask = vk::format_aspect_flags(res->desc.format);
+                region.imageSubresource.mipLevel = mip;
+                region.imageSubresource.layerCount = 1;
+                region.imageExtent = {w, h, 1};
+
+                vkCmdCopyBufferToImage(cmd, staging, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+                VkImageLayout final_layout = texture_post_upload_layout(res->desc);
+                if (final_layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+                    transition_image_layout(cmd,
+                                            res->image,
+                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                            final_layout,
+                                            vk::format_image_aspect_flags(res->desc.format));
+                }
+            });
+        } catch (...) {
+            vmaDestroyBuffer(allocator_, staging, staging_alloc);
+            throw;
+        }
 
         res->current_layout = texture_post_upload_layout(res->desc);
         defer_vma_buffer_destroy(staging, staging_alloc);
@@ -351,6 +369,7 @@ namespace tgfx {
                                                    uint32_t h,
                                                    std::span<const uint8_t> data,
                                                    uint32_t mip) {
+        device_failure_.require_operational("texture region upload");
         auto* res = textures_.get(dst.id);
         if (!res) {
             tc_log(TC_LOG_ERROR, "VulkanRenderDevice::upload_texture_region: invalid texture handle %u", dst.id);
@@ -413,51 +432,48 @@ namespace tgfx {
 
         VkBuffer staging = VK_NULL_HANDLE;
         VmaAllocation staging_alloc = VK_NULL_HANDLE;
-        if (vmaCreateBuffer(allocator_, &stage_ci, &stage_alloc_ci, &staging, &staging_alloc, nullptr) != VK_SUCCESS) {
+        if (!vulkan_detail::create_and_fill_upload_buffer(
+                allocator_, stage_ci, stage_alloc_ci, data, staging, staging_alloc)) {
             tc_log(TC_LOG_ERROR,
-                   "VulkanRenderDevice::upload_texture_region: failed to allocate staging buffer for texture %u",
+                   "VulkanRenderDevice::upload_texture_region: failed to prepare staging buffer for texture %u",
                    dst.id);
             return;
         }
-
-        void* mapped = nullptr;
-        if (vmaMapMemory(allocator_, staging_alloc, &mapped) != VK_SUCCESS || !mapped) {
-            tc_log(TC_LOG_ERROR,
-                   "VulkanRenderDevice::upload_texture_region: failed to map staging buffer for texture %u",
-                   dst.id);
-            vmaDestroyBuffer(allocator_, staging, staging_alloc);
-            return;
-        }
-        std::memcpy(mapped, data.data(), expected_size);
-        vmaUnmapMemory(allocator_, staging_alloc);
 
         const VkImageAspectFlags aspect = vk::format_aspect_flags(res->desc.format);
         const auto image_aspects = vk::format_image_aspect_flags(res->desc.format);
-        execute_immediate([&](VkCommandBuffer cmd) {
-            transition_image_layout(cmd, res->image, res->current_layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, image_aspects);
+        try {
+            execute_immediate([&](VkCommandBuffer cmd) {
+                transition_image_layout(
+                    cmd, res->image, res->current_layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, image_aspects);
 
-            VkBufferImageCopy region{};
-            region.bufferOffset = 0;
-            region.bufferRowLength = 0;
-            region.bufferImageHeight = 0;
-            region.imageSubresource.aspectMask = aspect;
-            region.imageSubresource.mipLevel = mip;
-            region.imageSubresource.baseArrayLayer = 0;
-            region.imageSubresource.layerCount = 1;
-            region.imageOffset = {
-                static_cast<int32_t>(x),
-                static_cast<int32_t>(y),
-                0,
-            };
-            region.imageExtent = {w, h, 1};
+                VkBufferImageCopy region{};
+                region.bufferOffset = 0;
+                region.bufferRowLength = 0;
+                region.bufferImageHeight = 0;
+                region.imageSubresource.aspectMask = aspect;
+                region.imageSubresource.mipLevel = mip;
+                region.imageSubresource.baseArrayLayer = 0;
+                region.imageSubresource.layerCount = 1;
+                region.imageOffset = {
+                    static_cast<int32_t>(x),
+                    static_cast<int32_t>(y),
+                    0,
+                };
+                region.imageExtent = {w, h, 1};
 
-            vkCmdCopyBufferToImage(cmd, staging, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+                vkCmdCopyBufferToImage(cmd, staging, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-            VkImageLayout final_layout = texture_post_upload_layout(res->desc);
-            if (final_layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-                transition_image_layout(cmd, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, final_layout, image_aspects);
-            }
-        });
+                VkImageLayout final_layout = texture_post_upload_layout(res->desc);
+                if (final_layout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+                    transition_image_layout(
+                        cmd, res->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, final_layout, image_aspects);
+                }
+            });
+        } catch (...) {
+            vmaDestroyBuffer(allocator_, staging, staging_alloc);
+            throw;
+        }
 
         res->current_layout = texture_post_upload_layout(res->desc);
         defer_vma_buffer_destroy(staging, staging_alloc);

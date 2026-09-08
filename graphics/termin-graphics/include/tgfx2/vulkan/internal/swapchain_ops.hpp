@@ -11,6 +11,7 @@ namespace tgfx::vulkan_detail {
         PFN_vkAcquireNextImageKHR acquire_next_image = vkAcquireNextImageKHR;
         PFN_vkQueueSubmit queue_submit = vkQueueSubmit;
         PFN_vkQueuePresentKHR queue_present = vkQueuePresentKHR;
+        PFN_vkDeviceWaitIdle device_wait_idle = vkDeviceWaitIdle;
     };
 
     inline void configure_swapchain_sharing(VkSwapchainCreateInfoKHR& info,

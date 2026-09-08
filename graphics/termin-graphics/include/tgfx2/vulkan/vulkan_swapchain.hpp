@@ -179,6 +179,7 @@ namespace tgfx {
 
     private:
         void check(VkResult result, const char* operation);
+        void check_device(VkResult result, const char* operation);
         void require_usable() const;
         void wait_for_retirement();
         void submit_frame(VkCommandBuffer commands, uint32_t image_index, VkSemaphore image_available);

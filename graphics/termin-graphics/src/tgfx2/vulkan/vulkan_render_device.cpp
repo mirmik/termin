@@ -130,7 +130,13 @@ namespace tgfx {
 
     // --- Constructor / Destructor ---
 
-    VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info) {
+    VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info)
+        : VulkanRenderDevice(info, vulkan_detail::DeviceOps{}) {
+    }
+
+    VulkanRenderDevice::VulkanRenderDevice(const VulkanDeviceCreateInfo& info,
+                                           const vulkan_detail::DeviceOps& device_ops) {
+        device_ops_ = device_ops;
         const char* required = std::getenv("TGFX2_GPU_VALIDATION_REQUIRED");
         validation_enabled_ = info.enable_validation || (required && std::strcmp(required, "1") == 0);
         api_version_ = info.api_version != 0 ? info.api_version : TGFX2_VULKAN_DEFAULT_API_VERSION;
@@ -292,9 +298,18 @@ namespace tgfx {
         // During normal frame lifecycle `destroy()` queues into
         // pending_destroy_{current,in_flight}_ and the per-submit fence keeps
         // them safe — see VulkanRenderDevice::submit.
-        const VkResult idle_result = device_ ? vkDeviceWaitIdle(device_) : VK_SUCCESS;
-        if (idle_result != VK_SUCCESS)
-            tc_log(TC_LOG_ERROR, "[Vulkan] teardown wait failed: VkResult=%d", int(idle_result));
+        const VkResult idle_result = device_ ? device_ops_.device_wait_idle(device_) : VK_SUCCESS;
+        if (idle_result != VK_SUCCESS) {
+            tc_log(TC_LOG_ERROR,
+                   "[Vulkan] teardown wait failed: VkResult=%d; retaining device-owned resources because GPU "
+                   "completion is unproven",
+                   int(idle_result));
+            // Per-resource destruction is unsafe unless queue completion is
+            // proven. Keep the swapchain object too: its destructor releases
+            // semaphores, fences and views belonging to this device.
+            (void)swapchain_.release();
+            return;
+        }
 
         // Tear down the swapchain first — its sync objects and image
         // views are bound to device_ which is still alive at this point.
@@ -916,6 +931,13 @@ namespace tgfx {
             throw std::runtime_error("VulkanRenderDevice: failed to allocate ring UBO");
         }
         ring_ubo_mapped_ = alloc_info.pMappedData;
+        if (!ring_ubo_mapped_) {
+            tc_log(TC_LOG_ERROR, "[RingUBO] mapped allocation returned a null pointer");
+            vmaDestroyBuffer(allocator_, ring_ubo_buffer_, ring_ubo_allocation_);
+            ring_ubo_buffer_ = VK_NULL_HANDLE;
+            ring_ubo_allocation_ = VK_NULL_HANDLE;
+            throw std::runtime_error("VulkanRenderDevice: ring UBO mapping failed");
+        }
 
         // Query the memory type's coherency flag so writes can skip
         // vmaFlushAllocation on desktop Linux drivers (always coherent on
@@ -943,6 +965,9 @@ namespace tgfx {
     }
 
     bool VulkanRenderDevice::ring_ubo_write(const void* data, uint32_t size, uint32_t& out_offset) {
+        device_failure_.require_operational("ring UBO write");
+        if (!data || size == 0 || size > ring_ubo_slot_size_ || !ring_ubo_mapped_ || ring_ubo_handle_.id == 0)
+            return false;
         // Reserve an aligned slice at the head. fetch_add returns the pre-update
         // value → that's our offset within the slot. The advance is aligned(size)
         // so the NEXT allocation starts on a legal dynamic-offset boundary.
@@ -1012,6 +1037,13 @@ namespace tgfx {
             throw std::runtime_error("VulkanRenderDevice: failed to allocate transient vertex ring");
         }
         transient_vb_mapped_ = alloc_info.pMappedData;
+        if (!transient_vb_mapped_) {
+            tc_log(TC_LOG_ERROR, "[TransientVB] mapped allocation returned a null pointer");
+            vmaDestroyBuffer(allocator_, transient_vb_buffer_, transient_vb_allocation_);
+            transient_vb_buffer_ = VK_NULL_HANDLE;
+            transient_vb_allocation_ = VK_NULL_HANDLE;
+            throw std::runtime_error("VulkanRenderDevice: transient vertex ring mapping failed");
+        }
 
         transient_vb_coherent_ = (memory_properties_.memoryTypes[alloc_info.memoryType].propertyFlags &
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
@@ -1031,6 +1063,7 @@ namespace tgfx {
     }
 
     uint64_t VulkanRenderDevice::transient_vertex_write(const void* data, uint32_t size) {
+        device_failure_.require_operational("transient vertex write");
         if (!data || size == 0 || size > transient_vb_slot_size_ || transient_vb_mapped_ == nullptr ||
             transient_vb_handle_.id == 0) {
             return UINT64_MAX;
@@ -1117,13 +1150,7 @@ namespace tgfx {
         const VkResult result = vmaFlushAllocations(
             allocator_, static_cast<uint32_t>(allocations.size()), allocations.data(), offsets.data(), sizes.data());
         if (result != VK_SUCCESS) {
-            tc_log(TC_LOG_ERROR,
-                   "[VulkanRenderDevice] failed to flush %u mapped dirty range(s) "
-                   "for frame slot %u: VkResult=%d",
-                   static_cast<unsigned>(allocations.size()),
-                   slot,
-                   static_cast<int>(result));
-            throw std::runtime_error("VulkanRenderDevice: failed to flush mapped host writes");
+            device_failure_.fail("mapped host-write flush before submit", result);
         }
 
         ring_ubo_dirty_ranges_[slot].clear();
@@ -1179,10 +1206,9 @@ namespace tgfx {
         return caps_;
     }
     void VulkanRenderDevice::wait_idle() {
-        const auto result = vkDeviceWaitIdle(device_);
+        const auto result = device_ops_.device_wait_idle(device_);
         if (result != VK_SUCCESS) {
-            tc_log(TC_LOG_ERROR, "[Vulkan] device idle wait failed: VkResult=%d", int(result));
-            throw std::runtime_error("Vulkan device idle wait failed");
+            device_failure_.fail("device idle wait", result);
         }
         // Only submitted requests are complete. Requests in the current
         // prelude still require a submit, even if the device is idle.
@@ -1641,6 +1667,7 @@ namespace tgfx {
     // --- Command list ---
 
     std::unique_ptr<ICommandList> VulkanRenderDevice::create_command_list(QueueType /*queue*/) {
+        device_failure_.require_operational("command list creation");
         return std::make_unique<VulkanCommandList>(*this);
     }
 
@@ -1763,19 +1790,15 @@ namespace tgfx {
         };
 
         measured(&SubmitStats::fence_wait_us, [&] {
-            if (frame_fence_in_flight_[slot]) {
-                const auto wait_result = vkWaitForFences(device_, 1, &frame_fences_[slot], VK_TRUE, UINT64_MAX);
-                if (wait_result != VK_SUCCESS) {
-                    tc_log(TC_LOG_ERROR, "[Vulkan] frame %u fence wait failed: VkResult=%d", slot, int(wait_result));
-                    throw std::runtime_error("Vulkan frame fence wait failed");
-                }
-                const auto reset_result = vkResetFences(device_, 1, &frame_fences_[slot]);
-                if (reset_result != VK_SUCCESS) {
-                    tc_log(TC_LOG_ERROR, "[Vulkan] frame %u fence reset failed: VkResult=%d", slot, int(reset_result));
-                    throw std::runtime_error("Vulkan frame fence reset failed");
-                }
-                frame_fence_in_flight_[slot] = false;
-            }
+            const std::string wait_context = "frame fence wait for slot " + std::to_string(slot);
+            const std::string reset_context = "frame fence reset for slot " + std::to_string(slot);
+            vulkan_detail::prepare_fence_or_fail(device_failure_,
+                                                 device_ops_,
+                                                 device_,
+                                                 frame_fences_[slot],
+                                                 frame_fence_in_flight_[slot],
+                                                 wait_context.c_str(),
+                                                 reset_context.c_str());
         });
         complete_gpu_frame_timing(slot);
         measured(&SubmitStats::readback_cleanup_us,
@@ -1785,9 +1808,8 @@ namespace tgfx {
             for (VkDescriptorPool pool : descriptor_pools_[slot]) {
                 const VkResult result = vkResetDescriptorPool(device_, pool, 0);
                 if (result != VK_SUCCESS) {
-                    tc_log(TC_LOG_ERROR, "VulkanRenderDevice: vkResetDescriptorPool failed result=%d slot=%u",
-                           result, slot);
-                    throw std::runtime_error("Failed to reset descriptor pool");
+                    const std::string context = "descriptor pool reset for slot " + std::to_string(slot);
+                    device_failure_.fail(context.c_str(), result);
                 }
             }
             descriptor_pool_heads_[slot] = 0;
@@ -1804,6 +1826,7 @@ namespace tgfx {
     }
 
     void VulkanRenderDevice::submit(ICommandList& cmd) {
+        device_failure_.require_operational("frame submit");
         const bool stats_enabled = vulkan_stats_enabled();
         auto& vcmd = static_cast<VulkanCommandList&>(cmd);
         VkCommandBuffer main_cb = vcmd.command_buffer();
@@ -1832,8 +1855,7 @@ namespace tgfx {
         if (immediate_cb_open_) {
             const auto end_result = vkEndCommandBuffer(immediate_cb_);
             if (end_result != VK_SUCCESS) {
-                tc_log(TC_LOG_ERROR, "[Vulkan] immediate command end failed: VkResult=%d", int(end_result));
-                throw std::runtime_error("Vulkan immediate command end failed");
+                device_failure_.fail("immediate command end before submit", end_result);
             }
             immediate_cb_open_ = false;
             cbs[cb_count++] = immediate_cb_;
@@ -1852,15 +1874,17 @@ namespace tgfx {
 
         const auto t_submit0 =
             stats_enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-        const auto submit_result = vkQueueSubmit(graphics_queue_, 1, &si, frame_fences_[submitted_slot]);
-        if (submit_result != VK_SUCCESS) {
-            tc_log(TC_LOG_ERROR, "[Vulkan] frame %u submit failed: VkResult=%d", submitted_slot, int(submit_result));
+        try {
+            const std::string context = "queue submit for slot " + std::to_string(submitted_slot);
+            vulkan_detail::submit_or_fail(
+                device_failure_, device_ops_, graphics_queue_, si, frame_fences_[submitted_slot], context.c_str());
+        } catch (...) {
             // The fence was never submitted: do not mark it in flight and do
             // not move readbacks into a slot that could publish stale bytes.
             if (submitted_immediate_cb)
                 defer_cmd_buffer_free(submitted_immediate_cb);
             destroy_pixel_readbacks(pixel_readbacks_current_);
-            throw std::runtime_error("Vulkan frame submit failed");
+            throw;
         }
         PendingDestroyQueue submitted_destroy = std::move(pending_destroy_current_);
         pending_destroy_current_ = {};

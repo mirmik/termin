@@ -1029,6 +1029,18 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         termin_set_rpath_test(tgfx2_vulkan_readback_memory_test)
         add_test(NAME tgfx2_vulkan_readback_memory_test COMMAND tgfx2_vulkan_readback_memory_test)
 
+        add_executable(tgfx2_vulkan_upload_memory_test tests/test_tgfx2_vulkan_upload_memory.cpp)
+        target_include_directories(tgfx2_vulkan_upload_memory_test SYSTEM PRIVATE "${TERMIN_VMA_DIR}/include")
+        target_link_libraries(tgfx2_vulkan_upload_memory_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_upload_memory_test)
+        add_test(NAME tgfx2_vulkan_upload_memory_test COMMAND tgfx2_vulkan_upload_memory_test)
+
+        add_executable(tgfx2_vulkan_device_failure_test tests/test_tgfx2_vulkan_device_failure.cpp)
+        target_compile_definitions(tgfx2_vulkan_device_failure_test PRIVATE TGFX2_HAS_VULKAN)
+        target_link_libraries(tgfx2_vulkan_device_failure_test PRIVATE termin_graphics2 Vulkan::Vulkan)
+        termin_set_rpath_test(tgfx2_vulkan_device_failure_test)
+        add_test(NAME tgfx2_vulkan_device_failure_test COMMAND tgfx2_vulkan_device_failure_test)
+
         add_executable(tgfx2_vulkan_readback_test tests/test_tgfx2_vulkan_readback.cpp)
         target_compile_definitions(tgfx2_vulkan_readback_test PRIVATE TGFX2_HAS_VULKAN)
         target_link_libraries(tgfx2_vulkan_readback_test PRIVATE termin_graphics2 Vulkan::Vulkan)

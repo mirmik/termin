@@ -109,9 +109,13 @@ namespace tgfx {
     }
 
     VulkanSwapchain::~VulkanSwapchain() {
-        try { wait_for_retirement(); }
+        try {
+            wait_for_retirement();
+        }
         catch (const std::exception& error) {
-            tc_log_error("VulkanSwapchain shutdown: %s", error.what());
+            tc_log_error("VulkanSwapchain shutdown: %s; retaining resources because GPU completion is unproven",
+                         error.what());
+            return;
         }
         if (!compose_command_buffers_.empty()) {
             vkFreeCommandBuffers(device_.device(),
@@ -323,12 +327,12 @@ namespace tgfx {
         require_usable();
         if (submitted_[current_frame_]) {
             const VkFence fence = in_flight_fences_[current_frame_];
-            check(ops_.wait_for_fences(device_.device(), 1, &fence, VK_TRUE, UINT64_MAX), "wait frame fence");
+            check_device(ops_.wait_for_fences(device_.device(), 1, &fence, VK_TRUE, UINT64_MAX), "wait frame fence");
             submitted_[current_frame_] = false;
         }
         if (acquire_pending_[current_frame_]) {
             const VkFence fence = acquire_fences_[current_frame_];
-            check(ops_.wait_for_fences(device_.device(), 1, &fence, VK_TRUE, UINT64_MAX), "wait acquire fence");
+            check_device(ops_.wait_for_fences(device_.device(), 1, &fence, VK_TRUE, UINT64_MAX), "wait acquire fence");
             acquire_pending_[current_frame_] = false;
         }
     }
@@ -340,7 +344,7 @@ namespace tgfx {
     VkResult VulkanSwapchain::acquire(uint32_t* out_image_index, VkSemaphore* out_image_available) {
         VkSemaphore sem = image_available_semaphores_[current_frame_];
         const VkFence fence = acquire_fences_[current_frame_];
-        check(ops_.reset_fences(device_.device(), 1, &fence), "reset acquire fence");
+        check_device(ops_.reset_fences(device_.device(), 1, &fence), "reset acquire fence");
         VkResult r = ops_.acquire_next_image(device_.device(), swapchain_, UINT64_MAX, sem, fence, out_image_index);
         if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) {
             acquire_pending_[current_frame_] = true;
@@ -396,11 +400,21 @@ namespace tgfx {
     void VulkanSwapchain::check(VkResult result, const char* operation) {
         if (result == VK_SUCCESS) return;
         failed_ = true;
+        if (result == VK_ERROR_DEVICE_LOST)
+            device_.fail_terminal(operation, result);
         tc_log_error("VulkanSwapchain: %s failed: VkResult=%d; swapchain stopped", operation, int(result));
         throw std::runtime_error(std::string("VulkanSwapchain: ") + operation + " failed: " + std::to_string(result));
     }
 
+    void VulkanSwapchain::check_device(VkResult result, const char* operation) {
+        if (result == VK_SUCCESS)
+            return;
+        failed_ = true;
+        device_.fail_terminal(operation, result);
+    }
+
     void VulkanSwapchain::require_usable() const {
+        device_.require_operational("swapchain publication");
         if (failed_) {
             tc_log_error("VulkanSwapchain: cannot publish after failure; recreate or destroy the swapchain");
             throw std::runtime_error("VulkanSwapchain is stopped");
@@ -413,12 +427,12 @@ namespace tgfx {
         // semaphore is destroyed; an unsignalled submit fence is never waited on.
         for (uint32_t slot = 0; slot < MAX_FRAMES_IN_FLIGHT; ++slot) {
             if (acquire_pending_[slot]) {
-                check(ops_.wait_for_fences(device_.device(), 1, &acquire_fences_[slot], VK_TRUE, UINT64_MAX),
-                      "retire acquired image");
+                check_device(ops_.wait_for_fences(device_.device(), 1, &acquire_fences_[slot], VK_TRUE, UINT64_MAX),
+                             "retire acquired image");
                 acquire_pending_[slot] = false;
             }
         }
-        check(vkDeviceWaitIdle(device_.device()), "retire swapchain queues");
+        check_device(ops_.device_wait_idle(device_.device()), "retire swapchain queues");
     }
 
     void VulkanSwapchain::submit_frame(VkCommandBuffer commands, uint32_t image_index, VkSemaphore available) {
@@ -434,8 +448,8 @@ namespace tgfx {
         info.signalSemaphoreCount = 1;
         info.pSignalSemaphores = &finished;
         const VkFence fence = in_flight_fences_[current_frame_];
-        check(ops_.reset_fences(device_.device(), 1, &fence), "reset submit fence");
-        check(ops_.queue_submit(device_.graphics_queue(), 1, &info, fence), "submit frame");
+        check_device(ops_.reset_fences(device_.device(), 1, &fence), "reset submit fence");
+        check_device(ops_.queue_submit(device_.graphics_queue(), 1, &info, fence), "submit frame");
         submitted_[current_frame_] = true;
         // The acquire fence signal is a distinct WSI operation. Keep it pending
         // until a host wait proves it can be reset or destroyed, even after the

@@ -22,6 +22,7 @@ VK_DEFINE_HANDLE(VmaAllocation)
 
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/tgfx2_api.h"
+#include "tgfx2/vulkan/internal/device_failure.hpp"
 #include "tgfx2/vulkan/internal/non_coherent_dirty_range.hpp"
 
 // `tc_texture` / `tc_mesh` are forward-declared in i_render_device.hpp.
@@ -213,10 +214,12 @@ namespace tgfx {
         // this to the surface's min/max caps.
         uint32_t swapchain_width = 0;
         uint32_t swapchain_height = 0;
+
     };
 
     class TGFX2_TYPE_API VulkanRenderDevice : public IRenderDevice {
     private:
+        friend class VulkanSwapchain;
         static constexpr uint32_t kFrameSlotCount = 6;
 
         // --- Frame sync / deferred destroy -----------------------------------
@@ -328,6 +331,8 @@ namespace tgfx {
         VmaAllocator allocator_ = VK_NULL_HANDLE;
         VkPhysicalDeviceMemoryProperties memory_properties_ = {};
         VkCommandPool command_pool_ = VK_NULL_HANDLE;
+        vulkan_detail::DeviceOps device_ops_;
+        vulkan_detail::DeviceFailureState device_failure_;
 
         // Grow each frame slot's pool chain on exhaustion. All pools remain
         // alive until the slot fence signals, then reset and reuse the chain.
@@ -478,6 +483,7 @@ namespace tgfx {
 
     public:
         explicit VulkanRenderDevice(const VulkanDeviceCreateInfo& info);
+        VulkanRenderDevice(const VulkanDeviceCreateInfo& info, const vulkan_detail::DeviceOps& device_ops);
         ~VulkanRenderDevice() override;
 
         BackendType backend_type() const override {
@@ -555,6 +561,9 @@ namespace tgfx {
         // Internal access for command list
         VkDevice device() const {
             return device_;
+        }
+        bool has_terminal_error() const {
+            return device_failure_.terminal();
         }
         uint32_t api_version() const {
             return api_version_;
@@ -808,6 +817,12 @@ namespace tgfx {
                               VkExtent3D extent, std::span<uint8_t> output);
         void complete_pixel_readbacks(std::vector<PendingPixelReadback>& pending, VkResult completion);
         void destroy_pixel_readbacks(std::vector<PendingPixelReadback>& pending);
+        void require_operational(const char* operation) const {
+            device_failure_.require_operational(operation);
+        }
+        [[noreturn]] void fail_terminal(const char* operation, VkResult result) {
+            device_failure_.fail(operation, result);
+        }
         void prepare_frame_slot(uint32_t slot, SubmitStats* stats);
         void complete_gpu_frame_timing(uint32_t slot);
     };

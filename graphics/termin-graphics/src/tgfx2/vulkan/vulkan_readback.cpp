@@ -22,6 +22,7 @@ namespace tgfx {
     }
 
     VkCommandBuffer VulkanRenderDevice::begin_readback_commands() {
+        device_failure_.require_operational("synchronous readback recording");
         VkCommandBufferAllocateInfo ai{};
         ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         ai.commandPool = command_pool_;
@@ -49,26 +50,42 @@ namespace tgfx {
                                             VkDeviceSize offset, std::span<uint8_t> output) {
         // Synchronous readback deliberately blocks. The producer must already
         // have been submitted; unsubmitted draw buffers are not executed here.
-        VkResult result = vkEndCommandBuffer(cb);
-        bool submitted = false;
-        if (result == VK_SUCCESS) {
-            VkSubmitInfo si{};
-            si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            si.commandBufferCount = 1;
-            si.pCommandBuffers = &cb;
-            result = vkQueueSubmit(graphics_queue_, 1, &si, VK_NULL_HANDLE);
-            submitted = result == VK_SUCCESS;
+        device_failure_.require_operational("synchronous readback submit");
+        const VkResult end_result = vkEndCommandBuffer(cb);
+        if (end_result != VK_SUCCESS) {
+            (void)vulkan_detail::copy_completed_readback(end_result, allocator_, allocation, offset, output);
+            vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
+            if (staging)
+                vmaDestroyBuffer(allocator_, staging, allocation);
+            device_failure_.fail("synchronous readback command end", end_result);
         }
-        if (submitted)
-            result = vkQueueWaitIdle(graphics_queue_);
+
+        VkSubmitInfo si{};
+        si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        si.commandBufferCount = 1;
+        si.pCommandBuffers = &cb;
+        try {
+            vulkan_detail::submit_or_fail(
+                device_failure_, device_ops_, graphics_queue_, si, VK_NULL_HANDLE, "synchronous readback submit");
+        } catch (...) {
+            (void)vulkan_detail::copy_completed_readback(
+                device_failure_.result(), allocator_, allocation, offset, output);
+            vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
+            if (staging)
+                vmaDestroyBuffer(allocator_, staging, allocation);
+            throw;
+        }
+
+        const VkResult result = device_ops_.queue_wait_idle(graphics_queue_);
         const bool ok = vulkan_detail::copy_completed_readback(result, allocator_, allocation, offset, output);
-        if (submitted && result != VK_SUCCESS) {
+        if (result != VK_SUCCESS) {
             // A failed wait is not proof that the GPU stopped accessing these
-            // objects. A later successful frame fence (or device teardown)
-            // owns their cleanup; never publish or free in-flight bytes here.
+            // objects. Terminal teardown owns their cleanup; never publish or
+            // free in-flight bytes here, and never submit a retry.
             defer_cmd_buffer_free(cb);
             if (staging)
                 defer_vma_buffer_destroy(staging, allocation);
+            device_failure_.fail("synchronous readback queue idle wait", result);
         } else {
             vkFreeCommandBuffers(device_, command_pool_, 1, &cb);
             if (staging)
