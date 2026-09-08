@@ -17,6 +17,9 @@ from termin_build.managed_process import process_group_exists
 PROCESS_TREE_FIXTURE = (
     Path(__file__).with_name("fixtures") / "process_tree_fixture.py"
 )
+PROCESS_TIMEOUT_FIXTURE = (
+    Path(__file__).with_name("fixtures") / "process_timeout_fixture.py"
+)
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -1403,6 +1406,41 @@ def test_process_smoke_missing_capability_is_an_explicit_skip(tmp_path: Path) ->
 
 
 def test_process_smoke_timeout_fails_and_retains_log(
+    tmp_path: Path,
+) -> None:
+    repo = _repository(tmp_path)
+    platform = "windows" if os.name == "nt" else "linux"
+    command = _add_process_smoke_suite(
+        repo,
+        profile="editor-smoke",
+        platform=platform,
+        root="scripts/smoke.py",
+        capability="editor",
+    )
+    catalog = repository_control.load_catalog(repo)
+    command.write_bytes(PROCESS_TIMEOUT_FIXTURE.read_bytes())
+    command.chmod(0o755)
+
+    result = repository_control.run_process_smoke_plan(
+        repo,
+        catalog,
+        "editor-smoke",
+        platform,
+        capabilities=("editor",),
+        timeout_seconds=1.0,
+    )
+
+    assert result.exit_code == 1
+    assert "timed out after 1s" in result.failed["alpha-process-smoke"]
+    log_path = repo / result.logs["alpha-process-smoke"]
+    assert "PROCESS_TIMEOUT_READY" in log_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="process-smoke process-group cleanup currently requires POSIX",
+)
+def test_process_smoke_timeout_cleans_posix_process_group(
     tmp_path: Path, monkeypatch
 ) -> None:
     repo = _repository(tmp_path)
@@ -1410,11 +1448,11 @@ def test_process_smoke_timeout_fails_and_retains_log(
         repo,
         profile="editor-smoke",
         platform="linux",
-        root="scripts/smoke",
+        root="scripts/smoke.py",
         capability="editor",
     )
     catalog = repository_control.load_catalog(repo)
-    command.write_text(PROCESS_TREE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    command.write_bytes(PROCESS_TREE_FIXTURE.read_bytes())
     command.chmod(0o755)
     state_path = tmp_path / "central-process-smoke-tree.json"
     monkeypatch.setenv("TERMIN_PROCESS_TREE_STATE", str(state_path))
@@ -1445,8 +1483,6 @@ def test_process_smoke_timeout_fails_and_retains_log(
 
     assert result.exit_code == 1
     assert "timed out after 1s" in result.failed["alpha-process-smoke"]
-    log_path = repo / result.logs["alpha-process-smoke"]
-    assert "PROCESS_TREE_READY" in log_path.read_text(encoding="utf-8")
     assert state is not None
     assert not process_group_exists(int(state["process_group_id"]))
 

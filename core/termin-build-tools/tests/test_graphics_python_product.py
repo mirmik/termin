@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 import zipfile
 
 import pytest
@@ -69,6 +70,10 @@ def _write_shader_compiler(sdk_prefix: Path) -> None:
 @pytest.mark.parametrize(
     ("free_threaded", "expected_abi"),
     [(False, "cp314"), (True, "cp314t")],
+)
+@pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="the Graphics Python resource wheel is currently Linux-only",
 )
 def test_resource_wheel_owns_precompiled_assets_and_shader_compiler(
     tmp_path: Path,
@@ -181,7 +186,7 @@ def test_compose_product_wheel_merges_payload_and_strips_internal_metadata(
         requires=("PyYAML>=6",),
     )
     release_license = tmp_path / "LICENSE.txt"
-    release_license.write_text("license text\n", encoding="utf-8")
+    release_license.write_bytes(b"license text\n")
 
     output = compose_product_wheel(
         [first, second],
