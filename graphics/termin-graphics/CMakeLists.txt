@@ -777,6 +777,15 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
     set_tests_properties(tgfx2_d3d11_presentation_test PROPERTIES TIMEOUT 10)
     termin_add_test_labels(tgfx2_d3d11_presentation_test)
 
+    add_executable(tgfx2_d3d11_buffer_upload_test
+        tests/test_tgfx2_d3d11_buffer_upload.cpp)
+    target_link_libraries(tgfx2_d3d11_buffer_upload_test PRIVATE termin_graphics2)
+    termin_set_rpath_test(tgfx2_d3d11_buffer_upload_test)
+    add_test(NAME tgfx2_d3d11_buffer_upload_test
+        COMMAND tgfx2_d3d11_buffer_upload_test)
+    set_tests_properties(tgfx2_d3d11_buffer_upload_test PROPERTIES TIMEOUT 10)
+    termin_add_test_labels(tgfx2_d3d11_buffer_upload_test)
+
     add_executable(tgfx2_sdf_test tests/test_tgfx2_sdf.cpp)
     target_compile_definitions(tgfx2_sdf_test PRIVATE
         TGFX2_TEST_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")

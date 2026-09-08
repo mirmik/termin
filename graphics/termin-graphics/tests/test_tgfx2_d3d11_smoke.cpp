@@ -236,8 +236,8 @@ int main() {
     try {
         const auto slang_texcoord = tgfx::d3d11_internal::normalize_reflected_semantic("TEXCOORD1", 0);
         const auto d3d_texcoord = tgfx::d3d11_internal::normalize_reflected_semantic("TEXCOORD", 1);
-        if (slang_texcoord.name != "TEXCOORD" || slang_texcoord.index != 1 ||
-            d3d_texcoord.name != "TEXCOORD" || d3d_texcoord.index != 1) {
+        if (slang_texcoord.name != "TEXCOORD" || slang_texcoord.index != 1 || d3d_texcoord.name != "TEXCOORD" ||
+            d3d_texcoord.index != 1) {
             std::fprintf(stderr, "D3D11 smoke: reflected semantic normalization failed\n");
             return 1;
         }
@@ -256,6 +256,39 @@ int main() {
             std::fprintf(stderr, "D3D11 smoke: storage textures must be rejected explicitly\n");
             return 1;
         }
+
+        tgfx::BufferDesc partial_upload_desc;
+        partial_upload_desc.size = 16;
+        partial_upload_desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopySrc;
+        partial_upload_desc.cpu_visible = true;
+        const auto partial_upload_buffer = device->create_buffer(partial_upload_desc);
+        if (!partial_upload_buffer) {
+            std::fprintf(stderr, "D3D11 smoke: partial-upload buffer creation failed\n");
+            return 1;
+        }
+        std::array<uint8_t, 16> expected_upload{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+        device->upload_buffer(partial_upload_buffer, expected_upload);
+
+        const std::array<uint8_t, 4> middle_patch{40, 41, 42, 43};
+        device->upload_buffer(partial_upload_buffer, middle_patch, 6);
+        std::copy(middle_patch.begin(), middle_patch.end(), expected_upload.begin() + 6);
+        std::array<uint8_t, 16> upload_readback{};
+        device->read_buffer(partial_upload_buffer, upload_readback);
+        if (upload_readback != expected_upload) {
+            std::fprintf(stderr, "D3D11 smoke: middle partial upload did not preserve prefix/suffix\n");
+            return 1;
+        }
+
+        const std::array<uint8_t, 3> prefix_patch{90, 91, 92};
+        device->upload_buffer(partial_upload_buffer, prefix_patch, 0);
+        std::copy(prefix_patch.begin(), prefix_patch.end(), expected_upload.begin());
+        upload_readback.fill(0);
+        device->read_buffer(partial_upload_buffer, upload_readback);
+        if (upload_readback != expected_upload) {
+            std::fprintf(stderr, "D3D11 smoke: offset-zero partial upload did not preserve suffix\n");
+            return 1;
+        }
+        device->destroy(partial_upload_buffer);
 
         const std::array<float, 8> transient_vertices = {
             0.0f,
@@ -422,7 +455,8 @@ int main() {
             std::fprintf(stderr, "D3D11 smoke: RGBA16F target creation failed\n");
             return 1;
         }
-        device->clear_texture(hdr_color, termin::LinearColor{1.25f, 0.50f, 0.125f, 1.0f}, termin::Bounds2i::from_size(4, 4));
+        device->clear_texture(
+            hdr_color, termin::LinearColor{1.25f, 0.50f, 0.125f, 1.0f}, termin::Bounds2i::from_size(4, 4));
         std::vector<float> hdr_readback(4 * 4 * 4, 0.0f);
         if (!device->read_texture_rgba_float(hdr_color, hdr_readback.data())) {
             std::fprintf(stderr, "D3D11 smoke: RGBA16F read_texture_rgba_float failed\n");

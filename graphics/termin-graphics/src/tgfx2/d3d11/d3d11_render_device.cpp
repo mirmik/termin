@@ -4,6 +4,7 @@
 
 #include "tgfx2/d3d11/d3d11_command_list.hpp"
 #include "tgfx2/d3d11/d3d11_type_conversions.hpp"
+#include "tgfx2/d3d11/internal/dynamic_buffer_upload.hpp"
 #include "tgfx2/pixel_format_utils.hpp"
 #include "tgfx2/tc_mesh_bridge.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
@@ -620,6 +621,9 @@ float4 main(VSOut input) : SV_Target {
 
         D3D11Buffer out;
         out.desc = desc;
+        if (desc.cpu_visible) {
+            out.upload_shadow.resize(bd.ByteWidth, 0u);
+        }
         HRESULT hr = device_->CreateBuffer(&bd, nullptr, &out.buffer);
         if (FAILED(hr)) {
             tc::Log::error("D3D11RenderDevice::create_buffer failed: HRESULT=0x%08X", static_cast<unsigned>(hr));
@@ -942,15 +946,38 @@ float4 main(VSOut input) : SV_Target {
         }
 
         if (buf->desc.cpu_visible) {
-            D3D11_MAPPED_SUBRESOURCE mapped{};
-            HRESULT hr = context_->Map(buf->buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-            if (FAILED(hr)) {
+            struct MapState {
+                ID3D11DeviceContext* context = nullptr;
+                ID3D11Buffer* buffer = nullptr;
+                HRESULT result = E_FAIL;
+            } state{context_.Get(), buf->buffer.Get()};
+            const d3d11_internal::DiscardMapOps ops{
+                &state,
+                [](void* user) -> d3d11_internal::DiscardMapResult {
+                    auto& map = *static_cast<MapState*>(user);
+                    D3D11_MAPPED_SUBRESOURCE mapped{};
+                    map.result = map.context->Map(map.buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+                    return {static_cast<uint8_t*>(mapped.pData), SUCCEEDED(map.result)};
+                },
+                [](void* user) {
+                    auto& map = *static_cast<MapState*>(user);
+                    map.context->Unmap(map.buffer, 0);
+                },
+            };
+            const auto result = d3d11_internal::upload_discard_preserving(buf->upload_shadow, data, offset, ops);
+            if (result == d3d11_internal::DiscardUploadResult::MapFailed) {
                 tc::Log::error("D3D11RenderDevice::upload_buffer Map failed: HRESULT=0x%08X",
-                               static_cast<unsigned>(hr));
+                               static_cast<unsigned>(state.result));
                 return;
             }
-            std::memcpy(static_cast<uint8_t*>(mapped.pData) + offset, data.data(), data.size());
-            context_->Unmap(buf->buffer.Get(), 0);
+            if (result == d3d11_internal::DiscardUploadResult::NullMappedData) {
+                tc::Log::error("D3D11RenderDevice::upload_buffer Map returned null data");
+                return;
+            }
+            if (result != d3d11_internal::DiscardUploadResult::Success) {
+                tc::Log::error("D3D11RenderDevice::upload_buffer: dynamic upload shadow does not match buffer size");
+                return;
+            }
             return;
         }
 

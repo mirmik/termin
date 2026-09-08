@@ -25,6 +25,7 @@ namespace tgfx {
         Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
         BufferDesc desc;
+        std::vector<uint8_t> upload_shadow;
     };
 
     struct D3D11Texture {
