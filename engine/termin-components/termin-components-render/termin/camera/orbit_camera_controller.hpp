@@ -23,6 +23,36 @@
 
 namespace termin {
 
+    // Camera-side directions: north +Y, east +X, top +Z.
+    enum class ViewDirection {
+        North,
+        South,
+        East,
+        West,
+        Top,
+        Bottom,
+        NorthEast,
+        NorthWest,
+        SouthEast,
+        SouthWest,
+        TopNorth,
+        TopSouth,
+        TopEast,
+        TopWest,
+        BottomNorth,
+        BottomSouth,
+        BottomEast,
+        BottomWest,
+        TopNorthEast,
+        TopNorthWest,
+        TopSouthEast,
+        TopSouthWest,
+        BottomNorthEast,
+        BottomNorthWest,
+        BottomSouthEast,
+        BottomSouthWest
+    };
+
     /**
      * OrbitCameraController - orbit camera controller similar to DCC tools.
      *
@@ -95,6 +125,10 @@ namespace termin {
          * @param delta_elevation Vertical rotation in degrees
          */
         void orbit(double delta_azimuth, double delta_elevation);
+
+        // Preserve target, radius and projection; use deterministic horizon-aligned roll.
+        // Top has north (+Y) upward on screen; bottom has south (-Y) upward.
+        void snap_view(ViewDirection direction);
 
         /**
          * Translate the target along the camera's right/up axes.

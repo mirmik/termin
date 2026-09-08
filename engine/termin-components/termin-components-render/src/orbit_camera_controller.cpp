@@ -240,13 +240,62 @@ namespace termin {
         double r = _clamp(radius, min_radius, max_radius);
         const Vec3 eye = orbit_camera_eye(_target, r, _azimuth, _elevation);
 
-        // Create pose looking at target (always zero-roll, resets fly roll)
-        Pose3 pose = Pose3::looking_at(eye, _target);
+        // Compose the orbital frame directly: look-at with world Z up is
+        // singular at the exact top/bottom views used by snap_view.
+        const Quat rotation = Quat::from_axis_angle(Vec3::unit_z(), _azimuth) *
+                              Quat::from_axis_angle(Vec3::unit_x(), -_elevation);
+        Pose3 pose{rotation, eye};
         entity().transform().relocate(pose);
 
         // Update last known position to avoid re-sync
         _last_position = entity().transform().global_position();
         _last_rotation = entity().transform().global_rotation();
+    }
+
+    void OrbitCameraController::snap_view(ViewDirection direction) {
+        if (!entity().valid()) {
+            tc_log_error("[OrbitCameraController] Cannot snap view without a live entity");
+            return;
+        }
+        Vec3 offset;
+        switch (direction) {
+        case ViewDirection::North: offset = {0.0, 1.0, 0.0}; break;
+        case ViewDirection::South: offset = {0.0, -1.0, 0.0}; break;
+        case ViewDirection::East: offset = {1.0, 0.0, 0.0}; break;
+        case ViewDirection::West: offset = {-1.0, 0.0, 0.0}; break;
+        case ViewDirection::Top: offset = {0.0, 0.0, 1.0}; break;
+        case ViewDirection::Bottom: offset = {0.0, 0.0, -1.0}; break;
+        case ViewDirection::NorthEast: offset = {1.0, 1.0, 0.0}; break;
+        case ViewDirection::NorthWest: offset = {-1.0, 1.0, 0.0}; break;
+        case ViewDirection::SouthEast: offset = {1.0, -1.0, 0.0}; break;
+        case ViewDirection::SouthWest: offset = {-1.0, -1.0, 0.0}; break;
+        case ViewDirection::TopNorth: offset = {0.0, 1.0, 1.0}; break;
+        case ViewDirection::TopSouth: offset = {0.0, -1.0, 1.0}; break;
+        case ViewDirection::TopEast: offset = {1.0, 0.0, 1.0}; break;
+        case ViewDirection::TopWest: offset = {-1.0, 0.0, 1.0}; break;
+        case ViewDirection::BottomNorth: offset = {0.0, 1.0, -1.0}; break;
+        case ViewDirection::BottomSouth: offset = {0.0, -1.0, -1.0}; break;
+        case ViewDirection::BottomEast: offset = {1.0, 0.0, -1.0}; break;
+        case ViewDirection::BottomWest: offset = {-1.0, 0.0, -1.0}; break;
+        case ViewDirection::TopNorthEast: offset = {1.0, 1.0, 1.0}; break;
+        case ViewDirection::TopNorthWest: offset = {-1.0, 1.0, 1.0}; break;
+        case ViewDirection::TopSouthEast: offset = {1.0, -1.0, 1.0}; break;
+        case ViewDirection::TopSouthWest: offset = {-1.0, -1.0, 1.0}; break;
+        case ViewDirection::BottomNorthEast: offset = {1.0, 1.0, -1.0}; break;
+        case ViewDirection::BottomNorthWest: offset = {-1.0, 1.0, -1.0}; break;
+        case ViewDirection::BottomSouthEast: offset = {1.0, -1.0, -1.0}; break;
+        case ViewDirection::BottomSouthWest: offset = {-1.0, -1.0, -1.0}; break;
+        default:
+            tc_log_error("[OrbitCameraController] Invalid view direction %d", static_cast<int>(direction));
+            return;
+        }
+        // Respect an external camera relocation even before the next update.
+        update(0.0f);
+        _azimuth = (offset.x == 0.0 && offset.y == 0.0) ? 0.0 : std::atan2(offset.x, -offset.y);
+        _elevation = std::atan2(offset.z, std::hypot(offset.x, offset.y));
+        // A pointer pan anchor belongs to the previous camera frame.
+        _viewport_states.clear();
+        _update_pose();
     }
 
     void OrbitCameraController::orbit(double delta_azimuth, double delta_elevation) {

@@ -201,6 +201,97 @@ TEST_CASE("OrbitCameraController center_on keeps camera offset from target") {
     tc_entity_free(rig.entity.handle());
 }
 
+TEST_CASE("OrbitCameraController snaps all cube directions and preserves orbit state") {
+    const struct { termin::ViewDirection direction; termin::Vec3 offset; } views[] = {
+        {termin::ViewDirection::North, {0.0, 1.0, 0.0}},
+        {termin::ViewDirection::South, {0.0, -1.0, 0.0}},
+        {termin::ViewDirection::East, {1.0, 0.0, 0.0}},
+        {termin::ViewDirection::West, {-1.0, 0.0, 0.0}},
+        {termin::ViewDirection::Top, {0.0, 0.0, 1.0}},
+        {termin::ViewDirection::Bottom, {0.0, 0.0, -1.0}},
+        {termin::ViewDirection::NorthEast, {1.0, 1.0, 0.0}},
+        {termin::ViewDirection::NorthWest, {-1.0, 1.0, 0.0}},
+        {termin::ViewDirection::SouthEast, {1.0, -1.0, 0.0}},
+        {termin::ViewDirection::SouthWest, {-1.0, -1.0, 0.0}},
+        {termin::ViewDirection::TopNorth, {0.0, 1.0, 1.0}},
+        {termin::ViewDirection::TopSouth, {0.0, -1.0, 1.0}},
+        {termin::ViewDirection::TopEast, {1.0, 0.0, 1.0}},
+        {termin::ViewDirection::TopWest, {-1.0, 0.0, 1.0}},
+        {termin::ViewDirection::BottomNorth, {0.0, 1.0, -1.0}},
+        {termin::ViewDirection::BottomSouth, {0.0, -1.0, -1.0}},
+        {termin::ViewDirection::BottomEast, {1.0, 0.0, -1.0}},
+        {termin::ViewDirection::BottomWest, {-1.0, 0.0, -1.0}},
+        {termin::ViewDirection::TopNorthEast, {1.0, 1.0, 1.0}},
+        {termin::ViewDirection::TopNorthWest, {-1.0, 1.0, 1.0}},
+        {termin::ViewDirection::TopSouthEast, {1.0, -1.0, 1.0}},
+        {termin::ViewDirection::TopSouthWest, {-1.0, -1.0, 1.0}},
+        {termin::ViewDirection::BottomNorthEast, {1.0, 1.0, -1.0}},
+        {termin::ViewDirection::BottomNorthWest, {-1.0, 1.0, -1.0}},
+        {termin::ViewDirection::BottomSouthEast, {1.0, -1.0, -1.0}},
+        {termin::ViewDirection::BottomSouthWest, {-1.0, -1.0, -1.0}},
+    };
+    for (const CameraProjection projection : {CameraProjection::Perspective, CameraProjection::Orthographic}) {
+        CameraRig rig = make_camera_rig("snap-camera");
+        rig.camera->projection_type = projection;
+        rig.camera->ortho_size = 7.0;
+        rig.controller->radius = 12.0;
+        const termin::Vec3 focus{2.0, -3.0, 4.0};
+        rig.controller->center_on(focus);
+        for (const auto& view : views) {
+            rig.controller->snap_view(view.direction);
+            const termin::Vec3 offset = rig.entity.transform().global_position() - focus;
+            const termin::Vec3 expected = view.offset.normalized();
+            CHECK((offset - expected * 12.0).norm() < 1e-10);
+            const termin::Quat rotation = rig.entity.transform().global_rotation();
+            CHECK((rotation.rotate(termin::Vec3::unit_y()) + expected).norm() < 1e-10);
+            CHECK((rig.controller->target() - focus).norm() < 1e-10);
+            CHECK_EQ(rig.controller->radius, Approx(12.0).epsilon(1e-12));
+            CHECK(rig.camera->projection_type == projection);
+            CHECK_EQ(rig.camera->ortho_size, Approx(7.0).epsilon(1e-12));
+            rig.controller->update(0.0f);
+            CHECK((rig.controller->target() - focus).norm() < 1e-10);
+            rig.controller->orbit(13.0, -9.0);
+            CHECK((rig.controller->target() - focus).norm() < 1e-10);
+            CHECK(std::abs((rig.entity.transform().global_position() - focus).norm() - 12.0) < 1e-10);
+        }
+        tc_entity_free(rig.entity.handle());
+    }
+}
+
+TEST_CASE("OrbitCameraController pole views keep a deterministic frame through pan and zoom") {
+    CameraRig rig = make_camera_rig("pole-camera");
+    for (const auto direction : {termin::ViewDirection::Top, termin::ViewDirection::Bottom}) {
+        rig.controller->snap_view(direction);
+        const double sign = direction == termin::ViewDirection::Top ? 1.0 : -1.0;
+        const termin::Quat rotation = rig.entity.transform().global_rotation();
+        CHECK((rotation.rotate(termin::Vec3::unit_x()) - termin::Vec3::unit_x()).norm() < 1e-10);
+        CHECK((rotation.rotate(termin::Vec3::unit_z()) - termin::Vec3{0.0, sign, 0.0}).norm() < 1e-10);
+        const termin::Vec3 target = rig.controller->target();
+        rig.controller->translate_target({2.0, 3.0});
+        CHECK((rig.controller->target() - target - termin::Vec3{2.0, sign * 3.0, 0.0}).norm() < 1e-10);
+        const double radius = rig.controller->radius;
+        rig.controller->zoom(1.0);
+        const termin::Vec3 offset = rig.entity.transform().global_position() - rig.controller->target();
+        CHECK((offset - termin::Vec3{0.0, 0.0, sign * (radius + 1.0)}).norm() < 1e-10);
+        CHECK((rig.entity.transform().global_rotation().rotate(termin::Vec3::unit_z()) -
+               termin::Vec3{0.0, sign, 0.0}).norm() < 1e-10);
+    }
+    tc_entity_free(rig.entity.handle());
+}
+
+TEST_CASE("OrbitCameraController snap synchronizes an externally relocated camera") {
+    CameraRig rig = make_camera_rig("relocated-snap-camera");
+    const termin::Quat rotation = termin::Quat::from_axis_angle(termin::Vec3::unit_z(), 0.7);
+    const termin::Vec3 position{10.0, -4.0, 8.0};
+    rig.entity.transform().relocate(termin::Pose3{rotation, position});
+    const termin::Vec3 expected_target = position + rotation.rotate(termin::Vec3::unit_y()) * rig.controller->radius;
+    rig.controller->snap_view(termin::ViewDirection::North);
+    CHECK((rig.controller->target() - expected_target).norm() < 1e-10);
+    CHECK((rig.entity.transform().global_position() - expected_target -
+           termin::Vec3{0.0, rig.controller->radius, 0.0}).norm() < 1e-10);
+    tc_entity_free(rig.entity.handle());
+}
+
 TEST_CASE("CameraComponent C++ ray API returns an optional canonical Ray3") {
     CameraRig rig = make_camera_rig("ray-camera");
 
