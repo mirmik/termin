@@ -192,18 +192,15 @@ namespace tgfx {
                 std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(kCorners.data()), sizeof(kCorners)));
         }
 
-        if (!vertex_shader_ || !fragment_shader_) {
-            if (tc_shader_handle_is_invalid(shader_handle_)) {
-                shader_handle_ = register_builtin_shader_from_catalog(kShaderUuid);
-            }
-            tc_shader* shader = tc_shader_get(shader_handle_);
-            if (!shader || !termin::tc_shader_ensure_tgfx2(shader, &device, &vertex_shader_, &fragment_shader_)) {
-                tc::Log::error("PointCloudRenderer: failed to create the built-in shader");
-                vertex_shader_ = {};
-                fragment_shader_ = {};
-                return false;
-            }
+        termin::Tgfx2ShaderView view;
+        if (!termin::builtin_shader_resolve_tgfx2(kShaderUuid, &shader_handle_, &device, &view)) {
+            tc::Log::error("PointCloudRenderer: failed to resolve the built-in shader");
+            vertex_shader_ = {};
+            fragment_shader_ = {};
+            return false;
         }
+        vertex_shader_ = view.vertex_shader;
+        fragment_shader_ = view.fragment_shader;
         return true;
     }
 

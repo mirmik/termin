@@ -79,7 +79,7 @@ namespace tgfx {
         }
         const bool has_vs = shader->vertex_source && shader->vertex_source[0] != '\0';
         const auto& resolver = shader_artifact_resolver();
-        const uint64_t resolver_revision = resolver.revision();
+        const uint64_t resolver_revision = shader_artifact_revision();
         auto cached = tc_shader_cache_.find(shader->pool_index);
         if (cached != tc_shader_cache_.end() && cached->second.version == shader->version &&
             cached->second.resolver_revision == resolver_revision && cached->second.has_vs == has_vs &&
@@ -90,6 +90,7 @@ namespace tgfx {
             return true;
         }
         if (cached != tc_shader_cache_.end()) {
+            notify_shader_handles_replaced();
             if (cached->second.vs)
                 destroy(cached->second.vs);
             if (cached->second.fs)
@@ -141,6 +142,7 @@ namespace tgfx {
         auto entry = tc_shader_cache_.find(pool_index);
         if (entry == tc_shader_cache_.end())
             return;
+        notify_shader_handles_replaced();
         if (entry->second.vs)
             destroy(entry->second.vs);
         if (entry->second.fs)

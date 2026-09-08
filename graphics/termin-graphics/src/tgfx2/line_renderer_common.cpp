@@ -24,25 +24,15 @@ namespace tgfx::line_renderer {
                             const char* owner_name,
                             ShaderHandle& vertex_shader,
                             ShaderHandle& fragment_shader) {
-        if (vertex_shader && fragment_shader) {
-            return true;
-        }
-
-        if (tc_shader_handle_is_invalid(registry_handle)) {
-            registry_handle = register_builtin_shader_from_catalog(uuid);
-        }
-        if (tc_shader_handle_is_invalid(registry_handle)) {
-            tc::Log::error("[%s] failed to register %s shader", owner_name, label);
-            return false;
-        }
-
-        tc_shader* raw = tc_shader_get(registry_handle);
-        if (!raw || !termin::tc_shader_ensure_tgfx2(raw, &device, &vertex_shader, &fragment_shader)) {
-            tc::Log::error("[%s] failed to create %s shader", owner_name, label);
+        termin::Tgfx2ShaderView view;
+        if (!termin::builtin_shader_resolve_tgfx2(uuid, &registry_handle, &device, &view)) {
+            tc::Log::error("[%s] failed to resolve %s shader", owner_name, label);
             vertex_shader = {};
             fragment_shader = {};
             return false;
         }
+        vertex_shader = view.vertex_shader;
+        fragment_shader = view.fragment_shader;
         return true;
     }
 
@@ -52,24 +42,13 @@ namespace tgfx::line_renderer {
                                 const char* label,
                                 const char* owner_name,
                                 ShaderHandle& fragment_shader) {
-        if (fragment_shader) {
-            return true;
-        }
-
-        if (tc_shader_handle_is_invalid(registry_handle)) {
-            registry_handle = register_builtin_shader_from_catalog(uuid);
-        }
-        if (tc_shader_handle_is_invalid(registry_handle)) {
-            tc::Log::error("[%s] failed to register %s shader", owner_name, label);
-            return false;
-        }
-
-        tc_shader* raw = tc_shader_get(registry_handle);
-        if (!raw || !termin::tc_shader_ensure_tgfx2(raw, &device, nullptr, &fragment_shader)) {
-            tc::Log::error("[%s] failed to create %s shader", owner_name, label);
+        termin::Tgfx2ShaderView view;
+        if (!termin::builtin_shader_resolve_tgfx2(uuid, &registry_handle, &device, &view)) {
+            tc::Log::error("[%s] failed to resolve %s shader", owner_name, label);
             fragment_shader = {};
             return false;
         }
+        fragment_shader = view.fragment_shader;
         return true;
     }
 

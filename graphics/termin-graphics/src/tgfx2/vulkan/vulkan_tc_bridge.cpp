@@ -255,7 +255,7 @@ namespace tgfx {
         const uint32_t pool_index = shader->pool_index;
         const uint32_t version = shader->version;
         const auto& resolver = shader_artifact_resolver();
-        const uint64_t resolver_revision = resolver.revision();
+        const uint64_t resolver_revision = shader_artifact_revision();
         const bool resource_layout_ready = tc_shader_has_resource_layout(shader) ||
                                            (!artifacts_required && shader_language == TC_SHADER_LANGUAGE_GLSL);
         {
@@ -270,6 +270,7 @@ namespace tgfx {
                 return true;
             }
             if (it != tc_shader_cache_.end()) {
+                notify_shader_handles_replaced();
                 if (it->second.vs)
                     destroy(it->second.vs);
                 if (it->second.fs)
@@ -342,6 +343,7 @@ namespace tgfx {
         std::lock_guard<std::mutex> lock(tc_shader_cache_mtx_);
         auto it = tc_shader_cache_.find(pool_index);
         if (it != tc_shader_cache_.end()) {
+            notify_shader_handles_replaced();
             if (it->second.vs)
                 destroy(it->second.vs);
             if (it->second.fs)
@@ -367,6 +369,7 @@ namespace tgfx {
         auto it = tc_shader_cache_.find(pool_index);
         if (it == tc_shader_cache_.end())
             return;
+        notify_shader_handles_replaced();
         if (it->second.vs)
             destroy(it->second.vs);
         if (it->second.fs)

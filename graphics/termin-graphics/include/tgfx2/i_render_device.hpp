@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -45,7 +46,17 @@ namespace tgfx {
 
         termin::ShaderArtifactResolver shader_artifact_resolver_;
         bool shader_artifact_resolver_configured_ = false;
+        uint64_t shader_artifact_revision_ = 1;
+        std::atomic<uint64_t> shader_handle_revision_{1};
         std::shared_ptr<const LifetimeToken> lifetime_token_ = std::make_shared<const LifetimeToken>();
+
+    protected:
+        // Backends call this immediately before retiring cached native shader
+        // handles. PipelineCache observes the revision and retires pipelines
+        // that were built from the displaced handles.
+        void notify_shader_handles_replaced() noexcept {
+            shader_handle_revision_.fetch_add(1, std::memory_order_release);
+        }
 
     public:
         IRenderDevice() = default;
@@ -68,11 +79,23 @@ namespace tgfx {
         void configure_shader_artifacts(const termin::ShaderArtifactResolver& resolver) {
             shader_artifact_resolver_ = resolver;
             shader_artifact_resolver_configured_ = true;
+            ++shader_artifact_revision_;
         }
 
         const termin::ShaderArtifactResolver& shader_artifact_resolver() const {
             return shader_artifact_resolver_configured_ ? shader_artifact_resolver_
                                                         : termin::tgfx2_legacy_shader_artifact_resolver();
+        }
+
+        // Device-owned generation: unlike ShaderArtifactResolver::revision(),
+        // this also distinguishes two separately constructed resolver values.
+        uint64_t shader_artifact_revision() const noexcept {
+            return shader_artifact_resolver_configured_ ? ((uint64_t{1} << 63) | shader_artifact_revision_)
+                                                        : termin::tgfx2_legacy_shader_artifact_resolver().revision();
+        }
+
+        uint64_t shader_handle_revision() const noexcept {
+            return shader_handle_revision_.load(std::memory_order_acquire);
         }
 
         // Backend identity — lets callers branch on GL-only vs Vulkan-only

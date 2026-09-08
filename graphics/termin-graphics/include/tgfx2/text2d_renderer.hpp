@@ -73,7 +73,6 @@ namespace tgfx {
         // Shader lives on the tc_shader registry — shared across
         // Text2DRenderer instances so Play/Stop doesn't re-run shaderc.
         // vs_/fs_ are per-frame cached views into the slot's current ids.
-        IRenderDevice* compiled_on_ = nullptr;
         tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
         ShaderHandle vs_{};
         ShaderHandle fs_{};
@@ -95,8 +94,7 @@ namespace tgfx {
         Text2DRenderer(const Text2DRenderer&) = delete;
         Text2DRenderer& operator=(const Text2DRenderer&) = delete;
 
-        // Set up a frame. Compiles the shader on first call or when the
-        // underlying IRenderDevice changes (caller re-created its context).
+        // Set up a frame and resolve the current versioned shader view.
         // If `font` is non-null it replaces any earlier font; the caller
         // retains ownership.
         void begin(RenderContext2* ctx, int viewport_w, int viewport_h, FontAtlas* font = nullptr);
@@ -128,8 +126,7 @@ namespace tgfx {
         // until the caller rebinds or ends its pass.
         void end();
 
-        // Drop the compiled shader. Call when the GL context is torn down
-        // so the destructor does not reach into a dead device.
+        // Drop cached shader views and active frame state.
         void release_gpu();
 
         // A value of 1 disables bitmap coverage correction. Values greater

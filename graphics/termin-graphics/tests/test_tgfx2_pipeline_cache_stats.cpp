@@ -7,9 +7,16 @@
 #include <vector>
 
 #include <tgfx2/i_render_device.hpp>
+#include <tgfx2/canvas2d_renderer.hpp>
 #include <tgfx2/pipeline_cache.hpp>
 #include <tgfx2/render_context.hpp>
+#include <tgfx2/shader_artifact_resolver.hpp>
 #include <tgfx2/texture_pool.hpp>
+
+extern "C" {
+#include <tgfx/resources/tc_shader.h>
+#include <tgfx/resources/tc_shader_registry.h>
+}
 
 namespace {
 
@@ -31,16 +38,26 @@ namespace {
         void framebuffer_local_barrier() override {
             ++framebuffer_local_barrier_count;
         }
-        void bind_pipeline(tgfx::PipelineHandle) override {}
+        void bind_pipeline(tgfx::PipelineHandle pipeline) override {
+            current_pipeline = pipeline;
+        }
         void
         bind_resource_set(tgfx::ResourceSetHandle, uint32_t = 0, const uint32_t* = nullptr, uint32_t = 0) override {}
         void set_push_constants(const void*, uint32_t) override {}
         void bind_vertex_buffer(uint32_t, tgfx::BufferHandle, uint64_t = 0) override {}
         void bind_index_buffer(tgfx::BufferHandle, tgfx::IndexType, uint64_t = 0) override {}
-        void draw(uint32_t, uint32_t = 0) override {}
-        void draw_instanced(uint32_t, uint32_t, uint32_t = 0, uint32_t = 0) override {}
-        void draw_indexed(uint32_t, uint32_t = 0, int32_t = 0) override {}
-        void draw_indexed_instanced(uint32_t, uint32_t, uint32_t = 0, int32_t = 0, uint32_t = 0) override {}
+        void draw(uint32_t, uint32_t = 0) override {
+            draw_pipelines.push_back(current_pipeline);
+        }
+        void draw_instanced(uint32_t, uint32_t, uint32_t = 0, uint32_t = 0) override {
+            draw_pipelines.push_back(current_pipeline);
+        }
+        void draw_indexed(uint32_t, uint32_t = 0, int32_t = 0) override {
+            draw_pipelines.push_back(current_pipeline);
+        }
+        void draw_indexed_instanced(uint32_t, uint32_t, uint32_t = 0, int32_t = 0, uint32_t = 0) override {
+            draw_pipelines.push_back(current_pipeline);
+        }
         void dispatch(uint32_t, uint32_t, uint32_t) override {}
         void copy_buffer(tgfx::BufferHandle, tgfx::BufferHandle, uint64_t, uint64_t = 0, uint64_t = 0) override {}
         void copy_texture(tgfx::TextureHandle, tgfx::TextureHandle) override {}
@@ -53,6 +70,8 @@ namespace {
         uint32_t end_render_pass_count = 0;
         uint32_t framebuffer_local_barrier_count = 0;
         tgfx::RenderPassDesc last_render_pass;
+        tgfx::PipelineHandle current_pipeline;
+        std::vector<tgfx::PipelineHandle> draw_pipelines;
     };
 
     class PipelineCacheStatsDevice final : public tgfx::IRenderDevice {
@@ -68,7 +87,7 @@ namespace {
         void wait_idle() override {}
 
         tgfx::BufferHandle create_buffer(const tgfx::BufferDesc&) override {
-            return {};
+            return tgfx::BufferHandle{next_buffer_id_++};
         }
 
         tgfx::TextureHandle create_texture(const tgfx::TextureDesc& desc) override {
@@ -83,7 +102,7 @@ namespace {
         }
 
         tgfx::SamplerHandle create_sampler(const tgfx::SamplerDesc&) override {
-            return {};
+            return tgfx::SamplerHandle{next_sampler_id_++};
         }
 
         tgfx::ShaderHandle create_shader(const tgfx::ShaderDesc&) override {
@@ -111,7 +130,9 @@ namespace {
         }
         void destroy(tgfx::SamplerHandle) override {}
         void destroy(tgfx::ShaderHandle) override {}
-        void destroy(tgfx::PipelineHandle) override {}
+        void destroy(tgfx::PipelineHandle handle) override {
+            destroyed_pipelines.push_back(handle);
+        }
         void destroy(tgfx::ResourceSetHandle) override {}
 
         void upload_buffer(tgfx::BufferHandle, std::span<const uint8_t>, uint64_t = 0) override {}
@@ -136,8 +157,42 @@ namespace {
             return command_list;
         }
 
-        void submit(tgfx::ICommandList&) override {}
+        void submit(tgfx::ICommandList& commands) override {
+            auto* recording = dynamic_cast<RecordingCommandList*>(&commands);
+            if (!recording)
+                return;
+            submitted_pipelines.insert(submitted_pipelines.end(),
+                                       recording->draw_pipelines.begin(),
+                                       recording->draw_pipelines.end());
+        }
         void present() override {}
+
+        bool ensure_tc_shader(tc_shader* shader,
+                              tgfx::ShaderHandle* out_vertex,
+                              tgfx::ShaderHandle* out_fragment) override {
+            if (!shader || !out_fragment)
+                return false;
+            const uint64_t artifact_revision = shader_artifact_revision();
+            auto cached = shader_cache_.find(shader->pool_index);
+            if (cached == shader_cache_.end() || cached->second.source_version != shader->version ||
+                cached->second.artifact_revision != artifact_revision) {
+                if (cached != shader_cache_.end()) {
+                    notify_shader_handles_replaced();
+                    shader_cache_.erase(cached);
+                }
+                CachedShader replacement;
+                replacement.source_version = shader->version;
+                replacement.artifact_revision = artifact_revision;
+                if (shader->vertex_source && shader->vertex_source[0] != '\0')
+                    replacement.vertex = tgfx::ShaderHandle{next_shader_id_++};
+                replacement.fragment = tgfx::ShaderHandle{next_shader_id_++};
+                cached = shader_cache_.emplace(shader->pool_index, replacement).first;
+            }
+            if (out_vertex)
+                *out_vertex = cached->second.vertex;
+            *out_fragment = cached->second.fragment;
+            return true;
+        }
 
         int texture_failures_remaining = 0;
         int pipeline_failures_remaining = 0;
@@ -145,12 +200,25 @@ namespace {
         uint32_t create_pipeline_count = 0;
         std::vector<tgfx::PipelineDesc> created_pipeline_descs;
         std::vector<tgfx::TextureHandle> destroyed_textures;
+        std::vector<tgfx::PipelineHandle> destroyed_pipelines;
+        std::vector<tgfx::PipelineHandle> submitted_pipelines;
         RecordingCommandList* last_command_list = nullptr;
 
     private:
+        struct CachedShader {
+            tgfx::ShaderHandle vertex;
+            tgfx::ShaderHandle fragment;
+            uint32_t source_version = 0;
+            uint64_t artifact_revision = 0;
+        };
+
+        uint32_t next_buffer_id_ = 1;
+        uint32_t next_sampler_id_ = 1;
+        uint32_t next_shader_id_ = 100;
         uint32_t next_texture_id_ = 1;
         uint32_t next_pipeline_id_ = 1;
         std::unordered_map<uint32_t, tgfx::TextureDesc> texture_descs_;
+        std::unordered_map<uint32_t, CachedShader> shader_cache_;
     };
 
     tgfx::VertexLayoutDesc make_layout(uint32_t stride, const char* semantic) {
@@ -305,6 +373,88 @@ TEST_CASE("PipelineCache keeps indexed strip formats in pipeline identity") {
     CHECK(device.created_pipeline_descs[0].strip_index_format == tgfx::StripIndexFormat::Uint16);
     CHECK(device.created_pipeline_descs[1].strip_index_format == tgfx::StripIndexFormat::Uint32);
     CHECK(device.created_pipeline_descs[2].strip_index_format == tgfx::StripIndexFormat::Undefined);
+}
+
+TEST_CASE("live Canvas2D renderers reacquire shaders and retire pipelines after shader reloads") {
+    {
+        PipelineCacheStatsDevice device;
+        tgfx::PipelineCache cache(device);
+        tgfx::RenderContext2 context(device, cache);
+        tgfx::Canvas2DRenderer first;
+        tgfx::Canvas2DRenderer second;
+
+        tgfx::TextureDesc color_desc;
+        color_desc.width = 32;
+        color_desc.height = 32;
+        color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        color_desc.usage = tgfx::TextureUsage::ColorAttachment;
+        const tgfx::TextureHandle color = device.create_texture(color_desc);
+
+        const auto render_both = [&]() {
+            tgfx::RenderPassDesc pass;
+            pass.colors.resize(1);
+            pass.colors[0].texture = color;
+            context.begin_frame();
+            REQUIRE(context.begin_pass(pass));
+            first.begin(context, 32, 32);
+            first.draw_rect(1.0f, 1.0f, 8.0f, 8.0f, tgfx::CanvasSrgbColor::white());
+            first.end();
+            second.begin(context, 32, 32);
+            second.draw_rect(12.0f, 1.0f, 8.0f, 8.0f, tgfx::CanvasSrgbColor::white());
+            second.end();
+            context.end_pass();
+            context.end_frame();
+        };
+
+        render_both();
+        REQUIRE(device.submitted_pipelines.size() == 2u);
+        const tgfx::PipelineHandle initial_pipeline = device.submitted_pipelines[0];
+        CHECK(device.submitted_pipelines[1] == initial_pipeline);
+        REQUIRE(device.created_pipeline_descs.size() == 1u);
+        const tgfx::ShaderHandle initial_vertex = device.created_pipeline_descs[0].vertex_shader;
+        const tgfx::ShaderHandle initial_fragment = device.created_pipeline_descs[0].fragment_shader;
+
+        termin::ShaderArtifactResolver replacement_resolver;
+        device.configure_shader_artifacts(replacement_resolver);
+        device.submitted_pipelines.clear();
+        render_both();
+
+        REQUIRE(device.submitted_pipelines.size() == 2u);
+        const tgfx::PipelineHandle replacement_pipeline = device.submitted_pipelines[0];
+        CHECK(replacement_pipeline != initial_pipeline);
+        CHECK(device.submitted_pipelines[1] == replacement_pipeline);
+        REQUIRE(device.created_pipeline_descs.size() == 2u);
+        CHECK(device.created_pipeline_descs[1].vertex_shader != initial_vertex);
+        CHECK(device.created_pipeline_descs[1].fragment_shader != initial_fragment);
+        REQUIRE(device.destroyed_pipelines.size() == 1u);
+        CHECK(device.destroyed_pipelines[0] == initial_pipeline);
+        CHECK(cache.size() == 1u);
+
+        const tc_shader_handle solid_handle = tc_shader_find("termin-engine-canvas2d-solid");
+        tc_shader* solid_shader = tc_shader_get(solid_handle);
+        REQUIRE(solid_shader != nullptr);
+        struct ShaderVersionRestore {
+            tc_shader* shader;
+            uint32_t version;
+            ~ShaderVersionRestore() {
+                shader->version = version;
+            }
+        } restore_version{solid_shader, solid_shader->version};
+        ++solid_shader->version;
+
+        device.submitted_pipelines.clear();
+        render_both();
+        REQUIRE(device.submitted_pipelines.size() == 2u);
+        const tgfx::PipelineHandle source_reload_pipeline = device.submitted_pipelines[0];
+        CHECK(source_reload_pipeline != replacement_pipeline);
+        CHECK(device.submitted_pipelines[1] == source_reload_pipeline);
+        REQUIRE(device.created_pipeline_descs.size() == 3u);
+        CHECK(device.created_pipeline_descs[2].vertex_shader != device.created_pipeline_descs[1].vertex_shader);
+        CHECK(device.created_pipeline_descs[2].fragment_shader != device.created_pipeline_descs[1].fragment_shader);
+        REQUIRE(device.destroyed_pipelines.size() == 2u);
+        CHECK(device.destroyed_pipelines[1] == replacement_pipeline);
+        CHECK(cache.size() == 1u);
+    }
 }
 
 TEST_CASE("PipelineCache identity includes complete raster state") {

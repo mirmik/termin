@@ -25,7 +25,7 @@
 #include <vector>
 
 extern "C" {
-struct tc_shader;
+#include <tgfx/resources/tc_shader_registry.h>
 }
 
 namespace tgfx {
@@ -36,6 +36,16 @@ namespace tgfx {
 namespace termin {
 
     class ShaderArtifactResolver;
+
+    // Authoritative per-device view of one registry shader. Re-resolving the
+    // view is cheap on a cache hit and observes both source and artifact
+    // resolver generations before exposing native handles to a renderer.
+    struct Tgfx2ShaderView {
+        tgfx::ShaderHandle vertex_shader;
+        tgfx::ShaderHandle fragment_shader;
+        uint32_t source_version = 0;
+        uint64_t artifact_revision = 0;
+    };
 
     // Ensure the tgfx2 vertex and fragment ShaderHandles for `shader` are live
     // and up to date for the given device. The device compiles on first call or
@@ -49,6 +59,18 @@ namespace termin {
                                           tgfx::IRenderDevice* device,
                                           tgfx::ShaderHandle* out_vs,
                                           tgfx::ShaderHandle* out_fs);
+
+    TGFX2_API bool tc_shader_resolve_tgfx2(::tc_shader* shader,
+                                           tgfx::IRenderDevice* device,
+                                           Tgfx2ShaderView* out_view);
+
+    // Resolve a process-lifetime built-in by UUID, reacquiring a generation-
+    // stale registry handle and replacing the whole view atomically on
+    // success. Failure clears out_view; callers must not retain old handles.
+    TGFX2_API bool builtin_shader_resolve_tgfx2(const char* uuid,
+                                                tc_shader_handle* inout_registry_handle,
+                                                tgfx::IRenderDevice* device,
+                                                Tgfx2ShaderView* out_view);
 
     TGFX2_API void tgfx2_set_shader_artifact_root(const char* root);
     TGFX2_API const char* tgfx2_get_shader_artifact_root(void);

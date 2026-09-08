@@ -112,44 +112,28 @@ namespace tgfx {
     }
 
     void Text2DRenderer::ensure_shader_(IRenderDevice& device) {
-        if (compiled_on_ == &device && vs_.id != 0 && fs_.id != 0 && vs_sdf_.id != 0 && fs_sdf_.id != 0)
-            return;
-        compiled_on_ = &device;
-
-        // Bitmap shader pair.
-        if (!tc_shader_is_valid(shader_handle_)) {
-            shader_handle_ = register_builtin_shader_from_catalog(TEXT2D_SHADER_UUID);
-        }
-
         vs_ = ShaderHandle{};
         fs_ = ShaderHandle{};
-        if (!tc_shader_handle_is_invalid(shader_handle_)) {
-            tc_shader* raw = tc_shader_get(shader_handle_);
-            if (raw) {
-                if (!termin::tc_shader_ensure_tgfx2(raw, &device, &vs_, &fs_)) {
-                    tc::Log::error("[Text2DRenderer] failed to create bitmap shader");
-                }
-            }
+        termin::Tgfx2ShaderView bitmap_view;
+        if (termin::builtin_shader_resolve_tgfx2(TEXT2D_SHADER_UUID, &shader_handle_, &device, &bitmap_view)) {
+            vs_ = bitmap_view.vertex_shader;
+            fs_ = bitmap_view.fragment_shader;
+        } else {
+            tc::Log::error("[Text2DRenderer] failed to resolve bitmap shader");
         }
 
         if (vs_.id == 0 || fs_.id == 0) {
             tc::Log::error("[Text2DRenderer] bitmap shader is unavailable");
         }
 
-        // SDF shader pair uses a larger push block than the bitmap path.
-        if (!tc_shader_is_valid(sdf_shader_handle_)) {
-            sdf_shader_handle_ = register_builtin_shader_from_catalog(TEXT2D_SDF_SHADER_UUID);
-        }
-
         vs_sdf_ = ShaderHandle{};
         fs_sdf_ = ShaderHandle{};
-        if (!tc_shader_handle_is_invalid(sdf_shader_handle_)) {
-            tc_shader* raw = tc_shader_get(sdf_shader_handle_);
-            if (raw) {
-                if (!termin::tc_shader_ensure_tgfx2(raw, &device, &vs_sdf_, &fs_sdf_)) {
-                    tc::Log::error("[Text2DRenderer] failed to create SDF shader");
-                }
-            }
+        termin::Tgfx2ShaderView sdf_view;
+        if (termin::builtin_shader_resolve_tgfx2(TEXT2D_SDF_SHADER_UUID, &sdf_shader_handle_, &device, &sdf_view)) {
+            vs_sdf_ = sdf_view.vertex_shader;
+            fs_sdf_ = sdf_view.fragment_shader;
+        } else {
+            tc::Log::error("[Text2DRenderer] failed to resolve SDF shader");
         }
 
         if (vs_sdf_.id == 0 || fs_sdf_.id == 0) {
@@ -166,7 +150,6 @@ namespace tgfx {
         fs_ = ShaderHandle{};
         vs_sdf_ = ShaderHandle{};
         fs_sdf_ = ShaderHandle{};
-        compiled_on_ = nullptr;
         ctx_ = nullptr;
     }
 
@@ -195,6 +178,7 @@ namespace tgfx {
             tc::Log::error("[Text2DRenderer] per-draw coverage gamma must be finite and positive");
             return;
         }
+        ensure_shader_(ctx_->device());
 
         const bool profile = tc_profiler_enabled();
         const termin::LinearColor color = termin::srgb_to_linear(options.color);
@@ -408,6 +392,7 @@ namespace tgfx {
             tc::Log::error("[Text2DRenderer] per-mesh coverage gamma must be finite and positive");
             return;
         }
+        ensure_shader_(ctx_->device());
 
         RenderContext2& ctx = *ctx_;
         const bool use_sdf = font->is_sdf_size(display_px);

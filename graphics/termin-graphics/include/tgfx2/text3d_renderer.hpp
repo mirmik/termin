@@ -58,7 +58,6 @@ namespace tgfx {
         };
 
     private:
-        IRenderDevice* compiled_on_ = nullptr;
         tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
         ShaderHandle vs_{};
         ShaderHandle fs_{};
@@ -77,8 +76,8 @@ namespace tgfx {
         Text3DRenderer(const Text3DRenderer&) = delete;
         Text3DRenderer& operator=(const Text3DRenderer&) = delete;
 
-        // Set up a frame. Compiles the shader on first call or when the
-        // device changes. mvp/cam_right/cam_up are copied by value; the
+        // Set up a frame and resolve the current versioned shader view.
+        // mvp/cam_right/cam_up are copied by value; the
         // caller may free their source buffers immediately.
         void begin(RenderContext2* ctx,
                    const float mvp[16],

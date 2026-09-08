@@ -72,7 +72,8 @@ namespace tgfx {
         int viewport_w_ = 0;
         int viewport_h_ = 0;
         float projection_[16]{};
-        IRenderDevice* compiled_on_ = nullptr;
+        tc_shader_handle solid_shader_handle_ = tc_shader_handle_invalid();
+        tc_shader_handle texture_shader_handle_ = tc_shader_handle_invalid();
         ShaderHandle solid_vs_{}, solid_fs_{}, texture_vs_{}, texture_fs_{};
         std::vector<ClipRect> clip_stack_;
         BatchMode batch_mode_ = BatchMode::None;

@@ -1935,6 +1935,58 @@ namespace termin {
         return true;
     }
 
+    bool tc_shader_resolve_tgfx2(::tc_shader* shader,
+                                 tgfx::IRenderDevice* device,
+                                 Tgfx2ShaderView* out_view) {
+        if (!out_view) {
+            tc_log(TC_LOG_ERROR, "tc_shader_resolve_tgfx2: out_view is NULL");
+            return false;
+        }
+        *out_view = {};
+        if (!shader || !device) {
+            tc_log(TC_LOG_ERROR, "tc_shader_resolve_tgfx2: shader and device are required");
+            return false;
+        }
+
+        Tgfx2ShaderView resolved;
+        if (!tc_shader_ensure_tgfx2(shader, device, &resolved.vertex_shader, &resolved.fragment_shader)) {
+            return false;
+        }
+        resolved.source_version = shader->version;
+        resolved.artifact_revision = device->shader_artifact_revision();
+        *out_view = resolved;
+        return true;
+    }
+
+    bool builtin_shader_resolve_tgfx2(const char* uuid,
+                                      tc_shader_handle* inout_registry_handle,
+                                      tgfx::IRenderDevice* device,
+                                      Tgfx2ShaderView* out_view) {
+        if (!inout_registry_handle || !out_view) {
+            tc_log(TC_LOG_ERROR, "builtin_shader_resolve_tgfx2: handle and out_view are required");
+            return false;
+        }
+        *out_view = {};
+        if (!uuid || uuid[0] == '\0' || !device) {
+            tc_log(TC_LOG_ERROR, "builtin_shader_resolve_tgfx2: uuid and device are required");
+            return false;
+        }
+
+        if (!tc_shader_is_valid(*inout_registry_handle)) {
+            *inout_registry_handle = tgfx::register_builtin_shader_from_catalog(uuid);
+        }
+        if (!tc_shader_is_valid(*inout_registry_handle)) {
+            tc_log(TC_LOG_ERROR, "builtin_shader_resolve_tgfx2: failed to register '%s'", uuid);
+            return false;
+        }
+        ::tc_shader* shader = tc_shader_get(*inout_registry_handle);
+        if (!shader) {
+            tc_log(TC_LOG_ERROR, "builtin_shader_resolve_tgfx2: registry view for '%s' is unavailable", uuid);
+            return false;
+        }
+        return tc_shader_resolve_tgfx2(shader, device, out_view);
+    }
+
 } // namespace termin
 extern "C" TGFX2_API void tgfx2_set_shader_artifact_root(const char* root) {
     termin::tgfx2_set_shader_artifact_root(root);

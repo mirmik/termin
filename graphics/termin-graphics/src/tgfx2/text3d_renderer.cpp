@@ -87,28 +87,21 @@ namespace tgfx {
     }
 
     void Text3DRenderer::ensure_shader_(IRenderDevice& device) {
-        if (compiled_on_ == &device && vs_.id != 0 && fs_.id != 0) {
-            return;
-        }
         vs_ = ShaderHandle{};
         fs_ = ShaderHandle{};
 
-        if (!tc_shader_is_valid(shader_handle_)) {
-            shader_handle_ = register_builtin_shader_from_catalog(TEXT3D_SHADER_UUID);
-        }
-
-        if (!tc_shader_handle_is_invalid(shader_handle_)) {
-            tc_shader* raw = tc_shader_get(shader_handle_);
-            if (raw && !termin::tc_shader_ensure_tgfx2(raw, &device, &vs_, &fs_)) {
-                tc::Log::error("[Text3DRenderer] failed to create shader");
-            }
+        termin::Tgfx2ShaderView view;
+        if (termin::builtin_shader_resolve_tgfx2(TEXT3D_SHADER_UUID, &shader_handle_, &device, &view)) {
+            vs_ = view.vertex_shader;
+            fs_ = view.fragment_shader;
+        } else {
+            tc::Log::error("[Text3DRenderer] failed to resolve shader");
         }
 
         if (vs_.id == 0 || fs_.id == 0) {
             tc::Log::error("[Text3DRenderer] shader is unavailable");
         }
 
-        compiled_on_ = &device;
     }
 
     void Text3DRenderer::release_gpu() {
@@ -116,7 +109,6 @@ namespace tgfx {
         // Text3DRenderer instances; cached handles are local views only.
         vs_ = ShaderHandle{};
         fs_ = ShaderHandle{};
-        compiled_on_ = nullptr;
         ctx_ = nullptr;
     }
 
@@ -140,6 +132,9 @@ namespace tgfx {
 
     void Text3DRenderer::draw(std::string_view text_utf8, const DrawOptions& options) {
         if (text_utf8.empty() || font_ == nullptr || ctx_ == nullptr)
+            return;
+        ensure_shader_(ctx_->device());
+        if (!vs_ || !fs_)
             return;
         const bool screen_aligned = expansion_mode_ == ExpansionMode::ScreenAligned;
         const termin::LinearColor& color = options.color;

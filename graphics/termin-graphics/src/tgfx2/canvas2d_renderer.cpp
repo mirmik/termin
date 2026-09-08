@@ -37,22 +37,6 @@ namespace tgfx {
         constexpr const char* CANVAS2D_SOLID_SHADER_UUID = "termin-engine-canvas2d-solid";
         constexpr const char* CANVAS2D_TEXTURE_SHADER_UUID = "termin-engine-canvas2d-texture";
 
-        tc_shader_handle solid_shader_handle() {
-            static tc_shader_handle handle = tc_shader_handle_invalid();
-            if (!tc_shader_is_valid(handle)) {
-                handle = register_builtin_shader_from_catalog(CANVAS2D_SOLID_SHADER_UUID);
-            }
-            return handle;
-        }
-
-        tc_shader_handle texture_shader_handle() {
-            static tc_shader_handle handle = tc_shader_handle_invalid();
-            if (!tc_shader_is_valid(handle)) {
-                handle = register_builtin_shader_from_catalog(CANVAS2D_TEXTURE_SHADER_UUID);
-            }
-            return handle;
-        }
-
         void build_ortho_pixel_to_ndc(float x, float y, float w, float h, float out[16]) {
             if (w <= 0.0f || h <= 0.0f) {
                 std::memset(out, 0, 16 * sizeof(float));
@@ -1037,7 +1021,6 @@ namespace tgfx {
         solid_fs_ = ShaderHandle{};
         texture_vs_ = ShaderHandle{};
         texture_fs_ = ShaderHandle{};
-        compiled_on_ = nullptr;
     }
 
     void Canvas2DRenderer::ensure_samplers_(IRenderDevice& device) {
@@ -1070,25 +1053,26 @@ namespace tgfx {
     }
 
     void Canvas2DRenderer::ensure_shaders_(IRenderDevice& device) {
-        if (compiled_on_ == &device && solid_vs_.id != 0 && solid_fs_.id != 0 && texture_vs_.id != 0 &&
-            texture_fs_.id != 0) {
-            return;
-        }
-
         solid_vs_ = ShaderHandle{};
         solid_fs_ = ShaderHandle{};
         texture_vs_ = ShaderHandle{};
         texture_fs_ = ShaderHandle{};
 
-        if (tc_shader* raw = tc_shader_get(solid_shader_handle())) {
-            if (!termin::tc_shader_ensure_tgfx2(raw, &device, &solid_vs_, &solid_fs_)) {
-                tc::Log::error("[Canvas2DRenderer] failed to create solid shader");
-            }
+        termin::Tgfx2ShaderView solid_view;
+        if (termin::builtin_shader_resolve_tgfx2(
+                CANVAS2D_SOLID_SHADER_UUID, &solid_shader_handle_, &device, &solid_view)) {
+            solid_vs_ = solid_view.vertex_shader;
+            solid_fs_ = solid_view.fragment_shader;
+        } else {
+            tc::Log::error("[Canvas2DRenderer] failed to resolve solid shader");
         }
-        if (tc_shader* raw = tc_shader_get(texture_shader_handle())) {
-            if (!termin::tc_shader_ensure_tgfx2(raw, &device, &texture_vs_, &texture_fs_)) {
-                tc::Log::error("[Canvas2DRenderer] failed to create texture shader");
-            }
+        termin::Tgfx2ShaderView texture_view;
+        if (termin::builtin_shader_resolve_tgfx2(
+                CANVAS2D_TEXTURE_SHADER_UUID, &texture_shader_handle_, &device, &texture_view)) {
+            texture_vs_ = texture_view.vertex_shader;
+            texture_fs_ = texture_view.fragment_shader;
+        } else {
+            tc::Log::error("[Canvas2DRenderer] failed to resolve texture shader");
         }
 
         if (solid_vs_.id == 0 || solid_fs_.id == 0) {
@@ -1099,7 +1083,6 @@ namespace tgfx {
             tc::Log::error("[Canvas2DRenderer] texture shader is unavailable");
         }
 
-        compiled_on_ = &device;
     }
 
     void Canvas2DRenderer::build_projection_() {
@@ -1113,6 +1096,7 @@ namespace tgfx {
     bool Canvas2DRenderer::flush_() {
         if (ctx_ == nullptr || batch_vertices_.empty())
             return true;
+        ensure_shaders_(ctx_->device());
 
         bool bound = false;
         if (batch_mode_ == BatchMode::Solid) {
@@ -1149,7 +1133,7 @@ namespace tgfx {
         push.color[3] = color.a;
 
         ctx_->bind_shader(solid_vs_, solid_fs_);
-        tc_shader* raw = tc_shader_get(solid_shader_handle());
+        tc_shader* raw = tc_shader_get(solid_shader_handle_);
         ctx_->use_shader_resource_layout(raw);
         ctx_->bind_uniform_data("canvas_draw", &push, static_cast<uint32_t>(sizeof(push)));
         return true;
@@ -1174,7 +1158,7 @@ namespace tgfx {
         push.color[3] = tint.a;
 
         ctx_->bind_shader(texture_vs_, texture_fs_);
-        tc_shader* raw = tc_shader_get(texture_shader_handle());
+        tc_shader* raw = tc_shader_get(texture_shader_handle_);
         ctx_->use_shader_resource_layout(raw);
         ctx_->bind_uniform_data("canvas_draw", &push, static_cast<uint32_t>(sizeof(push)));
         const SamplerHandle sampler = sampling == CanvasTextureSampling::Nearest ? nearest_sampler_ : linear_sampler_;

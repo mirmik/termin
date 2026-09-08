@@ -100,6 +100,7 @@ namespace tgfx {
         uint64_t hit_count_ = 0;
         uint64_t miss_count_ = 0;
         uint64_t create_pipeline_count_ = 0;
+        uint64_t shader_handle_revision_ = 0;
 
     public:
         explicit PipelineCache(IRenderDevice& device);

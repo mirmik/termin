@@ -134,13 +134,19 @@ namespace tgfx {
     // ============================================================================
 
     PipelineCache::PipelineCache(IRenderDevice& device)
-        : device_(device) {}
+        : device_(device),
+          shader_handle_revision_(device.shader_handle_revision()) {}
 
     PipelineCache::~PipelineCache() {
         clear();
     }
 
     PipelineHandle PipelineCache::get(const PipelineCacheLookupKey& key) {
+        const uint64_t shader_handle_revision = device_.shader_handle_revision();
+        if (shader_handle_revision_ != shader_handle_revision) {
+            clear();
+            shader_handle_revision_ = shader_handle_revision;
+        }
         if (key.vertex_shader.id == 0 || key.fragment_shader.id == 0) {
             tc_log(TC_LOG_ERROR,
                    "PipelineCache: graphics pipeline requires valid vertex and fragment shaders; "
@@ -239,6 +245,7 @@ namespace tgfx {
         }
         cache_.clear();
         observed_vertex_layout_hashes_.clear();
+        shader_handle_revision_ = device_.shader_handle_revision();
     }
 
     PipelineCacheStats PipelineCache::stats() const {
