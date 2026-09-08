@@ -630,6 +630,11 @@ namespace termin {
         if (!component)
             return false;
         tc_component_on_mouse_move(component, ev);
+        // Captured component gestures bypass EditorInteractionSystem::on_mouse_move,
+        // so they must request a frame without redispatching the event as hover.
+        auto* sys = EditorInteractionSystem::instance();
+        if (sys && sys->on_request_update)
+            sys->on_request_update();
         return true;
     }
 

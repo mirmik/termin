@@ -5,6 +5,7 @@
 #include "termin/entity/entity.hpp"
 #include "termin/input/input_events.hpp"
 #include "termin/editor/editor_viewport_input_manager.hpp"
+#include "termin/editor/editor_interaction_system.hpp"
 
 #include <termin/camera/camera_component.hpp>
 
@@ -96,6 +97,9 @@ TEST_CASE("Editor camera gestures stop on release and focus loss") {
     const tc_display_handle display = tc_display_new("camera-gesture-display", nullptr);
     REQUIRE(tc_display_alive(display));
     {
+        termin::EditorInteractionSystem interaction;
+        int redraws = 0;
+        interaction.on_request_update = [&] { ++redraws; };
         termin::EditorViewportInputManager manager(viewport, display);
         REQUIRE(tc_viewport_get_input_manager(viewport) != nullptr);
         for (int button : {rig.controller->orbit_mouse_button, rig.controller->pan_mouse_button}) {
@@ -103,7 +107,9 @@ TEST_CASE("Editor camera gestures stop on release and focus loss") {
                 manager.on_mouse_move(400.0, 300.0);
                 const auto before = rig.entity.transform().global_position();
                 manager.on_mouse_button(button, TC_INPUT_PRESS, 0, 1);
+                redraws = 0;
                 manager.on_mouse_move(440.0, 320.0);
+                CHECK(redraws > 0);
                 const auto moved = rig.entity.transform().global_position();
                 CHECK((moved - before).norm() > 1e-6);
                 if (cancel)
