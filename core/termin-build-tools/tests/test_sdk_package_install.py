@@ -1,4 +1,4 @@
-from termin_build import sdk
+from termin_build import sdk_package_install
 from termin_build.package_manifest import PackageEntry
 
 
@@ -20,15 +20,15 @@ def test_extension_only_package_uses_regular_install_in_editable_mode(
     ]
     commands = []
 
-    monkeypatch.setattr(sdk, "_sdk_packages", lambda _repo_root: packages)
-    monkeypatch.setattr(sdk, "_python_bin", lambda: "python")
+    monkeypatch.setattr(sdk_package_install, "_sdk_packages", lambda _repo_root: packages)
+    monkeypatch.setattr(sdk_package_install, "_python_bin", lambda: "python")
     monkeypatch.setattr(
-        sdk,
+        sdk_package_install,
         "_run",
         lambda command, **_kwargs: commands.append(command) or 0,
     )
 
-    result = sdk.install_pip_packages(
+    result = sdk_package_install.install_pip_packages(
         repo_root=repo_root,
         sdk_prefix=sdk_prefix,
         build_dir=repo_root / "build" / "Release",

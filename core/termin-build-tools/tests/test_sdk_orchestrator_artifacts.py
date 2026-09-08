@@ -9,7 +9,9 @@ import pytest
 from termin_build import (
     artifact_manifest,
     sdk,
+    sdk_artifact_publication,
     sdk_bundled_python,
+    sdk_native_artifacts,
     sdk_verification,
 )
 from termin_build.package_manifest import NativeExtension, PackageEntry
@@ -25,6 +27,7 @@ SDK_PROFILES = sdk.load_sdk_profiles(REPO_ROOT)
 def _repository_doctor_profiles(monkeypatch):
     monkeypatch.setattr(sdk, "load_doctor_profiles", lambda _root: DOCTOR_PROFILES)
     monkeypatch.setattr(sdk, "load_sdk_profiles", lambda _root: SDK_PROFILES)
+    monkeypatch.setattr(sdk_artifact_publication, "_sdk_application_payloads", lambda _root: [])
 
 
 @pytest.mark.parametrize("profile_name", ["sdk", "sdk-cpp", "sdk-bindings", "cpp-tests"])
@@ -159,14 +162,14 @@ def test_write_artifacts_records_install_path_and_runtime_dependencies(
             ),
         )
     ]
-    monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
+    monkeypatch.setattr(sdk_artifact_publication, "_sdk_packages", lambda _repo_root: packages)
     monkeypatch.setattr(
-        sdk,
+        sdk_artifact_publication,
         "_native_runtime_dependencies",
         lambda _binary: ["libtermin_sample.so"],
     )
 
-    result = sdk.write_artifacts(
+    result = sdk_artifact_publication.write_artifacts(
         repo_root=repo_root,
         build_dir=build_dir,
         sdk_prefix=sdk_prefix,
@@ -220,10 +223,10 @@ def test_native_runtime_dependencies_are_locale_independent(monkeypatch):
             stderr="",
         )
 
-    monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk_artifact_publication, "_is_windows", lambda: False)
     monkeypatch.setattr(sdk.subprocess, "run", run)
 
-    dependencies = sdk._native_runtime_dependencies(Path("extension.so"))
+    dependencies = sdk_artifact_publication._native_runtime_dependencies(Path("extension.so"))
 
     assert dependencies == ["libnanobind-ft.so", "libc.so.6"]
     assert captured_env["LC_ALL"] == "C"
@@ -248,7 +251,7 @@ def test_pe_import_dependencies_reads_windows_import_table(tmp_path):
     binary = tmp_path / "extension.pyd"
     binary.write_bytes(image)
 
-    assert sdk._pe_import_dependencies(binary) == ["nanobind-ft.dll"]
+    assert sdk_native_artifacts.pe_import_dependencies(binary) == ["nanobind-ft.dll"]
 
 
 def test_pe_import_dependencies_rejects_non_pe_file(tmp_path):
@@ -256,7 +259,7 @@ def test_pe_import_dependencies_rejects_non_pe_file(tmp_path):
     binary.write_bytes(b"not a PE image")
 
     with pytest.raises(RuntimeError, match="missing DOS header"):
-        sdk._pe_import_dependencies(binary)
+        sdk_native_artifacts.pe_import_dependencies(binary)
 
 
 def test_native_runtime_dependencies_reports_readelf_failure(monkeypatch):
@@ -268,11 +271,11 @@ def test_native_runtime_dependencies_reports_readelf_failure(monkeypatch):
             stderr="readelf: Error: Not an ELF file",
         )
 
-    monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk_artifact_publication, "_is_windows", lambda: False)
     monkeypatch.setattr(sdk.subprocess, "run", run)
 
     with pytest.raises(RuntimeError, match="Not an ELF file"):
-        sdk._native_runtime_dependencies(Path("extension.so"))
+        sdk_artifact_publication._native_runtime_dependencies(Path("extension.so"))
 
 
 def test_write_artifacts_reports_missing_required_binding(
@@ -295,9 +298,9 @@ def test_write_artifacts_reports_missing_required_binding(
             ),
         )
     ]
-    monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
+    monkeypatch.setattr(sdk_artifact_publication, "_sdk_packages", lambda _repo_root: packages)
 
-    result = sdk.write_artifacts(
+    result = sdk_artifact_publication.write_artifacts(
         repo_root=tmp_path,
         build_dir=tmp_path / "build",
         sdk_prefix=tmp_path / "sdk",
@@ -338,9 +341,9 @@ def test_write_artifacts_supports_windows_pyd_layout(tmp_path, monkeypatch):
             ),
         )
     ]
-    monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
-    monkeypatch.setattr(sdk, "_is_windows", lambda: True)
-    monkeypatch.setattr(sdk, "_native_runtime_dependencies", lambda _path: [])
+    monkeypatch.setattr(sdk_artifact_publication, "_sdk_packages", lambda _repo_root: packages)
+    monkeypatch.setattr(sdk_artifact_publication, "_is_windows", lambda: True)
+    monkeypatch.setattr(sdk_artifact_publication, "_native_runtime_dependencies", lambda _path: [])
     monkeypatch.setattr(
         sdk.PythonAbiIdentity,
         "current",
@@ -352,7 +355,7 @@ def test_write_artifacts_supports_windows_pyd_layout(tmp_path, monkeypatch):
         ),
     )
 
-    result = sdk.write_artifacts(
+    result = sdk_artifact_publication.write_artifacts(
         repo_root=repo_root,
         build_dir=build_dir,
         sdk_prefix=sdk_prefix,
@@ -400,9 +403,9 @@ def test_write_artifacts_prefers_windows_config_pyd_over_stale_bin_copy(
             ),
         )
     ]
-    monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
-    monkeypatch.setattr(sdk, "_is_windows", lambda: True)
-    monkeypatch.setattr(sdk, "_native_runtime_dependencies", lambda _path: [])
+    monkeypatch.setattr(sdk_artifact_publication, "_sdk_packages", lambda _repo_root: packages)
+    monkeypatch.setattr(sdk_artifact_publication, "_is_windows", lambda: True)
+    monkeypatch.setattr(sdk_artifact_publication, "_native_runtime_dependencies", lambda _path: [])
     monkeypatch.setattr(
         sdk.PythonAbiIdentity,
         "current",
@@ -414,7 +417,7 @@ def test_write_artifacts_prefers_windows_config_pyd_over_stale_bin_copy(
         ),
     )
 
-    result = sdk.write_artifacts(
+    result = sdk_artifact_publication.write_artifacts(
         repo_root=repo_root,
         build_dir=build_dir,
         sdk_prefix=sdk_prefix,
@@ -466,9 +469,9 @@ def test_write_artifacts_ignores_stale_disabled_feature_extension(
             ),
         )
     ]
-    monkeypatch.setattr(sdk, "load_manifest", lambda _repo_root: packages)
+    monkeypatch.setattr(sdk_artifact_publication, "_sdk_packages", lambda _repo_root: packages)
 
-    assert sdk.write_artifacts(repo_root, build_dir, sdk_prefix) == 0
+    assert sdk_artifact_publication.write_artifacts(repo_root, build_dir, sdk_prefix) == 0
     manifest = json.loads(
         (sdk_prefix / "termin-artifacts.json").read_text(encoding="utf-8")
     )

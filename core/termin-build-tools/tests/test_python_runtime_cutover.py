@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from termin_build import sdk
+from termin_build import sdk, sdk_build_support
 from termin_build.python_abi import PythonAbiError
 
 from termin_build.package_manifest import (
@@ -127,7 +127,7 @@ def test_explicit_release_python_is_abi_checked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        sdk,
+        sdk_build_support,
         "_python_version_and_paths",
         lambda _python: {
             "version": "3.14",
@@ -138,7 +138,7 @@ def test_explicit_release_python_is_abi_checked(
     )
     expected = tmp_path / "environment" / "bin" / "python"
     monkeypatch.setattr(
-        sdk,
+        sdk_build_support,
         "_ensure_sdk_python_build_environment",
         lambda *_args, **_kwargs: expected,
     )

@@ -198,6 +198,16 @@ toolchain; при первой установке требуется досту�
 4. **SDK Python wheelhouse** — атомарная публикация в `<sdk-prefix>/wheels` того же
    проверенного набора wheels, из которого Stage 3 установила bundled runtime
 
+Python-оркестратор разделён по владельцам механизмов. `termin_build.sdk`
+остаётся единственной CLI-точкой и координирует стадии; product profile и
+installed-Core inputs принадлежат `sdk_product_inputs`, общие process/path/build
+helpers — `sdk_build_support`, editable/target pip installs —
+`sdk_package_install`, wheel pipeline — `sdk_wheel_pipeline`, population bundled
+Python — `sdk_python_install`, публикация native artifact manifest —
+`sdk_artifact_publication`. Установленное SDK tree по-прежнему собирается только
+через `sdk_composition`: новые модули механизмов не импортируют CLI-фасад и не
+образуют второй composition path.
+
 Внутри root build зависимости между модулями выражены CMake targets. Внешние
 consumers используют `find_package()` и передают выбранный `sdk/`, `sdk-core/`
 или `sdk-graphics/` через `CMAKE_PREFIX_PATH`.

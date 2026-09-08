@@ -6,8 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from termin_build import sdk
-from termin_build import artifact_manifest
+from termin_build import artifact_manifest, sdk, sdk_artifact_publication
 from termin_build.application_payload import (
     INSTALLED_MANIFEST_NAME,
     install_application_payloads,
@@ -268,14 +267,20 @@ def test_application_native_extension_is_not_attributed_to_a_distribution(
     )
     installed_artifact.parent.mkdir(parents=True)
     installed_artifact.write_bytes(b"native")
-    monkeypatch.setattr(sdk, "_native_runtime_dependencies", lambda _path: [])
-    monkeypatch.setattr(sdk, "write_desktop_capabilities", lambda **_kwargs: None)
+    monkeypatch.setattr(sdk_artifact_publication, "_native_runtime_dependencies", lambda _path: [])
+    monkeypatch.setattr(sdk_artifact_publication, "write_desktop_capabilities", lambda **_kwargs: None)
+    monkeypatch.setattr(sdk_artifact_publication, "_sdk_packages", load_manifest)
+    monkeypatch.setattr(
+        sdk_artifact_publication,
+        "_sdk_application_payloads",
+        load_application_payloads,
+    )
     repository_profiles = sdk.load_sdk_profiles(_repo_root())
     monkeypatch.setattr(
         sdk, "load_sdk_profiles", lambda _repo_root: repository_profiles
     )
 
-    assert sdk.write_artifacts(repo_root, repo_root / "build", sdk_root) == 0
+    assert sdk_artifact_publication.write_artifacts(repo_root, repo_root / "build", sdk_root) == 0
 
     artifacts = json.loads(
         (sdk_root / "termin-artifacts.json").read_text(encoding="utf-8")

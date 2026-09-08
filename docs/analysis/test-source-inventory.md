@@ -106,7 +106,11 @@ Status values:
 | reviewed | python | `termin-base/tests/python/test_tcbase_api.py` | Consolidated overlapping enum binding checks; remaining settings roundtrip covers grouped persistence. |
 | reviewed | cpp | `termin-base/tests/test_orbit_camera.cpp` | Covers orbit camera defaults, fit_bounds clip/target update, and center-ray direction with concrete values. |
 | reviewed | c | `termin-base/tests/test_tc_value.c` | Removed self-evident struct-literal field echo test; remaining dlist and tc_value tests exercise real container/value behavior. |
-| reviewed | python | `termin-build-tools/tests/test_sdk_orchestrator.py` | Build-tool regression coverage for SDK orchestration, package installs, artifact manifests, and duplicate-library checks. |
+| reviewed | python | `termin-build-tools/tests/test_sdk_build_contracts.py` | SDK CLI/build-stage orchestration, platform entrypoint, profile, capability, and wheelhouse publication contracts. |
+| reviewed | python | `termin-build-tools/tests/test_sdk_repository_contracts.py` | Installed-Core selection and repository-owned SDK/package/CMake contract coverage. |
+| reviewed | python | `termin-build-tools/tests/test_sdk_python_wheels.py` | Pip installation, cache cleanup, isolated build environment, wheel preparation, and offline runtime install coverage. |
+| reviewed | python | `termin-build-tools/tests/test_sdk_python_runtime.py` | Bundled Python runtime, ABI migration, launcher verification, and CMake Python layout coverage. |
+| reviewed | python | `termin-build-tools/tests/test_sdk_runtime_manifest.py` | Runtime distribution manifest creation, hashing, composition, and tamper-detection coverage. |
 | reviewed | python | `scripts/tests/test_gen_dependency_graph.py` | Repository-tool regression coverage for CMake dependency parsing and self-contained interactive graph generation; owned by the `repository-scripts-tests` pytest suite. |
 | reviewed | cpp | `termin-collision/tests/main.cpp` | Guard test entrypoint only. |
 | reviewed | cpp | `termin-collision/tests/tests_colliders.cpp` | Covers collider centers, ray hits/misses, analytic distances, scale effects, and cross-type collision dispatch with concrete expected values. |

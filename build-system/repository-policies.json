@@ -16,11 +16,6 @@
     ],
     "baselines": [
       {
-        "path": "core/termin-build-tools/termin_build/sdk.py",
-        "max_lines": 2416,
-        "reason": "Pre-existing orchestration debt tracked by #1640"
-      },
-      {
         "path": "graphics/termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp",
         "max_lines": 2301,
         "reason": "Pre-existing Vulkan backend debt tracked by #1640"
@@ -34,11 +29,6 @@
         "path": "editor/termin-project-build/tests/test_desktop_runtime_packager.py",
         "max_lines": 2082,
         "reason": "Pre-existing desktop packager test debt tracked by #1640"
-      },
-      {
-        "path": "core/termin-build-tools/tests/test_sdk_orchestrator.py",
-        "max_lines": 2010,
-        "reason": "Pre-existing SDK orchestrator test debt tracked by #1640"
       },
       {
         "path": "engine/termin-runtime/src/runtime_package.cpp",

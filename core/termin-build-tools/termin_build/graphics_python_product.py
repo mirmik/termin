@@ -25,14 +25,14 @@ from .local_wheel_artifacts import (
     write_local_wheel_manifest,
 )
 from .package_manifest import load_manifest
-from .sdk import (
+from .sdk_build_support import (
     _clear_python_package_build_caches,
     _resolve_bindings_dir,
     _run,
-    prepare_locked_runtime_wheels,
     prepare_python_build_environment,
     prepare_pinned_python_build_environment,
 )
+from .sdk_wheel_pipeline import prepare_locked_runtime_wheels
 from .sdk_profiles import load_sdk_profiles, select_python_packages
 from .slang_toolchain import SlangToolchainError, prepare_slang_toolchain
 from .versioning import public_version
