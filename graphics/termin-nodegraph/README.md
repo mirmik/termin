@@ -24,8 +24,15 @@ The optional C++ UI component projects the graph into a `TcVisualScene`, owns
 semantic selection and connection gestures, and updates node/group dragging
 and incident edges incrementally. It deliberately contains no render-pipeline
 node kinds or socket colors: applications may provide a `PresentationPolicy`,
-while the default policy is neutral. Parameter widgets and document hosting
-remain outside this projection layer.
+while the default policy is neutral. `NodeGraphView` adds the caller-document
+facade and owns bool/enum/int/float/text parameter controls and optional node
+body widgets projected through `SceneView` portals.
+
+`ParameterEditorDescriptor` values supply labels, ranges, enum choices and
+optional native style overrides. The default policy infers kinds from
+`node.params` and reads the migration-compatible `node.data["param_specs"]`
+schema; applications can override `PresentationPolicy::parameter_editors`
+without placing domain knowledge in nodegraph.
 
 Installed CMake consumers opt into the projection explicitly:
 
@@ -34,8 +41,23 @@ find_package(termin_nodegraph CONFIG REQUIRED COMPONENTS ui)
 target_link_libraries(my_tool PRIVATE termin_nodegraph::ui)
 ```
 
-The native offscreen example renders a fixed generic graph and can optionally
-write its framebuffer to a PPM file:
+Create a complete view inside a caller-owned document and attach its returned
+root widget where the host needs it:
+
+```cpp
+termin::nodegraph::NodeGraphView graph_view(document, &graph, presentation);
+document.add_root(*graph_view.scene_view());
+```
+
+The language-neutral counterpart is `termin/nodegraph/view_c_api.h`. Its
+generation-checked view handle exposes rebuild/sync, the root widget, parameter
+widget lookup and post-mutation graph/parameter/context callbacks. It accepts
+the existing opaque `tc_nodegraph_handle`; no internal `Graph*` crosses the C
+ABI. Destroy the view before the graph when callbacks need to keep querying the
+public graph handle.
+
+The native offscreen example renders a fixed generic graph with native bool and
+float parameter portals and can optionally write its framebuffer to a PPM file:
 
 ```bash
 ./sdk/bin/termin_nodegraph_projection_example --output nodegraph.ppm

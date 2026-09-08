@@ -2,13 +2,12 @@
 
 Status: accepted migration design.
 
-Implementation progress (2026-09-08): the step-4 retained scene foundation is
-implemented by `termin_nodegraph::ui` and `NodeGraphProjection`. It owns the
-`TcVisualScene`, generic node/group/edge/socket presentation, semantic hit
-testing, selection, dragging, connection gestures and deletion. Native
-parameter widgets and the caller-document view facade remain the explicit next
-step; the Python projection stays as the compatibility path until consumer
-cutover.
+Implementation progress (2026-09-08): migration steps 1–5 are implemented.
+`termin_nodegraph::ui` now provides both `NodeGraphProjection` and the
+caller-document-owned `NodeGraphView`, including typed native parameter
+editors, generic presentation descriptors, optional body portals and the
+opaque C ABI view facade. The Python projection stays only as the compatibility
+path until the pipeline consumer cutover in step 6.
 
 ## Context
 

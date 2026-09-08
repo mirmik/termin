@@ -54,6 +54,8 @@ if(TERMIN_NODEGRAPH_BUILD_UI)
     add_library(termin_nodegraph_ui SHARED
         src/projection.cpp
         src/projection_render.cpp
+        src/view.cpp
+        src/view_c_api.cpp
     )
     add_library(termin_nodegraph::ui ALIAS termin_nodegraph_ui)
     set_target_properties(termin_nodegraph_ui PROPERTIES EXPORT_NAME ui)
@@ -143,6 +145,30 @@ if(TERMIN_BUILD_TESTS)
         termin_set_rpath_test(termin_nodegraph_projection_interaction_test)
         add_test(NAME termin_nodegraph_projection_interaction_test
             COMMAND termin_nodegraph_projection_interaction_test)
+
+        add_executable(termin_nodegraph_view_test
+            tests/test_view.cpp)
+        target_link_libraries(termin_nodegraph_view_test PRIVATE
+            termin_nodegraph_ui)
+        termin_set_rpath_test(termin_nodegraph_view_test)
+        add_test(NAME termin_nodegraph_view_test
+            COMMAND termin_nodegraph_view_test)
+
+        add_executable(termin_nodegraph_view_c_api_test
+            tests/test_view_c_api.cpp)
+        target_link_libraries(termin_nodegraph_view_c_api_test PRIVATE
+            termin_nodegraph_ui)
+        termin_set_rpath_test(termin_nodegraph_view_c_api_test)
+        add_test(NAME termin_nodegraph_view_c_api_test
+            COMMAND termin_nodegraph_view_c_api_test)
+
+        add_executable(termin_nodegraph_view_c_header_test
+            tests/test_view_c_header.c)
+        target_link_libraries(termin_nodegraph_view_c_header_test PRIVATE
+            termin_nodegraph_ui)
+        termin_set_rpath_test(termin_nodegraph_view_c_header_test)
+        add_test(NAME termin_nodegraph_view_c_header_test
+            COMMAND termin_nodegraph_view_c_header_test)
 
         if(TARGET termin_nodegraph_projection_example)
             add_test(NAME termin_nodegraph_projection_example

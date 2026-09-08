@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -17,6 +18,13 @@ namespace termin::nodegraph {
         constexpr float title_height = 26.0f;
         constexpr float socket_row_height = 20.0f;
         constexpr float socket_hit_radius = 12.0f;
+        constexpr float parameter_top_gap = 7.0f;
+        constexpr float parameter_row_height = 30.0f;
+        constexpr float parameter_editor_height = 28.0f;
+        constexpr float parameter_checkbox_size = 18.0f;
+        constexpr float parameter_label_fraction = 0.44f;
+        constexpr float parameter_editor_x_fraction = 0.47f;
+        constexpr float node_bottom_padding = 10.0f;
         constexpr float edge_hit_radius_px = 8.0f;
         constexpr float edge_width = 2.6f;
         constexpr float selected_edge_width = 5.0f;
@@ -141,6 +149,34 @@ namespace termin::nodegraph {
             return value;
         }
 
+        tc_graphic_item_handle
+        create_hit_region_rect(tc_visual_scene_handle scene, tc_graphic_item_handle parent, float width, float height) {
+            const std::vector<tc_visual_path_verb2d> verbs{
+                TC_VISUAL_PATH_MOVE_TO,
+                TC_VISUAL_PATH_LINE_TO,
+                TC_VISUAL_PATH_LINE_TO,
+                TC_VISUAL_PATH_LINE_TO,
+                TC_VISUAL_PATH_CLOSE,
+            };
+            const std::vector<tc_vec2f> points{{0.0f, 0.0f}, {width, 0.0f}, {width, height}, {0.0f, height}};
+            return tc_visual_hit_region_item2d_create(
+                scene, parent, path_view(verbs, points), TC_VISUAL_FILL_RULE_NON_ZERO);
+        }
+
+        bool valid_body_layout(const NodeBodyLayout& layout, float node_width) {
+            return std::isfinite(layout.height) && layout.height > 0.0f && std::isfinite(layout.inset_left) &&
+                   layout.inset_left >= 0.0f && std::isfinite(layout.inset_right) && layout.inset_right >= 0.0f &&
+                   std::isfinite(layout.inset_top) && layout.inset_top >= 0.0f && std::isfinite(layout.inset_bottom) &&
+                   layout.inset_bottom >= 0.0f && std::isfinite(layout.gap_before) && layout.gap_before >= 0.0f &&
+                   layout.inset_left + layout.inset_right < node_width;
+        }
+
+        bool valid_parameter_descriptor(const ParameterEditorDescriptor& descriptor) {
+            return !descriptor.name.empty() && std::isfinite(descriptor.minimum) && std::isfinite(descriptor.maximum) &&
+                   descriptor.maximum >= descriptor.minimum && std::isfinite(descriptor.step) &&
+                   descriptor.step > 0.0 && descriptor.decimals >= 0 && descriptor.decimals <= 9;
+        }
+
     } // namespace
 
     struct NodeGraphProjection::Impl {
@@ -150,9 +186,17 @@ namespace termin::nodegraph {
         };
 
         struct NodeVisual {
+            struct ParameterVisual {
+                ParameterEditorDescriptor descriptor;
+                tc_graphic_item_handle item = invalid_item();
+            };
+
             NodeHandle node;
             tc_graphic_item_handle item = invalid_item();
             std::vector<SocketVisual> sockets;
+            std::vector<ParameterVisual> parameters;
+            tc_graphic_item_handle body = invalid_item();
+            float height = 0.0f;
         };
 
         struct GroupVisual {
@@ -187,6 +231,7 @@ namespace termin::nodegraph {
         RequestRenderCallback request_render;
         GraphChangedCallback graph_changed;
         ContextRequestedCallback context_requested;
+        BodyLayoutProvider body_layout_provider;
 
         explicit Impl(Graph* source_graph, std::shared_ptr<const PresentationPolicy> source_policy)
             : graph(source_graph),
@@ -222,6 +267,7 @@ namespace termin::nodegraph {
             request_render = {};
             graph_changed = {};
             context_requested = {};
+            body_layout_provider = {};
             projected_revision = 0;
             is_closed = true;
         }
@@ -346,6 +392,30 @@ namespace termin::nodegraph {
                 tc::Log::error("[termin-nodegraph/ui] node presentation policy failed: unknown exception");
             }
             return DefaultPresentationPolicy{}.node_palette(node);
+        }
+
+        std::vector<ParameterEditorDescriptor> parameter_editors(const Node& node) const {
+            try {
+                return policy->parameter_editors(node);
+            } catch (const std::exception& error) {
+                tc::Log::error(error, "[termin-nodegraph/ui] parameter presentation policy failed");
+            } catch (...) {
+                tc::Log::error("[termin-nodegraph/ui] parameter presentation policy failed: unknown exception");
+            }
+            return {};
+        }
+
+        std::optional<NodeBodyLayout> body_layout(const Node& node) const {
+            if (!body_layout_provider)
+                return std::nullopt;
+            try {
+                return body_layout_provider(node);
+            } catch (const std::exception& error) {
+                tc::Log::error(error, "[termin-nodegraph/ui] node body layout provider failed");
+            } catch (...) {
+                tc::Log::error("[termin-nodegraph/ui] node body layout provider failed: unknown exception");
+            }
+            return std::nullopt;
         }
 
         ProjectionColor edge_color(const Edge& edge) const {
@@ -516,9 +586,11 @@ namespace termin::nodegraph {
         return false;
     }
 
-    NodeGraphProjection::NodeGraphProjection(Graph* graph, std::shared_ptr<const PresentationPolicy> policy)
+    NodeGraphProjection::NodeGraphProjection(Graph* graph,
+                                             std::shared_ptr<const PresentationPolicy> policy,
+                                             bool defer_rebuild)
         : impl_(std::make_unique<Impl>(graph, std::move(policy))) {
-        if (!impl_->is_closed)
+        if (!impl_->is_closed && !defer_rebuild)
             rebuild();
     }
 
@@ -627,10 +699,34 @@ namespace termin::nodegraph {
             TC_VISUAL_PATH_CLOSE,
         };
         for (const Node& node : impl_->graph->nodes()) {
-            const float required_height =
-                title_height +
-                socket_row_height * static_cast<float>(std::max(node.inputs.size(), node.outputs.size())) + 12.0f;
-            const float height = std::max(node.height, required_height);
+            const std::vector<ParameterEditorDescriptor> parameter_descriptors = impl_->parameter_editors(node);
+            std::set<std::string> parameter_names;
+            for (const ParameterEditorDescriptor& descriptor : parameter_descriptors) {
+                if (!valid_parameter_descriptor(descriptor) || !parameter_names.insert(descriptor.name).second ||
+                    !node.params.contains(descriptor.name))
+                    return fail("parameter presentation contains an invalid or duplicate name");
+            }
+            const std::optional<NodeBodyLayout> body_layout = impl_->body_layout(node);
+            if (body_layout && !valid_body_layout(*body_layout, node.width))
+                return fail("node body layout is invalid");
+
+            const float socket_height =
+                socket_row_height * static_cast<float>(std::max<std::size_t>(
+                                        std::max(node.inputs.size(), node.outputs.size()), std::size_t{1}));
+            const float parameter_y = title_height + socket_height + parameter_top_gap;
+            const float body_y = parameter_y + parameter_row_height * static_cast<float>(parameter_descriptors.size());
+            float required_height = title_height + socket_height + 12.0f;
+            if (!parameter_descriptors.empty() || body_layout) {
+                required_height = body_y + node_bottom_padding;
+                if (body_layout) {
+                    required_height += body_layout->gap_before + body_layout->inset_top + body_layout->height +
+                                       body_layout->inset_bottom;
+                }
+            }
+            const bool explicit_size = node.data.view().get("explicit_size").as_bool(false);
+            if (explicit_size && required_height > node.height)
+                return fail("presented node content does not fit explicit node height");
+            const float height = explicit_size ? node.height : std::max(node.height, required_height);
             const NodePalette palette = impl_->node_palette(node);
             const auto body_fill = fill(palette.body);
             const auto body_stroke = stroke(palette.border, 1.5f);
@@ -659,7 +755,10 @@ namespace termin::nodegraph {
             if (!impl_->valid_item(tc_visual_text_item2d_create(impl_->scene, item, &title_desc)))
                 return fail("cannot create node title");
 
-            Impl::NodeVisual visual{node.handle, item, {}};
+            Impl::NodeVisual visual;
+            visual.node = node.handle;
+            visual.item = item;
+            visual.height = height;
             const auto append_sockets = [&](const std::vector<Socket>& sockets, SocketDirection direction) {
                 for (std::size_t index = 0; index < sockets.size(); ++index) {
                     const Socket& socket = sockets[index];
@@ -699,6 +798,51 @@ namespace termin::nodegraph {
             if (!append_sockets(node.inputs, SocketDirection::Input) ||
                 !append_sockets(node.outputs, SocketDirection::Output))
                 return fail("cannot create node socket visuals");
+
+            const float editor_x = node.width * parameter_editor_x_fraction;
+            const float editor_width = std::max(64.0f, node.width - editor_x - 8.0f);
+            for (std::size_t index = 0; index < parameter_descriptors.size(); ++index) {
+                const ParameterEditorDescriptor& descriptor = parameter_descriptors[index];
+                const float row_y = parameter_y + parameter_row_height * static_cast<float>(index);
+                const tc_visual_text_desc2d parameter_label{
+                    .text = descriptor.label.c_str(),
+                    .font_uri = "ui://default-font",
+                    .origin = {8.0f, row_y + 19.0f},
+                    .size_px = 11.0f,
+                    .color = visual_color({0.70f, 0.74f, 0.82f, 1.0f}),
+                    .anchor = TC_VISUAL_TEXT_ANCHOR_LEFT,
+                    .layout_bounds = {8.0f, row_y, node.width * parameter_label_fraction, row_y + parameter_row_height},
+                    .has_coverage_gamma = false,
+                    .coverage_gamma = 0.0f,
+                };
+                if (!impl_->valid_item(tc_visual_text_item2d_create(impl_->scene, item, &parameter_label)))
+                    return fail("cannot create node parameter label");
+                const bool checkbox = descriptor.kind == ParameterEditorKind::Boolean;
+                const float editor_height = checkbox ? parameter_checkbox_size : parameter_editor_height;
+                const float editor_item_width = checkbox ? parameter_checkbox_size : editor_width;
+                const float x = checkbox ? editor_x + (editor_width - editor_item_width) * 0.5f : editor_x;
+                const tc_graphic_item_handle editor_item =
+                    create_hit_region_rect(impl_->scene, item, editor_item_width, editor_height);
+                if (!impl_->valid_item(editor_item) ||
+                    !tc_visual_scene_item_set_transform(
+                        impl_->scene,
+                        editor_item,
+                        tc_affine2f_translation(x, row_y + (parameter_row_height - editor_height) * 0.5f)))
+                    return fail("cannot create node parameter portal anchor");
+                visual.parameters.push_back({descriptor, editor_item});
+            }
+
+            if (body_layout) {
+                const float body_width = node.width - body_layout->inset_left - body_layout->inset_right;
+                visual.body = create_hit_region_rect(impl_->scene, item, body_width, body_layout->height);
+                if (!impl_->valid_item(visual.body) ||
+                    !tc_visual_scene_item_set_transform(
+                        impl_->scene,
+                        visual.body,
+                        tc_affine2f_translation(body_layout->inset_left,
+                                                body_y + body_layout->gap_before + body_layout->inset_top)))
+                    return fail("cannot create node body portal anchor");
+            }
             impl_->nodes.push_back(std::move(visual));
         }
 
@@ -730,6 +874,15 @@ namespace termin::nodegraph {
         return revision == impl_->projected_revision ? false : rebuild();
     }
 
+    bool NodeGraphProjection::acknowledge_graph_revision() {
+        if (closed() || impl_->graph == nullptr) {
+            tc::Log::error("[termin-nodegraph/ui] cannot acknowledge a revision without an open graph");
+            return false;
+        }
+        impl_->projected_revision = impl_->graph->revision();
+        return true;
+    }
+
     std::optional<SemanticHit> NodeGraphProjection::hit_test(float world_x, float world_y, float zoom) const {
         if (closed() || impl_->graph == nullptr || !finite_point(world_x, world_y) || !std::isfinite(zoom) ||
             zoom <= 0.0f) {
@@ -752,11 +905,7 @@ namespace termin::nodegraph {
         for (auto visual = impl_->nodes.rbegin(); visual != impl_->nodes.rend(); ++visual) {
             const auto node = impl_->graph->node(visual->node);
             if (node && world_x >= node->x && world_y >= node->y && world_x <= node->x + node->width &&
-                world_y <= node->y + std::max(node->height,
-                                              title_height +
-                                                  socket_row_height * static_cast<float>(std::max(
-                                                                          node->inputs.size(), node->outputs.size())) +
-                                                  12.0f)) {
+                world_y <= node->y + visual->height) {
                 return SemanticHit{node_semantic(node->handle), visual->item};
             }
         }
@@ -967,6 +1116,46 @@ namespace termin::nodegraph {
         return visual ? visual->item : invalid_item();
     }
 
+    tc_graphic_item_handle NodeGraphProjection::parameter_item(NodeHandle node, const std::string& name) const {
+        if (!impl_)
+            return invalid_item();
+        const Impl::NodeVisual* visual = impl_->find_node_visual(node);
+        if (visual == nullptr)
+            return invalid_item();
+        const auto found =
+            std::find_if(visual->parameters.begin(),
+                         visual->parameters.end(),
+                         [&](const Impl::NodeVisual::ParameterVisual& value) { return value.descriptor.name == name; });
+        return found == visual->parameters.end() ? invalid_item() : found->item;
+    }
+
+    tc_graphic_item_handle NodeGraphProjection::body_item(NodeHandle node) const {
+        if (!impl_)
+            return invalid_item();
+        const Impl::NodeVisual* visual = impl_->find_node_visual(node);
+        return visual ? visual->body : invalid_item();
+    }
+
+    float NodeGraphProjection::node_visual_height(NodeHandle node) const {
+        if (!impl_)
+            return 0.0f;
+        const Impl::NodeVisual* visual = impl_->find_node_visual(node);
+        return visual ? visual->height : 0.0f;
+    }
+
+    std::vector<ParameterEditorDescriptor> NodeGraphProjection::parameter_editors(NodeHandle node) const {
+        if (!impl_)
+            return {};
+        const Impl::NodeVisual* visual = impl_->find_node_visual(node);
+        if (visual == nullptr)
+            return {};
+        std::vector<ParameterEditorDescriptor> result;
+        result.reserve(visual->parameters.size());
+        for (const Impl::NodeVisual::ParameterVisual& parameter : visual->parameters)
+            result.push_back(parameter.descriptor);
+        return result;
+    }
+
     void NodeGraphProjection::set_request_render_callback(RequestRenderCallback callback) {
         if (impl_)
             impl_->request_render = std::move(callback);
@@ -980,6 +1169,11 @@ namespace termin::nodegraph {
     void NodeGraphProjection::set_context_requested_callback(ContextRequestedCallback callback) {
         if (impl_)
             impl_->context_requested = std::move(callback);
+    }
+
+    void NodeGraphProjection::set_body_layout_provider(BodyLayoutProvider provider) {
+        if (impl_)
+            impl_->body_layout_provider = std::move(provider);
     }
 
 } // namespace termin::nodegraph

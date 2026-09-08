@@ -1,4 +1,4 @@
-#include <termin/nodegraph/projection.hpp>
+#include <termin/nodegraph/view.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -48,6 +48,9 @@ namespace {
         source.x = -180.0f;
         source.y = -55.0f;
         source.outputs.push_back({"samples", "signal", true});
+        source.params["enabled"] = true;
+        source.data["param_specs"]["enabled"]["kind"] = "bool";
+        source.data["param_specs"]["enabled"]["label"] = "Enabled";
         const auto source_handle = graph.create_node(std::move(source));
 
         ng::NodeDescriptor filter;
@@ -58,6 +61,12 @@ namespace {
         filter.y = 15.0f;
         filter.inputs.push_back({"input", "signal", false});
         filter.outputs.push_back({"output", "signal", true});
+        filter.params["gain"] = 0.75;
+        filter.data["param_specs"]["gain"]["kind"] = "float";
+        filter.data["param_specs"]["gain"]["label"] = "Gain";
+        filter.data["param_specs"]["gain"]["min"] = 0.0;
+        filter.data["param_specs"]["gain"]["max"] = 2.0;
+        filter.data["param_specs"]["gain"]["step"] = 0.05;
         const auto filter_handle = graph.create_node(std::move(filter));
 
         if (!source_handle || !filter_handle)
@@ -133,16 +142,14 @@ int main(int argc, char** argv) {
         termin::gui_native::OffscreenGuiComposition composition(std::move(config));
 
         ng::Graph graph = make_graph();
-        ng::NodeGraphProjection projection(&graph);
-        projection.set_request_render_callback([&composition] { composition.request_repaint(); });
-
-        termin::visual::TcVisualScene scene{projection.scene()};
-        auto* view = new termin::gui_native::SceneView(scene);
-        composition.document().adopt(view);
-        composition.document().add_root(*view);
-        view->set_show_grid(false);
-        view->set_offset({320.0f, 195.0f});
-        view->set_scene_colors({0.09f, 0.10f, 0.12f, 1.0f}, {0.15f, 0.16f, 0.20f, 1.0f}, {0.24f, 0.27f, 0.34f, 1.0f});
+        ng::NodeGraphView nodegraph(composition.document(), &graph);
+        nodegraph.set_request_render_callback([&composition] { composition.request_repaint(); });
+        if (!composition.document().add_root(*nodegraph.scene_view()))
+            throw std::runtime_error("failed to attach nodegraph root widget");
+        nodegraph.scene_view()->set_show_grid(false);
+        nodegraph.scene_view()->set_offset({320.0f, 195.0f});
+        nodegraph.scene_view()->set_scene_colors(
+            {0.09f, 0.10f, 0.12f, 1.0f}, {0.15f, 0.16f, 0.20f, 1.0f}, {0.24f, 0.27f, 0.34f, 1.0f});
 
         if (!composition.render_frame())
             throw std::runtime_error("offscreen composition did not render");
@@ -150,7 +157,7 @@ int main(int argc, char** argv) {
         if (first.size() != 640u * 400u * 4u || !different_from_background(first, 0.09f))
             throw std::runtime_error("projected graph is not visible in offscreen output");
 
-        view->invalidate_scene();
+        nodegraph.scene_view()->invalidate_scene();
         if (!composition.render_frame())
             throw std::runtime_error("offscreen composition did not render a stable second frame");
         const std::vector<float> second = composition.read_frame_rgba_float();
@@ -164,6 +171,7 @@ int main(int argc, char** argv) {
 
         if (!output_path.empty())
             write_ppm(output_path, second, 640, 400);
+        nodegraph.close();
         composition.close();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
