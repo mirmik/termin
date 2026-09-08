@@ -440,6 +440,24 @@ FragmentOutput fs_main() {
     REQUIRE(planned_material != nullptr);
     CHECK(planned_material->stage_mask == TC_SHADER_STAGE_FRAGMENT);
 
+    {
+        termin::MaterialShaderVariantBatch batch(shader_contract);
+        contract.shader_variants = &batch;
+        const size_t task_count = tasks.size();
+        auto mismatched = termin::plan_render_item_task(request, tasks);
+        CHECK(mismatched.rejection == termin::RenderItemTaskRejection::ShaderPlanningRejected);
+        CHECK(tasks.size() == task_count);
+        contract.shader_contract = &batch.contract();
+        auto cached = termin::plan_render_item_task(request, tasks);
+        REQUIRE(cached.accepted());
+        CHECK(tc_shader_handle_eq(tasks.at(cached.task_index).final_shader, tasks.at(0).final_shader));
+        // A memoized shader must not bypass validation of each mesh's attributes.
+        mesh->layout = tc_vertex_layout_pos();
+        auto incompatible_mesh = termin::plan_render_item_task(request, tasks);
+        CHECK(incompatible_mesh.rejection == termin::RenderItemTaskRejection::MeshVertexInputMismatch);
+        CHECK(tasks.size() == task_count + 1u);
+    }
+
     tc_mesh_shutdown();
     tc_shader_shutdown();
 }

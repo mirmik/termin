@@ -1,3 +1,4 @@
+#include "tcbase/profiler_scope.hpp"
 // render_context.cpp - Mid-level rendering abstraction over tgfx2.
 #include "tgfx2/render_context.hpp"
 #include "tcbase/tc_log.h"
@@ -913,6 +914,7 @@ namespace tgfx {
     // ============================================================================
 
     void RenderContext2::use_shader_resource_layout(const struct ::tc_shader* shader) {
+        const tc::ProfilerScope profile_scope("Build binding plan");
         if (!shader) {
             active_shader_layout_ = nullptr;
             active_backend_binding_plan_ = {};

@@ -897,8 +897,10 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         const char* debug_pass_name_c = debug_pass_name.c_str();
         const MaterialPipelinePassContract task_shader_contract =
             multiview_mode_ ? multiview_color_material_pass_contract() : color_material_pass_contract();
+        MaterialShaderVariantBatch shader_variants(task_shader_contract);
         RenderItemTaskPlanningContract task_planning_contract =
-            color_task_planning_contract(tc_phase_find(phase_mark.c_str()), task_shader_contract, debug_pass_name_c);
+            color_task_planning_contract(tc_phase_find(phase_mark.c_str()), shader_variants.contract(), debug_pass_name_c);
+        task_planning_contract.shader_variants = &shader_variants;
         RenderTaskList render_tasks;
         render_tasks.reserve(cached_draw_calls_.size());
         std::vector<RenderTask*> tasks_by_item_index(scene_items->item_count(), nullptr);

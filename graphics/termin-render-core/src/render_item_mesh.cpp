@@ -1,3 +1,4 @@
+#include "tcbase/profiler_scope.hpp"
 #include "render_item_mesh.hpp"
 
 #include <termin/render/shader_abi.hpp>
@@ -120,6 +121,7 @@ namespace termin {
     bool encode_mesh_render_item_draw(tgfx::RenderContext2& ctx,
                                       const tc_render_item& item,
                                       const MeshRenderItemEncodeRequest& request) {
+        const tc::ProfilerScope profile_scope("Encode mesh draw");
         const char* pass_name = request.debug_pass_name ? request.debug_pass_name : "RenderItemMesh";
         const char* entity_name = request.debug_entity_name ? request.debug_entity_name : "<unnamed>";
 

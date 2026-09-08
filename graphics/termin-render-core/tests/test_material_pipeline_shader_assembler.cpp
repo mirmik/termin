@@ -1194,6 +1194,57 @@ TEST_CASE("material shader overrides stay canonical across frame-local owners") 
     tc_shader_shutdown();
 }
 
+TEST_CASE("material shader batch isolates transforms and refreshes changed sources") {
+    tc_shader_init();
+    {
+        const termin::MaterialPipelineMaterialContract material = material_contract();
+        termin::MaterialShaderVariantBatch batch(material_pass_contract());
+        const auto static_kind = termin::VertexTransformKind::StaticMesh;
+        const auto skinned_kind = termin::VertexTransformKind::SkinnedMesh;
+        termin::TcShader first = batch.resolve(material.shader, static_kind, "batch-test");
+        REQUIRE(first.is_valid());
+        termin::TcShader repeated = batch.resolve(material.shader, static_kind, "batch-test");
+        CHECK(tc_shader_handle_eq(first.handle, repeated.handle));
+        termin::TcShader skinned = batch.resolve(material.shader, skinned_kind, "batch-test");
+        REQUIRE(skinned.is_valid());
+        CHECK_FALSE(tc_shader_handle_eq(first.handle, skinned.handle));
+        CHECK(skinned.variant_op() == TC_SHADER_VARIANT_SKINNING);
+        CHECK(tc_shader_handle_eq(skinned.handle, batch.resolve(material.shader, skinned_kind, "batch-test").handle));
+
+        tc_shader_bump_version(material.shader.get());
+        REQUIRE(tc_shader_variant_is_stale(first.handle));
+        termin::TcShader refreshed = batch.resolve(material.shader, static_kind, "batch-test");
+        REQUIRE(refreshed.is_valid());
+        CHECK(tc_shader_handle_eq(first.handle, refreshed.handle));
+        CHECK_FALSE(tc_shader_variant_is_stale(refreshed.handle));
+        CHECK(tc_shader_variant_is_stale(skinned.handle));
+        REQUIRE(batch.resolve(material.shader, skinned_kind, "batch-test").is_valid());
+        CHECK_FALSE(tc_shader_variant_is_stale(skinned.handle));
+    }
+    tc_shader_shutdown();
+}
+
+TEST_CASE("material shader batch owns its contract and separates subsequent pass changes") {
+    tc_shader_init();
+    {
+        const termin::MaterialPipelineMaterialContract material = material_contract();
+        termin::MaterialPipelinePassContract pass = material_pass_contract();
+        termin::MaterialShaderVariantBatch first_batch(pass);
+        pass.debug_name = "changed-batch-pass";
+        pass.static_vertex_transform->adapter_input_expression += " ";
+        CHECK(first_batch.contract().debug_name != pass.debug_name);
+        const auto kind = termin::VertexTransformKind::StaticMesh;
+        termin::TcShader first = first_batch.resolve(material.shader, kind, "batch-contract-test");
+        REQUIRE(first.is_valid());
+        termin::MaterialShaderVariantBatch next_batch(pass);
+        termin::TcShader changed = next_batch.resolve(material.shader, kind, "batch-contract-test");
+        REQUIRE(changed.is_valid());
+        CHECK_FALSE(tc_shader_handle_eq(first.handle, changed.handle));
+        CHECK(tc_shader_handle_eq(first.handle, first_batch.resolve(material.shader, kind, "batch-contract-test").handle));
+    }
+    tc_shader_shutdown();
+}
+
 TEST_CASE("destroyed variant originals are quiet cache invalidation probes") {
     tc_shader_init();
 

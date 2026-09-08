@@ -105,6 +105,7 @@ namespace termin {
         uint32_t required_input_mask = 0;
         uint64_t accepted_vertex_transform_kind_mask = UINT64_MAX;
         const MaterialPipelinePassContract* shader_contract = nullptr;
+        MaterialShaderVariantBatch* shader_variants = nullptr;
         const char* debug_pass_name = nullptr;
     };
 

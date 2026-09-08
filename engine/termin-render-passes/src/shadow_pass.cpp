@@ -530,8 +530,10 @@ struct VertexInput {
         collect_shadow_casters(request.scene, request.layer_mask, request.render_category_mask, *scene_items);
 
         const MaterialPipelinePassContract task_shader_contract = shadow_material_pass_contract();
+        MaterialShaderVariantBatch shader_variants(task_shader_contract);
         RenderItemTaskPlanningContract task_planning_contract =
-            shadow_task_planning_contract(task_shader_contract, "ShadowPass");
+            shadow_task_planning_contract(shader_variants.contract(), "ShadowPass");
+        task_planning_contract.shader_variants = &shader_variants;
         RenderTaskList render_tasks;
         render_tasks.reserve(cached_draw_calls_.size());
 

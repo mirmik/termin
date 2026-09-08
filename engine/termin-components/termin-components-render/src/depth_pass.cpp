@@ -169,9 +169,12 @@ namespace termin {
                                          tc_phase_mask requested_phase,
                                          const MaterialPipelinePassContract& shader_contract,
                                          const char* debug_pass_name,
-                                         RenderTaskList& tasks) {
+                                         RenderTaskList& tasks,
+                                       MaterialShaderVariantBatch* shader_variants = nullptr) {
             RenderItemTaskPlanningContract contract =
                 depth_only_task_planning_contract(requested_phase, shader_contract, debug_pass_name);
+            contract.shader_variants = shader_variants;
+            if (shader_variants) contract.shader_contract = &shader_variants->contract();
             RenderItemTaskPlanningRequest request{};
             request.item = &item;
             request.material_phase = phase;
@@ -483,6 +486,7 @@ namespace termin {
         }
 
         const MaterialPipelinePassContract pass_contract = depth_material_pass_contract("depth_only");
+        MaterialShaderVariantBatch shader_variants(pass_contract);
         const tc_phase_mask requested_phase = tc_phase_find(pass_phase_mark.c_str());
         if (requested_phase == TC_PHASE_NONE) {
             tc::Log::error("[DepthOnlyPass] pass '%s' requests unregistered phase '%s'",
@@ -532,7 +536,7 @@ namespace termin {
                                             requested_phase,
                                             pass_contract,
                                             "DepthOnlyPass/Collect",
-                                            planned_shader)) {
+                                            planned_shader, &shader_variants)) {
                 DrawCall dc;
                 dc.entity = ent;
                 dc.component = component;

@@ -1,3 +1,4 @@
+#include "tcbase/profiler_scope.hpp"
 // material_ubo_apply.cpp - Apply material phase resources by reflected names.
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/geom/color.hpp"
@@ -376,6 +377,7 @@ namespace termin {
                                   tgfx::IRenderDevice& device,
                                   tgfx::RenderContext2& ctx,
                                   const ResolvedMaterialTextureSources* texture_sources) {
+        const tc::ProfilerScope profile_scope("Pack material UBO");
         if (!phase || !shader)
             return false;
 

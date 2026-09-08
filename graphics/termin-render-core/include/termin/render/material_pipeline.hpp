@@ -6,6 +6,7 @@
 #include <span>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline_shader_assembler.hpp"
@@ -110,6 +111,25 @@ namespace termin {
     // transform intent. Equivalent requests reuse the same handle across frames;
     // changing the original shader version refreshes the stale variant in place.
     RENDER_CORE_API TcShader assemble_material_shader_override(const MaterialShaderOverrideRequest& request);
+
+    // One pass-planning batch. Contracts and provider registrations must remain
+    // unchanged during planning; the batch never survives into another frame.
+    class RENDER_CORE_API MaterialShaderVariantBatch {
+    public:
+        explicit MaterialShaderVariantBatch(const MaterialPipelinePassContract& contract);
+        const MaterialPipelinePassContract& contract() const { return contract_; }
+        TcShader resolve(TcShader original, VertexTransformKind kind, const char* debug_context);
+
+    private:
+        struct Entry {
+            tc_shader_handle original;
+            uint32_t source_version;
+            VertexTransformKind kind;
+            TcShader shader;
+        };
+        const MaterialPipelinePassContract contract_;
+        std::vector<Entry> entries_;
+    };
 
     RENDER_CORE_API std::string
     material_pipeline_shader_intent_fingerprint(TcShader original_shader,

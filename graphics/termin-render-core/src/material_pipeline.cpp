@@ -1,3 +1,4 @@
+#include "tcbase/profiler_scope.hpp"
 #include "termin/render/material_pipeline.hpp"
 
 #include "tcbase/tc_log.hpp"
@@ -342,6 +343,7 @@ namespace termin {
     }
 
     TcShader assemble_material_shader_override(const MaterialShaderOverrideRequest& request) {
+        const tc::ProfilerScope profile_scope("Shader variant plan");
         const char* context = material_shader_override_context(request);
         TcShader original_shader = request.original_shader;
         if (!original_shader.is_valid()) {
@@ -494,6 +496,31 @@ namespace termin {
         return assembly.shader;
     }
 
+    MaterialShaderVariantBatch::MaterialShaderVariantBatch(const MaterialPipelinePassContract& contract)
+        : contract_(contract) {}
+
+    TcShader MaterialShaderVariantBatch::resolve(TcShader original,
+                                                 VertexTransformKind kind,
+                                                 const char* debug_context) {
+        const uint32_t source_version = original.version();
+        for (const Entry& entry : entries_) {
+            if (tc_shader_handle_eq(entry.original, original.handle) && entry.source_version == source_version &&
+                entry.kind == kind) {
+                return entry.shader;
+            }
+        }
+        MaterialShaderOverrideRequest request{};
+        request.original_shader = original;
+        request.vertex_transform_kind = kind;
+        request.pass_contract = contract_;
+        request.debug_context = debug_context;
+        TcShader shader = assemble_material_shader_override(request);
+        if (shader.is_valid()) {
+            entries_.push_back({original.handle, source_version, kind, shader});
+        }
+        return shader;
+    }
+
     MaterialMeshVertexInput material_mesh_vertex_input_for_shader(const tc_shader* shader,
                                                                   MaterialMeshVertexInput static_input) {
         if (!shader) {
@@ -600,6 +627,7 @@ namespace termin {
                                          tc_shader_handle shader_handle,
                                          const char* debug_context,
                                          MaterialPipelineShaderBinding& out) {
+        const tc::ProfilerScope profile_scope("Ensure material shader");
         out = {};
 
         tc_shader* shader = tc_shader_get(shader_handle);
@@ -640,6 +668,7 @@ namespace termin {
                                              const tc_shader* shader,
                                              tc_material_phase* phase,
                                              const MaterialPipelineResourceView& resources) {
+        const tc::ProfilerScope profile_scope("Prepare material resources");
         if (!shader) {
             return false;
         }

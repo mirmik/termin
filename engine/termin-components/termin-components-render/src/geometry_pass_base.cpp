@@ -48,9 +48,12 @@ namespace termin {
                                        tc_phase_mask requested_phase,
                                        const MaterialPipelinePassContract& shader_contract,
                                        const char* debug_pass_name,
-                                       RenderTaskList& tasks) {
+                                       RenderTaskList& tasks,
+                                       MaterialShaderVariantBatch* shader_variants = nullptr) {
             RenderItemTaskPlanningContract contract =
                 geometry_task_planning_contract(requested_phase, shader_contract, debug_pass_name);
+            contract.shader_variants = shader_variants;
+            if (shader_variants) contract.shader_contract = &shader_variants->contract();
             RenderItemTaskPlanningRequest request{};
             request.item = &item;
             request.material_phase = phase;
@@ -240,6 +243,7 @@ namespace termin {
         }
 
         const MaterialPipelinePassContract pass_contract = shader_pass_contract();
+        MaterialShaderVariantBatch shader_variants(pass_contract);
         const std::string pass_name = get_pass_name();
         const auto& items = snapshot.items();
 
@@ -286,7 +290,7 @@ namespace termin {
                                           collect_phase,
                                           pass_contract,
                                           pass_name.c_str(),
-                                          planned_shader)) {
+                                          planned_shader, &shader_variants)) {
                 DrawCall dc;
                 dc.entity = ent;
                 dc.component = component;

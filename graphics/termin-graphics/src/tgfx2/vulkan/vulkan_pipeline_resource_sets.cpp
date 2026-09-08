@@ -1,3 +1,4 @@
+#include "tcbase/profiler_scope.hpp"
 #ifdef TGFX2_HAS_VULKAN
 
 #include <vulkan/vulkan.h>
@@ -681,6 +682,7 @@ namespace tgfx {
                                                      std::span<const VulkanResolvedResourceBinding> resolved_bindings,
                                                      VkResourceSetResource res,
                                                      uint64_t cache_domain) {
+        const tc::ProfilerScope profile_scope("Vulkan resource set");
         bool has_ring = false;
         if (ring_ubo_handle_) {
             for (const VulkanResolvedResourceBinding& b : resolved_bindings) {

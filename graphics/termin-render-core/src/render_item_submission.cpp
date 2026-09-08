@@ -259,13 +259,24 @@ namespace termin {
                 break;
             }
 
-            MaterialShaderOverrideRequest override_request{};
-            override_request.original_shader = TcShader(request.candidate_shader);
-            override_request.vertex_transform_kind = out_plan.vertex_transform_kind;
-            override_request.pass_contract = *request.contract->shader_contract;
-            override_request.debug_context =
+            const char* debug_context =
                 request.contract->debug_pass_name ? request.contract->debug_pass_name : "MeshRenderItemPlanner";
-            TcShader planned = assemble_material_shader_override(override_request);
+            TcShader planned;
+            if (request.contract->shader_variants) {
+                MaterialShaderVariantBatch& batch = *request.contract->shader_variants;
+                if (request.contract->shader_contract != &batch.contract()) {
+                    out_detail = "shader variant batch does not own the requested pass contract";
+                    return RenderItemTaskRejection::ShaderPlanningRejected;
+                }
+                planned = batch.resolve(TcShader(request.candidate_shader), out_plan.vertex_transform_kind, debug_context);
+            } else {
+                MaterialShaderOverrideRequest override_request{};
+                override_request.original_shader = TcShader(request.candidate_shader);
+                override_request.vertex_transform_kind = out_plan.vertex_transform_kind;
+                override_request.pass_contract = *request.contract->shader_contract;
+                override_request.debug_context = debug_context;
+                planned = assemble_material_shader_override(override_request);
+            }
 
             auto reject_missing_semantic = [&](const char* contract_name, const char* semantic) {
                 // A malformed declaration can be planned every frame. Keep the
