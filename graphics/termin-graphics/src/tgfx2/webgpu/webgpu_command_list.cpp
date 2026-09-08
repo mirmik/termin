@@ -46,6 +46,8 @@ namespace tgfx {
         command_buffer_ = nullptr;
         recording_ = true;
         current_layout_token_ = 0;
+        current_pipeline_ = {};
+        index_buffer_bound_ = false;
     }
 
     void WebGpuCommandList::end() {
@@ -101,6 +103,9 @@ namespace tgfx {
         native.depthStencilAttachment = pass.has_depth ? &depth : nullptr;
         render_pass_ = encoder_.BeginRenderPass(&native);
         in_render_pass_ = true;
+        current_layout_token_ = 0;
+        current_pipeline_ = {};
+        index_buffer_bound_ = false;
     }
 
     void WebGpuCommandList::end_render_pass() {
@@ -119,6 +124,7 @@ namespace tgfx {
             command_fail("invalid pipeline handle");
         render_pass_.SetPipeline(pipeline->object);
         current_layout_token_ = pipeline->layout_token;
+        current_pipeline_ = handle;
     }
 
     void WebGpuCommandList::bind_resource_set(ResourceSetHandle handle,
@@ -164,6 +170,8 @@ namespace tgfx {
                                     type == IndexType::Uint16 ? wgpu::IndexFormat::Uint16 : wgpu::IndexFormat::Uint32,
                                     offset,
                                     buffer->desc.size - offset);
+        current_index_type_ = type;
+        index_buffer_bound_ = true;
     }
 
     void WebGpuCommandList::draw(uint32_t count, uint32_t first) {
@@ -185,6 +193,22 @@ namespace tgfx {
         uint32_t count, uint32_t instances, uint32_t first, int32_t vertex_offset, uint32_t first_instance) {
         if (!in_render_pass_)
             command_fail("draw_indexed requires a render pass");
+        const WebGpuPipeline* pipeline = device_.pipelines_.get(current_pipeline_.id);
+        if (!pipeline)
+            command_fail("draw_indexed requires a bound pipeline");
+        if (!index_buffer_bound_)
+            command_fail("draw_indexed requires a bound index buffer");
+        if (pipeline->desc.topology == PrimitiveTopology::LineStrip ||
+            pipeline->desc.topology == PrimitiveTopology::TriangleStrip) {
+            const StripIndexFormat expected =
+                current_index_type_ == IndexType::Uint16 ? StripIndexFormat::Uint16 : StripIndexFormat::Uint32;
+            if (pipeline->desc.strip_index_format == StripIndexFormat::Undefined) {
+                command_fail("indexed strip draw requires a pipeline strip index format");
+            }
+            if (pipeline->desc.strip_index_format != expected) {
+                command_fail("indexed strip pipeline format does not match the bound index buffer");
+            }
+        }
         render_pass_.DrawIndexed(count, instances, first, vertex_offset, first_instance);
     }
 

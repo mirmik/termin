@@ -36,6 +36,7 @@ namespace tgfx {
         size_t vertex_layouts_hash = 0;
 
         PrimitiveTopology topology = PrimitiveTopology::TriangleList;
+        StripIndexFormat strip_index_format = StripIndexFormat::Undefined;
 
         RasterState raster;
         DepthStencilState depth_stencil;

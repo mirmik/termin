@@ -841,6 +841,7 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         tests/test_tgfx2_texture_encoding.cpp
         tests/test_tgfx2_tc_mesh_bridge.cpp
         tests/test_tgfx2_webgpu_binding_layout.cpp
+        tests/test_tgfx2_webgpu_primitive_state.cpp
         tests/test_tgfx2_webgpu_raster_state.cpp
     )
     target_include_directories(tgfx2_device_factory_test PRIVATE

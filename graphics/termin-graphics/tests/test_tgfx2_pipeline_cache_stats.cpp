@@ -279,6 +279,34 @@ TEST_CASE("PipelineCache treats color resolve topology as Vulkan-compatible iden
     CHECK(device.created_pipeline_descs[1].color_resolve_mask == 1u);
 }
 
+TEST_CASE("PipelineCache keeps indexed strip formats in pipeline identity") {
+    PipelineCacheStatsDevice device;
+    tgfx::PipelineCache cache(device);
+
+    tgfx::PipelineCacheLookupKey key;
+    key.vertex_shader = tgfx::ShaderHandle{1};
+    key.fragment_shader = tgfx::ShaderHandle{2};
+    key.topology = tgfx::PrimitiveTopology::TriangleStrip;
+
+    key.strip_index_format = tgfx::StripIndexFormat::Uint16;
+    const tgfx::PipelineHandle uint16_pipeline = cache.get(key);
+    key.strip_index_format = tgfx::StripIndexFormat::Uint32;
+    const tgfx::PipelineHandle uint32_pipeline = cache.get(key);
+    key.strip_index_format = tgfx::StripIndexFormat::Undefined;
+    const tgfx::PipelineHandle nonindexed_pipeline = cache.get(key);
+
+    CHECK(uint16_pipeline);
+    CHECK(uint32_pipeline);
+    CHECK(nonindexed_pipeline);
+    CHECK(uint16_pipeline != uint32_pipeline);
+    CHECK(uint16_pipeline != nonindexed_pipeline);
+    CHECK(uint32_pipeline != nonindexed_pipeline);
+    REQUIRE(device.created_pipeline_descs.size() == 3u);
+    CHECK(device.created_pipeline_descs[0].strip_index_format == tgfx::StripIndexFormat::Uint16);
+    CHECK(device.created_pipeline_descs[1].strip_index_format == tgfx::StripIndexFormat::Uint32);
+    CHECK(device.created_pipeline_descs[2].strip_index_format == tgfx::StripIndexFormat::Undefined);
+}
+
 TEST_CASE("PipelineCache identity includes complete raster state") {
     PipelineCacheStatsDevice device;
     tgfx::PipelineCache cache(device);

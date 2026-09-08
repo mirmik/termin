@@ -1,6 +1,7 @@
 #include "tgfx2/webgpu/webgpu_render_device.hpp"
 
 #include "tgfx2/webgpu/webgpu_command_list.hpp"
+#include "webgpu_primitive_state.hpp"
 #include "webgpu_raster_state.hpp"
 
 #include <algorithm>
@@ -1220,6 +1221,14 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             fail("depth bias requires a depth attachment");
         }
 
+        webgpu::NativePrimitiveState primitive_state;
+        switch (webgpu::map_primitive_state(desc.topology, desc.strip_index_format, primitive_state)) {
+        case webgpu::PrimitiveStateError::None:
+            break;
+        case webgpu::PrimitiveStateError::StripIndexFormatOnListTopology:
+            fail("strip index format is only valid for line-strip and triangle-strip pipelines");
+        }
+
         native.layout = pipeline_layout;
         native.vertex.module = vertex->object;
         native.vertex.entryPoint = std::string_view(vertex->desc.entry_point);
@@ -1227,6 +1236,17 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         native.vertex.buffers = buffers.data();
         native.fragment = &fragment_state;
         native.primitive.topology = topology(desc.topology);
+        switch (primitive_state.strip_index_format) {
+        case webgpu::NativeStripIndexFormat::Undefined:
+            native.primitive.stripIndexFormat = wgpu::IndexFormat::Undefined;
+            break;
+        case webgpu::NativeStripIndexFormat::Uint16:
+            native.primitive.stripIndexFormat = wgpu::IndexFormat::Uint16;
+            break;
+        case webgpu::NativeStripIndexFormat::Uint32:
+            native.primitive.stripIndexFormat = wgpu::IndexFormat::Uint32;
+            break;
+        }
         native.primitive.frontFace =
             desc.raster.front_face == FrontFace::CCW ? wgpu::FrontFace::CCW : wgpu::FrontFace::CW;
         native.primitive.cullMode =

@@ -31,13 +31,20 @@ namespace {
     }
 
     tgfx::PipelineHandle
-    create_pipeline(tgfx::WebGpuRenderDevice& device, const char* source, const char* layout, const char* name) {
+    create_pipeline(tgfx::WebGpuRenderDevice& device,
+                    const char* source,
+                    const char* layout,
+                    const char* name,
+                    tgfx::PrimitiveTopology topology = tgfx::PrimitiveTopology::TriangleList,
+                    tgfx::StripIndexFormat strip_index_format = tgfx::StripIndexFormat::Undefined) {
         tgfx::PipelineDesc desc;
         desc.vertex_shader = create_shader(device, tgfx::ShaderStage::Vertex, source, layout, name);
         desc.fragment_shader = create_shader(device, tgfx::ShaderStage::Fragment, source, layout, name);
         desc.color_formats = {device.surface_pixel_format()};
         desc.depth_format = tgfx::PixelFormat::Undefined;
         desc.raster.cull = tgfx::CullMode::None;
+        desc.topology = topology;
+        desc.strip_index_format = strip_index_format;
         return device.create_pipeline(desc);
     }
 
@@ -258,6 +265,110 @@ namespace {
         device.present();
     }
 
+    void render_strip_fixture(tgfx::WebGpuRenderDevice& device) {
+        constexpr const char* source = R"wgsl(
+@vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+  let p = array<vec2<f32>, 4>(
+    vec2<f32>(-0.82, -0.72), vec2<f32>(-0.82, 0.72),
+    vec2<f32>(0.82, -0.72), vec2<f32>(0.82, 0.72));
+  return vec4<f32>(p[i], 0.0, 1.0);
+}
+@fragment fn fs_main(@builtin(position) p: vec4<f32>) -> @location(0) vec4<f32> {
+  return vec4<f32>(0.25 + p.x / 480.0, 0.25 + p.y / 480.0, 0.85, 1.0);
+})wgsl";
+        constexpr const char* layout = R"json({"version":3,"target":"webgpu","resources":[]})json";
+
+        constexpr std::array<uint16_t, 4> indices16{{0, 1, 2, 3}};
+        constexpr std::array<uint32_t, 4> indices32{{0, 1, 2, 3}};
+        tgfx::BufferDesc index16_desc;
+        index16_desc.size = sizeof(indices16);
+        index16_desc.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
+        const tgfx::BufferHandle index16 = device.create_buffer(index16_desc);
+        device.upload_buffer(
+            index16, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(indices16.data()), sizeof(indices16)));
+        tgfx::BufferDesc index32_desc;
+        index32_desc.size = sizeof(indices32);
+        index32_desc.usage = tgfx::BufferUsage::Index | tgfx::BufferUsage::CopyDst;
+        const tgfx::BufferHandle index32 = device.create_buffer(index32_desc);
+        device.upload_buffer(
+            index32, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(indices32.data()), sizeof(indices32)));
+
+        struct DrawCase {
+            tgfx::PrimitiveTopology topology;
+            tgfx::StripIndexFormat strip_index_format;
+            tgfx::IndexType index_type;
+            bool indexed;
+            const char* name;
+        };
+        constexpr std::array<DrawCase, 6> cases{{
+            {tgfx::PrimitiveTopology::LineStrip,
+             tgfx::StripIndexFormat::Uint16,
+             tgfx::IndexType::Uint16,
+             true,
+             "line-strip-uint16"},
+            {tgfx::PrimitiveTopology::LineStrip,
+             tgfx::StripIndexFormat::Uint32,
+             tgfx::IndexType::Uint32,
+             true,
+             "line-strip-uint32"},
+            {tgfx::PrimitiveTopology::LineStrip,
+             tgfx::StripIndexFormat::Undefined,
+             tgfx::IndexType::Uint32,
+             false,
+             "line-strip-nonindexed"},
+            {tgfx::PrimitiveTopology::TriangleStrip,
+             tgfx::StripIndexFormat::Uint16,
+             tgfx::IndexType::Uint16,
+             true,
+             "triangle-strip-uint16"},
+            {tgfx::PrimitiveTopology::TriangleStrip,
+             tgfx::StripIndexFormat::Uint32,
+             tgfx::IndexType::Uint32,
+             true,
+             "triangle-strip-uint32"},
+            {tgfx::PrimitiveTopology::TriangleStrip,
+             tgfx::StripIndexFormat::Undefined,
+             tgfx::IndexType::Uint32,
+             false,
+             "triangle-strip-nonindexed"},
+        }};
+        std::array<tgfx::PipelineHandle, cases.size()> pipelines;
+        for (size_t index = 0; index < cases.size(); ++index) {
+            pipelines[index] = create_pipeline(
+                device, source, layout, cases[index].name, cases[index].topology, cases[index].strip_index_format);
+        }
+
+        const tgfx::TextureHandle surface = device.acquire_surface_texture();
+        tgfx::RenderPassDesc pass;
+        tgfx::ColorAttachmentDesc color;
+        color.texture = surface;
+        color.clear_color = {0.01f, 0.01f, 0.01f, 1.0f};
+        pass.colors.push_back(color);
+        std::unique_ptr<tgfx::ICommandList> commands = device.create_command_list();
+        commands->begin();
+        commands->begin_render_pass(pass);
+        for (uint32_t index = 0; index < cases.size(); ++index) {
+            const int x = static_cast<int>((index % 3) * 106);
+            const int y = static_cast<int>((index / 3) * 160);
+            const int width = index % 3 == 2 ? 108 : 106;
+            commands->set_viewport(x, y, width, 160);
+            commands->set_scissor(x, y, width, 160);
+            commands->bind_pipeline(pipelines[index]);
+            if (cases[index].indexed) {
+                const tgfx::BufferHandle buffer =
+                    cases[index].index_type == tgfx::IndexType::Uint16 ? index16 : index32;
+                commands->bind_index_buffer(buffer, cases[index].index_type, 0);
+                commands->draw_indexed(4);
+            } else {
+                commands->draw(4);
+            }
+        }
+        commands->end_render_pass();
+        commands->end();
+        device.submit(*commands);
+        device.present();
+    }
+
 } // namespace
 
 extern "C" EMSCRIPTEN_KEEPALIVE int tgfx2_webgpu_binding_layout_start() {
@@ -277,6 +388,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int tgfx2_webgpu_binding_layout_start() {
                                                 }
                                                 try {
                                                     render_fixture(*device);
+                                                    render_strip_fixture(*device);
                                                     fixture_device = std::move(device);
                                                     fixture_status = 2;
                                                 } catch (const std::exception& exception) {

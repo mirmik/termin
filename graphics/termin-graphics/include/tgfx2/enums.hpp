@@ -113,6 +113,12 @@ namespace tgfx {
         Uint32
     };
 
+    enum class StripIndexFormat {
+        Undefined,
+        Uint16,
+        Uint32,
+    };
+
     // --- Shader stage ---
 
     enum class ShaderStage {

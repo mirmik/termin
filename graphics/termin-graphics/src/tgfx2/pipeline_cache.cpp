@@ -40,7 +40,8 @@ namespace tgfx {
         }
 
         return a.vertex_shader == b.vertex_shader && a.fragment_shader == b.fragment_shader &&
-               a.geometry_shader == b.geometry_shader && a.topology == b.topology && a.raster.cull == b.raster.cull &&
+               a.geometry_shader == b.geometry_shader && a.topology == b.topology &&
+               a.strip_index_format == b.strip_index_format && a.raster.cull == b.raster.cull &&
                a.raster.front_face == b.raster.front_face && a.raster.polygon_mode == b.raster.polygon_mode &&
                a.raster.depth_bias_enabled == b.raster.depth_bias_enabled &&
                a.raster.depth_bias_constant == b.raster.depth_bias_constant &&
@@ -94,6 +95,7 @@ namespace tgfx {
         hash_combine(h, k.vertex_layouts_hash);
 
         hash_combine(h, std::hash<int>{}(static_cast<int>(k.topology)));
+        hash_combine(h, std::hash<int>{}(static_cast<int>(k.strip_index_format)));
         hash_combine(h, std::hash<int>{}(static_cast<int>(k.raster.cull)));
         hash_combine(h, std::hash<int>{}(static_cast<int>(k.raster.front_face)));
         hash_combine(h, std::hash<int>{}(static_cast<int>(k.raster.polygon_mode)));
@@ -209,6 +211,7 @@ namespace tgfx {
         }
 
         desc.topology = key.topology;
+        desc.strip_index_format = key.strip_index_format;
         desc.raster = key.raster;
         desc.depth_stencil = key.depth_stencil;
         desc.blend = key.blend;

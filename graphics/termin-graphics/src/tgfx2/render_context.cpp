@@ -607,6 +607,22 @@ namespace tgfx {
             topology_ = topo;
             pipeline_dirty_ = true;
         }
+        if (topo != PrimitiveTopology::LineStrip && topo != PrimitiveTopology::TriangleStrip &&
+            strip_index_format_ != StripIndexFormat::Undefined) {
+            strip_index_format_ = StripIndexFormat::Undefined;
+            pipeline_dirty_ = true;
+        }
+    }
+
+    void RenderContext2::prepare_strip_index_format(bool indexed, IndexType index_type) {
+        StripIndexFormat format = StripIndexFormat::Undefined;
+        if (indexed && (topology_ == PrimitiveTopology::LineStrip || topology_ == PrimitiveTopology::TriangleStrip)) {
+            format = index_type == IndexType::Uint16 ? StripIndexFormat::Uint16 : StripIndexFormat::Uint32;
+        }
+        if (strip_index_format_ != format) {
+            strip_index_format_ = format;
+            pipeline_dirty_ = true;
+        }
     }
 
     void RenderContext2::reset_cached_vertex_buffers() {
@@ -1174,6 +1190,7 @@ namespace tgfx {
         key.vertex_layouts = vertex_layouts_;
         key.vertex_layouts_hash = vertex_layouts_hash_;
         key.topology = topology_;
+        key.strip_index_format = strip_index_format_;
         key.raster = raster_;
         key.depth_stencil = depth_stencil_;
         if (depth_format_ == PixelFormat::Undefined) {
@@ -1391,6 +1408,7 @@ namespace tgfx {
     }
 
     void RenderContext2::draw(BufferHandle vbo, BufferHandle ibo, uint32_t index_count, IndexType idx_type) {
+        prepare_strip_index_format(true, idx_type);
         if (!flush_pipeline())
             return;
         flush_resource_set();
@@ -1421,6 +1439,7 @@ namespace tgfx {
                               uint32_t index_count,
                               int32_t vertex_offset,
                               IndexType idx_type) {
+        prepare_strip_index_format(true, idx_type);
         if (!flush_pipeline())
             return;
         flush_resource_set();
@@ -1440,6 +1459,7 @@ namespace tgfx {
     }
 
     void RenderContext2::draw_indexed_instanced(const IndexedInstancedDraw& draw) {
+        prepare_strip_index_format(true, draw.index_type);
         if (!flush_pipeline())
             return;
         flush_resource_set();
@@ -1470,6 +1490,7 @@ namespace tgfx {
     }
 
     void RenderContext2::draw_arrays(BufferHandle vbo, uint64_t vertex_offset, uint32_t vertex_count) {
+        prepare_strip_index_format(false);
         if (!flush_pipeline())
             return;
         flush_resource_set();
@@ -1483,6 +1504,7 @@ namespace tgfx {
     }
 
     void RenderContext2::draw_arrays_instanced(BufferHandle vbo, uint32_t vertex_count, uint32_t instance_count) {
+        prepare_strip_index_format(false);
         if (!flush_pipeline())
             return;
         flush_resource_set();
@@ -1499,6 +1521,7 @@ namespace tgfx {
                                                BufferHandle instance_vbo,
                                                uint32_t vertex_count,
                                                uint32_t instance_count) {
+        prepare_strip_index_format(false);
         if (!flush_pipeline())
             return;
         flush_resource_set();
@@ -1522,6 +1545,7 @@ namespace tgfx {
                                                uint64_t instance_offset,
                                                uint32_t vertex_count,
                                                uint32_t instance_count) {
+        prepare_strip_index_format(false);
         if (!flush_pipeline())
             return;
         flush_resource_set();

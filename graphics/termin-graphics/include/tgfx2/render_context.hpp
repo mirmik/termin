@@ -84,6 +84,7 @@ namespace tgfx {
         // re-hashing vertex attributes on every draw.
         size_t vertex_layouts_hash_ = 0;
         PrimitiveTopology topology_ = PrimitiveTopology::TriangleList;
+        StripIndexFormat strip_index_format_ = StripIndexFormat::Undefined;
 
         // Synced from begin_pass() with the actual attachment formats.
         // `Undefined` means "no attachment of this kind in the current
@@ -180,6 +181,7 @@ namespace tgfx {
         void clear_pending_binding_buckets();
         bool any_dirty_binding_scope() const;
         void reset_cached_vertex_buffers();
+        void prepare_strip_index_format(bool indexed, IndexType index_type = IndexType::Uint32);
         void ensure_cached_vertex_buffer_slots(uint32_t count);
         static BoundResourceBinding* find_planned_binding(std::vector<BoundResourceBinding>& bindings,
                                                           const BackendBoundResourceSlot& slot,

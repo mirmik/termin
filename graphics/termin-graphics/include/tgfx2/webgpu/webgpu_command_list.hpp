@@ -52,6 +52,9 @@ namespace tgfx {
         bool recording_ = false;
         bool in_render_pass_ = false;
         uintptr_t current_layout_token_ = 0;
+        PipelineHandle current_pipeline_;
+        IndexType current_index_type_ = IndexType::Uint32;
+        bool index_buffer_bound_ = false;
     };
 
 } // namespace tgfx

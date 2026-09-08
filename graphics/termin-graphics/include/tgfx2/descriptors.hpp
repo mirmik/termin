@@ -85,6 +85,9 @@ namespace tgfx {
 
         std::vector<VertexLayoutDesc> vertex_layouts;
         PrimitiveTopology topology = PrimitiveTopology::TriangleList;
+        // WebGPU fixes the primitive-restart index width in a strip pipeline.
+        // Undefined declares a non-indexed strip; list topologies require it.
+        StripIndexFormat strip_index_format = StripIndexFormat::Undefined;
 
         RasterState raster;
         DepthStencilState depth_stencil;
