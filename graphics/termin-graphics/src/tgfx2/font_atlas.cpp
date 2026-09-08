@@ -37,10 +37,6 @@ extern "C" {
 
 #include "internal/utf8_decode.hpp"
 
-extern "C" {
-#include "tgfx/tgfx2_interop.h"
-}
-
 // stb_truetype - single-header; define the implementation in this TU
 // only. The header itself lives at termin-thirdparty/stb/.
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -189,19 +185,9 @@ namespace tgfx {
     }
 
     FontAtlas::~FontAtlas() {
-        // Best-effort GPU release — destructor may fire after the GL
-        // context is already gone. release_gpu() is a no-op if gpu_device_
-        // is null, and we never touch GL directly here.
+        // Best-effort GPU release. The device lifetime token prevents a late
+        // atlas destructor from dereferencing a device that is already gone.
         release_gpu();
-        // Drop SDF GPU handle. Same lifetime considerations as the bitmap
-        // atlas — the device may already be gone.
-        if (gpu_device_ != nullptr && sdf_gpu_texture_.id != 0) {
-            void* live = tgfx2_interop_get_device();
-            if (live == gpu_device_) {
-                gpu_device_->destroy(sdf_gpu_texture_);
-            }
-        }
-        sdf_gpu_texture_ = TextureHandle{};
         delete impl_;
         impl_ = nullptr;
     }
@@ -560,9 +546,12 @@ namespace tgfx {
     // ---------------------------------------------------------------------------
 
     void FontAtlas::sync_sdf_gpu_(RenderContext2* ctx) {
-        if (!ctx || sdf_gpu_texture_.id == 0)
+        if (!ctx)
             return;
         IRenderDevice& device = ctx->device();
+        ensure_gpu_device_(device);
+        if (sdf_gpu_texture_.id == 0)
+            return;
         device.upload_texture(sdf_gpu_texture_, std::span<const uint8_t>(sdf_atlas_.data(), sdf_atlas_.size()));
         sdf_dirty_ = false;
     }
@@ -572,17 +561,7 @@ namespace tgfx {
             return TextureHandle{};
 
         IRenderDevice& device = ctx->device();
-
-        if (gpu_device_ != nullptr && gpu_device_ != &device) {
-            if (sdf_gpu_texture_.id != 0) {
-                void* live = tgfx2_interop_get_device();
-                if (live == gpu_device_) {
-                    gpu_device_->destroy(sdf_gpu_texture_);
-                }
-            }
-            sdf_gpu_texture_ = TextureHandle{};
-        }
-        gpu_owner_ = ctx;
+        ensure_gpu_device_(device);
 
         if (sdf_gpu_texture_.id == 0) {
             TextureDesc desc{};
@@ -593,10 +572,12 @@ namespace tgfx {
             desc.format = PixelFormat::R8_UNorm;
             desc.usage = TextureUsage::Sampled | TextureUsage::CopyDst;
             sdf_gpu_texture_ = device.create_texture(desc);
-            gpu_device_ = &device;
-
-            device.upload_texture(sdf_gpu_texture_, std::span<const uint8_t>(sdf_atlas_.data(), sdf_atlas_.size()));
-            sdf_dirty_ = false;
+            if (sdf_gpu_texture_.id != 0) {
+                device.upload_texture(sdf_gpu_texture_, std::span<const uint8_t>(sdf_atlas_.data(), sdf_atlas_.size()));
+                sdf_dirty_ = false;
+            } else {
+                tc_log(TC_LOG_ERROR, "[FontAtlas] failed to create SDF atlas texture");
+            }
         } else if (sdf_dirty_) {
             sync_sdf_gpu_(ctx);
         }
@@ -709,6 +690,19 @@ namespace tgfx {
     // GPU upload
     // ---------------------------------------------------------------------------
 
+    void FontAtlas::ensure_gpu_device_(IRenderDevice& device) {
+        if (gpu_device_ == &device && !gpu_device_lifetime_.expired()) {
+            return;
+        }
+
+        // Bitmap and SDF handles are one device-owned cache. A device switch
+        // invalidates both representations before either upload path can use a
+        // numerically identical handle minted by another device.
+        release_gpu();
+        gpu_device_ = &device;
+        gpu_device_lifetime_ = device.lifetime_token();
+    }
+
     TextureHandle FontAtlas::ensure_texture(RenderContext2* ctx) {
         if (!ctx)
             return TextureHandle{};
@@ -716,29 +710,13 @@ namespace tgfx {
         const bool profile = tc_profiler_enabled();
 
         IRenderDevice& device = ctx->device();
-
-        // Ownership is keyed on the IRenderDevice, not the RenderContext2.
-        // Every tgfx2 RenderContext2 that wraps the same process-global
-        // IRenderDevice shares handle pools, so a TextureHandle minted by
-        // one context resolves on the other without re-upload. Keying on
-        // RenderContext2* caused editor setups with an in-scene UIRenderer
-        // and a parent editor UIRenderer (both on one device, different
-        // RenderContext2 wrappers) to release+recreate the atlas every
-        // single frame — an expensive round-trip for an R8 texture and the
-        // dominant cost inside UIWidgetPass on OpenGL. Only real device
-        // swaps (hot-reload, multi-device hosts if we ever support those)
-        // actually need to drop the GPU texture.
-        if (gpu_device_ != nullptr && gpu_device_ != &device) {
+        if (gpu_device_ != &device || gpu_device_lifetime_.expired()) {
             if (profile)
                 tc_profiler_begin_section("atlas.device_swap");
-            release_gpu();
+            ensure_gpu_device_(device);
             if (profile)
                 tc_profiler_end_section();
         }
-
-        // Track the last context for diagnostics / legacy callers; ownership
-        // is still the device above.
-        gpu_owner_ = ctx;
 
         if (gpu_texture_.id == 0) {
             if (profile)
@@ -751,10 +729,12 @@ namespace tgfx {
             desc.format = PixelFormat::R8_UNorm;
             desc.usage = TextureUsage::Sampled | TextureUsage::CopyDst;
             gpu_texture_ = device.create_texture(desc);
-            gpu_device_ = &device;
-
-            device.upload_texture(gpu_texture_, std::span<const uint8_t>(atlas_.data(), atlas_.size()));
-            dirty_ = false;
+            if (gpu_texture_.id != 0) {
+                device.upload_texture(gpu_texture_, std::span<const uint8_t>(atlas_.data(), atlas_.size()));
+                dirty_ = false;
+            } else {
+                tc_log(TC_LOG_ERROR, "[FontAtlas] failed to create bitmap atlas texture");
+            }
             if (profile)
                 tc_profiler_end_section();
         } else if (dirty_) {
@@ -768,34 +748,35 @@ namespace tgfx {
     }
 
     void FontAtlas::sync_gpu_(RenderContext2* ctx) {
-        if (!ctx || gpu_texture_.id == 0)
+        if (!ctx)
             return;
         IRenderDevice& device = ctx->device();
+        ensure_gpu_device_(device);
+        if (gpu_texture_.id == 0)
+            return;
         device.upload_texture(gpu_texture_, std::span<const uint8_t>(atlas_.data(), atlas_.size()));
         dirty_ = false;
     }
 
     void FontAtlas::release_gpu() {
-        // Same lifetime story as Text2DRenderer::release_gpu: on Python
-        // interpreter shutdown the application GraphicsHost may tear down the
-        // device before we get here, leaving `gpu_device_` dangling. Only destroy
-        // when the pointer is still the live interop target.
-        if (gpu_device_ != nullptr && gpu_texture_.id != 0) {
-            void* live = tgfx2_interop_get_device();
-            if (live == gpu_device_) {
-                gpu_device_->destroy(gpu_texture_);
+        // Isolated devices are just as valid as the process-global interop
+        // device. The weak token lets us release their resources while they
+        // are alive and safely drop stale handles after they are destroyed.
+        if (gpu_device_ != nullptr) {
+            const std::shared_ptr<const void> lifetime = gpu_device_lifetime_.lock();
+            if (lifetime) {
+                if (gpu_texture_.id != 0) {
+                    gpu_device_->destroy(gpu_texture_);
+                }
+                if (sdf_gpu_texture_.id != 0) {
+                    gpu_device_->destroy(sdf_gpu_texture_);
+                }
             }
         }
         gpu_texture_ = TextureHandle{};
-        if (gpu_device_ != nullptr && sdf_gpu_texture_.id != 0) {
-            void* live = tgfx2_interop_get_device();
-            if (live == gpu_device_) {
-                gpu_device_->destroy(sdf_gpu_texture_);
-            }
-        }
         sdf_gpu_texture_ = TextureHandle{};
-        gpu_owner_ = nullptr;
         gpu_device_ = nullptr;
+        gpu_device_lifetime_.reset();
         // CPU atlas + glyphs stay — the caller may re-ensure on a new
         // context without paying the rasterisation cost again.
         dirty_ = true;

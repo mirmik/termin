@@ -41,11 +41,29 @@ namespace tgfx {
 
     class IRenderDevice {
     private:
+        struct LifetimeToken {};
+
         termin::ShaderArtifactResolver shader_artifact_resolver_;
         bool shader_artifact_resolver_configured_ = false;
+        std::shared_ptr<const LifetimeToken> lifetime_token_ = std::make_shared<const LifetimeToken>();
 
     public:
-        virtual ~IRenderDevice() = default;
+        IRenderDevice() = default;
+        virtual ~IRenderDevice() {
+            lifetime_token_.reset();
+        }
+
+        IRenderDevice(const IRenderDevice&) = delete;
+        IRenderDevice& operator=(const IRenderDevice&) = delete;
+        IRenderDevice(IRenderDevice&&) = delete;
+        IRenderDevice& operator=(IRenderDevice&&) = delete;
+
+        // Non-owning lifetime observation for caches that retain device-owned
+        // handles. Locking this token proves that the IRenderDevice object has
+        // not completed destruction; it never extends the device lifetime.
+        std::weak_ptr<const void> lifetime_token() const noexcept {
+            return lifetime_token_;
+        }
 
         void configure_shader_artifacts(const termin::ShaderArtifactResolver& resolver) {
             shader_artifact_resolver_ = resolver;

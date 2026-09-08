@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -133,8 +134,8 @@ namespace tgfx {
         static constexpr std::size_t kMaxCachedMetricSizes = 256;
 
         // GPU state.
-        RenderContext2* gpu_owner_ = nullptr;
-        IRenderDevice* gpu_device_ = nullptr; // cached for destroy on release
+        IRenderDevice* gpu_device_ = nullptr;
+        std::weak_ptr<const void> gpu_device_lifetime_;
         TextureHandle gpu_texture_{};
         bool dirty_ = false;
 
@@ -290,6 +291,7 @@ namespace tgfx {
         PackedCell pack_sdf_(int cell_w, int cell_h);
 
         // Actually upload the CPU atlas to the GPU handle (full re-upload).
+        void ensure_gpu_device_(IRenderDevice& device);
         void sync_gpu_(RenderContext2* ctx);
         void sync_sdf_gpu_(RenderContext2* ctx);
 

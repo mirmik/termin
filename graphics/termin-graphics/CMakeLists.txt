@@ -790,6 +790,7 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
     add_executable(tgfx2_device_factory_test
         tests/main.cpp
         tests/test_tgfx2_device_factory.cpp
+        tests/test_tgfx2_font_atlas_device_ownership.cpp
         tests/test_tgfx2_interop_ownership.cpp
         tests/test_tgfx2_line_mesh_builder.cpp
         tests/test_tgfx2_gl_features.cpp
@@ -804,6 +805,8 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
     )
+    target_compile_definitions(tgfx2_device_factory_test PRIVATE
+        TGFX2_TEST_FONT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")
     target_link_libraries(tgfx2_device_factory_test PRIVATE termin_graphics2)
     if(TGFX2_ENABLE_OPENGL)
         target_sources(tgfx2_device_factory_test PRIVATE
