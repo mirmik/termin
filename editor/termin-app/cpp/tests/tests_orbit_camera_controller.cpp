@@ -4,6 +4,7 @@
 #include "termin/entity/component.hpp"
 #include "termin/entity/entity.hpp"
 #include "termin/input/input_events.hpp"
+#include "termin/editor/editor_viewport_input_manager.hpp"
 
 #include <termin/camera/camera_component.hpp>
 
@@ -12,7 +13,9 @@
 
 extern "C" {
 #include "core/tc_entity_pool.h"
+#include "core/tc_input_capability.h"
 #include "core/tc_scene.h"
+#include "render/tc_display.h"
 #include "render/tc_render_target.h"
 #include "render/tc_viewport.h"
 }
@@ -76,6 +79,56 @@ namespace {
     }
 
 } // namespace
+
+TEST_CASE("Editor camera gestures stop on release and focus loss") {
+    const tc_scene_handle scene = tc_scene_new_named("camera-gesture-lifetime");
+    const tc_entity_pool_handle pool = tc_entity_pool_registry_find(tc_scene_entity_pool(scene));
+    CameraRig rig = make_camera_rig("camera", pool);
+    REQUIRE(tc_component_set_input_source_mask(rig.controller->tc_component_ptr(), TC_INPUT_SOURCE_EDITOR));
+    const tc_render_target_handle target = tc_render_target_new("camera-gesture-target");
+    tc_render_target_set_scene(target, scene);
+    tc_render_target_set_camera(target, rig.camera->tc_component_ptr());
+    const tc_viewport_handle viewport = tc_viewport_new("camera-gesture-viewport", scene);
+    tc_viewport_set_render_target(viewport, target);
+    // Editor cameras receive input through the viewport's internal hierarchy.
+    tc_viewport_set_internal_entities(viewport, rig.entity.handle());
+    tc_viewport_set_pixel_rect(viewport, 0, 0, 800, 600);
+    const tc_display_handle display = tc_display_new("camera-gesture-display", nullptr);
+    REQUIRE(tc_display_alive(display));
+    {
+        termin::EditorViewportInputManager manager(viewport, display);
+        REQUIRE(tc_viewport_get_input_manager(viewport) != nullptr);
+        for (int button : {rig.controller->orbit_mouse_button, rig.controller->pan_mouse_button}) {
+            for (bool cancel : {false, true}) {
+                manager.on_mouse_move(400.0, 300.0);
+                const auto before = rig.entity.transform().global_position();
+                manager.on_mouse_button(button, TC_INPUT_PRESS, 0, 1);
+                manager.on_mouse_move(440.0, 320.0);
+                const auto moved = rig.entity.transform().global_position();
+                CHECK((moved - before).norm() > 1e-6);
+                if (cancel)
+                    manager.on_focus_lost();
+                else
+                    manager.on_mouse_button(button, TC_INPUT_RELEASE, 0, 1);
+                manager.on_mouse_move(480.0, 340.0);
+                manager.on_mouse_move(520.0, 360.0);
+                CHECK((rig.entity.transform().global_position() - moved).norm() < 1e-12);
+                if (cancel) {
+                    // Late Up ends quarantine; hover must still leave the camera alone.
+                    manager.on_mouse_button(button, TC_INPUT_RELEASE, 0, 1);
+                    manager.on_mouse_move(560.0, 380.0);
+                    manager.on_mouse_move(600.0, 400.0);
+                    CHECK((rig.entity.transform().global_position() - moved).norm() < 1e-12);
+                }
+            }
+        }
+    }
+    tc_viewport_free(viewport);
+    tc_display_free(display);
+    tc_render_target_free(target);
+    tc_entity_free(rig.entity.handle());
+    tc_scene_free(scene);
+}
 
 TEST_CASE("OrbitCameraController only handles events from viewports rendered by its camera") {
     tc_scene_handle scene = tc_scene_new_named("orbit-camera-controller-test");

@@ -446,6 +446,12 @@ namespace termin {
         if (!e || !_event_targets_this_camera(e->viewport)) {
             return;
         }
+        if (e->button != orbit_mouse_button && e->button != pan_mouse_button) {
+            return;
+        }
+        if (_prevent_moving && e->action == static_cast<int>(Action::PRESS)) {
+            return;
+        }
 
         // Get viewport pointer as key for per-viewport state
         uint64_t vp_key = viewport_key(e->viewport);
@@ -471,6 +477,14 @@ namespace termin {
         if (e->action == static_cast<int>(Action::RELEASE)) {
             state.has_last = false;
             state.pan_gesture.reset();
+        }
+        // Claim the gesture so the input router delivers its moves and release.
+        e->handled = true;
+    }
+
+    void OrbitCameraController::on_focus_lost(tc_input_focus_event* e) {
+        if (e) {
+            _viewport_states.erase(viewport_key(e->viewport));
         }
     }
 

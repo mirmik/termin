@@ -165,6 +165,7 @@ namespace termin {
         void on_mouse_button(tc_mouse_button_event* event) override;
         void on_mouse_move(tc_mouse_move_event* event) override;
         void on_scroll(tc_scroll_event* event) override;
+        void on_focus_lost(tc_input_focus_event* event) override;
 
         // === Internal methods (public for Python compatibility) ===
 
