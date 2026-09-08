@@ -28,6 +28,21 @@ checkout. Установочные prefixes различаются намере�
 `task --list`, подробности конкретной операции — через
 `task --summary <имя>`.
 
+## Очистка локальных артефактов
+
+`task clean -- --dry-run` на Linux и `task clean -- -DryRun` на Windows
+показывают единый вычисляемый inventory, не удаляя файлы. В него входят
+корневые и package-local `build`, `build_win`, `dist`, `install`, `install_win`,
+Python cache/egg-info и `bin`/`obj` обнаруженных C#-проектов. Vendored
+`termin-thirdparty`, `.git` и произвольные пользовательские каталоги не
+обходятся как проекты.
+
+SDK prefixes удаляются только явно: `--include-sdk` на Linux или `-IncludeSdk`
+на Windows. Их имена читаются из `build-system/sdk-profiles.json`, поэтому
+`sdk/`, `sdk-core/` и `sdk-graphics/` остаются синхронизированы с профилями
+сборки. Также удаляется системный prefix платформы (`/opt/termin` либо
+`%LOCALAPPDATA%\termin-sdk`).
+
 Отдельно от SDK существует первоначальная Linux-операция упаковки Python
 Graphics product:
 

@@ -1,10 +1,5 @@
 #!/usr/bin/env pwsh
-# Clean build artifacts across all termin-env projects.
-#
-# Usage:
-#   .\clean-all.ps1
-#   .\clean-all.ps1 -DryRun
-#   .\clean-all.ps1 -IncludeSdk
+# Cross-platform clean inventory is owned by clean_inventory.py.
 
 param(
     [switch]$DryRun,
@@ -13,101 +8,48 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-
 if ($Help) {
-    Write-Host "Usage: .\clean-all.ps1 [OPTIONS]"
+    Write-Host "Usage: .\scripts\maintenance\clean.ps1 [-DryRun] [-IncludeSdk]"
     Write-Host ""
-    Write-Host "Options:"
     Write-Host "  -DryRun      Show what would be removed without deleting"
-    Write-Host "  -IncludeSdk  Also remove %LOCALAPPDATA%\termin-sdk"
-    Write-Host "  -Help        Show this help"
+    Write-Host "  -IncludeSdk  Also remove repository and per-user SDK prefixes"
     exit 0
 }
 
 $Root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
-$ProjectRoots = @(
-    (Join-Path $Root "termin-graphics"),
-    (Join-Path $Root "termin-nodegraph"),
-    (Join-Path $Root "termin-app")
-)
-
-$targets = New-Object System.Collections.Generic.List[string]
-
-# Explicit high-value build/install outputs.
-$explicitDirs = @(
-    "termin-graphics\build",
-    "termin-graphics\dist",
-    "termin-graphics\install",
-    "termin-graphics\install_win",
-    "termin-nodegraph\build",
-    "termin-nodegraph\dist",
-    "termin-app\cpp\build"
-)
-
-foreach ($rel in $explicitDirs) {
-    $path = Join-Path $Root $rel
-    if (Test-Path -LiteralPath $path) {
-        $targets.Add($path)
-    }
-}
-
-# Generic transient artifacts inside project roots.
-$namePatterns = @("__pycache__", ".pytest_cache")
-
-foreach ($projectRoot in $ProjectRoots) {
-    if (-not (Test-Path -LiteralPath $projectRoot)) {
-        continue
-    }
-
-    Get-ChildItem -Path $projectRoot -Recurse -Directory -Force |
-        Where-Object {
-            $_.FullName -notmatch "\\\.git(\\|$)" -and (
-                $namePatterns -contains $_.Name -or
-                $_.Name -like "*.egg-info" -or
-                $_.Name -eq "bin" -and $_.FullName -match "\\termin\\csharp\\" -or
-                $_.Name -eq "obj" -and $_.FullName -match "\\termin\\csharp\\"
-            )
-        } |
-        ForEach-Object {
-            $targets.Add($_.FullName)
-        }
-}
-
-if ($IncludeSdk) {
-    $localAppDataDir = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME "AppData\Local" }
-    $sdkDir = Join-Path $localAppDataDir "termin-sdk"
-    if (Test-Path -LiteralPath $sdkDir) {
-        $targets.Add($sdkDir)
-    }
-}
-
-$finalTargets = $targets |
-    Sort-Object -Unique |
-    Sort-Object { $_.Length } -Descending
-
-if ($finalTargets.Count -eq 0) {
-    Write-Host "Nothing to clean."
-    exit 0
-}
-
-Write-Host "Targets to clean: $($finalTargets.Count)"
-foreach ($t in $finalTargets) {
-    Write-Host "  $t"
-}
-
+$Inventory = Join-Path $Root "scripts\maintenance\clean_inventory.py"
+$InventoryArguments = @()
 if ($DryRun) {
-    Write-Host ""
-    Write-Host "Dry run complete. Nothing was deleted."
-    exit 0
+    $InventoryArguments += "--dry-run"
 }
-
-$removed = 0
-foreach ($t in $finalTargets) {
-    if (Test-Path -LiteralPath $t) {
-        Remove-Item -LiteralPath $t -Recurse -Force
-        $removed++
+if ($IncludeSdk) {
+    $InventoryArguments += "--include-sdk"
+}
+$PythonCommand = $null
+$PythonArguments = @()
+if ($env:PYTHON_BIN -and -not $IncludeSdk) {
+    $PythonCommand = Get-Command $env:PYTHON_BIN -ErrorAction SilentlyContinue
+}
+if (-not $PythonCommand) {
+    $PythonCommand = Get-Command py -CommandType Application -ErrorAction SilentlyContinue
+    if ($PythonCommand) {
+        $PythonArguments += "-3"
     }
 }
+if (-not $PythonCommand) {
+    $PythonCommand = Get-Command python -CommandType Application -ErrorAction SilentlyContinue
+}
+if (-not $PythonCommand -and -not $IncludeSdk) {
+    $BundledPython = Join-Path $Root "sdk\bin\termin_python.exe"
+    if (Test-Path -LiteralPath $BundledPython -PathType Leaf) {
+        $PythonCommand = Get-Command $BundledPython -ErrorAction SilentlyContinue
+    }
+}
+if (-not $PythonCommand) {
+    Write-Error "Python 3 is required to compute the clean inventory."
+    exit 1
+}
 
-Write-Host ""
-Write-Host "Clean complete. Removed: $removed"
+$PythonExecutable = $PythonCommand.Source
+& $PythonExecutable @PythonArguments $Inventory @InventoryArguments
+exit $LASTEXITCODE
