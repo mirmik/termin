@@ -176,6 +176,9 @@ add_custom_target(termin_web_core_browser_smoke
     DEPENDS termin_web_core termin_web_core_fixture_packages
     USES_TERMINAL
 )
+if(TARGET tgfx2_webgpu_binding_layout_browser_gate)
+    add_dependencies(termin_web_core_browser_smoke tgfx2_webgpu_binding_layout_browser_gate)
+endif()
 
 add_custom_target(termin_web_visual_scene_browser_smoke
     COMMAND "${TERMIN_HOST_PYTHON}"

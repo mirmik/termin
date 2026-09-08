@@ -5,6 +5,6 @@
   "stage": "fragment",
   "resources": [
     {"name": "material", "kind": "constant_buffer", "scope": "material", "set": 0, "binding": 8, "stage_mask": 2, "size": 16, "webgpu": {"group": 0, "binding": 8}, "fields": [{"name":"u_tint_color","type":"Vec4","offset":0,"size":16}]},
-    {"name": "u_tint_texture", "kind": "texture", "scope": "material", "set": 0, "binding": 96, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 96, "sampler_binding": 106}}
+    {"name": "u_tint_texture", "kind": "texture", "scope": "material", "set": 0, "binding": 96, "stage_mask": 2, "size": 0, "webgpu": {"group": 0, "binding": 96, "sampler_binding": 106, "sample_type": "float", "sampler_kind": "filtering", "view_aspect": "all", "view_dimension": "2d", "multisampled": false}}
   ]
 }

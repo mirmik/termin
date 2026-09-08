@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>tgfx2 WebGPU binding layout fixture</title></head>
+<body style="margin:0;background:#000">
+  <canvas id="fixture-canvas" width="320" height="320"></canvas>
+  <pre id="result">STARTING</pre>
+  <script type="module">
+    import createFixture from './tgfx2_webgpu_binding_layout_fixture.mjs';
+    const result = document.querySelector('#result');
+    try {
+      const module = await createFixture();
+      module._tgfx2_webgpu_binding_layout_start();
+      const poll = () => {
+        const status = module._tgfx2_webgpu_binding_layout_status();
+        if (status === 2) {
+          requestAnimationFrame(() => { result.textContent = 'TERMIN_WEBGPU_BINDING_LAYOUT_READY'; });
+        } else if (status < 0) {
+          result.textContent = `ERROR:${module.UTF8ToString(module._tgfx2_webgpu_binding_layout_error())}`;
+        } else {
+          setTimeout(poll, 20);
+        }
+      };
+      poll();
+    } catch (error) {
+      result.textContent = `ERROR:${error?.stack ?? error}`;
+    }
+  </script>
+</body>
+</html>

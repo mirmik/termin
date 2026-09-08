@@ -169,6 +169,7 @@ set(TGFX2_SOURCES
     src/tgfx2/world_tube_line_renderer.cpp
     src/tgfx2/text2d_renderer.cpp
     src/tgfx2/text3d_renderer.cpp
+    src/tgfx2/webgpu/webgpu_binding_layout.cpp
     src/tgfx2/pixel_format_utils.cpp
     src/tgfx2/pipeline_cache.cpp
     src/tgfx2/render_context.cpp
@@ -204,6 +205,7 @@ if(EMSCRIPTEN)
         src/tgfx2/text2d_renderer.cpp
         src/tgfx2/world_space_line_renderer.cpp
         src/tgfx2/world_tube_line_renderer.cpp
+        src/tgfx2/webgpu/webgpu_binding_layout.cpp
         src/tgfx2/pixel_format_utils.cpp
         src/tgfx2/pipeline_cache.cpp
         src/tgfx2/render_context.cpp
@@ -452,6 +454,37 @@ if(COMMAND termin_enable_pch_for)
     termin_enable_pch_for(termin_graphics2)
 endif()
 termin_set_rpath_lib(termin_graphics2)
+
+if(EMSCRIPTEN AND TGFX2_ENABLE_WEBGPU)
+    add_executable(tgfx2_webgpu_binding_layout_fixture
+        tests/webgpu_binding_layout_browser_fixture.cpp)
+    target_link_libraries(tgfx2_webgpu_binding_layout_fixture PRIVATE termin_graphics2)
+    target_link_options(tgfx2_webgpu_binding_layout_fixture PRIVATE
+        "-fexceptions"
+        "--no-entry"
+        "-sMODULARIZE=1"
+        "-sEXPORT_ES6=1"
+        "-sEXPORT_NAME=createTgfx2WebGpuBindingLayoutFixture"
+        "-sENVIRONMENT=web"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sEXPORTED_FUNCTIONS=['_tgfx2_webgpu_binding_layout_start','_tgfx2_webgpu_binding_layout_status','_tgfx2_webgpu_binding_layout_error']"
+        "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString']")
+    set_target_properties(tgfx2_webgpu_binding_layout_fixture PROPERTIES
+        OUTPUT_NAME "tgfx2_webgpu_binding_layout_fixture"
+        SUFFIX ".mjs")
+    configure_file(
+        tests/webgpu_binding_layout_browser_fixture.html
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/tgfx2-webgpu-binding-layout-fixture.html"
+        COPYONLY)
+    find_program(TGFX2_WEBGPU_FIXTURE_PYTHON NAMES python3 python REQUIRED)
+    add_custom_target(tgfx2_webgpu_binding_layout_browser_gate
+        COMMAND "${TGFX2_WEBGPU_FIXTURE_PYTHON}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/webgpu_binding_layout_browser_smoke.py"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+            --report "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/webgpu-binding-layout-gate-report.json"
+        DEPENDS tgfx2_webgpu_binding_layout_fixture
+        USES_TERMINAL)
+endif()
 
 # termin_shaderc is a desktop host tool, not a runtime-backend component.  Test
 # and source-project workflows need a graph-owned compiler even in a headless
@@ -798,6 +831,7 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         tests/test_tgfx2_pipeline_cache_stats.cpp
         tests/test_tgfx2_texture_encoding.cpp
         tests/test_tgfx2_tc_mesh_bridge.cpp
+        tests/test_tgfx2_webgpu_binding_layout.cpp
         tests/test_tgfx2_webgpu_raster_state.cpp
     )
     target_include_directories(tgfx2_device_factory_test PRIVATE

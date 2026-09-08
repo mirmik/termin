@@ -27,6 +27,12 @@ namespace termin_shaderc::internal {
         bool slang_storage_texture = false;
         bool webgpu_has_sampler_binding = false;
         uint32_t webgpu_sampler_binding = 0;
+        std::string webgpu_sample_type;
+        std::string webgpu_access;
+        std::string webgpu_sampler_kind;
+        std::string webgpu_view_aspect;
+        std::string webgpu_view_dimension;
+        bool webgpu_multisampled = false;
         bool d3d11_scalar_sampler_for_texture_array = false;
 
         struct Field {

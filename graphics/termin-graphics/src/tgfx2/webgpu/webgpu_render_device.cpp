@@ -5,13 +5,11 @@
 
 #include <algorithm>
 #include <array>
-#include <limits>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
 
 #include <tcbase/tc_log.h>
-#include <tcbase/trent/json.h>
 
 extern "C" {
 #include "tgfx/resources/tc_mesh_registry.h"
@@ -125,7 +123,16 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
       "name": "source_texture",
       "kind": "texture",
       "stage_mask": 2,
-      "webgpu": {"group": 0, "binding": 1, "sampler_binding": 2}
+      "webgpu": {
+        "group": 0,
+        "binding": 1,
+        "sampler_binding": 2,
+        "sample_type": "float",
+        "sampler_kind": "filtering",
+        "view_aspect": "all",
+        "view_dimension": "2d",
+        "multisampled": false
+      }
     }
   ]
 })json";
@@ -133,43 +140,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         [[noreturn]] void fail(const std::string& message) {
             tc_log_error("WebGPU: %s", message.c_str());
             throw std::runtime_error(message);
-        }
-
-        const nos::trent* field(const nos::trent& object, const char* name) {
-            return object.is_dict() ? object._get(name) : nullptr;
-        }
-
-        bool uint_field(const nos::trent& object, const char* name, uint32_t& value) {
-            const nos::trent* item = field(object, name);
-            if (!item || !item->is_numer())
-                return false;
-            const int64_t integer = item->as_integer();
-            if (integer < 0 || integer > std::numeric_limits<uint32_t>::max())
-                return false;
-            value = static_cast<uint32_t>(integer);
-            return true;
-        }
-
-        bool string_field(const nos::trent& object, const char* name, std::string& value) {
-            const nos::trent* item = field(object, name);
-            if (!item || !item->is_string())
-                return false;
-            value = item->as_string();
-            return true;
-        }
-
-        ShaderResourceKind resource_kind(const std::string& name) {
-            if (name == "constant_buffer")
-                return ShaderResourceKind::ConstantBuffer;
-            if (name == "texture")
-                return ShaderResourceKind::Texture;
-            if (name == "sampler")
-                return ShaderResourceKind::Sampler;
-            if (name == "storage_buffer")
-                return ShaderResourceKind::StorageBuffer;
-            if (name == "storage_texture")
-                return ShaderResourceKind::StorageTexture;
-            return ShaderResourceKind::None;
         }
 
         wgpu::BlendFactor blend_factor(BlendFactor value) {
@@ -215,50 +185,63 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
 
         std::vector<WebGpuLayoutEntry> parse_layout(const ShaderDesc& desc) {
-            if (desc.resource_layout_json.empty())
-                return {};
-            nos::trent root;
-            try {
-                root = nos::json::parse(desc.resource_layout_json);
-            } catch (const std::exception& error) {
-                fail("invalid layout sidecar for '" + desc.debug_name + "': " + error.what());
-            }
-            uint32_t version = 0;
-            std::string target;
-            if (!uint_field(root, "version", version) || version != 3 || !string_field(root, "target", target) ||
-                target != "webgpu") {
-                fail("shader '" + desc.debug_name + "' requires a WebGPU resource layout sidecar version 3");
-            }
-            const nos::trent* resources = field(root, "resources");
-            if (!resources || !resources->is_list()) {
-                fail("shader '" + desc.debug_name + "' layout has no resources array");
-            }
+            webgpu::BindingLayoutParseResult result =
+                webgpu::parse_binding_layout(desc.resource_layout_json, desc.debug_name);
+            if (!result)
+                fail(result.error);
+            return std::move(result.entries);
+        }
 
-            std::vector<WebGpuLayoutEntry> result;
-            for (const nos::trent& item : resources->as_list()) {
-                std::string kind_name;
-                WebGpuLayoutEntry entry;
-                const nos::trent* placement = field(item, "webgpu");
-                uint32_t group = 0;
-                if (!string_field(item, "name", entry.name) || !string_field(item, "kind", kind_name) ||
-                    !uint_field(item, "stage_mask", entry.stage_mask) || !placement || !placement->is_dict() ||
-                    !uint_field(*placement, "group", group) || group != 0 ||
-                    !uint_field(*placement, "binding", entry.binding)) {
-                    fail("shader '" + desc.debug_name + "' has malformed WebGPU placement");
-                }
-                entry.kind = resource_kind(kind_name);
-                if (entry.kind == ShaderResourceKind::None || entry.stage_mask == 0) {
-                    fail("shader '" + desc.debug_name + "' has unsupported layout resource kind");
-                }
-                uint_field(item, "size", entry.size);
-                entry.has_sampler_binding = uint_field(*placement, "sampler_binding", entry.sampler_binding);
-                if (entry.has_sampler_binding &&
-                    (entry.kind != ShaderResourceKind::Texture || entry.sampler_binding == entry.binding)) {
-                    fail("shader '" + desc.debug_name + "' has invalid sampler_binding");
-                }
-                result.push_back(std::move(entry));
+        wgpu::TextureSampleType texture_sample_type(webgpu::TextureSampleType value) {
+            switch (value) {
+            case webgpu::TextureSampleType::Float:
+                return wgpu::TextureSampleType::Float;
+            case webgpu::TextureSampleType::UnfilterableFloat:
+                return wgpu::TextureSampleType::UnfilterableFloat;
+            case webgpu::TextureSampleType::Depth:
+                return wgpu::TextureSampleType::Depth;
+            case webgpu::TextureSampleType::Sint:
+                return wgpu::TextureSampleType::Sint;
+            case webgpu::TextureSampleType::Uint:
+                return wgpu::TextureSampleType::Uint;
+            case webgpu::TextureSampleType::Undefined:
+                break;
             }
-            return result;
+            fail("undefined WebGPU texture sample type");
+        }
+
+        wgpu::SamplerBindingType sampler_binding_type(webgpu::SamplerKind value) {
+            switch (value) {
+            case webgpu::SamplerKind::Filtering:
+                return wgpu::SamplerBindingType::Filtering;
+            case webgpu::SamplerKind::NonFiltering:
+                return wgpu::SamplerBindingType::NonFiltering;
+            case webgpu::SamplerKind::Comparison:
+                return wgpu::SamplerBindingType::Comparison;
+            case webgpu::SamplerKind::None:
+                break;
+            }
+            fail("undefined WebGPU sampler kind");
+        }
+
+        wgpu::TextureViewDimension texture_view_dimension(webgpu::TextureViewDimension value) {
+            switch (value) {
+            case webgpu::TextureViewDimension::e1D:
+                return wgpu::TextureViewDimension::e1D;
+            case webgpu::TextureViewDimension::e2D:
+                return wgpu::TextureViewDimension::e2D;
+            case webgpu::TextureViewDimension::e2DArray:
+                return wgpu::TextureViewDimension::e2DArray;
+            case webgpu::TextureViewDimension::Cube:
+                return wgpu::TextureViewDimension::Cube;
+            case webgpu::TextureViewDimension::CubeArray:
+                return wgpu::TextureViewDimension::CubeArray;
+            case webgpu::TextureViewDimension::e3D:
+                return wgpu::TextureViewDimension::e3D;
+            case webgpu::TextureViewDimension::Undefined:
+                break;
+            }
+            fail("undefined WebGPU texture view dimension");
         }
 
         wgpu::ShaderStage shader_visibility(uint32_t mask) {
@@ -427,6 +410,22 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         bool linearly_filterable_color_format(PixelFormat format) {
             return color_format(format) && format != PixelFormat::R32F && format != PixelFormat::RG32F &&
                    format != PixelFormat::RGBA32F;
+        }
+
+        bool depth_format(PixelFormat format) {
+            return format == PixelFormat::D24_UNorm || format == PixelFormat::D24_UNorm_S8_UInt ||
+                   format == PixelFormat::D32F;
+        }
+
+        bool sampler_matches(webgpu::SamplerKind kind, const SamplerDesc& desc) {
+            if (kind == webgpu::SamplerKind::Comparison)
+                return desc.compare_enable;
+            if (desc.compare_enable)
+                return false;
+            if (kind != webgpu::SamplerKind::NonFiltering)
+                return kind == webgpu::SamplerKind::Filtering;
+            return desc.min_filter == FilterMode::Nearest && desc.mag_filter == FilterMode::Nearest &&
+                   desc.mip_filter == FilterMode::Nearest && desc.max_anisotropy <= 1.0f;
         }
 
         bool rect_inside(termin::Bounds2i rect, uint32_t width, uint32_t height) {
@@ -631,6 +630,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
           device_(std::move(device)),
           queue_(device_.GetQueue()),
           surface_(std::move(surface)) {
+        float32_filterable_enabled_ = device_.HasFeature(wgpu::FeatureName::Float32Filterable);
         wgpu::SurfaceCapabilities surface_caps;
         if (surface_.GetCapabilities(adapter_, &surface_caps) != wgpu::Status::Success ||
             surface_caps.formatCount == 0) {
@@ -1050,7 +1050,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         wgpu::Sampler object = device_.CreateSampler(&native);
         if (!object)
             fail("CreateSampler failed");
-        return {samplers_.add({std::move(object)})};
+        return {samplers_.add({std::move(object), desc})};
     }
 
     ShaderHandle WebGpuRenderDevice::create_shader(const ShaderDesc& desc) {
@@ -1083,11 +1083,13 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 layout.begin(), layout.end(), [&](const auto& item) { return item.binding == incoming.binding; });
             if (existing == layout.end()) {
                 layout.push_back(incoming);
-            } else if (existing->name != incoming.name || existing->kind != incoming.kind ||
-                       existing->has_sampler_binding != incoming.has_sampler_binding ||
-                       (existing->has_sampler_binding && existing->sampler_binding != incoming.sampler_binding)) {
-                fail("shader stages disagree on WebGPU resource placement");
             } else {
+                WebGpuLayoutEntry existing_contract = *existing;
+                WebGpuLayoutEntry incoming_contract = incoming;
+                existing_contract.stage_mask = 0;
+                incoming_contract.stage_mask = 0;
+                if (existing_contract != incoming_contract)
+                    fail("shader stages disagree on WebGPU resource layout");
                 existing->stage_mask |= incoming.stage_mask;
             }
         }
@@ -1106,14 +1108,22 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 entry.buffer.minBindingSize = item.size;
                 break;
             case ShaderResourceKind::StorageBuffer:
-                entry.buffer.type = wgpu::BufferBindingType::Storage;
+                if (item.access == webgpu::ResourceAccess::ReadOnly) {
+                    entry.buffer.type = wgpu::BufferBindingType::ReadOnlyStorage;
+                } else if (item.access == webgpu::ResourceAccess::ReadWrite) {
+                    entry.buffer.type = wgpu::BufferBindingType::Storage;
+                } else {
+                    fail("unsupported WebGPU storage-buffer access for '" + item.name + "'");
+                }
                 entry.buffer.minBindingSize = item.size;
                 break;
             case ShaderResourceKind::Texture:
-                entry.texture.sampleType = wgpu::TextureSampleType::Float;
+                entry.texture.sampleType = texture_sample_type(item.sample_type);
+                entry.texture.viewDimension = texture_view_dimension(item.view_dimension);
+                entry.texture.multisampled = item.multisampled;
                 break;
             case ShaderResourceKind::Sampler:
-                entry.sampler.type = wgpu::SamplerBindingType::Filtering;
+                entry.sampler.type = sampler_binding_type(item.sampler_kind);
                 break;
             default:
                 fail("unsupported WebGPU resource layout kind");
@@ -1123,7 +1133,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 wgpu::BindGroupLayoutEntry sampler;
                 sampler.binding = item.sampler_binding;
                 sampler.visibility = entry.visibility;
-                sampler.sampler.type = wgpu::SamplerBindingType::Filtering;
+                sampler.sampler.type = sampler_binding_type(item.sampler_kind);
                 native_layout.push_back(sampler);
             }
         }
@@ -1295,28 +1305,49 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 }
                 case BoundResourceKind::SampledTexture: {
                     const WebGpuTexture* texture = textures_.get(binding.value.texture.id);
-                    const SamplerHandle sampler_handle =
-                        binding.value.sampler ? binding.value.sampler : default_sampler_;
-                    const WebGpuSampler* sampler = samplers_.get(sampler_handle.id);
-                    if (!texture || !sampler)
-                        fail("sampled texture requires valid texture and sampler");
+                    if (!texture)
+                        fail("sampled texture binding references an invalid texture");
+                    if (layout_item->view_dimension != webgpu::TextureViewDimension::e2D)
+                        fail("sampled texture requires a view dimension unsupported by this WebGPU backend");
+                    if (layout_item->multisampled != (texture->desc.sample_count > 1))
+                        fail("sampled texture multisample state does not match its shader contract");
+                    if ((layout_item->view_aspect == webgpu::TextureViewAspect::DepthOnly) !=
+                        depth_format(texture->desc.format)) {
+                        fail("sampled texture aspect does not match its shader contract");
+                    }
+                    const bool sample_type_matches =
+                        (layout_item->sample_type == webgpu::TextureSampleType::Depth &&
+                         depth_format(texture->desc.format)) ||
+                        (layout_item->sample_type == webgpu::TextureSampleType::Float &&
+                         color_format(texture->desc.format) &&
+                         (linearly_filterable_color_format(texture->desc.format) || float32_filterable_enabled_)) ||
+                        (layout_item->sample_type == webgpu::TextureSampleType::UnfilterableFloat &&
+                         color_format(texture->desc.format));
+                    if (!sample_type_matches)
+                        fail("sampled texture format does not match its shader sample type");
                     native.textureView = texture->view;
                     entries.push_back(native);
-                    if (!binding.slot.placement.webgpu.has_sampler_binding) {
-                        fail("sampled texture placement has no sampler_binding");
+                    if (layout_item->has_sampler_binding) {
+                        const SamplerHandle sampler_handle =
+                            binding.value.sampler ? binding.value.sampler : default_sampler_;
+                        const WebGpuSampler* sampler = samplers_.get(sampler_handle.id);
+                        if (!sampler || !sampler_matches(layout_item->sampler_kind, sampler->desc))
+                            fail("sampled texture sampler does not match its shader contract");
+                        wgpu::BindGroupEntry sampler_entry;
+                        sampler_entry.binding = layout_item->sampler_binding;
+                        sampler_entry.sampler = sampler->object;
+                        entries.push_back(sampler_entry);
+                    } else if (binding.value.sampler) {
+                        fail("textureLoad-only resource unexpectedly provides a sampler");
                     }
-                    wgpu::BindGroupEntry sampler_entry;
-                    sampler_entry.binding = binding.slot.placement.webgpu.sampler_binding;
-                    sampler_entry.sampler = sampler->object;
-                    entries.push_back(sampler_entry);
                     break;
                 }
                 case BoundResourceKind::Sampler: {
                     const SamplerHandle sampler_handle =
                         binding.value.sampler ? binding.value.sampler : default_sampler_;
                     const WebGpuSampler* sampler = samplers_.get(sampler_handle.id);
-                    if (!sampler)
-                        fail("resource set references an invalid sampler");
+                    if (!sampler || !sampler_matches(layout_item->sampler_kind, sampler->desc))
+                        fail("sampler does not match its shader contract");
                     native.sampler = sampler->object;
                     entries.push_back(native);
                     break;

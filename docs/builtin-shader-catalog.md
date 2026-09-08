@@ -132,9 +132,12 @@ WebGPU artifacts use sidecar contract version 3. Every reflected resource keeps
 its logical name, kind and Termin scope and also carries a `webgpu` placement
 with group 0 and a unique binding. Combined Slang textures additionally carry a
 `sampler_binding`, because WGSL represents their texture and sampler as separate
-bindings. The WGSL declarations are rewritten to exactly match this placement
-before Naga validation; consumers must not derive bindings from declaration
-order or names.
+bindings. The WebGPU placement also records the canonical texture sample type,
+sampler kind, view aspect/dimension and multisample state, or the storage access
+mode for storage resources. These fields come from the generated WGSL declarations
+and are required by the runtime when it creates the bind-group layout. The WGSL
+declarations are rewritten to exactly match this placement before Naga validation;
+consumers must not derive bindings or binding types from declaration order or names.
 
 ## Resource scope policy
 

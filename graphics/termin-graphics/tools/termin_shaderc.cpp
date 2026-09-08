@@ -1359,6 +1359,22 @@ namespace termin_shaderc::internal {
                 if (binding.webgpu_has_sampler_binding) {
                     out << ", \"sampler_binding\": " << binding.webgpu_sampler_binding;
                 }
+                if (binding.kind == "texture") {
+                    out << ", \"sample_type\": \"" << json_escape(binding.webgpu_sample_type) << "\""
+                        << ", \"sampler_kind\": \"" << json_escape(binding.webgpu_sampler_kind) << "\""
+                        << ", \"view_aspect\": \"" << json_escape(binding.webgpu_view_aspect) << "\""
+                        << ", \"view_dimension\": \"" << json_escape(binding.webgpu_view_dimension) << "\""
+                        << ", \"multisampled\": " << (binding.webgpu_multisampled ? "true" : "false");
+                } else if (binding.kind == "sampler") {
+                    out << ", \"sampler_kind\": \"" << json_escape(binding.webgpu_sampler_kind) << "\"";
+                } else if (binding.kind == "storage_buffer") {
+                    out << ", \"access\": \"" << json_escape(binding.webgpu_access) << "\"";
+                } else if (binding.kind == "storage_texture") {
+                    out << ", \"access\": \"" << json_escape(binding.webgpu_access) << "\""
+                        << ", \"view_aspect\": \"" << json_escape(binding.webgpu_view_aspect) << "\""
+                        << ", \"view_dimension\": \"" << json_escape(binding.webgpu_view_dimension) << "\""
+                        << ", \"multisampled\": " << (binding.webgpu_multisampled ? "true" : "false");
+                }
                 out << "}";
             }
             if (!binding.fields.empty()) {

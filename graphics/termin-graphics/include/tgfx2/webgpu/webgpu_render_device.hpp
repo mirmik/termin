@@ -9,6 +9,7 @@
 #include <webgpu/webgpu_cpp.h>
 
 #include "tgfx2/i_render_device.hpp"
+#include "tgfx2/webgpu/webgpu_binding_layout.hpp"
 
 namespace tgfx {
 
@@ -23,15 +24,7 @@ namespace tgfx {
     using WebGpuDeviceCallback =
         std::function<void(std::unique_ptr<class WebGpuRenderDevice> device, std::string error)>;
 
-    struct WebGpuLayoutEntry {
-        std::string name;
-        ShaderResourceKind kind = ShaderResourceKind::None;
-        uint32_t stage_mask = 0;
-        uint32_t binding = 0;
-        uint32_t size = 0;
-        bool has_sampler_binding = false;
-        uint32_t sampler_binding = 0;
-    };
+    using WebGpuLayoutEntry = webgpu::LayoutEntry;
 
     template <typename T> class WebGpuHandlePool {
     public:
@@ -72,6 +65,7 @@ namespace tgfx {
 
     struct WebGpuSampler {
         wgpu::Sampler object;
+        SamplerDesc desc;
     };
 
     struct WebGpuShader {
@@ -193,6 +187,7 @@ namespace tgfx {
         wgpu::Queue queue_;
         wgpu::Surface surface_;
         wgpu::TextureFormat surface_format_ = wgpu::TextureFormat::BGRA8Unorm;
+        bool float32_filterable_enabled_ = false;
         BackendCapabilities caps_;
         uint32_t surface_width_ = 1;
         uint32_t surface_height_ = 1;

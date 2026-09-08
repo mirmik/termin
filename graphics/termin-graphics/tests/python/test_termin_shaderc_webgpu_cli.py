@@ -52,6 +52,36 @@ def _write_fake_naga(path: Path, *, exit_code: int = 0) -> Path:
     return path
 
 
+def _write_fake_webgpu_binding_types_slangc(path: Path) -> Path:
+    path.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, pathlib, sys\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('-o') + 1])\n"
+        "reflection = pathlib.Path(sys.argv[sys.argv.index('-reflection-json') + 1])\n"
+        "out.write_text(\n"
+        "    '@binding(0) @group(0) var shadow_map_texture_0: texture_depth_2d;\\n'\n"
+        "    '@binding(1) @group(0) var shadow_map_sampler_0: sampler_comparison;\\n'\n"
+        "    '@binding(2) @group(0) var values_0: texture_2d<f32>;\\n'\n"
+        "    '@binding(3) @group(0) var<storage, read> vertices_0: array<vec4<f32>>;\\n'\n"
+        "    '@binding(4) @group(0) var color_texture_0: texture_2d<f32>;\\n'\n"
+        "    '@binding(5) @group(0) var color_sampler_0: sampler;\\n'\n"
+        "    '@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }\\n',\n"
+        "    encoding='utf-8')\n"
+        "def resource(name, index, *, combined=False, base_shape='texture2D'):\n"
+        "    return {'name': name, 'binding': {'kind': 'descriptorTableSlot', 'index': index},\n"
+        "            'type': {'kind': 'resource', 'baseShape': base_shape, 'combined': combined}}\n"
+        "reflection.write_text(json.dumps({'parameters': [\n"
+        "    resource('shadow_map', 0, combined=True),\n"
+        "    resource('values', 2),\n"
+        "    resource('vertices', 3, base_shape='structuredBuffer'),\n"
+        "    resource('color', 4, combined=True),\n"
+        "]}), encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+    return path
+
+
 def test_webgpu_target_patches_and_validates_wgsl_with_versioned_layout(tmp_path: Path) -> None:
     shader = tmp_path / "test.slang"
     shader.write_text(
@@ -101,6 +131,44 @@ def test_webgpu_target_patches_and_validates_wgsl_with_versioned_layout(tmp_path
         "var image_sampler_0"
     ) in wgsl
     assert not Path(f"{output}.reflection.json").exists()
+
+
+def test_webgpu_layout_records_wgsl_binding_types(tmp_path: Path) -> None:
+    shader = tmp_path / "binding-types.slang"
+    shader.write_text('[shader("fragment")] float4 fs_main() : SV_Target { return 1; }\n', encoding="utf-8")
+    output = tmp_path / "binding-types.frag.wgsl"
+
+    result = _run_shaderc(
+        [
+            "compile", "--language", "slang", "--target", "webgpu",
+            "--stage", "fragment", "--entry", "fs_main",
+            "--default-scope", "transient",
+            "--input", str(shader), "--output", str(output),
+            "--slangc", str(_write_fake_webgpu_binding_types_slangc(tmp_path / "slangc.py")),
+            "--wgsl-validator", str(_write_fake_naga(tmp_path / "naga.py")),
+        ]
+    )
+
+    assert result.returncode == 0, result.stderr
+    layout = json.loads(Path(f"{output}.layout.json").read_text(encoding="utf-8"))
+    bindings = {resource["name"]: resource["webgpu"] for resource in layout["resources"]}
+    shadow = bindings["shadow_map"]
+    assert shadow == {
+        "group": 0,
+        "binding": shadow["binding"],
+        "sampler_binding": shadow["sampler_binding"],
+        "sample_type": "depth",
+        "sampler_kind": "comparison",
+        "view_aspect": "depth_only",
+        "view_dimension": "2d",
+        "multisampled": False,
+    }
+    assert bindings["values"]["sample_type"] == "unfilterable_float"
+    assert bindings["values"]["sampler_kind"] == "none"
+    assert "sampler_binding" not in bindings["values"]
+    assert bindings["vertices"]["access"] == "read_only"
+    assert bindings["color"]["sample_type"] == "float"
+    assert bindings["color"]["sampler_kind"] == "filtering"
 
 
 def test_webgpu_target_rejects_geometry_before_running_slang(tmp_path: Path) -> None:

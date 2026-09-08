@@ -3,6 +3,7 @@
 #include <tgfx2/backend_binding_plan.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -190,6 +191,131 @@ namespace termin_shaderc::internal {
         return std::regex_search(wgsl, declaration_re);
     }
 
+    static bool slang_wgsl_symbol_declaration(const std::string& wgsl,
+                                              const std::string& symbol_pattern,
+                                              std::string& address_space,
+                                              std::string& type) {
+        const std::regex declaration_re("@binding\\([0-9]+\\)\\s*@group\\([0-9]+\\)\\s*"
+                                        "var(?:<([^>]+)>)?\\s+(?:" +
+                                        symbol_pattern + ")\\s*:\\s*([^;]+);");
+        std::smatch match;
+        if (!std::regex_search(wgsl, match, declaration_re))
+            return false;
+        address_space = match[1].str();
+        type = match[2].str();
+        return true;
+    }
+
+    static std::string compact_ascii_whitespace(std::string value) {
+        value.erase(std::remove_if(value.begin(), value.end(), [](unsigned char ch) { return std::isspace(ch); }),
+                    value.end());
+        return value;
+    }
+
+    static bool annotate_slang_webgpu_resource(ShaderResourceBinding& resource, const std::string& wgsl) {
+        const std::string escaped_name = regex_escape(resource.name);
+        std::string address_space;
+        std::string type;
+        auto find_candidates = [&](const std::vector<std::string>& patterns) {
+            for (const std::string& pattern : patterns) {
+                if (slang_wgsl_symbol_declaration(wgsl, pattern, address_space, type))
+                    return true;
+            }
+            return false;
+        };
+
+        if (resource.kind == "storage_buffer") {
+            if (!find_candidates({escaped_name + "_[0-9]+"}))
+                return false;
+            const std::string storage = compact_ascii_whitespace(address_space);
+            if (storage == "storage" || storage == "storage,read") {
+                resource.webgpu_access = "read_only";
+            } else if (storage == "storage,read_write") {
+                resource.webgpu_access = "read_write";
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        if (resource.kind == "sampler") {
+            if (!find_candidates({escaped_name + "_[0-9]+", escaped_name + "_sampler_[0-9]+"}))
+                return false;
+            resource.webgpu_sampler_kind =
+                compact_ascii_whitespace(type) == "sampler_comparison" ? "comparison" : "filtering";
+            return compact_ascii_whitespace(type) == "sampler" ||
+                   compact_ascii_whitespace(type) == "sampler_comparison";
+        }
+
+        if (resource.kind != "texture" && resource.kind != "storage_texture")
+            return true;
+        if (!find_candidates({escaped_name + "_texture_[0-9]+", escaped_name + "_[0-9]+"}))
+            return false;
+
+        const std::string texture_type = compact_ascii_whitespace(type);
+        if (texture_type.rfind("texture_depth_", 0) == 0) {
+            resource.webgpu_sample_type = "depth";
+            resource.webgpu_view_aspect = "depth_only";
+        } else {
+            resource.webgpu_view_aspect = "all";
+            if (texture_type.find("<i32") != std::string::npos) {
+                resource.webgpu_sample_type = "sint";
+            } else if (texture_type.find("<u32") != std::string::npos) {
+                resource.webgpu_sample_type = "uint";
+            } else if (texture_type.find("<f32") != std::string::npos) {
+                resource.webgpu_sample_type = resource.webgpu_has_sampler_binding ? "float" : "unfilterable_float";
+            }
+        }
+
+        resource.webgpu_multisampled = texture_type.find("multisampled") != std::string::npos;
+        if (texture_type.find("_2d_array") != std::string::npos) {
+            resource.webgpu_view_dimension = "2d_array";
+        } else if (texture_type.find("_cube_array") != std::string::npos) {
+            resource.webgpu_view_dimension = "cube_array";
+        } else if (texture_type.find("_cube") != std::string::npos) {
+            resource.webgpu_view_dimension = "cube";
+        } else if (texture_type.find("_1d") != std::string::npos) {
+            resource.webgpu_view_dimension = "1d";
+        } else if (texture_type.find("_2d") != std::string::npos) {
+            resource.webgpu_view_dimension = "2d";
+        } else if (texture_type.find("_3d") != std::string::npos) {
+            resource.webgpu_view_dimension = "3d";
+        } else {
+            return false;
+        }
+
+        if (resource.kind == "storage_texture") {
+            const size_t comma = texture_type.rfind(',');
+            const size_t end = texture_type.rfind('>');
+            if (comma == std::string::npos || end == std::string::npos || comma >= end)
+                return false;
+            const std::string access = texture_type.substr(comma + 1, end - comma - 1);
+            if (access == "read")
+                resource.webgpu_access = "read_only";
+            else if (access == "write")
+                resource.webgpu_access = "write_only";
+            else if (access == "read_write")
+                resource.webgpu_access = "read_write";
+            else
+                return false;
+            return true;
+        }
+
+        resource.webgpu_sampler_kind = "none";
+        if (resource.webgpu_has_sampler_binding) {
+            if (!find_candidates({escaped_name + "_sampler_[0-9]+"}))
+                return false;
+            const std::string sampler_type = compact_ascii_whitespace(type);
+            if (sampler_type == "sampler_comparison")
+                resource.webgpu_sampler_kind = "comparison";
+            else if (sampler_type == "sampler")
+                resource.webgpu_sampler_kind = "filtering";
+            else
+                return false;
+        }
+        return !resource.webgpu_sample_type.empty();
+    }
+
     static bool slang_wgsl_resource_present(const std::string& wgsl, const ShaderResourceBinding& resource) {
         const std::string escaped_name = regex_escape(resource.name);
         if (resource.kind == "texture") {
@@ -322,6 +448,13 @@ namespace termin_shaderc::internal {
         bool changed = false;
         for (const ShaderResourceBinding& resource : resources) {
             if (!patch_slang_wgsl_resource_binding(wgsl, resource, changed)) {
+                return false;
+            }
+        }
+        for (ShaderResourceBinding& resource : resources) {
+            if (!annotate_slang_webgpu_resource(resource, wgsl)) {
+                std::cerr << "termin_shaderc: cannot derive WebGPU binding type metadata for resource '"
+                          << resource.name << "' from validated WGSL\n";
                 return false;
             }
         }
