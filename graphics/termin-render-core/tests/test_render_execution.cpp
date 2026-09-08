@@ -121,6 +121,7 @@ namespace {
     int g_raster_probe_execute_count = 0;
     int g_raster_probe_record_count = 0;
     int g_resolve_probe_execute_count = 0;
+    int g_explicit_texture_read_count = 0;
 
     using termin::test::ExecutionRecordingDevice;
 
@@ -343,11 +344,13 @@ namespace {
             color.resource_type = "color_texture";
             color.format = "rgba16f";
             color.size = {16, 16};
+            color.clear_color = termin::LinearColor{0.2f, 0.4f, 0.6f, 0.8f};
 
             termin::ResourceSpec depth;
             depth.resource = "scene_depth";
             depth.resource_type = "depth_texture";
             depth.size = {16, 16};
+            depth.clear_depth = 0.125f;
             return {color, depth};
         }
 
@@ -364,6 +367,36 @@ namespace {
 
         bool record_raster(termin::ExecuteContext&) override {
             return true;
+        }
+    };
+
+    class ExplicitTextureReadProbe final : public termin::CxxFramePass {
+    public:
+        ExplicitTextureReadProbe() {
+            pass_name_set("ExplicitTextureReadProbe");
+        }
+
+        std::set<const char*> compute_reads() const override {
+            return {"read_color", "read_depth"};
+        }
+
+        std::vector<termin::ResourceSpec> get_resource_specs() const override {
+            termin::ResourceSpec color;
+            color.resource = "read_color";
+            color.resource_type = "color_texture";
+            color.size = {16, 16};
+            color.clear_color = termin::LinearColor{0.3f, 0.5f, 0.7f, 0.9f};
+
+            termin::ResourceSpec depth;
+            depth.resource = "read_depth";
+            depth.resource_type = "depth_texture";
+            depth.size = {16, 16};
+            depth.clear_depth = 0.25f;
+            return {color, depth};
+        }
+
+        void execute(termin::ExecuteContext&) override {
+            ++g_explicit_texture_read_count;
         }
     };
 
@@ -814,6 +847,59 @@ TEST_CASE("compatible color export is bound directly to the physical target") {
     pipeline.destroy();
 }
 
+TEST_CASE("explicit color and depth textures clear before their first read every frame") {
+    termin::RenderPipeline pipeline("explicit-texture-clear-before-read-test");
+    REQUIRE(pipeline.is_valid());
+    pipeline.add_pass((new ExplicitTextureReadProbe())->tc_pass_ptr());
+
+    termin::RenderItemSnapshot snapshot;
+    publish_empty_snapshot(snapshot);
+    termin::RenderTargetContext target;
+    target.name = "ExplicitTextureReadTarget";
+    target.render_rect = {0, 0, 16, 16};
+    termin::RenderExecution execution;
+    execution.pipeline = &pipeline;
+    execution.default_render_target = target.name;
+    execution.targets.emplace(target.name,
+                              termin::RenderExecutionTarget{.context = &target, .render_items = &snapshot});
+
+    auto device = std::make_unique<ExecutionRecordingDevice>();
+    ExecutionRecordingDevice* recording_device = device.get();
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
+    termin::RenderEngine engine;
+    engine.set_graphics_host(*host);
+    g_explicit_texture_read_count = 0;
+
+    for (int frame = 0; frame < 2; ++frame) {
+        recording_device->state.scopes.clear();
+        engine.execute_pipeline(execution);
+        REQUIRE(recording_device->state.scopes.size() == 2u);
+        bool saw_color_clear = false;
+        bool saw_depth_clear = false;
+        for (const termin::test::RecordedRenderScope& recorded : recording_device->state.scopes) {
+            const tgfx::RenderPassDesc& scope = recorded.pass;
+            if (!scope.colors.empty()) {
+                REQUIRE(scope.colors.size() == 1u);
+                CHECK(scope.colors[0].load == tgfx::LoadOp::Clear);
+                CHECK(scope.colors[0].clear_color.r == guard::Approx(0.3f));
+                CHECK(scope.colors[0].clear_color.g == guard::Approx(0.5f));
+                CHECK(scope.colors[0].clear_color.b == guard::Approx(0.7f));
+                CHECK(scope.colors[0].clear_color.a == guard::Approx(0.9f));
+                saw_color_clear = true;
+            }
+            if (scope.has_depth) {
+                CHECK(scope.depth.load == tgfx::LoadOp::Clear);
+                CHECK(scope.depth.clear_depth == guard::Approx(0.25f));
+                saw_depth_clear = true;
+            }
+        }
+        CHECK(saw_color_clear);
+        CHECK(saw_depth_clear);
+    }
+    CHECK(g_explicit_texture_read_count == 2);
+    pipeline.destroy();
+}
+
 TEST_CASE("scaled resource extent follows its named target through resize and direct export") {
     termin::RenderPipeline pipeline("scaled-resource-extent-test");
     REQUIRE(pipeline.is_valid());
@@ -1026,12 +1112,25 @@ TEST_CASE("direct composed color export preserves its internal depth view") {
     REQUIRE(recording_device->state.scopes.size() == 1u);
     REQUIRE(recording_device->state.scopes[0].pass.colors.size() == 1u);
     CHECK(recording_device->state.scopes[0].pass.colors[0].texture == output);
+    CHECK(recording_device->state.scopes[0].pass.colors[0].load == tgfx::LoadOp::Clear);
+    CHECK(recording_device->state.scopes[0].pass.colors[0].clear_color.r == guard::Approx(0.2f));
+    CHECK(recording_device->state.scopes[0].pass.colors[0].clear_color.g == guard::Approx(0.4f));
+    CHECK(recording_device->state.scopes[0].pass.colors[0].clear_color.b == guard::Approx(0.6f));
+    CHECK(recording_device->state.scopes[0].pass.colors[0].clear_color.a == guard::Approx(0.8f));
     CHECK(recording_device->state.scopes[0].pass.has_depth);
     CHECK(recording_device->state.scopes[0].pass.depth.texture);
+    CHECK(recording_device->state.scopes[0].pass.depth.load == tgfx::LoadOp::Clear);
+    CHECK(recording_device->state.scopes[0].pass.depth.clear_depth == guard::Approx(0.125f));
     REQUIRE(recording_device->state.created_textures.size() == 2u);
     CHECK(recording_device->state.created_textures[0].first == output);
     CHECK(recording_device->state.created_textures[1].second.format == tgfx::PixelFormat::D32F);
     CHECK(recording_device->state.texture_copies.empty());
+
+    recording_device->state.scopes.clear();
+    engine.execute_pipeline(execution);
+    REQUIRE(recording_device->state.scopes.size() == 1u);
+    CHECK(recording_device->state.scopes[0].pass.colors[0].load == tgfx::LoadOp::Clear);
+    CHECK(recording_device->state.scopes[0].pass.depth.load == tgfx::LoadOp::Clear);
     pipeline.destroy();
 }
 

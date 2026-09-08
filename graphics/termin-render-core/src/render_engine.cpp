@@ -1517,38 +1517,79 @@ namespace termin {
             const char* canonical = tc_frame_graph_canonical_resource(fg, resource.c_str());
             return std::string(canonical ? canonical : resource);
         };
-        std::unordered_map<std::string, ResourceSpec> canonical_clear_specs;
+
+        struct PhysicalTextureClear {
+            tgfx::TextureHandle texture;
+            std::optional<LinearColor> color;
+            std::optional<float> depth;
+            std::string source_resource;
+        };
+        std::unordered_map<uint32_t, PhysicalTextureClear> physical_texture_clears;
+        const auto find_texture = [&](const Tex2Map& textures, const std::string& resource) {
+            auto texture = textures.find(resource);
+            if (texture != textures.end())
+                return texture->second;
+            const std::string canonical = canonical_resource_name(resource);
+            texture = textures.find(canonical);
+            return texture != textures.end() ? texture->second : tgfx::TextureHandle{};
+        };
+        const auto merge_color_clear = [&](const ResourceSpec& spec, tgfx::TextureHandle texture) {
+            if (!spec.clear_color)
+                return;
+            if (!texture) {
+                tc::Log::error("RenderEngine::execute_pipeline: color clear resource '%s' has no physical attachment",
+                               spec.resource.c_str());
+                return;
+            }
+            auto [it, inserted] = physical_texture_clears.try_emplace(
+                texture.id, PhysicalTextureClear{texture, spec.clear_color, std::nullopt, spec.resource});
+            if (!inserted) {
+                const std::optional<LinearColor>& existing = it->second.color;
+                const bool same_clear = existing && existing->r == spec.clear_color->r &&
+                                        existing->g == spec.clear_color->g && existing->b == spec.clear_color->b &&
+                                        existing->a == spec.clear_color->a;
+                if (existing && !same_clear) {
+                    tc::Log::error("RenderEngine::execute_pipeline: resources '%s' and '%s' request conflicting "
+                                   "color clears for the same physical attachment",
+                                   it->second.source_resource.c_str(),
+                                   spec.resource.c_str());
+                } else {
+                    it->second.color = spec.clear_color;
+                }
+            }
+        };
+        const auto merge_depth_clear = [&](const ResourceSpec& spec, tgfx::TextureHandle texture) {
+            if (!spec.clear_depth)
+                return;
+            if (!texture) {
+                tc::Log::error("RenderEngine::execute_pipeline: depth clear resource '%s' has no physical attachment",
+                               spec.resource.c_str());
+                return;
+            }
+            auto [it, inserted] = physical_texture_clears.try_emplace(
+                texture.id, PhysicalTextureClear{texture, std::nullopt, spec.clear_depth, spec.resource});
+            if (!inserted) {
+                if (it->second.depth && it->second.depth != spec.clear_depth) {
+                    tc::Log::error("RenderEngine::execute_pipeline: resources '%s' and '%s' request conflicting "
+                                   "depth clears for the same physical attachment",
+                                   it->second.source_resource.c_str(),
+                                   spec.resource.c_str());
+                } else {
+                    it->second.depth = spec.clear_depth;
+                }
+            }
+        };
         for (const ResourceSpec& spec : specs) {
             if (!spec.clear_color && !spec.clear_depth)
                 continue;
-            const std::string canonical = canonical_resource_name(spec.resource);
-            auto [it, inserted] = canonical_clear_specs.try_emplace(canonical, spec);
-            ResourceSpec& merged = it->second;
-            if (inserted) {
-                merged.resource = canonical;
-                continue;
-            }
-            if (spec.clear_color) {
-                const bool same_clear = merged.clear_color && spec.clear_color &&
-                                        merged.clear_color->r == spec.clear_color->r &&
-                                        merged.clear_color->g == spec.clear_color->g &&
-                                        merged.clear_color->b == spec.clear_color->b &&
-                                        merged.clear_color->a == spec.clear_color->a;
-                if (merged.clear_color && !same_clear) {
-                    tc::Log::error("RenderEngine::execute_pipeline: conflicting clear colors for aliased resource '%s'",
-                                   canonical.c_str());
-                } else {
-                    merged.clear_color = spec.clear_color;
-                }
-            }
-            if (spec.clear_depth) {
-                if (merged.clear_depth && merged.clear_depth != spec.clear_depth) {
-                    tc::Log::error("RenderEngine::execute_pipeline: conflicting clear depths for aliased resource '%s'",
-                                   canonical.c_str());
-                } else {
-                    merged.clear_depth = spec.clear_depth;
-                }
-            }
+            const bool depth_texture = spec.resource_type == "depth_texture" ||
+                                       spec.resource_type == "multiview_depth_texture";
+            const bool color_texture = spec.resource_type == "color_texture" ||
+                                       spec.resource_type == "multiview_color_texture";
+            if (!depth_texture)
+                merge_color_clear(spec, find_texture(tex2_resources, spec.resource));
+            if (!color_texture)
+                merge_depth_clear(spec, find_texture(tex2_depth_resources, spec.resource));
         }
 
         // A resolve contract promises a complete image write, but its target
@@ -1556,6 +1597,7 @@ namespace termin {
         // first graph access. An earlier read or partial write still depends on
         // the render-target clear requested by the caller.
         std::unordered_set<uint32_t> fully_overwritten_external_colors;
+        std::unordered_set<uint32_t> deferred_resource_clears;
         std::unordered_set<uint32_t> textures_accessed;
         for (const PreparedPass& prepared : prepared_passes) {
             std::unordered_set<uint32_t> pass_reads;
@@ -1581,12 +1623,26 @@ namespace termin {
             if (prepared.has_resolve_contract) {
                 resolve_target = lookup_color_write(prepared, prepared.resolve_contract.target_resource);
             }
+            tgfx::TextureHandle raster_color{};
+            tgfx::TextureHandle raster_depth{};
+            if (prepared.has_raster_contract) {
+                raster_color = lookup_color_write(prepared, prepared.raster_contract.target_resource);
+                const auto depth = prepared.context.tex2_depth_writes.find(prepared.raster_contract.target_resource);
+                if (depth != prepared.context.tex2_depth_writes.end())
+                    raster_depth = depth->second;
+            }
             for (uint32_t texture_id : pass_reads)
                 textures_accessed.insert(texture_id);
             for (uint32_t texture_id : pass_writes) {
                 const bool first_access = textures_accessed.insert(texture_id).second;
                 if (first_access && resolve_target.id == texture_id && !pass_reads.contains(texture_id))
                     fully_overwritten_external_colors.insert(texture_id);
+                const bool raster_attachment = raster_color.id == texture_id || raster_depth.id == texture_id;
+                if (first_access && !pass_reads.contains(texture_id) && raster_attachment && ctx2 &&
+                    sync_mode == TC_RENDER_SYNC_NONE && prepared.raster_contract.fusion_eligible &&
+                    physical_texture_clears.contains(texture_id)) {
+                    deferred_resource_clears.insert(texture_id);
+                }
             }
         }
 
@@ -1628,77 +1684,52 @@ namespace termin {
         tc_profiler_end_section();
         clear_targets_ms = timing_ms(clear_targets_begin, RenderTimingClock::now());
 
-        // Resource initialization belongs to the first physical raster scope
-        // whenever that pass can be recorded by the executor. This preserves
-        // tile-local Clear loadOps for MSAA color/depth instead of performing a
-        // separate clear followed by an off-chip Load.
-        std::unordered_map<std::string, const ResourceSpec*> deferred_raster_clears;
-        std::unordered_set<std::string> resources_accessed;
-        for (const PreparedPass& prepared : prepared_passes) {
-            std::unordered_set<std::string> pass_reads;
-            std::unordered_set<std::string> pass_writes;
-            const std::vector<const char*> reads = collect_pass_dependencies(prepared.pass, tc_pass_get_reads);
-            for (const char* read : reads) {
-                if (read)
-                    pass_reads.insert(canonical_resource_name(read));
-            }
-            const std::vector<const char*> writes = collect_pass_dependencies(prepared.pass, tc_pass_get_writes);
-            for (const char* write : writes) {
-                if (write)
-                    pass_writes.insert(canonical_resource_name(write));
-            }
-
-            std::unordered_set<std::string> pass_accesses = pass_reads;
-            pass_accesses.insert(pass_writes.begin(), pass_writes.end());
-            for (const std::string& canonical : pass_accesses) {
-                if (!resources_accessed.insert(canonical).second)
-                    continue;
-                const auto spec = canonical_clear_specs.find(canonical);
-                if (spec == canonical_clear_specs.end())
-                    continue;
-                const bool attachment_write = pass_writes.contains(canonical) && prepared.has_raster_contract &&
-                                              prepared.canonical_raster_target == canonical;
-                if (ctx2 && sync_mode == TC_RENDER_SYNC_NONE && attachment_write &&
-                    prepared.raster_contract.fusion_eligible) {
-                    deferred_raster_clears.emplace(canonical, &spec->second);
-                }
-            }
-        }
-
         tc_profiler_begin_section("Clear Resources");
         const auto clear_resources_begin = RenderTimingClock::now();
+        const auto clear_physical_attachments = [&](const PhysicalTextureClear* color_clear,
+                                                    const PhysicalTextureClear* depth_clear) {
+            const tgfx::TextureHandle color = color_clear ? color_clear->texture : tgfx::TextureHandle{};
+            const tgfx::TextureHandle depth = depth_clear ? depth_clear->texture : tgfx::TextureHandle{};
+            if (!ctx2 || (!color && !depth))
+                return;
+            if (!begin_clear_texture_pass(*ctx2,
+                                          *device,
+                                          color,
+                                          depth,
+                                          color_clear ? &*color_clear->color : nullptr,
+                                          depth_clear ? *depth_clear->depth : 1.0f,
+                                          depth_clear != nullptr)) {
+                return;
+            }
+            const tgfx::TextureDesc desc = device->texture_desc(color ? color : depth);
+            ctx2->set_viewport(0, 0, static_cast<int>(desc.width), static_cast<int>(desc.height));
+            ctx2->end_pass();
+        };
         if (ctx2) {
-            for (const auto& [canonical, spec] : canonical_clear_specs) {
-                if (spec.resource_type != "fbo" && spec.resource_type != "multiview_fbo" &&
-                    !spec.resource_type.empty()) {
+            std::unordered_set<uint32_t> cleared_textures;
+            for (const auto& [texture_id, clear] : physical_texture_clears) {
+                if (deferred_resource_clears.contains(texture_id) || cleared_textures.contains(texture_id))
                     continue;
+                const PhysicalTextureClear* color_clear = clear.color ? &clear : nullptr;
+                const PhysicalTextureClear* depth_clear = clear.depth ? &clear : nullptr;
+                if (!color_clear || !depth_clear) {
+                    for (const auto& [candidate_id, candidate] : physical_texture_clears) {
+                        if (candidate_id == texture_id || deferred_resource_clears.contains(candidate_id) ||
+                            cleared_textures.contains(candidate_id) ||
+                            candidate.source_resource != clear.source_resource) {
+                            continue;
+                        }
+                        if (!color_clear && candidate.color)
+                            color_clear = &candidate;
+                        if (!depth_clear && candidate.depth)
+                            depth_clear = &candidate;
+                    }
                 }
-                if (deferred_raster_clears.contains(canonical))
-                    continue;
-
-                auto ct = tex2_resources.find(canonical);
-                auto dt = tex2_depth_resources.find(canonical);
-                const tgfx::TextureHandle color =
-                    ct == tex2_resources.end() ? tgfx::TextureHandle{} : ct->second;
-                const tgfx::TextureHandle depth =
-                    dt == tex2_depth_resources.end() ? tgfx::TextureHandle{} : dt->second;
-                if (!color && !depth)
-                    continue;
-
-                termin::LinearColor clear_rgba{0.0f, 0.0f, 0.0f, 1.0f};
-                const termin::LinearColor* clear_color = nullptr;
-                if (spec.clear_color) {
-                    clear_rgba = *spec.clear_color;
-                    clear_color = &clear_rgba;
-                }
-                const float clear_depth = spec.clear_depth.value_or(1.0f);
-                if (!begin_clear_texture_pass(
-                        *ctx2, *device, color, depth, clear_color, clear_depth, spec.clear_depth.has_value())) {
-                    continue;
-                }
-                const tgfx::TextureDesc desc = device->texture_desc(color ? color : depth);
-                ctx2->set_viewport(0, 0, static_cast<int>(desc.width), static_cast<int>(desc.height));
-                ctx2->end_pass();
+                clear_physical_attachments(color_clear, depth_clear);
+                if (color_clear)
+                    cleared_textures.insert(color_clear->texture.id);
+                if (depth_clear)
+                    cleared_textures.insert(depth_clear->texture.id);
             }
         }
         tc_profiler_end_section();
@@ -1810,20 +1841,26 @@ namespace termin {
                 color_it == first.context.tex2_writes.end() ? tgfx::TextureHandle{} : color_it->second;
             const tgfx::TextureHandle depth =
                 depth_it == first.context.tex2_depth_writes.end() ? tgfx::TextureHandle{} : depth_it->second;
-            const auto deferred_clear_it = deferred_raster_clears.find(first.canonical_raster_target);
-            const ResourceSpec* deferred_clear =
-                deferred_clear_it == deferred_raster_clears.end() ? nullptr : deferred_clear_it->second;
+            const auto color_clear_it = physical_texture_clears.find(color.id);
+            const PhysicalTextureClear* color_clear =
+                color && deferred_resource_clears.contains(color.id) && color_clear_it != physical_texture_clears.end()
+                    ? &color_clear_it->second
+                    : nullptr;
+            const auto depth_clear_it = physical_texture_clears.find(depth.id);
+            const PhysicalTextureClear* depth_clear =
+                depth && deferred_resource_clears.contains(depth.id) && depth_clear_it != physical_texture_clears.end()
+                    ? &depth_clear_it->second
+                    : nullptr;
 
             tgfx::RenderPassDesc base_scope;
             if (first.raster_contract.has_color && color) {
                 tgfx::ColorAttachmentDesc attachment;
                 attachment.texture = color;
-                attachment.load = (deferred_clear && deferred_clear->clear_color) ||
-                                          first.raster_contract.color_load == TC_RASTER_CLEAR
+                attachment.load = (color_clear && color_clear->color) || first.raster_contract.color_load == TC_RASTER_CLEAR
                                       ? tgfx::LoadOp::Clear
                                       : tgfx::LoadOp::Load;
-                if (deferred_clear && deferred_clear->clear_color) {
-                    attachment.clear_color = *deferred_clear->clear_color;
+                if (color_clear && color_clear->color) {
+                    attachment.clear_color = *color_clear->color;
                 }
                 if (absorbed_resolve) {
                     attachment.resolve_texture =
@@ -1836,12 +1873,12 @@ namespace termin {
             if (first.raster_contract.has_depth && depth) {
                 base_scope.has_depth = true;
                 base_scope.depth.texture = depth;
-                base_scope.depth.load = (deferred_clear && deferred_clear->clear_depth) ||
+                base_scope.depth.load = (depth_clear && depth_clear->depth) ||
                                                 first.raster_contract.depth_load == TC_RASTER_CLEAR
                                             ? tgfx::LoadOp::Clear
                                             : tgfx::LoadOp::Load;
-                if (deferred_clear && deferred_clear->clear_depth)
-                    base_scope.depth.clear_depth = *deferred_clear->clear_depth;
+                if (depth_clear && depth_clear->depth)
+                    base_scope.depth.clear_depth = *depth_clear->depth;
                 if (absorbed_resolve && !texture_is_read_after(depth, group_end + 1))
                     base_scope.depth.store = tgfx::StoreOp::DontCare;
             }
@@ -1863,34 +1900,19 @@ namespace termin {
             if (!scope_open) {
                 tc::Log::error("RenderEngine: failed to open fused raster scope for resource '%s'",
                                first.canonical_raster_target.c_str());
-                if (deferred_clear) {
-                    termin::LinearColor clear_rgba{0.0f, 0.0f, 0.0f, 1.0f};
-                    const termin::LinearColor* clear_color = nullptr;
-                    if (deferred_clear->clear_color) {
-                        clear_rgba = *deferred_clear->clear_color;
-                        clear_color = &clear_rgba;
-                    }
-                    if (begin_clear_texture_pass(*ctx2,
-                                                 *device,
-                                                 color,
-                                                 depth,
-                                                 clear_color,
-                                                 deferred_clear->clear_depth.value_or(1.0f),
-                                                 deferred_clear->clear_depth.has_value())) {
-                        ctx2->set_viewport(0,
-                                           0,
-                                           std::max(1, first.context.render_rect.width),
-                                           std::max(1, first.context.render_rect.height));
-                        ctx2->end_pass();
-                    }
-                    deferred_raster_clears.erase(first.canonical_raster_target);
-                }
+                clear_physical_attachments(color_clear, depth_clear);
+                if (color)
+                    deferred_resource_clears.erase(color.id);
+                if (depth)
+                    deferred_resource_clears.erase(depth.id);
                 execute_standalone(first);
                 ++prepared_index;
                 continue;
             }
-            if (deferred_clear)
-                deferred_raster_clears.erase(first.canonical_raster_target);
+            if (color)
+                deferred_resource_clears.erase(color.id);
+            if (depth)
+                deferred_resource_clears.erase(depth.id);
 
             for (size_t member_index = prepared_index; member_index < group_end; ++member_index) {
                 PreparedPass& prepared = prepared_passes[member_index];

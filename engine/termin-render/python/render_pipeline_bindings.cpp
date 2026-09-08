@@ -1,4 +1,5 @@
 // render_pipeline_bindings.cpp - nanobind bindings for RenderPipeline
+#include <array>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/array.h>
 #include <nanobind/stl/optional.h>
@@ -284,6 +285,17 @@ namespace termin {
                                  item["has_depth"] =
                                      (resource.flags & TC_PIPELINE_RESOURCE_DEPTH_PRESENT)
                                          ? nb::cast((resource.flags & TC_PIPELINE_RESOURCE_DEPTH_ENABLED) != 0)
+                                         : nb::none();
+                                 item["clear_color"] =
+                                     (resource.initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT)
+                                         ? nb::cast(std::array<float, 4>{resource.clear_color[0],
+                                                                         resource.clear_color[1],
+                                                                         resource.clear_color[2],
+                                                                         resource.clear_color[3]})
+                                         : nb::none();
+                                 item["clear_depth"] =
+                                     (resource.initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT)
+                                         ? nb::cast(resource.clear_depth)
                                          : nb::none();
                                  result.append(std::move(item));
                              }

@@ -32,7 +32,10 @@ TEST_CASE("compiled pipeline template round-trips without execution state") {
          4,
          2,
          TC_PIPELINE_RESOURCE_COLOR_PRESENT | TC_PIPELINE_RESOURCE_DEPTH_PRESENT |
-             TC_PIPELINE_RESOURCE_DEPTH_ENABLED},
+             TC_PIPELINE_RESOURCE_DEPTH_ENABLED,
+         {0.1f, 0.2f, 0.3f, 0.4f},
+         0.25f,
+         TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT | TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT},
         {"scene-color", "color_texture", "RGBA16_FLOAT", "main", 0, 0, 0.5f, 1, 1, 0},
     };
     const tc_pipeline_template_dependency_desc dependencies[] = {
@@ -114,6 +117,13 @@ TEST_CASE("compiled pipeline template round-trips without execution state") {
     CHECK(decoded->resources[0].array_layers == 2);
     CHECK((decoded->resources[0].flags & TC_PIPELINE_RESOURCE_COLOR_ENABLED) == 0);
     CHECK((decoded->resources[0].flags & TC_PIPELINE_RESOURCE_DEPTH_ENABLED) != 0);
+    CHECK((decoded->resources[0].initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT) != 0);
+    CHECK((decoded->resources[0].initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT) != 0);
+    CHECK_EQ(decoded->resources[0].clear_color[0], 0.1f);
+    CHECK_EQ(decoded->resources[0].clear_color[1], 0.2f);
+    CHECK_EQ(decoded->resources[0].clear_color[2], 0.3f);
+    CHECK_EQ(decoded->resources[0].clear_color[3], 0.4f);
+    CHECK_EQ(decoded->resources[0].clear_depth, 0.25f);
     CHECK_EQ(decoded->resources[1].scale, 0.5f);
     REQUIRE(decoded->dependency_count == 3);
     CHECK(decoded->dependencies[1].access == TC_PIPELINE_RESOURCE_READ);
@@ -127,8 +137,25 @@ TEST_CASE("compiled pipeline template round-trips without execution state") {
     CHECK(std::strcmp(decoded->fbo_compositions[0].name, "joined-scene") == 0);
     CHECK(std::strcmp(decoded->fbo_compositions[0].depth, "scene-depth.view") == 0);
 
+    tc_pipeline_template_retain(decoded);
+    {
+        termin::TcPipelineTemplate decoded_template(decoded_handle);
+        termin::RenderPipeline instance(decoded_template);
+        REQUIRE(instance.spec_count() == 2u);
+        const termin::ResourceSpec* restored = instance.get_spec_at(0);
+        REQUIRE(restored != nullptr);
+        REQUIRE(restored->clear_color.has_value());
+        CHECK(restored->clear_color->r == 0.1f);
+        CHECK(restored->clear_color->g == 0.2f);
+        CHECK(restored->clear_color->b == 0.3f);
+        CHECK(restored->clear_color->a == 0.4f);
+        REQUIRE(restored->clear_depth.has_value());
+        CHECK(*restored->clear_depth == 0.25f);
+        instance.destroy();
+    }
+
     CHECK(tc_pipeline_template_remove(original_handle));
-    CHECK(tc_pipeline_template_remove(decoded_handle));
+    CHECK(tc_pipeline_template_release(decoded));
     tc_pipeline_template_shutdown();
 }
 

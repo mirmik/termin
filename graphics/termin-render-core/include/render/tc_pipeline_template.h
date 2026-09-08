@@ -15,8 +15,8 @@ extern "C" {
 
 TC_DEFINE_HANDLE(tc_pipeline_template_handle)
 
-#define TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION 4u
-#define TC_PIPELINE_TEMPLATE_BINARY_VERSION 4u
+#define TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION 5u
+#define TC_PIPELINE_TEMPLATE_BINARY_VERSION 5u
 
 typedef enum tc_pipeline_execution_model {
     TC_PIPELINE_EXECUTION_SINGLE_VIEW = 1,
@@ -47,7 +47,15 @@ typedef struct tc_pipeline_template_resource_desc {
     uint32_t samples;
     uint32_t array_layers;
     uint32_t flags;
+    float clear_color[4];
+    float clear_depth;
+    uint32_t initialization_flags;
 } tc_pipeline_template_resource_desc;
+
+typedef enum tc_pipeline_resource_initialization_flags {
+    TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT = 1u << 0,
+    TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT = 1u << 1
+} tc_pipeline_resource_initialization_flags;
 
 typedef enum tc_pipeline_template_resource_flags {
     TC_PIPELINE_RESOURCE_COLOR_PRESENT = 1u << 0,

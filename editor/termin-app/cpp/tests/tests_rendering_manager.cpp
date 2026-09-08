@@ -764,6 +764,13 @@ TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered 
         "format": "rgba16f",
         "samples": 4,
         "array_layers": 2,
+        "clear_color": true,
+        "clear_color_r": 0.125,
+        "clear_color_g": 0.25,
+        "clear_color_b": 0.5,
+        "clear_color_a": 0.75,
+        "clear_depth": true,
+        "clear_depth_value": 0.375,
         "has_color": true,
         "has_depth": false
       }
@@ -797,6 +804,13 @@ TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered 
         CHECK(*spec.has_color);
         REQUIRE(spec.has_depth.has_value());
         CHECK_FALSE(*spec.has_depth);
+        REQUIRE(spec.clear_color.has_value());
+        CHECK(spec.clear_color->r == guard::Approx(0.125f));
+        CHECK(spec.clear_color->g == guard::Approx(0.25f));
+        CHECK(spec.clear_color->b == guard::Approx(0.5f));
+        CHECK(spec.clear_color->a == guard::Approx(0.75f));
+        REQUIRE(spec.clear_depth.has_value());
+        CHECK(*spec.clear_depth == guard::Approx(0.375f));
     }
     CHECK(found);
     REQUIRE(pipeline_template->resource_count == 1u);
@@ -804,6 +818,10 @@ TEST_CASE("Graph compiler preserves explicit XR multiview execution and layered 
     CHECK((pipeline_template->resources[0].flags & TC_PIPELINE_RESOURCE_COLOR_ENABLED) != 0);
     CHECK((pipeline_template->resources[0].flags & TC_PIPELINE_RESOURCE_DEPTH_PRESENT) != 0);
     CHECK((pipeline_template->resources[0].flags & TC_PIPELINE_RESOURCE_DEPTH_ENABLED) == 0);
+    CHECK((pipeline_template->resources[0].initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT) != 0);
+    CHECK((pipeline_template->resources[0].initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT) != 0);
+    CHECK(pipeline_template->resources[0].clear_color[2] == guard::Approx(0.5f));
+    CHECK(pipeline_template->resources[0].clear_depth == guard::Approx(0.375f));
 
     pipeline->destroy();
     delete pipeline;

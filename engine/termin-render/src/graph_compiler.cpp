@@ -1092,6 +1092,7 @@ namespace tc {
                 }
             }
             uint32_t flags = 0;
+            uint32_t initialization_flags = 0;
             if (spec && spec->has_color) {
                 flags |= TC_PIPELINE_RESOURCE_COLOR_PRESENT;
                 if (*spec->has_color)
@@ -1101,6 +1102,12 @@ namespace tc {
                 flags |= TC_PIPELINE_RESOURCE_DEPTH_PRESENT;
                 if (*spec->has_depth)
                     flags |= TC_PIPELINE_RESOURCE_DEPTH_ENABLED;
+            }
+            if (spec && spec->clear_color) {
+                initialization_flags |= TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT;
+            }
+            if (spec && spec->clear_depth) {
+                initialization_flags |= TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT;
             }
             resource_descs.push_back({
                 stored.name.c_str(),
@@ -1113,6 +1120,12 @@ namespace tc {
                 spec ? static_cast<uint32_t>(spec->samples) : 1u,
                 spec ? static_cast<uint32_t>(spec->array_layers) : 1u,
                 flags,
+                {spec && spec->clear_color ? spec->clear_color->r : 0.0f,
+                 spec && spec->clear_color ? spec->clear_color->g : 0.0f,
+                 spec && spec->clear_color ? spec->clear_color->b : 0.0f,
+                 spec && spec->clear_color ? spec->clear_color->a : 0.0f},
+                spec && spec->clear_depth ? *spec->clear_depth : 0.0f,
+                initialization_flags,
             });
         }
 

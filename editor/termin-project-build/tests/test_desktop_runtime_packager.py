@@ -1432,7 +1432,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
     pipeline_path = result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline-template"
     assert pipeline_path.exists()
     pipeline_data = pipeline_path.read_bytes()
-    assert pipeline_data.startswith(b"TPLT\x04\x00\x00\x00")
+    assert pipeline_data.startswith(b"TPLT\x05\x00\x00\x00")
     assert b'"nodes"' not in pipeline_data
     assert b'"connections"' not in pipeline_data
 

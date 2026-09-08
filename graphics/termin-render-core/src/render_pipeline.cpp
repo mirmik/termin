@@ -109,6 +109,13 @@ namespace termin {
                 if (desc.flags & TC_PIPELINE_RESOURCE_DEPTH_PRESENT) {
                     spec.has_depth = (desc.flags & TC_PIPELINE_RESOURCE_DEPTH_ENABLED) != 0;
                 }
+                if (desc.initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT) {
+                    spec.clear_color = LinearColor{
+                        desc.clear_color[0], desc.clear_color[1], desc.clear_color[2], desc.clear_color[3]};
+                }
+                if (desc.initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT) {
+                    spec.clear_depth = desc.clear_depth;
+                }
                 add_spec(spec);
             }
 

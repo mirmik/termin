@@ -1,5 +1,6 @@
 #include <render/tc_pipeline_template_registry.h>
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -240,6 +241,8 @@ static bool validate_payload(const tc_pipeline_template_payload_desc* desc) {
                                           TC_PIPELINE_RESOURCE_COLOR_ENABLED |
                                           TC_PIPELINE_RESOURCE_DEPTH_PRESENT |
                                           TC_PIPELINE_RESOURCE_DEPTH_ENABLED;
+        const uint32_t initialization_flags = TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT |
+                                              TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT;
         if (!desc->resources[i].name || !desc->resources[i].name[0] || !desc->resources[i].resource_type ||
             !desc->resources[i].resource_type[0]) {
             tc_log_error("tc_pipeline_template_set_payload: resource %u lacks name or type", i);
@@ -267,6 +270,23 @@ static bool validate_payload(const tc_pipeline_template_payload_desc* desc) {
         if ((desc->resources[i].flags & TC_PIPELINE_RESOURCE_DEPTH_ENABLED) &&
             !(desc->resources[i].flags & TC_PIPELINE_RESOURCE_DEPTH_PRESENT)) {
             tc_log_error("tc_pipeline_template_set_payload: resource %u enables depth without declaring it", i);
+            return false;
+        }
+        if (desc->resources[i].initialization_flags & ~initialization_flags) {
+            tc_log_error("tc_pipeline_template_set_payload: resource %u has unknown initialization flags 0x%x",
+                         i,
+                         desc->resources[i].initialization_flags);
+            return false;
+        }
+        if ((desc->resources[i].initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_COLOR_PRESENT) &&
+            (!isfinite(desc->resources[i].clear_color[0]) || !isfinite(desc->resources[i].clear_color[1]) ||
+             !isfinite(desc->resources[i].clear_color[2]) || !isfinite(desc->resources[i].clear_color[3]))) {
+            tc_log_error("tc_pipeline_template_set_payload: resource %u has non-finite clear color", i);
+            return false;
+        }
+        if ((desc->resources[i].initialization_flags & TC_PIPELINE_RESOURCE_CLEAR_DEPTH_PRESENT) &&
+            !isfinite(desc->resources[i].clear_depth)) {
+            tc_log_error("tc_pipeline_template_set_payload: resource %u has non-finite clear depth", i);
             return false;
         }
         for (uint32_t previous = 0; previous < i; ++previous) {
@@ -595,6 +615,12 @@ size_t tc_pipeline_template_serialize(const tc_pipeline_template* pipeline_templ
         write_u32(&writer, value->samples);
         write_u32(&writer, value->array_layers);
         write_u32(&writer, value->flags);
+        write_f32(&writer, value->clear_color[0]);
+        write_f32(&writer, value->clear_color[1]);
+        write_f32(&writer, value->clear_color[2]);
+        write_f32(&writer, value->clear_color[3]);
+        write_f32(&writer, value->clear_depth);
+        write_u32(&writer, value->initialization_flags);
     }
     for (uint32_t i = 0; i < pipeline_template->dependency_count; ++i) {
         write_u32(&writer, pipeline_template->dependencies[i].pass_index);
@@ -776,6 +802,12 @@ tc_pipeline_template_handle tc_pipeline_template_deserialize(const char* uuid, c
         value->samples = read_u32(&reader);
         value->array_layers = read_u32(&reader);
         value->flags = read_u32(&reader);
+        value->clear_color[0] = read_f32(&reader);
+        value->clear_color[1] = read_f32(&reader);
+        value->clear_color[2] = read_f32(&reader);
+        value->clear_color[3] = read_f32(&reader);
+        value->clear_depth = read_f32(&reader);
+        value->initialization_flags = read_u32(&reader);
     }
     for (uint32_t i = 0; reader.valid && i < desc.dependency_count; ++i) {
         tc_pipeline_template_dependency_desc* value = (tc_pipeline_template_dependency_desc*)&desc.dependencies[i];

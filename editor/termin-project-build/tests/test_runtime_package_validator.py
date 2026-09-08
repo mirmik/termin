@@ -217,8 +217,8 @@ def _write_builtin_shader_contract(package_dir: Path) -> None:
 
 def _pipeline_template_payload(
     *,
-    binary_version: int = 4,
-    descriptor_version: int = 4,
+    binary_version: int = 5,
+    descriptor_version: int = 5,
     dependency_pass_index: int = 0,
     target_color_content: int = 1,
 ) -> bytes:
@@ -262,6 +262,12 @@ def _pipeline_template_payload(
     u32(1)
     u32(1)
     u32(0)
+    f32(0.0)
+    f32(0.0)
+    f32(0.0)
+    f32(0.0)
+    f32(0.0)
+    u32(0)
     u32(dependency_pass_index)
     text("OUTPUT")
     u32(2)
@@ -273,13 +279,13 @@ def _pipeline_template_payload(
     return bytes(payload)
 
 
-def test_pipeline_template_decoder_accepts_complete_v4_target_layout() -> None:
+def test_pipeline_template_decoder_accepts_complete_v5_target_layout() -> None:
     decoded = runtime_package_resource_validator._decode_pipeline_template(
         _pipeline_template_payload(target_color_content=2)
     )
 
-    assert decoded["binary_version"] == 4
-    assert decoded["descriptor_version"] == 4
+    assert decoded["binary_version"] == 5
+    assert decoded["descriptor_version"] == 5
     assert decoded["targets"] == [
         {
             "viewport_name": "main",
@@ -294,10 +300,10 @@ def test_pipeline_template_decoder_accepts_complete_v4_target_layout() -> None:
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
-        (_pipeline_template_payload(binary_version=5), "unsupported binary version 5"),
+        (_pipeline_template_payload(binary_version=6), "unsupported binary version 6"),
         (
-            _pipeline_template_payload(descriptor_version=5),
-            "unsupported descriptor version 5",
+            _pipeline_template_payload(descriptor_version=6),
+            "unsupported descriptor version 6",
         ),
         (
             _pipeline_template_payload(target_color_content=3),
@@ -307,7 +313,7 @@ def test_pipeline_template_decoder_accepts_complete_v4_target_layout() -> None:
         (_pipeline_template_payload() + b"\x00", "descriptor contains trailing data"),
     ],
 )
-def test_pipeline_template_decoder_strictly_rejects_invalid_v4_payloads(
+def test_pipeline_template_decoder_strictly_rejects_invalid_v5_payloads(
     payload: bytes,
     message: str,
 ) -> None:

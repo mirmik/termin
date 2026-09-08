@@ -901,9 +901,9 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         raise ValueError("descriptor magic must be TPLT")
     binary_version = u32()
     descriptor_version = u32()
-    if binary_version != 4:
+    if binary_version != 5:
         raise ValueError(f"unsupported binary version {binary_version}")
-    if descriptor_version != 4:
+    if descriptor_version != 5:
         raise ValueError(f"unsupported descriptor version {descriptor_version}")
     execution_model = u32()
     if execution_model not in (1, 2):
@@ -968,6 +968,9 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         samples = u32()
         array_layers = u32()
         flags = u32()
+        clear_color = (f32(), f32(), f32(), f32())
+        clear_depth = f32()
+        initialization_flags = u32()
         if not resource_name or not resource_type:
             raise ValueError(f"resource {index} lacks name or type")
         if resource_name in resource_names:
@@ -983,6 +986,11 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
             raise ValueError(f"resource '{resource_name}' enables color without declaring it")
         if flags & 0x08 and not flags & 0x04:
             raise ValueError(f"resource '{resource_name}' enables depth without declaring it")
+        if initialization_flags & ~0x03:
+            raise ValueError(
+                f"resource '{resource_name}' has unknown initialization flags "
+                f"0x{initialization_flags:x}"
+            )
         resource_names.add(resource_name)
         resources.append(
             {
@@ -996,6 +1004,9 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
                 "samples": samples,
                 "array_layers": array_layers,
                 "flags": flags,
+                "clear_color": clear_color if initialization_flags & 0x01 else None,
+                "clear_depth": clear_depth if initialization_flags & 0x02 else None,
+                "initialization_flags": initialization_flags,
             }
         )
 
