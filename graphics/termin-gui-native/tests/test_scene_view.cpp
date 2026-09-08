@@ -1,6 +1,3 @@
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
 #include <termin/gui_native/tc_document.hpp>
 #include <termin/gui_native/widgets.hpp>
 

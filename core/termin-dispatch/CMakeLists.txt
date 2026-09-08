@@ -78,15 +78,6 @@ if(TERMIN_BUILD_TESTS)
         PRIVATE termin_dispatch Threads::Threads
     )
     add_test(NAME termin_dispatch_cpp_test COMMAND termin_dispatch_cpp_test)
-    # These tests use assert for both checks and dispatcher operations.
-    # Release must execute the same test bodies as Debug.
-    foreach(target IN ITEMS termin_dispatch_c_test termin_dispatch_cpp_test)
-        if(MSVC)
-            target_compile_options(${target} PRIVATE /UNDEBUG)
-        else()
-            target_compile_options(${target} PRIVATE -UNDEBUG)
-        endif()
-    endforeach()
 endif()
 
 include(GNUInstallDirs)

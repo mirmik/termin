@@ -1,7 +1,3 @@
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-
 #include "tgfx2/canvas2d_renderer.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/device_factory.hpp"

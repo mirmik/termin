@@ -193,7 +193,8 @@ int main() {
     auto* replacement_surface = new FixedSurface;
     tc_render_surface_init(&replacement_surface->surface, &fixed_surface_vtable, surface_delete);
     replacement_surface->surface.body = replacement_surface;
-    assert(tc_display_set_surface(display, &replacement_surface->surface));
+    const bool replaced_surface = tc_display_set_surface(display, &replacement_surface->surface);
+    assert(replaced_surface);
     if (tc_display_get_input_manager(display) != input) {
         std::fprintf(stderr, "surface replacement changed the display input endpoint\n");
         return 1;
@@ -215,9 +216,15 @@ int main() {
 
     // A touch remains captured by the viewport where it started even after
     // crossing into another viewport.
-    assert(tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 25.0, 50.0, 1.0f));
-    assert(tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE, 75.0, 50.0, 1.0f));
-    assert(tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_UP, 75.0, 50.0, 0.0f));
+    const bool touch_down =
+        tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 25.0, 50.0, 1.0f);
+    const bool touch_move =
+        tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_MOVE, 75.0, 50.0, 1.0f);
+    const bool touch_up =
+        tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_UP, 75.0, 50.0, 0.0f);
+    assert(touch_down);
+    assert(touch_move);
+    assert(touch_up);
     assert(left_input.pointer_events == 3);
     assert(right_input.pointer_events == 0);
     assert(left_input.last_pointer_id == 42);
@@ -225,9 +232,13 @@ int main() {
 
     // Capture is released after UP, so reusing the platform pointer id starts
     // a new contact in the viewport under the new DOWN position.
-    assert(tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 75.0, 50.0, 1.0f));
+    const bool reused_touch_down =
+        tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_DOWN, 75.0, 50.0, 1.0f);
+    assert(reused_touch_down);
     assert(right_input.pointer_events == 1);
-    assert(tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL, 75.0, 50.0, 0.0f));
+    const bool reused_touch_cancel =
+        tc_display_dispatch_pointer(display, 42, TC_POINTER_DEVICE_TOUCH, TC_POINTER_CANCEL, 75.0, 50.0, 0.0f);
+    assert(reused_touch_cancel);
     assert(right_input.pointer_events == 2);
 
 #ifdef TERMIN_DISPLAY_HAS_SDL
@@ -247,14 +258,14 @@ int main() {
     key_event.key.native_key = 'w';
     key_event.key.native_scancode = 26;
     termin::dispatch_window_input_event(display, key_event);
-    if (left_input.last_key != TC_KEY_W || left_input.last_scancode != 26 ||
-        left_input.last_key_action != TC_INPUT_PRESS) {
+    if (right_input.last_key != TC_KEY_W || right_input.last_scancode != 26 ||
+        right_input.last_key_action != TC_INPUT_PRESS) {
         std::fprintf(stderr,
                      "window bridge did not translate portable key code: "
                      "key=%d scancode=%d action=%d\n",
-                     left_input.last_key,
-                     left_input.last_scancode,
-                     left_input.last_key_action);
+                     right_input.last_key,
+                     right_input.last_scancode,
+                     right_input.last_key_action);
         return 1;
     }
 
@@ -263,7 +274,7 @@ int main() {
     text_event.text.utf8[0] = static_cast<char>(0xd0);
     text_event.text.utf8[1] = static_cast<char>(0x96);
     termin::dispatch_window_input_event(display, text_event);
-    if (left_input.last_text != "\xd0\x96") {
+    if (right_input.last_text != "\xd0\x96") {
         std::fprintf(stderr, "window bridge did not preserve committed UTF-8 text\n");
         return 1;
     }

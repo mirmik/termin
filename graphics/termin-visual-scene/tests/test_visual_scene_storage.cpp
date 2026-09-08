@@ -1,6 +1,3 @@
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
 #include <cassert>
 
 #include "termin_visual_scene/scene2d.hpp"

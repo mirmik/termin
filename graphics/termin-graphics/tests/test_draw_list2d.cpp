@@ -1,7 +1,3 @@
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-
 #include "tgfx2/draw_list2d.hpp"
 
 #include <cassert>

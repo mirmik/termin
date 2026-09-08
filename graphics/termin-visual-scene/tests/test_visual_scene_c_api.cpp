@@ -44,6 +44,10 @@ namespace {
         return {verbs, 4, points, 3};
     }
 
+    bool same_handle(tc_graphic_item_handle lhs, tc_graphic_item_handle rhs) {
+        return lhs.scene_id == rhs.scene_id && lhs.index == rhs.index && lhs.generation == rhs.generation;
+    }
+
 } // namespace
 
 int main() {
@@ -118,16 +122,16 @@ int main() {
     assert(tc_visual_scene_item_is_valid(scene, image));
     assert(tc_visual_scene_item_is_valid(scene, hit));
     assert(tc_visual_scene_item_set_parent(scene, hit, group, 0));
-    assert(tc_visual_scene_item_child_at(scene, group, 0) == hit);
+    assert(same_handle(tc_visual_scene_item_child_at(scene, group, 0), hit));
 
     tc_graphic_item_handle ordered[6]{};
     assert(tc_visual_scene_copy_item_handles(scene, ordered, 6) == 6);
-    assert(ordered[0] == group);
-    assert(ordered[1] == rect);
-    assert(ordered[2] == path);
-    assert(ordered[3] == text);
-    assert(ordered[4] == image);
-    assert(ordered[5] == hit);
+    assert(same_handle(ordered[0], group));
+    assert(same_handle(ordered[1], rect));
+    assert(same_handle(ordered[2], path));
+    assert(same_handle(ordered[3], text));
+    assert(same_handle(ordered[4], image));
+    assert(same_handle(ordered[5], hit));
 
     assert(tc_visual_scene_item_set_parent(scene, rect, tc_graphic_item_handle_invalid(), 0));
     assert(tc_graphic_item_handle_is_invalid(tc_visual_scene_item_parent(scene, rect)));

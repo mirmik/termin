@@ -1,5 +1,39 @@
 include_guard(GLOBAL)
 
+# C and C++ assertions are part of the native test contract.  CMake defines
+# NDEBUG for optimized configurations, so undo that definition on test-only
+# build targets after their ordinary configuration has been applied.  Keep the
+# policy target-local: libraries, tools, examples, and other production targets
+# must retain their selected configuration's normal NDEBUG semantics.
+function(termin_enable_test_assertions target)
+    if(NOT TARGET "${target}")
+        message(FATAL_ERROR
+            "Cannot enable test assertions for unknown target ${target}")
+    endif()
+
+    get_property(
+        _termin_assertion_policy
+        TARGET "${target}"
+        PROPERTY TERMIN_TEST_ASSERTION_POLICY
+    )
+    if(_termin_assertion_policy STREQUAL "TEST_ASSERTIONS")
+        return()
+    elseif(_termin_assertion_policy STREQUAL "PRESERVE_RELEASE_SEMANTICS")
+        message(FATAL_ERROR
+            "Target ${target} is registered with conflicting CTest assertion policies")
+    endif()
+
+    if(MSVC)
+        target_compile_options("${target}" PRIVATE /UNDEBUG)
+    else()
+        target_compile_options("${target}" PRIVATE -UNDEBUG)
+    endif()
+    set_property(
+        TARGET "${target}"
+        PROPERTY TERMIN_TEST_ASSERTION_POLICY TEST_ASSERTIONS
+    )
+endfunction()
+
 # Keep native diagnostics fatal even when a test executable returns success.
 # CTest retains the complete output (including constructor/destructor errors)
 # in LastTest.log and the central runner's JUnit report.
@@ -58,6 +92,7 @@ function(termin_label_tests_in_directory module)
         get_property(_termin_labels TEST "${_termin_test}" PROPERTY LABELS)
         termin_require_gpu_validation("${_termin_test}")
         set(_termin_build_target "")
+        set(_termin_preserve_release_semantics FALSE)
         set(_termin_requires_python_bindings FALSE)
         set(_termin_requires_window FALSE)
         set(_termin_requires_unconfigured_backend FALSE)
@@ -69,6 +104,9 @@ function(termin_label_tests_in_directory module)
                         "termin:build-target labels")
                 endif()
                 set(_termin_build_target "${CMAKE_MATCH_1}")
+            elseif(_termin_label STREQUAL
+                   "termin:assert-policy:preserve-release-semantics")
+                set(_termin_preserve_release_semantics TRUE)
             elseif(_termin_label STREQUAL
                    "termin:capability:python-bindings")
                 set(_termin_requires_python_bindings TRUE)
@@ -87,6 +125,25 @@ function(termin_label_tests_in_directory module)
         if(NOT _termin_build_target)
             message(FATAL_ERROR
                 "CTest registration ${_termin_test} has no build target")
+        endif()
+        if(_termin_preserve_release_semantics)
+            get_property(
+                _termin_assertion_policy
+                TARGET "${_termin_build_target}"
+                PROPERTY TERMIN_TEST_ASSERTION_POLICY
+            )
+            if(_termin_assertion_policy STREQUAL "TEST_ASSERTIONS")
+                message(FATAL_ERROR
+                    "Target ${_termin_build_target} is registered with "
+                    "conflicting CTest assertion policies")
+            endif()
+            set_property(
+                TARGET "${_termin_build_target}"
+                PROPERTY TERMIN_TEST_ASSERTION_POLICY
+                PRESERVE_RELEASE_SEMANTICS
+            )
+        else()
+            termin_enable_test_assertions("${_termin_build_target}")
         endif()
         if(NOT _termin_requires_python_bindings
            AND NOT _termin_requires_unconfigured_backend)
@@ -111,10 +168,26 @@ function(termin_add_test_labels test)
 endfunction()
 
 function(termin_set_test_build_target test target)
+    cmake_parse_arguments(
+        _termin_test_target
+        "PRESERVE_RELEASE_SEMANTICS"
+        ""
+        ""
+        ${ARGN}
+    )
+    if(_termin_test_target_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR
+            "Unknown termin_set_test_build_target arguments: "
+            "${_termin_test_target_UNPARSED_ARGUMENTS}")
+    endif()
     if(NOT TARGET "${target}")
         message(FATAL_ERROR
             "CTest registration ${test} names unknown build target ${target}")
     endif()
     set_property(TEST "${test}" APPEND PROPERTY LABELS
         "termin:build-target:${target}")
+    if(_termin_test_target_PRESERVE_RELEASE_SEMANTICS)
+        set_property(TEST "${test}" APPEND PROPERTY LABELS
+            "termin:assert-policy:preserve-release-semantics")
+    endif()
 endfunction()

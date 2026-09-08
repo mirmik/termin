@@ -95,7 +95,10 @@ if(TERMIN_BUILD_TESTS)
             SKIP_RETURN_CODE 77
         )
         termin_add_test_labels(termin_profiler_window_smoke "termin:capability:window")
-        termin_set_test_build_target(termin_profiler_window_smoke termin_profiler)
+        termin_set_test_build_target(
+            termin_profiler_window_smoke
+            termin_profiler
+            PRESERVE_RELEASE_SEMANTICS)
     endif()
 
     termin_label_tests_in_directory("termin-profiler")

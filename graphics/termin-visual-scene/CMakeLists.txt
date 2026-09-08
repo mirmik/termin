@@ -243,13 +243,16 @@ if(TERMIN_BUILD_TESTS)
         if(COMMAND termin_set_test_build_target)
             termin_set_test_build_target(
                 termin_visual_scene_draggable_example_smoke
-                termin_visual_scene_draggable_example)
+                termin_visual_scene_draggable_example
+                PRESERVE_RELEASE_SEMANTICS)
             termin_set_test_build_target(
                 termin_visual_scene_draggable_example_shader_smoke
-                termin_visual_scene_draggable_example)
+                termin_visual_scene_draggable_example
+                PRESERVE_RELEASE_SEMANTICS)
             termin_set_test_build_target(
                 termin_visual_scene_draggable_example_missing_shader_smoke
-                termin_visual_scene_draggable_example)
+                termin_visual_scene_draggable_example
+                PRESERVE_RELEASE_SEMANTICS)
         endif()
         if(COMMAND termin_add_test_labels)
             if(TGFX2_ENABLE_VULKAN)
@@ -276,7 +279,8 @@ if(TERMIN_BUILD_TESTS)
         if(COMMAND termin_set_test_build_target)
             termin_set_test_build_target(
                 termin_visual_scene3d_builtin_example_smoke
-                termin_visual_scene3d_builtin_example)
+                termin_visual_scene3d_builtin_example
+                PRESERVE_RELEASE_SEMANTICS)
         endif()
     endif()
 endif()

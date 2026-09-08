@@ -1,7 +1,3 @@
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-
 #include "tgfx2/composition2d.hpp"
 
 #include <cassert>

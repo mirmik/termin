@@ -263,6 +263,113 @@ file(WRITE \"${{CMAKE_BINARY_DIR}}/aggregates.txt\"
     )
 
 
+def test_release_ctest_targets_keep_c_and_cpp_assertions_active(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    source_dir = tmp_path / "source"
+    build_dir = tmp_path / "build"
+    source_dir.mkdir()
+    fixture = """#include <assert.h>
+
+static int side_effect_count = 0;
+
+int main(int argc, char** argv) {
+    (void)argv;
+    assert(++side_effect_count == 1);
+    if (argc > 1) {
+        assert(0 && "false assertion must remain active in Release tests");
+    }
+    return side_effect_count == 1 ? 0 : 2;
+}
+"""
+    (source_dir / "assertions.c").write_text(fixture, encoding="utf-8")
+    (source_dir / "assertions.cpp").write_text(fixture, encoding="utf-8")
+    (source_dir / "production.cpp").write_text(
+        """#ifndef NDEBUG
+#error production target must retain Release NDEBUG semantics
+#endif
+
+int main() { return 0; }
+""",
+        encoding="utf-8",
+    )
+    metadata = (repo_root / "cmake/TerminTestMetadata.cmake").as_posix()
+    (source_dir / "CMakeLists.txt").write_text(
+        f"""cmake_minimum_required(VERSION 3.19)
+project(test_assertion_policy LANGUAGES C CXX)
+enable_testing()
+set(TGFX2_ENABLE_VULKAN OFF)
+include(\"{metadata}\")
+
+add_executable(c_assertions assertions.c)
+add_test(NAME c_assertion_side_effect COMMAND c_assertions)
+termin_set_test_build_target(c_assertion_side_effect c_assertions)
+
+add_executable(cpp_assertions assertions.cpp)
+add_test(NAME cpp_assertion_side_effect COMMAND cpp_assertions)
+termin_set_test_build_target(cpp_assertion_side_effect cpp_assertions)
+
+add_executable(production_tool production.cpp)
+add_test(NAME production_tool_smoke COMMAND production_tool)
+termin_set_test_build_target(
+    production_tool_smoke production_tool PRESERVE_RELEASE_SEMANTICS)
+
+termin_label_tests_in_directory(\"test-module\")
+file(GENERATE
+    OUTPUT \"${{CMAKE_BINARY_DIR}}/assertion-targets-$<CONFIG>.txt\"
+    CONTENT \"$<TARGET_FILE:c_assertions>\\n$<TARGET_FILE:cpp_assertions>\\n\")
+""",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [
+            "cmake",
+            "-S",
+            str(source_dir),
+            "-B",
+            str(build_dir),
+            "-DCMAKE_BUILD_TYPE=Release",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["cmake", "--build", str(build_dir), "--config", "Release"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        [
+            "ctest",
+            "--test-dir",
+            str(build_dir),
+            "-C",
+            "Release",
+            "--output-on-failure",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    targets = (build_dir / "assertion-targets-Release.txt").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    assert len(targets) == 2
+    for target in targets:
+        failed_assertion = subprocess.run(
+            [target, "fail"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert failed_assertion.returncode != 0
+
+
 def test_windows_cmake_helper_builds_multiple_targets_as_one_solution_graph() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     helper = (repo_root / "scripts" / "Invoke-CMakeBuild.ps1").read_text(encoding="utf-8")

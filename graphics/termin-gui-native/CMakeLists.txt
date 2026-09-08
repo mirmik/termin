@@ -303,11 +303,6 @@ if(TERMIN_BUILD_TESTS)
         target_compile_definitions(${target} PRIVATE
             TERMIN_GUI_NATIVE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         )
-        if(MSVC)
-            target_compile_options(${target} PRIVATE /UNDEBUG)
-        else()
-            target_compile_options(${target} PRIVATE -UNDEBUG)
-        endif()
         if(NOT WIN32)
             set_target_properties(${target} PROPERTIES
                 BUILD_RPATH "$<TARGET_FILE_DIR:termin_gui_native>;$<TARGET_FILE_DIR:tcbase::termin_base>"
