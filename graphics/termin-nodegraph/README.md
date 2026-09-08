@@ -5,8 +5,9 @@ Abstract node graph library for Termin ecosystem.
 ## Layers
 
 1. Native graph/controller and serialization: `termin_nodegraph_core`
-2. Stable language boundary: `termin/nodegraph/c_api.h`
-3. Native Python binding and UI projection: `termin.nodegraph`
+2. Retained C++ scene projection: `termin_nodegraph_ui`
+3. Stable language boundary: `termin/nodegraph/c_api.h`
+4. Native Python binding and compatibility UI facade: `termin.nodegraph`
 
 The C++ core depends only on `termin-base` and does not require a UI runtime.
 `termin.nodegraph.Graph` owns the C++ graph. Its `nodes`, `edges`, `groups`, and
@@ -18,6 +19,27 @@ fields, copied `tc_value` snapshots and size-query/copy strings. Inputs are
 deep-copied; callers own returned `tc_value` trees and release them with
 `tc_value_free`. `tc_nodegraph_replace` and `tc_nodegraph_replace_json` validate
 into a staging graph and never partially modify the destination.
+
+The optional C++ UI component projects the graph into a `TcVisualScene`, owns
+semantic selection and connection gestures, and updates node/group dragging
+and incident edges incrementally. It deliberately contains no render-pipeline
+node kinds or socket colors: applications may provide a `PresentationPolicy`,
+while the default policy is neutral. Parameter widgets and document hosting
+remain outside this projection layer.
+
+Installed CMake consumers opt into the projection explicitly:
+
+```cmake
+find_package(termin_nodegraph CONFIG REQUIRED COMPONENTS ui)
+target_link_libraries(my_tool PRIVATE termin_nodegraph::ui)
+```
+
+The native offscreen example renders a fixed generic graph and can optionally
+write its framebuffer to a PPM file:
+
+```bash
+./sdk/bin/termin_nodegraph_projection_example --output nodegraph.ppm
+```
 
 ## Quick start
 

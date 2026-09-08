@@ -6,11 +6,27 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python bindings" OFF)
+option(TERMIN_NODEGRAPH_BUILD_UI "Build retained visual-scene projection" ON)
+option(TERMIN_NODEGRAPH_BUILD_EXAMPLES "Build termin-nodegraph examples" ON)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
 else()
     find_package(termin_base REQUIRED)
+endif()
+
+if(TERMIN_NODEGRAPH_BUILD_UI)
+    if(COMMAND termin_require_package)
+        termin_require_package(
+            termin_visual_scene
+            termin_visual_scene::termin_visual_scene)
+        termin_require_package(
+            termin_gui_native
+            termin_gui_native::termin_gui_native)
+    else()
+        find_package(termin_visual_scene CONFIG REQUIRED)
+        find_package(termin_gui_native CONFIG REQUIRED)
+    endif()
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
@@ -34,6 +50,27 @@ target_link_libraries(termin_nodegraph_core PUBLIC
 )
 termin_set_rpath_lib(termin_nodegraph_core)
 
+if(TERMIN_NODEGRAPH_BUILD_UI)
+    add_library(termin_nodegraph_ui SHARED
+        src/projection.cpp
+        src/projection_render.cpp
+    )
+    add_library(termin_nodegraph::ui ALIAS termin_nodegraph_ui)
+    set_target_properties(termin_nodegraph_ui PROPERTIES EXPORT_NAME ui)
+    target_compile_definitions(termin_nodegraph_ui PRIVATE
+        TERMIN_NODEGRAPH_UI_EXPORTS)
+    target_include_directories(termin_nodegraph_ui PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    )
+    target_link_libraries(termin_nodegraph_ui PUBLIC
+        termin_nodegraph_core
+        termin_visual_scene::termin_visual_scene
+        termin_gui_native::termin_gui_native
+    )
+    termin_set_rpath_lib(termin_nodegraph_ui)
+endif()
+
 if(TERMIN_BUILD_PYTHON)
     find_package(Python 3.14 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(nanobind CONFIG REQUIRED)
@@ -43,6 +80,33 @@ if(TERMIN_BUILD_PYTHON)
         termin_nodegraph_core tcbase::termin_base)
     termin_set_rpath_python(_nodegraph_native)
     install(TARGETS _nodegraph_native DESTINATION lib/python/termin/nodegraph)
+endif()
+
+if(TERMIN_NODEGRAPH_BUILD_UI AND TERMIN_NODEGRAPH_BUILD_EXAMPLES)
+    if(TARGET termin_shaderc)
+        set(_termin_nodegraph_example_shaderc "$<TARGET_FILE:termin_shaderc>")
+    else()
+        find_program(_termin_nodegraph_example_shaderc
+            NAMES termin_shaderc
+            HINTS ${CMAKE_PREFIX_PATH}
+            PATH_SUFFIXES bin
+            REQUIRED)
+    endif()
+    add_executable(termin_nodegraph_projection_example
+        examples/native_projection.cpp)
+    target_link_libraries(termin_nodegraph_projection_example PRIVATE
+        termin_nodegraph_ui
+        termin_gui_native::offscreen)
+    if(TARGET termin_shaderc)
+        add_dependencies(termin_nodegraph_projection_example termin_shaderc)
+    endif()
+    target_compile_definitions(termin_nodegraph_projection_example PRIVATE
+        TERMIN_NODEGRAPH_EXAMPLE_FONT="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf"
+        TERMIN_NODEGRAPH_EXAMPLE_SHADERC="${_termin_nodegraph_example_shaderc}"
+    )
+    termin_set_rpath_tool(termin_nodegraph_projection_example)
+    install(TARGETS termin_nodegraph_projection_example
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if(TERMIN_BUILD_TESTS)
@@ -62,6 +126,33 @@ if(TERMIN_BUILD_TESTS)
     termin_set_rpath_test(termin_nodegraph_c_api_test)
     add_test(NAME termin_nodegraph_c_api_test
         COMMAND termin_nodegraph_c_api_test)
+
+    if(TERMIN_NODEGRAPH_BUILD_UI)
+        add_executable(termin_nodegraph_projection_test
+            tests/test_projection.cpp)
+        target_link_libraries(termin_nodegraph_projection_test PRIVATE
+            termin_nodegraph_ui)
+        termin_set_rpath_test(termin_nodegraph_projection_test)
+        add_test(NAME termin_nodegraph_projection_test
+            COMMAND termin_nodegraph_projection_test)
+
+        add_executable(termin_nodegraph_projection_interaction_test
+            tests/test_projection_interaction.cpp)
+        target_link_libraries(termin_nodegraph_projection_interaction_test PRIVATE
+            termin_nodegraph_ui)
+        termin_set_rpath_test(termin_nodegraph_projection_interaction_test)
+        add_test(NAME termin_nodegraph_projection_interaction_test
+            COMMAND termin_nodegraph_projection_interaction_test)
+
+        if(TARGET termin_nodegraph_projection_example)
+            add_test(NAME termin_nodegraph_projection_example
+                COMMAND termin_nodegraph_projection_example --verify)
+            set_tests_properties(termin_nodegraph_projection_example PROPERTIES
+                TIMEOUT 30
+                SKIP_RETURN_CODE 77
+                ENVIRONMENT "DISPLAY=;WAYLAND_DISPLAY=")
+        endif()
+    endif()
 endif()
 
 include(GNUInstallDirs)
@@ -73,12 +164,27 @@ install(TARGETS termin_nodegraph_core
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+if(TERMIN_NODEGRAPH_BUILD_UI)
+    install(TARGETS termin_nodegraph_ui
+        EXPORT termin_nodegraphUiTargets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(EXPORT termin_nodegraphTargets
     FILE termin_nodegraphTargets.cmake
     NAMESPACE termin_nodegraph::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_nodegraph
 )
+if(TERMIN_NODEGRAPH_BUILD_UI)
+    install(EXPORT termin_nodegraphUiTargets
+        FILE termin_nodegraphUiTargets.cmake
+        NAMESPACE termin_nodegraph::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_nodegraph
+    )
+endif()
 configure_package_config_file(
     cmake/termin_nodegraphConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/termin_nodegraphConfig.cmake

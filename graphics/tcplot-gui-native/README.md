@@ -95,7 +95,7 @@ added to a widget tree, used as a `SceneView` portal, or transferred into a
 node body:
 
 ```python
-from tcnodegraph import NodeBodyContent, NodeBodyLayout
+from termin.nodegraph import NodeBodyContent, NodeBodyLayout
 
 def body_content(document, node):
     if node.kind != "trajectory":
