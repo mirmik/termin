@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,6 +38,61 @@ extern "C" {
 namespace termin {
 
     static constexpr const char* RESOURCE_FORMAT_RENDER_TARGET = "render_target";
+
+    struct ResolvedResourceExtent {
+        int width = 0;
+        int height = 0;
+        const RenderTargetContext* target = nullptr;
+    };
+
+    static std::optional<ResolvedResourceExtent>
+    resolve_resource_extent(const std::string& resource,
+                            const ResourceSpec* spec,
+                            const std::unordered_map<std::string, RenderTargetContext>& render_target_contexts,
+                            const RenderTargetContext& default_target) {
+        const RenderTargetContext* target = &default_target;
+        if (spec && !spec->viewport_name.empty()) {
+            const auto target_it = render_target_contexts.find(spec->viewport_name);
+            if (target_it == render_target_contexts.end()) {
+                tc::Log::error("RenderEngine::execute_pipeline: resource '%s' refers to unknown target '%s'",
+                               resource.c_str(),
+                               spec->viewport_name.c_str());
+                return std::nullopt;
+            }
+            target = &target_it->second;
+        }
+
+        if (spec && spec->size) {
+            if (spec->size->first <= 0 || spec->size->second <= 0) {
+                tc::Log::error("RenderEngine::execute_pipeline: resource '%s' has invalid fixed extent %dx%d",
+                               resource.c_str(),
+                               spec->size->first,
+                               spec->size->second);
+                return std::nullopt;
+            }
+            return ResolvedResourceExtent{spec->size->first, spec->size->second, target};
+        }
+
+        const double scale = spec ? static_cast<double>(spec->scale) : 1.0;
+        const double scaled_width = static_cast<double>(target->render_rect.width) * scale;
+        const double scaled_height = static_cast<double>(target->render_rect.height) * scale;
+        constexpr double max_extent = static_cast<double>(std::numeric_limits<int>::max());
+        if (!std::isfinite(scale) || scale <= 0.0 || !std::isfinite(scaled_width) || !std::isfinite(scaled_height) ||
+            scaled_width <= 0.0 || scaled_height <= 0.0 || scaled_width > max_extent || scaled_height > max_extent) {
+            tc::Log::error("RenderEngine::execute_pipeline: resource '%s' has invalid target extent %dx%d at scale %g",
+                           resource.c_str(),
+                           target->render_rect.width,
+                           target->render_rect.height,
+                           scale);
+            return std::nullopt;
+        }
+
+        return ResolvedResourceExtent{
+            std::max(1, static_cast<int>(std::lround(scaled_width))),
+            std::max(1, static_cast<int>(std::lround(scaled_height))),
+            target,
+        };
+    }
 
     static bool begin_clear_texture_pass(tgfx::RenderContext2& ctx,
                                          tgfx::IRenderDevice& device,
@@ -425,9 +483,6 @@ namespace termin {
         }
         const RenderTargetContext& default_rt_ctx = default_it->second;
 
-        int default_width = default_rt_ctx.render_rect.width;
-        int default_height = default_rt_ctx.render_rect.height;
-
         tc_profiler_begin_section("Get Frame Graph");
         const auto frame_graph_begin = RenderTimingClock::now();
         tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline.handle());
@@ -500,6 +555,32 @@ namespace termin {
             return nullptr;
         };
 
+        std::vector<const char*> canonical_names = collect_canonical_resources(fg);
+        const size_t canon_count = canonical_names.size();
+        std::unordered_map<std::string, ResolvedResourceExtent> resolved_resource_extents;
+        resolved_resource_extents.reserve(canon_count);
+        for (const char* canon : canonical_names) {
+            if (pipeline_cache.fbo_compositions.contains(canon) ||
+                find_external_alias(fg, canon, is_external_output_resource) ||
+                is_external_graph_input_resource(canon, render_target_contexts)) {
+                continue;
+            }
+            const ResourceSpec* spec = find_resource_spec(canon);
+            const std::string resource_type = spec && !spec->resource_type.empty() ? spec->resource_type : "fbo";
+            if (resource_type != "fbo" && resource_type != "multiview_fbo" && resource_type != "color_texture" &&
+                resource_type != "multiview_color_texture" && resource_type != "depth_texture" &&
+                resource_type != "multiview_depth_texture") {
+                continue;
+            }
+            const std::optional<ResolvedResourceExtent> extent =
+                resolve_resource_extent(canon, spec, render_target_contexts, default_rt_ctx);
+            if (!extent) {
+                tc_profiler_end_section();
+                return;
+            }
+            resolved_resource_extents.emplace(canon, *extent);
+        }
+
         // Resolve the allocation that physically owns a color result. FBO
         // compositions and attachment views are names for an underlying color
         // resource; direct export binding must replace that resource's color
@@ -557,11 +638,17 @@ namespace termin {
                 return false;
             }
 
+            const auto extent_it = resolved_resource_extents.find(candidate.storage_resource);
+            if (extent_it == resolved_resource_extents.end()) {
+                return false;
+            }
+            const ResolvedResourceExtent& extent = extent_it->second;
+
             tgfx::TextureDesc source_desc;
-            source_desc.width = static_cast<uint32_t>(spec && spec->size ? spec->size->first : default_width);
-            source_desc.height = static_cast<uint32_t>(spec && spec->size ? spec->size->second : default_height);
+            source_desc.width = static_cast<uint32_t>(extent.width);
+            source_desc.height = static_cast<uint32_t>(extent.height);
             source_desc.format =
-                resolve_fbo_color_format(spec && spec->format ? *spec->format : std::string{}, default_rt_ctx, *device);
+                resolve_fbo_color_format(spec && spec->format ? *spec->format : std::string{}, *extent.target, *device);
             source_desc.array_layers = static_cast<uint32_t>(spec && spec->array_layers > 0 ? spec->array_layers : 1);
             source_desc.sample_count = static_cast<uint32_t>(spec && spec->samples > 0 ? spec->samples : 1);
 
@@ -600,9 +687,6 @@ namespace termin {
         // native tgfx2 textures owned by the caller (ViewportRenderState)
         // and plumbed straight into tex2_writes below.
 
-        std::vector<const char*> canonical_names = collect_canonical_resources(fg);
-        size_t canon_count = canonical_names.size();
-
         for (size_t i = 0; i < canon_count; i++) {
             const char* canon = canonical_names[i];
 
@@ -620,20 +704,7 @@ namespace termin {
                 continue;
             }
 
-            const ResourceSpec* spec = nullptr;
-            auto it = spec_map.find(canon);
-            if (it != spec_map.end()) {
-                spec = &it->second;
-            } else {
-                std::vector<const char*> aliases = collect_alias_group(fg, canon);
-                size_t alias_count = aliases.size();
-                for (size_t j = 0; j < alias_count && !spec; j++) {
-                    auto ait = spec_map.find(aliases[j]);
-                    if (ait != spec_map.end()) {
-                        spec = &ait->second;
-                    }
-                }
-            }
+            const ResourceSpec* spec = find_resource_spec(canon);
 
             std::string resource_type = "fbo";
             if (spec && !spec->resource_type.empty()) {
@@ -641,14 +712,9 @@ namespace termin {
             }
 
             if (resource_type == "color_texture" || resource_type == "multiview_color_texture") {
-                int tex_width = default_width;
-                int tex_height = default_height;
+                const ResolvedResourceExtent& extent = resolved_resource_extents.at(canon);
                 std::string format;
                 if (spec) {
-                    if (spec->size) {
-                        tex_width = spec->size->first;
-                        tex_height = spec->size->second;
-                    }
                     if (spec->format) {
                         format = *spec->format;
                     }
@@ -656,10 +722,10 @@ namespace termin {
 
                 tgfx::TextureUsage usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment |
                                            tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
-                tgfx::PixelFormat color_format = resolve_fbo_color_format(format, default_rt_ctx, *device);
+                tgfx::PixelFormat color_format = resolve_fbo_color_format(format, *extent.target, *device);
                 tgfx::TextureDesc texture_desc;
-                texture_desc.width = static_cast<uint32_t>(tex_width);
-                texture_desc.height = static_cast<uint32_t>(tex_height);
+                texture_desc.width = static_cast<uint32_t>(extent.width);
+                texture_desc.height = static_cast<uint32_t>(extent.height);
                 texture_desc.format = color_format;
                 texture_desc.array_layers =
                     static_cast<uint32_t>(spec && spec->array_layers > 0 ? spec->array_layers : 1);
@@ -688,17 +754,12 @@ namespace termin {
             }
 
             if (resource_type == "depth_texture" || resource_type == "multiview_depth_texture") {
-                int tex_width = default_width;
-                int tex_height = default_height;
-                if (spec && spec->size) {
-                    tex_width = spec->size->first;
-                    tex_height = spec->size->second;
-                }
+                const ResolvedResourceExtent& extent = resolved_resource_extents.at(canon);
                 tgfx::TextureUsage usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::DepthStencilAttachment |
                                            tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
                 tgfx::TextureDesc texture_desc;
-                texture_desc.width = static_cast<uint32_t>(tex_width);
-                texture_desc.height = static_cast<uint32_t>(tex_height);
+                texture_desc.width = static_cast<uint32_t>(extent.width);
+                texture_desc.height = static_cast<uint32_t>(extent.height);
                 texture_desc.format = tgfx::PixelFormat::D32F;
                 texture_desc.array_layers =
                     static_cast<uint32_t>(spec && spec->array_layers > 0 ? spec->array_layers : 1);
@@ -753,18 +814,13 @@ namespace termin {
                 continue;
             }
 
-            int fbo_width = default_width;
-            int fbo_height = default_height;
+            const ResolvedResourceExtent& extent = resolved_resource_extents.at(canon);
             int samples = 1;
             int array_layers = 1;
             std::string format;
             TextureFilter filter = TextureFilter::LINEAR;
 
             if (spec) {
-                if (spec->size) {
-                    fbo_width = spec->size->first;
-                    fbo_height = spec->size->second;
-                }
                 samples = spec->samples > 0 ? spec->samples : 1;
                 array_layers = spec->array_layers > 0 ? spec->array_layers : 1;
                 if (spec->format)
@@ -774,10 +830,10 @@ namespace termin {
 
             FBOPool& fbo_pool = pipeline.fbo_pool();
 
-            tgfx::PixelFormat color_fmt = resolve_fbo_color_format(format, default_rt_ctx, *device);
+            tgfx::PixelFormat color_fmt = resolve_fbo_color_format(format, *extent.target, *device);
             tgfx::RenderTargetPoolDesc target_desc;
-            target_desc.width = fbo_width;
-            target_desc.height = fbo_height;
+            target_desc.width = extent.width;
+            target_desc.height = extent.height;
             target_desc.samples = samples;
             target_desc.array_layers = array_layers;
             target_desc.color_format = color_fmt;
@@ -1368,6 +1424,23 @@ namespace termin {
                 const char* canonical =
                     tc_frame_graph_canonical_resource(fg, prepared.raster_contract.target_resource);
                 prepared.canonical_raster_target = canonical ? canonical : prepared.raster_contract.target_resource;
+
+                tgfx::TextureHandle physical_target;
+                const auto color = ctx.tex2_writes.find(prepared.raster_contract.target_resource);
+                if (color != ctx.tex2_writes.end()) {
+                    physical_target = color->second;
+                }
+                if (!physical_target) {
+                    const auto depth = ctx.tex2_depth_writes.find(prepared.raster_contract.target_resource);
+                    if (depth != ctx.tex2_depth_writes.end()) {
+                        physical_target = depth->second;
+                    }
+                }
+                if (physical_target) {
+                    const tgfx::TextureDesc target_desc = device->texture_desc(physical_target);
+                    ctx.render_rect.width = static_cast<int>(target_desc.width);
+                    ctx.render_rect.height = static_cast<int>(target_desc.height);
+                }
             }
             prepared.has_resolve_contract =
                 tc_pass_get_raster_resolve_contract(pass, &ctx, &prepared.resolve_contract) &&

@@ -240,6 +240,55 @@ namespace {
         }
     };
 
+    class ScaledExtentRasterProbe final : public termin::CxxFramePass {
+    private:
+        termin::ResourceSpec spec_;
+
+        void observe(termin::ExecuteContext& context) {
+            observed_render_rects.push_back(context.render_rect);
+        }
+
+    public:
+        std::vector<termin::Rect2i> observed_render_rects;
+
+        ScaledExtentRasterProbe(std::string resource, std::string viewport_name, float scale) {
+            pass_name_set("ScaledExtentRasterProbe");
+            spec_.resource = std::move(resource);
+            spec_.resource_type = "fbo";
+            spec_.format = "rgba16f";
+            spec_.viewport_name = std::move(viewport_name);
+            spec_.scale = scale;
+        }
+
+        std::set<const char*> compute_writes() const override {
+            return {spec_.resource.c_str()};
+        }
+
+        std::vector<termin::ResourceSpec> get_resource_specs() const override {
+            return {spec_};
+        }
+
+        bool get_raster_contract(termin::ExecuteContext&, tc_raster_pass_contract& contract) const override {
+            contract.target_resource = spec_.resource.c_str();
+            contract.view_count = 1;
+            contract.color_load = TC_RASTER_LOAD;
+            contract.depth_load = TC_RASTER_LOAD;
+            contract.has_color = true;
+            contract.has_depth = true;
+            contract.fusion_eligible = true;
+            return true;
+        }
+
+        bool record_raster(termin::ExecuteContext& context) override {
+            observe(context);
+            return true;
+        }
+
+        void execute(termin::ExecuteContext& context) override {
+            observe(context);
+        }
+    };
+
     class ColorOnlyRasterProbe final : public termin::CxxFramePass {
     private:
         std::string resource_;
@@ -762,6 +811,130 @@ TEST_CASE("compatible color export is bound directly to the physical target") {
     CHECK(recording_device->state.created_textures[0].first == output);
     CHECK(recording_device->state.created_textures[1].second.format == tgfx::PixelFormat::D32F);
     CHECK(recording_device->state.texture_copies.empty());
+    pipeline.destroy();
+}
+
+TEST_CASE("scaled resource extent follows its named target through resize and direct export") {
+    termin::RenderPipeline pipeline("scaled-resource-extent-test");
+    REQUIRE(pipeline.is_valid());
+    auto* probe = new ScaledExtentRasterProbe("scaled_color", "ResourceSource", 0.5f);
+    pipeline.add_pass(probe->tc_pass_ptr());
+    pipeline.set_color_export("scaled_color", termin::ColorContent::DisplayLinear, "ExportTarget");
+
+    auto device = std::make_unique<ExecutionRecordingDevice>();
+    ExecutionRecordingDevice* recording_device = device.get();
+    auto make_output = [&](uint32_t width, uint32_t height) {
+        tgfx::TextureDesc output_desc;
+        output_desc.width = width;
+        output_desc.height = height;
+        output_desc.format = tgfx::PixelFormat::RGBA16F;
+        output_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopyDst;
+        return device->create_texture(output_desc);
+    };
+    const tgfx::TextureHandle first_output = make_output(960, 540);
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
+
+    termin::RenderItemSnapshot snapshot;
+    publish_empty_snapshot(snapshot);
+    termin::RenderTargetContext default_target;
+    default_target.name = "DefaultTarget";
+    default_target.render_rect = {0, 0, 800, 600};
+    termin::RenderTargetContext resource_source;
+    resource_source.name = "ResourceSource";
+    resource_source.render_rect = {0, 0, 1920, 1080};
+    termin::RenderTargetContext export_target;
+    export_target.name = "ExportTarget";
+    export_target.render_rect = {0, 0, 960, 540};
+    export_target.output_color.texture = first_output;
+
+    termin::RenderExecution execution;
+    execution.pipeline = &pipeline;
+    execution.default_render_target = default_target.name;
+    execution.targets.emplace(default_target.name,
+                              termin::RenderExecutionTarget{.context = &default_target, .render_items = &snapshot});
+    execution.targets.emplace(resource_source.name,
+                              termin::RenderExecutionTarget{.context = &resource_source, .render_items = &snapshot});
+    execution.targets.emplace(export_target.name,
+                              termin::RenderExecutionTarget{.context = &export_target, .render_items = &snapshot});
+
+    termin::RenderEngine engine;
+    engine.set_graphics_host(*host);
+    engine.execute_pipeline(execution);
+
+    REQUIRE(probe->observed_render_rects.size() == 1u);
+    CHECK(probe->observed_render_rects[0].width == 960);
+    CHECK(probe->observed_render_rects[0].height == 540);
+    REQUIRE(recording_device->state.scopes.size() == 1u);
+    REQUIRE(recording_device->state.scopes[0].pass.colors.size() == 1u);
+    CHECK(recording_device->state.scopes[0].pass.colors[0].texture == first_output);
+    CHECK(recording_device->state.texture_copies.empty());
+    REQUIRE(recording_device->state.scopes[0].pass.has_depth);
+    const tgfx::TextureDesc first_depth =
+        recording_device->texture_desc(recording_device->state.scopes[0].pass.depth.texture);
+    CHECK(first_depth.width == 960u);
+    CHECK(first_depth.height == 540u);
+
+    resource_source.render_rect = {0, 0, 1000, 700};
+    export_target.render_rect = {0, 0, 500, 350};
+    tgfx::TextureDesc resized_output_desc;
+    resized_output_desc.width = 500;
+    resized_output_desc.height = 350;
+    resized_output_desc.format = tgfx::PixelFormat::RGBA16F;
+    resized_output_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopyDst;
+    const tgfx::TextureHandle resized_output = recording_device->create_texture(resized_output_desc);
+    export_target.output_color.texture = resized_output;
+    recording_device->state.scopes.clear();
+    recording_device->state.texture_copies.clear();
+
+    engine.execute_pipeline(execution);
+
+    REQUIRE(probe->observed_render_rects.size() == 2u);
+    CHECK(probe->observed_render_rects[1].width == 500);
+    CHECK(probe->observed_render_rects[1].height == 350);
+    REQUIRE(recording_device->state.scopes.size() == 1u);
+    REQUIRE(recording_device->state.scopes[0].pass.colors.size() == 1u);
+    CHECK(recording_device->state.scopes[0].pass.colors[0].texture == resized_output);
+    CHECK(recording_device->state.texture_copies.empty());
+    REQUIRE(recording_device->state.scopes[0].pass.has_depth);
+    const tgfx::TextureDesc resized_depth =
+        recording_device->texture_desc(recording_device->state.scopes[0].pass.depth.texture);
+    CHECK(resized_depth.width == 500u);
+    CHECK(resized_depth.height == 350u);
+    pipeline.destroy();
+}
+
+TEST_CASE("resource extent rejects an unknown named target explicitly") {
+    termin::RenderPipeline pipeline("unknown-resource-target-test");
+    REQUIRE(pipeline.is_valid());
+    auto* probe = new ScaledExtentRasterProbe("orphan_color", "MissingTarget", 0.5f);
+    pipeline.add_pass(probe->tc_pass_ptr());
+
+    termin::RenderItemSnapshot snapshot;
+    publish_empty_snapshot(snapshot);
+    termin::RenderTargetContext target;
+    target.name = "DefaultTarget";
+    target.render_rect = {0, 0, 1920, 1080};
+    termin::RenderExecution execution;
+    execution.pipeline = &pipeline;
+    execution.default_render_target = target.name;
+    execution.targets.emplace(target.name,
+                              termin::RenderExecutionTarget{.context = &target, .render_items = &snapshot});
+
+    auto device = std::make_unique<ExecutionRecordingDevice>();
+    ExecutionRecordingDevice* recording_device = device.get();
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
+    termin::RenderEngine engine;
+    engine.set_graphics_host(*host);
+    g_error_log.clear();
+    tc_log_set_callback(capture_error);
+    engine.execute_pipeline(execution);
+    tc_log_set_callback(nullptr);
+
+    CHECK(probe->observed_render_rects.empty());
+    CHECK(recording_device->state.created_textures.empty());
+    CHECK(g_error_log.find("orphan_color") != std::string::npos);
+    CHECK(g_error_log.find("MissingTarget") != std::string::npos);
+    CHECK(g_error_log.find("unknown target") != std::string::npos);
     pipeline.destroy();
 }
 
