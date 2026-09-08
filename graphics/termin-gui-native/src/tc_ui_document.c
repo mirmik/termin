@@ -729,7 +729,6 @@ static bool destroy_widget_inner(tc_ui_document* document, tc_widget_handle hand
     deleter = widget->deleter;
     tc_runtime_type_registry_unlink_instance(&widget->runtime_type_link);
     free(widget->children);
-    tc_ui_internal_release_widget_metadata(widget);
     widget->children = NULL;
     widget->child_count = 0;
     widget->child_capacity = 0;
@@ -738,6 +737,7 @@ static bool destroy_widget_inner(tc_ui_document* document, tc_widget_handle hand
     widget->handle = tc_widget_handle_invalid();
     widget->deleter = NULL;
     widget->ownership_policy = TC_WIDGET_BORROWED;
+    tc_widget_deinit_unowned(widget);
 
     slot->widget = NULL;
     slot->destroying = false;

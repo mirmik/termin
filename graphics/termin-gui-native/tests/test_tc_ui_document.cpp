@@ -14,6 +14,7 @@ struct TestWidget {
     int* destroy_count = nullptr;
     int* delete_count = nullptr;
     int* paint_count = nullptr;
+    int* metadata_released_count = nullptr;
 };
 
 struct TextMeasureProbe {
@@ -41,6 +42,10 @@ static TestWidget* from_widget(tc_widget* widget) {
 
 static void test_widget_delete(tc_widget* widget) {
     TestWidget* self = from_widget(widget);
+    if (self->metadata_released_count && !widget->stable_id && !widget->name && !widget->debug_name &&
+        !widget->owned_stable_id && !widget->owned_name && !widget->owned_debug_name) {
+        *self->metadata_released_count += 1;
+    }
     if (self->delete_count) {
         *self->delete_count += 1;
     }
@@ -76,14 +81,33 @@ static const tc_widget_vtable TEST_WIDGET_VTABLE{
     test_widget_on_destroy,
 };
 
-static TestWidget*
-make_test_widget(int* destroy_count = nullptr, int* delete_count = nullptr, int* paint_count = nullptr) {
+static TestWidget* make_test_widget(int* destroy_count = nullptr,
+                                    int* delete_count = nullptr,
+                                    int* paint_count = nullptr,
+                                    int* metadata_released_count = nullptr) {
     auto* widget = new TestWidget();
     widget->destroy_count = destroy_count;
     widget->delete_count = delete_count;
     widget->paint_count = paint_count;
+    widget->metadata_released_count = metadata_released_count;
     tc_widget_init_unowned(&widget->widget, &TEST_WIDGET_VTABLE, TC_LANGUAGE_CXX, widget);
     return widget;
+}
+
+static void test_unowned_widget_metadata_deinit_is_idempotent() {
+    TestWidget widget{};
+    tc_widget_init_unowned(&widget.widget, &TEST_WIDGET_VTABLE, TC_LANGUAGE_C, &widget);
+    assert(tc_widget_set_stable_id(&widget.widget, "standalone.stable"));
+    assert(tc_widget_set_name(&widget.widget, "Standalone"));
+    assert(tc_widget_set_debug_name(&widget.widget, "standalone-debug"));
+    assert(widget.widget.owned_stable_id);
+    assert(widget.widget.owned_name);
+    assert(widget.widget.owned_debug_name);
+
+    tc_widget_deinit_unowned(&widget.widget);
+    assert(!widget.widget.stable_id && !widget.widget.name && !widget.widget.debug_name);
+    assert(!widget.widget.owned_stable_id && !widget.widget.owned_name && !widget.widget.owned_debug_name);
+    tc_widget_deinit_unowned(&widget.widget);
 }
 
 struct RouteWidget {
@@ -674,18 +698,25 @@ static void test_plain_destroy_unlinks_tree_without_destroying_relatives() {
 static void test_recursive_destroy_uses_canonical_tree() {
     int destroyed = 0;
     int deleted = 0;
+    int metadata_released = 0;
     tc_ui_document_handle document = tc_ui_document_create();
-    TestWidget* root = make_test_widget(&destroyed, &deleted);
-    TestWidget* child = make_test_widget(&destroyed, &deleted);
-    TestWidget* grandchild = make_test_widget(&destroyed, &deleted);
+    TestWidget* root = make_test_widget(&destroyed, &deleted, nullptr, &metadata_released);
+    TestWidget* child = make_test_widget(&destroyed, &deleted, nullptr, &metadata_released);
+    TestWidget* grandchild = make_test_widget(&destroyed, &deleted, nullptr, &metadata_released);
     tc_widget_handle root_handle = adopt(document, root);
     tc_widget_handle child_handle = adopt(document, child);
     tc_widget_handle grandchild_handle = adopt(document, grandchild);
+    for (TestWidget* widget : {root, child, grandchild}) {
+        assert(tc_widget_set_stable_id(&widget->widget, "recursive.stable"));
+        assert(tc_widget_set_name(&widget->widget, "Recursive"));
+        assert(tc_widget_set_debug_name(&widget->widget, "recursive-debug"));
+    }
     assert(tc_widget_append_child(&root->widget, &child->widget));
     assert(tc_widget_append_child(&child->widget, &grandchild->widget));
 
     assert(tc_ui_document_destroy_widget_recursive(document, root_handle));
     assert(destroyed == 3 && deleted == 3);
+    assert(metadata_released == 3);
     assert(tc_ui_document_live_widget_count(document) == 0);
     assert(!tc_ui_document_is_alive(document, root_handle));
     assert(!tc_ui_document_is_alive(document, child_handle));
@@ -1551,6 +1582,7 @@ static void test_generic_widget_layout_spec_contract() {
 }
 
 int main() {
+    test_unowned_widget_metadata_deinit_is_idempotent();
     test_init_defaults_and_common_state();
     test_borrowed_widget_can_be_adopted_and_released();
     test_document_handles_become_stale_after_destroy();

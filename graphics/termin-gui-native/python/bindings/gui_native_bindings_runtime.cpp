@@ -398,6 +398,10 @@ namespace termin::gui_native::python_bindings {
         }
     }
 
+    PythonWidget::~PythonWidget() {
+        tc_widget_deinit_unowned(&widget);
+    }
+
     PythonWidget* PythonWidget::from_widget(tc_widget* widget) {
         if (!widget || !widget->body) {
             return nullptr;

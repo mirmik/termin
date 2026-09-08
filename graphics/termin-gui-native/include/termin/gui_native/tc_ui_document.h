@@ -547,6 +547,10 @@ TERMIN_GUI_NATIVE_API bool tc_ui_presentation_metrics_physical_to_logical_point(
 
 TERMIN_GUI_NATIVE_API void
 tc_widget_init_unowned(tc_widget* widget, const tc_widget_vtable* vtable, tc_language native_language, void* body);
+/* Releases owned metadata strings held by a widget that does not belong to a
+ * document. Document teardown returns widgets to this state before invoking
+ * an owned-widget deleter. The operation is idempotent. */
+TERMIN_GUI_NATIVE_API void tc_widget_deinit_unowned(tc_widget* widget);
 
 TERMIN_GUI_NATIVE_API void tc_widget_set_focusable(tc_widget* widget, bool focusable);
 TERMIN_GUI_NATIVE_API bool tc_widget_is_focusable(const tc_widget* widget);

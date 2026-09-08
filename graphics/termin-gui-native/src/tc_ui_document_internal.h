@@ -109,7 +109,6 @@ TC_UI_INTERNAL tc_widget_slot* tc_ui_internal_resolve_slot(tc_ui_document* docum
 TC_UI_INTERNAL const tc_widget_slot* tc_ui_internal_resolve_slot_const(const tc_ui_document* document,
                                                                        tc_widget_handle handle);
 TC_UI_INTERNAL bool tc_ui_internal_widget_is_live_pointer(const tc_widget* widget);
-TC_UI_INTERNAL void tc_ui_internal_release_widget_metadata(tc_widget* widget);
 TC_UI_INTERNAL size_t tc_ui_internal_find_child_index(const tc_widget* parent, const tc_widget* child);
 TC_UI_INTERNAL void tc_ui_internal_remove_child_at(tc_widget* parent, size_t index);
 TC_UI_INTERNAL bool tc_ui_internal_detach_widget(tc_widget* widget);

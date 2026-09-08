@@ -24,6 +24,16 @@ namespace termin_gui_native_test {
             }
         };
 
+        class PartiallyConstructedWidget final : public NativeWidget {
+        public:
+            PartiallyConstructedWidget()
+                : NativeWidget("partial-debug") {
+                set_stable_id("partial.stable");
+                set_name("Partial");
+                throw std::runtime_error("intentional partial construction failure");
+            }
+        };
+
     } // namespace
 
     void test_box_layout_sets_child_bounds_and_paints() {
@@ -92,6 +102,25 @@ namespace termin_gui_native_test {
         assert(tc_widget_name(root.c_widget()) == nullptr);
 
         tc_ui_document_destroy(document_handle);
+    }
+
+    void test_unowned_widget_metadata_lifecycle() {
+        {
+            Panel widget("standalone-debug");
+            widget.set_stable_id("standalone.stable");
+            widget.set_name("Standalone");
+            assert(widget.c_widget()->owned_stable_id);
+            assert(widget.c_widget()->owned_name);
+            assert(widget.c_widget()->owned_debug_name);
+        }
+
+        bool construction_failed = false;
+        try {
+            PartiallyConstructedWidget widget;
+        } catch (const std::runtime_error&) {
+            construction_failed = true;
+        }
+        assert(construction_failed);
     }
 
     void test_dirty_flags_track_layout_paint_and_state_changes() {

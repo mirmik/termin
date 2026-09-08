@@ -7,6 +7,7 @@ using namespace termin_gui_native_test;
 int main() {
     test_box_layout_sets_child_bounds_and_paints();
     test_widget_metadata_is_owned_and_exposed();
+    test_unowned_widget_metadata_lifecycle();
     test_dirty_flags_track_layout_paint_and_state_changes();
     test_box_layout_child_policies_allocate_primary_axis();
     test_hstack_vstack_wrappers_use_expected_orientation();

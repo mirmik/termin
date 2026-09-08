@@ -170,10 +170,15 @@ namespace termin::gui_native {
     protected:
         explicit Widget(const tc_widget_vtable* vtable, const char* debug_name = nullptr) {
             tc_widget_init_unowned(&_widget, vtable, TC_LANGUAGE_CXX, this);
-            set_debug_name(debug_name ? debug_name : std::string{});
+            if (!tc_widget_set_debug_name(&_widget, debug_name)) {
+                tc_widget_deinit_unowned(&_widget);
+                throw std::runtime_error("failed to set widget debug name");
+            }
         }
 
-        virtual ~Widget() = default;
+        virtual ~Widget() {
+            tc_widget_deinit_unowned(&_widget);
+        }
     };
 
 } // namespace termin::gui_native

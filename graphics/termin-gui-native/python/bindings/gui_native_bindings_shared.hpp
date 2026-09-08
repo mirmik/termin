@@ -286,6 +286,7 @@ namespace termin::gui_native::python_bindings {
         static const tc_widget_vtable VTABLE;
 
         explicit PythonWidget(nb::object object_, std::string debug_name_, std::shared_ptr<DocumentState> state_);
+        ~PythonWidget();
         static PythonWidget* from_widget(tc_widget* widget);
         static void delete_widget(tc_widget* widget);
         void capture_exception(const char* operation);

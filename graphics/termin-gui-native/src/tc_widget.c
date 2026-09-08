@@ -33,8 +33,12 @@ static bool replace_owned_string(const char* value, const char** view, char** ow
     return true;
 }
 
-void tc_ui_internal_release_widget_metadata(tc_widget* widget) {
+void tc_widget_deinit_unowned(tc_widget* widget) {
     if (!widget) {
+        return;
+    }
+    if (!tc_ui_document_handle_is_invalid(widget->document) || !tc_widget_handle_is_invalid(widget->handle)) {
+        tc_log_error("[termin-gui-native] cannot deinitialize a widget that still belongs to a document");
         return;
     }
     free(widget->owned_stable_id);
