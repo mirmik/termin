@@ -127,8 +127,14 @@ switch ($VulkanMode) {
 }
 $TerminEnableSdl = if ($SdlMode -eq "on") { "ON" } else { "OFF" }
 $TerminEnableOpenGl = if ($OpenGlMode -eq "on") { "ON" } else { "OFF" }
-$TerminBuildBuiltinShaderArtifacts = $TerminEnableOpenGl
-$TerminBuiltinShaderArtifactTargets = if ($TerminEnableOpenGl -eq "ON") { "d3d11;opengl330" } else { "" }
+# D3D11 is part of every native Windows SDK graph, independently of the
+# optional OpenGL backend.  Keep its bytecode in clean D3D11-only installs.
+$TerminBuildBuiltinShaderArtifacts = "ON"
+$TerminBuiltinShaderArtifactTargets = if ($TerminEnableOpenGl -eq "ON") {
+    "d3d11;opengl330"
+} else {
+    "d3d11"
+}
 $TerminUseCcache = if ($CcacheMode -eq "on") { "ON" } else { "OFF" }
 $TerminEnableUnityBuild = if ($UnityMode -eq "on") { "ON" } else { "OFF" }
 $TerminEnablePch = if ($PchMode -eq "on") { "ON" } else { "OFF" }

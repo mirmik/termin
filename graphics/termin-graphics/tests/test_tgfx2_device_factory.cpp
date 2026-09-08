@@ -962,6 +962,78 @@ float4 main() : SV_Target {
 #endif
 
 #ifndef _WIN32
+TEST_CASE("tgfx2 shader runtime returns generated D3D11 bytecode") {
+    namespace fs = std::filesystem;
+
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::string shader_uuid = "d3d11-dev-compile-shader-" + std::to_string(unique);
+    const fs::path root = fs::temp_directory_path() / ("termin_tgfx2_d3d11_dev_shader_" + std::to_string(unique));
+    const fs::path artifact_root = root / "assets";
+    const fs::path cache_root = root / "cache";
+    const fs::path compiler = root / "fake_termin_shaderc.sh";
+    fs::create_directories(root);
+    ShaderRuntimeTestGuard runtime_config_guard{root};
+
+    {
+        std::ofstream out(compiler, std::ios::binary);
+        out << "#!/bin/sh\n"
+            << "out=''\n"
+            << "stage=''\n"
+            << "while [ \"$#\" -gt 0 ]; do\n"
+            << "  if [ \"$1\" = '--output' ]; then shift; out=\"$1\"; fi\n"
+            << "  if [ \"$1\" = '--stage' ]; then shift; stage=\"$1\"; fi\n"
+            << "  shift\n"
+            << "done\n"
+            << "if [ -z \"$out\" ] || [ -z \"$stage\" ]; then exit 9; fi\n"
+            << "mkdir -p \"$(dirname \"$out\")\"\n"
+            << "printf 'DXBC-%s' \"$stage\" > \"$out\"\n"
+            << "printf '{\"version\":1,\"resources\":[]}' > \"$out.layout.json\"\n"
+            << "printf '%s\\n' \"$stage\" >> \"$(dirname \"$0\")/compiled_stages.txt\"\n";
+    }
+    fs::permissions(
+        compiler, fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec, fs::perm_options::add);
+
+    const tc_shader_create_desc shader_desc = {{"float4 main(uint vertex_id : SV_VertexID) : SV_Position { return 0; }",
+                                                "float4 main() : SV_Target0 { return 1; }",
+                                                nullptr,
+                                                "d3d11_dev_compile_shader",
+                                                nullptr,
+                                                nullptr,
+                                                nullptr,
+                                                nullptr},
+                                               shader_uuid.c_str(),
+                                               TC_SHADER_LANGUAGE_HLSL,
+                                               TC_SHADER_ARTIFACT_REQUIRED};
+    tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+
+    termin::tgfx2_set_shader_artifact_root(artifact_root.string().c_str());
+    termin::tgfx2_set_shader_cache_root(cache_root.string().c_str());
+    termin::tgfx2_set_shader_compiler_path(compiler.string().c_str());
+    termin::tgfx2_set_shader_dev_compile_enabled(true);
+
+    std::vector<uint8_t> vertex_bytes;
+    REQUIRE(termin::tgfx2_load_or_compile_shader_artifact_for_backend(
+        shader, tgfx::BackendType::D3D11, tgfx::ShaderStage::Vertex, vertex_bytes));
+    CHECK(vertex_bytes == std::vector<uint8_t>({'D', 'X', 'B', 'C', '-', 'v', 'e', 'r', 't', 'e', 'x'}));
+
+    std::vector<uint8_t> fragment_bytes;
+    REQUIRE(termin::tgfx2_load_or_compile_shader_artifact_for_backend(
+        shader, tgfx::BackendType::D3D11, tgfx::ShaderStage::Fragment, fragment_bytes));
+    CHECK(fragment_bytes == std::vector<uint8_t>({'D', 'X', 'B', 'C', '-', 'f', 'r', 'a', 'g', 'm', 'e', 'n', 't'}));
+
+    const fs::path shader_root = artifact_root / "shaders" / "d3d11";
+    CHECK(fs::is_regular_file(shader_root / (std::string(shader->uuid) + ".vs.cso")));
+    CHECK(fs::is_regular_file(shader_root / (std::string(shader->uuid) + ".ps.cso")));
+    CHECK(read_test_text_file(root / "compiled_stages.txt") == "vertex\nfragment\n");
+
+    tc_shader_destroy(handle);
+}
+#endif
+
+#ifndef _WIN32
 TEST_CASE("tgfx2 engine shader artifact metadata invalidates stale layout schema") {
     namespace fs = std::filesystem;
 

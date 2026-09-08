@@ -407,13 +407,23 @@ def test_graphics_sdk_profile_selects_chart_capable_native_and_csharp_stages(
     assert "scripts/build/csharp.ps1 --profile=plot-d3d11 --no-sdl" in normalized
 
 
-def test_windows_bindings_declares_builtin_shader_artifact_policy() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
-    windows_script = (repo_root / "scripts/build/bindings.ps1").read_text(
-        encoding="utf-8"
-    )
+@pytest.mark.parametrize(
+    "relative_script",
+    (
+        "scripts/build/cpp.ps1",
+        "scripts/build/bindings.ps1",
+        "scripts/test/cpp.ps1",
+    ),
+)
+def test_windows_native_graphs_always_build_d3d11_shader_artifacts(
+    relative_script: str,
+) -> None:
+    windows_script = (REPO_ROOT / relative_script).read_text(encoding="utf-8")
 
-    assert "TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS" in windows_script
+    assert '$TerminBuildBuiltinShaderArtifacts = "ON"' in windows_script
+    assert '$TerminBuiltinShaderArtifactTargets = if ($TerminEnableOpenGl -eq "ON") {' in windows_script
+    assert '"d3d11;opengl330"' in windows_script
+    assert re.search(r'}\s*else\s*{\s*"d3d11"\s*}', windows_script)
 
 
 def test_bindings_entrypoints_expose_core_profile_contract() -> None:

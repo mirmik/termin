@@ -132,8 +132,14 @@ switch ($VulkanMode) {
     }
 }
 $TerminEnableOpenGl = if ($OpenGlMode -eq "on") { "ON" } else { "OFF" }
-$TerminBuildBuiltinShaderArtifacts = $TerminEnableOpenGl
-$TerminBuiltinShaderArtifactTargets = if ($TerminEnableOpenGl -eq "ON") { "d3d11;opengl330" } else { "" }
+# The Windows test graph always contains D3D11.  Its shader bytecode must not
+# disappear merely because the optional OpenGL backend is disabled.
+$TerminBuildBuiltinShaderArtifacts = "ON"
+$TerminBuiltinShaderArtifactTargets = if ($TerminEnableOpenGl -eq "ON") {
+    "d3d11;opengl330"
+} else {
+    "d3d11"
+}
 $TerminEnableSdl = if ($SdlMode -eq "on") { "ON" } else { "OFF" }
 $TerminUseCcache = if ($CcacheMode -eq "on") { "ON" } else { "OFF" }
 $TerminEnableUnityBuild = if ($UnityMode -eq "on") { "ON" } else { "OFF" }

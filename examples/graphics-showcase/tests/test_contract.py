@@ -245,6 +245,10 @@ def test_graphics_showcase_has_an_installed_sdk_smoke_gate() -> None:
     assert '"PYTHONHOME"' in smoke
     assert '"PYTHONPATH"' in smoke
     assert '"PYTHONUSERBASE"' in smoke
+    assert '"TERMIN_BACKEND": "d3d11"' in smoke
+    assert '"TERMIN_D3D11_DEBUG": "1"' in smoke
+    assert 'shaders" / "d3d11"' in smoke
+    assert "D3D11 requires compiled bytecode" in smoke
     assert "EXPECTED_SECTIONS" in smoke
     assert "scripts/smoke-graphics-showcase" in docs
 

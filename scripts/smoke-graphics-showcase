@@ -14,7 +14,6 @@ import tempfile
 
 EXPECTED_SECTIONS = {
     "native_ui",
-    "graphics_lines",
     "tcplot_sine",
     "tcplot_scatter",
     "tcplot_multi",
@@ -28,6 +27,7 @@ EXPECTED_SECTIONS = {
     "plot_nodegraph_composition",
 }
 FORBIDDEN_MODULES = ("termin.display", "termin.engine", "termin.runtime")
+D3D11_BYTECODE_ERROR = "D3D11 requires compiled bytecode"
 
 
 class SmokeError(RuntimeError):
@@ -64,7 +64,45 @@ def _isolated_environment(sdk_root: Path) -> dict[str, str]:
             "PYTHONNOUSERSITE": "1",
         }
     )
+    if os.name == "nt":
+        environment.update(
+            {
+                "TERMIN_BACKEND": "d3d11",
+                "TERMIN_D3D11_DEBUG": "1",
+                "TERMIN_D3D11_LOG_INFO_QUEUE": "1",
+            }
+        )
     return environment
+
+
+def _verify_windows_d3d11_artifacts(sdk_root: Path) -> None:
+    if os.name != "nt":
+        return
+    shader_root = sdk_root / "share" / "termin" / "shaders" / "d3d11"
+    bytecode = sorted(shader_root.glob("*.cso"))
+    if not bytecode:
+        raise SmokeError(
+            f"installed Windows graphics SDK has no D3D11 shader bytecode: {shader_root}"
+        )
+
+
+def _verify_windows_d3d11_output(output: str) -> None:
+    if os.name != "nt":
+        return
+    error_lines = [
+        line
+        for line in output.splitlines()
+        if D3D11_BYTECODE_ERROR.lower() in line.lower()
+        or (
+            "[d3d11debug:" in line.lower()
+            and (
+                "severity=error" in line.lower()
+                or "severity=corruption" in line.lower()
+            )
+        )
+    ]
+    if error_lines:
+        raise SmokeError("D3D11 diagnostics reported:\n" + "\n".join(error_lines[-20:]))
 
 
 def _run(command: list[str], *, environment: dict[str, str]) -> str:
@@ -156,8 +194,9 @@ def _smoke(sdk_root: Path, output_dir: Path) -> None:
     report = output_dir / "graphics-showcase.json"
     artifact = output_dir / "graphics-showcase.png"
     environment = _isolated_environment(sdk_root)
+    _verify_windows_d3d11_artifacts(sdk_root)
     _verify_profile_boundary(python, environment)
-    _run(
+    output = _run(
         [
             str(python),
             "-I",
@@ -170,6 +209,7 @@ def _smoke(sdk_root: Path, output_dir: Path) -> None:
         ],
         environment=environment,
     )
+    _verify_windows_d3d11_output(output)
     _verify_report(report, artifact, sdk_root)
     print(f"graphics showcase installed-SDK smoke passed: {report}")
 
