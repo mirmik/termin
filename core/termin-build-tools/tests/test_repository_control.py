@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from termin_build import process_smoke, pytest_orchestration, repository_control
-from termin_build.managed_process import process_group_exists
+from termin_build.managed_process import ManagedProcessCleanupError, process_group_exists
 
 
 PROCESS_TREE_FIXTURE = (
@@ -1284,12 +1284,7 @@ def test_run_executes_manifest_process_smoke(tmp_path: Path, monkeypatch) -> Non
     assert result == 0
     assert calls[0][:3] == ([str(command)], repo, False)
     assert calls[0][4] == 900.0
-    expected_terminate_timeout = (
-        process_smoke.PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS
-        if os.name == "posix"
-        else None
-    )
-    assert calls[0][5] == expected_terminate_timeout
+    assert calls[0][5] == process_smoke.PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["kind"] == "termin-test-execution"
     assert report["executor"] == "process-smoke"
@@ -1338,12 +1333,15 @@ def test_windows_process_smoke_executes_from_canonical_plan(
 
     monkeypatch.setattr(process_smoke.shutil, "which", lambda name: "pwsh.exe")
 
-    def fake_run(args, **kwargs):
+    def fake_managed_run(args, **kwargs):
         calls.append((args, kwargs))
         return type("Result", (), {"returncode": 0, "stdout": "windows ok\n"})()
 
-    monkeypatch.setattr(process_smoke.subprocess, "run", fake_run)
-    monkeypatch.setattr(process_smoke, "run_managed_process", fake_run)
+    def reject_direct_run(*_args, **_kwargs):
+        raise AssertionError("Windows process smoke bypassed managed ownership")
+
+    monkeypatch.setattr(process_smoke.subprocess, "run", reject_direct_run)
+    monkeypatch.setattr(process_smoke, "run_managed_process", fake_managed_run)
 
     result = repository_control.main(
         [
@@ -1372,6 +1370,9 @@ def test_windows_process_smoke_executes_from_canonical_plan(
     assert calls[0][0] == ["pwsh.exe", "-NoProfile", "-File", str(command)]
     assert calls[0][1]["env"]["TERMIN_TEST_CONFIGURATION"] == "Debug"
     assert calls[0][1]["timeout"] == 12.0
+    assert calls[0][1]["terminate_timeout_seconds"] == (
+        process_smoke.PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS
+    )
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["executed"] == [{"id": "alpha-process-smoke"}]
     assert report["details"]["logs"] == {
@@ -1434,6 +1435,40 @@ def test_process_smoke_timeout_fails_and_retains_log(
     assert "timed out after 1s" in result.failed["alpha-process-smoke"]
     log_path = repo / result.logs["alpha-process-smoke"]
     assert "PROCESS_TIMEOUT_READY" in log_path.read_text(encoding="utf-8")
+
+
+def test_process_smoke_cleanup_failure_is_reported_and_retained(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo = _repository(tmp_path)
+    platform = "windows" if os.name == "nt" else "linux"
+    _add_process_smoke_suite(
+        repo,
+        profile="editor-smoke",
+        platform=platform,
+        root="scripts/smoke.py",
+        capability="editor",
+    )
+    catalog = repository_control.load_catalog(repo)
+
+    def fail_cleanup(*_args, **_kwargs):
+        raise ManagedProcessCleanupError("owned descendant survived")
+
+    monkeypatch.setattr(process_smoke, "run_managed_process", fail_cleanup)
+
+    result = repository_control.run_process_smoke_plan(
+        repo,
+        catalog,
+        "editor-smoke",
+        platform,
+        capabilities=("editor",),
+    )
+
+    assert result.exit_code == 1
+    assert "managed process cleanup failed" in result.failed["alpha-process-smoke"]
+    log_path = repo / result.logs["alpha-process-smoke"]
+    assert "owned descendant survived" in log_path.read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(

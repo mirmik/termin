@@ -16,12 +16,13 @@ STATE_ENVIRONMENT_VARIABLE = "TERMIN_PROCESS_TREE_STATE"
 
 
 def _write_state(path: Path, grandchild_pid: int) -> None:
+    process_group_id = os.getpgrp() if os.name == "posix" else None
     path.write_text(
         json.dumps(
             {
                 "wrapper_pid": os.getpid(),
                 "grandchild_pid": grandchild_pid,
-                "process_group_id": os.getpgrp(),
+                "process_group_id": process_group_id,
             }
         ),
         encoding="utf-8",
@@ -32,7 +33,7 @@ def _run_grandchild(*, ignore_sigterm: bool) -> int:
     if ignore_sigterm:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
     while True:
-        signal.pause()
+        time.sleep(60.0)
 
 
 def _run_wrapper(
@@ -83,7 +84,7 @@ def _run_supervisor(state_path: Path) -> int:
         _wait_for_state(state_path)
         state_path.with_suffix(".ready").write_text("ready\n", encoding="utf-8")
         while True:
-            signal.pause()
+            time.sleep(60.0)
 
 
 def main() -> int:

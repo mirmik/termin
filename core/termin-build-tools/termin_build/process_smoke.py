@@ -13,6 +13,7 @@ from typing import Iterable, Mapping
 from .managed_process import (
     DEFAULT_KILL_TIMEOUT_SECONDS,
     DEFAULT_TERMINATE_TIMEOUT_SECONDS,
+    ManagedProcessCleanupError,
     run_managed_process,
 )
 
@@ -132,16 +133,13 @@ def execute_process_smoke_suites(
                         "text": True,
                         "timeout": timeout_seconds,
                     }
-                    if os.name == "posix":
-                        result = run_managed_process(
-                            command_line,
-                            terminate_timeout_seconds=(
-                                PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS
-                            ),
-                            **run_options,
-                        )
-                    else:
-                        result = subprocess.run(command_line, **run_options)
+                    result = run_managed_process(
+                        command_line,
+                        terminate_timeout_seconds=(
+                            PROCESS_SMOKE_TERMINATE_TIMEOUT_SECONDS
+                        ),
+                        **run_options,
+                    )
                     output = result.stdout or ""
                 except subprocess.TimeoutExpired as exc:
                     output = exc.stdout or ""
@@ -152,6 +150,11 @@ def execute_process_smoke_suites(
                         f"timed out after {timeout_seconds:g}s; "
                         f"log: {displayed_log_path}"
                     )
+                    break
+                except ManagedProcessCleanupError as exc:
+                    error = f"managed process cleanup failed: {exc}"
+                    log_parts.append(f"ERROR: {error}\n")
+                    failed[suite_id] = f"{error}; log: {displayed_log_path}"
                     break
                 log_parts.append(output)
                 if output:
