@@ -6,8 +6,10 @@
 #include <exception>
 #include <memory>
 #include <span>
+#include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #ifndef SDL_MAIN_HANDLED
 #define SDL_MAIN_HANDLED
@@ -147,6 +149,208 @@ static bool render_ordered_mrt_smoke(tgfx::IRenderDevice& device,
     return passed;
 }
 
+namespace {
+
+    using Rgba8 = std::array<uint8_t, 4>;
+    using CornerColors = std::array<Rgba8, 4>;
+
+    constexpr std::array<CornerColors, 3> kSamplingMipColors = {{
+        {{{255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {255, 255, 0, 255}}},
+        {{{255, 0, 255, 255}, {0, 255, 255, 255}, {255, 128, 0, 255}, {255, 255, 255, 255}}},
+        {{{128, 32, 0, 255}, {0, 128, 64, 255}, {96, 0, 160, 255}, {96, 96, 96, 255}}},
+    }};
+
+    std::vector<uint8_t> make_sampling_mip(uint32_t extent, const CornerColors& colors) {
+        std::vector<uint8_t> pixels(static_cast<size_t>(extent) * extent * 4);
+        for (uint32_t y = 0; y < extent; ++y) {
+            for (uint32_t x = 0; x < extent; ++x) {
+                const size_t corner = (y >= extent / 2 ? 2u : 0u) + (x >= extent / 2 ? 1u : 0u);
+                const size_t offset = (static_cast<size_t>(y) * extent + x) * 4;
+                std::copy(colors[corner].begin(), colors[corner].end(), pixels.begin() + offset);
+            }
+        }
+        return pixels;
+    }
+
+    bool pixel_matches(const float pixel[4], const Rgba8& expected) {
+        constexpr float kTolerance = 1.5f / 255.0f;
+        for (size_t channel = 0; channel < 4; ++channel) {
+            if (std::abs(pixel[channel] - expected[channel] / 255.0f) > kTolerance)
+                return false;
+        }
+        return true;
+    }
+
+    struct SamplingCase {
+        const char* name;
+        const char* body;
+        size_t expected_mip;
+    };
+
+    constexpr std::array<SamplingCase, 5> kSamplingCases = {{
+        {"texture", "FragColor = texture(source_texture, uv);", 1},
+        {"textureLod", "FragColor = textureLod(source_texture, uv, 0.0);", 0},
+        {"textureGrad",
+         "FragColor = textureGrad(source_texture, uv, vec2(0.25, 0.0), vec2(0.0, -0.25));",
+         1},
+        // The 8x8 source sampled across a 4x4 target has implicit LOD 1. The
+        // bias therefore selects mip 2. Treating the bias as absolute LOD
+        // would incorrectly select mip 1 and is deliberately distinguishable.
+        {"texture-bias", "FragColor = texture(source_texture, uv, 1.0);", 2},
+        {"texelFetch",
+         "ivec2 p = ivec2(gl_FragCoord.x < 2.0 ? 0 : 3, gl_FragCoord.y > 2.0 ? 0 : 3);\n"
+         "    FragColor = texelFetch(source_texture, p, 1);",
+         1},
+    }};
+
+    std::string sampling_vertex_source(int glsl_version) {
+        return "#version " + std::to_string(glsl_version) +
+               " core\nlayout(location = 0) in vec2 aPos;\n"
+               "void main() { gl_Position = vec4(aPos, 0.0, 1.0); }\n";
+    }
+
+    std::string sampling_fragment_source(int glsl_version, const SamplingCase& sampling_case) {
+        return "#version " + std::to_string(glsl_version) +
+               " core\nuniform sampler2D source_texture;\nout vec4 FragColor;\n"
+               "void main() {\n"
+               "    vec2 uv = vec2(gl_FragCoord.x / 4.0, 1.0 - gl_FragCoord.y / 4.0);\n"
+               "    " +
+               sampling_case.body + "\n}\n";
+    }
+
+    bool run_sampling_origin_regression(tgfx::IRenderDevice& device,
+                                        const tgfx::VertexBufferLayout& vertex_layout,
+                                        tgfx::BufferHandle vertex_buffer) {
+        tgfx::TextureDesc source_desc;
+        source_desc.width = 8;
+        source_desc.height = 8;
+        source_desc.mip_levels = 3;
+        source_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        source_desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::CopyDst;
+        const tgfx::TextureHandle source = device.create_texture(source_desc);
+        for (uint32_t mip = 0; mip < source_desc.mip_levels; ++mip) {
+            const auto pixels = make_sampling_mip(source_desc.width >> mip, kSamplingMipColors[mip]);
+            device.upload_texture(source, pixels, mip);
+        }
+
+        tgfx::SamplerDesc sampler_desc;
+        sampler_desc.min_filter = tgfx::FilterMode::Nearest;
+        sampler_desc.mag_filter = tgfx::FilterMode::Nearest;
+        sampler_desc.mip_filter = tgfx::FilterMode::Nearest;
+        sampler_desc.address_u = tgfx::AddressMode::ClampToEdge;
+        sampler_desc.address_v = tgfx::AddressMode::ClampToEdge;
+        const tgfx::SamplerHandle sampler = device.create_sampler(sampler_desc);
+
+        tgfx::TextureDesc target_desc;
+        target_desc.width = 4;
+        target_desc.height = 4;
+        target_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        target_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+        const tgfx::TextureHandle target = device.create_texture(target_desc);
+
+        tgfx::BackendBindingPlanEntry texture_plan;
+        texture_plan.resource.name = "source_texture";
+        texture_plan.resource.kind = tgfx::ShaderResourceKind::Texture;
+        texture_plan.resource.scope = tgfx::ShaderResourceScope::Material;
+        texture_plan.stage_mask = TC_SHADER_STAGE_FRAGMENT;
+        texture_plan.placement.kind = tgfx::BackendPlacementKind::OpenGLBinding;
+        texture_plan.placement.opengl.binding_class = tgfx::OpenGLBindingClass::TextureUnit;
+        texture_plan.placement.opengl.texture_unit = 0;
+
+        bool passed = true;
+        for (const int glsl_version : {330, 450}) {
+            tgfx::ShaderDesc vertex_desc;
+            vertex_desc.stage = tgfx::ShaderStage::Vertex;
+            vertex_desc.source = sampling_vertex_source(glsl_version);
+            vertex_desc.debug_name = "opengl-sampling-origin:" + std::to_string(glsl_version) + ":vertex";
+            const tgfx::ShaderHandle vertex = device.create_shader(vertex_desc);
+
+            for (const SamplingCase& sampling_case : kSamplingCases) {
+                tgfx::ShaderDesc fragment_desc;
+                fragment_desc.stage = tgfx::ShaderStage::Fragment;
+                fragment_desc.source = sampling_fragment_source(glsl_version, sampling_case);
+                fragment_desc.debug_name = "opengl-sampling-origin:" + std::to_string(glsl_version) + ":" +
+                                           sampling_case.name;
+                const tgfx::ShaderHandle fragment = device.create_shader(fragment_desc);
+
+                tgfx::PipelineDesc pipeline_desc;
+                pipeline_desc.vertex_shader = vertex;
+                pipeline_desc.fragment_shader = fragment;
+                pipeline_desc.topology = tgfx::PrimitiveTopology::TriangleList;
+                pipeline_desc.depth_stencil.depth_test = false;
+                pipeline_desc.depth_stencil.depth_write = false;
+                pipeline_desc.depth_format = tgfx::PixelFormat::Undefined;
+                pipeline_desc.raster.cull = tgfx::CullMode::None;
+                pipeline_desc.color_formats = {tgfx::PixelFormat::RGBA8_UNorm};
+                pipeline_desc.vertex_layouts.push_back(tgfx::make_vertex_layout_desc(vertex_layout));
+                const tgfx::PipelineHandle pipeline = device.create_pipeline(pipeline_desc);
+
+                tgfx::BoundResourceValue texture_value;
+                texture_value.kind = tgfx::BoundResourceKind::SampledTexture;
+                texture_value.texture = source;
+                texture_value.sampler = sampler;
+                const tgfx::BoundResourceBinding texture_binding = {
+                    tgfx::bound_resource_slot_from_plan_entry(texture_plan),
+                    texture_value,
+                };
+                tgfx::BoundResourceSetStorage storage;
+                storage.set_resource_layout_token(device.pipeline_resource_layout_token(pipeline));
+                storage.append_group(tgfx::ShaderResourceScope::Material, true, &texture_binding, 1);
+                const tgfx::ResourceSetHandle resource_set = device.create_bound_resource_set(storage.view());
+
+                auto command = device.create_command_list();
+                command->begin();
+                tgfx::RenderPassDesc pass;
+                tgfx::ColorAttachmentDesc color;
+                color.texture = target;
+                color.load = tgfx::LoadOp::Clear;
+                pass.colors.push_back(color);
+                command->begin_render_pass(pass);
+                command->set_viewport(0, 0, 4, 4);
+                command->bind_pipeline(pipeline);
+                command->bind_resource_set(resource_set);
+                command->bind_vertex_buffer(0, vertex_buffer);
+                command->draw(3);
+                command->end_render_pass();
+                command->end();
+                device.submit(*command);
+
+                constexpr std::array<std::array<int, 2>, 4> kCornerPixels = {{{0, 0}, {3, 0}, {0, 3}, {3, 3}}};
+                for (size_t corner = 0; corner < kCornerPixels.size(); ++corner) {
+                    float pixel[4] = {};
+                    const bool read = device.read_pixel_rgba8(
+                        target, kCornerPixels[corner][0], kCornerPixels[corner][1], pixel);
+                    if (!read || !pixel_matches(pixel, kSamplingMipColors[sampling_case.expected_mip][corner])) {
+                        std::fprintf(stderr,
+                                     "OpenGL sampling regression failed: GLSL %d %s corner %zu "
+                                     "pixel=(%.3f %.3f %.3f %.3f)\n",
+                                     glsl_version,
+                                     sampling_case.name,
+                                     corner,
+                                     pixel[0],
+                                     pixel[1],
+                                     pixel[2],
+                                     pixel[3]);
+                        passed = false;
+                    }
+                }
+
+                device.destroy(resource_set);
+                device.destroy(pipeline);
+                device.destroy(fragment);
+            }
+            device.destroy(vertex);
+        }
+
+        device.destroy(target);
+        device.destroy(sampler);
+        device.destroy(source);
+        std::printf("OpenGL GLSL 330/450 sampling origin regression: %s\n", passed ? "ok" : "failed");
+        return passed;
+    }
+
+} // namespace
+
 int main() {
     SDLGLContext gl;
     if (!create_context(gl)) {
@@ -230,6 +434,7 @@ int main() {
     device->upload_buffer(vb, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(vertices), sizeof(vertices)));
 
     const bool ordered_mrt_ok = render_ordered_mrt_smoke(*device, vs, vertex_layout, vb);
+    const bool sampling_origin_ok = run_sampling_origin_regression(*device, vertex_layout, vb);
 
     const float color_block[] = {0.20f, 0.70f, 0.10f, 1.0f};
     tgfx::BufferDesc ubo_desc;
@@ -482,7 +687,7 @@ int main() {
     device->destroy(fs);
     device.reset();
 
-    if (!pass_ok || !srgb_sampling_ok || !linear_sampling_ok || !ordered_mrt_ok) {
+    if (!pass_ok || !srgb_sampling_ok || !linear_sampling_ok || !ordered_mrt_ok || !sampling_origin_ok) {
         std::fprintf(stderr, "OpenGL bound resource set smoke failed\n");
         return 1;
     }

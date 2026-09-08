@@ -851,19 +851,42 @@ namespace tgfx {
     //     Macros only expand in source that follows the `#define` lines,
     //     so the helpers' internal use of `texture` / `texelFetch` resolves
     //     to the builtin, not to itself.
-    static constexpr const char* kGLSamplingFlipOverlay =
+    static constexpr const char* kGLSamplingFlipFunctionsOverlay =
         "// tgfx2-GL-sampling-flip\n"
-        "vec4  _tgfx_gl_tex(highp sampler2D s, vec2 uv)             { return texture(s, vec2(uv.x, 1.0 - uv.y)); }\n"
-        "vec4  _tgfx_gl_tex(highp sampler2D s, vec2 uv, float lod)  { return textureLod(s, vec2(uv.x, 1.0 - uv.y), lod); }\n"
-        "vec4  _tgfx_gl_tex(highp sampler3D s, vec3 uvw)            { return texture(s, uvw); }\n"
-        "vec4  _tgfx_gl_tex(highp samplerCube s, vec3 dir)          { return texture(s, dir); }\n"
-        "float _tgfx_gl_tex(highp sampler2DShadow s, vec3 uvz)      { return texture(s, vec3(uvz.x, 1.0 - uvz.y, uvz.z)); }\n"
-        "vec4  _tgfx_gl_texel(highp sampler2D s, ivec2 p, int lod) {\n"
+        "vec2  _tgfx_gl_uv(vec2 uv) { return vec2(uv.x, 1.0 - uv.y); }\n"
+        "vec2  _tgfx_gl_dUV(vec2 duv) { return vec2(duv.x, -duv.y); }\n"
+        "vec4  _tgfx_gl_texture(highp sampler2D s, vec2 uv) { return texture(s, _tgfx_gl_uv(uv)); }\n"
+        "vec4  _tgfx_gl_texture(highp sampler3D s, vec3 uvw) { return texture(s, uvw); }\n"
+        "vec4  _tgfx_gl_texture(highp samplerCube s, vec3 dir) { return texture(s, dir); }\n"
+        "float _tgfx_gl_texture(highp sampler2DShadow s, vec3 uvz) { return texture(s, vec3(_tgfx_gl_uv(uvz.xy), uvz.z)); }\n"
+        "vec4  _tgfx_gl_texture_lod(highp sampler2D s, vec2 uv, float lod) { return textureLod(s, _tgfx_gl_uv(uv), lod); }\n"
+        "float _tgfx_gl_texture_lod(highp sampler2DShadow s, vec3 uvz, float lod) { return textureLod(s, vec3(_tgfx_gl_uv(uvz.xy), uvz.z), lod); }\n"
+        "vec4  _tgfx_gl_texture_lod(highp sampler3D s, vec3 uvw, float lod) { return textureLod(s, uvw, lod); }\n"
+        "vec4  _tgfx_gl_texture_lod(highp samplerCube s, vec3 dir, float lod) { return textureLod(s, dir, lod); }\n"
+        "vec4  _tgfx_gl_texture_grad(highp sampler2D s, vec2 uv, vec2 dx, vec2 dy) { return textureGrad(s, _tgfx_gl_uv(uv), _tgfx_gl_dUV(dx), _tgfx_gl_dUV(dy)); }\n"
+        "float _tgfx_gl_texture_grad(highp sampler2DShadow s, vec3 uvz, vec2 dx, vec2 dy) { return textureGrad(s, vec3(_tgfx_gl_uv(uvz.xy), uvz.z), _tgfx_gl_dUV(dx), _tgfx_gl_dUV(dy)); }\n"
+        "vec4  _tgfx_gl_texture_grad(highp sampler3D s, vec3 uvw, vec3 dx, vec3 dy) { return textureGrad(s, uvw, dx, dy); }\n"
+        "vec4  _tgfx_gl_texture_grad(highp samplerCube s, vec3 dir, vec3 dx, vec3 dy) { return textureGrad(s, dir, dx, dy); }\n"
+        "vec4  _tgfx_gl_texel_fetch(highp sampler2D s, ivec2 p, int lod) {\n"
         "    ivec2 sz = textureSize(s, lod);\n"
         "    return texelFetch(s, ivec2(p.x, sz.y - 1 - p.y), lod);\n"
-        "}\n"
-        "#define texture _tgfx_gl_tex\n"
-        "#define texelFetch _tgfx_gl_texel\n";
+        "}\n";
+
+    // The optional bias overload of texture() is fragment-only in desktop
+    // GLSL and ESSL. Injecting these helpers into a vertex shader makes an
+    // otherwise sampler-free shader fail compilation, so keep them scoped to
+    // the only stage where the builtin signatures exist.
+    static constexpr const char* kGLSamplingFlipFragmentBiasOverlay =
+        "vec4  _tgfx_gl_texture(highp sampler2D s, vec2 uv, float bias) { return texture(s, _tgfx_gl_uv(uv), bias); }\n"
+        "vec4  _tgfx_gl_texture(highp sampler3D s, vec3 uvw, float bias) { return texture(s, uvw, bias); }\n"
+        "vec4  _tgfx_gl_texture(highp samplerCube s, vec3 dir, float bias) { return texture(s, dir, bias); }\n"
+        "float _tgfx_gl_texture(highp sampler2DShadow s, vec3 uvz, float bias) { return texture(s, vec3(_tgfx_gl_uv(uvz.xy), uvz.z), bias); }\n";
+
+    static constexpr const char* kGLSamplingFlipMacrosOverlay =
+        "#define texture _tgfx_gl_texture\n"
+        "#define textureLod _tgfx_gl_texture_lod\n"
+        "#define textureGrad _tgfx_gl_texture_grad\n"
+        "#define texelFetch _tgfx_gl_texel_fetch\n";
 
     static constexpr const char* kWebGL2PrecisionOverlay =
         "// tgfx2-WebGL2-default-precision\n"
@@ -940,12 +963,17 @@ namespace tgfx {
         GLenum gl_stage = gl::to_gl_shader_stage(desc.stage);
         mod.gl_shader = glCreateShader(gl_stage);
 
+        std::string sampling_overlay = kGLSamplingFlipFunctionsOverlay;
+        if (desc.stage == ShaderStage::Fragment)
+            sampling_overlay += kGLSamplingFlipFragmentBiasOverlay;
+        sampling_overlay += kGLSamplingFlipMacrosOverlay;
+
         std::string resolved = desc.source;
         if (gl_features_.tier == GlFeatureTier::WebGL2) {
-            const std::string overlay = std::string(kWebGL2PrecisionOverlay) + kGLSamplingFlipOverlay;
+            const std::string overlay = std::string(kWebGL2PrecisionOverlay) + sampling_overlay;
             resolved = inject_after_version(resolved, overlay.c_str());
         } else {
-            resolved = inject_after_version(resolved, kGLSamplingFlipOverlay);
+            resolved = inject_after_version(resolved, sampling_overlay.c_str());
         }
         // On OpenGL, wrap sampling builtins so v=0 = top of content
         // regardless of whether the texture was uploaded from CPU (flipped
