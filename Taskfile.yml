@@ -29,6 +29,10 @@ includes:
     taskfile: ./taskfiles/runtime.yml
     flatten: true
 
+  branding:
+    taskfile: ./taskfiles/branding.yml
+    flatten: true
+
   ci:
     taskfile: ./taskfiles/ci.yml
     flatten: true

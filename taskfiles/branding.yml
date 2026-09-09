@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  branding:icon:
+    desc: Export the selected T to editor PNG, BMP and multi-size ICO
+    cmds:
+      - '{{if eq OS "windows"}}python{{else}}python3{{end}} assets/branding/tools/build_icon.py {{.CLI_ARGS}}'
+
+  branding:logo:
+    desc: Build the original 3D wordmark prototype (add --animate for video)
+    cmds:
+      - blender -noaudio --background --factory-startup --python-exit-code 1 --python assets/branding/geometry/build_logo.py -- {{.CLI_ARGS}}
+
+  branding:sculpture:
+    desc: Reproduce the rejected twisted T study (add --animate for video)
+    cmds:
+      - blender -noaudio --background --factory-startup --python-exit-code 1 --python assets/branding/geometry/build_sculpture.py -- {{.CLI_ARGS}}
+
+  branding:t-volume:
+    desc: Build the original T with a volumetric back (add --animate for video)
+    cmds:
+      - blender -noaudio --background --factory-startup --python-exit-code 1 --python assets/branding/geometry/build_t_volume.py -- {{.CLI_ARGS}}
