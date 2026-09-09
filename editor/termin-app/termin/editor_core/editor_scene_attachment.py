@@ -47,6 +47,7 @@ class EditorSceneAttachment:
         rendering_manager,
         make_editor_pipeline: Callable[[], "RenderPipeline"],
         camera_overlay_factory: Callable[["Entity", object], "Entity | None"] | None = None,
+        request_render: Callable[[], None] | None = None,
     ):
         """
         Initialize EditorSceneAttachment.
@@ -61,6 +62,7 @@ class EditorSceneAttachment:
         self._rendering_manager = rendering_manager
         self._make_editor_pipeline = make_editor_pipeline
         self._camera_overlay_factory = camera_overlay_factory
+        self._request_render = request_render
 
         # State (set when attached)
         self._attached_scene: "Scene | None" = None
@@ -137,7 +139,8 @@ class EditorSceneAttachment:
 
         # Create EditorEntities in scene
         self._camera_manager = EditorCameraManager(
-            camera_overlay_factory=self._camera_overlay_factory
+            camera_overlay_factory=self._camera_overlay_factory,
+            request_render=self._request_render,
         )
         self._camera_manager.attach_to_scene(scene)
 

@@ -63,13 +63,9 @@ float compute_depth(float3 pos) {
 }
 
 float compute_fade(float3 pos) {
-    float4 clip = mul(GridParams.u_projection, mul(GridParams.u_view, float4(pos, 1.0)));
-    float ndc_depth = clip.z / clip.w;
-    // Inverse of the perspective Z mapping used by Mat44f::perspective:
-    // depth = far / (far - near) - far*near / ((far - near) * view_depth).
-    float linear_depth =
-        (GridParams.u_near * GridParams.u_far) /
-        (GridParams.u_far - ndc_depth * (GridParams.u_far - GridParams.u_near));
+    // View-space Y is forward for every projection, including the editor's
+    // perspective/orthographic transition. No depth-buffer inversion is needed.
+    float linear_depth = mul(GridParams.u_view, float4(pos, 1.0)).y;
     return max(0.0, 1.0 - linear_depth / GridParams.u_far);
 }
 

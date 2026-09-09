@@ -135,6 +135,10 @@ class NativeOrientationCube:
             _logger.error("Cannot snap orientation cube without an editor camera")
             return
         self._controller.snap_view(ViewDirection[key])
+        if sum(value != 0 for value in self._patches[key].direction) == 1:
+            self._camera.enter_axis_view(self._controller.radius)
+        else:
+            self._camera.leave_axis_view()
         self.view.invalidate_view()
         self._viewport._request_render()
 

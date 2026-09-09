@@ -41,6 +41,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
             refresh_primary_scene=Mock(),
         )
     )
+    editor_viewport = Mock()
     request_editor_render = Mock()
     window = Mock()
     window.should_close.return_value = False
@@ -59,6 +60,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
         request_editor_render=request_editor_render,
+        editor_viewport=editor_viewport,
         window=window,
         frame_limit=frame_limit,
     )
@@ -76,6 +78,7 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
         request_editor_render=request_editor_render,
+        editor_viewport=editor_viewport,
         window=window,
     )
 
@@ -157,6 +160,7 @@ def test_attach_native_editor_event_loop_owns_reverse_order_teardown(
         editor_log_capture=services.editor_log_capture,
         game_mode_controller=services.game_mode_controller,
         request_editor_render=services.request_editor_render,
+        editor_viewport=services.editor_viewport,
         window=services.window,
     )
 
@@ -176,3 +180,17 @@ def test_attach_native_editor_event_loop_owns_reverse_order_teardown(
 def test_native_editor_smoke_frame_limit(monkeypatch, value: str, expected: int) -> None:
     monkeypatch.setenv("TERMIN_EDITOR_NATIVE_SMOKE_FRAMES", value)
     assert _smoke_frame_limit() == expected
+
+
+def test_idle_camera_updates_after_input_before_composition(monkeypatch):
+    times = iter((10.0, 10.125, 10.25))
+    monkeypatch.setattr(event_loop_module.time, "monotonic", lambda: next(times))
+    loop, services = _build_event_loop()
+    order = []
+    services.spacemouse.poll.side_effect = lambda: order.append("input")
+    services.editor_viewport.update.side_effect = lambda dt: order.append(("camera", dt))
+    services.window_manager.render_requested.side_effect = lambda: order.append("compose")
+    loop.poll_events()
+    loop.poll_events()
+    assert order == ["input", ("camera", .125), "compose"] * 2
+    services.request_editor_render.assert_not_called()

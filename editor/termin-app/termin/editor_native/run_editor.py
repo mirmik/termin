@@ -2023,6 +2023,7 @@ def _compose_native_editor(
         request_editor_render=request_editor_render,
         window=window,
         frame_limit=composition_config.frame_limit,
+        editor_viewport=native_viewport,
     )
 
 

@@ -5,6 +5,8 @@ find_package(nanobind CONFIG REQUIRED)
 
 set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/bindings/editor/editor_native_module.cpp
+    termin/bindings/editor/editor_camera_bindings.cpp
+    termin/editor/editor_camera_component.cpp
     termin/bindings/editor/gizmo_bindings.cpp
     termin/bindings/editor/editor_interaction_bindings.cpp
     termin/bindings/editor/frame_graph_debugger_bindings.cpp

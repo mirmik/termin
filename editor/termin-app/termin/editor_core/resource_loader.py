@@ -17,10 +17,12 @@ if TYPE_CHECKING:
 
 
 def register_editor_builtin_resources(resource_manager: "ResourceManager") -> None:
-    """Register built-in resources required before editor scene loading."""
+    """Register editor component types and resources after each runtime bootstrap."""
+    from termin.editor._editor_native import EditorCameraComponent
     from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController
     from termin.scene import publish_python_component
 
+    EditorCameraComponent.register_type()
     publish_python_component(EditorCameraUIController, owner="termin-app-python")
 
     resource_manager.register_builtin_shaders()

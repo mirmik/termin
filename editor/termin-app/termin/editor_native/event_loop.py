@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Callable
 
 from termin.base import log
@@ -44,6 +45,7 @@ class NativeEditorEventLoop:
         request_editor_render: Callable[[], None],
         window,
         frame_limit: int,
+        editor_viewport,
     ) -> None:
         self._terminal_interrupt = terminal_interrupt
         self._capture_profiler = capture_profiler
@@ -62,6 +64,8 @@ class NativeEditorEventLoop:
         self._window = window
         self._frame_limit = frame_limit
         self._frame_count = 0
+        self._editor_viewport = editor_viewport
+        self._last_update_time = time.monotonic()
 
     def poll_events(self) -> None:
         if self._terminal_interrupt.consume():
@@ -83,6 +87,12 @@ class NativeEditorEventLoop:
         with self._capture_profiler.section("Observers & Input"):
             self._scene_structure_observer.poll()
             self._spacemouse.poll()
+        now = time.monotonic()
+        dt = now - self._last_update_time
+        self._last_update_time = now
+        with self._capture_profiler.section("Editor Camera"):
+            if self._editor_viewport is not None:
+                self._editor_viewport.update(dt)
         with self._capture_profiler.section("Debug Tools"):
             self._framegraph_debugger.update()
             self._frame_profiler.update()
@@ -124,6 +134,7 @@ def attach_native_editor_event_loop(
     game_mode_controller,
     request_editor_render: Callable[[], None],
     window,
+    editor_viewport,
     frame_limit: int | None = None,
 ) -> None:
     """Attach the native frontend loop and register its ordered teardown."""
@@ -153,6 +164,7 @@ def attach_native_editor_event_loop(
             game_mode_controller=game_mode_controller,
             request_editor_render=request_editor_render,
             window=window,
+            editor_viewport=editor_viewport,
             frame_limit=_smoke_frame_limit() if frame_limit is None else frame_limit,
         ),
     )

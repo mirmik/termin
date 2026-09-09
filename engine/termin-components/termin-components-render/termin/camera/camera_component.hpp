@@ -41,6 +41,10 @@ namespace termin {
         uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
         uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
 
+    protected:
+        explicit CameraComponent(const char* type_name);
+        Mat44 compute_perspective_matrix(double aspect_override) const;
+
     private:
         std::vector<TcViewport> viewports_;
 
@@ -52,7 +56,7 @@ namespace termin {
         static void register_type();
 
         std::string get_projection_type_str() const;
-        void set_projection_type_str(const std::string& type);
+        virtual void set_projection_type_str(const std::string& type);
         std::string get_fov_mode_str() const;
         void set_fov_mode_str(const std::string& mode);
         double get_fov_x_degrees() const;
@@ -68,7 +72,7 @@ namespace termin {
         void set_aspect(double a);
         Mat44 get_view_matrix() const;
         Mat44 get_projection_matrix() const;
-        Mat44 compute_projection_matrix(double aspect_override) const;
+        virtual Mat44 compute_projection_matrix(double aspect_override) const;
         Vec3 get_position() const;
         void add_viewport(const TcViewport& vp);
         void remove_viewport(const TcViewport& vp);

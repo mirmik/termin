@@ -17,9 +17,23 @@ from termin.visual_scene import tc_visual_scene3d_create, tc_visual_scene3d_dest
 class _Controller:
     def __init__(self):
         self.snaps = []
+        self.radius = 7.0
 
     def snap_view(self, direction):
         self.snaps.append(direction)
+
+
+class _Camera:
+    def __init__(self):
+        self.entity = _Entity()
+        self.axis_distances = []
+        self.leave_count = 0
+
+    def enter_axis_view(self, distance):
+        self.axis_distances.append(distance)
+
+    def leave_axis_view(self):
+        self.leave_count += 1
 
 
 class _Entity:
@@ -47,7 +61,7 @@ def cube_rig():
     renders = []
     viewport = SimpleNamespace(
         document=document, composition=composition,
-        camera=SimpleNamespace(entity=_Entity()),
+        camera=_Camera(),
         _request_render=lambda: renders.append(True),
     )
     cube = NativeOrientationCube(viewport)
@@ -107,6 +121,12 @@ def test_real_scene_hits_and_activates_all_26_directions(cube_rig, patch):
     assert _pointer(rig, PointerEventType.Down, center) == EventResult.Handled
     assert _pointer(rig, PointerEventType.Up, center) == EventResult.Handled
     assert rig.viewport.camera.entity.controller.snaps == [ViewDirection[patch.key]]
+    if sum(value != 0 for value in patch.direction) == 1:
+        assert rig.viewport.camera.axis_distances == [7.0]
+        assert rig.viewport.camera.leave_count == 0
+    else:
+        assert rig.viewport.camera.axis_distances == []
+        assert rig.viewport.camera.leave_count == 1
     assert PointerEventType.Down not in rig.scene_events
     assert rig.renders
 
@@ -165,7 +185,7 @@ def test_rebinding_routes_to_new_controller_and_close_releases_owned_objects(cub
     count = rig.document.live_widget_count
     rig.cube.unbind_camera()
     assert not rig.cube.view.widget.enabled
-    rig.viewport.camera = SimpleNamespace(entity=_Entity())
+    rig.viewport.camera = _Camera()
     rig.cube.rebind_camera()
     assert rig.cube.view.widget.enabled
     assert rig.document.live_widget_count == count

@@ -18,7 +18,7 @@ from termin.scene import Entity
 from termin.input import INPUT_SOURCE_EDITOR, INPUT_SOURCE_RUNTIME
 from termin.input._input_native import set_input_source_mask
 from termin.render_components import OrbitCameraController
-from termin.render_components.camera import CameraComponent
+from termin.editor._editor_native import EditorCameraComponent
 from termin.base import log
 
 if TYPE_CHECKING:
@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 class EditorCameraManager:
     """
     Manages the editor camera and editor entities root.
+
+    Requires register_editor_builtin_resources() after runtime bootstrap.
 
     Handles:
     - Creation of EditorEntities root entity
@@ -44,11 +46,13 @@ class EditorCameraManager:
         scene: "Scene | None" = None,
         *,
         camera_overlay_factory: Callable[[Entity, object], Entity | None] | None = None,
+        request_render: Callable[[], None] | None = None,
     ):
         self._scene: "Scene | None" = None
         self.editor_entities: Entity | None = None
-        self.camera: CameraComponent | None = None
+        self.camera: EditorCameraComponent | None = None
         self._camera_overlay_factory = camera_overlay_factory
+        self._request_render = request_render
 
         # Legacy: if scene provided, attach immediately
         if scene is not None:
@@ -95,18 +99,19 @@ class EditorCameraManager:
         if self.editor_entities is not None:
             for child in self.editor_entities.transform.children:
                 if child.entity and child.entity.name == "camera":
-                    camera = child.entity.get_component_by_type("CameraComponent")
+                    camera = child.entity.get_component_by_type("EditorCameraComponent")
                     if camera is not None:
                         self.camera = camera
+                        camera.request_render_callback = self._request_render
                         self._ensure_camera_controller(child.entity)
                         self._enable_editor_input_sources(child.entity)
                         return
 
         # Create camera in standalone pool (not in scene)
         camera_entity = Entity(name="camera")
-        camera_entity.add_component_by_name("CameraComponent")
+        camera_entity.add_component_by_name("EditorCameraComponent")
         camera_entity.add_component_by_name("OrbitCameraController")
-        camera = camera_entity.get_component_by_type("CameraComponent")
+        camera = camera_entity.get_component_by_type("EditorCameraComponent")
 
         self._ensure_camera_controller(camera_entity)
 
@@ -115,6 +120,7 @@ class EditorCameraManager:
             self.editor_entities.transform.link(camera_entity.transform)
 
         self.camera = camera
+        camera.request_render_callback = self._request_render
         self._enable_editor_input_sources(camera_entity)
 
     def _enable_editor_input_sources(self, camera_entity: Entity) -> None:
@@ -176,6 +182,8 @@ class EditorCameraManager:
                 orientation.w,
             ],
             "radius": float(orbit_ctrl.radius) if orbit_ctrl else 5.0,
+            "axis_view": self.camera.axis_view,
+            "axis_ortho_size": self.camera.ortho_size,
         }
 
         # Serialize EditorEntities hierarchy components
@@ -208,6 +216,9 @@ class EditorCameraManager:
                     )
                     continue
                 if comp_data:
+                    if ref.type_name == "EditorCameraComponent":
+                        comp_data["data"]["projection_type"] = self.camera.navigation_projection_type
+                        comp_data["data"]["ortho_size"] = self.camera.navigation_ortho_size
                     components_data.append(comp_data)
             if components_data:
                 result[ent.name] = components_data
@@ -223,6 +234,7 @@ class EditorCameraManager:
         if self.camera is None or self.camera.entity is None:
             return
 
+        self.camera.reset_projection_transition()
         entity = self.camera.entity
         orbit_ctrl = self.orbit_controller
 
@@ -249,6 +261,11 @@ class EditorCameraManager:
         # Restore EditorEntities components
         if "editor_entities" in data:
             self._deserialize_editor_entities_components(data["editor_entities"])
+        if data.get("axis_view", False):
+            self.camera.enter_axis_view(float(orbit_ctrl.radius) if orbit_ctrl else 5.0)
+            if "axis_ortho_size" in data:
+                self.camera.ortho_size = float(data["axis_ortho_size"])
+            self.camera.finish_projection_transition()
 
     def _deserialize_editor_entities_components(self, data: dict) -> None:
         """Deserialize components of all entities in EditorEntities hierarchy."""
@@ -290,6 +307,25 @@ class EditorCameraManager:
                     camera_components.append(item)
                     break
 
+        # Older snapshots may only carry the UI projection preference.
+        has_projection = any(
+            isinstance(item, dict)
+            and item.get("type") in ("CameraComponent", "EditorCameraComponent")
+            and isinstance(item.get("data"), dict)
+            and "projection_type" in item["data"]
+            for item in camera_components
+        )
+        if self.camera is not None and not has_projection:
+            for item in camera_components:
+                if (isinstance(item, dict)
+                        and item.get("type") == "EditorCameraUIController"
+                        and isinstance(item.get("data"), dict)
+                        and "ortho_enabled" in item["data"]):
+                    self.camera.projection_type = (
+                        "orthographic" if item["data"]["ortho_enabled"] else "perspective"
+                    )
+                    break
+
         for ent in entities:
             components_data = (
                 camera_components if ent.name == "camera" else data.get(ent.name)
@@ -326,6 +362,10 @@ class EditorCameraManager:
                     )
                     continue
 
+                # Preserve all legacy camera fields and envelope identity.
+                if ent.name == "camera" and comp_type == "CameraComponent":
+                    comp_type = "EditorCameraComponent"
+
                 # Find matching component by type
                 ref = ent.get_tc_component(comp_type)
                 if ref:
@@ -333,6 +373,10 @@ class EditorCameraManager:
                     if isinstance(source_id, str) and source_id:
                         ref.source_id = source_id
                     ref.deserialize_data(comp_data_inner, scene_ref)
+                    # Projection is a camera property, not a base inspect field.
+                    if (comp_type == "EditorCameraComponent" and self.camera is not None
+                            and "projection_type" in comp_data_inner):
+                        self.camera.projection_type = comp_data_inner["projection_type"]
 
     def recreate_in_scene(self, new_scene: "Scene") -> None:
         """
@@ -340,15 +384,16 @@ class EditorCameraManager:
 
         Called when scene is reset or loaded.
         """
+        self.destroy_editor_entities()
         self._scene = new_scene
-        self.editor_entities = None
-        self.camera = None
 
         self._ensure_editor_entities_root()
         self._ensure_editor_camera()
 
     def destroy_editor_entities(self) -> None:
         """Destroy EditorEntities (they live in standalone pool, not in scene)."""
+        if self.camera is not None:
+            self.camera.request_render_callback = None
         if self.editor_entities is None:
             return
 

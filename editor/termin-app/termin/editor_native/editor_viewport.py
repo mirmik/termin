@@ -134,6 +134,7 @@ class NativeEditorViewport:
                 rendering_controller=None,
                 rendering_manager=rendering_manager,
                 make_editor_pipeline=make_editor_pipeline,
+                request_render=request_render,
             )
             attachment.attach(scene, restore_state=False)
             viewport = attachment.viewport
@@ -196,6 +197,15 @@ class NativeEditorViewport:
     @property
     def camera(self):
         return self.attachment.camera
+
+    def update(self, dt: float) -> None:
+        """Advance the editor-owned camera even when no frame is pending."""
+        if self._closed:
+            return
+        camera = self.camera
+        if (camera is not None and camera.enabled and camera.active_in_editor
+                and camera.entity is not None and camera.entity.enabled):
+            camera.update(dt)
 
     @property
     def overlay_names(self) -> tuple[str, ...]:

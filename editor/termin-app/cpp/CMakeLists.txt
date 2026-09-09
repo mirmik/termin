@@ -323,6 +323,8 @@ if(TERMIN_BUILD_TESTS)
 
     add_executable(termin_tests
         tests/main.cpp
+        termin/editor/editor_camera_component.cpp
+        tests/tests_editor_camera_component.cpp
         termin/editor/component_editor_visual.cpp
         termin/editor/camera_frustum_debug_gizmo.cpp
         termin/editor/editor_interaction_system.cpp

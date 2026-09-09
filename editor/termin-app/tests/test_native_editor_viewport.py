@@ -200,6 +200,7 @@ class _Attachment:
         rendering_controller,
         rendering_manager,
         make_editor_pipeline,
+        request_render,
     ) -> None:
         self.display = display
         self.rendering_controller = rendering_controller
@@ -414,3 +415,27 @@ def test_editor_interaction_callbacks_can_be_cleared_for_owner_shutdown():
     assert interaction.on_request_update is None
     assert interaction.on_transform_end is None
     assert interaction.on_key is None
+
+
+def test_camera_update_respects_editor_lifecycle_flags():
+    from unittest.mock import Mock
+    runtime = object.__new__(NativeEditorViewport)
+    camera = SimpleNamespace(enabled=True, active_in_editor=True,
+                             entity=SimpleNamespace(enabled=True), update=Mock())
+    runtime.attachment = SimpleNamespace(camera=camera)
+    runtime._closed = False
+    runtime.update(.1)
+    camera.update.assert_called_once_with(.1)
+    camera.update.reset_mock()
+    camera.active_in_editor = False
+    runtime.update(.1)
+    camera.active_in_editor = True
+    camera.enabled = False
+    runtime.update(.1)
+    camera.enabled = True
+    camera.entity.enabled = False
+    runtime.update(.1)
+    camera.entity.enabled = True
+    runtime._closed = True
+    runtime.update(.1)
+    camera.update.assert_not_called()

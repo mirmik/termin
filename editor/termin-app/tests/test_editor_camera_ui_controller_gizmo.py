@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from termin.bootstrap import bootstrap_editor, shutdown_editor
 from termin.editor_core.editor_camera import EditorCameraManager
 from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController
@@ -200,7 +202,7 @@ def test_camera_state_restores_component_envelope_identity() -> None:
         transform = SimpleNamespace(children=[])
 
         def get_tc_component(self, component_type: str):
-            return component if component_type == "CameraComponent" else None
+            return component if component_type == "EditorCameraComponent" else None
 
     manager = EditorCameraManager()
     manager.editor_entities = TestEntity()
@@ -236,7 +238,7 @@ def test_editor_camera_components_keep_source_identity_across_recreation() -> No
             component["type"]: component["source_id"]
             for component in initial_components
         }
-        assert initial_ids["CameraComponent"]
+        assert initial_ids["EditorCameraComponent"]
         assert initial_ids["OrbitCameraController"]
         assert initial_ids["EditorCameraUIController"]
 
@@ -251,6 +253,46 @@ def test_editor_camera_components_keep_source_identity_across_recreation() -> No
         }
 
         assert restored_ids == initial_ids
+    finally:
+        manager.detach_from_scene()
+        scene.destroy()
+        shutdown_editor()
+
+
+def test_editor_camera_restores_axis_projection_and_detaches_render_callback():
+    from termin.scene import TcScene
+
+    bootstrap_editor()
+    register_editor_builtin_resources(_ResourceManager())
+    scene = TcScene.create("editor-camera-axis-state")
+    renders = []
+    manager = EditorCameraManager(request_render=lambda: renders.append(True))
+    try:
+        manager.attach_to_scene(scene)
+        camera = manager.camera
+        camera.fov_x = 1.0
+        camera.near_clip = .2
+        camera.enter_axis_view(manager.orbit_controller.radius)
+        camera.finish_projection_transition()
+        camera.ortho_size *= 1.5
+        saved_size = camera.ortho_size
+        data = manager.get_camera_data()
+        assert data["axis_view"]
+        manager.detach_from_scene()
+        assert camera.request_render_callback is None
+        manager.attach_to_scene(scene)
+        manager.set_camera_data(data)
+        restored = manager.camera
+        assert restored.axis_view
+        assert not restored.transitioning
+        assert restored.navigation_projection_type == "perspective"
+        assert restored.ortho_size == pytest.approx(saved_size)
+        assert restored.fov_x == pytest.approx(1.0)
+        assert restored.near_clip == pytest.approx(.2)
+        restored.leave_axis_view()
+        restored.update(1.0)
+        assert restored.projection_type == "perspective"
+        assert renders
     finally:
         manager.detach_from_scene()
         scene.destroy()

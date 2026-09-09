@@ -63,8 +63,8 @@ def test_ground_grid_uses_zero_to_one_depth_contract() -> None:
 
     assert "return clip.z / clip.w;" in text
     assert "(clip.z / clip.w) * 0.5 + 0.5" not in text
-    assert "(GridParams.u_near * GridParams.u_far)" in text
-    assert "GridParams.u_far - ndc_depth * (GridParams.u_far - GridParams.u_near)" in text
+    assert "float linear_depth = mul(GridParams.u_view, float4(pos, 1.0)).y;" in text
+    assert "ndc_depth" not in text
 
 
 def test_opengl_clip_control_is_validated_and_centralized() -> None:

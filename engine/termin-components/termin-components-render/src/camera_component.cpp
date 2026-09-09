@@ -54,7 +54,10 @@ namespace termin {
     };
 
     CameraComponent::CameraComponent()
-        : CxxComponent("CameraComponent") {
+        : CameraComponent("CameraComponent") {}
+
+    CameraComponent::CameraComponent(const char* type_name)
+        : CxxComponent(type_name) {
         tc_camera_capability_attach(&_c, &g_camera_vtable, this);
     }
 
@@ -137,6 +140,10 @@ namespace termin {
             return Mat44::orthographic(left, right, bottom, top, near_clip, far_clip);
         }
 
+        return compute_perspective_matrix(aspect_override);
+    }
+
+    Mat44 CameraComponent::compute_perspective_matrix(double aspect_override) const {
         double safe_aspect = std::max(1e-6, aspect_override);
         switch (fov_mode) {
         case FovMode::FixHorizontal: {

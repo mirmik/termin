@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from termin.base import log
+from termin.editor._editor_native import EditorCameraComponent
 from termin.inspect import InspectField
 from termin.render import RENDER_CATEGORY_NAVMESH
 from termin.scene import PythonComponent
@@ -121,6 +122,10 @@ class EditorCameraUIController(PythonComponent):
         self._apply_wireframe()
         if self._camera is None:
             log.error("[EditorCameraUIController] cannot apply projection without camera")
+        elif isinstance(self._camera, EditorCameraComponent):
+            # Camera serialization owns the actual projection, including a
+            # temporary cube snap. Binding UI must not cancel that state.
+            self.ortho_enabled = self._camera.navigation_projection_type == "orthographic"
         else:
             self._camera.projection_type = (
                 "orthographic" if self.ortho_enabled else "perspective"
