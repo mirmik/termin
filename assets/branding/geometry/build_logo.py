@@ -47,6 +47,7 @@ GLYPHS = {
                     (210, 272),
                     (60, 226),
                 ],
+                strict=True,
             )
         ],
         [],
@@ -132,7 +133,7 @@ def make_glyph(letter, patches, ridges, body_material, edge_material):
         points[new][2] = depth
         additions = []
         for _, tri, _ in containing:
-            for a, b in zip(tri, tri[1:] + tri[:1]):
+            for a, b in zip(tri, tri[1:] + tri[:1], strict=True):
                 if abs(signed_area(points[a], points[b], (x, y))) > 1e-6:
                     additions.append((a, b, new))
         remove = {item[0] for item in containing}
@@ -143,7 +144,7 @@ def make_glyph(letter, patches, ridges, body_material, edge_material):
         if (Vector(verts[b]) - Vector(verts[a])).cross(Vector(verts[c]) - Vector(verts[a])).z < 0:
             b, c = c, b
         front.append((a, b, c))
-    counts = Counter(tuple(sorted((a, b))) for tri in front for a, b in zip(tri, tri[1:] + tri[:1]))
+    counts = Counter(tuple(sorted((a, b))) for tri in front for a, b in zip(tri, tri[1:] + tri[:1], strict=True))
     if max(counts.values()) > 2:
         raise ValueError(f"{letter}: overlapping patch edges")
     n = len(verts)
@@ -151,7 +152,7 @@ def make_glyph(letter, patches, ridges, body_material, edge_material):
     faces = front + [tuple(i + n for i in reversed(tri)) for tri in front]
     boundary = []
     for tri in front:
-        for a, b in zip(tri, tri[1:] + tri[:1]):
+        for a, b in zip(tri, tri[1:] + tri[:1], strict=True):
             if counts[tuple(sorted((a, b)))] == 1:
                 faces.extend([(b, a, a + n), (b, a + n, b + n)])
                 boundary.append((a, b))
@@ -162,7 +163,7 @@ def make_glyph(letter, patches, ridges, body_material, edge_material):
         raise ValueError(f"{letter}: Blender repaired invalid geometry")
     if any(p.area < 1e-9 for p in mesh.polygons):
         raise ValueError(f"{letter}: degenerate triangle")
-    edge_counts = Counter(tuple(sorted((a, b))) for face in faces for a, b in zip(face, face[1:] + face[:1]))
+    edge_counts = Counter(tuple(sorted((a, b))) for face in faces for a, b in zip(face, face[1:] + face[:1], strict=True))
     if set(edge_counts.values()) != {2}:
         raise ValueError(f"{letter}: mesh is not closed/manifold")
     obj = bpy.data.objects.new(f"TERMIN_{letter}", mesh)
@@ -174,7 +175,7 @@ def make_glyph(letter, patches, ridges, body_material, edge_material):
     normals = [Vector(mesh.polygons[i].normal) for i in range(len(front))]
     adjacency = {}
     for index, tri in enumerate(front):
-        for a, b in zip(tri, tri[1:] + tri[:1]):
+        for a, b in zip(tri, tri[1:] + tri[:1], strict=True):
             adjacency.setdefault(tuple(sorted((a, b))), []).append(index)
     curve = bpy.data.curves.new(f"{letter}_structural_light", "CURVE")
     curve.dimensions = "3D"
@@ -186,7 +187,7 @@ def make_glyph(letter, patches, ridges, body_material, edge_material):
             continue
         spline = curve.splines.new("POLY")
         spline.points.add(1)
-        for point, idx in zip(spline.points, (a, b)):
+        for point, idx in zip(spline.points, (a, b), strict=True):
             x, y, z = verts[idx]
             point.co = (x, y, z + 0.008, 1)
     edge_obj = bpy.data.objects.new(f"{letter}_edge_light", curve)

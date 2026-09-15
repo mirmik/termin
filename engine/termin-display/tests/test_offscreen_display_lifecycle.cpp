@@ -27,6 +27,11 @@ namespace {
             return {};
         }
         tgfx::TextureHandle create_texture(const tgfx::TextureDesc& desc) override {
+            // A display surface must work without depth-format support. Depth
+            // belongs to pipeline render targets, not the compositing output.
+            if (tgfx::has_flag(desc.usage, tgfx::TextureUsage::DepthStencilAttachment)) {
+                return {};
+            }
             created.push_back(desc);
             return tgfx::TextureHandle{next_texture_id++};
         }
@@ -85,22 +90,26 @@ int main() {
     TestRenderDevice device;
     tc_display_handle display = termin::create_offscreen_display(&device, 320, 200, "offscreen-lifecycle");
     assert(tc_display_handle_valid(display));
-    assert(device.created.size() == 2u);
+    assert(device.created.size() == 1u);
     assert(device.created[0].format == tgfx::PixelFormat::RGBA16F);
+    assert(device.created[0].width == 320u);
+    assert(device.created[0].height == 200u);
     assert(tc_display_get_color_texture_id(display) != 0u);
     assert(tc_display_get_graphics_domain_key(display) == reinterpret_cast<uintptr_t>(&device));
 
     assert(tc_display_resize(display, 640, 360));
-    assert(device.created.size() == 4u);
-    assert(device.created[2].format == tgfx::PixelFormat::RGBA16F);
-    assert(device.destroyed.size() == 2u);
+    assert(device.created.size() == 2u);
+    assert(device.created[1].format == tgfx::PixelFormat::RGBA16F);
+    assert(device.created[1].width == 640u);
+    assert(device.created[1].height == 360u);
+    assert(device.destroyed.size() == 1u);
 
-    // Explicit display destruction semantically releases both current GPU
-    // textures while the device is still alive, then frees surface storage.
+    // Explicit display destruction releases the current GPU texture while the
+    // device is still alive, then frees surface storage.
     assert(tc_display_free(display));
-    assert(device.destroyed.size() == 4u);
+    assert(device.destroyed.size() == 2u);
     assert(!tc_display_free(display));
-    assert(device.destroyed.size() == 4u);
+    assert(device.destroyed.size() == 2u);
 
     // The public host-facing constructor resolves the application-owned
     // interop device without exposing a raw device pointer across the ABI.

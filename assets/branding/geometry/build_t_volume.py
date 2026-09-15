@@ -12,7 +12,6 @@ import subprocess
 import sys
 
 import bpy
-from mathutils import Vector
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -44,10 +43,10 @@ def build(args):
     front = [tuple(v.co) for v in original.data.vertices[:n]]
     # The interior fan hub is the approved front's fold junction.
     hub = front[0]
-    counts = Counter(tuple(sorted((a, b))) for tri in front_faces for a, b in zip(tri, tri[1:] + tri[:1]))
+    counts = Counter(tuple(sorted((a, b))) for tri in front_faces for a, b in zip(tri, tri[1:] + tri[:1], strict=True))
     boundary = []
     for tri in front_faces:
-        for a, b in zip(tri, tri[1:] + tri[:1]):
+        for a, b in zip(tri, tri[1:] + tri[:1], strict=True):
             if counts[tuple(sorted((a, b)))] == 1:
                 boundary.append((a, b))
     interior = set(range(n)) - {i for pair in boundary for i in pair}
@@ -55,7 +54,7 @@ def build(args):
     # A contracted rear contour stays strictly inside the original front
     # silhouette. The folded rear fan reaches 1.6 units behind the face.
     rear = []
-    for i, (x, y, z) in enumerate(front):
+    for i, (x, y, _z) in enumerate(front):
         rx = hub[0] + 0.86 * (x - hub[0])
         ry = hub[1] + 0.86 * (y - hub[1])
         height = (y + 1.94) / 3.8
