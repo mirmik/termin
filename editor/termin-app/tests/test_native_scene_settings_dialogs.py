@@ -56,12 +56,26 @@ def test_native_scene_names_dialog_saves_reopens_and_releases(scene):
     assert dialog.show()
     root = dialog.dialog.widget.children[0]
     assert root.children[0].children[0].bounds.height == EDITOR_UI_METRICS.section_row
-    layers = dialog.layers.text.split("\n")
-    layers[5] = "Effects"
-    dialog.layers.text = "\n".join(layers)
+    assert len(dialog.layers) == 64
+    assert len(dialog.flags) == 64
+    assert dialog.layer_scroll.vertical_scroll_enabled
+    assert not dialog.layer_scroll.horizontal_scroll_enabled
+    layer_rows = root.children[0].children[1].children[0].children
+    flag_rows = root.children[1].children[1].children[0].children
+    assert [row.children[0].debug_name for row in layer_rows] == [
+        f"scene-names-layers-index-{index}" for index in range(64)
+    ]
+    assert [row.children[0].debug_name for row in flag_rows] == [
+        f"scene-names-flags-index-{index}" for index in range(64)
+    ]
+    dialog.layers[5].text = "Effects"
+    dialog.flags[7].text = "Selected"
     assert dialog.dialog.activate("ok")
     assert SceneNamesController(scene).load().layers[5] == "Effects"
+    assert SceneNamesController(scene).load().flags[7] == "Selected"
     assert dialog.show()
+    assert dialog.layers[5].text == "Effects"
+    assert dialog.flags[7].text == "Selected"
 
     dialog.close()
     assert not document.is_alive(dialog.dialog.handle)

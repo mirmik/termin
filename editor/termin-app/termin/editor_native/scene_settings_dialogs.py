@@ -38,12 +38,6 @@ def _row(document: TcDocument, label: str, control) -> WidgetRef:
     return row
 
 
-def _lines(text: str) -> tuple[str, ...]:
-    values = text.split("\n")[:64]
-    values.extend("" for _ in range(64 - len(values)))
-    return tuple(values)
-
-
 def _set_combo_items(combo, items) -> None:
     combo.clear()
     for item in items:
@@ -55,8 +49,10 @@ class NativeSceneNamesDialog:
     document: TcDocument
     controller: SceneNamesController
     dialog: object
-    layers: object
-    flags: object
+    layers: tuple[object, ...]
+    flags: tuple[object, ...]
+    layer_scroll: object
+    flag_scroll: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
     _closed: bool = False
@@ -67,8 +63,10 @@ class NativeSceneNamesDialog:
         if self.dialog.open:
             return False
         snapshot = self.controller.load()
-        self.layers.text = "\n".join(snapshot.layers)
-        self.flags.text = "\n".join(snapshot.flags)
+        for editor, name in zip(self.layers, snapshot.layers, strict=True):
+            editor.text = name
+        for editor, name in zip(self.flags, snapshot.flags, strict=True):
+            editor.text = name
         shown = self.dialog.show(self.viewport())
         if shown:
             self.request_render()
@@ -76,7 +74,10 @@ class NativeSceneNamesDialog:
 
     def save(self) -> SceneNamesSnapshot:
         snapshot = self.controller.save(
-            SceneNamesSnapshot(_lines(self.layers.text), _lines(self.flags.text))
+            SceneNamesSnapshot(
+                tuple(editor.text for editor in self.layers),
+                tuple(editor.text for editor in self.flags),
+            )
         )
         self.request_render()
         return snapshot
@@ -331,20 +332,53 @@ def _color_text(value) -> str:
     return ", ".join(f"{float(component):.2f}" for component in value[:3])
 
 
+def _build_scene_name_column(document, title: str, kind: str):
+    column = document.create_vstack(f"scene-names-{kind}")
+    column.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
+    column.add_fixed_child(document.create_label(title), EDITOR_UI_METRICS.section_row)
+
+    name_list = document.create_vstack(f"scene-names-{kind}-list")
+    name_list.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
+    editors = []
+    for index in range(64):
+        row = document.create_hstack(f"scene-names-{kind}-row-{index}")
+        row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+        index_label = document.create_label(
+            str(index), f"scene-names-{kind}-index-{index}"
+        )
+        editor = document.create_text_input()
+        editor.placeholder = "Unnamed"
+        row.add_fixed_child(index_label, 32.0)
+        row.add_stretch_child(editor.widget)
+        name_list.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
+        editors.append(editor)
+
+    content_height = (
+        64 * EDITOR_UI_METRICS.compact_row
+        + 63 * EDITOR_UI_METRICS.compact_spacing
+    )
+    name_list.preferred_size = Size(320.0, content_height)
+    scroll = document.create_scroll_area(f"scene-names-{kind}-scroll")
+    scroll.set_scroll_axes(False, True)
+    scroll.set_content(name_list)
+    column.add_stretch_child(scroll.widget)
+    return column, tuple(editors), scroll
+
+
 def build_native_scene_names_dialog(document, controller, *, viewport, request_render):
     root = document.create_hstack("native-scene-names")
     root.stable_id = "editor.scene-names"
     root.preferred_size = Size(760.0, 560.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
-    columns = []
-    for title in ("Layers (0-63)", "Flags (0-63)"):
-        column = document.create_vstack(f"scene-names-{title[:5].lower()}")
-        column.add_fixed_child(document.create_label(title), EDITOR_UI_METRICS.section_row)
-        area = document.create_text_area()
-        column.add_stretch_child(_ref(document, area))
-        root.add_stretch_child(column)
-        columns.append(area)
+    layer_column, layer_editors, layer_scroll = _build_scene_name_column(
+        document, "Layers (0-63)", "layers"
+    )
+    flag_column, flag_editors, flag_scroll = _build_scene_name_column(
+        document, "Flags (0-63)", "flags"
+    )
+    root.add_stretch_child(layer_column)
+    root.add_stretch_child(flag_column)
     dialog = document.create_dialog("Layers & Flags")
     dialog.actions = [
         DialogAction("ok", "OK", is_default=True),
@@ -352,7 +386,15 @@ def build_native_scene_names_dialog(document, controller, *, viewport, request_r
     ]
     dialog.set_content(root)
     result = NativeSceneNamesDialog(
-        document, controller, dialog, columns[0], columns[1], viewport, request_render
+        document,
+        controller,
+        dialog,
+        layer_editors,
+        flag_editors,
+        layer_scroll,
+        flag_scroll,
+        viewport,
+        request_render,
     )
     weak_result = weakref.ref(result)
 
