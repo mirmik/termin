@@ -91,7 +91,8 @@ if(TERMIN_BUILD_TESTS)
     if(TERMIN_PROFILER_BUILD_GUI)
         add_test(NAME termin_profiler_window_smoke COMMAND termin_profiler)
         set_tests_properties(termin_profiler_window_smoke PROPERTIES
-            ENVIRONMENT "TERMIN_PROFILER_RENDER_COUNT=2"
+            ENVIRONMENT
+                "TERMIN_PROFILER_RENDER_COUNT=2;TERMIN_SDK=${CMAKE_INSTALL_PREFIX}"
             SKIP_RETURN_CODE 77
         )
         termin_add_test_labels(termin_profiler_window_smoke "termin:capability:window")
