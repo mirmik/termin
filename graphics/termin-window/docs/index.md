@@ -40,6 +40,17 @@ SDL's process-global queue is routed through per-window pending queues, so
 polling one `BackendWindow` does not consume events addressed to another and a
 global quit request reaches every registered window.
 
+On Linux with SDL 2.0.22 or newer, a nonempty `WAYLAND_DISPLAY` makes native
+Wayland the preferred video driver, followed by X11 if Wayland cannot
+initialize. This avoids routing Wayland sessions through XWayland by SDL2's
+default ordering; the XWayland Vulkan FIFO path can show frames out of order
+on affected systems (see [the investigation](../../../docs/analysis/2026-09-18-vulkan-camera-jitter.md)).
+An explicit `SDL_VIDEODRIVER`, an existing host video-driver hint, or an already
+initialized SDL video subsystem takes precedence. Other platforms and X11-only
+sessions retain SDL's normal driver selection. Startup logs report the actual
+SDL video driver. `SDL_VIDEODRIVER=x11` remains available for explicit XWayland
+diagnostics.
+
 The target framework-neutral `WindowManager` owns a collection of
 `BackendWindow` objects created on one borrowed `WindowedGraphicsSession`. It
 publishes stable generational handles, ordered per-window event batches and

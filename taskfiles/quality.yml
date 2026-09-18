@@ -49,6 +49,12 @@ tasks:
     cmds:
       - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-relocated-sdk.ps1 {{.CLI_ARGS}}{{else}}./scripts/smoke-relocated-sdk {{.CLI_ARGS}}{{end}}'
 
+  smoke:present-order:
+    desc: Show immutable frame serials for external presentation-order capture
+    platforms: [linux]
+    cmds:
+      - ./sdk/bin/termin_python -I scripts/smoke-present-order {{.CLI_ARGS}}
+
   lint:cpp:
     desc: Run repository C/C++ lint checks
     platforms: [linux]

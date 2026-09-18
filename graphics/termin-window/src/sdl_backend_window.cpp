@@ -59,6 +59,17 @@ namespace termin {
 #endif
 
         void configure_sdl_window_hints() {
+#if defined(__linux__) && !defined(__ANDROID__) && defined(SDL_HINT_VIDEODRIVER)
+            // SDL2 may prefer X11 even inside a Wayland desktop. Use the native
+            // compositor connection first: the XWayland presentation path can
+            // exhibit backwards Vulkan FIFO frames (#2438). Keep X11 available
+            // when Wayland cannot initialize, and respect host/user selection.
+            const char* wayland_display = std::getenv("WAYLAND_DISPLAY");
+            if (SDL_WasInit(SDL_INIT_VIDEO) == 0 && wayland_display && *wayland_display &&
+                SDL_GetHint(SDL_HINT_VIDEODRIVER) == nullptr) {
+                SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "wayland,x11", SDL_HINT_DEFAULT);
+            }
+#endif
 #ifdef SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH
             SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
 #endif
@@ -458,6 +469,7 @@ namespace termin {
         if (SDL_WasInit(SDL_INIT_VIDEO) == 0 && SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
             throw std::runtime_error(std::string("SDL_InitSubSystem failed: ") + SDL_GetError());
         }
+        tc_log_info("[SDLWindowSystem] video driver: %s", SDL_GetCurrentVideoDriver());
         impl_->backend = tgfx::default_backend_from_env();
 
         if (impl_->backend == tgfx::BackendType::OpenGL) {

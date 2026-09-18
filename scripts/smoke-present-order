@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""Show immutable frame serials for external desktop/video capture on Linux.
+
+The 800x400 image encodes serial modulo 256 in eight bits, least significant
+bit on the left. Bit b occupies x=[40+90*b,110+90*b), y=[40,110).
+White means one; y=[130,200) contains the complementary bits. The moving
+white bar occupies x=[20+3*serial,28+3*serial), y=[230,360).
+
+Compare successive captured serials using ((current-previous+128)%256)-128.
+This distinguishes backward frames from 255->0 wrapping only when fewer than
+128 presentations separate capture samples. Repeated/skipped serials alone
+are normal when capture and presentation rates differ. Reject samples whose
+two barcode rows are not complements. This probe does not verify output.
+
+--output PREFIX writes PREFIX.csv (full serial, timestamps in seconds since
+the presentation loop started) and PREFIX.ready (JSON startup metadata).
+Capture the displayed window externally: GPU readback bypasses presentation.
+Choose the backend with TERMIN_BACKEND and SDL driver with SDL_VIDEODRIVER.
+"""
+
+from __future__ import annotations
+
+import argparse
+from contextlib import ExitStack
+import csv
+import ctypes
+import json
+import math
+from pathlib import Path
+import sys
+import time
+import traceback
+
+
+def nonnegative_number(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise argparse.ArgumentTypeError("expected a finite nonnegative number")
+    return number
+
+
+def run(args: argparse.Namespace) -> None:
+    import numpy as np
+
+    from termin.window import PresentationMode, WindowedGraphicsSession, quit_sdl
+    from termin.graphics import TextureEncoding, Tgfx2Context
+
+    cleanup_errors: list[str] = []
+
+    def cleanup(label, action):
+        try:
+            action()
+        except Exception:
+            cleanup_errors.append(label)
+            print(f"Presentation probe cleanup failed: {label}", file=sys.stderr)
+            traceback.print_exc()
+
+    ready_path = None
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        ready_path = Path(str(args.output) + ".ready")
+        ready_path.unlink(missing_ok=True)
+
+    with ExitStack() as stack:
+        writer = None
+        if args.output is not None:
+            csv_file = stack.enter_context(
+                Path(str(args.output) + ".csv").open("w", newline="", encoding="utf-8")
+            )
+            writer = csv.writer(csv_file)
+            writer.writerow(("serial", "before_present", "after_present"))
+
+        stack.callback(cleanup, "quit SDL", quit_sdl)
+        session = WindowedGraphicsSession.create_native()
+        stack.callback(cleanup, "close graphics session", session.close)
+        mode = PresentationMode.VSYNC if args.mode == "vsync" else PresentationMode.IMMEDIATE
+        window = session.create_window("Termin presentation serial probe", 800, 400, mode)
+        stack.callback(cleanup, "close window", window.close)
+
+        # Diagnostic query only; the window/session remains the owner of SDL.
+        sdl = ctypes.CDLL("libSDL2-2.0.so.0")
+        sdl.SDL_GetCurrentVideoDriver.argtypes = []
+        sdl.SDL_GetCurrentVideoDriver.restype = ctypes.c_char_p
+        driver = sdl.SDL_GetCurrentVideoDriver()
+        if driver is None:
+            raise RuntimeError("SDL reports no current video driver after creating the window")
+
+        graphics = Tgfx2Context.from_runtime(session.graphics)
+        context = graphics.context
+        textures = []
+
+        def release_textures():
+            for texture in textures:
+                cleanup("destroy serial texture", lambda texture=texture: context.destroy_texture(texture))
+
+        stack.callback(release_textures)
+        stack.callback(cleanup, "wait for GPU", graphics.device.wait_idle)
+
+        # Pre-upload every payload. The presentation loop never mutates a
+        # texture, eliminating producer uploads and camera updates as causes.
+        for serial in range(256):
+            pixels = np.zeros((400, 800, 4), dtype=np.uint8)
+            pixels[:, :, 3] = 255
+            pixels[:20, :, :3] = 128
+            pixels[380:, :, :3] = 128
+            for bit in range(8):
+                x = 40 + bit * 90
+                value = 255 if (serial >> bit) & 1 else 0
+                pixels[40:110, x : x + 70, :3] = value
+                pixels[130:200, x : x + 70, :3] = 255 - value
+            x = 20 + serial * 3
+            pixels[230:360, x : x + 8, :3] = 255
+            textures.append(context.create_texture_rgba8(800, 400, pixels, TextureEncoding.LINEAR))
+
+        window.present(textures[0])
+        graphics.device.wait_idle()
+        metadata = {
+            "driver": driver.decode("utf-8"),
+            "device": graphics.device.adapter_name,
+            "requested_mode": args.mode,
+            "applied_mode": str(window.presentation_mode),
+            "fps_limit": args.fps,
+            "seconds": args.seconds,
+            "width": 800,
+            "height": 400,
+            "serial_modulus": 256,
+        }
+        print(json.dumps(metadata), flush=True)
+        if ready_path is not None:
+            ready_path.write_text(json.dumps(metadata) + "\n", encoding="utf-8")
+
+        start = time.monotonic()
+        serial = 0
+        while not window.should_close():
+            if args.seconds and time.monotonic() - start >= args.seconds:
+                break
+            window.poll_events()
+            if window.should_close():
+                break
+            before = time.monotonic()
+            window.present(textures[serial % 256])
+            after = time.monotonic()
+            if writer is not None:
+                writer.writerow((serial, before - start, after - start))
+            serial += 1
+            if args.fps:
+                time.sleep(max(0.0, start + serial / args.fps - time.monotonic()))
+        elapsed = time.monotonic() - start
+        print(f"Presented {serial} frames in {elapsed:.3f}s", flush=True)
+
+    if cleanup_errors:
+        raise RuntimeError("presentation probe cleanup failed: " + ", ".join(cleanup_errors))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--mode", choices=("vsync", "immediate"), default="vsync")
+    parser.add_argument("--seconds", type=nonnegative_number, default=15.0, help="duration; 0 runs until closed")
+    parser.add_argument("--fps", type=nonnegative_number, default=0.0, help="presentation rate limit; 0 is unlimited")
+    parser.add_argument("--output", type=Path, help="optional prefix for .csv and .ready files")
+    args = parser.parse_args()
+    try:
+        run(args)
+    except Exception:
+        print("Presentation serial probe failed", file=sys.stderr)
+        traceback.print_exc()
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
