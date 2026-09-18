@@ -48,6 +48,8 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
         def set_enabled(component, value):
             component.enabled = bool(value)
 
+        layer_names = [""] * 64
+        flag_names = [""] * 64
         controller = EntityInspectorController(
             undo_handler=stack.push,
             field_collector=lambda _component: {
@@ -68,6 +70,7 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
                 ),
             ),
             soa_component_type_collector=lambda: ("NativeInspectorSoAProbe",),
+            classification_names=lambda: (layer_names, flag_names),
         )
         controller.set_scene(scene)
         document = tc_ui_document_create()
@@ -96,6 +99,12 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
         assert transform_right <= scroll_right + 0.5
         assert inspector.name_input.text == "source"
         assert inspector.uuid_value.text == entity.uuid
+        assert inspector.layer_combo.item_text(4) == "Layer 4"
+        layer_names[4] = "Gameplay"
+        flag_names[7] = "Selected"
+        controller.refresh()
+        assert inspector.layer_combo.item_text(4) == "Gameplay"
+        assert controller.snapshot.flag_names[7] == "Selected"
         assert inspector.component_model.item_count == 1
         assert inspector.component_model.items[0].subtitle == ""
         assert inspector.component_list.select(0)

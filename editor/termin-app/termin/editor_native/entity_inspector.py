@@ -76,7 +76,11 @@ class NativeEntityInspector:
             self.uuid_value.text = snapshot.uuid or "No entity selected"
             self.prefab_status.text = snapshot.prefab_status
             self.prefab_status.widget.visible = bool(snapshot.prefab_status)
-            if self.layer_combo.item_count != len(snapshot.layer_names):
+            current_layer_names = tuple(
+                self.layer_combo.item_text(index)
+                for index in range(self.layer_combo.item_count)
+            )
+            if current_layer_names != snapshot.layer_names:
                 self.layer_combo.clear()
                 for name in snapshot.layer_names:
                     self.layer_combo.add_item(name)

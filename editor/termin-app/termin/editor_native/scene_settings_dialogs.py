@@ -55,6 +55,7 @@ class NativeEntityClassificationDialog:
     flag_scroll: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
+    on_saved: Callable[[EntityClassificationSnapshot], None] | None = None
     _closed: bool = False
 
     def show(self) -> bool:
@@ -79,6 +80,8 @@ class NativeEntityClassificationDialog:
                 tuple(editor.text for editor in self.flags),
             )
         )
+        if self.on_saved is not None:
+            self.on_saved(snapshot)
         self.request_render()
         return snapshot
 
@@ -365,7 +368,14 @@ def _build_classification_name_column(document, title: str, kind: str):
     return column, tuple(editors), scroll
 
 
-def build_native_entity_classification_dialog(document, controller, *, viewport, request_render):
+def build_native_entity_classification_dialog(
+    document,
+    controller,
+    *,
+    viewport,
+    request_render,
+    on_saved=None,
+):
     root = document.create_hstack("native-entity-classification")
     root.stable_id = "editor.entity-classification"
     root.preferred_size = Size(760.0, 560.0)
@@ -395,6 +405,7 @@ def build_native_entity_classification_dialog(document, controller, *, viewport,
         flag_scroll,
         viewport,
         request_render,
+        on_saved,
     )
     weak_result = weakref.ref(result)
 

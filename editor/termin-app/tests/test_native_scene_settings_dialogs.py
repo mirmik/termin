@@ -49,11 +49,13 @@ def test_native_entity_classification_dialog_saves_reopens_and_releases(tmp_path
     document, renders, viewport, render = _host()
     manager = ProjectSettingsManager()
     manager.set_project_path(tmp_path)
+    saved = []
     dialog = build_native_entity_classification_dialog(
         document,
         EntityClassificationController(manager),
         viewport=viewport,
         request_render=render,
+        on_saved=saved.append,
     )
 
     assert dialog.show()
@@ -76,6 +78,8 @@ def test_native_entity_classification_dialog_saves_reopens_and_releases(tmp_path
     assert dialog.dialog.activate("ok")
     assert EntityClassificationController(manager).load().layers[5] == "Effects"
     assert EntityClassificationController(manager).load().flags[7] == "Selected"
+    assert saved[-1].layers[5] == "Effects"
+    assert saved[-1].flags[7] == "Selected"
     assert dialog.show()
     assert dialog.layers[5].text == "Effects"
     assert dialog.flags[7].text == "Selected"

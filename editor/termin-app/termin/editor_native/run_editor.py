@@ -444,6 +444,7 @@ def _compose_native_editor(
             EntityClassificationController(project_settings_manager),
             viewport=editor_viewport,
             request_render=request_editor_render,
+            on_saved=lambda _snapshot: entity_inspector_controller.refresh(),
         ),
         cleanup=lambda: entity_classification_dialog.close(),
     )
