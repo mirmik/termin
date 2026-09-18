@@ -8,6 +8,7 @@ from typing import Callable
 
 from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
 from termin.geombase import SrgbColor
+from termin.project.settings import ProjectSettingsManager
 from termin.render import debug_geometry_types, scene_render_mount, scene_render_state
 
 
@@ -36,37 +37,33 @@ def _render_state(scene):
 
 
 @dataclass(frozen=True)
-class SceneNamesSnapshot:
+class EntityClassificationSnapshot:
     layers: tuple[str, ...]
     flags: tuple[str, ...]
 
 
-class SceneNamesController:
-    def __init__(self, scene) -> None:
-        self._scene = scene
+class EntityClassificationController:
+    def __init__(self, manager: ProjectSettingsManager | None = None) -> None:
+        self._manager = manager or ProjectSettingsManager.instance()
 
-    def set_scene(self, scene) -> SceneNamesSnapshot | None:
-        self._scene = scene
-        return None if scene is None else self.load()
-
-    def load(self) -> SceneNamesSnapshot:
-        return SceneNamesSnapshot(
-            tuple(str(self._scene.layer_names.get(index, "")) for index in range(_NAME_COUNT)),
-            tuple(str(self._scene.flag_names.get(index, "")) for index in range(_NAME_COUNT)),
+    def load(self) -> EntityClassificationSnapshot:
+        settings = self._manager.settings
+        return EntityClassificationSnapshot(
+            tuple(settings.layer_names),
+            tuple(settings.flag_names),
         )
 
-    def save(self, snapshot: SceneNamesSnapshot) -> SceneNamesSnapshot:
+    def save(self, snapshot: EntityClassificationSnapshot) -> EntityClassificationSnapshot:
         if len(snapshot.layers) != _NAME_COUNT or len(snapshot.flags) != _NAME_COUNT:
-            raise ValueError("scene layers and flags must contain exactly 64 names")
-        normalized = SceneNamesSnapshot(
+            raise ValueError("project layers and flags must contain exactly 64 names")
+        normalized = EntityClassificationSnapshot(
             tuple(name.strip() for name in snapshot.layers),
             tuple(name.strip() for name in snapshot.flags),
         )
-        for index, name in enumerate(normalized.layers):
-            self._scene.set_layer_name(index, name)
-        for index, name in enumerate(normalized.flags):
-            self._scene.set_flag_name(index, name)
-        return normalized
+        self._manager.set_entity_classification_names(
+            list(normalized.layers), list(normalized.flags)
+        )
+        return self.load()
 
 
 @dataclass(frozen=True)
@@ -385,8 +382,8 @@ class ScenePropertiesController:
 __all__ = [
     "SHADOW_METHODS",
     "SKYBOX_TYPES",
-    "SceneNamesController",
-    "SceneNamesSnapshot",
+    "EntityClassificationController",
+    "EntityClassificationSnapshot",
     "ScenePipelineSnapshot",
     "DebugGeometrySettingSnapshot",
     "ScenePropertiesController",

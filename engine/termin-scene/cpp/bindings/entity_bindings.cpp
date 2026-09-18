@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <charconv>
 #include <functional>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -31,6 +32,56 @@ extern "C" {
 namespace nb = nanobind;
 
 namespace termin {
+
+    static bool parse_python_uint64(nb::handle value, uint64_t& result) {
+        if (nb::isinstance<nb::bool_>(value)) {
+            return false;
+        }
+        if (nb::isinstance<nb::int_>(value)) {
+            const unsigned long long parsed = PyLong_AsUnsignedLongLong(value.ptr());
+            if (PyErr_Occurred()) {
+                PyErr_Clear();
+                return false;
+            }
+            result = static_cast<uint64_t>(parsed);
+            return true;
+        }
+        if (!nb::isinstance<nb::str>(value)) {
+            return false;
+        }
+
+        const std::string encoded = nb::cast<std::string>(value);
+        if (encoded.size() != 18 || encoded[0] != '0' || encoded[1] != 'x') {
+            return false;
+        }
+        const char* first = encoded.data() + 2;
+        const char* last = encoded.data() + encoded.size();
+        const auto parsed = std::from_chars(first, last, result, 16);
+        return parsed.ec == std::errc() && parsed.ptr == last;
+    }
+
+    static bool restore_python_classification(Entity& entity, const nb::dict& data, const char* context) {
+        if (data.contains("layer")) {
+            uint64_t layer = 0;
+            const nb::handle encoded_layer = data["layer"];
+            if (nb::isinstance<nb::bool_>(encoded_layer) || !nb::isinstance<nb::int_>(encoded_layer) ||
+                !parse_python_uint64(encoded_layer, layer) || layer >= 64) {
+                tc::Log::error("[%s] layer must be an integer in range 0..63", context);
+                return false;
+            }
+            entity.set_layer(layer);
+        }
+        if (data.contains("flags")) {
+            uint64_t flags = 0;
+            if (!parse_python_uint64(data["flags"], flags)) {
+                tc::Log::error("[%s] flags must be an integer in range 0..2^64-1 or a canonical 0x16hex string",
+                               context);
+                return false;
+            }
+            entity.set_flags(flags);
+        }
+        return true;
+    }
 
     // Look up SoA type id by name
     static tc_soa_type_id soa_type_id_by_name(const std::string& name) {
@@ -129,6 +180,9 @@ namespace termin {
                    int layer,
                    uint64_t flags,
                    const std::string& uuid) {
+                    if (layer < 0 || layer >= 64) {
+                        throw nb::value_error("layer must be in range 0..63");
+                    }
                     new (self) Entity(uuid.empty() ? Entity::create(get_standalone_pool(), name)
                                                    : Entity::create_with_uuid(get_standalone_pool(), name, uuid));
                     if (!self->valid()) {
@@ -722,10 +776,10 @@ namespace termin {
                             ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
                         if (dict_data.contains("selectable"))
                             ent.set_selectable(nb::cast<bool>(dict_data["selectable"]));
-                        if (dict_data.contains("layer"))
-                            ent.set_layer(nb::cast<uint64_t>(dict_data["layer"]));
-                        if (dict_data.contains("flags"))
-                            ent.set_flags(nb::cast<uint64_t>(dict_data["flags"]));
+                        if (!restore_python_classification(ent, dict_data, "Entity::deserialize")) {
+                            tc_entity_free(ent.handle());
+                            return nb::none();
+                        }
 
                         // Restore pose
                         if (dict_data.contains("pose")) {
@@ -869,10 +923,10 @@ namespace termin {
                             ent.set_pickable(nb::cast<bool>(dict_data["pickable"]));
                         if (dict_data.contains("selectable"))
                             ent.set_selectable(nb::cast<bool>(dict_data["selectable"]));
-                        if (dict_data.contains("layer"))
-                            ent.set_layer(nb::cast<uint64_t>(dict_data["layer"]));
-                        if (dict_data.contains("flags"))
-                            ent.set_flags(nb::cast<uint64_t>(dict_data["flags"]));
+                        if (!restore_python_classification(ent, dict_data, "Entity::deserialize_base")) {
+                            tc_entity_free(ent.handle());
+                            return nb::none();
+                        }
 
                         if (dict_data.contains("pose")) {
                             nb::object pose_obj = dict_data["pose"];

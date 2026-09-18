@@ -46,6 +46,7 @@ class NativeEntityInspector:
     prefab_status: object
     layer_combo: object
     apply_layer_button: object
+    flags_button: object
     transform_boxes: tuple[tuple[object, object, object], ...]
     component_model: CollectionModel
     component_list: object
@@ -82,6 +83,7 @@ class NativeEntityInspector:
             self.layer_combo.selected_index = snapshot.layer
             self.layer_combo.widget.enabled = snapshot.entity is not None
             self.apply_layer_button.widget.enabled = snapshot.entity is not None
+            self.flags_button.widget.enabled = snapshot.entity is not None
             transform_values = (
                 snapshot.transform.position,
                 snapshot.transform.rotation_degrees,
@@ -281,6 +283,14 @@ def build_native_entity_inspector(
     layer_row.add_fixed_child(apply_layer_button.widget, 32.0)
     content.add_fixed_child(layer_row, 30.0)
 
+    flags_row = document.create_hstack("native-inspector-entity-flags-row")
+    flags_row.set_layout_spacing(4.0)
+    flags_label = document.create_label("Flags", "native-inspector-entity-flags-label")
+    flags_row.add_fixed_child(flags_label, EDITOR_UI_METRICS.inspector_label)
+    flags_button = document.create_button("Edit...", "native-inspector-entity-flags")
+    flags_row.add_stretch_child(flags_button.widget)
+    content.add_fixed_child(flags_row, 30.0)
+
     transform_boxes = []
     for key, label_text in (
         ("position", "Position"),
@@ -343,6 +353,7 @@ def build_native_entity_inspector(
         prefab_status=prefab_status,
         layer_combo=layer_combo,
         apply_layer_button=apply_layer_button,
+        flags_button=flags_button,
         transform_boxes=tuple(transform_boxes),
         component_model=component_model,
         component_list=component_list,
@@ -386,6 +397,19 @@ def build_native_entity_inspector(
         owner = current()
         if owner is not None and not owner.updating:
             owner.controller.apply_layer_to_descendants()
+
+    def on_flags_clicked() -> None:
+        owner = current()
+        if owner is None or owner.updating or show_layer_mask_dialog is None:
+            return
+
+        def finished(value: int | None) -> None:
+            current_owner = current()
+            if current_owner is not None and value is not None:
+                current_owner.controller.set_flags(value)
+
+        snapshot = owner.controller.snapshot
+        show_layer_mask_dialog(snapshot.flags, snapshot.flag_names, finished)
 
     def on_transform_changed(_value: float) -> None:
         owner = current()
@@ -440,6 +464,7 @@ def build_native_entity_inspector(
     name_input.connect_submitted(on_name_submitted)
     layer_combo.connect_changed(on_layer_changed)
     apply_layer_button.connect_clicked(on_apply_layer)
+    flags_button.connect_clicked(on_flags_clicked)
     for boxes in inspector.transform_boxes:
         for box in boxes:
             box.connect_changed(on_transform_changed)

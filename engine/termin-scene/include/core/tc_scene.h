@@ -250,16 +250,6 @@ TC_API const char* tc_scene_get_uuid(tc_scene_handle h);
 TC_API void tc_scene_set_uuid(tc_scene_handle h, const char* uuid);
 
 // ============================================================================
-// Layer and Flag Names (64 each, indexed 0-63)
-// ============================================================================
-
-TC_API const char* tc_scene_get_layer_name(tc_scene_handle h, int index);
-TC_API void tc_scene_set_layer_name(tc_scene_handle h, int index, const char* name);
-
-TC_API const char* tc_scene_get_flag_name(tc_scene_handle h, int index);
-TC_API void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name);
-
-// ============================================================================
 // Metadata
 // ============================================================================
 

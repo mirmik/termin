@@ -421,10 +421,10 @@ int main() {
     TEST_ASSERT(reconcile_layer_value.has_value(), "reconcile uint64 override fixture should parse");
     termin::prefab::PrefabPropertyOverride reconcile_layer_override;
     reconcile_layer_override.source_entity_id = "prefab-source-root";
-    reconcile_layer_override.field_path = "layer";
+    reconcile_layer_override.field_path = "flags";
     reconcile_layer_override.target_kind = "uint64";
     reconcile_layer_override.value = std::move(*reconcile_layer_value);
-    reconcile_instance.root.set_layer(std::numeric_limits<uint64_t>::max());
+    reconcile_instance.root.set_flags(std::numeric_limits<uint64_t>::max());
     TEST_ASSERT(reconcile_state->set_property_override(std::move(reconcile_layer_override), reconcile_override_error),
                 "reconcile uint64 override should be stored");
     const TestOverrideResourceResolver reconcile_resource_resolver;
@@ -459,7 +459,7 @@ int main() {
                 "reconcile should reapply and retain typed override metadata");
     TEST_ASSERT(std::string(reconcile_instance.root.name()) == "RefreshedRoot" && reconcile_probe->weight == 42.5 &&
                     reconcile_probe->resource == TestResourceHandle::from_uuid("resource-local") &&
-                    reconcile_instance.root.layer() == std::numeric_limits<uint64_t>::max() &&
+                    reconcile_instance.root.flags() == std::numeric_limits<uint64_t>::max() &&
                     reconcile_probe->labels == std::vector<std::string>({"fresh"}),
                 "source values should refresh while the exact override wins");
     TEST_ASSERT(reconcile_local.valid() && reconcile_instance.root.find_child("ReconcileLocal") == reconcile_local,

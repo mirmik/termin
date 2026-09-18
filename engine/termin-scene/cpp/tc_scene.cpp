@@ -202,24 +202,6 @@ namespace termin {
         tc_scene_set_uuid(_h, u.empty() ? nullptr : u.c_str());
     }
 
-    std::string TcSceneRef::get_layer_name(int index) const {
-        const char* n = tc_scene_get_layer_name(_h, index);
-        return n ? std::string(n) : "";
-    }
-
-    void TcSceneRef::set_layer_name(int index, const std::string& name) {
-        tc_scene_set_layer_name(_h, index, name.empty() ? nullptr : name.c_str());
-    }
-
-    std::string TcSceneRef::get_flag_name(int index) const {
-        const char* n = tc_scene_get_flag_name(_h, index);
-        return n ? std::string(n) : "";
-    }
-
-    void TcSceneRef::set_flag_name(int index, const std::string& name) {
-        tc_scene_set_flag_name(_h, index, name.empty() ? nullptr : name.c_str());
-    }
-
     nos::trent TcSceneRef::metadata() const {
         tc_value* v = tc_scene_get_metadata(_h);
         if (v) {
@@ -443,28 +425,6 @@ namespace termin {
         }
         result["entities"] = std::move(entities);
 
-        // Layer names
-        nos::trent layer_names;
-        layer_names.init(nos::trent::type::dict);
-        for (int i = 0; i < 64; i++) {
-            std::string ln = get_layer_name(i);
-            if (!ln.empty()) {
-                layer_names[std::to_string(i)] = ln;
-            }
-        }
-        result["layer_names"] = std::move(layer_names);
-
-        // Flag names
-        nos::trent flag_names;
-        flag_names.init(nos::trent::type::dict);
-        for (int i = 0; i < 64; i++) {
-            std::string fn = get_flag_name(i);
-            if (!fn.empty()) {
-                flag_names[std::to_string(i)] = fn;
-            }
-        }
-        result["flag_names"] = std::move(flag_names);
-
         // Metadata
         nos::trent md = metadata();
         if (!md.is_nil() && md.is_dict() && !md.as_dict().empty()) {
@@ -502,22 +462,6 @@ namespace termin {
                     set_time_scale(scale);
                 } else {
                     tc::Log::error("[TcSceneRef] invalid serialized time_scale=%g", scale);
-                }
-            }
-
-            // Layer names
-            if (data.contains("layer_names") && data["layer_names"].is_dict()) {
-                for (const auto& [k, v] : data["layer_names"].as_dict()) {
-                    int idx = std::stoi(k);
-                    set_layer_name(idx, v.as_string());
-                }
-            }
-
-            // Flag names
-            if (data.contains("flag_names") && data["flag_names"].is_dict()) {
-                for (const auto& [k, v] : data["flag_names"].as_dict()) {
-                    int idx = std::stoi(k);
-                    set_flag_name(idx, v.as_string());
                 }
             }
 

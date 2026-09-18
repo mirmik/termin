@@ -64,6 +64,17 @@ int main() {
     TEST_ASSERT(termin::prefab::PrefabDocument::parse_json(parsed.document.to_json()).ok(),
                 "validated document should round-trip");
 
+    nos::trent highest_flag = valid;
+    highest_flag["root"]["flags"] = "0x8000000000000000";
+    parsed = termin::prefab::PrefabDocument::parse_json(nos::json::dump(highest_flag));
+    TEST_ASSERT(parsed.ok(), "flags must preserve the highest uint64 bit");
+    TEST_ASSERT(parsed.document.to_json().find("0x8000000000000000") != std::string::npos,
+                "canonical prefab JSON must preserve the highest uint64 bit as hex");
+
+    nos::trent layer_overflow = valid;
+    layer_overflow["root"]["layer"] = int64_t{64};
+    TEST_ASSERT(rejects(layer_overflow, "root.layer"), "layer must fit the project registry");
+
     for (const char* field : {"visible", "enabled", "pickable", "selectable"}) {
         nos::trent malformed = valid;
         malformed["root"][field] = int64_t{1};

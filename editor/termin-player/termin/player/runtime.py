@@ -153,7 +153,10 @@ class PlayerRuntime:
         self.title = title
         self.fullscreen = window_settings.fullscreen
         self.vsync = window_settings.vsync
-        self.render_phase_names = load_project_runtime_settings(self.project_path).render_phase_names
+        runtime_settings = load_project_runtime_settings(self.project_path)
+        self.render_phase_names = runtime_settings.render_phase_names
+        self.layer_names = runtime_settings.layer_names
+        self.flag_names = runtime_settings.flag_names
         self.mcp_enabled = bool(mcp_enabled)
         self.mcp_options = mcp_options if mcp_options is not None else {}
 
@@ -246,6 +249,10 @@ class PlayerRuntime:
         if not self._ensure_engine_core():
             self.shutdown()
             return False
+        self._engine.scene_manager.configure_entity_classification(
+            self.layer_names,
+            self.flag_names,
+        )
         if not self._configure_shader_runtime():
             self.shutdown()
             return False

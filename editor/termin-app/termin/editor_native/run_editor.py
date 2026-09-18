@@ -55,7 +55,7 @@ from termin.editor_core.undo_stack import UndoStack
 from termin.editor_core.undo_history_model import UndoHistoryController
 from termin.editor_core.audio_debugger_model import create_audio_debugger_controller
 from termin.editor_core.scene_settings_model import (
-    SceneNamesController,
+    EntityClassificationController,
     ScenePropertiesController,
     ShadowSettingsController,
 )
@@ -142,7 +142,7 @@ from termin.editor_native.diagnostic_dialogs import (
     connect_diagnostic_command,
 )
 from termin.editor_native.scene_settings_dialogs import (
-    build_native_scene_names_dialog,
+    build_native_entity_classification_dialog,
     build_native_scene_properties_dialog,
     build_native_shadow_settings_dialog,
     connect_scene_settings_command,
@@ -250,6 +250,9 @@ def _compose_native_editor(
         build_native_editor_shell(host.document),
     )
     host.event_policy.shortcut_dispatcher = shell.menu_bar.dispatch_shortcut
+    from termin.project.settings import ProjectSettingsManager
+    project_settings_manager = ProjectSettingsManager.instance()
+    project_settings_manager.bind_scene_manager(engine.scene_manager)
     file_menu = shell.menu_route("file")
     edit_menu = shell.menu_route("edit")
     view_menu = shell.menu_route("view")
@@ -434,10 +437,23 @@ def _compose_native_editor(
         update_undo_commands()
 
     scene_properties_dialog = None
-    scene_names_dialog = None
+    entity_classification_dialog = workspace_stage.own(
+        "entity classification dialog",
+        build_native_entity_classification_dialog(
+            host.document,
+            EntityClassificationController(project_settings_manager),
+            viewport=editor_viewport,
+            request_render=request_editor_render,
+        ),
+        cleanup=lambda: entity_classification_dialog.close(),
+    )
+    connect_scene_settings_command(
+        edit_menu,
+        shell.entity_classification_command,
+        entity_classification_dialog,
+    )
     shadow_settings_dialog = None
     scene_properties_controller = None
-    scene_names_controller = None
     shadow_settings_controller = None
     if initial_scene is not None:
         scene_properties_controller = ScenePropertiesController(
@@ -457,18 +473,6 @@ def _compose_native_editor(
             scene_properties_dialog,
             cleanup=lambda: scene_properties_dialog.close(),
         )
-        scene_names_controller = SceneNamesController(initial_scene)
-        scene_names_dialog = build_native_scene_names_dialog(
-            host.document,
-            scene_names_controller,
-            viewport=editor_viewport,
-            request_render=request_editor_render,
-        )
-        workspace_stage.own(
-            "scene names dialog",
-            scene_names_dialog,
-            cleanup=lambda: scene_names_dialog.close(),
-        )
         shadow_settings_controller = ShadowSettingsController(initial_scene, on_changed=request_editor_render)
         shadow_settings_dialog = build_native_shadow_settings_dialog(
             host.document,
@@ -483,7 +487,6 @@ def _compose_native_editor(
         )
         for command_id, scene_dialog in (
             (shell.scene_properties_command, scene_properties_dialog),
-            (shell.scene_names_command, scene_names_dialog),
             (shell.shadow_settings_command, shadow_settings_dialog),
         ):
             connect_scene_settings_command(scene_menu, command_id, scene_dialog)
@@ -578,7 +581,13 @@ def _compose_native_editor(
     inspector_model.set_scene(initial_scene)
     pipeline_editor_controller = PipelineEditorController()
     inspector_resource_catalog = InspectorResourceCatalog(resource_manager)
-    entity_inspector_controller = EntityInspectorController(undo_handler=push_undo_command)
+    entity_inspector_controller = EntityInspectorController(
+        undo_handler=push_undo_command,
+        classification_names=lambda: (
+            tuple(engine.scene_manager.layer_names),
+            tuple(engine.scene_manager.flag_names),
+        ),
+    )
     entity_inspector_controller.set_scene(initial_scene)
     entity_inspector = build_native_entity_inspector(
         host.document,
@@ -1094,14 +1103,12 @@ def _compose_native_editor(
     if (
         native_viewport is not None
         and scene_properties_controller is not None
-        and scene_names_controller is not None
         and shadow_settings_controller is not None
     ):
 
         def prepare_scene_switch() -> None:
             for scene_dialog in (
                 scene_properties_dialog,
-                scene_names_dialog,
                 shadow_settings_dialog,
             ):
                 if scene_dialog is not None and scene_dialog.dialog.open:
@@ -1135,7 +1142,6 @@ def _compose_native_editor(
             scene_hierarchy=scene_hierarchy_controller,
             entity_inspector=entity_inspector_controller,
             scene_properties=scene_properties_controller,
-            scene_names=scene_names_controller,
             shadow_settings=shadow_settings_controller,
             clear_selection=clear_scene_selection,
             before_switch=prepare_scene_switch,
@@ -1947,7 +1953,7 @@ def _compose_native_editor(
                 "audio_debugger_controller": audio_debugger_controller,
                 "audio_debugger_dialog": audio_debugger_dialog,
                 "scene_properties_dialog": scene_properties_dialog,
-                "scene_names_dialog": scene_names_dialog,
+                "entity_classification_dialog": entity_classification_dialog,
                 "shadow_settings_dialog": shadow_settings_dialog,
                 "project_settings_controller": project_settings_controller,
                 "project_settings_dialog": project_settings_dialog,

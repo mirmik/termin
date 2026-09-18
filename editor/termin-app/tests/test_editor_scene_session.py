@@ -34,14 +34,13 @@ class _Model:
 
 
 def _session(attachment, events):
-    models = [_Model() for _ in range(5)]
+    models = [_Model() for _ in range(4)]
     session = EditorSceneSession(
         attachment,
         scene_hierarchy=models[0],
         entity_inspector=models[1],
         scene_properties=models[2],
-        scene_names=models[3],
-        shadow_settings=models[4],
+        shadow_settings=models[3],
         clear_selection=lambda: events.append("clear"),
         before_switch=lambda: events.append("before"),
         on_switched=lambda scene: events.append(scene),

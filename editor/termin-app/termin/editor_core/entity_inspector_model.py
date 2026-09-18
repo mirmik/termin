@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import math
-from typing import Callable
+from typing import Callable, Iterable
 
 from termin.editor_core.editor_commands import (
     AddComponentCommand,
@@ -80,6 +80,7 @@ class EntityTransformSnapshot:
 
 ComponentTypeCollector = Callable[[], tuple[EntityInspectorComponentType, ...]]
 SoaComponentTypeCollector = Callable[[], tuple[str, ...]]
+ClassificationNamesProvider = Callable[[], tuple[Iterable[str], Iterable[str]]]
 
 
 def _component_category_index(category: str) -> int:
@@ -137,6 +138,8 @@ class EntityInspectorSnapshot:
     uuid: str
     layer: int
     layer_names: tuple[str, ...]
+    flags: int
+    flag_names: tuple[str, ...]
     prefab_status: str
     components: tuple[EntityInspectorComponent, ...]
     selected_component: int
@@ -155,6 +158,7 @@ class EntityInspectorController:
         component_selection_changed: ComponentSelectionHandler | None = None,
         component_type_collector: ComponentTypeCollector = collect_component_types,
         soa_component_type_collector: SoaComponentTypeCollector = collect_soa_component_types,
+        classification_names: ClassificationNamesProvider | None = None,
     ) -> None:
         self._scene = None
         self._entity: Entity | None = None
@@ -164,6 +168,9 @@ class EntityInspectorController:
         self._component_selection_changed = component_selection_changed
         self._component_type_collector = component_type_collector
         self._soa_component_type_collector = soa_component_type_collector
+        self._classification_names = classification_names or (
+            lambda: ((f"Layer {index}" for index in range(64)), (f"Flag {index}" for index in range(64)))
+        )
         self.fields = InspectorFieldsController(
             field_collector=field_collector,
             metadata_collector=metadata_collector,
@@ -232,6 +239,19 @@ class EntityInspectorController:
         old_layer = int(self._entity.layer)
         if layer != old_layer:
             self._execute(EntityPropertyEditCommand(self._entity, "layer", old_layer, layer))
+        return self.refresh()
+
+    def set_flags(self, flags: int) -> EntityInspectorSnapshot:
+        if self._entity is None:
+            return self._snapshot
+        value = int(flags)
+        if not 0 <= value < (1 << 64):
+            raise ValueError("entity flags must be an unsigned 64-bit mask")
+        old_value = int(self._entity.flags)
+        if value != old_value:
+            self._execute(
+                EntityPropertyEditCommand(self._entity, "flags", old_value, value)
+            )
         return self.refresh()
 
     def apply_layer_to_descendants(self) -> EntityInspectorSnapshot:
@@ -436,7 +456,7 @@ class EntityInspectorController:
 
     def _build_snapshot(self) -> EntityInspectorSnapshot:
         entity = self._entity
-        layer_names = tuple(self._layer_name(index) for index in range(64))
+        layer_names, flag_names = self._read_classification_names()
         if entity is None:
             return EntityInspectorSnapshot(
                 entity=None,
@@ -444,6 +464,8 @@ class EntityInspectorController:
                 uuid="",
                 layer=-1,
                 layer_names=layer_names,
+                flags=0,
+                flag_names=flag_names,
                 prefab_status="",
                 components=(),
                 selected_component=-1,
@@ -482,6 +504,8 @@ class EntityInspectorController:
             uuid=entity.uuid or "-",
             layer=int(entity.layer),
             layer_names=layer_names,
+            flags=int(entity.flags),
+            flag_names=flag_names,
             prefab_status=self._prefab_status(entity),
             components=tuple(components),
             selected_component=self._selected_component,
@@ -532,15 +556,23 @@ class EntityInspectorController:
             scale=tuple(float(value) for value in pose.scale),
         )
 
-    def _layer_name(self, index: int) -> str:
-        if self._scene is None:
-            return f"Layer {index}"
+    def _read_classification_names(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         try:
-            name = self._scene.get_layer_name(index)
+            raw_layers, raw_flags = self._classification_names()
+            layers = tuple(str(name) for name in raw_layers)
+            flags = tuple(str(name) for name in raw_flags)
         except Exception as error:
-            _logger.error("Failed to read scene layer %d: %s", index, error)
-            return f"Layer {index}"
-        return name or f"Layer {index}"
+            _logger.error("Failed to read entity classification names: %s", error)
+            layers = ()
+            flags = ()
+        if len(layers) != 64 or len(flags) != 64:
+            _logger.error("Entity classification provider must return exactly 64 names")
+            layers = ()
+            flags = ()
+        return (
+            tuple(name or f"Layer {index}" for index, name in enumerate(layers or ("",) * 64)),
+            tuple(name or f"Flag {index}" for index, name in enumerate(flags or ("",) * 64)),
+        )
 
 __all__ = [
     "ComponentTypeCollector",

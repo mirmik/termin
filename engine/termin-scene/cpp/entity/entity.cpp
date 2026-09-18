@@ -2,8 +2,14 @@
 #include "inspect/tc_inspect.h"
 #include "inspect/tc_inspect_context.h"
 #include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <functional>
+#include <iomanip>
+#include <limits>
 #include <numeric>
+#include <sstream>
+#include <string_view>
 #include <tcbase/tc_log.hpp>
 #include <tcbase/tc_uuid.h>
 #include <tcbase/tc_value_trent.hpp>
@@ -15,6 +21,61 @@
 namespace termin {
 
     namespace {
+
+        std::string serialize_uint64(uint64_t value) {
+            std::ostringstream stream;
+            stream << "0x" << std::hex << std::setfill('0') << std::setw(16) << value;
+            return stream.str();
+        }
+
+        bool parse_uint64_string(const char* text, uint64_t& value) {
+            if (!text) {
+                return false;
+            }
+            const std::string_view encoded(text);
+            if (encoded.size() != 18 || encoded[0] != '0' || encoded[1] != 'x') {
+                return false;
+            }
+            const char* first = encoded.data() + 2;
+            const char* last = encoded.data() + encoded.size();
+            const auto parsed = std::from_chars(first, last, value, 16);
+            return parsed.ec == std::errc() && parsed.ptr == last;
+        }
+
+        bool parse_uint64(const nos::trent& value, uint64_t& result) {
+            if (value.is_string()) {
+                return parse_uint64_string(value.as_string().c_str(), result);
+            }
+            if (!value.is_numer()) {
+                return false;
+            }
+            const long double number = value.as_numer();
+            if (!std::isfinite(number) || number < 0 || std::trunc(number) != number ||
+                number > static_cast<long double>(std::numeric_limits<int64_t>::max())) {
+                return false;
+            }
+            result = static_cast<uint64_t>(number);
+            return true;
+        }
+
+        bool parse_uint64(const tc_value* value, uint64_t& result) {
+            if (!value) {
+                return false;
+            }
+            if (value->type == TC_VALUE_STRING) {
+                return parse_uint64_string(value->data.s, result);
+            }
+            if (value->type != TC_VALUE_INT && value->type != TC_VALUE_DOUBLE) {
+                return false;
+            }
+            const double number = value->type == TC_VALUE_INT ? static_cast<double>(value->data.i) : value->data.d;
+            if (!std::isfinite(number) || number < 0 || std::trunc(number) != number ||
+                number > static_cast<double>(std::numeric_limits<int64_t>::max())) {
+                return false;
+            }
+            result = static_cast<uint64_t>(number);
+            return true;
+        }
 
         std::vector<size_t> component_deserialization_order(const nos::trent& components_data) {
             const auto& components = components_data.as_list();
@@ -96,7 +157,7 @@ namespace termin {
             data["pickable"] = entity.pickable();
             data["selectable"] = entity.selectable();
             data["layer"] = static_cast<int64_t>(entity.layer());
-            data["flags"] = static_cast<int64_t>(entity.flags());
+            data["flags"] = serialize_uint64(entity.flags());
 
             double pos[3], rot[4], scl[3];
             entity.get_local_position(pos);
@@ -699,7 +760,7 @@ namespace termin {
         tc_value_dict_set(&data, "pickable", tc_value_bool(pickable()));
         tc_value_dict_set(&data, "selectable", tc_value_bool(selectable()));
         tc_value_dict_set(&data, "layer", tc_value_int(static_cast<int64_t>(layer())));
-        tc_value_dict_set(&data, "flags", tc_value_int(static_cast<int64_t>(flags())));
+        tc_value_dict_set(&data, "flags", tc_value_string(serialize_uint64(flags()).c_str()));
 
         double pos[3], rot[4], scl[3];
         get_local_position(pos);
@@ -853,10 +914,22 @@ namespace termin {
         ent.set_selectable(tc_value_as_bool(selectable_v, true));
 
         tc_value* layer_v = tc_value_dict_get(const_cast<tc_value*>(data), "layer");
-        ent.set_layer(static_cast<uint64_t>(tc_value_as_double(layer_v, 1)));
+        uint64_t layer = 0;
+        if (layer_v && (!parse_uint64(layer_v, layer) || layer >= 64)) {
+            tc::Log::error("[Entity::deserialize] layer must be an integer in range 0..63");
+            tc_entity_free(ent.handle());
+            return Entity();
+        }
+        ent.set_layer(layer);
 
         tc_value* flags_v = tc_value_dict_get(const_cast<tc_value*>(data), "flags");
-        ent.set_flags(static_cast<uint64_t>(tc_value_as_double(flags_v, 0)));
+        uint64_t flags = 0;
+        if (flags_v && !parse_uint64(flags_v, flags)) {
+            tc::Log::error("[Entity::deserialize] flags must be a uint64 integer or canonical string");
+            tc_entity_free(ent.handle());
+            return Entity();
+        }
+        ent.set_flags(flags);
 
         tc_value* pose_v = tc_value_dict_get(const_cast<tc_value*>(data), "pose");
         if (pose_v && pose_v->type == TC_VALUE_DICT) {
@@ -937,10 +1010,23 @@ namespace termin {
             ent.set_selectable(data["selectable"].as_bool_default(true));
         }
         if (data.contains("layer")) {
-            ent.set_layer(static_cast<uint64_t>(data["layer"].as_numer_default(0)));
+            uint64_t layer = 0;
+            if (!parse_uint64(data["layer"], layer) || layer >= 64) {
+                tc::Log::error("[Entity::deserialize_base_trent] layer must be an integer in range 0..63");
+                tc_entity_free(ent.handle());
+                return Entity();
+            }
+            ent.set_layer(layer);
         }
         if (data.contains("flags")) {
-            ent.set_flags(static_cast<uint64_t>(data["flags"].as_numer_default(0)));
+            uint64_t flags = 0;
+            if (!parse_uint64(data["flags"], flags)) {
+                tc::Log::error(
+                    "[Entity::deserialize_base_trent] flags must be a uint64 integer or canonical string");
+                tc_entity_free(ent.handle());
+                return Entity();
+            }
+            ent.set_flags(flags);
         }
 
         // Restore pose

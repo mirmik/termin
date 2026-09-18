@@ -22,7 +22,7 @@ from termin.project_build.runtime_package_resource_validator import (
 
 
 SUPPORTED_RUNTIME_BACKENDS = frozenset({"vulkan", "opengl", "opengl330", "webgl2", "d3d11", "webgpu"})
-RUNTIME_PACKAGE_SCHEMA_VERSION = 3
+RUNTIME_PACKAGE_SCHEMA_VERSION = 4
 
 
 ComponentFactoryPreparer = Callable[
@@ -47,6 +47,7 @@ def validate_runtime_package(
 
     _validate_version(manifest, diagnostics)
     _validate_world_controller(manifest, diagnostics)
+    _validate_entity_classification(manifest, diagnostics)
     scenes = _validate_scenes(package_root, manifest, diagnostics)
     resource_index = _validate_resources(package_root, manifest, diagnostics)
     component_types = frozenset(
@@ -207,6 +208,74 @@ def _validate_world_controller(
                     f"Runtime package world_controller.{field} must be a non-empty trimmed string",
                 )
             )
+
+
+def _validate_entity_classification(
+    manifest: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    value = manifest.get("entity_classification")
+    if not isinstance(value, dict):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "entity_classification",
+                "Runtime package entity_classification must be an object",
+            )
+        )
+        return
+
+    expected = {"layer_names", "flag_names"}
+    actual = set(value)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        unexpected = sorted(actual - expected)
+        detail: list[str] = []
+        if missing:
+            detail.append("missing " + ", ".join(missing))
+        if unexpected:
+            detail.append("unexpected " + ", ".join(unexpected))
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "entity_classification",
+                "Runtime package entity_classification requires exactly layer_names and flag_names ("
+                + "; ".join(detail)
+                + ")",
+            )
+        )
+
+    for field_name in sorted(expected):
+        names = value.get(field_name)
+        if (
+            not isinstance(names, list)
+            or len(names) != 64
+            or any(not isinstance(name, str) for name in names)
+        ):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"entity_classification.{field_name}",
+                    f"Runtime package entity_classification.{field_name} must contain exactly 64 string entries",
+                )
+            )
+            continue
+        normalized = [name.strip() for name in names]
+        occupied: dict[str, int] = {}
+        for index, name in enumerate(normalized):
+            if not name:
+                continue
+            previous = occupied.get(name)
+            if previous is not None:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        f"entity_classification.{field_name}[{index}]",
+                        f"Runtime package entity classification name '{name}' is duplicated at indices {previous} and {index}",
+                    )
+                )
+            else:
+                occupied[name] = index
 
 
 def _validate_scenes(

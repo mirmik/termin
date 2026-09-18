@@ -136,8 +136,6 @@
         "components": [{"source_id": "portal-walk-alpha-camera-component", "type": "CameraComponent", "data": {"enabled": true, "near_clip": 0.1, "far_clip": 100.0, "ortho_size": 5.0, "fov_x_degrees": 64.0, "fov_y_degrees": 45.0, "fov_mode": "FixHorizontal", "layer_mask": "0xffffffffffffffff", "render_category_mask": "0xffffffffffffffff"}}]
       }
     ],
-    "layer_names": {},
-    "flag_names": {},
     "metadata": {"termin": {"editor": {"entities_data": null, "viewport_camera_name": "Main Camera"}}},
     "extensions": {
       "render_mount": {

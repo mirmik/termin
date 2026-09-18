@@ -153,12 +153,35 @@ def test_entity_inspector_clears_fields_for_non_component_or_missing_target(scen
     controller = EntityInspectorController()
     snapshot = controller.set_target(entity)
     assert snapshot.components == ()
-
     snapshot = controller.select_component(0)
     assert snapshot.fields.rows == ()
     snapshot = controller.set_target(None)
     assert snapshot.entity is None
     assert snapshot.components == ()
+
+
+def test_entity_inspector_edits_flags_with_project_names_and_undo(scene):
+    entity = scene.create_entity("flagged")
+    stack = UndoStack()
+    layers = [""] * 64
+    flags = [""] * 64
+    layers[3] = "Gameplay"
+    flags[7] = "Selected"
+    controller = EntityInspectorController(
+        undo_handler=stack.push,
+        classification_names=lambda: (layers, flags),
+    )
+
+    snapshot = controller.set_target(entity)
+    assert snapshot.layer_names[3] == "Gameplay"
+    assert snapshot.flag_names[7] == "Selected"
+    assert snapshot.flags == 0
+
+    snapshot = controller.set_flags((1 << 7) | (1 << 11))
+    assert snapshot.flags == (1 << 7) | (1 << 11)
+    assert entity.flags == snapshot.flags
+    stack.undo()
+    assert entity.flags == 0
 
 
 def test_entity_inspector_component_catalog_add_remove_and_undo(scene):

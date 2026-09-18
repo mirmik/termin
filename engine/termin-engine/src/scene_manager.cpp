@@ -258,6 +258,28 @@ namespace termin {
         return result;
     }
 
+    bool SceneManager::configure_entity_classification(const std::vector<std::string>& layer_names,
+                                                       const std::vector<std::string>& flag_names,
+                                                       std::string* error) {
+        std::string local_error;
+        std::string* diagnostic = error ? error : &local_error;
+        if (!_entity_classification.configure(layer_names, flag_names, diagnostic)) {
+            tc_log(TC_LOG_ERROR,
+                   "[SceneManager] configure_entity_classification rejected: %s",
+                   diagnostic->c_str());
+            return false;
+        }
+        return true;
+    }
+
+    const EntityClassificationRegistry& SceneManager::entity_classification() const noexcept {
+        return _entity_classification;
+    }
+
+    EntityClassificationRegistry& SceneManager::entity_classification() noexcept {
+        return _entity_classification;
+    }
+
     std::string SceneManager::get_scene_path(const SceneKey& key) const {
         const auto it = _scenes.find(key);
         return it != _scenes.end() ? it->second.path : "";

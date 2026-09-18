@@ -6,20 +6,21 @@ import pytest
 
 from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.editor_core.scene_settings_model import (
-    SceneNamesController,
+    EntityClassificationController,
     ScenePropertiesController,
     ShadowSettingsController,
 )
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.scene_settings_dialogs import (
-    build_native_scene_names_dialog,
+    build_native_entity_classification_dialog,
     build_native_scene_properties_dialog,
     build_native_shadow_settings_dialog,
 )
 from termin.gui_native import Rect
 from termin.render import DebugGeometryTypeRegistration
 from termin.scene import TcScene
+from termin.project.settings import ProjectSettingsManager
 
 @pytest.fixture(scope="module", autouse=True)
 def _bootstrap():
@@ -44,11 +45,13 @@ def _host():
     tc_ui_document_destroy(document)
 
 
-def test_native_scene_names_dialog_saves_reopens_and_releases(scene):
+def test_native_entity_classification_dialog_saves_reopens_and_releases(tmp_path):
     document, renders, viewport, render = _host()
-    dialog = build_native_scene_names_dialog(
+    manager = ProjectSettingsManager()
+    manager.set_project_path(tmp_path)
+    dialog = build_native_entity_classification_dialog(
         document,
-        SceneNamesController(scene),
+        EntityClassificationController(manager),
         viewport=viewport,
         request_render=render,
     )
@@ -63,16 +66,16 @@ def test_native_scene_names_dialog_saves_reopens_and_releases(scene):
     layer_rows = root.children[0].children[1].children[0].children
     flag_rows = root.children[1].children[1].children[0].children
     assert [row.children[0].debug_name for row in layer_rows] == [
-        f"scene-names-layers-index-{index}" for index in range(64)
+        f"entity-classification-layers-index-{index}" for index in range(64)
     ]
     assert [row.children[0].debug_name for row in flag_rows] == [
-        f"scene-names-flags-index-{index}" for index in range(64)
+        f"entity-classification-flags-index-{index}" for index in range(64)
     ]
     dialog.layers[5].text = "Effects"
     dialog.flags[7].text = "Selected"
     assert dialog.dialog.activate("ok")
-    assert SceneNamesController(scene).load().layers[5] == "Effects"
-    assert SceneNamesController(scene).load().flags[7] == "Selected"
+    assert EntityClassificationController(manager).load().layers[5] == "Effects"
+    assert EntityClassificationController(manager).load().flags[7] == "Selected"
     assert dialog.show()
     assert dialog.layers[5].text == "Effects"
     assert dialog.flags[7].text == "Selected"

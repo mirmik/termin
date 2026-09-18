@@ -123,7 +123,8 @@ def export_runtime_package(
         entry_scene_path,
         scenes if scenes is not None else (entry_scene_path,),
     )
-    world_controller = load_project_settings(project_root_path).world_controller
+    project_settings = load_project_settings(project_root_path)
+    world_controller = project_settings.world_controller
 
     from termin.glb_adapters.scene_animation_repair import repair_glb_animation_player_clip_refs
 
@@ -264,10 +265,14 @@ def export_runtime_package(
     resources.sort(key=_resource_sort_key)
 
     manifest = {
-        "version": 3,
+        "version": 4,
         "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
         "entry_scene": entry_identity,
         "world_controller": (world_controller.to_dict() if world_controller is not None else None),
+        "entity_classification": {
+            "layer_names": list(project_settings.layer_names),
+            "flag_names": list(project_settings.flag_names),
+        },
         "builtin_shader_contract": builtin_shader_contract,
         "pipeline_shader_requirements": pipeline_shader_requirements,
         "resources": resources,

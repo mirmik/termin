@@ -656,6 +656,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
                                                   std::move(read_artifact));
 
         termin::SceneManager& scene_manager = web_player->engine->scene_manager;
+        std::string classification_error;
+        if (!scene_manager.configure_entity_classification(
+                web_player->package.layer_names,
+                web_player->package.flag_names,
+                &classification_error)) {
+            throw std::runtime_error(
+                "failed to configure packaged entity classification: " + classification_error);
+        }
         for (const termin::runtime::RuntimePackageScene& packaged : web_player->package.scenes) {
             const termin::SceneKey key{packaged.identity, termin::SceneRole::Runtime};
             if (!scene_manager.register_scene(key, packaged.scene.handle())) {

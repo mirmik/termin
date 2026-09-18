@@ -4,6 +4,45 @@ GUARD_TEST_MAIN();
 
 #include <termin/scene/scene_manager.hpp>
 
+#include <vector>
+
+namespace {
+    std::vector<std::string> empty_classification_names() {
+        return std::vector<std::string>(termin::EntityClassificationRegistry::name_count);
+    }
+}
+
+TEST_CASE("SceneManager owns an atomic normalized entity classification registry") {
+    termin::SceneManager manager;
+    auto layers = empty_classification_names();
+    auto flags = empty_classification_names();
+    layers[1] = "  Gameplay  ";
+    flags[3] = " Selectable\t";
+
+    std::string error;
+    REQUIRE(manager.configure_entity_classification(layers, flags, &error));
+    CHECK(error.empty());
+    CHECK_EQ(manager.entity_classification().layer_names()[1], std::string("Gameplay"));
+    CHECK_EQ(manager.entity_classification().flag_names()[3], std::string("Selectable"));
+    REQUIRE(manager.entity_classification().layer_index(" Gameplay ").has_value());
+    CHECK_EQ(*manager.entity_classification().layer_index(" Gameplay "), 1u);
+    REQUIRE(manager.entity_classification().flag_index("Selectable").has_value());
+    CHECK_EQ(*manager.entity_classification().flag_index("Selectable"), 3u);
+    CHECK_FALSE(manager.entity_classification().layer_index(" ").has_value());
+
+    auto duplicate_layers = layers;
+    duplicate_layers[5] = "Gameplay";
+    CHECK_FALSE(manager.configure_entity_classification(duplicate_layers, flags, &error));
+    CHECK_FALSE(error.empty());
+    CHECK_EQ(manager.entity_classification().layer_names()[1], std::string("Gameplay"));
+    CHECK(manager.entity_classification().layer_names()[5].empty());
+
+    auto short_flags = flags;
+    short_flags.pop_back();
+    CHECK_FALSE(manager.configure_entity_classification(layers, short_flags, &error));
+    CHECK_EQ(manager.entity_classification().flag_names()[3], std::string("Selectable"));
+}
+
 TEST_CASE("SceneManager keys scene instances by identity and role") {
     termin::SceneManager manager;
     const termin::SceneKey authoring("Scenes/Main.scene", termin::SceneRole::Authoring);

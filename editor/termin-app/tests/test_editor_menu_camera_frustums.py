@@ -37,6 +37,7 @@ def _menu_config() -> EditorMenuSpecConfig:
                 redo=_noop,
                 settings=_noop,
                 project_settings=_noop,
+                entity_classification=_noop,
             ),
             view=ViewMenuActions(
                 toggle_fullscreen=_noop,
@@ -44,7 +45,6 @@ def _menu_config() -> EditorMenuSpecConfig:
             ),
             scene=SceneMenuActions(
                 scene_properties=_noop,
-                layers_settings=_noop,
                 shadow_settings=_noop,
                 pipeline_editor=_noop,
             ),

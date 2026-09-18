@@ -1,5 +1,7 @@
 #include <termin/prefab/prefab_document.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -57,6 +59,32 @@ namespace termin::prefab {
             return true;
         }
 
+        bool require_uint64(const nos::trent& entity,
+                            const char* field,
+                            const std::string& path,
+                            std::string& message) {
+            if (!entity.contains(field)) {
+                message = path + "." + field + " must be a uint64 hexadecimal string";
+                return false;
+            }
+            const nos::trent& value = entity[field];
+            if (value.is_numer()) {
+                const long double number = value.as_numer();
+                if (std::isfinite(number) && std::trunc(number) == number && number >= 0 &&
+                    number <= static_cast<long double>(std::numeric_limits<int64_t>::max())) {
+                    return true;
+                }
+            } else if (value.is_string()) {
+                const std::string& text = value.as_string();
+                if (text.size() == 18 && text[0] == '0' && text[1] == 'x' &&
+                    std::all_of(text.begin() + 2, text.end(), [](unsigned char c) { return std::isxdigit(c) != 0; })) {
+                    return true;
+                }
+            }
+            message = path + "." + field + " must be a uint64 hexadecimal string";
+            return false;
+        }
+
         bool require_finite_vector(const nos::trent& value,
                                    size_t expected_size,
                                    const std::string& path,
@@ -95,16 +123,11 @@ namespace termin::prefab {
                                  message)) {
                 return false;
             }
-            for (const char* field : {"layer", "flags"}) {
-                if (!require_integer(entity,
-                                     field,
-                                     0,
-                                     std::numeric_limits<int64_t>::max(),
-                                     "must be a non-negative integer",
-                                     path,
-                                     message)) {
-                    return false;
-                }
+            if (!require_integer(entity, "layer", 0, 63, "must be an integer in range 0..63", path, message)) {
+                return false;
+            }
+            if (!require_uint64(entity, "flags", path, message)) {
+                return false;
             }
             if (!entity.contains("pose") || !entity["pose"].is_dict()) {
                 message = path + ".pose must be an object";
@@ -270,7 +293,7 @@ namespace termin::prefab {
         root["pickable"] = true;
         root["selectable"] = true;
         root["layer"] = static_cast<int64_t>(0);
-        root["flags"] = static_cast<int64_t>(0);
+        root["flags"] = "0x0000000000000000";
         root["pose"]["position"].init(nos::trent::type::list);
         root["pose"]["position"].push_back(0.0);
         root["pose"]["position"].push_back(0.0);

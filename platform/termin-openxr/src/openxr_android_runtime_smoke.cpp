@@ -623,6 +623,19 @@ namespace termin::openxr {
                     engine.reset();
                     return false;
                 }
+                std::string classification_error;
+                if (!engine->scene_manager.configure_entity_classification(
+                        package.layer_names, package.flag_names, &classification_error)) {
+                    log_error("OpenXR scene",
+                              (std::string("failed to configure entity classification: ") +
+                               classification_error)
+                                  .c_str());
+                    tc_log_error("[OpenXR scene] failed to configure entity classification: %s",
+                                 classification_error.c_str());
+                    package.destroy();
+                    engine.reset();
+                    return false;
+                }
                 tgfx::set_builtin_shader_root(package.shader_runtime.builtin_shader_root.c_str());
                 render_engine->configure_shader_artifacts(package.shader_runtime.artifact_root,
                                                           package.shader_runtime.cache_root,

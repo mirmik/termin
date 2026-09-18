@@ -93,7 +93,7 @@ class NativeEditorShell:
     audio_debugger_command: int
     spacemouse_settings_command: int
     scene_properties_command: int
-    scene_names_command: int
+    entity_classification_command: int
     shadow_settings_command: int
     agent_types_command: int
     navmesh_areas_command: int
@@ -221,7 +221,7 @@ def build_native_editor_shell(document: TcDocument) -> NativeEditorShell:
     spacemouse_settings_command = commands[("View", "SpaceMouse Settings...")]
     fullscreen_command = commands[("View", "Fullscreen")]
     scene_properties_command = commands[("Scene", "Scene Properties...")]
-    scene_names_command = commands[("Scene", "Layers & Flags...")]
+    entity_classification_command = commands[("Edit", "Entity Layers & Flags...")]
     shadow_settings_command = commands[("Scene", "Shadow Settings...")]
     pipeline_editor_command = commands[("Scene", "Pipeline Editor...")]
     agent_types_command = commands[("Navigation", "Agent Types...")]
@@ -425,7 +425,7 @@ def build_native_editor_shell(document: TcDocument) -> NativeEditorShell:
         audio_debugger_command=audio_debugger_command,
         spacemouse_settings_command=spacemouse_settings_command,
         scene_properties_command=scene_properties_command,
-        scene_names_command=scene_names_command,
+        entity_classification_command=entity_classification_command,
         shadow_settings_command=shadow_settings_command,
         agent_types_command=agent_types_command,
         navmesh_areas_command=navmesh_areas_command,

@@ -55,6 +55,7 @@ set(TERMIN_SCENE_CXX_SOURCES
     cpp/inspect/tc_inspect_component_adapter.cpp
     cpp/geom/general_transform3.cpp
     cpp/entity/entity.cpp
+    cpp/entity/entity_classification_registry.cpp
     cpp/entity/component.cpp
     cpp/entity/component_registry.cpp
     cpp/entity/unknown_component.cpp
@@ -67,6 +68,7 @@ set(TERMIN_SCENE_CXX_HEADERS
     include/termin/export.hpp
     include/termin/geom/general_transform3.hpp
     include/termin/entity/entity.hpp
+    include/termin/entity/entity_classification_registry.hpp
     include/termin/entity/component.hpp
     include/termin/entity/component_registry.hpp
     include/termin/entity/component_registry_python.hpp

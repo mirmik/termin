@@ -153,14 +153,6 @@ namespace termin {
         std::string uuid() const;
         void set_uuid(const std::string& u);
 
-        // Layer names (0-63)
-        std::string get_layer_name(int index) const;
-        void set_layer_name(int index, const std::string& name);
-
-        // Flag names (0-63)
-        std::string get_flag_name(int index) const;
-        void set_flag_name(int index, const std::string& name);
-
         // Metadata access (converted from tc_value on each call)
         nos::trent metadata() const;
 

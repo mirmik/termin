@@ -19,7 +19,7 @@ extern "C" {
 
 namespace termin::runtime {
 
-    inline constexpr std::uint32_t RUNTIME_PACKAGE_SCHEMA_VERSION = 3;
+    inline constexpr std::uint32_t RUNTIME_PACKAGE_SCHEMA_VERSION = 4;
 
     struct RuntimePackageResourceKeepalive;
 
@@ -92,6 +92,8 @@ namespace termin::runtime {
         bool ok = false;
         std::string message;
         std::string entry_scene_identity;
+        std::vector<std::string> layer_names;
+        std::vector<std::string> flag_names;
         std::optional<RuntimePackageWorldControllerSelection> world_controller;
         std::vector<RuntimePackageScene> scenes;
         // Convenience alias for the entry in ``scenes``.

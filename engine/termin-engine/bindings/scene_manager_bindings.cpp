@@ -65,6 +65,46 @@ namespace termin {
         nb::class_<SceneManager, PySceneManager>(m, "SceneManager")
             .def(nb::init<>())
             .def(
+                "configure_entity_classification",
+                [](SceneManager& self,
+                   const std::vector<std::string>& layer_names,
+                   const std::vector<std::string>& flag_names) {
+                    std::string error;
+                    if (!self.configure_entity_classification(layer_names, flag_names, &error)) {
+                        throw nb::value_error(error.c_str());
+                    }
+                    return true;
+                },
+                nb::arg("layer_names"),
+                nb::arg("flag_names"),
+                "Atomically configure the 64 project layer and flag names.")
+            .def_prop_ro(
+                "layer_names",
+                [](const SceneManager& self) {
+                    const auto& names = self.entity_classification().layer_names();
+                    return std::vector<std::string>(names.begin(), names.end());
+                })
+            .def_prop_ro(
+                "flag_names",
+                [](const SceneManager& self) {
+                    const auto& names = self.entity_classification().flag_names();
+                    return std::vector<std::string>(names.begin(), names.end());
+                })
+            .def(
+                "layer_index",
+                [](const SceneManager& self, const std::string& name) -> nb::object {
+                    const auto index = self.entity_classification().layer_index(name);
+                    return index ? nb::cast(*index) : nb::none();
+                },
+                nb::arg("name"))
+            .def(
+                "flag_index",
+                [](const SceneManager& self, const std::string& name) -> nb::object {
+                    const auto index = self.entity_classification().flag_index(name);
+                    return index ? nb::cast(*index) : nb::none();
+                },
+                nb::arg("name"))
+            .def(
                 "create_scene",
                 [](SceneManager& self, const SceneKey& key, nb::object extensions_obj) -> nb::object {
                     std::vector<tc_scene_ext_type_id> extensions;

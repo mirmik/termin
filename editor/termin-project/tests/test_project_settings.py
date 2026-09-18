@@ -5,6 +5,7 @@ import pytest
 from termin.project.application_identity import ProjectApplicationIdentity
 from termin.project.ignored_paths import project_ignored_roots
 from termin.project.settings import (
+    ProjectClassificationMigrationError,
     ProjectPlayerWindowSettings,
     ProjectSettings,
     ProjectSettingsManager,
@@ -412,3 +413,83 @@ def test_project_application_identity_rejects_invalid_values(
 
     with pytest.raises(ValueError, match=message):
         ProjectSettings.from_dict({"application": data}, project_name="Product")
+
+
+def test_entity_classification_requires_exact_unique_trimmed_names() -> None:
+    names = [""] * 64
+    names[2] = "  Gameplay  "
+    settings = ProjectSettings.from_dict({"layer_names": names})
+    assert settings.layer_names[2] == "Gameplay"
+
+    duplicate = [""] * 64
+    duplicate[1] = duplicate[5] = "Gameplay"
+    with pytest.raises(ProjectClassificationMigrationError, match="duplicate"):
+        ProjectSettings.from_dict({"layer_names": duplicate})
+    with pytest.raises(ProjectClassificationMigrationError, match="exactly 64"):
+        ProjectSettings.from_dict({"flag_names": [""] * 63})
+
+
+def test_project_settings_migrates_wrapped_scene_classification(tmp_path) -> None:
+    scene_path = tmp_path / "Scenes" / "Main.scene"
+    scene_path.parent.mkdir()
+    scene_path.write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "scene": {
+                    "entities": [],
+                    "layer_names": {"3": " Gameplay "},
+                    "flag_names": {"7": "Selected"},
+                },
+                "editor": {"expanded": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ProjectSettingsManager()
+    manager.set_project_path(tmp_path)
+
+    assert manager.settings.layer_names[3] == "Gameplay"
+    assert manager.settings.flag_names[7] == "Selected"
+    migrated = json.loads(scene_path.read_text(encoding="utf-8"))
+    assert "layer_names" not in migrated["scene"]
+    assert "flag_names" not in migrated["scene"]
+    persisted = json.loads(
+        (tmp_path / "project_settings" / "project.json").read_text(encoding="utf-8")
+    )
+    assert persisted["layer_names"][3] == "Gameplay"
+
+
+def test_project_settings_rejects_malformed_classification_without_rewrite(tmp_path) -> None:
+    settings_path = tmp_path / "project_settings" / "project.json"
+    settings_path.parent.mkdir()
+    original = {"layer_names": [""] * 63}
+    settings_path.write_text(json.dumps(original), encoding="utf-8")
+
+    with pytest.raises(ProjectClassificationMigrationError, match="exactly 64"):
+        ProjectSettingsManager().set_project_path(tmp_path)
+
+    assert json.loads(settings_path.read_text(encoding="utf-8")) == original
+
+
+def test_project_settings_rejects_conflicting_scenes_without_partial_writes(tmp_path) -> None:
+    first = tmp_path / "First.scene"
+    second = tmp_path / "Second.scene"
+    first.write_text(
+        json.dumps({"scene": {"layer_names": {"2": "World"}, "flag_names": {}}}),
+        encoding="utf-8",
+    )
+    second.write_text(
+        json.dumps({"scene": {"layer_names": {"2": "UI"}, "flag_names": {}}}),
+        encoding="utf-8",
+    )
+    before_first = first.read_text(encoding="utf-8")
+    before_second = second.read_text(encoding="utf-8")
+
+    with pytest.raises(ProjectClassificationMigrationError, match="conflicting layer"):
+        ProjectSettingsManager().set_project_path(tmp_path)
+
+    assert first.read_text(encoding="utf-8") == before_first
+    assert second.read_text(encoding="utf-8") == before_second
+    assert not (tmp_path / "project_settings" / "project.json").exists()

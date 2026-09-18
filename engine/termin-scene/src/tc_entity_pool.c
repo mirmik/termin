@@ -897,6 +897,13 @@ uint64_t tc_entity_pool_layer(const tc_entity_pool* pool, tc_entity_id id) {
 void tc_entity_pool_set_layer(tc_entity_pool* pool, tc_entity_id id, uint64_t v) {
     if (!tc_entity_pool_alive(pool, id))
         return;
+    if (v >= 64) {
+        tc_log(TC_LOG_ERROR,
+               "[tc_entity_pool_set_layer] rejected layer %llu for entity idx=%u: valid range is 0..63",
+               (unsigned long long)v,
+               id.index);
+        return;
+    }
     pool->layers[id.index] = v;
 }
 

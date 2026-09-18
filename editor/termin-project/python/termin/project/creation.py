@@ -280,8 +280,6 @@ def make_default_scene() -> dict:
                     ],
                 },
             ],
-            "layer_names": {},
-            "flag_names": {},
             "extensions": {
                 "render_mount": {
                     "viewport_configs": [

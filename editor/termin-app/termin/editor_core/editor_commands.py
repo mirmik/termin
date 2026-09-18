@@ -690,7 +690,12 @@ class EntityPropertyEditCommand(UndoCommand):
         self._property_name = property_name
         self._old_value = old_value
         self._new_value = new_value
-        kinds = {"name": "string", "layer": "uint64", "visible": "bool"}
+        kinds = {
+            "name": "string",
+            "layer": "uint64",
+            "flags": "uint64",
+            "visible": "bool",
+        }
         self._prefab_override = capture_entity_property(
             entity, property_name, kinds[property_name]) if property_name in kinds else None
 
@@ -707,6 +712,9 @@ class EntityPropertyEditCommand(UndoCommand):
             return
         if self._property_name == "layer":
             entity.layer = int(value)
+            return
+        if self._property_name == "flags":
+            entity.flags = int(value)
             return
         if self._property_name == "visible":
             entity.visible = bool(value)

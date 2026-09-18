@@ -10,8 +10,8 @@ import weakref
 from termin.editor_core.scene_settings_model import (
     SHADOW_METHODS,
     SKYBOX_TYPES,
-    SceneNamesController,
-    SceneNamesSnapshot,
+    EntityClassificationController,
+    EntityClassificationSnapshot,
     ScenePropertiesController,
     ScenePropertiesSnapshot,
     ShadowSettingsController,
@@ -45,9 +45,9 @@ def _set_combo_items(combo, items) -> None:
 
 
 @dataclass
-class NativeSceneNamesDialog:
+class NativeEntityClassificationDialog:
     document: TcDocument
-    controller: SceneNamesController
+    controller: EntityClassificationController
     dialog: object
     layers: tuple[object, ...]
     flags: tuple[object, ...]
@@ -59,7 +59,7 @@ class NativeSceneNamesDialog:
 
     def show(self) -> bool:
         if self._closed:
-            raise RuntimeError("native scene names dialog is closed")
+            raise RuntimeError("native entity classification dialog is closed")
         if self.dialog.open:
             return False
         snapshot = self.controller.load()
@@ -72,9 +72,9 @@ class NativeSceneNamesDialog:
             self.request_render()
         return shown
 
-    def save(self) -> SceneNamesSnapshot:
+    def save(self) -> EntityClassificationSnapshot:
         snapshot = self.controller.save(
-            SceneNamesSnapshot(
+            EntityClassificationSnapshot(
                 tuple(editor.text for editor in self.layers),
                 tuple(editor.text for editor in self.flags),
             )
@@ -332,19 +332,19 @@ def _color_text(value) -> str:
     return ", ".join(f"{float(component):.2f}" for component in value[:3])
 
 
-def _build_scene_name_column(document, title: str, kind: str):
-    column = document.create_vstack(f"scene-names-{kind}")
+def _build_classification_name_column(document, title: str, kind: str):
+    column = document.create_vstack(f"entity-classification-{kind}")
     column.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
     column.add_fixed_child(document.create_label(title), EDITOR_UI_METRICS.section_row)
 
-    name_list = document.create_vstack(f"scene-names-{kind}-list")
+    name_list = document.create_vstack(f"entity-classification-{kind}-list")
     name_list.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
     editors = []
     for index in range(64):
-        row = document.create_hstack(f"scene-names-{kind}-row-{index}")
+        row = document.create_hstack(f"entity-classification-{kind}-row-{index}")
         row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
         index_label = document.create_label(
-            str(index), f"scene-names-{kind}-index-{index}"
+            str(index), f"entity-classification-{kind}-index-{index}"
         )
         editor = document.create_text_input()
         editor.placeholder = "Unnamed"
@@ -358,34 +358,34 @@ def _build_scene_name_column(document, title: str, kind: str):
         + 63 * EDITOR_UI_METRICS.compact_spacing
     )
     name_list.preferred_size = Size(320.0, content_height)
-    scroll = document.create_scroll_area(f"scene-names-{kind}-scroll")
+    scroll = document.create_scroll_area(f"entity-classification-{kind}-scroll")
     scroll.set_scroll_axes(False, True)
     scroll.set_content(name_list)
     column.add_stretch_child(scroll.widget)
     return column, tuple(editors), scroll
 
 
-def build_native_scene_names_dialog(document, controller, *, viewport, request_render):
-    root = document.create_hstack("native-scene-names")
-    root.stable_id = "editor.scene-names"
+def build_native_entity_classification_dialog(document, controller, *, viewport, request_render):
+    root = document.create_hstack("native-entity-classification")
+    root.stable_id = "editor.entity-classification"
     root.preferred_size = Size(760.0, 560.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
-    layer_column, layer_editors, layer_scroll = _build_scene_name_column(
+    layer_column, layer_editors, layer_scroll = _build_classification_name_column(
         document, "Layers (0-63)", "layers"
     )
-    flag_column, flag_editors, flag_scroll = _build_scene_name_column(
+    flag_column, flag_editors, flag_scroll = _build_classification_name_column(
         document, "Flags (0-63)", "flags"
     )
     root.add_stretch_child(layer_column)
     root.add_stretch_child(flag_column)
-    dialog = document.create_dialog("Layers & Flags")
+    dialog = document.create_dialog("Project Entity Layers & Flags")
     dialog.actions = [
         DialogAction("ok", "OK", is_default=True),
         DialogAction("cancel", "Cancel", is_cancel=True),
     ]
     dialog.set_content(root)
-    result = NativeSceneNamesDialog(
+    result = NativeEntityClassificationDialog(
         document,
         controller,
         dialog,
@@ -614,10 +614,10 @@ def connect_scene_settings_command(menu_bar, command_id: int, dialog) -> None:
 
 
 __all__ = [
-    "NativeSceneNamesDialog",
+    "NativeEntityClassificationDialog",
     "NativeScenePropertiesDialog",
     "NativeShadowSettingsDialog",
-    "build_native_scene_names_dialog",
+    "build_native_entity_classification_dialog",
     "build_native_scene_properties_dialog",
     "build_native_shadow_settings_dialog",
     "connect_scene_settings_command",

@@ -3,6 +3,7 @@
 #define TC_SCENE_MANAGER_HPP
 
 #include "termin/engine/termin_engine_api.hpp"
+#include <termin/entity/entity_classification_registry.hpp>
 
 #include <cstdint>
 #include <functional>
@@ -66,6 +67,7 @@ namespace termin {
         BeforeSceneDestroyGuard _before_scene_destroy_guard;
         SceneElevationCallback _scene_elevator;
         std::unordered_set<SceneKey, SceneKeyHash> _elevating_scenes;
+        EntityClassificationRegistry _entity_classification;
 
     public:
         SceneManager();
@@ -91,6 +93,12 @@ namespace termin {
         bool is_registered(tc_scene_handle scene) const noexcept;
         std::optional<SceneKey> key_of(tc_scene_handle scene) const;
         std::vector<ManagedSceneInfo> scene_entries() const;
+
+        bool configure_entity_classification(const std::vector<std::string>& layer_names,
+                                             const std::vector<std::string>& flag_names,
+                                             std::string* error = nullptr);
+        const EntityClassificationRegistry& entity_classification() const noexcept;
+        EntityClassificationRegistry& entity_classification() noexcept;
 
         std::string get_scene_path(const SceneKey& key) const;
         std::string get_scene_path(tc_scene_handle scene) const;

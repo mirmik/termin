@@ -39,6 +39,7 @@ class EditMenuActions:
     redo: VoidCallback
     settings: VoidCallback
     project_settings: VoidCallback
+    entity_classification: VoidCallback
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +51,6 @@ class ViewMenuActions:
 @dataclass(frozen=True, slots=True)
 class SceneMenuActions:
     scene_properties: VoidCallback
-    layers_settings: VoidCallback
     shadow_settings: VoidCallback
     pipeline_editor: VoidCallback
 
@@ -249,6 +249,7 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
                 None,
                 MenuItemSpec("Settings...", actions.edit.settings),
                 MenuItemSpec("Project Settings...", actions.edit.project_settings),
+                MenuItemSpec("Entity Layers & Flags...", actions.edit.entity_classification),
             ],
         ),
         # ── View ───────────────────────────────────────────────────────
@@ -272,7 +273,6 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
             name="Scene",
             items=[
                 MenuItemSpec("Scene Properties...", actions.scene.scene_properties),
-                MenuItemSpec("Layers & Flags...", actions.scene.layers_settings),
                 MenuItemSpec("Shadow Settings...", actions.scene.shadow_settings),
                 None,
                 MenuItemSpec("Pipeline Editor...", actions.scene.pipeline_editor),
@@ -330,9 +330,9 @@ def build_editor_menu_inventory() -> list[MenuSpec]:
         EditorMenuSpecConfig(
             actions=EditorMenuActions(
                 file=FileMenuActions(*([noop] * 8)),
-                edit=EditMenuActions(*([noop] * 4)),
+                edit=EditMenuActions(*([noop] * 5)),
                 view=ViewMenuActions(*([noop] * 2)),
-                scene=SceneMenuActions(*([noop] * 4)),
+                scene=SceneMenuActions(*([noop] * 3)),
                 navigation=NavigationMenuActions(noop, noop),
                 game=GameMenuActions(*([noop] * 6)),
                 debug=DebugMenuActions(*([noop] * 8), show_frame_profiler=noop),

@@ -32,6 +32,7 @@
 #include <termin/gui_native/ui_document_asset.hpp>
 #endif
 #include <termin/image/image_decode.hpp>
+#include <termin/entity/entity_classification_registry.hpp>
 #include <termin/render/render_pipeline.hpp>
 #ifndef TERMIN_RUNTIME_RENDER_ONLY
 #include <termin/render/sprite_asset.hpp>
@@ -96,6 +97,46 @@ namespace termin::runtime {
                 return def;
             }
             return static_cast<double>(v->as_numer());
+        }
+
+        std::vector<std::string> classification_names(const nos::trent& classification,
+                                                      const char* field_name) {
+            const nos::trent* field = dict_get(classification, field_name);
+            if (!field || !field->is_list() || field->as_list().size() != 64) {
+                throw std::runtime_error(
+                    std::string("entity_classification.") + field_name +
+                    " must contain exactly 64 string entries");
+            }
+            std::vector<std::string> names;
+            names.reserve(64);
+            for (const nos::trent& value : field->as_list()) {
+                if (!value.is_string()) {
+                    throw std::runtime_error(
+                        std::string("entity_classification.") + field_name +
+                        " must contain exactly 64 string entries");
+                }
+                names.push_back(value.as_string());
+            }
+            return names;
+        }
+
+        void parse_entity_classification(const nos::trent& manifest,
+                                         RuntimePackageLoadResult& result) {
+            const nos::trent* classification = dict_get(manifest, "entity_classification");
+            if (!classification || !classification->is_dict()) {
+                throw std::runtime_error("manifest entity_classification must be an object");
+            }
+            const std::vector<std::string> layer_names =
+                classification_names(*classification, "layer_names");
+            const std::vector<std::string> flag_names =
+                classification_names(*classification, "flag_names");
+            EntityClassificationRegistry registry;
+            std::string error;
+            if (!registry.configure(layer_names, flag_names, &error)) {
+                throw std::runtime_error("invalid entity_classification: " + error);
+            }
+            result.layer_names.assign(registry.layer_names().begin(), registry.layer_names().end());
+            result.flag_names.assign(registry.flag_names().begin(), registry.flag_names().end());
         }
 
         uint32_t uint32_field(const nos::trent& t, const char* key, uint32_t def = 0) {
@@ -1848,6 +1889,8 @@ namespace termin::runtime {
         scenes.clear();
         scene = TcSceneRef();
         world_controller.reset();
+        layer_names.clear();
+        flag_names.clear();
         resources.reset();
         ok = false;
     }
@@ -1874,6 +1917,7 @@ namespace termin::runtime {
                 return result;
             }
             result.world_controller = detail::parse_world_controller_selection(manifest);
+            parse_entity_classification(manifest, result);
             const nos::trent* artifact_root_field = dict_get(manifest, "shader_artifact_root");
             std::string shader_root;
             if (artifact_root_field) {

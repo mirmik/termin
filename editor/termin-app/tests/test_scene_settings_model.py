@@ -3,8 +3,8 @@ import pytest
 from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.editor_core.scene_settings_model import (
     SKYBOX_TYPES,
-    SceneNamesController,
-    SceneNamesSnapshot,
+    EntityClassificationController,
+    EntityClassificationSnapshot,
     ScenePropertiesController,
     ShadowSettingsController,
     ShadowSettingsSnapshot,
@@ -13,6 +13,7 @@ from termin.editor_core.undo_stack import UndoStack
 from termin.geombase import SrgbColor
 from termin.render import DebugGeometryTypeRegistration, scene_render_state
 from termin.scene import TcScene
+from termin.project.settings import ProjectSettingsManager
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -29,19 +30,21 @@ def scene():
     value.destroy()
 
 
-def test_scene_names_controller_normalizes_and_persists_64_names(scene):
-    controller = SceneNamesController(scene)
+def test_entity_classification_controller_normalizes_and_persists_64_names(tmp_path):
+    manager = ProjectSettingsManager()
+    manager.set_project_path(tmp_path)
+    controller = EntityClassificationController(manager)
     layers = [""] * 64
     flags = [""] * 64
     layers[3] = "  Gameplay "
     flags[7] = " Selected "
 
-    saved = controller.save(SceneNamesSnapshot(tuple(layers), tuple(flags)))
+    saved = controller.save(EntityClassificationSnapshot(tuple(layers), tuple(flags)))
 
     assert saved.layers[3] == "Gameplay"
     assert controller.load().flags[7] == "Selected"
     with pytest.raises(ValueError):
-        controller.save(SceneNamesSnapshot(("short",), tuple(flags)))
+        controller.save(EntityClassificationSnapshot(("short",), tuple(flags)))
 
 
 def test_shadow_settings_controller_validates_applies_and_mirrors(scene):

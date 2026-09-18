@@ -17,7 +17,6 @@ class EditorSceneSession:
         scene_hierarchy,
         entity_inspector,
         scene_properties,
-        scene_names,
         shadow_settings,
         clear_selection: Callable[[], None],
         before_switch: Callable[[], None] | None = None,
@@ -27,7 +26,6 @@ class EditorSceneSession:
         self._scene_hierarchy = scene_hierarchy
         self._entity_inspector = entity_inspector
         self._scene_properties = scene_properties
-        self._scene_names = scene_names
         self._shadow_settings = shadow_settings
         self._clear_selection = clear_selection
         self._before_switch = before_switch
@@ -86,7 +84,6 @@ class EditorSceneSession:
         self._scene_hierarchy.set_scene(None)
         self._entity_inspector.set_scene(None)
         self._scene_properties.set_scene(None)
-        self._scene_names.set_scene(None)
         self._shadow_settings.set_scene(None)
         if self._on_switched is not None:
             self._on_switched(None)
@@ -96,7 +93,6 @@ class EditorSceneSession:
         self._scene_hierarchy.set_scene(scene)
         self._entity_inspector.set_scene(scene)
         self._scene_properties.set_scene(scene)
-        self._scene_names.set_scene(scene)
         self._shadow_settings.set_scene(scene)
 
 

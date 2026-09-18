@@ -20,6 +20,7 @@ DEFAULT_PLAYER_WINDOW_HEIGHT = 720
 DEFAULT_PLAYER_WINDOW_FULLSCREEN = True
 DEFAULT_PLAYER_WINDOW_VSYNC = True
 PROJECT_RENDER_PHASE_CAPACITY = 48
+ENTITY_CLASSIFICATION_NAME_COUNT = 64
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,12 @@ class ProjectRuntimeSettings:
     render_phase_names: tuple[str, ...] = field(
         default_factory=lambda: ("",) * PROJECT_RENDER_PHASE_CAPACITY
     )
+    layer_names: tuple[str, ...] = field(
+        default_factory=lambda: ("",) * ENTITY_CLASSIFICATION_NAME_COUNT
+    )
+    flag_names: tuple[str, ...] = field(
+        default_factory=lambda: ("",) * ENTITY_CLASSIFICATION_NAME_COUNT
+    )
     player_window: ProjectPlayerWindowSettings = field(default_factory=ProjectPlayerWindowSettings)
 
     @staticmethod
@@ -85,6 +92,8 @@ class ProjectRuntimeSettings:
                 )
             ),
             render_phase_names=_render_phase_names(data.get("render_phase_names")),
+            layer_names=_classification_names(data.get("layer_names"), "layer_names"),
+            flag_names=_classification_names(data.get("flag_names"), "flag_names"),
             player_window=ProjectPlayerWindowSettings.from_dict(data.get("player_window")),
         )
 
@@ -117,6 +126,18 @@ def _render_phase_names(value: object) -> tuple[str, ...]:
         )
     if any(not isinstance(name, str) for name in value):
         raise ValueError("render_phase_names entries must be strings")
+    return tuple(name.strip() for name in value)
+
+
+def _classification_names(value: object, field_name: str) -> tuple[str, ...]:
+    if value is None:
+        return ("",) * ENTITY_CLASSIFICATION_NAME_COUNT
+    if not isinstance(value, list) or len(value) != ENTITY_CLASSIFICATION_NAME_COUNT:
+        raise ValueError(
+            f"{field_name} must contain exactly {ENTITY_CLASSIFICATION_NAME_COUNT} indexed entries"
+        )
+    if any(not isinstance(name, str) for name in value):
+        raise ValueError(f"{field_name} entries must be strings")
     return tuple(name.strip() for name in value)
 
 

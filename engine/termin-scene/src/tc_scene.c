@@ -134,9 +134,6 @@ typedef struct tc_scene_slot {
     uint64_t next_lifecycle_registration_order;
     tc_event_bus* event_bus;
 
-    // Layer and flag names (64 each per scene, interned strings)
-    const char* layer_names[64];
-    const char* flag_names[64];
     void* ext_instances[TC_SCENE_EXT_TYPE_COUNT];
 } tc_scene_slot;
 
@@ -507,42 +504,6 @@ void tc_scene_set_uuid(tc_scene_handle h, const char* uuid) {
     if (!handle_alive(h))
         return;
     g_pool->slots[h.index].uuid = uuid ? tc_intern_string(uuid) : NULL;
-}
-
-// ============================================================================
-// Layer and Flag Names
-// ============================================================================
-
-const char* tc_scene_get_layer_name(tc_scene_handle h, int index) {
-    if (!handle_alive(h))
-        return NULL;
-    if (index < 0 || index >= 64)
-        return NULL;
-    return g_pool->slots[h.index].layer_names[index];
-}
-
-void tc_scene_set_layer_name(tc_scene_handle h, int index, const char* name) {
-    if (!handle_alive(h))
-        return;
-    if (index < 0 || index >= 64)
-        return;
-    g_pool->slots[h.index].layer_names[index] = (name && name[0]) ? tc_intern_string(name) : NULL;
-}
-
-const char* tc_scene_get_flag_name(tc_scene_handle h, int index) {
-    if (!handle_alive(h))
-        return NULL;
-    if (index < 0 || index >= 64)
-        return NULL;
-    return g_pool->slots[h.index].flag_names[index];
-}
-
-void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name) {
-    if (!handle_alive(h))
-        return;
-    if (index < 0 || index >= 64)
-        return;
-    g_pool->slots[h.index].flag_names[index] = (name && name[0]) ? tc_intern_string(name) : NULL;
 }
 
 // ============================================================================

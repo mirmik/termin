@@ -112,6 +112,29 @@ namespace termin::prefab {
             return true;
         }
 
+        bool source_uint64(const nos::trent& value, uint64_t& result) {
+            if (value.is_numer()) {
+                const long double number = value.as_numer();
+                if (!std::isfinite(number) || number < 0 || std::trunc(number) != number ||
+                    number > static_cast<long double>(std::numeric_limits<int64_t>::max())) {
+                    return false;
+                }
+                result = static_cast<uint64_t>(number);
+                return true;
+            }
+            if (!value.is_string()) {
+                return false;
+            }
+            const std::string& encoded = value.as_string();
+            if (encoded.size() != 18 || encoded[0] != '0' || encoded[1] != 'x') {
+                return false;
+            }
+            const char* first = encoded.data() + 2;
+            const char* last = encoded.data() + encoded.size();
+            const auto parsed = std::from_chars(first, last, result, 16);
+            return parsed.ec == std::errc() && parsed.ptr == last;
+        }
+
         const nos::trent* entity_source_value(const nos::trent& source, const std::string& field_path) {
             if (field_path == "transform.position") {
                 if (!source.contains("pose") || !source["pose"].is_dict() || !source["pose"].contains("position"))
@@ -206,15 +229,18 @@ namespace termin::prefab {
             if (item.field_path == "layer" || item.field_path == "flags") {
                 if (!require_kind(item, "uint64", kind_failure))
                     return kind_failure;
-                if (!value->is_numer() || !std::isfinite(static_cast<double>(value->as_numer())) ||
-                    value->as_numer() != static_cast<long double>(value->as_integer()) || value->as_integer() < 0) {
-                    return failure(item, Error::InvalidSourceValue, "source bit field must be a non-negative integer");
+                uint64_t bits = 0;
+                if (!source_uint64(*value, bits)) {
+                    return failure(item, Error::InvalidSourceValue, "source bit field must be a uint64 value");
                 }
-                const uint64_t bits = static_cast<uint64_t>(value->as_integer());
-                if (item.field_path == "layer")
+                if (item.field_path == "layer") {
+                    if (bits >= 64) {
+                        return failure(item, Error::InvalidSourceValue, "source layer must be in range 0..63");
+                    }
                     runtime.set_layer(bits);
-                else
+                } else {
                     runtime.set_flags(bits);
+                }
                 return std::nullopt;
             }
 

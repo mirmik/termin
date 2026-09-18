@@ -100,8 +100,6 @@
         ]
       }
     ],
-    "layer_names": {},
-    "flag_names": {},
     "extensions": {
       "render_mount": {
         "pipeline_templates": [],

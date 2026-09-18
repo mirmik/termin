@@ -230,9 +230,28 @@ void main() {
         return out.str();
     }
 
+    std::string with_entity_classification(std::string manifest_text) {
+        std::ostringstream classification;
+        classification << "  \"entity_classification\": {\n";
+        for (const char* field : {"layer_names", "flag_names"}) {
+            classification << "    \"" << field << "\": [";
+            for (std::size_t index = 0; index < 64; ++index) {
+                if (index != 0) classification << ", ";
+                classification << "\"\"";
+            }
+            classification << "]" << (std::string(field) == "layer_names" ? "," : "") << "\n";
+        }
+        classification << "  },\n";
+        const std::string marker = "  \"world_controller\": null,\n";
+        const std::size_t offset = manifest_text.find(marker);
+        REQUIRE(offset != std::string::npos);
+        manifest_text.insert(offset + marker.size(), classification.str());
+        return manifest_text;
+    }
+
     std::string manifest() {
-        return R"({
-  "version": 3,
+        return with_entity_classification(R"({
+  "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -245,7 +264,7 @@ void main() {
     {"type": "mesh", "uuid": "runtime-loader-test-mesh", "path": "meshes/test.tmesh.json"}
   ]
 }
-)";
+)");
     }
 
     std::string replace_once(std::string text, const std::string& needle, const std::string& replacement) {
@@ -274,8 +293,8 @@ void main() {
     }
 
     std::string manifest_with_packaged_texture() {
-        return R"({
-  "version": 3,
+        return with_entity_classification(R"({
+  "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -289,7 +308,7 @@ void main() {
     {"type": "shader_program", "uuid": "runtime-loader-test-program", "path": "shaders/test.shader-program.json"}
   ]
 }
-)";
+)");
     }
 
     std::string scene_json() {
@@ -490,8 +509,8 @@ void main() {
 TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects omitted domains") {
     termin::bootstrap::shutdown_runtime();
     const std::filesystem::path root = make_package_root();
-    write_text(root / "manifest.json", R"({
-  "version": 3,
+    write_text(root / "manifest.json", with_entity_classification(R"({
+  "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -499,7 +518,7 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
   ],
   "resources": []
 }
-)");
+)"));
     write_text(root / "scene.json", R"({
   "uuid": "minimal-runtime-scene",
   "entities": [
@@ -543,8 +562,8 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
     CHECK(unsupported_component.message.find("minimal runtime profile") != std::string::npos);
 
     write_text(root / "scene.json", R"({"uuid": "minimal-runtime-scene", "entities": []})");
-    write_text(root / "manifest.json", R"({
-  "version": 3,
+    write_text(root / "manifest.json", with_entity_classification(R"({
+  "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -554,7 +573,7 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
     {"type": "mesh", "uuid": "unsupported-mesh", "path": "meshes/test.tmesh.json"}
   ]
 }
-)");
+)"));
     auto unsupported_resource = loader.load(root.string(), options);
     CHECK_FALSE(unsupported_resource.ok);
     CHECK(unsupported_resource.message.find("resource type 'mesh'") != std::string::npos);
@@ -565,8 +584,8 @@ TEST_CASE("RuntimePackageLoader minimal bootstrap loads core scenes and rejects 
 TEST_CASE("RuntimePackageLoader restores OrbitCameraController horizon lock") {
     termin::bootstrap::shutdown_runtime();
     const std::filesystem::path root = make_package_root();
-    write_text(root / "manifest.json", R"({
-  "version": 3,
+    write_text(root / "manifest.json", with_entity_classification(R"({
+  "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -574,7 +593,7 @@ TEST_CASE("RuntimePackageLoader restores OrbitCameraController horizon lock") {
   ],
   "resources": []
 }
-)");
+)"));
     write_text(root / "scene.json", R"({
   "uuid": "orbit-camera-runtime-scene",
   "entities": [
@@ -816,8 +835,8 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
     REQUIRE(tc_pipeline_template_remove(source_handle));
 
     write_binary(root / "pipelines" / "compiled.pipeline-template", payload);
-    write_text(root / "manifest.json", R"({
-  "version": 3,
+    write_text(root / "manifest.json", with_entity_classification(R"({
+  "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -827,7 +846,7 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
     {"type": "pipeline", "uuid": "runtime-loader-compiled-pipeline", "name": "Runtime Compiled Pipeline", "path": "pipelines/compiled.pipeline-template"}
   ]
 }
-)");
+)"));
     write_text(root / "scene.json", R"({
   "uuid": "runtime-loader-pipeline-scene",
   "entities": [],
@@ -885,8 +904,8 @@ root:
     const std::string compiled = termin::gui_native::TcUiDocumentAsset::compile_source_json(
         ui_uuid, "Runtime UI", "UI/runtime.uiscript", source);
     write_text(root / "ui" / "runtime.ui-document.json", compiled);
-    write_text(root / "manifest.json", R"({
-  "version": 3,
+    write_text(root / "manifest.json", with_entity_classification(R"({
+  "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
   "scenes": [
@@ -896,7 +915,7 @@ root:
     {"type": "ui_document", "uuid": "runtime-native-ui", "name": "Runtime UI", "path": "ui/runtime.ui-document.json"}
   ]
 }
-)");
+)"));
     write_text(root / "scene.json", R"({
   "uuid": "runtime-native-ui-scene",
   "entities": []

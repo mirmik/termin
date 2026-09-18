@@ -1254,6 +1254,12 @@ print(json.dumps({
 
         void register_scenes() {
             SceneManager* manager = &engine->scene_manager;
+            std::string classification_error;
+            if (!manager->configure_entity_classification(
+                    package.layer_names, package.flag_names, &classification_error)) {
+                throw std::runtime_error(
+                    "failed to configure packaged entity classification: " + classification_error);
+            }
             for (const termin::runtime::RuntimePackageScene& packaged_scene : package.scenes) {
                 const SceneKey key{packaged_scene.identity, SceneRole::Runtime};
                 if (!manager->register_scene(key, packaged_scene.scene.handle())) {

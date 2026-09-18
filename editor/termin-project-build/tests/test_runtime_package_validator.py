@@ -26,9 +26,13 @@ def _scene_manifest(
     path: str = SCENE_PATH,
 ) -> dict[str, object]:
     return {
-        "version": 3,
+        "version": 4,
         "entry_scene": identity,
         "world_controller": None,
+        "entity_classification": {
+            "layer_names": [""] * 64,
+            "flag_names": [""] * 64,
+        },
         "scenes": [{"identity": identity, "path": path}],
     }
 
@@ -83,7 +87,7 @@ def test_validate_runtime_package_rejects_invalid_world_controller(
     )
 
 
-def test_validate_runtime_package_requires_explicit_world_controller_and_v3(
+def test_validate_runtime_package_requires_explicit_world_controller_and_v4(
     tmp_path: Path,
 ) -> None:
     package_dir = _write_valid_package(tmp_path)
@@ -95,7 +99,7 @@ def test_validate_runtime_package_requires_explicit_world_controller_and_v3(
 
     diagnostics = validate_runtime_package(package_dir)
 
-    assert any("supported version is 3" in item.message for item in diagnostics)
+    assert any("supported version is 4" in item.message for item in diagnostics)
     assert any(
         item.path == "world_controller" and "explicitly define" in item.message
         for item in diagnostics
@@ -667,9 +671,13 @@ def test_validate_runtime_package_rejects_missing_entry_and_duplicate_scene_iden
     _write_json(
         package_dir / "manifest.json",
         {
-            "version": 3,
+            "version": 4,
             "entry_scene": "Scenes/Missing.scene",
             "world_controller": None,
+            "entity_classification": {
+                "layer_names": [""] * 64,
+                "flag_names": [""] * 64,
+            },
             "scenes": [
                 {"identity": SCENE_IDENTITY, "path": SCENE_PATH},
                 {

@@ -1047,9 +1047,13 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     assert "editor" not in scene_data
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    assert manifest["version"] == 3
+    assert manifest["version"] == 4
     assert manifest["entry_scene"] == "Scenes/Main.scene"
     assert manifest["world_controller"] is None
+    assert manifest["entity_classification"] == {
+        "layer_names": [""] * 64,
+        "flag_names": [""] * 64,
+    }
     assert manifest["scenes"] == [
         {
             "identity": "Scenes/Main.scene",

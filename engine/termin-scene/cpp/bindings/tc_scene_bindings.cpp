@@ -340,51 +340,6 @@ namespace termin {
             .def_prop_rw("source_path", &TcSceneRef::source_path, &TcSceneRef::set_source_path)
             .def_prop_rw("uuid", &TcSceneRef::uuid, &TcSceneRef::set_uuid)
 
-            // Layer names (0-63)
-            .def(
-                "get_layer_name",
-                [](TcSceneRef& self, int index) -> std::string {
-                    std::string name = self.get_layer_name(index);
-                    if (name.empty())
-                        return "Layer " + std::to_string(index);
-                    return name;
-                },
-                nb::arg("index"))
-            .def("set_layer_name", &TcSceneRef::set_layer_name, nb::arg("index"), nb::arg("name"))
-            .def(
-                "get_flag_name",
-                [](TcSceneRef& self, int index) -> std::string {
-                    std::string name = self.get_flag_name(index);
-                    if (name.empty())
-                        return "Flag " + std::to_string(index);
-                    return name;
-                },
-                nb::arg("index"))
-            .def("set_flag_name", &TcSceneRef::set_flag_name, nb::arg("index"), nb::arg("name"))
-
-            .def_prop_ro("layer_names",
-                         [](TcSceneRef& self) -> nb::dict {
-                             nb::dict result;
-                             for (int i = 0; i < 64; i++) {
-                                 std::string name = self.get_layer_name(i);
-                                 if (!name.empty()) {
-                                     result[nb::int_(i)] = nb::str(name.c_str(), name.size());
-                                 }
-                             }
-                             return result;
-                         })
-            .def_prop_ro("flag_names",
-                         [](TcSceneRef& self) -> nb::dict {
-                             nb::dict result;
-                             for (int i = 0; i < 64; i++) {
-                                 std::string name = self.get_flag_name(i);
-                                 if (!name.empty()) {
-                                     result[nb::int_(i)] = nb::str(name.c_str(), name.size());
-                                 }
-                             }
-                             return result;
-                         })
-
             // Metadata
             .def("get_metadata", [](TcSceneRef& self) -> nb::object { return trent_to_python(self.metadata()); })
             .def(

@@ -488,6 +488,16 @@ namespace {
             g_state.player_package.shader_runtime.dev_compile_enabled);
 
         termin::SceneManager& scene_manager = g_state.player_engine->scene_manager;
+        std::string classification_error;
+        if (!scene_manager.configure_entity_classification(
+                g_state.player_package.layer_names,
+                g_state.player_package.flag_names,
+                &classification_error)) {
+            tc_log_error("termin_android_player: failed to configure entity classification: %s",
+                         classification_error.c_str());
+            destroy_player_session_locked();
+            return false;
+        }
         for (const termin::runtime::RuntimePackageScene& packaged_scene : g_state.player_package.scenes) {
             const termin::SceneKey key{packaged_scene.identity, termin::SceneRole::Runtime};
             if (!scene_manager.register_scene(key, packaged_scene.scene.handle())) {
