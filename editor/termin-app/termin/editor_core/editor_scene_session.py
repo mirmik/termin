@@ -67,6 +67,8 @@ class EditorSceneSession:
                         transfer_camera_state=False,
                     )
                     self._bind_models(previous)
+                    if self._on_switched is not None:
+                        self._on_switched(previous)
                 except Exception:
                     _logger.exception("Editor scene switch rollback failed")
             raise
