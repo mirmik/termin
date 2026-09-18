@@ -23,7 +23,7 @@ namespace termin {
                   height_(std::max(1, height)) {
                 tc_render_surface_init(&surface_, &s_vtable, &delete_storage);
                 surface_.body = this;
-                allocate_textures();
+                allocate_texture();
             }
 
             ~OffscreenRenderSurface() = default;
@@ -32,22 +32,21 @@ namespace termin {
                 return &surface_;
             }
             bool is_valid() const {
-                return device_ && color_tex_ && depth_tex_;
+                return device_ && color_tex_;
             }
 
         private:
             tgfx::IRenderDevice* device_ = nullptr;
             tc_render_surface surface_{};
             tgfx::TextureHandle color_tex_{};
-            tgfx::TextureHandle depth_tex_{};
             int width_ = 0;
             int height_ = 0;
 
             static const tc_render_surface_vtable s_vtable;
 
-            void allocate_textures() {
+            void allocate_texture() {
                 if (!device_) {
-                    tc::Log::error("OffscreenRenderSurface::allocate_textures: device is null");
+                    tc::Log::error("OffscreenRenderSurface::allocate_texture: device is null");
                     return;
                 }
 
@@ -57,36 +56,26 @@ namespace termin {
                 // An offscreen display is a compositing boundary, not an encoded
                 // presentation surface. Preserve DisplayLinear precision until
                 // the eventual physical sink performs its output transform.
+                // The surface exposes only color; pipeline render targets own
+                // any depth attachments needed while rendering the viewports.
                 color_desc.format = tgfx::PixelFormat::RGBA16F;
                 color_desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment |
                                    tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
                 color_tex_ = device_->create_texture(color_desc);
 
-                tgfx::TextureDesc depth_desc;
-                depth_desc.width = static_cast<uint32_t>(width_);
-                depth_desc.height = static_cast<uint32_t>(height_);
-                depth_desc.format = tgfx::PixelFormat::D24_UNorm;
-                depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment | tgfx::TextureUsage::Sampled |
-                                   tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
-                depth_tex_ = device_->create_texture(depth_desc);
-                if (!color_tex_ || !depth_tex_) {
+                if (!color_tex_) {
                     tc::Log::error("OffscreenRenderSurface: texture allocation failed");
                 }
             }
 
-            void release_textures() {
+            void release_texture() {
                 if (!device_) {
                     color_tex_ = {};
-                    depth_tex_ = {};
                     return;
                 }
                 if (color_tex_) {
                     device_->destroy(color_tex_);
                     color_tex_ = {};
-                }
-                if (depth_tex_) {
-                    device_->destroy(depth_tex_);
-                    depth_tex_ = {};
                 }
                 device_->invalidate_render_target_cache();
             }
@@ -96,10 +85,10 @@ namespace termin {
                     return false;
                 if (width == width_ && height == height_)
                     return true;
-                release_textures();
+                release_texture();
                 width_ = width;
                 height_ = height;
-                allocate_textures();
+                allocate_texture();
                 if (!is_valid())
                     return false;
                 tc_render_surface_notify_resize(&surface_, width_, height_);
@@ -137,7 +126,7 @@ namespace termin {
                 OffscreenRenderSurface* self = from_surface(surface);
                 if (!self)
                     return;
-                self->release_textures();
+                self->release_texture();
                 self->device_ = nullptr;
             }
 

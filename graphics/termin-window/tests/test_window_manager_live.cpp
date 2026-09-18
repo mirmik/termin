@@ -26,7 +26,6 @@ int main() {
         windows.take_events(first);
         windows.take_events(second);
 
-        auto& first_sdl = static_cast<termin::SDLBackendWindow&>(windows.window(first));
         auto& second_sdl = static_cast<termin::SDLBackendWindow&>(windows.window(second));
 
         SDL_Event key{};
@@ -37,16 +36,31 @@ int main() {
         key.key.keysym.scancode = SDL_SCANCODE_C;
         assert(SDL_PushEvent(&key) == 1);
 
-        assert(windows.pump_events() == 1);
-        assert(windows.pending_event_count(first) == 0);
-        assert(windows.pending_event_count(second) == 1);
-        assert(windows.pump_events() == 0);
-        assert(windows.pending_event_count(second) == 1);
+        // Native focus, resize and pointer events can arrive after the initial
+        // drain. Check queue accounting independently of that ambient traffic.
+        const auto first_pump_count = windows.pump_events();
+        assert(first_pump_count >= 1);
+        assert(windows.pending_event_count(first) + windows.pending_event_count(second) == first_pump_count);
+        const auto first_pending = windows.pending_event_count(first);
+        const auto second_pending = windows.pending_event_count(second);
+        const auto second_pump_count = windows.pump_events();
+        assert(windows.pending_event_count(first) >= first_pending);
+        assert(windows.pending_event_count(second) >= second_pending);
+        assert(windows.pending_event_count(first) + windows.pending_event_count(second)
+            == first_pump_count + second_pump_count);
 
+        const auto first_events = windows.take_events(first);
         const auto second_events = windows.take_events(second);
-        assert(second_events.size() == 1);
-        assert(second_events.front().type == termin::WindowEventType::KeyPressed);
-        assert(second_events.front().key.key == termin::WindowKey::C);
+        assert(first_events.size() + second_events.size() == first_pump_count + second_pump_count);
+        assert(windows.pending_event_count(first) == 0);
+        assert(windows.pending_event_count(second) == 0);
+        const auto is_key_pressed = [](const termin::WindowEvent& event) {
+            return event.type == termin::WindowEventType::KeyPressed;
+        };
+        assert(std::ranges::count_if(first_events, is_key_pressed) == 0);
+        assert(std::ranges::count_if(second_events, is_key_pressed) == 1);
+        const auto received_key = std::ranges::find_if(second_events, is_key_pressed);
+        assert(received_key->key.key == termin::WindowKey::C);
 
         bool session_close_rejected = false;
         try {
@@ -80,13 +94,18 @@ int main() {
         SDL_Event quit{};
         quit.type = SDL_QUIT;
         assert(SDL_PushEvent(&quit) == 1);
-        assert(windows.pump_events() == 2);
+        const auto quit_pump_count = windows.pump_events();
+        assert(quit_pump_count >= 2);
+        size_t taken_count = 0;
         for (termin::WindowHandle handle : windows.handles()) {
             const auto events = windows.take_events(handle);
-            assert(std::ranges::any_of(events, [](const termin::WindowEvent& event) {
+            taken_count += events.size();
+            assert(std::ranges::count_if(events, [](const termin::WindowEvent& event) {
                 return event.type == termin::WindowEventType::CloseRequested;
-            }));
+            }) == 1);
+            assert(windows.pending_event_count(handle) == 0);
         }
+        assert(taken_count == quit_pump_count);
 
         windows.close();
         assert(!windows.is_open());

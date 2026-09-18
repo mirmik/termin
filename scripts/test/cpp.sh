@@ -131,6 +131,8 @@ case "$WINDOW_TESTS_MODE" in
 esac
 
 export LD_LIBRARY_PATH="${BUILD_DIR}/bin:${SDK_PREFIX}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Windowed SDK consumers also need installed runtime assets such as UI fonts.
+export TERMIN_SDK="$SDK_PREFIX"
 
 echo ""
 echo "========================================"

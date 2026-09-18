@@ -60,7 +60,7 @@ def build(destination: Path) -> None:
         frames = [(work / f"{s}.png").read_bytes() for s in SIZES]
         entries = []
         offset = 6 + 16 * len(frames)
-        for size, data in zip(SIZES, frames):
+        for size, data in zip(SIZES, frames, strict=True):
             assert data[:8] == b"\x89PNG\r\n\x1a\n"
             assert struct.unpack_from(">II", data, 16) == (size, size)
             assert data[24:26] == bytes((8, 2)), "Expected 8-bit opaque RGB PNG"
