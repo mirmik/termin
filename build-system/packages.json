@@ -520,6 +520,10 @@
       "distribution": "termin-project-build"
     },
     {
+      "path": "editor/termin-scene-recipe",
+      "distribution": "termin-scene-recipe"
+    },
+    {
       "path": "editor/termin-player",
       "distribution": "termin-player"
     },

@@ -104,7 +104,8 @@
         "termin-player",
         "termin-project",
         "termin-project-build",
-        "termin-project-modules"
+        "termin-project-modules",
+        "termin-scene-recipe"
       ]
     },
     {

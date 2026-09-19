@@ -28,6 +28,8 @@ from termin.editor_core.pipeline_inspector_model import PipelineInspectorControl
 from termin.editor_core.framegraph_debugger_service import EditorFramegraphDebuggerService
 from termin.editor_core.python_console_model import PythonConsoleController
 from termin.editor_core.scene_edit_service import EditorSceneEditService
+from termin.editor_core.scene_recipe_adapter import SceneRecipeAdapter
+from termin.scene_recipe import SceneRecipeService
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_core.about_model import (
     build_editor_about_info,
@@ -1877,6 +1879,27 @@ def _compose_native_editor(
     project_stage.own("resource manager controller", resource_manager_controller)
 
     automation_stage = session.begin_stage("automation services")
+
+    def refresh_recipe_scene() -> None:
+        scene_hierarchy_controller.rebuild()
+        entity_inspector_controller.refresh()
+
+    scene_recipe = automation_stage.own(
+        "scene recipe service",
+        SceneRecipeService(
+            SceneRecipeAdapter(
+                scene_provider=current_scene,
+                resource_manager=resource_manager,
+                is_play_mode=lambda: (
+                    game_mode_controller is not None
+                    and game_mode_controller.model.is_game_mode
+                ),
+                push_undo_command=push_undo_command,
+                refresh_editor=refresh_recipe_scene,
+                request_render_update=request_editor_render,
+            ),
+        ),
+    )
     scene_edit = automation_stage.own(
         "scene edit service",
         EditorSceneEditService(
@@ -1897,6 +1920,8 @@ def _compose_native_editor(
                 "resource_manager": resource_manager,
                 "selected_entity": selected_entity,
                 "scene_edit": scene_edit,
+                "scene_recipe": scene_recipe,
+                "refresh_editor": refresh_recipe_scene,
                 "scene_hierarchy_controller": scene_hierarchy_controller,
                 "scene_tree": scene_tree,
                 "viewport_list_controller": viewport_list_controller,

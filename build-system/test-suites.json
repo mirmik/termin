@@ -1623,6 +1623,14 @@
       ]
     },
     {
+      "id": "termin-scene-recipe-tests",
+      "module": "termin-scene-recipe",
+      "executor": "pytest",
+      "roots": [
+        "editor/termin-scene-recipe/tests"
+      ]
+    },
+    {
       "id": "termin-scene-tests",
       "module": "termin-scene",
       "executor": "pytest",
