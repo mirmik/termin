@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <termin/navmesh/world_navmesh_link_component.hpp>
+#include <termin/navmesh/world_navmesh_seam_component.hpp>
 
 #include <core/tc_entity_pool_registry.h>
 #include <tcbase/tc_log.hpp>
@@ -78,6 +79,7 @@ namespace termin {
         }
 
         entries_.push_back({entity.handle(), component});
+        surface_cache_.reset();
     }
 
     void PathfindingWorld::remove(DetourPathfindingWorldComponent* component) {
@@ -89,6 +91,7 @@ namespace termin {
                                       entries_.end(),
                                       [component](const Entry& entry) { return entry.component == component; }),
                        entries_.end());
+        surface_cache_.reset();
     }
 
     bool PathfindingWorld::contains(DetourPathfindingWorldComponent* component) const {
@@ -100,6 +103,8 @@ namespace termin {
     void PathfindingWorld::rebuild_from_scene() {
         entries_.clear();
         links_.clear();
+        seams_.clear();
+        surface_cache_.reset();
         if (!tc_scene_handle_valid(scene_)) {
             tc_log_warn("[PathfindingWorld] cannot rebuild: scene handle is invalid");
             return;
@@ -134,6 +139,8 @@ namespace termin {
                 }
                 if (auto* link = dynamic_cast<WorldNavMeshLinkComponent*>(cxx))
                     add_link(link);
+                if (auto* seam = dynamic_cast<WorldNavMeshSeamComponent*>(cxx))
+                    add_seam(seam);
             }
         }
     }
@@ -275,59 +282,7 @@ namespace termin {
                                                                           const Vec3f& end,
                                                                           const PathfindingWorldQueryOptions& options) {
         prune_invalid_entries();
-        if (!links_.empty()) {
-            auto linked = find_linked_path_world(start, end);
-            if (linked.success)
-                return linked;
-        }
-        PathfindingWorldPathResult result;
-        std::vector<PathfindingWorldCandidate> candidates = candidates_for_world_points(start, end);
-        if (candidates.empty()) {
-            tc_log_warn("[PathfindingWorld] path query failed: no DetourPathfindingWorldComponent "
-                        "accepted closest-point query");
-            return result;
-        }
-
-        for (const PathfindingWorldCandidate& candidate : candidates) {
-            if (!candidate.component) {
-                continue;
-            }
-
-            const Vec3f& query_end = options.navmesh_precast ? candidate.end_closest.point : end;
-            DetourPathResult path =
-                candidate.component->find_detailed_path_world(candidate.bake_frame, start, query_end);
-            if (!path.success || path.points.empty()) {
-                tc_log_warn("[PathfindingWorld] path candidate failed: entity='%s' "
-                            "navmesh_uuid='%s'",
-                            candidate.entity_name().c_str(),
-                            candidate.navmesh_uuid().c_str());
-                continue;
-            }
-
-            result.success = true;
-            result.candidate = candidate;
-            result.path = std::move(path);
-            result.spans.push_back(
-                {candidate.entity, candidate.component, candidate.bake_frame, 0, result.path.points.size() - 1});
-            if (!links_.empty()) {
-                // A failed seam route must not masquerade as reaching a target
-                // that was projected onto an unrelated local surface.
-                const auto starts = candidates_for_world_point(start);
-                for (const auto& origin : starts) {
-                    if (origin.distance_sq + 1e-6 < candidate.start_distance_sq)
-                        result.path.partial = true;
-                }
-                const auto ends = candidates_for_world_point(end);
-                for (const auto& target : ends) {
-                    if (target.distance_sq + 1e-6 < candidate.end_distance_sq)
-                        result.path.partial = true;
-                }
-            }
-            return result;
-        }
-
-        tc_log_warn("[PathfindingWorld] path query failed: all %zu candidates returned empty path", candidates.size());
-        return result;
+        return find_surface_path_world(start, end, options);
     }
 
     void PathfindingWorld::add_link(WorldNavMeshLinkComponent* component) {
@@ -342,171 +297,24 @@ namespace termin {
         std::erase_if(links_, [component](const auto& e) { return e.component == component; });
     }
 
-    PathfindingWorldPathResult PathfindingWorld::find_linked_path_world(const Vec3f& start, const Vec3f& end) {
-        PathfindingWorldPathResult result;
-        auto starts = candidates_for_world_point(start);
-        auto ends = candidates_for_world_point(end);
-        if (starts.empty() || ends.empty())
-            return result;
-        // In a curved world a remote floor can be directly below a point in its
-        // own bake frame. Physical distance, not over_poly, chooses the surface.
-        auto nearest = [](const auto& a, const auto& b) {
-            return a.distance_sq < b.distance_sq;
-        };
-        auto start_candidate = *std::min_element(starts.begin(), starts.end(), nearest);
-        auto end_candidate = *std::min_element(ends.begin(), ends.end(), nearest);
-        struct Node {
-            PathfindingWorldPointCandidate surface;
-        };
-        std::vector<Node> nodes{{start_candidate}, {end_candidate}};
-        struct Seam {
-            size_t from, to;
-        };
-        std::vector<Seam> seams;
-        auto endpoint = [&](Entity surface, const tc_vec3& local, double radius, PathfindingWorldPointCandidate& out) {
-            if (!surface.valid() || !surface.enabled() || !same_owner_scene(surface, scene_))
-                return false;
-            const Vec3 world = surface.transform().transform_point(Vec3{local.x, local.y, local.z});
-            const Vec3f point{float(world.x), float(world.y), float(world.z)};
-            double best = radius * radius;
-            bool found = false;
-            bool ambiguous = false;
-            for (const auto& entry : entries_) {
-                if (!tc_entity_handle_eq(entry.owner, surface.handle()) || !entry.component->enabled())
-                    continue;
-                const Pose3 frame = navmesh_bake_frame_from_transform(surface.transform());
-                const auto closest = entry.component->closest_point_world(frame, point);
-                if (!closest.success)
-                    continue;
-                const double distance = distance_sq(point, closest.point);
-                if (found && std::abs(distance - best) <= 1e-10) {
-                    ambiguous = true;
-                } else if (distance <= best) {
-                    ambiguous = false;
-                    out = {surface, entry.component, frame, closest, distance};
-                    best = distance;
-                    found = true;
-                }
-            }
-            if (ambiguous)
-                tc_log_warn("[PathfindingWorld] ambiguous seam surface '%s': multiple equally near Detour components",
-                            surface.name());
-            return found && !ambiguous;
-        };
-        for (const auto& entry : links_) {
-            Entity owner(entry.owner);
-            auto* link = entry.component;
-            if (!owner.enabled() || !link->enabled())
-                continue;
-            PathfindingWorldPointCandidate a, b;
-            if (!std::isfinite(link->snap_radius) || link->snap_radius < 0 ||
-                !endpoint(link->start_surface, link->start_local, link->snap_radius, a) ||
-                !endpoint(link->end_surface, link->end_local, link->snap_radius, b)) {
-                tc_log_warn("[PathfindingWorld] ignored seam '%s': missing surface or endpoint outside snap radius",
-                            owner.name());
-                continue;
-            }
-            const size_t i = nodes.size();
-            nodes.push_back({a});
-            nodes.push_back({b});
-            seams.push_back({i, i + 1});
-            if (link->bidirectional)
-                seams.push_back({i + 1, i});
-        }
-        if (seams.empty())
-            return result;
-        struct Edge {
-            bool evaluated = false;
-            double cost = std::numeric_limits<double>::infinity();
-            DetourPathResult path;
-        };
-        const size_t count = nodes.size();
-        // Every directed intra-surface leg is evaluated at most once per query.
-        std::vector<Edge> edges(count * count);
-        for (auto seam : seams) {
-            auto& edge = edges[seam.from * count + seam.to];
-            edge.evaluated = true;
-            edge.path.success = true;
-            DetourPathPoint a, b;
-            a.point = nodes[seam.from].surface.closest.point;
-            b.point = nodes[seam.to].surface.closest.point;
-            a.poly_ref = nodes[seam.from].surface.closest.poly_ref;
-            // The seam span belongs to its starting surface; the destination
-            // polygon reference is provided by the following surface span.
-            b.poly_ref = 0;
-            edge.path.points = {a, b};
-            edge.cost = std::sqrt(distance_sq(a.point, b.point));
-        }
-        std::vector<double> distances(count, std::numeric_limits<double>::infinity());
-        std::vector<size_t> previous(count, count);
-        std::vector<bool> visited(count, false);
-        distances[0] = 0;
-        for (size_t iteration = 0; iteration < count; ++iteration) {
-            size_t current = count;
-            for (size_t i = 0; i < count; ++i)
-                if (!visited[i] && (current == count || distances[i] < distances[current]))
-                    current = i;
-            if (current == count || !std::isfinite(distances[current]))
-                break;
-            if (current == 1)
-                break;
-            visited[current] = true;
-            for (size_t next = 0; next < count; ++next) {
-                if (visited[next] || next == current)
-                    continue;
-                auto& edge = edges[current * count + next];
-                const auto& a = nodes[current].surface;
-                const auto& b = nodes[next].surface;
-                if (!edge.evaluated && a.component == b.component) {
-                    edge.evaluated = true;
-                    edge.path = a.component->find_detailed_path_world(a.bake_frame, a.closest.point, b.closest.point);
-                    if (edge.path.success && !edge.path.partial && !edge.path.points.empty()) {
-                        edge.cost = 0;
-                        for (size_t p = 1; p < edge.path.points.size(); ++p)
-                            edge.cost +=
-                                std::sqrt(distance_sq(edge.path.points[p - 1].point, edge.path.points[p].point));
-                    }
-                }
-                const double cost = distances[current] + edge.cost;
-                if (cost < distances[next]) {
-                    distances[next] = cost;
-                    previous[next] = current;
-                }
-            }
-        }
-        if (!std::isfinite(distances[1]))
-            return result;
-        std::vector<size_t> route;
-        for (size_t i = 1; i != 0; i = previous[i])
-            route.push_back(i);
-        route.push_back(0);
-        std::reverse(route.begin(), route.end());
-        for (size_t i = 1; i < route.size(); ++i) {
-            const size_t from = route[i - 1], to = route[i];
-            const auto& points = edges[from * count + to].path.points;
-            const auto& surface = nodes[from].surface;
-            const size_t begin = result.path.points.size();
-            result.path.points.insert(result.path.points.end(), points.begin(), points.end());
-            result.spans.push_back(
-                {surface.entity, surface.component, surface.bake_frame, begin, result.path.points.size() - 1});
-        }
-        // START/END flags belong to the whole route, never an intermediate leg.
-        for (auto& point : result.path.points)
-            point.flags &= ~3u;
-        result.path.points.front().flags |= 1u;
-        result.path.points.back().flags |= 2u;
-        result.success = result.path.success = true;
-        result.candidate = {start_candidate.entity,
-                            start_candidate.component,
-                            start_candidate.bake_frame,
-                            start_candidate.closest,
-                            end_candidate.closest,
-                            start_candidate.distance_sq,
-                            end_candidate.distance_sq};
-        return result;
+    void PathfindingWorld::add_seam(WorldNavMeshSeamComponent* component) {
+        if (!component || !same_owner_scene(component->entity(), scene_))
+            return;
+        if (std::any_of(seams_.begin(), seams_.end(), [component](const auto& e) { return e.component == component; }))
+            return;
+        seams_.push_back({component->entity().handle(), component});
+        surface_cache_.reset();
+    }
+    void PathfindingWorld::remove_seam(WorldNavMeshSeamComponent* component) {
+        std::erase_if(seams_, [component](const auto& e) { return e.component == component; });
+        surface_cache_.reset();
     }
 
     void PathfindingWorld::prune_invalid_entries() {
+        std::erase_if(seams_, [this](const SeamEntry& entry) {
+            Entity owner(entry.owner);
+            return !owner.valid() || !same_owner_scene(owner, scene_);
+        });
         std::erase_if(links_, [this](const LinkEntry& entry) {
             Entity owner(entry.owner);
             return !owner.valid() || !same_owner_scene(owner, scene_);

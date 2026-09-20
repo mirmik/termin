@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -12,6 +13,8 @@
 
 namespace termin {
     class WorldNavMeshLinkComponent;
+    class WorldNavMeshSeamComponent;
+    struct SurfaceWorldCache;
 
     struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldQueryOptions {
         bool navmesh_precast = true;
@@ -52,6 +55,9 @@ namespace termin {
         // Inclusive indices in the concatenated world-space polyline.
         size_t point_begin = 0;
         size_t point_end = 0;
+        uint64_t poly_ref = 0;
+        uint64_t generation = 0;
+        Vec3 normal{0, 0, 1};
     };
 
     struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldPathResult {
@@ -74,6 +80,12 @@ namespace termin {
             WorldNavMeshLinkComponent* component = nullptr;
         };
         std::vector<LinkEntry> links_;
+        struct SeamEntry {
+            tc_entity_handle owner = TC_ENTITY_HANDLE_INVALID;
+            WorldNavMeshSeamComponent* component = nullptr;
+        };
+        std::vector<SeamEntry> seams_;
+        std::shared_ptr<SurfaceWorldCache> surface_cache_;
 
     public:
         static PathfindingWorld* from_scene(tc_scene_handle scene);
@@ -92,6 +104,8 @@ namespace termin {
         void rebuild_from_scene();
         void add_link(WorldNavMeshLinkComponent* component);
         void remove_link(WorldNavMeshLinkComponent* component);
+        void add_seam(WorldNavMeshSeamComponent* component);
+        void remove_seam(WorldNavMeshSeamComponent* component);
 
         size_t size() const;
 
@@ -108,7 +122,8 @@ namespace termin {
                                                             const PathfindingWorldQueryOptions& options = {});
 
     private:
-        PathfindingWorldPathResult find_linked_path_world(const Vec3f& start, const Vec3f& end);
+        PathfindingWorldPathResult
+        find_surface_path_world(const Vec3f& start, const Vec3f& end, const PathfindingWorldQueryOptions& options);
         void prune_invalid_entries();
         static double distance_sq(const Vec3f& a, const Vec3f& b);
         static bool same_owner_scene(const Entity& entity, tc_scene_handle scene);

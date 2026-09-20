@@ -6,10 +6,11 @@
 #include "termin/navmesh/navmesh_keeper_component.hpp"
 #include "termin/navmesh/navmesh_query_space.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
-#include "termin/navmesh/world_navmesh_link_component.hpp"
 #include "termin/navmesh/pathfinding_world.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/navmesh/tc_navmesh_handle.hpp"
+#include "termin/navmesh/world_navmesh_link_component.hpp"
+#include "termin/navmesh/world_navmesh_seam_component.hpp"
 #include <inspect/tc_inspect_python.hpp>
 #include <nanobind/stl/string.h>
 #include <termin/bindings/entity_helpers.hpp>
@@ -290,12 +291,37 @@ namespace termin {
             .def_rw("end_surface", &WorldNavMeshLinkComponent::end_surface)
             .def_rw("snap_radius", &WorldNavMeshLinkComponent::snap_radius)
             .def_rw("bidirectional", &WorldNavMeshLinkComponent::bidirectional)
-            .def_prop_rw("start_local",
+            .def_prop_rw(
+                "start_local",
                 [](WorldNavMeshLinkComponent& self) { return tc_vec3_to_vec3(self.start_local); },
                 [](WorldNavMeshLinkComponent& self, const Vec3& value) { self.start_local = tc_vec3_from_vec3(value); })
-            .def_prop_rw("end_local",
+            .def_prop_rw(
+                "end_local",
                 [](WorldNavMeshLinkComponent& self) { return tc_vec3_to_vec3(self.end_local); },
                 [](WorldNavMeshLinkComponent& self, const Vec3& value) { self.end_local = tc_vec3_from_vec3(value); });
+
+        nb::class_<WorldNavMeshSeamComponent, CxxComponent>(m, "WorldNavMeshSeamComponent")
+            .def("__init__", [](nb::handle self) { cxx_component_init<WorldNavMeshSeamComponent>(self); })
+            .def_rw("start_surface", &WorldNavMeshSeamComponent::start_surface)
+            .def_rw("end_surface", &WorldNavMeshSeamComponent::end_surface)
+            .def_rw("max_extension", &WorldNavMeshSeamComponent::max_extension)
+            .def_rw("bidirectional", &WorldNavMeshSeamComponent::bidirectional)
+            .def_prop_rw(
+                "start_a",
+                [](WorldNavMeshSeamComponent& self) { return tc_vec3_to_vec3(self.start_a); },
+                [](WorldNavMeshSeamComponent& self, const Vec3& value) { self.start_a = tc_vec3_from_vec3(value); })
+            .def_prop_rw(
+                "start_b",
+                [](WorldNavMeshSeamComponent& self) { return tc_vec3_to_vec3(self.start_b); },
+                [](WorldNavMeshSeamComponent& self, const Vec3& value) { self.start_b = tc_vec3_from_vec3(value); })
+            .def_prop_rw(
+                "end_a",
+                [](WorldNavMeshSeamComponent& self) { return tc_vec3_to_vec3(self.end_a); },
+                [](WorldNavMeshSeamComponent& self, const Vec3& value) { self.end_a = tc_vec3_from_vec3(value); })
+            .def_prop_rw(
+                "end_b",
+                [](WorldNavMeshSeamComponent& self) { return tc_vec3_to_vec3(self.end_b); },
+                [](WorldNavMeshSeamComponent& self, const Vec3& value) { self.end_b = tc_vec3_from_vec3(value); });
 
         nb::class_<OffMeshLinkComponent, CxxComponent>(m, "OffMeshLinkComponent")
             .def("__init__", [](nb::handle self) { cxx_component_init<OffMeshLinkComponent>(self); })
@@ -547,7 +573,10 @@ namespace termin {
             .def_ro("component", &PathfindingWorldPathSpan::component)
             .def_ro("bake_frame", &PathfindingWorldPathSpan::bake_frame)
             .def_ro("point_begin", &PathfindingWorldPathSpan::point_begin)
-            .def_ro("point_end", &PathfindingWorldPathSpan::point_end);
+            .def_ro("point_end", &PathfindingWorldPathSpan::point_end)
+            .def_ro("poly_ref", &PathfindingWorldPathSpan::poly_ref)
+            .def_ro("generation", &PathfindingWorldPathSpan::generation)
+            .def_ro("normal", &PathfindingWorldPathSpan::normal);
 
         nb::class_<PathfindingWorldPathResult>(m, "PathfindingWorldPathResult")
             .def_ro("success", &PathfindingWorldPathResult::success)

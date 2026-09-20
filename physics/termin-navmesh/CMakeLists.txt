@@ -124,6 +124,11 @@ if(TERMIN_HAS_RECAST)
         src/off_mesh_link_component.cpp
         src/world_navmesh_link_component.cpp
         src/pathfinding_world.cpp
+        src/surface_navigation.cpp
+        src/surface_seam.cpp
+        src/surface_graph_builder.cpp
+        src/surface_pathfinding_world.cpp
+        src/world_navmesh_seam_component.cpp
         src/recast_navmesh_bake.cpp
         src/recast_navmesh_entity_geometry.cpp
         src/recast_navmesh_builder_component.cpp
@@ -207,10 +212,12 @@ if(TERMIN_HAS_RECAST)
             COMMAND termin_navmesh_detour_linear_paths_test
         )
 
-        add_executable(termin_navmesh_world_links_test tests/test_world_navmesh_links.cpp)
-        target_link_libraries(termin_navmesh_world_links_test PRIVATE termin_navmesh_components)
-        termin_set_rpath_test(termin_navmesh_world_links_test)
-        add_test(NAME termin_navmesh_world_links_test COMMAND termin_navmesh_world_links_test)
+        foreach(suite surface_seam surface_navigation surface_graph_builder detour_surface_snapshot world_seams surface_public_transitions)
+            add_executable(termin_navmesh_${suite}_test tests/test_${suite}.cpp)
+            target_link_libraries(termin_navmesh_${suite}_test PRIVATE termin_navmesh_components)
+            termin_set_rpath_test(termin_navmesh_${suite}_test)
+            add_test(NAME termin_navmesh_${suite}_test COMMAND termin_navmesh_${suite}_test)
+        endforeach()
 
         add_executable(termin_navmesh_detour_path_status_test
             tests/test_detour_path_status.cpp

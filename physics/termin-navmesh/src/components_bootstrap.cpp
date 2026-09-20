@@ -4,9 +4,10 @@
 #include <termin/navmesh/navmesh_bake_source.hpp>
 #include <termin/navmesh/navmesh_keeper_component.hpp>
 #include <termin/navmesh/off_mesh_link_component.hpp>
-#include <termin/navmesh/world_navmesh_link_component.hpp>
 #include <termin/navmesh/recast_navmesh_builder_component.hpp>
 #include <termin/navmesh/tc_pathfinding_world.h>
+#include <termin/navmesh/world_navmesh_link_component.hpp>
+#include <termin/navmesh/world_navmesh_seam_component.hpp>
 
 namespace termin {
 
@@ -16,6 +17,7 @@ namespace termin {
         DetourPathfindingWorldComponent::register_type();
         OffMeshLinkComponent::register_type();
         WorldNavMeshLinkComponent::register_type();
+        WorldNavMeshSeamComponent::register_type();
         RecastNavMeshBuilderComponent::register_type();
         NavMeshBakeVisitorRegistry::instance().ensure_builtin_visitors_registered();
     }

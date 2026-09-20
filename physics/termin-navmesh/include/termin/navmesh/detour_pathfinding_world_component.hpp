@@ -5,6 +5,7 @@
 
 #include <termin/entity/component.hpp>
 #include <termin/navmesh/detour_query_session.hpp>
+#include <termin/navmesh/tc_navmesh.h>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 namespace termin {
@@ -14,6 +15,8 @@ namespace termin {
         mutable std::string _loaded_navmesh_uuid;
         mutable std::string _loaded_asset_path;
         mutable bool _load_failed = false;
+        tc_navmesh_handle _loaded_navmesh_handle = tc_navmesh_handle_invalid();
+        std::uint32_t _loaded_navmesh_version = 0;
         std::vector<std::vector<unsigned char>> _tile_blobs;
         DetourQuerySession _query_session;
 
@@ -34,6 +37,12 @@ namespace termin {
         bool rebuild();
         void clear();
         bool is_ready() const;
+
+        // Ensures resource version changes are reflected before exposing geometry.
+        const DetourSurfaceSnapshot* surface_snapshot();
+        std::uint64_t generation() const {
+            return _query_session.generation();
+        }
 
         std::vector<Vec3f> find_path(const Vec3f& start, const Vec3f& end);
 

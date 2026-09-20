@@ -5,6 +5,7 @@
 
 #include <termin/geom/pose3.hpp>
 #include <termin/geom/vec3.hpp>
+#include <termin/navmesh/detour_surface_snapshot.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 class dtNavMesh;
@@ -54,6 +55,7 @@ namespace termin {
         dtNavMesh* _navmesh = nullptr;
         dtNavMeshQuery* _query = nullptr;
         std::vector<unsigned char> _tile_blob;
+        DetourSurfaceSnapshot _surface_snapshot;
 
     public:
         Vec3f query_extents{2.0f, 4.0f, 2.0f};
@@ -70,6 +72,14 @@ namespace termin {
         bool load_single_tile_data(const std::vector<unsigned char>& data, const std::string& asset_name = "");
         void clear();
         bool is_ready() const;
+
+        // References remain valid until clear/load; generation changes on both.
+        const DetourSurfaceSnapshot& surface_snapshot() const {
+            return _surface_snapshot;
+        }
+        std::uint64_t generation() const {
+            return _surface_snapshot.generation;
+        }
 
         std::vector<Vec3f> find_path(const Vec3f& start, const Vec3f& end);
 
@@ -88,6 +98,7 @@ namespace termin {
         DetourClosestPointResult closest_point_world(const Pose3& bake_frame, const Vec3f& point);
 
     private:
+        bool build_surface_snapshot();
         bool
         find_nearest_poly(const Vec3f& point, unsigned long long& poly_ref, Vec3f& nearest, bool* over_poly = nullptr);
     };

@@ -193,6 +193,9 @@ namespace termin {
     }
 
     void DetourQuerySession::clear() {
+        ++_surface_snapshot.generation;
+        _surface_snapshot.walkable_climb = 0;
+        _surface_snapshot.polygons.clear();
         if (_query) {
             dtFreeNavMeshQuery(_query);
             _query = nullptr;
@@ -233,7 +236,138 @@ namespace termin {
             return false;
         }
 
+        if (!build_surface_snapshot()) {
+            tc_log_error("[DetourQuerySession] failed to snapshot Detour surface '%s'", _asset_name.c_str());
+            clear();
+            return false;
+        }
+        ++_surface_snapshot.generation;
+
         tc_log_info("[DetourQuerySession] loaded '%s'", _asset_name.c_str());
+        return true;
+    }
+
+    bool DetourQuerySession::build_surface_snapshot() {
+        _surface_snapshot.polygons.clear();
+        const dtNavMesh* mesh = _navmesh;
+        for (int tile_index = 0; tile_index < mesh->getMaxTiles(); ++tile_index) {
+            const dtMeshTile* tile = mesh->getTile(tile_index);
+            if (!tile || !tile->header) {
+                continue;
+            }
+            _surface_snapshot.walkable_climb = tile->header->walkableClimb;
+            const dtPolyRef base = mesh->getPolyRefBase(tile);
+            for (int poly_index = 0; poly_index < tile->header->polyCount; ++poly_index) {
+                const dtPoly& poly = tile->polys[poly_index];
+                const dtPolyRef ref = base | static_cast<dtPolyRef>(poly_index);
+                DetourSurfacePolygon result;
+                result.poly_ref = static_cast<unsigned long long>(ref);
+                result.poly_type = poly.getType();
+                result.area = poly.getArea();
+                result.flags = poly.flags;
+                for (int vertex = 0; vertex < poly.vertCount; ++vertex) {
+                    result.vertices.push_back(recast_point_from_detour(&tile->verts[poly.verts[vertex] * 3]));
+                }
+                if (poly.getType() == DT_POLYTYPE_GROUND) {
+                    if (poly_index >= tile->header->detailMeshCount) {
+                        tc_log_error("[DetourQuerySession] ground polygon %llu has no detail mesh", result.poly_ref);
+                        return false;
+                    }
+                    const dtPolyDetail& detail = tile->detailMeshes[poly_index];
+                    for (int triangle = 0; triangle < detail.triCount; ++triangle) {
+                        const unsigned char* indices = &tile->detailTris[(detail.triBase + triangle) * 4];
+                        std::array<Vec3f, 3> vertices;
+                        for (int corner = 0; corner < 3; ++corner) {
+                            const int index = indices[corner];
+                            vertices[corner] =
+                                index < poly.vertCount
+                                    ? result.vertices[index]
+                                    : recast_point_from_detour(
+                                          &tile->detailVerts[(detail.vertBase + index - poly.vertCount) * 3]);
+                        }
+                        result.detail_triangles.push_back(vertices);
+                    }
+                } else if (poly.getType() == DT_POLYTYPE_OFFMESH_CONNECTION) {
+                    const dtOffMeshConnection* connection = mesh->getOffMeshConnectionByRef(ref);
+                    if (connection) {
+                        result.user_id = connection->userId;
+                    }
+                } else if (poly.getType() == DT_POLYTYPE_LINEAR) {
+                    const dtLinearSegment* segment = mesh->getLinearSegmentByRef(ref);
+                    if (segment) {
+                        result.user_id = segment->userId;
+                    }
+                }
+
+                for (unsigned int index = poly.firstLink; index != DT_NULL_LINK; index = tile->links[index].next) {
+                    const dtLink& link = tile->links[index];
+                    const dtMeshTile* target_tile = nullptr;
+                    const dtPoly* target_poly = nullptr;
+                    if (dtStatusFailed(mesh->getTileAndPolyByRef(link.ref, &target_tile, &target_poly))) {
+                        tc_log_error("[DetourQuerySession] invalid adjacency %llu -> %llu",
+                                     result.poly_ref,
+                                     static_cast<unsigned long long>(link.ref));
+                        return false;
+                    }
+                    DetourSurfaceLink portal;
+                    portal.poly_ref = static_cast<unsigned long long>(link.ref);
+                    auto vertex = [](const dtMeshTile* owner, const dtPoly& polygon, int i) {
+                        return recast_point_from_detour(&owner->verts[polygon.verts[i] * 3]);
+                    };
+                    auto linear_point = [&](const dtMeshTile* owner, const dtPoly& polygon, unsigned char t) {
+                        const Vec3f a = vertex(owner, polygon, 0);
+                        return a + (vertex(owner, polygon, 1) - a) * (t / 255.0f);
+                    };
+
+                    // Match Detour's attachment encoding, retaining individual directed
+                    // links rather than looking up an arbitrary link by destination ref.
+                    if (poly.getType() == DT_POLYTYPE_OFFMESH_CONNECTION) {
+                        portal.left = portal.right = vertex(tile, poly, link.edge);
+                    } else if (target_poly->getType() == DT_POLYTYPE_OFFMESH_CONNECTION) {
+                        const dtLink* attachment = nullptr;
+                        for (unsigned int reverse = target_poly->firstLink; reverse != DT_NULL_LINK;
+                             reverse = target_tile->links[reverse].next) {
+                            if (target_tile->links[reverse].ref == ref) {
+                                attachment = &target_tile->links[reverse];
+                                break;
+                            }
+                        }
+                        if (!attachment) {
+                            tc_log_error("[DetourQuerySession] offmesh attachment missing for %llu -> %llu",
+                                         result.poly_ref,
+                                         portal.poly_ref);
+                            return false;
+                        }
+                        portal.left = portal.right = vertex(target_tile, *target_poly, attachment->edge);
+                    } else if (poly.getType() == DT_POLYTYPE_LINEAR) {
+                        portal.left = portal.right = linear_point(tile, poly, link.bmin);
+                    } else if (target_poly->getType() == DT_POLYTYPE_LINEAR) {
+                        portal.left = portal.right = linear_point(target_tile, *target_poly, link.bmax);
+                    } else {
+                        if (link.edge >= poly.vertCount) {
+                            tc_log_error("[DetourQuerySession] invalid portal edge on polygon %llu", result.poly_ref);
+                            return false;
+                        }
+                        portal.edge = link.edge;
+                        const Vec3f a = vertex(tile, poly, link.edge);
+                        const Vec3f b = vertex(tile, poly, (link.edge + 1) % poly.vertCount);
+                        portal.left = a;
+                        portal.right = b;
+                        if (link.side != 0xff) {
+                            portal.left = a + (b - a) * (link.bmin / 255.0f);
+                            portal.right = a + (b - a) * (link.bmax / 255.0f);
+                        }
+                    }
+                    portal.target_left = portal.left;
+                    portal.target_right = portal.right;
+                    if (poly.getType() == DT_POLYTYPE_LINEAR && target_poly->getType() == DT_POLYTYPE_LINEAR) {
+                        portal.target_left = portal.target_right = linear_point(target_tile, *target_poly, link.bmax);
+                    }
+                    result.links.push_back(portal);
+                }
+                _surface_snapshot.polygons.push_back(std::move(result));
+            }
+        }
         return true;
     }
 

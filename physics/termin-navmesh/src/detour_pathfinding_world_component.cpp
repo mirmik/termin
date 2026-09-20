@@ -57,11 +57,20 @@ namespace termin {
         _tile_blobs.clear();
         _loaded_navmesh_uuid.clear();
         _loaded_asset_path.clear();
+        _loaded_navmesh_handle = tc_navmesh_handle_invalid();
+        _loaded_navmesh_version = 0;
         _load_failed = false;
     }
 
     bool DetourPathfindingWorldComponent::is_ready() const {
-        return _query_session.is_ready() && _loaded_navmesh_uuid == navmesh_uuid;
+        const tc_navmesh_handle handle = tc_navmesh_find(navmesh_uuid.c_str());
+        const tc_navmesh* resource = tc_navmesh_get(handle);
+        return _query_session.is_ready() && _loaded_navmesh_uuid == navmesh_uuid && resource && resource->is_loaded &&
+               tc_navmesh_handle_eq(handle, _loaded_navmesh_handle) && resource->version == _loaded_navmesh_version;
+    }
+
+    const DetourSurfaceSnapshot* DetourPathfindingWorldComponent::surface_snapshot() {
+        return ensure_query_loaded() ? &_query_session.surface_snapshot() : nullptr;
     }
 
     bool DetourPathfindingWorldComponent::rebuild() {
@@ -74,18 +83,23 @@ namespace termin {
             clear();
             return false;
         }
-        if (is_ready()) {
+        TcNavMesh navmesh = TcNavMesh::from_uuid(navmesh_uuid);
+        const bool same_resource = _loaded_navmesh_uuid == navmesh_uuid &&
+                                   tc_navmesh_handle_eq(navmesh.handle, _loaded_navmesh_handle) &&
+                                   navmesh.version() == _loaded_navmesh_version;
+        if (same_resource && navmesh.is_loaded() && _query_session.is_ready()) {
             sync_query_settings();
             return true;
         }
-        if (_loaded_navmesh_uuid == navmesh_uuid && _load_failed) {
+        if (same_resource && _load_failed) {
             return false;
         }
 
         clear();
         _loaded_navmesh_uuid = navmesh_uuid;
+        _loaded_navmesh_handle = navmesh.handle;
+        _loaded_navmesh_version = navmesh.version();
 
-        TcNavMesh navmesh = TcNavMesh::from_uuid(navmesh_uuid);
         if (!navmesh.is_valid()) {
             tc_log_warn("[DetourPathfindingWorldComponent] navmesh not found for uuid=%s", navmesh_uuid.c_str());
             _load_failed = true;
@@ -93,7 +107,10 @@ namespace termin {
         }
         _loaded_asset_path = navmesh.name();
 
-        if (!load_detour_tile_blobs_from_navmesh(navmesh, _tile_blobs)) {
+        const bool loaded = load_detour_tile_blobs_from_navmesh(navmesh, _tile_blobs);
+        // Lazy loading may itself replace the resource payload and bump its version.
+        _loaded_navmesh_version = navmesh.version();
+        if (!loaded) {
             _load_failed = true;
             return false;
         }
