@@ -439,6 +439,14 @@ namespace termin {
         }
 
         result.success = true;
+        // Detour also reports BUFFER_TOO_SMALL when the final END vertex exactly
+        // fills the straight-path buffer. The END flag distinguishes that complete
+        // path from actual truncation.
+        result.partial = path[static_cast<size_t>(path_count - 1)] != static_cast<dtPolyRef>(end_ref_raw) ||
+                         dtStatusDetail(find_path_status, DT_PARTIAL_RESULT) ||
+                         dtStatusDetail(find_path_status, DT_BUFFER_TOO_SMALL) ||
+                         dtStatusDetail(straight_status, DT_PARTIAL_RESULT) ||
+                         (flags[static_cast<size_t>(straight_count - 1)] & DT_STRAIGHTPATH_END) == 0;
         result.points.reserve(static_cast<size_t>(straight_count));
         float total_straight_length = 0.0f;
         Vec3f previous_point{0.0f, 0.0f, 0.0f};
@@ -505,7 +513,7 @@ namespace termin {
                     result.points.size(),
                     path_count,
                     total_straight_length,
-                    dtStatusDetail(find_path_status, DT_PARTIAL_RESULT) ? 1 : 0);
+                    result.partial ? 1 : 0);
         return result;
     }
 

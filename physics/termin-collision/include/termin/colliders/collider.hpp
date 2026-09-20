@@ -27,6 +27,9 @@ namespace termin {
             Vec3 point_on_collider; // Ближайшая точка на коллайдере
             Vec3 point_on_ray;      // Ближайшая точка на луче
             double distance;        // Расстояние между точками (0 = пересечение)
+            // Outward world-space unit normal at a surface intersection. Zero for
+            // misses and interior overlap results that do not identify a surface.
+            Vec3 normal{0, 0, 0};
 
             bool hit() const {
                 return distance < 1e-8;

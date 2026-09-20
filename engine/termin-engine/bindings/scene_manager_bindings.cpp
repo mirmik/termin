@@ -129,7 +129,8 @@ namespace termin {
             .def("close_scenes", &SceneManager::close_scenes, nb::arg("role"), "Close all scenes with a role.")
             .def(
                 "copy_scene",
-                [](SceneManager& self, const SceneKey& source, const SceneKey& destination) -> nb::object {
+                [](SceneManager& self, const SceneKey& source, const SceneKey& destination,
+                   bool preserve_source_path) -> nb::object {
                     tc_scene_handle src_h = self.get_scene(source);
                     if (!tc_scene_handle_valid(src_h)) {
                         return nb::none();
@@ -140,6 +141,12 @@ namespace termin {
                     if (!tc_scene_handle_valid(dst_h)) {
                         return nb::none();
                     }
+                    // File provenance is transient scene metadata, not serialized content.
+                    // Play copies retain it; ordinary duplicates remain unsaved by default.
+                    if (preserve_source_path) {
+                        const char* source_path = tc_scene_get_source_path(src_h);
+                        self.set_scene_path(destination, source_path ? source_path : "");
+                    }
                     nb::object dst_scene = scene_from_handle(dst_h);
                     dst_scene.attr("load_from_data")(data, nb::none(), true);
 
@@ -147,7 +154,8 @@ namespace termin {
                 },
                 nb::arg("source_key"),
                 nb::arg("destination_key"),
-                "Copy scene. Returns new TcScene.")
+                nb::arg("preserve_source_path") = false,
+                "Copy scene. Optionally retain file provenance for runtime copies. Returns new TcScene.")
             .def(
                 "load_scene",
                 [](SceneManager& self, const SceneKey& key, const std::string& path) -> nb::object {

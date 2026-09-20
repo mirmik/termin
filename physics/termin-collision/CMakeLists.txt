@@ -120,6 +120,7 @@ if(TERMIN_BUILD_TESTS)
         tests/main.cpp
         tests/tests_colliders.cpp
         tests/tests_collision.cpp
+        tests/test_raycast_normals.cpp
         tests/test_contact_patch.cpp
         tests/tests_gjk.cpp
         tests/tests_quickhull.cpp

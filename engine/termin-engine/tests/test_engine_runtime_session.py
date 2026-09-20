@@ -289,3 +289,32 @@ def test_python_component_requests_primary_scene_for_next_engine_tick() -> None:
     assert context.primary_scene is None
     assert not context.valid
     assert engine.shutdown()
+
+
+@pytest.mark.parametrize("source_path", ["", "/project/Scenes/Main.scene"])
+@pytest.mark.parametrize("preserve_source_path", [False, True])
+def test_scene_copy_file_provenance_is_explicit(source_path, preserve_source_path) -> None:
+    engine = EngineCore()
+    manager = engine.scene_manager
+    source_key = engine_scene.SceneKey("Main", engine_scene.SceneRole.AUTHORING)
+    destination_key = engine_scene.SceneKey("Main", engine_scene.SceneRole.RUNTIME)
+    try:
+        source = manager.create_scene(source_key)
+        assert source is not None
+        manager.set_scene_path(source_key, source_path)
+        copy = manager.copy_scene(
+            source_key, destination_key, preserve_source_path=preserve_source_path
+        )
+        assert copy is not None
+        expected = source_path if preserve_source_path else ""
+        assert copy.source_path == expected
+        assert manager.get_scene_path(destination_key) == expected
+        assert manager.key_of(source) == source_key
+        assert manager.key_of(copy) == destination_key
+        manager.set_scene_path(destination_key, "/different/Copy.scene")
+        assert source.source_path == source_path
+        assert manager.get_scene_path(source_key) == source_path
+        assert manager.close_scene(destination_key)
+        assert source.is_alive()
+    finally:
+        assert engine.shutdown()

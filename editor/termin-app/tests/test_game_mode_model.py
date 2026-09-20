@@ -914,3 +914,22 @@ def test_editor_scene_attachment_leaves_lifecycle_notifications_to_scene_mode(
     finally:
         attachment.close(save_state=False)
         scene_manager.close_all_scenes()
+
+
+def test_play_copy_retains_scene_file_provenance(tmp_path):
+    engine, editor_scene, _connector, _render_session, model = _new_game_mode_fixture()
+    scene_path = str(tmp_path / "Scenes" / "Main.scene")
+    engine.scene_manager.set_scene_path(_authoring_key("Editor"), scene_path)
+    try:
+        model.toggle_game_mode()
+        assert model.is_game_mode
+        runtime = engine.scene_manager.get_scene(_runtime_key("Editor"))
+        assert runtime is not None
+        assert runtime.source_path == scene_path
+        assert engine.scene_manager.get_scene_path(_runtime_key("Editor")) == scene_path
+        model.toggle_game_mode()
+        assert editor_scene.is_alive()
+        assert editor_scene.source_path == scene_path
+        assert engine.scene_manager.get_scene_path(_authoring_key("Editor")) == scene_path
+    finally:
+        _stop_and_shutdown(engine, model)

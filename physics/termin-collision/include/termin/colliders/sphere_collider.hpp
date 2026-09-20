@@ -149,6 +149,7 @@ namespace termin {
             }
             result.point_on_ray = p_ray;
             result.distance = 0.0;
+            result.normal = dist > 1e-10 ? dir_vec / dist : Vec3();
 
             return result;
         }

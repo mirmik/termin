@@ -27,6 +27,7 @@ NB_MODULE(_colliders_native, m) {
         .def_rw("point_on_collider", &RayHit::point_on_collider)
         .def_rw("point_on_ray", &RayHit::point_on_ray)
         .def_rw("distance", &RayHit::distance)
+        .def_rw("normal", &RayHit::normal)
         .def("hit", &RayHit::hit);
 
     nb::class_<ColliderHit>(m, "ColliderHit")

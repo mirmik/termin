@@ -255,6 +255,10 @@ namespace termin {
                 result.point_on_collider = O;
                 result.point_on_ray = O;
                 result.distance = 0.0;
+                // Preserve the overlap-at-origin contract. A strict interior
+                // point has no surface normal; a boundary origin does.
+                if (dist_axis0 > 1e-10 && std::abs(dist_axis0 - R) <= 1e-8)
+                    result.normal = (O - closest_axis_pt) / dist_axis0;
                 return result;
             }
 
@@ -305,6 +309,8 @@ namespace termin {
                 result.point_on_ray = p_hit;
                 result.point_on_collider = p_hit;
                 result.distance = 0.0;
+                const Vec3 axis_point = A + (B - A) * project_to_segment(p_hit, A, B);
+                result.normal = (p_hit - axis_point).normalized();
                 return result;
             }
 

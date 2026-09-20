@@ -6,6 +6,7 @@
 #include "termin/navmesh/navmesh_keeper_component.hpp"
 #include "termin/navmesh/navmesh_query_space.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
+#include "termin/navmesh/world_navmesh_link_component.hpp"
 #include "termin/navmesh/pathfinding_world.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/navmesh/tc_navmesh_handle.hpp"
@@ -283,6 +284,19 @@ namespace termin {
             .value("Jump", OffMeshLinkType::Jump)
             .value("Climb", OffMeshLinkType::Climb);
 
+        nb::class_<WorldNavMeshLinkComponent, CxxComponent>(m, "WorldNavMeshLinkComponent")
+            .def("__init__", [](nb::handle self) { cxx_component_init<WorldNavMeshLinkComponent>(self); })
+            .def_rw("start_surface", &WorldNavMeshLinkComponent::start_surface)
+            .def_rw("end_surface", &WorldNavMeshLinkComponent::end_surface)
+            .def_rw("snap_radius", &WorldNavMeshLinkComponent::snap_radius)
+            .def_rw("bidirectional", &WorldNavMeshLinkComponent::bidirectional)
+            .def_prop_rw("start_local",
+                [](WorldNavMeshLinkComponent& self) { return tc_vec3_to_vec3(self.start_local); },
+                [](WorldNavMeshLinkComponent& self, const Vec3& value) { self.start_local = tc_vec3_from_vec3(value); })
+            .def_prop_rw("end_local",
+                [](WorldNavMeshLinkComponent& self) { return tc_vec3_to_vec3(self.end_local); },
+                [](WorldNavMeshLinkComponent& self, const Vec3& value) { self.end_local = tc_vec3_from_vec3(value); });
+
         nb::class_<OffMeshLinkComponent, CxxComponent>(m, "OffMeshLinkComponent")
             .def("__init__", [](nb::handle self) { cxx_component_init<OffMeshLinkComponent>(self); })
             .def_rw("enabled", &OffMeshLinkComponent::enabled)
@@ -528,9 +542,18 @@ namespace termin {
                 return point_to_python(self.closest.point);
             });
 
+        nb::class_<PathfindingWorldPathSpan>(m, "PathfindingWorldPathSpan")
+            .def_ro("entity", &PathfindingWorldPathSpan::entity)
+            .def_ro("component", &PathfindingWorldPathSpan::component)
+            .def_ro("bake_frame", &PathfindingWorldPathSpan::bake_frame)
+            .def_ro("point_begin", &PathfindingWorldPathSpan::point_begin)
+            .def_ro("point_end", &PathfindingWorldPathSpan::point_end);
+
         nb::class_<PathfindingWorldPathResult>(m, "PathfindingWorldPathResult")
             .def_ro("success", &PathfindingWorldPathResult::success)
+            .def_prop_ro("partial", [](const PathfindingWorldPathResult& self) { return self.path.partial; })
             .def_ro("candidate", &PathfindingWorldPathResult::candidate)
+            .def_ro("spans", &PathfindingWorldPathResult::spans)
             .def_prop_ro("path",
                          [](const PathfindingWorldPathResult& self) { return detailed_path_to_python(self.path); });
 

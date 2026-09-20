@@ -122,6 +122,7 @@ if(TERMIN_HAS_RECAST)
         src/detour_query_session.cpp
         src/navmesh_keeper_component.cpp
         src/off_mesh_link_component.cpp
+        src/world_navmesh_link_component.cpp
         src/pathfinding_world.cpp
         src/recast_navmesh_bake.cpp
         src/recast_navmesh_entity_geometry.cpp
@@ -204,6 +205,23 @@ if(TERMIN_HAS_RECAST)
         add_test(
             NAME termin_navmesh_detour_linear_paths_test
             COMMAND termin_navmesh_detour_linear_paths_test
+        )
+
+        add_executable(termin_navmesh_world_links_test tests/test_world_navmesh_links.cpp)
+        target_link_libraries(termin_navmesh_world_links_test PRIVATE termin_navmesh_components)
+        termin_set_rpath_test(termin_navmesh_world_links_test)
+        add_test(NAME termin_navmesh_world_links_test COMMAND termin_navmesh_world_links_test)
+
+        add_executable(termin_navmesh_detour_path_status_test
+            tests/test_detour_path_status.cpp
+        )
+        target_link_libraries(termin_navmesh_detour_path_status_test
+            PRIVATE termin_navmesh_components
+        )
+        termin_set_rpath_test(termin_navmesh_detour_path_status_test)
+        add_test(
+            NAME termin_navmesh_detour_path_status_test
+            COMMAND termin_navmesh_detour_path_status_test
         )
 
         add_executable(termin_navmesh_debug_shader_contract_test

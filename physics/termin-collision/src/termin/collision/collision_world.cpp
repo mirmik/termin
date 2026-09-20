@@ -338,8 +338,7 @@ namespace termin::collision {
             RayHit hit;
             hit.collider = collider;
             hit.point = collider_hit.point_on_ray;
-            Vec3 center = collider->center();
-            hit.normal = (hit.point - center).normalized();
+            hit.normal = collider_hit.normal;
             hit.distance = (hit.point - ray.origin).norm();
             hits.push_back(hit);
         });

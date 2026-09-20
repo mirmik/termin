@@ -422,6 +422,9 @@ namespace termin {
                     best.point_on_ray = ray.point_at(triangle_hit.ray_parameter);
                     best.point_on_collider = best.point_on_ray;
                     best.distance = 0.0;
+                    best.normal = transform.ang.rotate(Vec3(face.normal.x / transform.scale.x,
+                                                           face.normal.y / transform.scale.y,
+                                                           face.normal.z / transform.scale.z)).normalized();
                     any_hit = true;
                 }
             }

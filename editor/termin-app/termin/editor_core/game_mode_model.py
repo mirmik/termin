@@ -243,6 +243,7 @@ class GameModeModel:
             runtime_scene = self._scene_manager.copy_scene(
                 editor_scene_key,
                 runtime_scene_key,
+                preserve_source_path=True,
             )
             if runtime_scene is None:
                 raise RuntimeError(f"failed to copy editor scene '{editor_scene_name}'")

@@ -42,6 +42,9 @@ namespace termin {
 
     struct TERMIN_NAVMESH_COMPONENTS_API DetourPathResult {
         bool success = false;
+        // A usable path was found, but its corridor or straight path does not reach
+        // the snapped destination. Snapping an endpoint alone is not partial.
+        bool partial = false;
         std::vector<DetourPathPoint> points;
     };
 

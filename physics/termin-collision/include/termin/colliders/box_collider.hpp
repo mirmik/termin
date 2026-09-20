@@ -161,6 +161,7 @@ namespace termin {
             double tmin = -std::numeric_limits<double>::infinity();
             double tmax = std::numeric_limits<double>::infinity();
             bool hit_possible = true;
+            Vec3 entry_normal, exit_normal;
 
             // Slab method для AABB-Ray intersection
             for (int i = 0; i < 3; ++i) {
@@ -174,8 +175,17 @@ namespace termin {
                     double t2 = (box_max[i] - O_local[i]) / D_local[i];
                     if (t1 > t2)
                         std::swap(t1, t2);
-                    tmin = std::max(tmin, t1);
-                    tmax = std::min(tmax, t2);
+                    Vec3 near_normal, far_normal;
+                    near_normal[i] = D_local[i] > 0 ? -1.0 : 1.0;
+                    far_normal[i] = -near_normal[i];
+                    if (t1 > tmin) {
+                        tmin = t1;
+                        entry_normal = near_normal;
+                    }
+                    if (t2 < tmax) {
+                        tmax = t2;
+                        exit_normal = far_normal;
+                    }
                 }
             }
 
@@ -189,6 +199,11 @@ namespace termin {
                     result.point_on_ray = p_world;
                     result.point_on_collider = p_world;
                     result.distance = 0.0;
+                    const Vec3 local_normal = tmin >= 0 ? entry_normal : exit_normal;
+                    // Inverse transpose of the TRS linear part, including scale.
+                    result.normal = transform.ang.rotate(Vec3(local_normal.x / transform.scale.x,
+                                                             local_normal.y / transform.scale.y,
+                                                             local_normal.z / transform.scale.z)).normalized();
                     return result;
                 }
             }

@@ -145,7 +145,7 @@ print(json.dumps({
 
     state = json.loads(result.stdout)
     assert state == {
-        "component_specs": 40,
+        "component_specs": 41,
         "frame_pass_specs": 26,
         "profiler_instance": False,
         "resource_manager_factory_active": False,
@@ -442,7 +442,7 @@ print(json.dumps({
 
     state = json.loads(result.stdout)
     assert state == {
-        "component_specs": 40,
+        "component_specs": 41,
         "frame_pass_specs": 26,
         "loaded_runtime_packages": [],
     }
