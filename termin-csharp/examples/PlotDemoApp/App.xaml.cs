@@ -57,6 +57,10 @@ public partial class App : Application
         {
             return new ScaledPlot3DWindow();
         }
+        if (args.Contains("--smoke-spherical3d", StringComparer.OrdinalIgnoreCase))
+        {
+            return new SphericalPlot3DWindow();
+        }
 
         return null;
     }
