@@ -74,6 +74,7 @@ namespace tcplot {
             const double radius = frame.grid_radius;
             const auto text = [&](const std::string& label, std::array<double, 3> point,
                                   const termin::SrgbColor& color) {
+                point = transform_spherical_direction(frame, point);
                 termin::Vec3f world{static_cast<float>(point[0] * frame.axis_scale[0]),
                                     static_cast<float>(point[1] * frame.axis_scale[1]),
                                     static_cast<float>(point[2] * frame.axis_scale[2])};

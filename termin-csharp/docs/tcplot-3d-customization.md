@@ -70,6 +70,25 @@ ChartHost.RequestRender();
 режиме не создаётся. Режим доступен через `chart.Coordinates` и не меняется
 после создания графика.
 
+Ориентацию угловой системы можно задать при создании. `polarAxis` определяет
+направление полярного угла 0, а `zeroLongitude` — направление первого угла 0
+в плоскости, перпендикулярной полярной оси. Termin нормализует направления и
+ортогонализует `zeroLongitude`; параллельные направления отклоняются. Frame
+одинаково применяется к поверхности, опорным окружностям, делениям и подписям,
+но не поворачивает камеру и экранные элементы:
+
+```csharp
+var frame = new SphericalCoordinateFrame3D(
+    polarAxisX: 0, polarAxisY: -1, polarAxisZ: 0,
+    zeroLongitudeX: 1, zeroLongitudeY: 0, zeroLongitudeZ: 0);
+using var chart = RetainedChart3D.CreateSpherical(host, frame);
+```
+
+Для этого frame локальная точка преобразуется как
+`x = r sin(θ) cos(φ)`, `y = -r cos(θ)`, `z = r sin(θ) sin(φ)`.
+Стандартный overload без frame сохраняет полярную ось `+Z` и нулевое
+направление `+X`.
+
 ```csharp
 using var chart = RetainedChart3D.CreateSpherical(host);
 chart.MsaaSamples = 4;

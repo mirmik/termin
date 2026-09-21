@@ -211,10 +211,64 @@ namespace {
         return result;
     }
 
+    struct SphericalCoordinateFrame {
+        std::array<double, 3> polar{0.0, 0.0, 1.0};
+        std::array<double, 3> zero_longitude{1.0, 0.0, 0.0};
+        std::array<double, 3> quarter_longitude{0.0, 1.0, 0.0};
+    };
+
+    SphericalCoordinateFrame spherical_coordinate_frame(
+        const tc_spherical_coordinate_frame3d* value) {
+        if (!value)
+            return {};
+
+        const auto normalize = [](std::array<double, 3> vector, const char* name) {
+            if (!std::all_of(vector.begin(), vector.end(), [](double component) {
+                    return std::isfinite(component);
+                }))
+                throw std::invalid_argument(std::string(name) + " must be finite");
+            const double length = std::hypot(vector[0], vector[1], vector[2]);
+            if (length <= 1e-12)
+                throw std::invalid_argument(std::string(name) + " must be non-zero");
+            for (double& component : vector)
+                component /= length;
+            return vector;
+        };
+
+        SphericalCoordinateFrame result;
+        result.polar = normalize(
+            {value->polar_axis_x, value->polar_axis_y, value->polar_axis_z},
+            "spherical polar axis");
+        std::array<double, 3> zero{
+            value->zero_longitude_x,
+            value->zero_longitude_y,
+            value->zero_longitude_z,
+        };
+        if (!std::all_of(zero.begin(), zero.end(), [](double component) {
+                return std::isfinite(component);
+            }))
+            throw std::invalid_argument("spherical zero-longitude direction must be finite");
+        const double projection = zero[0] * result.polar[0] + zero[1] * result.polar[1] +
+                                  zero[2] * result.polar[2];
+        for (size_t axis = 0; axis < 3; ++axis)
+            zero[axis] -= projection * result.polar[axis];
+        result.zero_longitude = normalize(zero, "spherical zero-longitude direction");
+        result.quarter_longitude = {
+            result.polar[1] * result.zero_longitude[2] - result.polar[2] * result.zero_longitude[1],
+            result.polar[2] * result.zero_longitude[0] - result.polar[0] * result.zero_longitude[2],
+            result.polar[0] * result.zero_longitude[1] - result.polar[1] * result.zero_longitude[0],
+        };
+        return result;
+    }
+
     class RetainedChart3D {
     public:
-        explicit RetainedChart3D(bool spherical = false)
-            : scene_id_(g_next_plot_scene3d_id.fetch_add(1)), spherical_(spherical) {
+        explicit RetainedChart3D(
+            bool spherical = false,
+            const tc_spherical_coordinate_frame3d* spherical_frame = nullptr)
+            : scene_id_(g_next_plot_scene3d_id.fetch_add(1)),
+              spherical_(spherical),
+              spherical_frame_(spherical_coordinate_frame(spherical_frame)) {
             if (spherical_) {
                 x_label_ = "azimuth";
                 y_label_ = "polar";
@@ -879,7 +933,7 @@ namespace {
             return slot;
         }
 
-        static void set_spherical_geometry(Slot& slot, const double* values, size_t count) {
+        void set_spherical_geometry(Slot& slot, const double* values, size_t count) const {
             const size_t input_columns = slot.azimuths.size();
             if (count != slot.polar_angles.size() * input_columns)
                 throw std::invalid_argument("radius count must equal angular rows times columns");
@@ -905,9 +959,18 @@ namespace {
                     }
                     const size_t index = row * slot.columns + column;
                     const double azimuth = slot.azimuths[column];
-                    x[index] = pole ? 0.0 : radius * std::sin(polar) * std::cos(azimuth);
-                    y[index] = pole ? 0.0 : radius * std::sin(polar) * std::sin(azimuth);
-                    z[index] = radius * std::cos(polar);
+                    const double local_x = pole ? 0.0 : radius * std::sin(polar) * std::cos(azimuth);
+                    const double local_y = pole ? 0.0 : radius * std::sin(polar) * std::sin(azimuth);
+                    const double local_z = radius * std::cos(polar);
+                    x[index] = spherical_frame_.zero_longitude[0] * local_x +
+                               spherical_frame_.quarter_longitude[0] * local_y +
+                               spherical_frame_.polar[0] * local_z;
+                    y[index] = spherical_frame_.zero_longitude[1] * local_x +
+                               spherical_frame_.quarter_longitude[1] * local_y +
+                               spherical_frame_.polar[1] * local_z;
+                    z[index] = spherical_frame_.zero_longitude[2] * local_x +
+                               spherical_frame_.quarter_longitude[2] * local_y +
+                               spherical_frame_.polar[2] * local_z;
                 }
                 if (slot.close_azimuth) {
                     const size_t first = row * slot.columns;
@@ -1031,6 +1094,9 @@ namespace {
             bounds(frame.bounds_min.data(), frame.bounds_max.data());
             frame.spherical_coordinates = spherical_;
             frame.grid_radius = spherical_ ? frame.bounds_max[0] : 0.0;
+            frame.spherical_polar_axis = spherical_frame_.polar;
+            frame.spherical_zero_longitude = spherical_frame_.zero_longitude;
+            frame.spherical_quarter_longitude = spherical_frame_.quarter_longitude;
             frame.x_label = x_label_;
             frame.y_label = y_label_;
             frame.z_label = z_label_;
@@ -1083,6 +1149,7 @@ namespace {
         std::unique_ptr<tcplot::PlotScene3DRenderPipeline> render_pipeline_;
         std::uint64_t scene_id_;
         const bool spherical_;
+        const SphericalCoordinateFrame spherical_frame_;
         std::vector<Slot> slots_;
         std::vector<std::uint32_t> free_;
         tc_plot_item3d_handle grid_part_ = invalid_item();
@@ -1247,6 +1314,9 @@ struct tc_retained_chart3d {
     explicit tc_retained_chart3d(tcplot::GpuHost& host)
         : value(host),
           render_item_source(value) {}
+    explicit tc_retained_chart3d(const tc_spherical_coordinate_frame3d& frame)
+        : value(true, &frame),
+          render_item_source(value) {}
     RetainedChart3D value;
     PlotScene3DRenderItemSource render_item_source;
 };
@@ -1288,6 +1358,18 @@ tc_retained_chart3d* tc_retained_chart3d_create(void* gpu_host) {
 tc_retained_chart3d* tc_retained_chart3d_create_spherical(void* gpu_host) {
     return logged("create_spherical", static_cast<tc_retained_chart3d*>(nullptr), [&] {
         auto chart = std::make_unique<tc_retained_chart3d>(true);
+        if (gpu_host)
+            chart->value.attach(*static_cast<tcplot::GpuHost*>(gpu_host));
+        return chart.release();
+    });
+}
+
+tc_retained_chart3d* tc_retained_chart3d_create_spherical_with_frame(
+    void* gpu_host, const tc_spherical_coordinate_frame3d* frame) {
+    if (!frame)
+        return nullptr;
+    return logged("create_spherical_with_frame", static_cast<tc_retained_chart3d*>(nullptr), [&] {
+        auto chart = std::make_unique<tc_retained_chart3d>(*frame);
         if (gpu_host)
             chart->value.attach(*static_cast<tcplot::GpuHost*>(gpu_host));
         return chart.release();

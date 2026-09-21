@@ -27,6 +27,46 @@ public enum PlotColorMap3D : uint
     Solid = 5,
 }
 
+/// <summary>
+/// Defines the orientation of a spherical chart's angular coordinates.
+/// The polar axis is the direction of polar angle zero. The zero-longitude
+/// direction is projected onto the plane normal to that axis and normalized.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public readonly struct SphericalCoordinateFrame3D
+{
+    public readonly double PolarAxisX;
+    public readonly double PolarAxisY;
+    public readonly double PolarAxisZ;
+    public readonly double ZeroLongitudeX;
+    public readonly double ZeroLongitudeY;
+    public readonly double ZeroLongitudeZ;
+
+    public SphericalCoordinateFrame3D(
+        double polarAxisX,
+        double polarAxisY,
+        double polarAxisZ,
+        double zeroLongitudeX,
+        double zeroLongitudeY,
+        double zeroLongitudeZ)
+    {
+        PolarAxisX = polarAxisX;
+        PolarAxisY = polarAxisY;
+        PolarAxisZ = polarAxisZ;
+        ZeroLongitudeX = zeroLongitudeX;
+        ZeroLongitudeY = zeroLongitudeY;
+        ZeroLongitudeZ = zeroLongitudeZ;
+    }
+
+    public static SphericalCoordinateFrame3D Standard => new(
+        polarAxisX: 0,
+        polarAxisY: 0,
+        polarAxisZ: 1,
+        zeroLongitudeX: 1,
+        zeroLongitudeY: 0,
+        zeroLongitudeZ: 0);
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct PlotItemHandle3D : IEquatable<PlotItemHandle3D>
 {
@@ -756,16 +796,31 @@ public sealed class RetainedChart3D : IDisposable
 
     /// <summary>Creates a chart with spherical reference circles, angular labels and radial scales.</summary>
     public static RetainedChart3D CreateSpherical(GpuHost? host = null) =>
-        new(host, PlotCoordinateSystem3D.Spherical);
+        new(host, PlotCoordinateSystem3D.Spherical, null);
 
-    private RetainedChart3D(GpuHost? host, PlotCoordinateSystem3D coordinates)
+    /// <summary>
+    /// Creates a spherical chart in an oriented angular frame. The frame applies
+    /// consistently to spherical surfaces, reference geometry and angular labels.
+    /// </summary>
+    public static RetainedChart3D CreateSpherical(
+        GpuHost? host,
+        SphericalCoordinateFrame3D frame) =>
+        new(host, PlotCoordinateSystem3D.Spherical, frame);
+
+    private RetainedChart3D(
+        GpuHost? host,
+        PlotCoordinateSystem3D coordinates,
+        SphericalCoordinateFrame3D? sphericalFrame = null)
     {
         _host = host;
         Coordinates = coordinates;
         IntPtr nativeHost = host is null ? IntPtr.Zero : GpuHost.getCPtr(host).Handle;
-        _native = coordinates == PlotCoordinateSystem3D.Spherical
-            ? RetainedChart3DNative.CreateSpherical(nativeHost)
-            : RetainedChart3DNative.Create(nativeHost);
+        if (coordinates == PlotCoordinateSystem3D.Spherical && sphericalFrame is { } frame)
+            _native = RetainedChart3DNative.CreateSphericalWithFrame(nativeHost, ref frame);
+        else
+            _native = coordinates == PlotCoordinateSystem3D.Spherical
+                ? RetainedChart3DNative.CreateSpherical(nativeHost)
+                : RetainedChart3DNative.Create(nativeHost);
         if (_native == IntPtr.Zero)
             throw new InvalidOperationException(
                 "Failed to create RetainedChart3D. See native log.");
@@ -928,6 +983,11 @@ internal static class RetainedChart3DNative
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_create_spherical")]
     internal static extern IntPtr CreateSpherical(IntPtr gpuHost);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_create_spherical_with_frame")]
+    internal static extern IntPtr CreateSphericalWithFrame(
+        IntPtr gpuHost,
+        ref SphericalCoordinateFrame3D frame);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_destroy")]
     internal static extern void Destroy(IntPtr chart);

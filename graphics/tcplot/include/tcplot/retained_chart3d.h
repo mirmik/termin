@@ -125,10 +125,25 @@ typedef struct tc_orbit_camera3d_state {
     double far_clip;
 } tc_orbit_camera3d_state;
 
+// Orientation of a spherical chart's angular coordinate system. The polar axis
+// is the direction of polar angle 0. zero_longitude_direction is the direction
+// at polar angle pi/2 and longitude 0. Inputs are normalized and orthogonalized;
+// zero directions parallel to the polar axis are rejected.
+typedef struct tc_spherical_coordinate_frame3d {
+    double polar_axis_x;
+    double polar_axis_y;
+    double polar_axis_z;
+    double zero_longitude_x;
+    double zero_longitude_y;
+    double zero_longitude_z;
+} tc_spherical_coordinate_frame3d;
+
 TCPLOT_API tc_retained_chart3d* tc_retained_chart3d_create(void* gpu_host);
 // Immutable spherical mode: all grid items use reference circles and radial
-// scales. Angles are radians, azimuth around +Z, polar angle measured from +Z.
+// scales. The default frame uses longitude around +Z and polar angle from +Z.
 TCPLOT_API tc_retained_chart3d* tc_retained_chart3d_create_spherical(void* gpu_host);
+TCPLOT_API tc_retained_chart3d* tc_retained_chart3d_create_spherical_with_frame(
+    void* gpu_host, const tc_spherical_coordinate_frame3d* frame);
 TCPLOT_API void tc_retained_chart3d_destroy(tc_retained_chart3d* chart);
 // A chart may be created before a graphics domain exists by passing null.
 // Attach the domain before the first render. Reattaching to the same host is

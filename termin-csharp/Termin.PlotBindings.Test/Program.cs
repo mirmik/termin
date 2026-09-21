@@ -306,6 +306,15 @@ static void TestSphericalChart(GpuHost host)
         throw new InvalidOperationException(
             "Default 3D styles must be visible and usable across the managed/native boundary.");
     using var chart = RetainedChart3D.CreateSpherical(host);
+    using var orientedChart = RetainedChart3D.CreateSpherical(
+        host,
+        new SphericalCoordinateFrame3D(
+            polarAxisX: 0,
+            polarAxisY: -1,
+            polarAxisZ: 0,
+            zeroLongitudeX: 1,
+            zeroLongitudeY: 0,
+            zeroLongitudeZ: 0));
     using var cartesian = new RetainedChart3D(host);
     if (chart.Coordinates != PlotCoordinateSystem3D.Spherical ||
         chart.Parts.Grid is null || chart.Scene.Count != 1)
@@ -315,6 +324,15 @@ static void TestSphericalChart(GpuHost host)
     double[] azimuths = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
     double[] polarAngles = { 0, Math.PI / 2, Math.PI };
     double[] radii = { 2, 2, 2, 2, 3, 4, 5, 6, 2, 2, 2, 2 };
+    var orientedSurface = orientedChart.Scene.AddSphericalSurface(
+        azimuths, polarAngles, radii,
+        style: new SurfaceItemStyle3D(surfaceGridVisible: true));
+    orientedChart.SetAxisLabels("angle phi", "polar angle theta", "radius");
+    orientedChart.Camera.Fit();
+    _ = orientedChart.RenderToTextureHandleId(480, 360);
+    if (!orientedSurface.IsValid)
+        throw new InvalidOperationException(
+            "Oriented spherical construction did not retain its surface.");
     var surface = chart.Scene.AddSphericalSurface(
         azimuths, polarAngles, radii,
         style: new SurfaceItemStyle3D(

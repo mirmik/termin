@@ -629,8 +629,9 @@ namespace tcplot {
             constexpr size_t segments = 128;
             const double radius = frame.grid_radius;
             const auto vertex = [&](const std::array<double, 3>& point, float r, float g, float b, float a) {
-                append_line_vertex(data.draw_vertices, static_cast<float>(point[0]), static_cast<float>(point[1]),
-                                   static_cast<float>(point[2]), r, g, b, a);
+                const auto world = transform_spherical_direction(frame, point);
+                append_line_vertex(data.draw_vertices, static_cast<float>(world[0]), static_cast<float>(world[1]),
+                                   static_cast<float>(world[2]), r, g, b, a);
             };
             // Three great circles define orientation without a Cartesian cage.
             for (size_t plane = 0; plane < 3; ++plane) {

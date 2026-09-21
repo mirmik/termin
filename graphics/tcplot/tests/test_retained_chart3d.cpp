@@ -294,6 +294,56 @@ namespace {
         return item ? tcplot::plot_scene3d_render_item_payload(*item) : nullptr;
     }
 
+    void test_oriented_spherical_chart_cpu() {
+        constexpr double pi = 3.14159265358979323846;
+        const tc_spherical_coordinate_frame3d frame{
+            0.0, -1.0, 0.0,
+            1.0, 0.0, 0.0,
+        };
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        ChartOwner owner(
+            tc_retained_chart3d_create_spherical_with_frame(nullptr, &frame),
+            tc_retained_chart3d_destroy);
+        require(owner != nullptr, "failed to create oriented spherical chart");
+
+        const double longitudes[] = {0.0, pi / 2, pi};
+        const double polar[] = {0.0, pi / 2, pi};
+        const double radii[] = {2, 2, 2, 3, 4, 5, 2, 2, 2};
+        tc_surface_item3d_style style{};
+        style.color_r = style.color_g = style.color_b = style.color_a = 1.0f;
+        const auto surface = tc_retained_chart3d_add_spherical_surface(
+            owner.get(), longitudes, 3, polar, 3, radii, 0, &style);
+        require(tc_retained_chart3d_item_is_valid(owner.get(), surface),
+                "oriented spherical surface creation failed");
+
+        termin::RenderItemSnapshot snapshot;
+        auto& source = tcplot::plot_scene3d_render_item_source(*owner);
+        require(source.publish(snapshot, {}), "oriented spherical snapshot publication failed");
+        const auto* payload = find_plot_payload(snapshot, surface);
+        require(payload && payload->item, "oriented spherical payload is missing");
+        const auto& data = *payload->item;
+        const auto point_is = [&](size_t index, double x, double y, double z) {
+            return std::abs(data.x[index] - x) < 1e-12 && std::abs(data.y[index] - y) < 1e-12 &&
+                   std::abs(data.z[index] - z) < 1e-12;
+        };
+        require(point_is(0, 0, -2, 0) && point_is(3, 3, 0, 0) && point_is(4, 0, 0, 4) &&
+                    point_is(6, 0, 2, 0),
+                "oriented spherical frame must rotate cardinal directions consistently");
+        require(payload->frame.spherical_polar_axis == std::array<double, 3>{0.0, -1.0, 0.0} &&
+                    payload->frame.spherical_zero_longitude == std::array<double, 3>{1.0, 0.0, 0.0} &&
+                    payload->frame.spherical_quarter_longitude == std::array<double, 3>{0.0, 0.0, 1.0},
+                "oriented spherical frame must be published for grid and label generation");
+
+        const tc_spherical_coordinate_frame3d parallel{
+            0.0, 1.0, 0.0,
+            0.0, 2.0, 0.0,
+        };
+        ChartOwner rejected(
+            tc_retained_chart3d_create_spherical_with_frame(nullptr, &parallel),
+            tc_retained_chart3d_destroy);
+        require(rejected == nullptr, "parallel spherical frame directions must be rejected");
+    }
+
     void test_spherical_chart_cpu() {
         constexpr double pi = 3.14159265358979323846;
         const double azimuths[] = {0.0, pi / 2, pi, 3 * pi / 2};
@@ -519,6 +569,7 @@ int main(int argc, char** argv) {
                 "usage: tcplot_retained_chart3d_test [--cpu-only|--spherical-d3d11]");
         test_termin_clip_canvas_projection();
         test_spherical_chart_cpu();
+        test_oriented_spherical_chart_cpu();
         if (cpu_only) {
             std::printf("retained Chart3D CPU geometry and lifecycle test passed\n");
             return 0;

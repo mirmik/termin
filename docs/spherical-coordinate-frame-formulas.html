@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сферическая система координат диаграммы ЭПР</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    body {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+
+    h1, h2 {
+      line-height: 1.2;
+    }
+
+    section {
+      margin-top: 32px;
+    }
+
+    .formula {
+      overflow-x: auto;
+      margin: 20px 0;
+      padding: 18px 24px;
+      border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+      border-radius: 8px;
+      background: color-mix(in srgb, CanvasText 5%, Canvas);
+      font-size: 1.18rem;
+    }
+
+    math[display="block"] {
+      margin: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+      text-align: left;
+    }
+
+    th {
+      background: color-mix(in srgb, CanvasText 8%, Canvas);
+    }
+
+    code {
+      font-size: 0.95em;
+    }
+
+    .summary {
+      padding: 16px 20px;
+      border-left: 4px solid #d96b18;
+      background: color-mix(in srgb, #d96b18 9%, Canvas);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Сферическая система координат диаграммы ЭПР</h1>
+
+    <p>
+      Система задаётся не географическими названиями углов, а ориентированным
+      ортонормированным базисом.
+    </p>
+
+    <ul>
+      <li><strong>P</strong> — направление полярной оси.</li>
+      <li><strong>X</strong> — направление нулевой долготы, то есть φ = 0.</li>
+      <li><strong>Q = P × X</strong> — направление четверти оборота, то есть φ = 90°.</li>
+    </ul>
+
+    <section>
+      <h2>Общая формула Termin</h2>
+
+      <div class="formula">
+        <math display="block">
+          <mrow>
+            <mi mathvariant="bold">r</mi><mo>(</mo><mi>θ</mi><mo>,</mo><mi>φ</mi><mo>)</mo>
+            <mo>=</mo><mi>R</mi><mo>[</mo>
+            <mi>sin</mi><mi>θ</mi><mi>cos</mi><mi>φ</mi><mi mathvariant="bold">X</mi>
+            <mo>+</mo><mi>cos</mi><mi>θ</mi><mi mathvariant="bold">P</mi>
+            <mo>+</mo><mi>sin</mi><mi>θ</mi><mi>sin</mi><mi>φ</mi><mi mathvariant="bold">Q</mi>
+            <mo>]</mo>
+          </mrow>
+        </math>
+      </div>
+
+      <p>
+        Здесь <strong>θ</strong> — полярный угол, <strong>φ</strong> — угол вращения
+        вокруг полярной оси, а <strong>R</strong> — радиус точки диаграммы.
+      </p>
+    </section>
+
+    <section>
+      <h2>Ориентация для данных Alliance</h2>
+
+      <div class="formula">
+        <math display="block">
+          <mrow>
+            <mi mathvariant="bold">P</mi><mo>=</mo><mo>(</mo><mn>0</mn><mo>,</mo><mo>−</mo><mn>1</mn><mo>,</mo><mn>0</mn><mo>)</mo><mo>,</mo>
+            <mspace width="1.2em"/>
+            <mi mathvariant="bold">X</mi><mo>=</mo><mo>(</mo><mn>1</mn><mo>,</mo><mn>0</mn><mo>,</mo><mn>0</mn><mo>)</mo><mo>,</mo>
+            <mspace width="1.2em"/>
+            <mi mathvariant="bold">Q</mi><mo>=</mo><mo>(</mo><mn>0</mn><mo>,</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>)</mo>
+          </mrow>
+        </math>
+      </div>
+
+      <p>После подстановки получаются декартовы координаты:</p>
+
+      <div class="formula">
+        <math display="block">
+          <mtable columnalign="right center left" rowspacing="0.6em">
+            <mtr>
+              <mtd><mi>x</mi></mtd><mtd><mo>=</mo></mtd>
+              <mtd><mi>R</mi><mi>sin</mi><mi>θ</mi><mi>cos</mi><mi>φ</mi></mtd>
+            </mtr>
+            <mtr>
+              <mtd><mi>y</mi></mtd><mtd><mo>=</mo></mtd>
+              <mtd><mo>−</mo><mi>R</mi><mi>cos</mi><mi>θ</mi></mtd>
+            </mtr>
+            <mtr>
+              <mtd><mi>z</mi></mtd><mtd><mo>=</mo></mtd>
+              <mtd><mi>R</mi><mi>sin</mi><mi>θ</mi><mi>sin</mi><mi>φ</mi></mtd>
+            </mtr>
+          </mtable>
+        </math>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Углы</th>
+            <th>Полученное направление</th>
+            <th>Смысл</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>θ = 0°, любое φ</td>
+            <td>(0, −R, 0)</td>
+            <td>Первый горизонтальный полюс</td>
+          </tr>
+          <tr>
+            <td>θ = 90°, φ = 0°</td>
+            <td>(R, 0, 0)</td>
+            <td>Направление нулевой долготы</td>
+          </tr>
+          <tr>
+            <td>θ = 90°, φ = 90°</td>
+            <td>(0, 0, R)</td>
+            <td>Верх диаграммы</td>
+          </tr>
+          <tr>
+            <td>θ = 180°, любое φ</td>
+            <td>(0, R, 0)</td>
+            <td>Второй горизонтальный полюс</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Расчёт ЭПР</h2>
+
+      <div class="formula">
+        <math display="block">
+          <mrow>
+            <msub><mi>σ</mi><mi>дБ</mi></msub>
+            <mo>=</mo>
+            <mn>10</mn><msub><mi>log</mi><mn>10</mn></msub>
+            <mo>[</mo><mn>4</mn><mi>π</mi>
+            <mo>(</mo>
+            <msup><mrow><mo>|</mo><msub><mi>E</mi><mi>φ</mi></msub><mo>|</mo></mrow><mn>2</mn></msup>
+            <mo>+</mo>
+            <msup><mrow><mo>|</mo><msub><mi>E</mi><mi>θ</mi></msub><mo>|</mo></mrow><mn>2</mn></msup>
+            <mo>)</mo><mo>]</mo>
+          </mrow>
+        </math>
+      </div>
+
+      <p>
+        Это соответствует формуле <code>10 lg(4π|E|²)</code>, где полный квадрат
+        модуля поля равен сумме квадратов модулей двух компонент.
+      </p>
+    </section>
+
+    <section class="summary">
+      <strong>Итог:</strong> θ остаётся полярным углом, но его полярная ось лежит
+      горизонтально и направлена вдоль −Y. Угол φ вращает направление вокруг этой
+      горизонтальной оси. Поэтому θ в этой системе нельзя называть азимутом.
+    </section>
+  </main>
+</body>
+</html>

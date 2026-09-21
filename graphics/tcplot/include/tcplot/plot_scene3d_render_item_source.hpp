@@ -57,6 +57,9 @@ namespace tcplot {
     struct PlotScene3DFrameRenderState {
         bool spherical_coordinates = false;
         double grid_radius = 1.0;
+        std::array<double, 3> spherical_polar_axis{0.0, 0.0, 1.0};
+        std::array<double, 3> spherical_zero_longitude{1.0, 0.0, 0.0};
+        std::array<double, 3> spherical_quarter_longitude{0.0, 1.0, 0.0};
         tc_orbit_camera3d_state camera{};
         std::array<float, 3> axis_scale{1.0f, 1.0f, 1.0f};
         bool surface_shading = true;
@@ -68,6 +71,22 @@ namespace tcplot {
         std::string y_label = "y";
         std::string z_label = "z";
     };
+
+    inline std::array<double, 3> transform_spherical_direction(
+        const PlotScene3DFrameRenderState& frame,
+        const std::array<double, 3>& local) {
+        return {
+            frame.spherical_zero_longitude[0] * local[0] +
+                frame.spherical_quarter_longitude[0] * local[1] +
+                frame.spherical_polar_axis[0] * local[2],
+            frame.spherical_zero_longitude[1] * local[0] +
+                frame.spherical_quarter_longitude[1] * local[1] +
+                frame.spherical_polar_axis[1] * local[2],
+            frame.spherical_zero_longitude[2] * local[0] +
+                frame.spherical_quarter_longitude[2] * local[1] +
+                frame.spherical_polar_axis[2] * local[2],
+        };
+    }
 
     // Both the shader and colorbar consume this range. Constant radii use a
     // zero-based range, including a useful unit range for a collapsed surface.
