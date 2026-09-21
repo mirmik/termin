@@ -69,6 +69,49 @@ namespace tcplot {
         canvas_->set_default_font(&font);
         canvas_->begin(context, viewport_width, viewport_height);
 
+        if (frame.spherical_coordinates) {
+            constexpr double pi = 3.14159265358979323846;
+            const double radius = frame.grid_radius;
+            const auto text = [&](const std::string& label, std::array<double, 3> point,
+                                  const termin::SrgbColor& color) {
+                termin::Vec3f world{static_cast<float>(point[0] * frame.axis_scale[0]),
+                                    static_cast<float>(point[1] * frame.axis_scale[1]),
+                                    static_cast<float>(point[2] * frame.axis_scale[2])};
+                const auto screen = project(world);
+                canvas_->draw_text(label, screen.x, screen.y - kTickTextSizePx * 0.5f,
+                                   kTickTextSizePx, color, &font, tgfx::Text2DRenderer::Anchor::Center);
+            };
+            const termin::SrgbColor azimuth_color{style.x_axis_r, style.x_axis_g, style.x_axis_b, 1.0f};
+            const termin::SrgbColor polar_color{style.y_axis_r, style.y_axis_g, style.y_axis_b, 1.0f};
+            for (int degrees = 0; degrees < 360; degrees += 60) {
+                const double angle = degrees * pi / 180.0;
+                text(frame.x_label + " " + std::to_string(degrees) + " deg",
+                     {radius * 1.10 * std::cos(angle), radius * 1.10 * std::sin(angle), -radius * 0.06},
+                     azimuth_color);
+            }
+            for (int degrees = 0; degrees <= 180; degrees += 30) {
+                const double angle = degrees * pi / 180.0;
+                text(frame.y_label + " " + std::to_string(degrees) + " deg",
+                     {radius * 1.10 * std::sin(angle), radius * 0.08, radius * 1.10 * std::cos(angle)},
+                     polar_color);
+            }
+            for (size_t axis = 0; axis < 3; ++axis) {
+                for (double tick : axes::nice_ticks(0.0, radius, 5)) {
+                    if (tick <= 0.0)
+                        continue;
+                    std::array<double, 3> point{};
+                    point[axis] = tick;
+                    point[(axis + 1) % 3] = -radius * 0.055;
+                    text(frame.z_label + " " + axes::format_tick(tick), point, label_color);
+                }
+            }
+            text("0", {0.0, 0.0, -radius * 0.04}, label_color);
+            canvas_->end();
+            context.set_depth_test(true);
+            context.set_depth_write(true);
+            return;
+        }
+
         for (size_t axis = 0; axis < 3; ++axis) {
             for (double tick : axes::nice_ticks(frame.bounds_min[axis], frame.bounds_max[axis], 6)) {
                 termin::Vec3f position{
@@ -130,18 +173,20 @@ namespace tcplot {
     void PlotScene3DChartChromeRenderer::draw_colorbar(tgfx::RenderContext2& context,
                                                        tgfx::FontAtlas& font,
                                                        const PlotScene3DFrameRenderState& frame,
-                                                       const tc_surface_item3d_style& surface_style,
+                                                       const PlotScene3DItemRenderData& surface,
                                                        const tc_colorbar3d_style& colorbar_style,
                                                        const std::string& label,
                                                        int viewport_width,
                                                        int viewport_height) {
+        const auto& surface_style = surface.surface_style;
         if (viewport_width <= 0 || viewport_height <= 0 ||
             surface_style.colormap == TC_PLOT_COLORMAP3D_SOLID) {
             return;
         }
 
-        const float range_min = static_cast<float>(frame.bounds_min[2]);
-        const float range_max = static_cast<float>(frame.bounds_max[2]);
+        const auto range = plot_scene3d_surface_color_range(surface, frame);
+        const float range_min = static_cast<float>(range[0]);
+        const float range_max = static_cast<float>(range[1]);
         if (!std::isfinite(range_min) || !std::isfinite(range_max) || range_max <= range_min) {
             return;
         }

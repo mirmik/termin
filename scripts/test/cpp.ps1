@@ -15,6 +15,7 @@ $BuildType = "Release"
 $BuildJobs = if ($env:BUILD_JOBS) { [int]$env:BUILD_JOBS } else { [Environment]::ProcessorCount }
 $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { "" }
 $Full = $false
+$RunOnly = $false
 $VulkanMode = "auto"
 $OpenGlMode = "on"
 $SdlMode = "on"
@@ -57,6 +58,7 @@ function Show-Help {
     Write-Host "Options:"
     Write-Host "  --debug, -d       Debug build"
     Write-Host "  --full            Include window/full C++ tests"
+    Write-Host "  --run-only        Run the configured test selection without rebuilding its targets"
     Write-Host "  --no-vulkan       Disable Vulkan support"
     Write-Host "  --vulkan          Require Vulkan support (default: auto-detect SDK)"
     Write-Host "  --no-opengl       Disable desktop OpenGL support"
@@ -87,6 +89,7 @@ foreach ($arg in $args) {
         "--debug"           { $BuildType = "Debug" }
         "-d"                { $BuildType = "Debug" }
         "--full"            { $Full = $true; $WindowTestsMode = "on" }
+        "--run-only"        { $RunOnly = $true }
         "--no-vulkan"       { $VulkanMode = "off" }
         "--vulkan"          { $VulkanMode = "on" }
         "--no-opengl"       { $OpenGlMode = "off" }
@@ -341,12 +344,14 @@ if (-not $CtestBuildAggregate) {
     Write-Error "CTest planner resolved no CMake build aggregate"
     exit 1
 }
-Write-Host "Building selected CTest graph: $CtestBuildAggregate"
-Invoke-TerminCMakeBuild `
-    -BuildDir $BuildDir `
-    -BuildType $BuildType `
-    -Target @($CtestBuildAggregate) `
-    -BuildJobs $BuildJobs
+if (-not $RunOnly) {
+    Write-Host "Building selected CTest graph: $CtestBuildAggregate"
+    Invoke-TerminCMakeBuild `
+        -BuildDir $BuildDir `
+        -BuildType $BuildType `
+        -Target @($CtestBuildAggregate) `
+        -BuildJobs $BuildJobs
+}
 
 $CtestJunitPath = Join-Path $BuildDir "ctest-results.xml"
 # Keep test-owned temporary files and shader artifacts inside the build tree.

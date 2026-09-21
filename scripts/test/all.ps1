@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 $Full = $false
+$CsharpOnly = $false
 $ProcessSmokeOnly = $false
 $ProcessSmokeDisabled = $false
 $PythonWindowCapability = $true
@@ -13,6 +14,9 @@ $CppArgs = New-Object System.Collections.Generic.List[string]
 
 foreach ($arg in $args) {
     switch ($arg) {
+        "--csharp-only" {
+            $CsharpOnly = $true
+        }
         "--full" {
             $Full = $true
             $CppArgs.Add("--full")
@@ -33,6 +37,7 @@ foreach ($arg in $args) {
             Write-Host "Use --vulkan to require it or --no-vulkan for compatibility checks."
             Write-Host ""
             Write-Host "Options:"
+            Write-Host "  --csharp-only  Run Graphics C# bindings and retained WPF chart smoke (Windows D3D11)"
             Write-Host "  --full      Include window/full C++ tests and pytest tests marked full"
             Write-Host "  --process-smoke-only"
             Write-Host "              Run only the selected manifest process-smoke profile"
@@ -65,6 +70,14 @@ foreach ($arg in $args) {
 
 $Failures = New-Object System.Collections.Generic.List[string]
 $TestBuildType = if ($CppArgs.Contains("--debug") -or $CppArgs.Contains("-d")) { "Debug" } else { "Release" }
+
+if ($CsharpOnly) {
+    if ($Full -or $ProcessSmokeOnly -or $CppArgs.Count -gt 0) {
+        throw "--csharp-only cannot be combined with C++ or process-smoke selection options"
+    }
+    & (Join-Path $ScriptDir "scripts\test\csharp.ps1")
+    exit $LASTEXITCODE
+}
 
 if ($ProcessSmokeOnly -and $ProcessSmokeDisabled) {
     throw "--process-smoke-only cannot be combined with --no-process-smoke"

@@ -222,6 +222,30 @@ if(TERMIN_BUILD_TESTS)
             TCPLOT_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")
         add_dependencies(tcplot_retained_chart3d_test termin_shaderc)
         termin_set_rpath_test(tcplot_retained_chart3d_test)
+        add_test(NAME tcplot_retained_chart3d_cpu_test
+            COMMAND tcplot_retained_chart3d_test --cpu-only)
+        set_tests_properties(tcplot_retained_chart3d_cpu_test PROPERTIES
+            TIMEOUT 30)
+        termin_add_test_labels(
+            tcplot_retained_chart3d_cpu_test
+            "termin:capability:host")
+        termin_set_test_build_target(
+            tcplot_retained_chart3d_cpu_test
+            tcplot_retained_chart3d_test)
+        if(TGFX2_ENABLE_D3D11)
+            add_test(NAME tcplot_spherical_chart3d_d3d11_test
+                COMMAND tcplot_retained_chart3d_test --spherical-d3d11)
+            set_tests_properties(tcplot_spherical_chart3d_d3d11_test PROPERTIES
+                TIMEOUT 30
+                ENVIRONMENT
+                    "TERMIN_SHADERC=$<TARGET_FILE:termin_shaderc>;TERMIN_BUILTIN_SHADER_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/../termin-graphics/resources/builtin_shaders")
+            termin_add_test_labels(
+                tcplot_spherical_chart3d_d3d11_test
+                "termin:capability:d3d11")
+            termin_set_test_build_target(
+                tcplot_spherical_chart3d_d3d11_test
+                tcplot_retained_chart3d_test)
+        endif()
         add_test(NAME tcplot_retained_chart3d_test
             COMMAND tcplot_retained_chart3d_test)
         set_tests_properties(tcplot_retained_chart3d_test PROPERTIES

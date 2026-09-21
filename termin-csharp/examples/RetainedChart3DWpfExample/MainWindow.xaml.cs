@@ -4,6 +4,8 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Termin.Native;
 using Termin.Wpf;
 
@@ -15,9 +17,13 @@ public partial class MainWindow : Window
     private const uint SurfaceColumns = 84;
     private readonly GpuHost _gpuHost;
     private readonly RetainedChart3D _chart;
-    private readonly SurfaceItemRef3D _surface;
-    private readonly ScatterItemRef3D _scatter;
-    private readonly GridItemRef3D _customGrid;
+    private readonly SurfaceRef3D _surface;
+    private readonly ScatterItemRef3D? _scatter;
+    private readonly bool _spherical = Environment.GetCommandLineArgs().Contains("--spherical");
+    private readonly bool _smoke = Environment.GetCommandLineArgs().Contains("--smoke");
+    private DispatcherTimer? _smokeTimer;
+    private DateTime _smokeDeadline;
+    private int _smokeFrames;
     private readonly TextBlock _title;
     private readonly Button _dataButton;
     private readonly Button _wireframeButton;
@@ -36,19 +42,20 @@ public partial class MainWindow : Window
         RetainedChart3D? chart = null;
         try
         {
-            chart = new RetainedChart3D(_gpuHost);
+            chart = _spherical
+                ? RetainedChart3D.CreateSpherical(_gpuHost)
+                : new RetainedChart3D(_gpuHost);
             _chart = chart;
             _chart.MsaaSamples = 4;
-            _chart.SetAxisScale(1, 1, 1.25f);
-            _chart.SetAxisLabels("phase x", "phase y", "amplitude");
+            if (!_spherical)
+            {
+                _chart.SetAxisScale(1, 1, 1.25f);
+                _chart.SetAxisLabels("phase x", "phase y", "amplitude");
+            }
             _chart.SetSurfaceShading(true, 0.42f);
             _chart.SetLightDirection(-0.45f, -0.55f, 0.72f);
 
-            (double[] x, double[] y, double[] z) =
-                CreateSurface(_surfacePhase);
-            _surface = _chart.Scene.AddSurface(
-                x, y, z, SurfaceRows, SurfaceColumns,
-                new SurfaceItemStyle3D(
+            var surfaceStyle = new SurfaceItemStyle3D(
                     colorMap: PlotColorMap3D.Viridis,
                     surfaceGridVisible: true,
                     surfaceGridRowStep: 8,
@@ -57,41 +64,62 @@ public partial class MainWindow : Window
                     surfaceGridR: 0.78f,
                     surfaceGridG: 0.88f,
                     surfaceGridB: 0.92f,
-                    surfaceGridA: 0.58f));
-            _chart.ShowColorBar(_surface, "amplitude");
+                    surfaceGridA: 0.58f);
+            if (_spherical)
+            {
+                double[] azimuths = Enumerable.Range(0, (int)SurfaceColumns)
+                    .Select(column => 2 * Math.PI * column / SurfaceColumns).ToArray();
+                double[] polarAngles = Enumerable.Range(0, (int)SurfaceRows)
+                    .Select(row => Math.PI * row / (SurfaceRows - 1)).ToArray();
+                _surface = _chart.Scene.AddSphericalSurface(
+                    azimuths, polarAngles, CreateRadii(_surfacePhase), style: surfaceStyle);
+                Title = "Spherical Chart3D from C#";
+            }
+            else
+            {
+                (double[] x, double[] y, double[] z) = CreateSurface(_surfacePhase);
+                _surface = _chart.Scene.AddSurface(
+                    x, y, z, SurfaceRows, SurfaceColumns, surfaceStyle);
+            }
+            _chart.ShowColorBar(_surface, _spherical ? "radius" : "amplitude");
 
-            (double[] sx, double[] sy, double[] sz) = CreateScatter();
-            _scatter = _chart.Scene.AddScatter(
-                sx, sy, sz,
-                new ScatterItemStyle3D(
-                    colorR: 1.0f,
-                    colorG: 0.26f,
-                    colorB: 0.16f,
-                    size: 5));
+            if (!_spherical)
+            {
+                (double[] sx, double[] sy, double[] sz) = CreateScatter();
+                _scatter = _chart.Scene.AddScatter(
+                    sx, sy, sz,
+                    new ScatterItemStyle3D(
+                        colorR: 1.0f,
+                        colorG: 0.26f,
+                        colorB: 0.16f,
+                        size: 5));
 
-            // The standard grid remains alive, but the named chart part now
-            // points at this independently retained custom grid item.
-            _customGrid = _chart.Scene.AddGrid(
-                new GridItemStyle3D(
-                    gridR: 0.18f,
-                    gridG: 0.52f,
-                    gridB: 0.62f,
-                    gridA: 0.82f,
-                    xAxisR: 1.0f,
-                    xAxisG: 0.35f,
-                    xAxisB: 0.22f,
-                    yAxisR: 0.32f,
-                    yAxisG: 0.95f,
-                    yAxisB: 0.48f,
-                    zAxisR: 0.40f,
-                    zAxisG: 0.58f,
-                    zAxisB: 1.0f));
-            _chart.Parts.ReplaceGrid(_customGrid);
+                // The standard grid remains alive, but the named chart part now
+                // points at this independently retained custom grid item.
+                GridItemRef3D customGrid = _chart.Scene.AddGrid(
+                    new GridItemStyle3D(
+                        gridR: 0.18f,
+                        gridG: 0.52f,
+                        gridB: 0.62f,
+                        gridA: 0.82f,
+                        xAxisR: 1.0f,
+                        xAxisG: 0.35f,
+                        xAxisB: 0.22f,
+                        yAxisR: 0.32f,
+                        yAxisG: 0.95f,
+                        yAxisB: 0.48f,
+                        zAxisR: 0.40f,
+                        zAxisG: 0.58f,
+                        zAxisB: 1.0f));
+                _chart.Parts.ReplaceGrid(customGrid);
+            }
             _chart.Camera.Reset();
 
             _title = new TextBlock
             {
-                Text = "Retained surface + scatter · custom grid from C#",
+                Text = _spherical
+                    ? "Spherical surface · radius by azimuth / polar angle"
+                    : "Retained surface + scatter · custom grid from C#",
                 Foreground = Brushes.White,
                 FontSize = 17,
                 FontWeight = FontWeights.SemiBold,
@@ -126,6 +154,8 @@ public partial class MainWindow : Window
         }
 
         Closed += OnClosed;
+        if (_smoke)
+            Loaded += OnSmokeLoaded;
     }
 
     private void OnFramebufferChanged(
@@ -159,10 +189,14 @@ public partial class MainWindow : Window
     private void OnDataClick(object sender, RoutedEventArgs e)
     {
         _surfacePhase += 0.45;
-        (double[] x, double[] y, double[] z) =
-            CreateSurface(_surfacePhase);
-        _surface.SetData(x, y, z, SurfaceRows, SurfaceColumns);
-        _chart.Camera.Fit();
+        if (_surface is SphericalSurfaceItemRef3D sphericalSurface)
+            sphericalSurface.SetRadii(CreateRadii(_surfacePhase));
+        else if (_surface is SurfaceItemRef3D cartesianSurface)
+        {
+            (double[] x, double[] y, double[] z) = CreateSurface(_surfacePhase);
+            cartesianSurface.SetData(x, y, z, SurfaceRows, SurfaceColumns);
+            _chart.Camera.Fit();
+        }
         ChartHost.RequestRender();
         ReportCallback("Surface data changed in C# without replacing its handle");
     }
@@ -211,11 +245,10 @@ public partial class MainWindow : Window
     private void ReportCallback(string action)
     {
         PlotItemSnapshot3D surface = _surface.Snapshot;
-        PlotItemSnapshot3D scatter = _scatter.Snapshot;
         StatusText.Text =
             $"{action}; scene {_chart.Scene.Id}, {_chart.Scene.Count} items; " +
             $"surface rev {surface.GeometryRevision}/{surface.StyleRevision}/gpu {surface.GpuRevision}, " +
-            $"scatter gpu {scatter.GpuRevision}.";
+            (_scatter is null ? "radius updated." : $"scatter gpu {_scatter.Snapshot.GpuRevision}.");
     }
 
     private void OnRenderFailed(
@@ -224,6 +257,61 @@ public partial class MainWindow : Window
     {
         StatusText.Text = $"Rendering stopped: {e.Error.Message}";
         StatusText.Foreground = Brushes.OrangeRed;
+        if (_smoke)
+            FailSmoke(e.Error);
+    }
+
+    private void OnSmokeLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnSmokeLoaded;
+        _smokeDeadline = DateTime.UtcNow.AddSeconds(15);
+        _smokeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _smokeTimer.Tick += OnSmokeTick;
+        _smokeTimer.Start();
+    }
+
+    private void OnSmokeTick(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (DateTime.UtcNow > _smokeDeadline)
+                throw new TimeoutException("No usable WPF framebuffer within 15 seconds.");
+            if (ChartHost.RenderHost.FramebufferWidth < 2 || ChartHost.RenderHost.FramebufferHeight < 2)
+                return;
+            ChartHost.RenderFrame();
+            if (++_smokeFrames == 1)
+            {
+                OnDataClick(this, new RoutedEventArgs());
+                return;
+            }
+            string? capturePath = Environment.GetEnvironmentVariable("TERMIN_CHART3D_SMOKE_CAPTURE");
+            if (!string.IsNullOrWhiteSpace(capturePath))
+            {
+                DpiScale dpi = VisualTreeHelper.GetDpi(ChartHost);
+                var capture = new RenderTargetBitmap(
+                    (int)Math.Ceiling(ChartHost.ActualWidth * dpi.DpiScaleX),
+                    (int)Math.Ceiling(ChartHost.ActualHeight * dpi.DpiScaleY),
+                    96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+                capture.Render(ChartHost);
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(capture));
+                using var stream = File.Create(capturePath);
+                encoder.Save(stream);
+            }
+            Console.WriteLine($"RETAINED_CHART3D_SMOKE_OK coordinates={_chart.Coordinates} frames={_smokeFrames}");
+            Close();
+        }
+        catch (Exception error)
+        {
+            FailSmoke(error);
+        }
+    }
+
+    private void FailSmoke(Exception error)
+    {
+        Console.Error.WriteLine($"RETAINED_CHART3D_SMOKE_FAILED {error}");
+        Environment.ExitCode = 1;
+        Close();
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -231,6 +319,7 @@ public partial class MainWindow : Window
         if (_closed)
             return;
         _closed = true;
+        _smokeTimer?.Stop();
         _dataButton.Click -= OnDataClick;
         _wireframeButton.Click -= OnWireframeClick;
         _shadingButton.Click -= OnShadingClick;
@@ -262,6 +351,25 @@ public partial class MainWindow : Window
         Background = new SolidColorBrush(Color.FromRgb(42, 91, 140)),
         BorderBrush = new SolidColorBrush(Color.FromRgb(111, 190, 255)),
     };
+
+    private static double[] CreateRadii(double phase)
+    {
+        var radii = new double[checked((int)(SurfaceRows * SurfaceColumns))];
+        for (uint row = 0; row < SurfaceRows; ++row)
+        {
+            double polar = Math.PI * row / (SurfaceRows - 1);
+            for (uint column = 0; column < SurfaceColumns; ++column)
+            {
+                double azimuth = 2 * Math.PI * column / SurfaceColumns;
+                // Each pole has one radius shared by all azimuth samples.
+                double wave = row == 0 || row == SurfaceRows - 1 ? 0
+                    : 0.38 * Math.Pow(Math.Sin(polar), 2) * Math.Cos(3 * azimuth + phase);
+                radii[row * SurfaceColumns + column] = 1.3 + wave
+                    + 0.18 * Math.Cos(2 * polar + phase);
+            }
+        }
+        return radii;
+    }
 
     private static (double[] X, double[] Y, double[] Z) CreateSurface(
         double phase)

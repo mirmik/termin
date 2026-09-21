@@ -189,8 +189,9 @@ namespace tcplot {
                 draw.mvp[1 * 4 + row] *= payload.frame.axis_scale[1];
                 draw.mvp[2 * 4 + row] *= payload.frame.axis_scale[2];
             }
-            draw.params[0] = static_cast<float>(payload.frame.bounds_min[2]);
-            draw.params[1] = static_cast<float>(payload.frame.bounds_max[2]);
+            const auto color_range = plot_scene3d_surface_color_range(data, payload.frame);
+            draw.params[0] = static_cast<float>(color_range[0]);
+            draw.params[1] = static_cast<float>(color_range[1]);
             draw.axis_shading[0] = payload.frame.axis_scale[0];
             draw.axis_shading[1] = payload.frame.axis_scale[1];
             draw.axis_shading[2] = payload.frame.axis_scale[2];
@@ -198,7 +199,7 @@ namespace tcplot {
                 const tc_surface_item3d_style& style = data.surface_style;
                 const termin::LinearColor surface_color =
                     termin::srgb_to_linear({style.color_r, style.color_g, style.color_b, style.color_a});
-                draw.params[2] = style.wireframe == 0 ? 1.0f : 0.0f;
+                draw.params[2] = style.wireframe == 0 ? (data.spherical_surface ? 2.0f : 1.0f) : 0.0f;
                 draw.params[3] = static_cast<float>(style.colormap) + (style.colormap_reversed != 0 ? 100.0f : 0.0f);
                 draw.surface_color[0] = surface_color.r;
                 draw.surface_color[1] = surface_color.g;
@@ -254,6 +255,9 @@ namespace tcplot {
                 return false;
             }
             const PlotScene3DItemRenderData& data = *payload->item;
+            // A valid radius table may collapse completely to the origin.
+            if (data.spherical_surface && data.draw_vertex_count == 0 && data.draw_vertices.empty())
+                return true;
             if (data.draw_vertex_count == 0 ||
                 data.draw_vertices.size() != static_cast<size_t>(data.draw_vertex_count) * kPlot3DFloatsPerVertex ||
                 data.draw_vertices.size() > std::numeric_limits<uint32_t>::max() / sizeof(float)) {
@@ -466,6 +470,31 @@ namespace tcplot {
         data.draw_vertices.reserve(cell_count * vertices_per_cell * kPlot3DFloatsPerVertex);
         for (uint32_t row = 0; row + 1 < data.rows; ++row) {
             for (uint32_t column = 0; column + 1 < data.columns; ++column) {
+                if (data.spherical_surface) {
+                    const uint32_t triangles[2][3][2] = {
+                        {{row, column}, {row, column + 1}, {row + 1, column}},
+                        {{row, column + 1}, {row + 1, column + 1}, {row + 1, column}},
+                    };
+                    for (const auto& triangle : triangles) {
+                        const size_t a = static_cast<size_t>(triangle[0][0]) * data.columns + triangle[0][1];
+                        const size_t b = static_cast<size_t>(triangle[1][0]) * data.columns + triangle[1][1];
+                        const size_t c = static_cast<size_t>(triangle[2][0]) * data.columns + triangle[2][1];
+                        const double ux = data.x[b] - data.x[a], uy = data.y[b] - data.y[a], uz = data.z[b] - data.z[a];
+                        const double vx = data.x[c] - data.x[a], vy = data.y[c] - data.y[a], vz = data.z[c] - data.z[a];
+                        if (std::hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) == 0.0)
+                            continue;
+                        if (data.surface_style.wireframe != 0) {
+                            for (size_t edge = 0; edge < 3; ++edge) {
+                                append_surface_vertex(data.draw_vertices, data, triangle[edge][0], triangle[edge][1]);
+                                append_surface_vertex(data.draw_vertices, data, triangle[(edge + 1) % 3][0], triangle[(edge + 1) % 3][1]);
+                            }
+                        } else {
+                            for (const auto& vertex : triangle)
+                                append_surface_vertex(data.draw_vertices, data, vertex[0], vertex[1]);
+                        }
+                    }
+                    continue;
+                }
                 if (data.surface_style.wireframe != 0) {
                     const uint32_t edge_vertices[12][2] = {
                         {row, column},
@@ -595,6 +624,61 @@ namespace tcplot {
         }
 
         const tc_grid_item3d_style& style = data.grid_style;
+        if (frame.spherical_coordinates) {
+            constexpr double pi = 3.14159265358979323846;
+            constexpr size_t segments = 128;
+            const double radius = frame.grid_radius;
+            const auto vertex = [&](const std::array<double, 3>& point, float r, float g, float b, float a) {
+                append_line_vertex(data.draw_vertices, static_cast<float>(point[0]), static_cast<float>(point[1]),
+                                   static_cast<float>(point[2]), r, g, b, a);
+            };
+            // Three great circles define orientation without a Cartesian cage.
+            for (size_t plane = 0; plane < 3; ++plane) {
+                const size_t first = plane == 2 ? 1 : 0;
+                const size_t second = plane == 0 ? 1 : 2;
+                for (size_t segment = 0; segment < segments; ++segment) {
+                    for (size_t endpoint = 0; endpoint < 2; ++endpoint) {
+                        const double angle = 2.0 * pi * static_cast<double>((segment + endpoint) % segments) / segments;
+                        std::array<double, 3> point{};
+                        point[first] = radius * std::cos(angle);
+                        point[second] = radius * std::sin(angle);
+                        vertex(point, style.grid_r, style.grid_g, style.grid_b, style.grid_a);
+                    }
+                }
+            }
+            // Positive radial scales; their ticks are distances from the origin.
+            for (size_t axis = 0; axis < 3; ++axis) {
+                std::array<double, 3> end{};
+                end[axis] = radius;
+                vertex({}, style.z_axis_r, style.z_axis_g, style.z_axis_b, 1.0f);
+                vertex(end, style.z_axis_r, style.z_axis_g, style.z_axis_b, 1.0f);
+                for (double tick : axes::nice_ticks(0.0, radius, 5)) {
+                    std::array<double, 3> a{}, b{};
+                    a[axis] = b[axis] = tick;
+                    a[(axis + 1) % 3] = -radius * 0.015;
+                    b[(axis + 1) % 3] = radius * 0.015;
+                    vertex(a, style.z_axis_r, style.z_axis_g, style.z_axis_b, 1.0f);
+                    vertex(b, style.z_axis_r, style.z_axis_g, style.z_axis_b, 1.0f);
+                }
+            }
+            // Azimuth marks on XY; polar marks on the +X half of XZ.
+            for (size_t coordinate = 0; coordinate < 2; ++coordinate) {
+                const size_t tick_count = coordinate == 0 ? 12 : 7;
+                for (size_t tick = 0; tick < tick_count; ++tick) {
+                    const double angle = static_cast<double>(tick) * pi / 6.0;
+                    for (double scale : {0.98, 1.02}) {
+                        std::array<double, 3> point = coordinate == 0
+                            ? std::array<double, 3>{scale * radius * std::cos(angle), scale * radius * std::sin(angle), 0.0}
+                            : std::array<double, 3>{scale * radius * std::sin(angle), 0.0, scale * radius * std::cos(angle)};
+                        vertex(point, coordinate == 0 ? style.x_axis_r : style.y_axis_r,
+                                      coordinate == 0 ? style.x_axis_g : style.y_axis_g,
+                                      coordinate == 0 ? style.x_axis_b : style.y_axis_b, 1.0f);
+                    }
+                }
+            }
+            data.draw_vertex_count = static_cast<uint32_t>(data.draw_vertices.size() / kPlot3DFloatsPerVertex);
+            return;
+        }
         constexpr size_t kAxisCount = 3;
         constexpr size_t kVerticesPerLine = 2;
         constexpr size_t kMaximumTickCount = 8;

@@ -2,7 +2,7 @@ import termin_prelude;
 
 struct Tcplot3DDraw {
     column_major float4x4 u_mvp;
-    float4 u_params;          // z_min, z_max, surface_mode, colormap_id
+    float4 u_params;          // scalar_min, scalar_max, surface_mode (0=line, 1=Z, 2=radius), colormap_id
     float4 u_surface_color;
     float4 u_axis_shading;    // axis_scale.xyz, shading_enabled
     float4 u_light_strength;  // light_dir.xyz, shading_strength
@@ -22,7 +22,7 @@ struct VertexInput {
 struct VertexOutput {
     float4 position : SV_Position;
     float4 color : COLOR0;
-    float z_norm : TEXCOORD0;
+    float scalar_norm : TEXCOORD0;
     float3 scaled_pos : TEXCOORD1;
     float4 surface_grid : TEXCOORD2;
     float4 surface_grid_color : TEXCOORD3;
@@ -160,9 +160,12 @@ VertexOutput vs_main(VertexInput input) {
     output.surface_grid = input.surface_grid;
     output.surface_grid_color = input.surface_grid_color;
     output.surface_grid_opts = input.surface_grid_opts;
-    float z_range = tcplot3d_draw.u_params.y - tcplot3d_draw.u_params.x;
-    output.z_norm = (z_range > 0.0)
-        ? (input.position.z - tcplot3d_draw.u_params.x) / z_range
+    // Use data-space radius before visual axis scaling. Interpolating the
+    // vertex scalar keeps colors tied to the sampled radii on each triangle.
+    float scalar = tcplot3d_draw.u_params.z == 2.0 ? length(input.position) : input.position.z;
+    float scalar_range = tcplot3d_draw.u_params.y - tcplot3d_draw.u_params.x;
+    output.scalar_norm = (scalar_range > 0.0)
+        ? (scalar - tcplot3d_draw.u_params.x) / scalar_range
         : 0.5;
     return output;
 }
@@ -175,7 +178,7 @@ struct FragmentOutput {
 FragmentOutput fs_main(VertexOutput input) {
     FragmentOutput output;
     if (tcplot3d_draw.u_params.z != 0.0) {
-        float3 rgb = map_surface_color(input.z_norm, tcplot3d_draw.u_params.w);
+        float3 rgb = map_surface_color(input.scalar_norm, tcplot3d_draw.u_params.w);
         if (tcplot3d_draw.u_axis_shading.w != 0.0) {
             float3 dx = ddx(input.scaled_pos);
             float3 dy = ddy(input.scaled_pos);

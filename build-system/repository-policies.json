@@ -10,6 +10,8 @@
       "dist",
       "node_modules",
       "sdk",
+      "sdk-core",
+      "sdk-graphics",
       "termin-csharp/Termin.Native/Generated",
       "termin-thirdparty",
       "thirdparty"

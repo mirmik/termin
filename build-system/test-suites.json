@@ -11,6 +11,8 @@
       ".venv",
       "build",
       "sdk",
+      "sdk-core",
+      "sdk-graphics",
       "termin-thirdparty"
     ],
     "exclude_directory_names": [
@@ -35,6 +37,8 @@
       ".git",
       "build",
       "sdk",
+      "sdk-core",
+      "sdk-graphics",
       "termin-thirdparty"
     ],
     "exclude_directory_names": [
@@ -43,6 +47,18 @@
       "dist"
     ],
     "source_classifications": [
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_device_failure.cpp",
+        "profiles": ["pr", "linux-full", "windows-d3d11"],
+        "capabilities": ["vulkan"],
+        "reason": "Compiled only when the Vulkan backend is enabled."
+      },
+      {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_vulkan_upload_memory.cpp",
+        "profiles": ["pr", "linux-full", "windows-d3d11"],
+        "capabilities": ["vulkan"],
+        "reason": "Compiled only when the Vulkan backend is enabled."
+      },
       {
         "path": "engine/termin-engine/tests/test_python_world_controller.cpp",
         "profiles": ["pr", "linux-full", "windows-d3d11"],

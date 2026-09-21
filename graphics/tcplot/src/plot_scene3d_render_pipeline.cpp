@@ -410,7 +410,7 @@ namespace tcplot {
                     chrome_renderer_.draw_colorbar(*context.ctx2,
                                                    *services->font,
                                                    colorbar_surface_payload->frame,
-                                                   colorbar_surface_payload->item->surface_style,
+                                                   *colorbar_surface_payload->item,
                                                    services->colorbar_style,
                                                    services->colorbar_label,
                                                    context.render_rect.width,

@@ -50,7 +50,7 @@ namespace tcplot {
         void draw_colorbar(tgfx::RenderContext2& context,
                            tgfx::FontAtlas& font,
                            const PlotScene3DFrameRenderState& frame,
-                           const tc_surface_item3d_style& surface_style,
+                           const PlotScene3DItemRenderData& surface,
                            const tc_colorbar3d_style& colorbar_style,
                            const std::string& label,
                            int viewport_width,

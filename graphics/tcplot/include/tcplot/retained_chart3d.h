@@ -87,8 +87,8 @@ typedef struct tc_grid_item3d_style {
 } tc_grid_item3d_style;
 
 // Screen-space color legend for one retained surface. The legend uses the
-// surface's live colormap/reversal and the same chart Z bounds as the surface
-// shader, so its colors and numeric labels cannot drift apart.
+// surface's live colormap/reversal and the same scalar range as the shader:
+// chart Z bounds for Cartesian surfaces, item radius range for spherical ones.
 typedef struct tc_colorbar3d_style {
     uint32_t tick_count;
     float width_px;
@@ -126,6 +126,9 @@ typedef struct tc_orbit_camera3d_state {
 } tc_orbit_camera3d_state;
 
 TCPLOT_API tc_retained_chart3d* tc_retained_chart3d_create(void* gpu_host);
+// Immutable spherical mode: all grid items use reference circles and radial
+// scales. Angles are radians, azimuth around +Z, polar angle measured from +Z.
+TCPLOT_API tc_retained_chart3d* tc_retained_chart3d_create_spherical(void* gpu_host);
 TCPLOT_API void tc_retained_chart3d_destroy(tc_retained_chart3d* chart);
 // A chart may be created before a graphics domain exists by passing null.
 // Attach the domain before the first render. Reattaching to the same host is
@@ -157,6 +160,18 @@ TCPLOT_API int tc_retained_chart3d_surface_set_data(tc_retained_chart3d* chart,
                                                     const double* z,
                                                     uint32_t rows,
                                                     uint32_t columns);
+// radii[row * columns + column], columns index azimuth, rows index polar angle.
+// Both angle axes must be strictly increasing; polar angles lie in [0, pi].
+// Closed azimuth requires >=3 columns and span <2*pi (omit repeated endpoint).
+// Open azimuth allows span <=2*pi. Radii must be finite and nonnegative;
+// all radii in a pole row must agree. Only valid for a spherical chart.
+TCPLOT_API tc_plot_item3d_handle tc_retained_chart3d_add_spherical_surface(
+    tc_retained_chart3d* chart, const double* azimuths, uint32_t columns,
+    const double* polar_angles, uint32_t rows, const double* radii,
+    int close_azimuth, const tc_surface_item3d_style* style);
+// Preserves angular topology and camera. count must equal input rows*columns.
+TCPLOT_API int tc_retained_chart3d_spherical_surface_set_radii(
+    tc_retained_chart3d* chart, tc_plot_item3d_handle surface, const double* radii, size_t count);
 TCPLOT_API int tc_retained_chart3d_surface_set_style(tc_retained_chart3d* chart,
                                                      tc_plot_item3d_handle surface,
                                                      const tc_surface_item3d_style* style);

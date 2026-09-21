@@ -62,6 +62,88 @@ ChartHost.RequestRender();
 включать этот режим: без mutation host сохраняет последний `D3DImage` и не
 выполняет native render/present на каждом WPF composition frame.
 
+## Сферическая поверхность и координатная сетка
+
+`RetainedChart3D.CreateSpherical(host)` создаёт согласованный сферический график:
+поверхности задаются радиусами, координатная сетка состоит из трёх больших
+окружностей с угловыми делениями и радиальных шкал. Декартова клетка в этом
+режиме не создаётся. Режим доступен через `chart.Coordinates` и не меняется
+после создания графика.
+
+```csharp
+using var chart = RetainedChart3D.CreateSpherical(host);
+chart.MsaaSamples = 4;
+
+// Столбцы — азимут вокруг +Z, строки — полярный угол от +Z.
+// Все входные углы в радианах. Шаг может быть неравномерным.
+double[] azimuths = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+double[] polarAngles = { 0, Math.PI / 2, Math.PI };
+double[] radii = {
+    1, 1, 1, 1,         // северный полюс
+    1.2, 1.5, 1.1, 1.4, // экватор
+    1, 1, 1, 1,         // южный полюс
+};
+
+SphericalSurfaceItemRef3D surface = chart.Scene.AddSphericalSurface(
+    azimuths, polarAngles, radii,
+    closeAzimuth: true,
+    style: new SurfaceItemStyle3D(
+        colorMap: PlotColorMap3D.Viridis,
+        surfaceGridVisible: true,
+        surfaceGridRowStep: 1,
+        surfaceGridColumnStep: 1));
+
+chart.ShowColorBar(surface, "radius");
+chart.Camera.Fit(); // учитывает также сферическую координатную сетку
+ChartHost.Attach(chart);
+
+surface.SetRadii(nextRadii); // тот же размер таблицы, те же углы и handle
+ChartHost.RequestRender();
+```
+
+Индекс радиуса: `row * azimuths.Length + column`. Оба массива углов должны
+быть конечными и строго возрастающими; полярные углы лежат в `[0, π]`.
+Для `closeAzimuth: true` нужны минимум три азимута с диапазоном меньше `2π`:
+конечный дубликат первого столбца передавать не нужно, шов строится автоматически.
+Для открытого сектора (`closeAzimuth: false`) нужны минимум два азимута,
+диапазон может достигать `2π`. Полярных углов всегда нужно минимум два.
+Радиусы конечные и неотрицательные. В строке полюса (`0` или `π`) все радиусы
+должны совпадать: разные азимуты описывают одну точку.
+
+Преобразование выполняется в native при изменении данных:
+`x = r sin(θ) cos(φ)`, `y = r sin(θ) sin(φ)`, `z = r cos(θ)`.
+Поверхностная сетка следует строкам и столбцам угловой таблицы. Colormap и
+цветовая шкала используют радиус, а не высоту Z. `SetRadii` сохраняет стиль и
+камеру; для подгонки под изменившийся размер явно вызывайте `Camera.Fit()`.
+Некорректное обновление отклоняется, предыдущая поверхность сохраняется.
+
+Сферическая поверхность и обычная поверхность имеют общую базу `SurfaceRef3D`
+со свойством `Style`; `ShowColorBar` принимает обе. У сферической поверхности
+доступен `SetRadii`, у декартовой — `SetData`. Вызов `AddSurface` в сферическом
+графике или `AddSphericalSurface` в декартовом отклоняется.
+
+`chart.Parts.Grid`, `Scene.AddGrid` и `Parts.ReplaceGrid` сохраняют обычный
+retained API, но геометрия сетки всегда соответствует режиму графика. В
+сферическом режиме `GridItemStyle3D.Grid*` задаёт цвета окружностей,
+`XAxis*` — азимутальных делений, `YAxis*` — полярных, `ZAxis*` — радиальных
+шкал. `LabelsVisible` включает подписи, угловые значения выводятся в градусах.
+`SetAxisLabels(azimuth, polar, radius)` переименовывает соответствующие шкалы;
+стандартные названия — `azimuth`, `polar`, `r`.
+
+Для работы с данными без GPU допустимо `RetainedChart3D.CreateSpherical()`;
+для отображения в WPF передавайте host от `Tgfx2Host.Acquire`.
+Сферический вариант примера `examples/RetainedChart3DWpfExample` запускается
+с аргументом `--spherical`. Кнопка `Advance wave` обновляет таблицу радиусов
+без сброса ракурса. Аргумент `--smoke` проверяет отображение и обновление, после
+чего закрывает окно с кодом завершения 0; ошибка возвращает ненулевой код.
+Центральная проверка C# API и обоих WPF-режимов: `task test -- --csharp-only`
+(после сборки Graphics SDK через
+`task build:graphics -- --no-sdl --no-vulkan --no-opengl`). Для WPF-проверки
+нужен Windows-сеанс с доступным D3D9Ex/D3DImage; ошибка создания bridge
+завершает smoke с ошибкой, даже если offscreen-рендер D3D11 работает.
+
+## Legacy PlotView3D
+
 Справочник по тому, что сейчас доступно из `Termin.Native.PlotView3D` для
 3D-графиков в Alliance. Методы ниже - это SWIG C# API, поэтому имена остаются
 в `snake_case`.

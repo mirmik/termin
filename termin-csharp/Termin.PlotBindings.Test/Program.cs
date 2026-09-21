@@ -280,6 +280,115 @@ static void TestManagedChartComposition(GpuHost host)
             "Managed series removal did not destroy its native item.");
 }
 
+static void RequireThrows<TException>(Action action, string message)
+    where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new InvalidOperationException(message);
+}
+
+static void TestSphericalChart(GpuHost host)
+{
+    var defaultSurface = new SurfaceItemStyle3D();
+    var defaultGrid = new GridItemStyle3D();
+    var defaultColorBar = new ColorBarStyle3D();
+    var defaultScatter = new ScatterItemStyle3D();
+    if (defaultSurface.ColorA != 1 || defaultSurface.ColorMap != PlotColorMap3D.Viridis ||
+        !defaultGrid.LabelsVisible || defaultGrid.GridA != 1 ||
+        defaultColorBar.TickCount != 5 || defaultScatter.Size <= 0)
+        throw new InvalidOperationException(
+            "Default 3D styles must be visible and usable across the managed/native boundary.");
+    using var chart = RetainedChart3D.CreateSpherical(host);
+    using var cartesian = new RetainedChart3D(host);
+    if (chart.Coordinates != PlotCoordinateSystem3D.Spherical ||
+        chart.Parts.Grid is null || chart.Scene.Count != 1)
+        throw new InvalidOperationException(
+            "Spherical construction must include its coordinate grid.");
+
+    double[] azimuths = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+    double[] polarAngles = { 0, Math.PI / 2, Math.PI };
+    double[] radii = { 2, 2, 2, 2, 3, 4, 5, 6, 2, 2, 2, 2 };
+    var surface = chart.Scene.AddSphericalSurface(
+        azimuths, polarAngles, radii,
+        style: new SurfaceItemStyle3D(
+            colorMap: PlotColorMap3D.Plasma, surfaceGridVisible: true));
+    chart.ShowColorBar(surface, "radius");
+    chart.Camera.Fit();
+    var fitted = chart.Camera.State;
+    if (fitted.TargetX != 0 || fitted.TargetY != 0 || fitted.TargetZ != 0 ||
+        fitted.Distance <= 6 || !double.IsFinite(fitted.FarClip))
+        throw new InvalidOperationException(
+            "Spherical camera must fit the full reference circles around the origin.");
+    var camera = new OrbitCameraState3D(
+        0.125, -0.375, 0.625, fitted.Distance,
+        0.73123456789, 0.41345678901, fitted.FieldOfViewY,
+        fitted.NearClip, fitted.FarClip);
+    chart.Camera.State = camera;
+    if (!chart.Camera.State.Equals(camera))
+        throw new InvalidOperationException(
+            "Camera doubles must round trip across the native ABI.");
+
+    chart.MsaaSamples = 1;
+    _ = chart.RenderToTextureHandleId(480, 360);
+    var handle = surface.Handle;
+    var before = surface.Snapshot;
+    surface.SetRadii(radii.Select(radius => radius * 1.25).ToArray());
+    var after = surface.Snapshot;
+    if (surface.Handle != handle || !surface.IsValid ||
+        after.GeometryRevision == before.GeometryRevision ||
+        after.StyleRevision != before.StyleRevision ||
+        surface.Style.ColorMap != PlotColorMap3D.Plasma ||
+        !chart.Camera.State.Equals(camera))
+        throw new InvalidOperationException(
+            "Radius updates must preserve surface identity, style and camera.");
+    _ = chart.RenderToTextureHandleId(480, 360);
+    var beforeInvalid = surface.Snapshot;
+    RequireThrows<ArgumentException>(
+        () => surface.SetRadii(new[] { 1.0 }),
+        "A radius array with the wrong dimensions was accepted.");
+    var negativeRadii = (double[])radii.Clone();
+    negativeRadii[4] = -1;
+    RequireThrows<ArgumentException>(
+        () => surface.SetRadii(negativeRadii),
+        "Negative radii were accepted.");
+    var invalidRadii = (double[])radii.Clone();
+    invalidRadii[4] = double.NaN;
+    RequireThrows<ArgumentException>(
+        () => surface.SetRadii(invalidRadii),
+        "Nonfinite radii were accepted.");
+    if (!surface.Snapshot.Equals(beforeInvalid))
+        throw new InvalidOperationException(
+            "Rejected managed radius updates changed the native item.");
+
+    var xyz = new[] { 0.0, 1.0, 2.0, 3.0 };
+    RequireThrows<InvalidOperationException>(
+        () => chart.Scene.AddSurface(xyz, xyz, xyz, 2, 2),
+        "A spherical chart accepted a Cartesian surface.");
+    RequireThrows<InvalidOperationException>(
+        () => cartesian.Scene.AddSphericalSurface(azimuths, polarAngles, radii),
+        "A Cartesian chart accepted a spherical surface.");
+
+    var oldGrid = chart.Parts.Grid!;
+    var replacementGrid = chart.Scene.AddGrid();
+    chart.Parts.ReplaceGrid(replacementGrid);
+    if (chart.Parts.Grid?.Handle != replacementGrid.Handle)
+        throw new InvalidOperationException(
+            "Replacing the spherical coordinate grid failed.");
+    oldGrid.Destroy();
+    _ = chart.RenderToTextureHandleId(480, 360);
+    chart.Dispose();
+    if (surface.IsValid || replacementGrid.IsValid)
+        throw new InvalidOperationException(
+            "Spherical chart disposal must invalidate its retained parts.");
+}
+
 TestRetainedVisualSceneFactories();
 TestRetainedPlotItems();
 
@@ -311,11 +420,13 @@ if (!OperatingSystem.IsWindows())
 {
     using var host = new GpuHost(fontPath, BackendType.Vulkan);
     TestManagedChartComposition(host);
+    TestSphericalChart(host);
 }
 else
 {
     using var host = new GpuHost(fontPath, BackendType.D3D11);
     TestManagedChartComposition(host);
+    TestSphericalChart(host);
     using var view = new PlotView2D(host);
     using var otherView = new PlotView2D(host);
     view.set_view(0.0, 10.0, 0.0, 10.0);
@@ -352,4 +463,4 @@ else
         throw new InvalidOperationException("Stale marker handle was accepted");
 }
 
-Console.WriteLine("Plot annotation bindings passed.");
+Console.WriteLine("Retained plots, spherical Chart3D and annotation bindings passed.");

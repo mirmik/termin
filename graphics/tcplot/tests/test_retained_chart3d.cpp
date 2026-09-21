@@ -1,9 +1,12 @@
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -181,6 +184,100 @@ namespace {
         return count;
     }
 
+    void capture_spherical_image(const std::vector<float>& pixels, uint32_t width, uint32_t height) {
+        const char* path = std::getenv("TERMIN_SPHERICAL_CAPTURE");
+        if (!path || !*path)
+            return;
+        std::ofstream output(path, std::ios::binary);
+        require(output.is_open(), "failed to open spherical capture output");
+        output << "P6\n" << width << ' ' << height << "\n255\n";
+        for (size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
+            for (size_t channel = 0; channel < 3; ++channel) {
+                const float linear = std::clamp(pixels[pixel + channel], 0.0f, 1.0f);
+                const float srgb = linear <= 0.0031308f ? linear * 12.92f
+                                                      : 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
+                output.put(static_cast<char>(std::lround(srgb * 255.0f)));
+            }
+        }
+        output.close();
+        require(output.good(), "failed to write spherical capture output");
+        std::printf("spherical Chart3D capture written to %s\n", path);
+    }
+
+    void test_spherical_chart_d3d11(tcplot::GpuHost& host) {
+        constexpr double pi = 3.14159265358979323846;
+        constexpr uint32_t rows = 25, columns = 48, width = 800, height = 600;
+        std::vector<double> azimuths(columns), polar(rows), radii(rows * columns);
+        for (uint32_t column = 0; column < columns; ++column)
+            azimuths[column] = 2.0 * pi * column / columns;
+        for (uint32_t row = 0; row < rows; ++row) {
+            polar[row] = pi * row / (rows - 1);
+            for (uint32_t column = 0; column < columns; ++column) {
+                const double latitude = row == 0 || row + 1 == rows ? 0.0 : std::sin(polar[row]);
+                radii[row * columns + column] = 2.0 + 0.6 * latitude * latitude * std::cos(2 * azimuths[column]) +
+                                               0.35 * latitude * std::cos(azimuths[column]);
+            }
+        }
+        std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)> chart(
+            tc_retained_chart3d_create_spherical(&host), tc_retained_chart3d_destroy);
+        require(chart != nullptr, "failed to create D3D11 spherical chart");
+        require(tc_retained_chart3d_set_msaa_samples(chart.get(), 1), "failed to configure D3D11 spherical MSAA");
+        tc_surface_item3d_style style{};
+        style.color_r = style.color_g = style.color_b = style.color_a = 1;
+        style.colormap = TC_PLOT_COLORMAP3D_VIRIDIS;
+        style.surface_grid_visible = 1;
+        style.surface_grid_row_step = 3;
+        style.surface_grid_col_step = 6;
+        style.surface_grid_width_px = 1.0f;
+        style.surface_grid_r = style.surface_grid_g = style.surface_grid_b = 0.07f;
+        style.surface_grid_a = 0.7f;
+        const auto surface = tc_retained_chart3d_add_spherical_surface(
+            chart.get(), azimuths.data(), columns, polar.data(), rows, radii.data(), 1, &style);
+        require(tc_retained_chart3d_item_is_valid(chart.get(), surface), "failed to add D3D11 spherical surface");
+        tc_colorbar3d_style colorbar{5, 18.0f, 0.62f, 18.0f, 8.0f, 13.0f,
+                                     0.8f, 0.8f, 0.8f, 1.0f, 0.42f, 0.45f, 0.52f, 1.0f};
+        require(tc_retained_chart3d_set_colorbar(chart.get(), surface, "radius", &colorbar),
+                "failed to add D3D11 radial colorbar");
+        const auto render = [&] {
+            const uint32_t texture = tc_retained_chart3d_render(chart.get(), width, height);
+            require(texture != 0, "D3D11 spherical render failed");
+            return read_pixels(host, texture, width, height);
+        };
+        const uint32_t first_texture = tc_retained_chart3d_render(chart.get(), width, height);
+        require(first_texture != 0 && count_non_clear_pixels(host, first_texture, width, height) > 4000,
+                "D3D11 spherical chart must visibly render its surface and reference frame");
+        const auto first = read_pixels(host, first_texture, width, height);
+        capture_spherical_image(first, width, height);
+
+        tc_retained_chart3d_clear_colorbar(chart.get());
+        const auto no_colorbar = render();
+        require(count_changed_pixels(first, no_colorbar) > 100,
+                "radial colorbar must change the rendered D3D11 image");
+        require(tc_retained_chart3d_set_colorbar(chart.get(), surface, "radius", &colorbar),
+                "failed to restore D3D11 radial colorbar");
+
+        const auto grid = tc_retained_chart3d_grid_part(chart.get());
+        tc_grid_item3d_style grid_style{};
+        require(tc_retained_chart3d_grid_get_style(chart.get(), grid, &grid_style),
+                "failed to read spherical grid style");
+        grid_style.labels_visible = 0;
+        require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &grid_style),
+                "failed to hide spherical angle/radius labels");
+        const auto no_labels = render();
+        require(count_changed_pixels(first, no_labels) > 10,
+                "spherical angle and radius labels must appear in the D3D11 image");
+        grid_style.labels_visible = 1;
+        require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &grid_style),
+                "failed to restore spherical labels");
+        for (double& radius : radii)
+            radius *= 0.8;
+        require(tc_retained_chart3d_spherical_surface_set_radii(chart.get(), surface, radii.data(), radii.size()),
+                "failed to update D3D11 spherical radii");
+        const auto updated = render();
+        require(count_changed_pixels(first, updated) > 100,
+                "updated radii must change the D3D11 surface image without resetting the camera");
+    }
+
     const tc_render_item* find_render_item(const termin::RenderItemSnapshot& snapshot, tc_plot_item3d_handle handle) {
         for (const tc_render_item& item : snapshot.items()) {
             if (item.source.namespace_id == handle.scene_id && item.source.object_id == handle.index &&
@@ -195,6 +292,161 @@ namespace {
                                                                   tc_plot_item3d_handle handle) {
         const tc_render_item* item = find_render_item(snapshot, handle);
         return item ? tcplot::plot_scene3d_render_item_payload(*item) : nullptr;
+    }
+
+    void test_spherical_chart_cpu() {
+        constexpr double pi = 3.14159265358979323846;
+        const double azimuths[] = {0.0, pi / 2, pi, 3 * pi / 2};
+        const double polar[] = {0.0, pi / 2, pi};
+        const double radii[] = {2, 2, 2, 2, 3, 4, 5, 6, 2, 2, 2, 2};
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        ChartOwner owner(tc_retained_chart3d_create_spherical(nullptr), tc_retained_chart3d_destroy);
+        ChartOwner cartesian(tc_retained_chart3d_create(nullptr), tc_retained_chart3d_destroy);
+        auto* chart = owner.get();
+        require(chart && cartesian, "failed to create detached spherical test charts");
+        tc_surface_item3d_style style{};
+        style.color_r = style.color_g = style.color_b = style.color_a = 1.0f;
+        style.colormap = TC_PLOT_COLORMAP3D_VIRIDIS;
+        style.surface_grid_row_step = style.surface_grid_col_step = 1;
+        style.surface_grid_width_px = 1.0f;
+        const auto surface = tc_retained_chart3d_add_spherical_surface(
+            chart, azimuths, 4, polar, 3, radii, 1, &style);
+        require(tc_retained_chart3d_item_is_valid(chart, surface), "spherical surface creation failed");
+        const auto grid = tc_retained_chart3d_grid_part(chart);
+        termin::RenderItemSnapshot first;
+        auto& source = tcplot::plot_scene3d_render_item_source(*chart);
+        require(source.publish(first, {}), "spherical snapshot publication failed");
+        const auto* payload = find_plot_payload(first, surface);
+        const auto* grid_payload = find_plot_payload(first, grid);
+        require(payload && payload->item && grid_payload && grid_payload->item &&
+                    payload->item->spherical_surface && payload->frame.spherical_coordinates &&
+                    grid_payload->frame.spherical_coordinates,
+                "spherical mode must apply to both surface and coordinate grid");
+        const auto& data = *payload->item;
+        require(data.rows == 3 && data.columns == 5 && data.x.size() == 15,
+                "closed azimuth must add one seam column");
+        for (size_t row = 0; row < data.rows; ++row) {
+            const size_t start = row * data.columns;
+            const size_t end = start + data.columns - 1;
+            require(data.x[start] == data.x[end] && data.y[start] == data.y[end] && data.z[start] == data.z[end],
+                    "closed spherical seam must exactly match its first column");
+        }
+        const auto point_is = [&](size_t index, double x, double y, double z) {
+            return std::abs(data.x[index] - x) < 1e-12 && std::abs(data.y[index] - y) < 1e-12 &&
+                   std::abs(data.z[index] - z) < 1e-12;
+        };
+        require(point_is(0, 0, 0, 2) && point_is(5, 3, 0, 0) && point_is(6, 0, 4, 0) &&
+                    point_is(7, -5, 0, 0) && point_is(8, 0, -6, 0) && point_is(10, 0, 0, -2),
+                "spherical angles must map to the documented cardinal directions");
+        require(data.draw_vertex_count == 24, "pole fans must contain exactly eight nondegenerate triangles");
+        for (size_t vertex = 0; vertex < data.draw_vertex_count; vertex += 3) {
+            const auto* a = &data.draw_vertices[vertex * 19];
+            const auto* b = a + 19;
+            const auto* c = b + 19;
+            const double ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+            const double vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+            const double cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+            require(cx * cx + cy * cy + cz * cz > 1e-10, "spherical draw stream contains a degenerate pole triangle");
+        }
+        const auto color_range = tcplot::plot_scene3d_surface_color_range(data, payload->frame);
+        require(color_range[0] == 2 && color_range[1] == 6 && payload->frame.bounds_min[2] == -6 &&
+                    payload->frame.bounds_max[2] == 6 && payload->frame.grid_radius == 6,
+                "spherical color range must use radius while grid bounds include complete reference circles");
+        bool curved_grid_segment = false;
+        const auto& grid_data = *grid_payload->item;
+        for (size_t vertex = 0; vertex + 1 < grid_data.draw_vertex_count; vertex += 2) {
+            const auto* a = &grid_data.draw_vertices[vertex * 19];
+            const auto* b = a + 19;
+            int varying_axes = 0;
+            for (size_t axis = 0; axis < 3; ++axis)
+                varying_axes += std::abs(a[axis] - b[axis]) > 1e-6;
+            curved_grid_segment |= varying_axes >= 2;
+        }
+        require(curved_grid_segment, "spherical grid must contain coordinate circles instead of only Cartesian lines");
+
+        tc_orbit_camera3d_state camera{};
+        tc_retained_chart3d_fit_camera(chart);
+        require(tc_retained_chart3d_get_camera(chart, &camera) && camera.target_x == 0 && camera.target_y == 0 &&
+                    camera.target_z == 0 && camera.distance > 6,
+                "spherical camera fit must include the origin and full coordinate grid");
+        camera.azimuth = 0.731;
+        camera.elevation = 0.413;
+        require(tc_retained_chart3d_set_camera(chart, &camera), "failed to set spherical camera");
+        const auto before = snapshot(chart, surface);
+        double updated[] = {4, 4, 4, 4, 6, 8, 10, 12, 4, 4, 4, 4};
+        require(tc_retained_chart3d_spherical_surface_set_radii(chart, surface, updated, 12), "radius update failed");
+        const auto after = snapshot(chart, surface);
+        tc_orbit_camera3d_state after_camera{};
+        require(tc_retained_chart3d_get_camera(chart, &after_camera) && after_camera.azimuth == camera.azimuth &&
+                    after_camera.elevation == camera.elevation && after_camera.distance == camera.distance &&
+                    after.geometry_revision != before.geometry_revision && after.style_revision == before.style_revision,
+                "radius update must preserve handle, style and camera");
+        termin::RenderItemSnapshot second;
+        require(source.publish(second, {}), "updated spherical snapshot publication failed");
+        const auto* updated_payload = find_plot_payload(second, surface);
+        require(updated_payload && updated_payload->item != payload->item && updated_payload->item->radius_max == 12 &&
+                    data.radius_max == 6 && data.x[5] == 3 && payload->frame.grid_radius == 6,
+                "radius update must preserve published snapshot values");
+
+        const auto invalid_update = [&](const double* values, size_t count) {
+            require(!tc_retained_chart3d_spherical_surface_set_radii(chart, surface, values, count) &&
+                        same_snapshot(after, snapshot(chart, surface)),
+                    "invalid radius update must fail without mutating item revisions");
+        };
+        invalid_update(updated, 11);
+        updated[4] = -1;
+        invalid_update(updated, 12);
+        updated[4] = std::numeric_limits<double>::quiet_NaN();
+        invalid_update(updated, 12);
+        updated[4] = std::numeric_limits<double>::infinity();
+        invalid_update(updated, 12);
+        updated[4] = 6;
+        updated[0] = 3;
+        invalid_update(updated, 12);
+        const auto count = tc_retained_chart3d_item_count(chart);
+        const double repeated_azimuths[] = {0, pi / 2, pi, 2 * pi};
+        const double unordered_azimuths[] = {0, pi, pi / 2, 3 * pi / 2};
+        const double invalid_polar[] = {-0.1, pi / 2, pi};
+        for (const double* invalid_angles : {repeated_azimuths, unordered_azimuths}) {
+            const auto rejected = tc_retained_chart3d_add_spherical_surface(
+                chart, invalid_angles, 4, polar, 3, radii, 1, &style);
+            require(!tc_retained_chart3d_item_is_valid(chart, rejected), "invalid azimuth axis was accepted");
+        }
+        const auto rejected_polar = tc_retained_chart3d_add_spherical_surface(
+            chart, azimuths, 4, invalid_polar, 3, radii, 1, &style);
+        require(!tc_retained_chart3d_item_is_valid(chart, rejected_polar) && tc_retained_chart3d_item_count(chart) == count,
+                "invalid axes must not add retained items");
+        const double xyz[] = {0, 1, 2, 3};
+        const auto wrong_cartesian = tc_retained_chart3d_add_surface(chart, xyz, xyz, xyz, 2, 2, &style);
+        const auto wrong_spherical = tc_retained_chart3d_add_spherical_surface(
+            cartesian.get(), azimuths, 4, polar, 3, radii, 1, &style);
+        require(!tc_retained_chart3d_item_is_valid(chart, wrong_cartesian) &&
+                    !tc_retained_chart3d_item_is_valid(cartesian.get(), wrong_spherical) &&
+                    !tc_retained_chart3d_surface_set_data(chart, surface, xyz, xyz, xyz, 2, 2),
+                "surface APIs must not mix incompatible coordinate modes");
+        const auto sector = tc_retained_chart3d_add_spherical_surface(
+            chart, azimuths, 4, polar, 3, radii, 0, &style);
+        termin::RenderItemSnapshot open_snapshot;
+        require(source.publish(open_snapshot, {}), "open sector publication failed");
+        const auto* sector_payload = find_plot_payload(open_snapshot, sector);
+        require(sector_payload && sector_payload->item->columns == 4 && sector_payload->item->draw_vertex_count == 18,
+                "open sectors must not gain an azimuth seam");
+        const double collapsed_radii[12]{};
+        require(tc_retained_chart3d_spherical_surface_set_radii(chart, surface, collapsed_radii, 12),
+                "zero radii must remain valid spherical data");
+        termin::RenderItemSnapshot collapsed_snapshot;
+        require(source.publish(collapsed_snapshot, {}), "collapsed spherical publication failed");
+        const auto* collapsed = find_plot_payload(collapsed_snapshot, surface);
+        require(collapsed && collapsed->item->draw_vertex_count == 0 &&
+                    tcplot::plot_scene3d_surface_color_range(*collapsed->item, collapsed->frame) ==
+                        std::array<double, 2>{0, 1},
+                "collapsed spherical surfaces must omit degenerate geometry and retain a finite color range");
+        tc_retained_chart3d_clear_data(chart);
+        require(tc_retained_chart3d_item_count(chart) == 1 && tc_retained_chart3d_item_is_valid(chart, grid),
+                "clearing spherical data must preserve coordinate grid");
+        owner.reset();
+        require(data.x[5] == 3 && payload->frame.spherical_coordinates,
+                "spherical snapshot must remain readable after chart destruction");
     }
 
     constexpr const char* kPlotSnapshotProbeType = "PlotScene3DSnapshotProbe";
@@ -259,11 +511,20 @@ namespace {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     try {
+        const bool cpu_only = argc == 2 && std::string(argv[1]) == "--cpu-only";
+        const bool spherical_d3d11 = argc == 2 && std::string(argv[1]) == "--spherical-d3d11";
+        require(argc == 1 || cpu_only || spherical_d3d11,
+                "usage: tcplot_retained_chart3d_test [--cpu-only|--spherical-d3d11]");
         test_termin_clip_canvas_projection();
+        test_spherical_chart_cpu();
+        if (cpu_only) {
+            std::printf("retained Chart3D CPU geometry and lifecycle test passed\n");
+            return 0;
+        }
 
-        if (!tgfx::backend_is_compiled(tgfx::BackendType::Vulkan)) {
+        if (!spherical_d3d11 && !tgfx::backend_is_compiled(tgfx::BackendType::Vulkan)) {
             std::printf("retained Chart3D test skipped: Vulkan unavailable\n");
             return 77;
         }
@@ -276,6 +537,14 @@ int main() {
         termin::tgfx2_set_shader_artifact_root(shader_root.path.string().c_str());
         termin::tgfx2_set_shader_cache_root((shader_root.path / "cache").string().c_str());
         termin::tgfx2_set_shader_dev_compile_enabled(true);
+
+        if (spherical_d3d11) {
+            require(tgfx::backend_is_compiled(tgfx::BackendType::D3D11), "D3D11 backend is unavailable");
+            tcplot::GpuHost d3d_host(TCPLOT_TEST_FONT, tgfx::BackendType::D3D11);
+            test_spherical_chart_d3d11(d3d_host);
+            std::printf("spherical Chart3D D3D11 pixels and retained updates test passed\n");
+            return 0;
+        }
 
         tcplot::GpuHost host(TCPLOT_TEST_FONT, tgfx::BackendType::Vulkan);
         const uint32_t supported_msaa_samples = test_texture_sample_support(host);

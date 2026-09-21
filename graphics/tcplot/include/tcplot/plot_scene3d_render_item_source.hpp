@@ -35,6 +35,9 @@ namespace tcplot {
         std::vector<double> z;
         uint32_t rows = 0;
         uint32_t columns = 0;
+        bool spherical_surface = false;
+        double radius_min = 0.0;
+        double radius_max = 1.0;
         tc_surface_item3d_style surface_style{};
         tc_scatter_item3d_style scatter_style{};
         tc_line_item3d_style line_style{};
@@ -52,6 +55,8 @@ namespace tcplot {
     // intentionally values rather than a retained-chart pointer so an encoder can
     // consume a snapshot after later chart mutations or destruction.
     struct PlotScene3DFrameRenderState {
+        bool spherical_coordinates = false;
+        double grid_radius = 1.0;
         tc_orbit_camera3d_state camera{};
         std::array<float, 3> axis_scale{1.0f, 1.0f, 1.0f};
         bool surface_shading = true;
@@ -63,6 +68,17 @@ namespace tcplot {
         std::string y_label = "y";
         std::string z_label = "z";
     };
+
+    // Both the shader and colorbar consume this range. Constant radii use a
+    // zero-based range, including a useful unit range for a collapsed surface.
+    inline std::array<double, 2> plot_scene3d_surface_color_range(
+        const PlotScene3DItemRenderData& item, const PlotScene3DFrameRenderState& frame) {
+        if (!item.spherical_surface)
+            return {frame.bounds_min[2], frame.bounds_max[2]};
+        if (item.radius_max > item.radius_min)
+            return {item.radius_min, item.radius_max};
+        return {0.0, item.radius_max > 0.0 ? item.radius_max : 1.0};
+    }
 
     struct PlotScene3DRenderItemPayload {
         std::shared_ptr<const PlotScene3DItemRenderData> item;

@@ -3,6 +3,12 @@ using System.Runtime.InteropServices;
 
 namespace Termin.Native;
 
+public enum PlotCoordinateSystem3D
+{
+    Cartesian,
+    Spherical,
+}
+
 public enum PlotItemKind3D : uint
 {
     Invalid = 0,
@@ -53,6 +59,8 @@ public readonly struct PlotItemHandle3D : IEquatable<PlotItemHandle3D>
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct SurfaceItemStyle3D
 {
+    public SurfaceItemStyle3D() : this(colorR: 1) {}
+
     public readonly float ColorR;
     public readonly float ColorG;
     public readonly float ColorB;
@@ -111,6 +119,8 @@ public readonly struct SurfaceItemStyle3D
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct ScatterItemStyle3D
 {
+    public ScatterItemStyle3D() : this(colorR: 1) {}
+
     public readonly float ColorR;
     public readonly float ColorG;
     public readonly float ColorB;
@@ -135,6 +145,8 @@ public readonly struct ScatterItemStyle3D
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct GridItemStyle3D
 {
+    public GridItemStyle3D() : this(labelsVisible: true) {}
+
     public readonly float GridR;
     public readonly float GridG;
     public readonly float GridB;
@@ -188,6 +200,8 @@ public readonly struct GridItemStyle3D
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct ColorBarStyle3D
 {
+    public ColorBarStyle3D() : this(tickCount: 5) {}
+
     public readonly uint TickCount;
     public readonly float WidthPx;
     public readonly float HeightRatio;
@@ -248,26 +262,26 @@ public readonly struct PlotItemSnapshot3D
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct OrbitCameraState3D
 {
-    public readonly float TargetX;
-    public readonly float TargetY;
-    public readonly float TargetZ;
-    public readonly float Distance;
-    public readonly float Azimuth;
-    public readonly float Elevation;
-    public readonly float FieldOfViewY;
-    public readonly float NearClip;
-    public readonly float FarClip;
+    public readonly double TargetX;
+    public readonly double TargetY;
+    public readonly double TargetZ;
+    public readonly double Distance;
+    public readonly double Azimuth;
+    public readonly double Elevation;
+    public readonly double FieldOfViewY;
+    public readonly double NearClip;
+    public readonly double FarClip;
 
     public OrbitCameraState3D(
-        float targetX,
-        float targetY,
-        float targetZ,
-        float distance,
-        float azimuth,
-        float elevation,
-        float fieldOfViewY,
-        float nearClip,
-        float farClip)
+        double targetX,
+        double targetY,
+        double targetZ,
+        double distance,
+        double azimuth,
+        double elevation,
+        double fieldOfViewY,
+        double nearClip,
+        double farClip)
     {
         TargetX = targetX;
         TargetY = targetY;
@@ -327,9 +341,9 @@ public abstract class PlotItemRef3D
     }
 }
 
-public sealed class SurfaceItemRef3D : PlotItemRef3D
+public abstract class SurfaceRef3D : PlotItemRef3D
 {
-    internal SurfaceItemRef3D(
+    internal SurfaceRef3D(
         RetainedChart3D chart,
         PlotItemHandle3D handle) : base(chart, handle) {}
 
@@ -354,6 +368,14 @@ public sealed class SurfaceItemRef3D : PlotItemRef3D
         }
     }
 
+}
+
+public sealed class SurfaceItemRef3D : SurfaceRef3D
+{
+    internal SurfaceItemRef3D(
+        RetainedChart3D chart,
+        PlotItemHandle3D handle) : base(chart, handle) {}
+
     public void SetData(
         double[] x,
         double[] y,
@@ -373,6 +395,30 @@ public sealed class SurfaceItemRef3D : PlotItemRef3D
                 columns) == 0)
             throw new InvalidOperationException(
                 "Failed to update retained surface data. See native log.");
+    }
+}
+
+public sealed class SphericalSurfaceItemRef3D : SurfaceRef3D
+{
+    private readonly int _radiusCount;
+
+    internal SphericalSurfaceItemRef3D(
+        RetainedChart3D chart,
+        PlotItemHandle3D handle,
+        int radiusCount) : base(chart, handle)
+    {
+        _radiusCount = radiusCount;
+    }
+
+    /// <summary>Updates radii in row-major order without changing angles, style, handle or camera.</summary>
+    public void SetRadii(double[] radii)
+    {
+        PlotScene3D.ValidateRadii(radii, _radiusCount);
+        ThrowIfStale();
+        if (RetainedChart3DNative.SphericalSurfaceSetRadii(
+                Chart.NativeHandle, Handle, radii, (nuint)radii.Length) == 0)
+            throw new InvalidOperationException(
+                "Failed to update retained spherical radii. See native log.");
     }
 }
 
@@ -486,11 +532,47 @@ public sealed class PlotScene3D
     {
         ValidateSurface(x, y, z, rows, columns);
         _chart.ThrowIfDisposed();
+        if (_chart.Coordinates != PlotCoordinateSystem3D.Cartesian)
+            throw new InvalidOperationException(
+                "Use AddSphericalSurface for a spherical chart.");
         var resolved = style ?? new SurfaceItemStyle3D();
         var handle = RetainedChart3DNative.AddSurface(
             _chart.NativeHandle, x, y, z, rows, columns, ref resolved);
         return new SurfaceItemRef3D(
             _chart, RequireHandle(handle, "surface"));
+    }
+
+    /// <summary>
+    /// Adds r(azimuth, polar angle). Angles are radians: azimuth around +Z,
+    /// polar angle from +Z. Radii use row * azimuths.Length + column indexing.
+    /// Closed azimuth axes omit the duplicated full-turn endpoint.
+    /// </summary>
+    public SphericalSurfaceItemRef3D AddSphericalSurface(
+        double[] azimuths,
+        double[] polarAngles,
+        double[] radii,
+        bool closeAzimuth = true,
+        SurfaceItemStyle3D? style = null)
+    {
+        if (azimuths is null)
+            throw new ArgumentNullException(nameof(azimuths));
+        if (polarAngles is null)
+            throw new ArgumentNullException(nameof(polarAngles));
+        if (azimuths.Length < (closeAzimuth ? 3 : 2) || polarAngles.Length < 2)
+            throw new ArgumentException(
+                "Spherical data needs at least two polar angles and two azimuths (three when closed).");
+        ValidateRadii(radii, checked(azimuths.Length * polarAngles.Length));
+        _chart.ThrowIfDisposed();
+        if (_chart.Coordinates != PlotCoordinateSystem3D.Spherical)
+            throw new InvalidOperationException(
+                "Create a spherical chart with RetainedChart3D.CreateSpherical first.");
+        var resolved = style ?? new SurfaceItemStyle3D();
+        var handle = RetainedChart3DNative.AddSphericalSurface(
+            _chart.NativeHandle, azimuths, (uint)azimuths.Length,
+            polarAngles, (uint)polarAngles.Length, radii,
+            closeAzimuth ? 1 : 0, ref resolved);
+        return new SphericalSurfaceItemRef3D(
+            _chart, RequireHandle(handle, "spherical surface"), radii.Length);
     }
 
     public ScatterItemRef3D AddScatter(
@@ -539,6 +621,19 @@ public sealed class PlotScene3D
             (ulong)rows * columns != (ulong)x.Length)
             throw new ArgumentException(
                 "Surface arrays must describe a rectangular grid of at least 2x2.");
+    }
+
+    internal static void ValidateRadii(double[] radii, int expectedCount)
+    {
+        if (radii is null)
+            throw new ArgumentNullException(nameof(radii));
+        if (radii.Length != expectedCount)
+            throw new ArgumentException(
+                "Radius count must equal polar-angle count times azimuth count.", nameof(radii));
+        foreach (double radius in radii)
+            if (double.IsNaN(radius) || double.IsInfinity(radius) || radius < 0)
+                throw new ArgumentException(
+                    "Radii must be finite and nonnegative.", nameof(radii));
     }
 
     internal static void ValidateEqualArrays(
@@ -651,15 +746,26 @@ public sealed class Chart3DCamera
 
 public sealed class RetainedChart3D : IDisposable
 {
-    private readonly GpuHost _host;
+    private readonly GpuHost? _host;
     private IntPtr _native;
     private bool _disposed;
 
     public RetainedChart3D(GpuHost host)
+        : this(host ?? throw new ArgumentNullException(nameof(host)),
+            PlotCoordinateSystem3D.Cartesian) {}
+
+    /// <summary>Creates a chart with spherical reference circles, angular labels and radial scales.</summary>
+    public static RetainedChart3D CreateSpherical(GpuHost? host = null) =>
+        new(host, PlotCoordinateSystem3D.Spherical);
+
+    private RetainedChart3D(GpuHost? host, PlotCoordinateSystem3D coordinates)
     {
-        _host = host ?? throw new ArgumentNullException(nameof(host));
-        _native = RetainedChart3DNative.Create(
-            GpuHost.getCPtr(_host).Handle);
+        _host = host;
+        Coordinates = coordinates;
+        IntPtr nativeHost = host is null ? IntPtr.Zero : GpuHost.getCPtr(host).Handle;
+        _native = coordinates == PlotCoordinateSystem3D.Spherical
+            ? RetainedChart3DNative.CreateSpherical(nativeHost)
+            : RetainedChart3DNative.Create(nativeHost);
         if (_native == IntPtr.Zero)
             throw new InvalidOperationException(
                 "Failed to create RetainedChart3D. See native log.");
@@ -673,6 +779,7 @@ public sealed class RetainedChart3D : IDisposable
     public PlotScene3D Scene { get; }
     public Chart3DParts Parts { get; }
     public Chart3DCamera Camera { get; }
+    public PlotCoordinateSystem3D Coordinates { get; }
 
     public int MsaaSamples
     {
@@ -717,7 +824,7 @@ public sealed class RetainedChart3D : IDisposable
     }
 
     public void ShowColorBar(
-        SurfaceItemRef3D surface,
+        SurfaceRef3D surface,
         string label = "",
         ColorBarStyle3D? style = null)
     {
@@ -819,6 +926,9 @@ internal static class RetainedChart3DNative
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_create")]
     internal static extern IntPtr Create(IntPtr gpuHost);
 
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_create_spherical")]
+    internal static extern IntPtr CreateSpherical(IntPtr gpuHost);
+
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_destroy")]
     internal static extern void Destroy(IntPtr chart);
 
@@ -851,6 +961,24 @@ internal static class RetainedChart3DNative
         uint rows,
         uint columns,
         ref SurfaceItemStyle3D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_add_spherical_surface")]
+    internal static extern PlotItemHandle3D AddSphericalSurface(
+        IntPtr chart,
+        [In] double[] azimuths,
+        uint columns,
+        [In] double[] polarAngles,
+        uint rows,
+        [In] double[] radii,
+        int closeAzimuth,
+        ref SurfaceItemStyle3D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_spherical_surface_set_radii")]
+    internal static extern int SphericalSurfaceSetRadii(
+        IntPtr chart,
+        PlotItemHandle3D surface,
+        [In] double[] radii,
+        nuint count);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_surface_set_data")]
     internal static extern int SurfaceSetData(

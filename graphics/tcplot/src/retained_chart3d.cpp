@@ -213,8 +213,13 @@ namespace {
 
     class RetainedChart3D {
     public:
-        RetainedChart3D()
-            : scene_id_(g_next_plot_scene3d_id.fetch_add(1)) {
+        explicit RetainedChart3D(bool spherical = false)
+            : scene_id_(g_next_plot_scene3d_id.fetch_add(1)), spherical_(spherical) {
+            if (spherical_) {
+                x_label_ = "azimuth";
+                y_label_ = "polar";
+                z_label_ = "r";
+            }
             grid_part_ = add_grid(default_grid_style());
         }
 
@@ -265,6 +270,8 @@ namespace {
                                           std::uint32_t rows,
                                           std::uint32_t columns,
                                           const tc_surface_item3d_style& style) {
+            if (spherical_)
+                throw std::invalid_argument("Cartesian surfaces require a Cartesian chart");
             if (rows < 2 || columns < 2) {
                 throw std::invalid_argument("retained surface requires at least a 2x2 grid");
             }
@@ -284,6 +291,60 @@ namespace {
             invalidate_grid_geometry();
             fit_camera();
             return handle(slot);
+        }
+
+        tc_plot_item3d_handle add_spherical_surface(const double* azimuths, uint32_t columns,
+                                                   const double* polar_angles, uint32_t rows,
+                                                   const double* radii, bool close_azimuth,
+                                                   const tc_surface_item3d_style& style) {
+            if (!spherical_)
+                throw std::invalid_argument("spherical surfaces require a spherical chart");
+            if (rows < 2 || columns < (close_azimuth ? 3u : 2u) ||
+                columns == std::numeric_limits<uint32_t>::max())
+                throw std::invalid_argument("invalid spherical surface dimensions");
+            validate(style);
+            Slot prepared;
+            prepared.azimuths = copy_values(azimuths, columns);
+            prepared.polar_angles = copy_values(polar_angles, rows);
+            const auto increasing = [](const std::vector<double>& values) {
+                return std::adjacent_find(values.begin(), values.end(),
+                    [](double a, double b) { return a >= b; }) == values.end();
+            };
+            constexpr double pi = 3.14159265358979323846;
+            const double span = prepared.azimuths.back() - prepared.azimuths.front();
+            if (!increasing(prepared.azimuths) || !increasing(prepared.polar_angles) ||
+                prepared.polar_angles.front() < 0.0 || prepared.polar_angles.back() > pi ||
+                span > 2.0 * pi || (close_azimuth && span >= 2.0 * pi))
+                throw std::invalid_argument("invalid spherical angular axes");
+            prepared.spherical_surface = true;
+            prepared.close_azimuth = close_azimuth;
+            prepared.rows = rows;
+            prepared.columns = columns + (close_azimuth ? 1 : 0);
+            prepared.surface_style = style;
+            set_spherical_geometry(prepared, radii, static_cast<size_t>(rows) * columns);
+            Slot& slot = allocate(TC_PLOT_ITEM3D_SURFACE);
+            prepared.index = slot.index;
+            prepared.generation = slot.generation;
+            prepared.alive = true;
+            prepared.kind = TC_PLOT_ITEM3D_SURFACE;
+            slot = std::move(prepared);
+            invalidate_render(slot);
+            invalidate_grid_geometry();
+            fit_camera();
+            return handle(slot);
+        }
+
+        bool set_spherical_radii(tc_plot_item3d_handle handle, const double* radii, size_t count) {
+            Slot* slot = resolve(handle, TC_PLOT_ITEM3D_SURFACE);
+            if (!slot)
+                return false;
+            if (!slot->spherical_surface)
+                throw std::invalid_argument("radius updates require a spherical surface");
+            set_spherical_geometry(*slot, radii, count);
+            ++slot->geometry_revision;
+            invalidate_render(*slot);
+            invalidate_grid_geometry();
+            return true;
         }
 
         tc_plot_item3d_handle add_scatter(const double* x,
@@ -335,6 +396,8 @@ namespace {
             Slot* slot = resolve(handle, TC_PLOT_ITEM3D_SURFACE);
             if (!slot)
                 return false;
+            if (slot->spherical_surface)
+                throw std::invalid_argument("spherical surface geometry must be updated with radii");
             if (rows < 2 || columns < 2) {
                 throw std::invalid_argument("retained surface requires at least a 2x2 grid");
             }
@@ -774,6 +837,12 @@ namespace {
             std::vector<double> z;
             std::uint32_t rows = 0;
             std::uint32_t columns = 0;
+            bool spherical_surface = false;
+            bool close_azimuth = false;
+            std::vector<double> azimuths;
+            std::vector<double> polar_angles;
+            double radius_min = 0.0;
+            double radius_max = 1.0;
             tc_surface_item3d_style surface_style{};
             tc_scatter_item3d_style scatter_style{};
             tc_line_item3d_style line_style{};
@@ -794,6 +863,10 @@ namespace {
                 free_.pop_back();
             }
             Slot& slot = slots_[index];
+            slot.spherical_surface = false;
+            slot.close_azimuth = false;
+            slot.azimuths.clear();
+            slot.polar_angles.clear();
             slot.alive = true;
             slot.kind = kind;
             slot.geometry_revision = 1;
@@ -804,6 +877,50 @@ namespace {
             slot.published_geometry_revision = 0;
             slot.published_style_revision = 0;
             return slot;
+        }
+
+        static void set_spherical_geometry(Slot& slot, const double* values, size_t count) {
+            const size_t input_columns = slot.azimuths.size();
+            if (count != slot.polar_angles.size() * input_columns)
+                throw std::invalid_argument("radius count must equal angular rows times columns");
+            const auto radii = copy_values(values, count);
+            const auto range = std::minmax_element(radii.begin(), radii.end());
+            if (*range.first < 0.0 || *range.second > std::numeric_limits<float>::max())
+                throw std::invalid_argument("radii must be nonnegative and representable by the GPU");
+            constexpr double pi = 3.14159265358979323846;
+            std::vector<double> x(static_cast<size_t>(slot.rows) * slot.columns);
+            std::vector<double> y(x.size());
+            std::vector<double> z(x.size());
+            for (size_t row = 0; row < slot.rows; ++row) {
+                const double polar = slot.polar_angles[row];
+                const bool pole = polar == 0.0 || polar == pi;
+                for (size_t column = 0; column < input_columns; ++column) {
+                    double radius = radii[row * input_columns + column];
+                    if (pole) {
+                        const double pole_radius = radii[row * input_columns];
+                        if (std::abs(radius - pole_radius) >
+                            1e-12 * std::max(1.0, std::max(radius, pole_radius)))
+                            throw std::invalid_argument("radii at a shared pole must agree");
+                        radius = pole_radius;
+                    }
+                    const size_t index = row * slot.columns + column;
+                    const double azimuth = slot.azimuths[column];
+                    x[index] = pole ? 0.0 : radius * std::sin(polar) * std::cos(azimuth);
+                    y[index] = pole ? 0.0 : radius * std::sin(polar) * std::sin(azimuth);
+                    z[index] = radius * std::cos(polar);
+                }
+                if (slot.close_azimuth) {
+                    const size_t first = row * slot.columns;
+                    x[first + input_columns] = x[first];
+                    y[first + input_columns] = y[first];
+                    z[first + input_columns] = z[first];
+                }
+            }
+            slot.x = std::move(x);
+            slot.y = std::move(y);
+            slot.z = std::move(z);
+            slot.radius_min = *range.first;
+            slot.radius_max = *range.second;
         }
 
         tc_plot_item3d_handle handle(const Slot& slot) const {
@@ -853,6 +970,22 @@ namespace {
         }
 
         void bounds(double lo[3], double hi[3]) const {
+            if (spherical_) {
+                double radius = 0.0;
+                for (const Slot& slot : slots_) {
+                    if (!slot.alive || slot.kind == TC_PLOT_ITEM3D_GRID)
+                        continue;
+                    for (size_t index = 0; index < slot.x.size(); ++index)
+                        radius = std::max(radius, std::hypot(slot.x[index], slot.y[index], slot.z[index]));
+                }
+                if (radius <= 0.0)
+                    radius = 1.0;
+                for (int axis = 0; axis < 3; ++axis) {
+                    lo[axis] = -radius;
+                    hi[axis] = radius;
+                }
+                return;
+            }
             for (int axis = 0; axis < 3; ++axis) {
                 lo[axis] = std::numeric_limits<double>::infinity();
                 hi[axis] = -std::numeric_limits<double>::infinity();
@@ -896,6 +1029,8 @@ namespace {
             frame.surface_shading_strength = shading_strength_;
             frame.surface_light_direction = {light_.x, light_.y, light_.z};
             bounds(frame.bounds_min.data(), frame.bounds_max.data());
+            frame.spherical_coordinates = spherical_;
+            frame.grid_radius = spherical_ ? frame.bounds_max[0] : 0.0;
             frame.x_label = x_label_;
             frame.y_label = y_label_;
             frame.z_label = z_label_;
@@ -947,6 +1082,7 @@ namespace {
         tcplot::GpuHost* host_ = nullptr;
         std::unique_ptr<tcplot::PlotScene3DRenderPipeline> render_pipeline_;
         std::uint64_t scene_id_;
+        const bool spherical_;
         std::vector<Slot> slots_;
         std::vector<std::uint32_t> free_;
         tc_plot_item3d_handle grid_part_ = invalid_item();
@@ -1029,13 +1165,16 @@ namespace {
                 data->z = slot.z;
                 data->rows = slot.rows;
                 data->columns = slot.columns;
+                data->spherical_surface = slot.spherical_surface;
+                data->radius_min = slot.radius_min;
+                data->radius_max = slot.radius_max;
                 data->surface_style = slot.surface_style;
                 data->scatter_style = slot.scatter_style;
                 data->line_style = slot.line_style;
                 data->grid_style = slot.grid_style;
                 if (slot.kind == TC_PLOT_ITEM3D_SURFACE) {
                     tcplot::build_plot_scene3d_surface_draw_stream(*data);
-                    if (data->draw_vertex_count == 0) {
+                    if (data->draw_vertex_count == 0 && !data->spherical_surface) {
                         tc::Log::error("[PlotScene3DRenderItemSource] failed to build surface draw stream for slot %u",
                                        slot.index);
                         return false;
@@ -1102,8 +1241,8 @@ namespace {
 } // namespace
 
 struct tc_retained_chart3d {
-    tc_retained_chart3d()
-        : value(),
+    explicit tc_retained_chart3d(bool spherical = false)
+        : value(spherical),
           render_item_source(value) {}
     explicit tc_retained_chart3d(tcplot::GpuHost& host)
         : value(host),
@@ -1143,6 +1282,37 @@ extern "C" {
 tc_retained_chart3d* tc_retained_chart3d_create(void* gpu_host) {
     return logged("create", static_cast<tc_retained_chart3d*>(nullptr), [&] {
         return gpu_host ? new tc_retained_chart3d(*static_cast<tcplot::GpuHost*>(gpu_host)) : new tc_retained_chart3d();
+    });
+}
+
+tc_retained_chart3d* tc_retained_chart3d_create_spherical(void* gpu_host) {
+    return logged("create_spherical", static_cast<tc_retained_chart3d*>(nullptr), [&] {
+        auto chart = std::make_unique<tc_retained_chart3d>(true);
+        if (gpu_host)
+            chart->value.attach(*static_cast<tcplot::GpuHost*>(gpu_host));
+        return chart.release();
+    });
+}
+
+tc_plot_item3d_handle tc_retained_chart3d_add_spherical_surface(
+    tc_retained_chart3d* chart, const double* azimuths, uint32_t columns,
+    const double* polar_angles, uint32_t rows, const double* radii,
+    int close_azimuth, const tc_surface_item3d_style* style) {
+    if (!chart)
+        return invalid_item();
+    const auto resolved = style ? *style : default_surface_style();
+    return logged("add_spherical_surface", invalid_item(), [&] {
+        return chart->value.add_spherical_surface(azimuths, columns, polar_angles, rows, radii,
+                                                  close_azimuth != 0, resolved);
+    });
+}
+
+int tc_retained_chart3d_spherical_surface_set_radii(
+    tc_retained_chart3d* chart, tc_plot_item3d_handle surface, const double* radii, size_t count) {
+    if (!chart)
+        return 0;
+    return logged("spherical_surface_set_radii", 0, [&] {
+        return chart->value.set_spherical_radii(surface, radii, count) ? 1 : 0;
     });
 }
 
