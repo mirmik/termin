@@ -30,7 +30,7 @@ namespace {
     }
 
     termin::LinearColor color(tc_visual_color4f value) {
-        return {value.r, value.g, value.b, value.a};
+        return termin::srgb_to_linear(termin::SrgbColor{value.r, value.g, value.b, value.a});
     }
 
     termin::SrgbColor authored_color(tc_visual_color4f value) {

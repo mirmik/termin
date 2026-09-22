@@ -1294,6 +1294,13 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
     endif()
 
     if(TGFX2_ENABLE_D3D11)
+        add_executable(tgfx2_d3dimage_color_test tests/test_tgfx2_d3dimage_color.cpp)
+        target_link_libraries(tgfx2_d3dimage_color_test PRIVATE termin_graphics2)
+        termin_set_rpath_test(tgfx2_d3dimage_color_test)
+        add_test(NAME tgfx2_d3dimage_color_test COMMAND tgfx2_d3dimage_color_test)
+        set_tests_properties(tgfx2_d3dimage_color_test PROPERTIES TIMEOUT 30 SKIP_RETURN_CODE 77)
+        termin_add_test_labels(tgfx2_d3dimage_color_test "termin:capability:d3d11")
+
         add_executable(tgfx2_d3d11_smoke tests/test_tgfx2_d3d11_smoke.cpp)
         target_compile_definitions(tgfx2_d3d11_smoke PRIVATE TGFX2_HAS_D3D11)
         target_link_libraries(tgfx2_d3d11_smoke PRIVATE termin_graphics2 d3dcompiler)

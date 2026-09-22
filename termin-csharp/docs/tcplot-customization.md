@@ -205,6 +205,11 @@ RenderHost.Present(colorTex, width, height);
 в DIPs, а native D3DImage bridge работает в физических пикселях. После render tick
 передавайте tgfx2 texture handle в `RenderHost.Present(...)`.
 
+Графики рендерят RGB в линейном пространстве. D3DImage bridge выполняет
+финальное преобразование в sRGB при записи в общую текстуру WPF; не добавляйте
+гамма-коррекцию в прикладной код или настройки темы. Alpha при этом не меняется;
+преобразование RGB в premultiplied alpha этим шагом не выполняется.
+
 Перед освобождением shared `Tgfx2Host` потребитель должен освободить D3DImage bridge
 через `RenderHost.ReleaseNativeResources()`. Иначе `HwndHost` может удалить
 native D3DImage bridge уже после уничтожения D3D11 device.

@@ -161,7 +161,7 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     /// <summary>
     /// Schedules one composition render when <see cref="ContinuousRendering"/>
     /// is false. Call this after mutating chart data, style, camera, or chrome.
-    /// Axis display offsets and explicit tick labels request rendering automatically.
+    /// Background colors, axis display offsets and explicit tick labels request rendering automatically.
     /// </summary>
     public void RequestRender()
     {

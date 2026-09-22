@@ -92,7 +92,7 @@ public partial class SphericalPlot3DWindow
                 SaveCapture(image, "replacement-dbsm");
                 OnAdvanceWave(this, new RoutedEventArgs());
             }
-            else
+            else if (_smokeStage == 5)
             {
                 RequireVisibleSurface(pixels, image);
                 if (!_smokeCamera.Equals(_chart.Camera.State) ||
@@ -100,6 +100,31 @@ public partial class SphericalPlot3DWindow
                     throw new InvalidOperationException("SetRadii lost camera or axis display settings.");
                 SaveCapture(image, "updated-dbsm");
                 Console.WriteLine("PLOT_DEMO_AXIS_DISPLAY_SMOKE_OK constant, offset, zero boundary, replacement, SetRadii");
+                _smokeBaseline = pixels;
+                _smokeSurface = _surface.Snapshot;
+                OnToggleBackground(this, new RoutedEventArgs());
+            }
+            else if (_smokeStage == 6)
+            {
+                if (CountBackgroundPixels(pixels, BlueBackground) < image.PixelWidth * image.PixelHeight / 5)
+                {
+                    int sample = (20 * image.PixelWidth + 20) * 4;
+                    Console.WriteLine($"PLOT_BACKGROUND_WAIT observedRGBA={pixels[sample + 2]},{pixels[sample + 1]},{pixels[sample]},{pixels[sample + 3]}");
+                    SaveCapture(image, "background-observed");
+                    return;
+                }
+                RequireStableSurface();
+                RequireVisibleSurface(pixels, image);
+                SaveCapture(image, "blue-background");
+                OnToggleBackground(this, new RoutedEventArgs());
+            }
+            else
+            {
+                if (CountDifferences(_smokeBaseline!, pixels) != 0)
+                    return;
+                RequireStableSurface();
+                SaveCapture(image, "restored-background");
+                Console.WriteLine("PLOT_DEMO_BACKGROUND_SMOKE_OK live change, sRGB output pixels, stable surface and camera, restored frame");
                 Close();
                 return;
             }
@@ -150,6 +175,18 @@ public partial class SphericalPlot3DWindow
         int count = 0;
         for (int i = 0; i < before.Length; i += 4)
             if (before[i] != after[i] || before[i + 1] != after[i + 1] || before[i + 2] != after[i + 2])
+                ++count;
+        return count;
+    }
+
+    private static int CountBackgroundPixels(byte[] pixels, VisualSrgbColor color)
+    {
+        int red = (int)Math.Round(color.R * 255), green = (int)Math.Round(color.G * 255),
+            blue = (int)Math.Round(color.B * 255);
+        int count = 0;
+        for (int i = 0; i < pixels.Length; i += 4)
+            if (Math.Abs(pixels[i] - blue) <= 2 && Math.Abs(pixels[i + 1] - green) <= 2 &&
+                Math.Abs(pixels[i + 2] - red) <= 2 && pixels[i + 3] == 255)
                 ++count;
         return count;
     }

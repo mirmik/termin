@@ -709,6 +709,18 @@ namespace {
             axis_display_[display_axis_index(axis)].tick_labels.clear();
         }
 
+        void set_background_color(tc_visual_color4f color) {
+            for (float channel : {color.r, color.g, color.b, color.a}) {
+                if (!std::isfinite(channel) || channel < 0.0f || channel > 1.0f)
+                    throw std::invalid_argument("background color channels must be finite and in [0, 1]");
+            }
+            background_color_ = color;
+        }
+
+        tc_visual_color4f background_color() const {
+            return background_color_;
+        }
+
         void set_shading(bool enabled, float strength) {
             if (!std::isfinite(strength)) {
                 throw std::invalid_argument("shading strength must be finite");
@@ -876,6 +888,7 @@ namespace {
                                                                                             colorbar_surface_.generation,
                                                                                             colorbar_label_,
                                                                                             colorbar_style_,
+                                                                                            background_color_,
                                                                                             color_,
                                                                                             width,
                                                                                             height);
@@ -1195,6 +1208,7 @@ namespace {
         termin::Vec3f light_{-0.4f, -0.6f, 0.7f};
         float axis_scale_[3] = {1, 1, 1};
         std::array<tcplot::PlotAxis3DDisplay, 4> axis_display_;
+        tc_visual_color4f background_color_{0.08f, 0.09f, 0.11f, 1.0f};
         std::string x_label_ = "x";
         std::string y_label_ = "y";
         std::string z_label_ = "z";
@@ -1683,6 +1697,24 @@ int tc_retained_chart3d_clear_axis_tick_labels(tc_retained_chart3d* chart, tc_pl
         if (!chart)
             throw std::invalid_argument("chart must not be null");
         chart->value.clear_axis_tick_labels(axis);
+        return 1;
+    });
+}
+
+int tc_retained_chart3d_set_background_color(tc_retained_chart3d* chart, tc_visual_color4f color) {
+    return logged("set_background_color", 0, [&] {
+        if (!chart)
+            throw std::invalid_argument("chart must not be null");
+        chart->value.set_background_color(color);
+        return 1;
+    });
+}
+
+int tc_retained_chart3d_get_background_color(const tc_retained_chart3d* chart, tc_visual_color4f* color) {
+    return logged("get_background_color", 0, [&] {
+        if (!chart || !color)
+            throw std::invalid_argument("chart and output color must not be null");
+        *color = chart->value.background_color();
         return 1;
     });
 }

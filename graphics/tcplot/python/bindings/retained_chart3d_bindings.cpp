@@ -169,6 +169,19 @@ namespace tcplot_bindings {
                 require_success(tc_retained_chart3d_set_axis_scale(chart_, x, y, z), "set_axis_scale");
             }
 
+            tcplot::SrgbColor background_color() const {
+                tc_visual_color4f color{};
+                require_success(tc_retained_chart3d_get_background_color(chart_, &color),
+                                "get_background_color");
+                return {color.r, color.g, color.b, color.a};
+            }
+
+            void set_background_color(tcplot::SrgbColor color) {
+                require_success(tc_retained_chart3d_set_background_color(
+                                    chart_, {color.r, color.g, color.b, color.a}),
+                                "set_background_color");
+            }
+
             void set_axis_display_offset(tc_plot_axis3d axis, double offset) {
                 require_success(tc_retained_chart3d_set_axis_display_offset(chart_, axis, offset),
                                 "set_axis_display_offset");
@@ -293,6 +306,8 @@ namespace tcplot_bindings {
 
         nb::class_<PythonRetainedChart3D>(m, "RetainedChart3D")
             .def(nb::init<>())
+            .def_prop_rw("background_color", &PythonRetainedChart3D::background_color,
+                         &PythonRetainedChart3D::set_background_color)
             .def("add_line",
                  &PythonRetainedChart3D::add_line,
                  nb::arg("x"),

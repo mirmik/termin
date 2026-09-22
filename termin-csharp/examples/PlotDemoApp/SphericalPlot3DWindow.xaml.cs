@@ -21,6 +21,9 @@ public partial class SphericalPlot3DWindow : Window
     private bool _showPhysicalValues = true;
     private int _dataset;
     private bool _wireframe;
+    private bool _blueBackground;
+    private static readonly VisualSrgbColor DefaultBackground = new(0.08f, 0.09f, 0.11f, 1);
+    private static readonly VisualSrgbColor BlueBackground = new(0.30f, 0.40f, 0.60f, 1);
     private bool _closed;
     private double _phase;
 
@@ -182,6 +185,14 @@ public partial class SphericalPlot3DWindow : Window
         _chart.Camera.Fit();
         ChartHost.RequestRender();
         StatusText.Text = "Camera fitted to the spherical grid and surface.";
+    }
+
+    private void OnToggleBackground(object sender, RoutedEventArgs e)
+    {
+        _blueBackground = !_blueBackground;
+        _chart.BackgroundColor = _blueBackground ? BlueBackground : DefaultBackground;
+        BackgroundButton.Content = _blueBackground ? "Dark background" : "Blue background";
+        StatusText.Text = "Background changed; the chart requests a new frame automatically.";
     }
 
     private void OnRenderFailed(

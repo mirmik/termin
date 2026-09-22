@@ -53,16 +53,18 @@ $demoRoot = Join-Path $RepoRoot "termin-csharp\examples\PlotDemoApp"
 if ($LASTEXITCODE -ne 0) { throw "PlotDemoApp build failed with exit code $LASTEXITCODE" }
 $env:TERMIN_PLOT_DEMO_CAPTURE_DIR = $logRoot
 $demoExecutable = Join-Path $demoRoot "bin\Release\net8.0-windows\PlotDemoApp.exe"
-$demoProcess = Start-Process -FilePath $demoExecutable -ArgumentList "--smoke-axis-display" -WindowStyle Hidden -PassThru `
-    -RedirectStandardOutput (Join-Path $logRoot "plot-demo-axis-display.stdout.log") `
-    -RedirectStandardError (Join-Path $logRoot "plot-demo-axis-display.stderr.log")
-$demoHandle = $demoProcess.Handle
-if (-not $demoProcess.WaitForExit(60000)) {
-    Stop-Process -Id $demoProcess.Id -Force
-    throw "PlotDemoApp axis display smoke timed out. See build/logs/plot-demo-axis-display.*.log"
+foreach ($demoMode in @("axis-display", "color-presentation")) {
+    $demoProcess = Start-Process -FilePath $demoExecutable -ArgumentList "--smoke-$demoMode" -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") `
+        -RedirectStandardError (Join-Path $logRoot "plot-demo-$demoMode.stderr.log")
+    $demoHandle = $demoProcess.Handle
+    if (-not $demoProcess.WaitForExit(60000)) {
+        Stop-Process -Id $demoProcess.Id -Force
+        throw "PlotDemoApp $demoMode smoke timed out. See build/logs/plot-demo-$demoMode.*.log"
+    }
+    $demoProcess.WaitForExit()
+    if ($demoProcess.ExitCode -ne 0) {
+        throw "PlotDemoApp $demoMode smoke failed with exit code $($demoProcess.ExitCode). See build/logs/plot-demo-$demoMode.*.log"
+    }
+    Write-Host "PlotDemoApp $demoMode WPF smoke passed."
 }
-$demoProcess.WaitForExit()
-if ($demoProcess.ExitCode -ne 0) {
-    throw "PlotDemoApp axis display smoke failed with exit code $($demoProcess.ExitCode). See build/logs/plot-demo-axis-display.*.log"
-}
-Write-Host "PlotDemoApp axis display WPF smoke passed."

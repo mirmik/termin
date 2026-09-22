@@ -52,6 +52,14 @@ namespace tcplot {
         };
         static_assert(sizeof(ScatterPush) == 96);
 
+        void write_linear_color(float (&destination)[4], SrgbColor authored, float opacity) {
+            const auto linear = termin::srgb_to_linear(authored);
+            destination[0] = linear.r;
+            destination[1] = linear.g;
+            destination[2] = linear.b;
+            destination[3] = linear.a * opacity;
+        }
+
         tc_shader_handle shader_handle(const char* uuid) {
             if (std::strcmp(uuid, kLineShader) == 0) {
                 static tc_shader_handle value = tc_shader_handle_invalid();
@@ -437,10 +445,7 @@ namespace tcplot {
             context.set_topology(tgfx::PrimitiveTopology::LineStrip);
             LinePush push{};
             data_to_clip(frame, transform, viewport, push.matrix);
-            push.color[0] = style.color.r;
-            push.color[1] = style.color.g;
-            push.color[2] = style.color.b;
-            push.color[3] = style.color.a * opacity;
+            write_linear_color(push.color, style.color, opacity);
             context.bind_uniform_data("tcplot2d_line_draw", &push, sizeof(push));
             context.draw_arrays(impl_->vbo, impl_->gpu_count);
             return true;
@@ -509,10 +514,7 @@ namespace tcplot {
         context.set_topology(tgfx::PrimitiveTopology::TriangleStrip);
         StyledLinePush push{};
         data_to_clip(frame, transform, viewport, push.matrix);
-        push.color[0] = style.color.r;
-        push.color[1] = style.color.g;
-        push.color[2] = style.color.b;
-        push.color[3] = style.color.a * opacity;
+        write_linear_color(push.color, style.color, opacity);
         push.params[0] = style.thickness_px;
         push.params[1] = static_cast<float>(style.line_style);
         push.params[2] =
@@ -659,10 +661,7 @@ namespace tcplot {
         context.set_topology(tgfx::PrimitiveTopology::TriangleList);
         ScatterPush push{};
         data_to_clip(frame, transform, viewport, push.matrix);
-        push.color[0] = style.color.r;
-        push.color[1] = style.color.g;
-        push.color[2] = style.color.b;
-        push.color[3] = style.color.a * opacity;
+        write_linear_color(push.color, style.color, opacity);
         push.params[0] = viewport.width;
         push.params[1] = viewport.height;
         push.params[2] = style.diameter_px;

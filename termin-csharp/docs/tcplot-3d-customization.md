@@ -48,8 +48,8 @@ chart.ShowColorBar(surface, "amplitude", new ColorBarStyle3D(
 `RetainedChart3DHost` работает on-demand по умолчанию. Первый attach,
 resize/DPI, возврат из `Collapsed` и camera input сами запрашивают кадр. После
 изменения данных, стиля, камеры или остальных настроек chart из C# кадр
-запрашивает consumer. `SetAxisDisplayOffset`, `SetAxisTickLabel` и
-`ClearAxisTickLabels` сами вызывают `RenderInvalidated`, на который подписан
+запрашивает consumer. `BackgroundColor`, `SetAxisDisplayOffset`, `SetAxisTickLabel`
+и `ClearAxisTickLabels` сами вызывают `RenderInvalidated`, на который подписан
 host; для них дополнительный `RequestRender()` не нужен. Уведомление синхронное,
 поэтому прикреплённый к WPF график следует изменять на UI-потоке host:
 
@@ -65,6 +65,36 @@ ChartHost.RequestRender();
 `ChartHost.ContinuousRendering = true`. Статические surface-графики не должны
 включать этот режим: без mutation host сохраняет последний `D3DImage` и не
 выполняет native render/present на каждом WPF composition frame.
+
+## Цвет фона
+
+`RetainedChart3D.BackgroundColor` задаёт цвет очистки всего кадра для декартовых
+и сферических графиков. Используется `VisualSrgbColor`: RGB передаются в sRGB,
+без ручной линеаризации, а все четыре компонента RGBA должны быть конечными
+и лежать в `[0, 1]`. Значение по умолчанию — `(0.08, 0.09, 0.11, 1)`.
+
+```csharp
+chart.BackgroundColor = new VisualSrgbColor(0.08f, 0.18f, 0.32f);
+VisualSrgbColor currentBackground = chart.BackgroundColor;
+// Прикреплённый RetainedChart3DHost перерисует кадр автоматически.
+```
+
+Настройка принадлежит графику и сохраняется при обновлении данных, замене
+поверхности или сетки и освобождении GPU-ресурсов. Смена фона не изменяет
+геометрию, цвета объектов, деления или камеру. Некорректный цвет отклоняется
+целиком, предыдущий фон сохраняется.
+
+Alpha сохраняется в render target, но текущий WPF/D3DImage bridge не выполняет
+необходимую для прозрачного композитинга операцию premultiply RGB. Для показа
+через `RetainedChart3DHost` используйте непрозрачный фон (`A = 1`); поддержка
+полупрозрачного фона WPF этим свойством не обеспечивается.
+
+В Python соответствует свойство `chart.background_color` с типом
+`tcplot.SrgbColor`, как у остальных цветовых настроек tcplot.
+
+WPF/D3DImage bridge преобразует линейный RGB в sRGB при записи в общую текстуру
+вывода. Native render target остаётся линейным; компенсация цвета на стороне
+приложения не требуется.
 
 ## Отображаемые значения осей и colorbar
 
@@ -223,12 +253,23 @@ retained API, но геометрия сетки всегда соответст
 и исходными радиусами. При переключении поверхность, цвета и ракурс сохраняются.
 `Replace surface + grid` позволяет проверить сохранение offset и переопределения
 нулевой подписи при замене обоих объектов; `Advance wave` обновляет данные.
+Кнопка `Blue background` / `Dark background` меняет фон уже показанного графика
+без изменения ракурса и поверхности.
 
 `task test -- --csharp-only` также запускает `PlotDemoApp --smoke-axis-display`.
 Этот сценарий проверяет WPF-отображение и смену display-настроек, сохраняя кадры
 в `build/logs/plot-demo-*.png`. Постоянная сфера должна оставаться видимой с
 единственным значением colorbar около −26.99 dBsm; на наборе с нулевыми радиусами
 проверяется подпись `≤ −40 dBsm`.
+Тот же smoke проверяет смену фона по sRGB-пикселям WPF-вывода,
+сохранение геометрии и камеры,
+а также точное восстановление изображения после возврата исходного фона.
+
+Дополнительный `PlotDemoApp --smoke-color-presentation`, включённый в ту же
+test-задачу, сравнивает реальные WPF-пиксели `Chart2D`, декартового и сферического
+`RetainedChart3D` с заданными sRGB-цветами. Проверяются цветной и серый фон,
+белый, чёрный, изменение размера и пересоздание графиков. Кадры сохраняются
+в `build/logs/plot-color-*.png`.
 
 ## Legacy PlotView3D
 

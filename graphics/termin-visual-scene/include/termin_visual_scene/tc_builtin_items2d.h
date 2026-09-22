@@ -6,6 +6,9 @@
 extern "C" {
 #endif
 
+// Authored sRGB RGB with linear alpha coverage. The C item API converts fill
+// and stroke RGB to renderer-working linear values; text and image tint retain
+// their authored sRGB type until their renderer performs that conversion.
 typedef struct tc_visual_color4f {
     float r, g, b, a;
 } tc_visual_color4f;

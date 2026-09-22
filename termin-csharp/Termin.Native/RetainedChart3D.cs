@@ -846,11 +846,40 @@ public sealed class RetainedChart3D : IDisposable
     public PlotCoordinateSystem3D Coordinates { get; }
 
     /// <summary>
-    /// Raised synchronously after a successful axis display offset or tick-label mutation.
+    /// Raised synchronously after a successful background color, axis display offset or tick-label mutation.
     /// Other chart mutations still require an explicit render request from the consumer.
     /// When attached to a WPF host, mutate the chart on the host's UI thread.
     /// </summary>
     public event EventHandler? RenderInvalidated;
+
+    /// <summary>
+    /// Background clear color in sRGB, with finite RGBA components in [0, 1].
+    /// Defaults to (0.08, 0.09, 0.11, 1). Changes request rendering without changing the camera.
+    /// Alpha is preserved in the render target; use opaque colors for the WPF host.
+    /// </summary>
+    public VisualSrgbColor BackgroundColor
+    {
+        get
+        {
+            ThrowIfDisposed();
+            if (RetainedChart3DNative.GetBackgroundColor(_native, out var color) == 0)
+                throw new InvalidOperationException(
+                    "Failed to read Chart3D background color. See native log.");
+            return color;
+        }
+        set
+        {
+            ThrowIfDisposed();
+            ValidateColorComponent(value.R);
+            ValidateColorComponent(value.G);
+            ValidateColorComponent(value.B);
+            ValidateColorComponent(value.A);
+            if (RetainedChart3DNative.SetBackgroundColor(_native, value) == 0)
+                throw new InvalidOperationException(
+                    "Failed to update Chart3D background color. See native log.");
+            RenderInvalidated?.Invoke(this, EventArgs.Empty);
+        }
+    }
 
     public int MsaaSamples
     {
@@ -1052,6 +1081,13 @@ public sealed class RetainedChart3D : IDisposable
             throw new ArgumentOutOfRangeException(parameterName, "Value must be finite.");
     }
 
+    private static void ValidateColorComponent(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0 || value > 1)
+            throw new ArgumentOutOfRangeException(nameof(value),
+                "Background RGBA components must be finite and between 0 and 1.");
+    }
+
     internal void ThrowIfDisposed()
     {
         if (_disposed || _native == IntPtr.Zero)
@@ -1215,6 +1251,12 @@ internal static class RetainedChart3DNative
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_axis_display_offset")]
     internal static extern int SetAxisDisplayOffset(
         IntPtr chart, PlotAxis3D axis, double offset);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_get_background_color")]
+    internal static extern int GetBackgroundColor(IntPtr chart, out VisualSrgbColor color);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_background_color")]
+    internal static extern int SetBackgroundColor(IntPtr chart, VisualSrgbColor color);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_get_axis_display_offset")]
     internal static extern int GetAxisDisplayOffset(

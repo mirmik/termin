@@ -40,6 +40,8 @@
                 <Button Content="Fit camera"
                         Padding="12,6" Margin="8,0,0,0"
                         Click="OnFitCamera"/>
+                <Button x:Name="BackgroundButton" Content="Blue background"
+                        Padding="12,6" Margin="8,0,0,0" Click="OnToggleBackground"/>
             </WrapPanel>
         </StackPanel>
 

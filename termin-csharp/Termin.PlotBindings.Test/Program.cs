@@ -533,6 +533,87 @@ static void TestAxisDisplaySettings(GpuHost host)
         "A disposed chart returned a display setting.");
 }
 
+static void TestChart3DBackgroundColor(GpuHost host)
+{
+    foreach (bool spherical in new[] { false, true })
+    {
+        using var chart = spherical
+            ? RetainedChart3D.CreateSpherical(host)
+            : new RetainedChart3D(host);
+        if (!chart.BackgroundColor.Equals(new VisualSrgbColor(0.08f, 0.09f, 0.11f, 1)))
+            throw new InvalidOperationException("Chart3D must preserve the default background color.");
+
+        var item = chart.Scene.AddScatter(
+            new[] { -1.0, 1.0 }, new[] { -2.0, 2.0 }, new[] { -3.0, 3.0 });
+        chart.Camera.Fit();
+        _ = chart.RenderToTextureHandleId(480, 360);
+        var camera = chart.Camera.State;
+        var itemBefore = item.Snapshot;
+        int invalidations = 0;
+        chart.RenderInvalidated += (sender, _) =>
+        {
+            if (!ReferenceEquals(sender, chart))
+                throw new InvalidOperationException("Background invalidation must identify its chart.");
+            ++invalidations;
+        };
+
+        var color = new VisualSrgbColor(0.125f, 0.375f, 0.625f, 0.875f);
+        chart.BackgroundColor = color;
+        if (!chart.BackgroundColor.Equals(color) || invalidations != 1)
+            throw new InvalidOperationException("RGBA background must round trip and request rendering.");
+        _ = chart.RenderToTextureHandleId(480, 360);
+        if (!chart.Camera.State.Equals(camera) || !item.Snapshot.Equals(itemBefore))
+            throw new InvalidOperationException("Background changes must preserve camera and item revisions.");
+
+        foreach (float invalid in new[]
+                 { float.NaN, float.PositiveInfinity, float.NegativeInfinity, -0.01f, 1.01f })
+        {
+            foreach (var invalidColor in new[]
+            {
+                new VisualSrgbColor(invalid, color.G, color.B, color.A),
+                new VisualSrgbColor(color.R, invalid, color.B, color.A),
+                new VisualSrgbColor(color.R, color.G, invalid, color.A),
+                new VisualSrgbColor(color.R, color.G, color.B, invalid),
+            })
+                RequireThrows<ArgumentOutOfRangeException>(
+                    () => chart.BackgroundColor = invalidColor,
+                    "A nonfinite or out-of-range background component was accepted.");
+        }
+        if (!chart.BackgroundColor.Equals(color) || invalidations != 1 ||
+            !chart.Camera.State.Equals(camera) || !item.Snapshot.Equals(itemBefore))
+            throw new InvalidOperationException("Rejected backgrounds changed chart state or requested rendering.");
+
+        item.Destroy();
+        chart.Scene.AddScatter(
+            new[] { -1.0, 1.0 }, new[] { -2.0, 2.0 }, new[] { -3.0, 3.0 });
+        var oldGrid = chart.Parts.Grid;
+        chart.Parts.ReplaceGrid(chart.Scene.AddGrid());
+        oldGrid?.Destroy();
+        _ = chart.RenderToTextureHandleId(480, 360);
+        if (!chart.BackgroundColor.Equals(color) || !chart.Camera.State.Equals(camera))
+            throw new InvalidOperationException("Replacing chart items reset its background or camera.");
+
+        int beforeBoundaryColors = invalidations;
+        foreach (var boundaryColor in new[]
+                 { new VisualSrgbColor(0, 1, 0, 1), new VisualSrgbColor(1, 0, 1, 0) })
+        {
+            chart.BackgroundColor = boundaryColor;
+            if (!chart.BackgroundColor.Equals(boundaryColor))
+                throw new InvalidOperationException("Background components must accept both interval endpoints.");
+        }
+        if (invalidations != beforeBoundaryColors + 2)
+            throw new InvalidOperationException("Each successful background update must request rendering.");
+
+        chart.Dispose();
+        RequireThrows<ObjectDisposedException>(
+            () => { _ = chart.BackgroundColor; },
+            "A disposed chart returned its background.");
+        RequireThrows<ObjectDisposedException>(
+            () => chart.BackgroundColor = color,
+            "A disposed chart accepted a background update.");
+    }
+}
+
 TestRetainedVisualSceneFactories();
 TestRetainedPlotItems();
 
@@ -566,6 +647,7 @@ if (!OperatingSystem.IsWindows())
     TestManagedChartComposition(host);
     TestSphericalChart(host);
     TestAxisDisplaySettings(host);
+    TestChart3DBackgroundColor(host);
 }
 else
 {
@@ -573,6 +655,7 @@ else
     TestManagedChartComposition(host);
     TestSphericalChart(host);
     TestAxisDisplaySettings(host);
+    TestChart3DBackgroundColor(host);
     using var view = new PlotView2D(host);
     using var otherView = new PlotView2D(host);
     view.set_view(0.0, 10.0, 0.0, 10.0);
@@ -609,4 +692,4 @@ else
         throw new InvalidOperationException("Stale marker handle was accepted");
 }
 
-Console.WriteLine("Retained plots, Chart3D display settings, spherical Chart3D and annotation bindings passed.");
+Console.WriteLine("Retained plots, Chart3D display settings and background, spherical Chart3D and annotation bindings passed.");

@@ -4,6 +4,22 @@ import pytest
 from termin.plot import PlotAxis3D, RetainedChart3D, SrgbColor
 
 
+def test_background_color_before_gpu_attachment():
+    plot = RetainedChart3D()
+
+    def components():
+        color = plot.background_color
+        return color.r, color.g, color.b, color.a
+
+    assert components() == pytest.approx((0.08, 0.09, 0.11, 1))
+    plot.background_color = SrgbColor(0.12, 0.24, 0.38, 0.75)
+    assert components() == pytest.approx((0.12, 0.24, 0.38, 0.75))
+    for invalid in (float("nan"), float("inf"), -0.01, 1.01):
+        with pytest.raises(RuntimeError):
+            plot.background_color = SrgbColor(invalid, 0.24, 0.38, 0.75)
+        assert components() == pytest.approx((0.12, 0.24, 0.38, 0.75))
+
+
 def test_retained_chart3d_accepts_series_before_gpu_attachment():
     plot = RetainedChart3D()
 

@@ -9,6 +9,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--smoke-color-presentation", StringComparer.OrdinalIgnoreCase))
+        {
+            MainWindow = new ColorPresentationSmokeWindow();
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            MainWindow.Show();
+            return;
+        }
+
         if (e.Args.Contains("--smoke-axis-display", StringComparer.OrdinalIgnoreCase))
         {
             var displayWindow = new SphericalPlot3DWindow();

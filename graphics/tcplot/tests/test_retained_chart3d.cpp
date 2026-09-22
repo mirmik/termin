@@ -32,6 +32,8 @@
 #include "tcplot/gpu_host.hpp"
 #include "tcplot/plot_scene3d_render_item_source.hpp"
 #include "tcplot/retained_chart3d.h"
+#include "tcplot/retained_chart2d.h"
+#include "tcplot/retained_scene_renderer2d.h"
 
 #include "../src/plot_scene3d_chart_chrome.hpp"
 
@@ -182,6 +184,151 @@ namespace {
             }
         }
         return count;
+    }
+
+    bool same_color(tc_visual_color4f left, tc_visual_color4f right) {
+        return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
+    }
+
+    void test_background_color_cpu() {
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        const tc_visual_color4f default_color{0.08f, 0.09f, 0.11f, 1};
+        const tc_visual_color4f custom{0.15f, 0.42f, 0.73f, 0.25f};
+        require(!tc_retained_chart3d_set_background_color(nullptr, custom) &&
+                    !tc_retained_chart3d_get_background_color(nullptr, nullptr),
+                "null chart background calls must fail safely");
+        for (bool spherical : {false, true}) {
+            ChartOwner chart(spherical ? tc_retained_chart3d_create_spherical(nullptr)
+                                       : tc_retained_chart3d_create(nullptr), tc_retained_chart3d_destroy);
+            require(chart != nullptr, "failed to create background test chart");
+            tc_visual_color4f color{};
+            require(tc_retained_chart3d_get_background_color(chart.get(), &color) && same_color(color, default_color),
+                    "both coordinate systems must preserve the original default background");
+            require(!tc_retained_chart3d_get_background_color(chart.get(), nullptr),
+                    "null output color must be rejected");
+            const auto grid = tc_retained_chart3d_grid_part(chart.get());
+            const auto before = snapshot(chart.get(), grid);
+            tc_orbit_camera3d_state camera{}, after_camera{};
+            require(tc_retained_chart3d_get_camera(chart.get(), &camera), "failed to get background test camera");
+            require(tc_retained_chart3d_set_background_color(chart.get(), custom), "failed to set custom background");
+            for (int channel = 0; channel < 4; ++channel) {
+                for (float invalid : {-0.01f, 1.01f, std::numeric_limits<float>::quiet_NaN(),
+                                       std::numeric_limits<float>::infinity()}) {
+                    auto bad_color = custom;
+                    float* channels[] = {&bad_color.r, &bad_color.g, &bad_color.b, &bad_color.a};
+                    *channels[channel] = invalid;
+                    require(!tc_retained_chart3d_set_background_color(chart.get(), bad_color) &&
+                                tc_retained_chart3d_get_background_color(chart.get(), &color) && same_color(color, custom),
+                            "invalid RGBA values must fail without changing the background");
+                }
+            }
+            require(tc_retained_chart3d_get_camera(chart.get(), &after_camera) &&
+                        after_camera.target_x == camera.target_x && after_camera.target_y == camera.target_y &&
+                        after_camera.target_z == camera.target_z && after_camera.distance == camera.distance &&
+                        after_camera.azimuth == camera.azimuth && after_camera.elevation == camera.elevation &&
+                        same_snapshot(before, snapshot(chart.get(), grid)),
+                    "background mutation must not change camera or item geometry/style revisions");
+            tc_retained_chart3d_clear_data(chart.get());
+            tc_retained_chart3d_release_gpu(chart.get());
+            require(tc_retained_chart3d_set_msaa_samples(chart.get(), 2) &&
+                        tc_retained_chart3d_get_background_color(chart.get(), &color) && same_color(color, custom),
+                    "background must persist across data clearing and GPU/pipeline recreation");
+            require(tc_retained_chart3d_set_background_color(chart.get(), {0, 1, 0, 0}) &&
+                        tc_retained_chart3d_get_background_color(chart.get(), &color) &&
+                        same_color(color, {0, 1, 0, 0}),
+                    "background endpoints including transparent alpha must be accepted exactly");
+        }
+    }
+
+    void test_background_color_d3d11(tcplot::GpuHost& host) {
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        constexpr uint32_t width = 96, height = 72;
+        for (bool spherical : {false, true}) {
+            ChartOwner chart(spherical ? tc_retained_chart3d_create_spherical(&host)
+                                       : tc_retained_chart3d_create(&host), tc_retained_chart3d_destroy);
+            require(chart && tc_retained_chart3d_destroy_item(chart.get(), tc_retained_chart3d_grid_part(chart.get())),
+                    "failed to create empty background render chart");
+            for (int samples : {1, 4}) {
+                require(tc_retained_chart3d_set_msaa_samples(chart.get(), samples), "failed to configure background MSAA");
+                uint32_t output_texture = 0;
+                for (tc_visual_color4f color : {tc_visual_color4f{0.08f, 0.09f, 0.11f, 1},
+                                                tc_visual_color4f{0.8f, 0.3f, 0.2f, 0.35f},
+                                                tc_visual_color4f{0.2f, 0.7f, 0.5f, 0.8f},
+                                                tc_visual_color4f{0.08f, 0.09f, 0.11f, 1}}) {
+                    require(tc_retained_chart3d_set_background_color(chart.get(), color), "failed to set D3D11 background");
+                    const auto texture = tc_retained_chart3d_render(chart.get(), width, height);
+                    require(texture != 0 && (output_texture == 0 || output_texture == texture),
+                            "background changes must render into the existing chart output");
+                    output_texture = texture;
+                    const auto pixels = read_pixels(host, texture, width, height);
+                    const auto linear = termin::srgb_to_linear(termin::SrgbColor{color.r, color.g, color.b, color.a});
+                    for (size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
+                        require(std::abs(pixels[pixel] - linear.r) < 1.5f / 255 &&
+                                    std::abs(pixels[pixel + 1] - linear.g) < 1.5f / 255 &&
+                                    std::abs(pixels[pixel + 2] - linear.b) < 1.5f / 255 &&
+                                    std::abs(pixels[pixel + 3] - linear.a) < 1.5f / 255,
+                                "live D3D11 background must match linearized RGB and preserve alpha for every pixel");
+                    }
+                }
+            }
+        }
+    }
+
+    void test_retained_chart2d_colors_d3d11(tcplot::GpuHost& host) {
+        using ChartOwner = std::unique_ptr<tc_retained_chart2d, decltype(&tc_retained_chart2d_destroy)>;
+        using RendererOwner = std::unique_ptr<tc_retained_scene_renderer2d,
+            decltype(&tc_retained_scene_renderer2d_destroy)>;
+        constexpr uint32_t width = 240, height = 180;
+        auto theme = tc_retained_chart2d_default_theme();
+        theme.background_color = {0.3f, 0.4f, 0.6f, 1};
+        theme.plot_background_color = {0.05f, 0.07f, 0.09f, 1};
+        const tc_plot_color2d authored{0.7f, 0.2f, 0.5f, 1};
+        const double x[] = {0.2, 0.8}, y[] = {0.5, 0.5}, scalar[] = {0.5, 0.5};
+        for (int mode = 0; mode < 4; ++mode) {
+            ChartOwner chart(tc_retained_chart2d_create(&host, {0, 0, width, height}, {0, 1, 0, 1},
+                "ui://default-font", 1, &theme), tc_retained_chart2d_destroy);
+            require(chart != nullptr, "failed to create Chart2D color fixture");
+            const auto scene = tc_retained_chart2d_scene(chart.get());
+            require(tc_visual_scene_item_set_visible(scene,
+                        tc_retained_chart2d_part_handle(chart.get(), TC_CHART2D_PART_GRID), false) &&
+                    tc_visual_scene_item_set_visible(scene,
+                        tc_retained_chart2d_part_handle(chart.get(), TC_CHART2D_PART_CHROME_ROOT), false),
+                    "failed to isolate Chart2D series colors");
+            tc_chart_series_handle2d series{};
+            if (mode == 2) {
+                series = tc_retained_chart2d_add_named_scatter(chart.get(), "", false, x, y, 1, {authored, 18});
+            } else {
+                tc_plot_line_style_state2d style{authored, mode == 0 ? 1.0f : 8.0f,
+                    mode == 1 ? TC_PLOT_LINE_STYLE_DASH_2D : TC_PLOT_LINE_STYLE_SOLID_2D, 8, 4,
+                    mode == 3 ? TC_PLOT_COLORMAP_GRAYSCALE_2D : TC_PLOT_COLORMAP_SOLID_2D, false, 0, 1};
+                series = tc_retained_chart2d_add_named_line(chart.get(), "", false, x, y,
+                    mode == 3 ? scalar : nullptr, 2, style);
+            }
+            require(tc_retained_chart2d_series_is_valid(chart.get(), series), "failed to add Chart2D color series");
+            RendererOwner renderer(tc_retained_scene_renderer2d_create(&host, scene), tc_retained_scene_renderer2d_destroy);
+            require(renderer && tc_retained_scene_renderer2d_set_msaa_samples(renderer.get(), 1),
+                    "failed to create Chart2D color renderer");
+            const auto texture = tc_retained_scene_renderer2d_render(renderer.get(), width, height);
+            require(texture != 0, "failed to render Chart2D color fixture");
+            const auto pixels = read_pixels(host, texture, width, height);
+            const auto background = termin::srgb_to_linear(termin::SrgbColor{0.3f, 0.4f, 0.6f, 1});
+            const size_t corner = (2 * width + 2) * 4;
+            require(std::abs(pixels[corner] - background.r) < 1.5f / 255 &&
+                        std::abs(pixels[corner + 1] - background.g) < 1.5f / 255 &&
+                        std::abs(pixels[corner + 2] - background.b) < 1.5f / 255,
+                    "Chart2D authored theme fill must render into a linear target");
+            const auto expected = termin::srgb_to_linear(mode == 3 ? termin::SrgbColor{0.5f, 0.5f, 0.5f, 1}
+                : termin::SrgbColor{authored.r, authored.g, authored.b, authored.a});
+            size_t matching_pixels = 0;
+            for (size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
+                if (std::abs(pixels[pixel] - expected.r) < 1.5f / 255 &&
+                    std::abs(pixels[pixel + 1] - expected.g) < 1.5f / 255 &&
+                    std::abs(pixels[pixel + 2] - expected.b) < 1.5f / 255)
+                    ++matching_pixels;
+            }
+            require(matching_pixels > 10,
+                    "thin/styled line, scatter and colormap must decode authored RGB exactly once");
+        }
     }
 
     void capture_spherical_image(const std::vector<float>& pixels, uint32_t width, uint32_t height) {
@@ -739,6 +886,7 @@ int main(int argc, char** argv) {
         test_spherical_chart_cpu();
         test_oriented_spherical_chart_cpu();
         test_axis_display_cpu();
+        test_background_color_cpu();
         if (cpu_only) {
             std::printf("retained Chart3D CPU geometry and lifecycle test passed\n");
             return 0;
@@ -762,6 +910,8 @@ int main(int argc, char** argv) {
             require(tgfx::backend_is_compiled(tgfx::BackendType::D3D11), "D3D11 backend is unavailable");
             tcplot::GpuHost d3d_host(TCPLOT_TEST_FONT, tgfx::BackendType::D3D11);
             test_spherical_chart_d3d11(d3d_host);
+            test_background_color_d3d11(d3d_host);
+            test_retained_chart2d_colors_d3d11(d3d_host);
             std::printf("spherical Chart3D D3D11 pixels and retained updates test passed\n");
             return 0;
         }

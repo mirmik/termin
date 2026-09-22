@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <termin_visual_scene/tc_builtin_items2d.h>
+
 #include "tcplot/tcplot_api.h"
 
 #ifdef __cplusplus
@@ -274,6 +276,14 @@ TCPLOT_API int tc_retained_chart3d_set_axis_tick_label(
     tc_retained_chart3d* chart, tc_plot_axis3d axis, double value, const char* label);
 TCPLOT_API int tc_retained_chart3d_clear_axis_tick_labels(
     tc_retained_chart3d* chart, tc_plot_axis3d axis);
+
+// Chart background in sRGB RGBA, default (0.08, 0.09, 0.11, 1).
+// All channels must be finite and in [0, 1]. Alpha is linear coverage.
+// Applies on the next render without changing data, camera or presentation.
+TCPLOT_API int tc_retained_chart3d_set_background_color(
+    tc_retained_chart3d* chart, tc_visual_color4f color);
+TCPLOT_API int tc_retained_chart3d_get_background_color(
+    const tc_retained_chart3d* chart, tc_visual_color4f* color);
 
 TCPLOT_API void tc_retained_chart3d_set_axis_labels(tc_retained_chart3d* chart,
                                                     const char* x_label,

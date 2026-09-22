@@ -110,17 +110,19 @@ namespace tcplot {
             }
 
             std::vector<termin::ResourceSpec> get_resource_specs() const override {
-                const termin::LinearColor clear_color =
-                    termin::srgb_to_linear(termin::SrgbColor{0.08f, 0.09f, 0.11f, 1.0f});
                 return {termin::ResourceSpec{
                     kGeometryResource,
                     "fbo",
                     std::nullopt,
-                    clear_color,
+                    linear_background_color(),
                     1.0f,
                     std::nullopt,
                     sample_count_,
                 }};
+            }
+
+            void set_background_color(tc_visual_color4f color) {
+                background_color_ = color;
             }
 
             std::vector<std::string> get_internal_symbols() const override {
@@ -153,7 +155,7 @@ namespace tcplot {
                     kGeometryResource,
                     tgfx::LoadOp::Clear,
                     tgfx::StoreOp::Store,
-                    termin::srgb_to_linear(termin::SrgbColor{0.08f, 0.09f, 0.11f, 1.0f}),
+                    linear_background_color(),
                 };
                 const termin::FrameGraphDepthAttachment depth_attachment{
                     kGeometryResource,
@@ -178,6 +180,11 @@ namespace tcplot {
             }
 
         private:
+            termin::LinearColor linear_background_color() const {
+                return termin::srgb_to_linear(termin::SrgbColor{
+                    background_color_.r, background_color_.g, background_color_.b, background_color_.a});
+            }
+
             bool record(termin::ExecuteContext& context) {
                 const PlotScene3DRenderServices* services = require_plot_services(context, kGeometryPassName);
                 if (!services) {
@@ -285,6 +292,7 @@ namespace tcplot {
             }
 
             int sample_count_ = 1;
+            tc_visual_color4f background_color_{0.08f, 0.09f, 0.11f, 1.0f};
             std::vector<std::string> internal_symbols_;
         };
 
@@ -480,8 +488,8 @@ namespace tcplot {
                 throw std::runtime_error("failed to create RetainedChart3D render pipeline");
             }
             engine_.set_graphics_host(host.graphics());
-            auto* geometry_pass = new PlotScene3DGeometryPass(sample_count);
-            pipeline_.add_pass(geometry_pass->tc_pass_ptr());
+            geometry_pass_ = new PlotScene3DGeometryPass(sample_count);
+            pipeline_.add_pass(geometry_pass_->tc_pass_ptr());
             auto* resolve_pass = new PlotScene3DResolvePass();
             pipeline_.add_pass(resolve_pass->tc_pass_ptr());
             chrome_pass_ = new PlotScene3DChromePass();
@@ -503,9 +511,14 @@ namespace tcplot {
                                         std::uint32_t colorbar_surface_generation,
                                         const std::string& colorbar_label,
                                         const tc_colorbar3d_style& colorbar_style,
+                                        tc_visual_color4f background_color,
                                         tgfx::TextureHandle color,
                                         int width,
                                         int height) {
+            // RenderEngine collects resource specs on each execution, including
+            // clear colors for fused raster attachments. Updating the pass also
+            // covers standalone execution; cached graph topology stays valid.
+            geometry_pass_->set_background_color(background_color);
             PlotScene3DExecutionReport report;
             report.rendered_items.reserve(snapshot.item_count());
             PlotScene3DRenderServices services;
@@ -557,6 +570,7 @@ namespace tcplot {
         GpuHost* host_ = nullptr;
         termin::RenderEngine engine_;
         termin::RenderPipeline pipeline_;
+        PlotScene3DGeometryPass* geometry_pass_ = nullptr;
         PlotScene3DChromePass* chrome_pass_ = nullptr;
     };
 
@@ -573,6 +587,7 @@ namespace tcplot {
                                                                std::uint32_t colorbar_surface_generation,
                                                                const std::string& colorbar_label,
                                                                const tc_colorbar3d_style& colorbar_style,
+                                                               tc_visual_color4f background_color,
                                                                tgfx::TextureHandle color,
                                                                int width,
                                                                int height) {
@@ -584,6 +599,7 @@ namespace tcplot {
                               colorbar_surface_generation,
                               colorbar_label,
                               colorbar_style,
+                              background_color,
                               color,
                               width,
                               height);
