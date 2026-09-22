@@ -9,6 +9,15 @@ public enum PlotCoordinateSystem3D
     Spherical,
 }
 
+/// <summary>A numeric display axis: X/Y/Z for Cartesian charts, Radius for spherical charts.</summary>
+public enum PlotAxis3D
+{
+    X = 0,
+    Y = 1,
+    Z = 2,
+    Radius = 3,
+}
+
 public enum PlotItemKind3D : uint
 {
     Invalid = 0,
@@ -836,6 +845,13 @@ public sealed class RetainedChart3D : IDisposable
     public Chart3DCamera Camera { get; }
     public PlotCoordinateSystem3D Coordinates { get; }
 
+    /// <summary>
+    /// Raised synchronously after a successful axis display offset or tick-label mutation.
+    /// Other chart mutations still require an explicit render request from the consumer.
+    /// When attached to a WPF host, mutate the chart on the host's UI thread.
+    /// </summary>
+    public event EventHandler? RenderInvalidated;
+
     public int MsaaSamples
     {
         get
@@ -858,6 +874,58 @@ public sealed class RetainedChart3D : IDisposable
         ThrowIfDisposed();
         RetainedChart3DNative.SetAxisLabels(
             _native, x ?? string.Empty, y ?? string.Empty, z ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Displays value + offset without changing geometry, ticks, colors or camera.
+    /// The Z or Radius offset also applies to the surface colorbar.
+    /// </summary>
+    public void SetAxisDisplayOffset(PlotAxis3D axis, double offset)
+    {
+        ThrowIfDisposed();
+        ValidateDisplayAxis(axis);
+        ValidateFinite(offset, nameof(offset));
+        if (RetainedChart3DNative.SetAxisDisplayOffset(_native, axis, offset) == 0)
+            throw new InvalidOperationException(
+                "Failed to update axis display offset. See native log.");
+        RenderInvalidated?.Invoke(this, EventArgs.Empty);
+    }
+
+    public double GetAxisDisplayOffset(PlotAxis3D axis)
+    {
+        ThrowIfDisposed();
+        ValidateDisplayAxis(axis);
+        if (RetainedChart3DNative.GetAxisDisplayOffset(_native, axis, out var offset) == 0)
+            throw new InvalidOperationException(
+                "Failed to read axis display offset. See native log.");
+        return offset;
+    }
+
+    /// <summary>
+    /// Overrides a tick at an original (unshifted) coordinate in the displayed range.
+    /// Z and Radius overrides also apply to the surface colorbar. Null removes an
+    /// override; an empty string hides its text. Settings belong to the chart.
+    /// </summary>
+    public void SetAxisTickLabel(PlotAxis3D axis, double value, string? label)
+    {
+        ThrowIfDisposed();
+        ValidateDisplayAxis(axis);
+        ValidateFinite(value, nameof(value));
+        if (RetainedChart3DNative.SetAxisTickLabel(_native, axis, value, label) == 0)
+            throw new InvalidOperationException(
+                "Failed to update axis tick label. See native log.");
+        RenderInvalidated?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Removes all explicit tick labels for this axis, preserving its display offset.</summary>
+    public void ClearAxisTickLabels(PlotAxis3D axis)
+    {
+        ThrowIfDisposed();
+        ValidateDisplayAxis(axis);
+        if (RetainedChart3DNative.ClearAxisTickLabels(_native, axis) == 0)
+            throw new InvalidOperationException(
+                "Failed to clear axis tick labels. See native log.");
+        RenderInvalidated?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetSurfaceShading(bool enabled, float strength = 0.38f)
@@ -964,7 +1032,24 @@ public sealed class RetainedChart3D : IDisposable
             RetainedChart3DNative.Destroy(_native);
         _native = IntPtr.Zero;
         _disposed = true;
+        RenderInvalidated = null;
         GC.SuppressFinalize(this);
+    }
+
+    private void ValidateDisplayAxis(PlotAxis3D axis)
+    {
+        bool valid = Coordinates == PlotCoordinateSystem3D.Spherical
+            ? axis == PlotAxis3D.Radius
+            : axis == PlotAxis3D.X || axis == PlotAxis3D.Y || axis == PlotAxis3D.Z;
+        if (!valid)
+            throw new ArgumentOutOfRangeException(nameof(axis),
+                "Use X/Y/Z for Cartesian charts or Radius for spherical charts.");
+    }
+
+    private static void ValidateFinite(double value, string parameterName)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            throw new ArgumentOutOfRangeException(parameterName, "Value must be finite.");
     }
 
     internal void ThrowIfDisposed()
@@ -1126,6 +1211,22 @@ internal static class RetainedChart3DNative
         [MarshalAs(UnmanagedType.LPUTF8Str)] string x,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string y,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string z);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_axis_display_offset")]
+    internal static extern int SetAxisDisplayOffset(
+        IntPtr chart, PlotAxis3D axis, double offset);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_get_axis_display_offset")]
+    internal static extern int GetAxisDisplayOffset(
+        IntPtr chart, PlotAxis3D axis, out double offset);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_axis_tick_label")]
+    internal static extern int SetAxisTickLabel(
+        IntPtr chart, PlotAxis3D axis, double value,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? label);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_clear_axis_tick_labels")]
+    internal static extern int ClearAxisTickLabels(IntPtr chart, PlotAxis3D axis);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_surface_shading")]
     internal static extern int SetSurfaceShading(

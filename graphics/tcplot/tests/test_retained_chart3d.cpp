@@ -276,6 +276,36 @@ namespace {
         const auto updated = render();
         require(count_changed_pixels(first, updated) > 100,
                 "updated radii must change the D3D11 surface image without resetting the camera");
+
+        // A 0.002 m^2 RCS sample is -26.99 dBsm: offset -40 leaves a
+        // positive radius 13.01. Render the constant sphere independently of
+        // grid geometry so a visible reference frame cannot mask a missing surface.
+        radii.assign(radii.size(), 13.01);
+        require(tc_retained_chart3d_spherical_surface_set_radii(chart.get(), surface, radii.data(), radii.size()) &&
+                    tc_retained_chart3d_set_axis_display_offset(chart.get(), TC_PLOT_AXIS3D_RADIUS, -40) &&
+                    tc_retained_chart3d_set_axis_tick_label(chart.get(), TC_PLOT_AXIS3D_RADIUS, 0, "<= -40 dBsm") &&
+                    tc_retained_chart3d_destroy_item(chart.get(), grid),
+                "failed to configure constant dBsm sphere");
+        tc_retained_chart3d_fit_camera(chart.get());
+        tc_retained_chart3d_clear_colorbar(chart.get());
+        const uint32_t constant_texture = tc_retained_chart3d_render(chart.get(), width, height);
+        require(constant_texture != 0 && count_non_clear_pixels(host, constant_texture, width, height) > 4000,
+                "constant-radius sphere must remain visible without coordinate grid or colorbar");
+        const auto constant_surface = read_pixels(host, constant_texture, width, height);
+        require(tc_retained_chart3d_set_axis_display_offset(chart.get(), TC_PLOT_AXIS3D_RADIUS, 100),
+                "failed to change display-only offset");
+        require(count_changed_pixels(constant_surface, render()) == 0,
+                "display offset must leave every surface pixel unchanged");
+        require(tc_retained_chart3d_set_axis_display_offset(chart.get(), TC_PLOT_AXIS3D_RADIUS, -40) &&
+                    tc_retained_chart3d_set_colorbar(chart.get(), surface, "dBsm", &colorbar),
+                "failed to attach constant dBsm colorbar");
+        const auto constant_colorbar = render();
+        require(count_changed_pixels(constant_surface, constant_colorbar) > 100,
+                "constant-radius colorbar must remain visible with its single offset label");
+        require(tc_retained_chart3d_set_axis_display_offset(chart.get(), TC_PLOT_AXIS3D_RADIUS, 0),
+                "failed to reset constant colorbar offset");
+        require(count_changed_pixels(constant_colorbar, render()) > 10,
+                "constant colorbar must render the changed display label");
     }
 
     const tc_render_item* find_render_item(const termin::RenderItemSnapshot& snapshot, tc_plot_item3d_handle handle) {
@@ -292,6 +322,146 @@ namespace {
                                                                   tc_plot_item3d_handle handle) {
         const tc_render_item* item = find_render_item(snapshot, handle);
         return item ? tcplot::plot_scene3d_render_item_payload(*item) : nullptr;
+    }
+
+    void test_axis_display_cpu() {
+        constexpr double pi = 3.14159265358979323846;
+        constexpr auto radius_axis = TC_PLOT_AXIS3D_RADIUS;
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        ChartOwner spherical(tc_retained_chart3d_create_spherical(nullptr), tc_retained_chart3d_destroy);
+        ChartOwner cartesian(tc_retained_chart3d_create(nullptr), tc_retained_chart3d_destroy);
+        require(spherical && cartesian, "failed to create axis display charts");
+        auto* chart = spherical.get();
+        double offset = 123.0;
+        require(tc_retained_chart3d_get_axis_display_offset(chart, radius_axis, &offset) && offset == 0,
+                "axis display defaults must preserve old numeric labels");
+        for (auto axis : {TC_PLOT_AXIS3D_X, TC_PLOT_AXIS3D_Y, TC_PLOT_AXIS3D_Z}) {
+            const double expected = 12.5 + static_cast<int>(axis);
+            require(tc_retained_chart3d_set_axis_display_offset(cartesian.get(), axis, expected) &&
+                        tc_retained_chart3d_get_axis_display_offset(cartesian.get(), axis, &offset) && offset == expected,
+                    "Cartesian axes must support independent offsets");
+            require(!tc_retained_chart3d_set_axis_display_offset(chart, axis, 1) &&
+                        !tc_retained_chart3d_set_axis_tick_label(chart, axis, 0, "bad") &&
+                        !tc_retained_chart3d_clear_axis_tick_labels(chart, axis),
+                    "spherical charts must reject Cartesian display axes");
+        }
+        termin::RenderItemSnapshot cartesian_frame;
+        require(tcplot::plot_scene3d_render_item_source(*cartesian).publish(cartesian_frame, {}),
+                "failed to publish Cartesian display frame");
+        const auto* cartesian_grid = find_plot_payload(cartesian_frame, tc_retained_chart3d_grid_part(cartesian.get()));
+        require(cartesian_grid && cartesian_grid->frame.axis_display[0].offset == 12.5 &&
+                    cartesian_grid->frame.axis_display[1].offset == 13.5 &&
+                    cartesian_grid->frame.axis_display[2].offset == 14.5,
+                "Cartesian display settings must remain independent in the rendered frame");
+        require(!tc_retained_chart3d_set_axis_display_offset(cartesian.get(), radius_axis, 1) &&
+                    !tc_retained_chart3d_set_axis_display_offset(chart, static_cast<tc_plot_axis3d>(-1), 1) &&
+                    !tc_retained_chart3d_get_axis_display_offset(chart, TC_PLOT_AXIS3D_Z, &offset) &&
+                    !tc_retained_chart3d_get_axis_display_offset(chart, radius_axis, nullptr),
+                "invalid display axis calls must fail safely");
+        require(tc_retained_chart3d_set_axis_display_offset(chart, radius_axis, -40) &&
+                    tc_retained_chart3d_set_axis_tick_label(chart, radius_axis, 0, "<= -40 dBsm"),
+                "failed to configure radial display before adding data");
+        for (double invalid : {std::numeric_limits<double>::quiet_NaN(),
+                               std::numeric_limits<double>::infinity()}) {
+            require(!tc_retained_chart3d_set_axis_display_offset(chart, radius_axis, invalid) &&
+                        !tc_retained_chart3d_set_axis_tick_label(chart, radius_axis, invalid, "bad"),
+                    "display settings must reject non-finite values");
+        }
+        require(tc_retained_chart3d_get_axis_display_offset(chart, radius_axis, &offset) && offset == -40,
+                "invalid offsets must not mutate settings");
+        const double azimuths[] = {0, pi / 2, pi, 3 * pi / 2};
+        const double polar[] = {0, pi / 2, pi};
+        std::vector<double> radii(12, 13.01);
+        auto surface = tc_retained_chart3d_add_spherical_surface(chart, azimuths, 4, polar, 3, radii.data(), 1, nullptr);
+        require(tc_retained_chart3d_item_is_valid(chart, surface), "failed to add constant display sphere");
+        auto& source = tcplot::plot_scene3d_render_item_source(*chart);
+        termin::RenderItemSnapshot first;
+        require(source.publish(first, {}), "failed to publish radial display frame");
+        const auto* original = find_plot_payload(first, surface);
+        require(original && original->frame.axis_display[radius_axis].offset == -40,
+                "snapshot must own axis display settings");
+        const auto constant_range = tcplot::plot_scene3d_surface_color_range(*original->item, original->frame);
+        const auto constant_ticks = tcplot::plot_axis3d_display_ticks(
+            original->frame.axis_display[radius_axis], constant_range[0], constant_range[1], 5);
+        require(constant_range == std::array<double, 2>{13.01, 13.01} && constant_ticks.size() == 1 &&
+                    constant_ticks[0].value == 13.01 && constant_ticks[0].label == "-26.99",
+                "constant radius must expose one true offset label without the zero-radius override");
+        const auto radial_ticks = tcplot::plot_axis3d_display_ticks(original->frame.axis_display[radius_axis], 0, 13.01, 5);
+        require(!radial_ticks.empty() && radial_ticks.front().value == 0 && radial_ticks.front().label == "<= -40 dBsm",
+                "radial origin must use its explicit raw-value label");
+
+        const auto before = snapshot(chart, surface);
+        tc_orbit_camera3d_state camera{};
+        require(tc_retained_chart3d_get_camera(chart, &camera), "failed to get display test camera");
+        require(tc_retained_chart3d_set_axis_display_offset(chart, radius_axis, 5) &&
+                    tc_retained_chart3d_set_axis_tick_label(chart, radius_axis, 13.01, "constant"),
+                "failed to update display state");
+        termin::RenderItemSnapshot changed;
+        require(source.publish(changed, {}), "failed to publish changed display frame");
+        const auto* updated = find_plot_payload(changed, surface);
+        require(updated && updated->item == original->item && same_snapshot(before, snapshot(chart, surface)) &&
+                    updated->frame.bounds_min == original->frame.bounds_min &&
+                    updated->frame.bounds_max == original->frame.bounds_max &&
+                    updated->frame.camera.azimuth == camera.azimuth && updated->frame.camera.distance == camera.distance &&
+                    tcplot::plot_scene3d_surface_color_range(*updated->item, updated->frame) == constant_range &&
+                    original->frame.axis_display[radius_axis].offset == -40 &&
+                    original->frame.axis_display[radius_axis].tick_labels.size() == 1,
+                "display mutations must preserve geometry, colors, camera and old snapshots");
+
+        // Explicit labels outside nice-number ticks must be inserted only in their domain.
+        tcplot::PlotAxis3DDisplay display;
+        display.offset = -40;
+        display.tick_labels = {{0, "floor"}, {1.3, "boundary"}, {5, ""}};
+        const auto ticks = tcplot::plot_axis3d_display_ticks(display, 1.3, 8, 3);
+        require(ticks.size() == 2 && ticks[0].value == 1.3 && ticks[0].label == "boundary" &&
+                    ticks[1].value == 5 && ticks[1].label.empty(),
+                "raw label overrides must insert omitted bounds, hide empty labels and exclude other domains");
+        display.tick_labels.clear();
+        const auto shifted = tcplot::plot_axis3d_display_ticks(display, 0, 10, 5);
+        const auto raw_ticks = tcplot::axes::nice_ticks(0, 10, 5);
+        require(shifted.size() == raw_ticks.size(), "offset must not add tick positions");
+        for (size_t index = 0; index < shifted.size(); ++index)
+            require(shifted[index].value == raw_ticks[index] &&
+                        shifted[index].label == tcplot::axes::format_tick(raw_ticks[index] - 40),
+                    "display offset must preserve raw tick positions");
+
+        require(tc_retained_chart3d_set_axis_tick_label(chart, radius_axis, 13.01, nullptr) &&
+                    tc_retained_chart3d_set_axis_display_offset(chart, radius_axis, -40),
+                "failed to remove label override");
+        radii.assign(12, 0);
+        require(tc_retained_chart3d_spherical_surface_set_radii(chart, surface, radii.data(), radii.size()),
+                "failed to collapse display sphere");
+        termin::RenderItemSnapshot collapsed;
+        require(source.publish(collapsed, {}), "failed to publish collapsed display sphere");
+        const auto* zero = find_plot_payload(collapsed, surface);
+        const auto zero_ticks = tcplot::plot_axis3d_display_ticks(zero->frame.axis_display[radius_axis], 0, 0, 5);
+        require(zero_ticks.size() == 1 && zero_ticks[0].value == 0 && zero_ticks[0].label == "<= -40 dBsm" &&
+                    zero->frame.axis_display[radius_axis].tick_labels.size() == 1,
+                "zero-radius colorbar must retain the floor label after data updates");
+        tc_retained_chart3d_clear_data(chart);
+        const auto old_grid = tc_retained_chart3d_grid_part(chart);
+        require(tc_retained_chart3d_destroy_item(chart, old_grid), "failed to remove display test grid");
+        const auto new_grid = tc_retained_chart3d_add_grid(chart, nullptr);
+        require(tc_retained_chart3d_set_grid_part(chart, new_grid), "failed to replace display test grid");
+        radii.assign(12, 13.01);
+        surface = tc_retained_chart3d_add_spherical_surface(chart, azimuths, 4, polar, 3, radii.data(), 1, nullptr);
+        require(tc_retained_chart3d_set_colorbar(chart, surface, "dBsm", nullptr), "failed to replace display colorbar");
+        tc_retained_chart3d_clear_colorbar(chart);
+        require(tc_retained_chart3d_set_colorbar(chart, surface, "dBsm", nullptr), "failed to restore display colorbar");
+        termin::RenderItemSnapshot replacement;
+        require(source.publish(replacement, {}), "failed to publish replacement display state");
+        const auto* replaced = find_plot_payload(replacement, surface);
+        require(replaced && replaced->frame.axis_display[radius_axis].offset == -40 &&
+                    replaced->frame.axis_display[radius_axis].tick_labels.at(0) == "<= -40 dBsm",
+                "display settings must survive all item and colorbar replacements");
+        require(tc_retained_chart3d_clear_axis_tick_labels(chart, radius_axis), "failed to clear axis labels");
+        termin::RenderItemSnapshot cleared;
+        require(source.publish(cleared, {}) && find_plot_payload(cleared, surface)->frame.axis_display[radius_axis].tick_labels.empty(),
+                "clearing labels must remove every override");
+        spherical.reset();
+        require(original->frame.axis_display[radius_axis].offset == -40 &&
+                    replaced->frame.axis_display[radius_axis].tick_labels.at(0) == "<= -40 dBsm",
+                "snapshots must retain display values after chart destruction");
     }
 
     void test_oriented_spherical_chart_cpu() {
@@ -487,7 +657,7 @@ namespace {
         const auto* collapsed = find_plot_payload(collapsed_snapshot, surface);
         require(collapsed && collapsed->item->draw_vertex_count == 0 &&
                     tcplot::plot_scene3d_surface_color_range(*collapsed->item, collapsed->frame) ==
-                        std::array<double, 2>{0, 1},
+                        std::array<double, 2>{0, 0},
                 "collapsed spherical surfaces must omit degenerate geometry and retain a finite color range");
         tc_retained_chart3d_clear_data(chart);
         require(tc_retained_chart3d_item_count(chart) == 1 && tc_retained_chart3d_item_is_valid(chart, grid),
@@ -568,6 +738,7 @@ int main(int argc, char** argv) {
         test_termin_clip_canvas_projection();
         test_spherical_chart_cpu();
         test_oriented_spherical_chart_cpu();
+        test_axis_display_cpu();
         if (cpu_only) {
             std::printf("retained Chart3D CPU geometry and lifecycle test passed\n");
             return 0;

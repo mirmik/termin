@@ -407,6 +407,132 @@ static void TestSphericalChart(GpuHost host)
             "Spherical chart disposal must invalidate its retained parts.");
 }
 
+static void TestAxisDisplaySettings(GpuHost host)
+{
+    using var cartesian = new RetainedChart3D(host);
+    PlotAxis3D[] cartesianAxes = { PlotAxis3D.X, PlotAxis3D.Y, PlotAxis3D.Z };
+    foreach (var axis in cartesianAxes)
+        if (cartesian.GetAxisDisplayOffset(axis) != 0)
+            throw new InvalidOperationException("Axis display offsets must default to zero.");
+
+    double[] offsets = { 100.25, -20.5, -40.0 };
+    for (int i = 0; i < cartesianAxes.Length; ++i)
+        cartesian.SetAxisDisplayOffset(cartesianAxes[i], offsets[i]);
+    for (int i = 0; i < cartesianAxes.Length; ++i)
+        if (cartesian.GetAxisDisplayOffset(cartesianAxes[i]) != offsets[i])
+            throw new InvalidOperationException("Cartesian display offsets must be independent.");
+
+    var plane = cartesian.Scene.AddSurface(
+        new[] { 0.0, 1.0, 0.0, 1.0 },
+        new[] { 0.0, 0.0, 1.0, 1.0 },
+        new[] { 13.01, 13.01, 13.01, 13.01 }, 2, 2);
+    cartesian.ShowColorBar(plane, "dBsm");
+    cartesian.Camera.Fit();
+    _ = cartesian.RenderToTextureHandleId(480, 360);
+    var planeBefore = plane.Snapshot;
+    var planeCamera = cartesian.Camera.State;
+    cartesian.SetAxisDisplayOffset(PlotAxis3D.Z, -30);
+    _ = cartesian.RenderToTextureHandleId(480, 360);
+    if (!plane.Snapshot.Equals(planeBefore) || !cartesian.Camera.State.Equals(planeCamera))
+        throw new InvalidOperationException(
+            "Cartesian display changes must preserve surface revisions and camera.");
+
+    using var spherical = RetainedChart3D.CreateSpherical(host);
+    if (spherical.GetAxisDisplayOffset(PlotAxis3D.Radius) != 0)
+        throw new InvalidOperationException("Radial display offset must default to zero.");
+    int invalidations = 0;
+    spherical.RenderInvalidated += (sender, _) =>
+    {
+        if (!ReferenceEquals(sender, spherical))
+            throw new InvalidOperationException("Render invalidation sender must identify its chart.");
+        ++invalidations;
+    };
+
+    // Configure before data or colorbar exists: the display mapping belongs to the chart.
+    spherical.SetAxisDisplayOffset(PlotAxis3D.Radius, -40);
+    spherical.SetAxisTickLabel(PlotAxis3D.Radius, 0, "\u2264 \u221240 dBsm");
+    if (invalidations != 2)
+        throw new InvalidOperationException("Display changes must request a new render.");
+
+    double[] azimuths = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+    double[] polarAngles = { 0, Math.PI / 2, Math.PI };
+    var radii = Enumerable.Repeat(13.01, azimuths.Length * polarAngles.Length).ToArray();
+    var sphere = spherical.Scene.AddSphericalSurface(azimuths, polarAngles, radii);
+    spherical.ShowColorBar(sphere, "dBsm");
+    spherical.Camera.Fit();
+    _ = spherical.RenderToTextureHandleId(480, 360);
+    var sphereBefore = sphere.Snapshot;
+    var sphereCamera = spherical.Camera.State;
+    var sphereHandle = sphere.Handle;
+    spherical.SetAxisDisplayOffset(PlotAxis3D.Radius, -30);
+    spherical.SetAxisTickLabel(PlotAxis3D.Radius, 13.01, "constant sphere");
+    _ = spherical.RenderToTextureHandleId(480, 360);
+    if (sphere.Handle != sphereHandle || !sphere.Snapshot.Equals(sphereBefore) ||
+        !spherical.Camera.State.Equals(sphereCamera))
+        throw new InvalidOperationException(
+            "Radial display changes must preserve surface identity, revisions and camera.");
+
+    var invalidationsBeforeRejected = invalidations;
+    foreach (double invalid in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+    {
+        RequireThrows<ArgumentOutOfRangeException>(
+            () => spherical.SetAxisDisplayOffset(PlotAxis3D.Radius, invalid),
+            "A nonfinite display offset was accepted.");
+        RequireThrows<ArgumentOutOfRangeException>(
+            () => spherical.SetAxisTickLabel(PlotAxis3D.Radius, invalid, "invalid"),
+            "A nonfinite tick-label position was accepted.");
+    }
+    foreach (var invalidAxis in new[] { PlotAxis3D.X, PlotAxis3D.Y, PlotAxis3D.Z, (PlotAxis3D)999 })
+    {
+        RequireThrows<ArgumentOutOfRangeException>(
+            () => spherical.SetAxisDisplayOffset(invalidAxis, 1),
+            "A spherical chart accepted an incompatible display axis.");
+        RequireThrows<ArgumentOutOfRangeException>(
+            () => spherical.GetAxisDisplayOffset(invalidAxis),
+            "A spherical chart read an incompatible display axis.");
+        RequireThrows<ArgumentOutOfRangeException>(
+            () => spherical.SetAxisTickLabel(invalidAxis, 0, "invalid"),
+            "A spherical chart accepted an incompatible tick-label axis.");
+    }
+    RequireThrows<ArgumentOutOfRangeException>(
+        () => cartesian.SetAxisDisplayOffset(PlotAxis3D.Radius, 1),
+        "A Cartesian chart accepted a radial display offset.");
+    if (invalidations != invalidationsBeforeRejected ||
+        spherical.GetAxisDisplayOffset(PlotAxis3D.Radius) != -30 ||
+        !sphere.Snapshot.Equals(sphereBefore) || !spherical.Camera.State.Equals(sphereCamera))
+        throw new InvalidOperationException("Rejected display changes mutated chart state or requested rendering.");
+
+    // Exercise constant-to-varying data, detached colorbar, grid replacement and a new surface.
+    var varyingRadii = (double[])radii.Clone();
+    for (int column = 0; column < azimuths.Length; ++column)
+        varyingRadii[azimuths.Length + column] += column + 1;
+    sphere.SetRadii(varyingRadii);
+    spherical.HideColorBar();
+    var oldGrid = spherical.Parts.Grid!;
+    spherical.Parts.ReplaceGrid(spherical.Scene.AddGrid());
+    oldGrid.Destroy();
+    sphere.Destroy();
+    var replacement = spherical.Scene.AddSphericalSurface(azimuths, polarAngles, radii);
+    spherical.ShowColorBar(replacement, "dBsm");
+    _ = spherical.RenderToTextureHandleId(480, 360);
+    if (spherical.GetAxisDisplayOffset(PlotAxis3D.Radius) != -30 ||
+        !spherical.Camera.State.Equals(sphereCamera))
+        throw new InvalidOperationException("Replacing chart data or parts reset the display mapping or camera.");
+
+    int beforeClear = invalidations;
+    spherical.SetAxisTickLabel(PlotAxis3D.Radius, 13.01, null);
+    spherical.ClearAxisTickLabels(PlotAxis3D.Radius);
+    if (invalidations != beforeClear + 2)
+        throw new InvalidOperationException("Removing label overrides must request rendering.");
+    spherical.Dispose();
+    RequireThrows<ObjectDisposedException>(
+        () => spherical.SetAxisDisplayOffset(PlotAxis3D.Radius, 0),
+        "A disposed chart accepted a display setting.");
+    RequireThrows<ObjectDisposedException>(
+        () => spherical.GetAxisDisplayOffset(PlotAxis3D.Radius),
+        "A disposed chart returned a display setting.");
+}
+
 TestRetainedVisualSceneFactories();
 TestRetainedPlotItems();
 
@@ -439,12 +565,14 @@ if (!OperatingSystem.IsWindows())
     using var host = new GpuHost(fontPath, BackendType.Vulkan);
     TestManagedChartComposition(host);
     TestSphericalChart(host);
+    TestAxisDisplaySettings(host);
 }
 else
 {
     using var host = new GpuHost(fontPath, BackendType.D3D11);
     TestManagedChartComposition(host);
     TestSphericalChart(host);
+    TestAxisDisplaySettings(host);
     using var view = new PlotView2D(host);
     using var otherView = new PlotView2D(host);
     view.set_view(0.0, 10.0, 0.0, 10.0);
@@ -481,4 +609,4 @@ else
         throw new InvalidOperationException("Stale marker handle was accepted");
 }
 
-Console.WriteLine("Retained plots, spherical Chart3D and annotation bindings passed.");
+Console.WriteLine("Retained plots, Chart3D display settings, spherical Chart3D and annotation bindings passed.");

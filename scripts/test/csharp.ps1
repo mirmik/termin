@@ -47,3 +47,22 @@ foreach ($mode in @("cartesian", "spherical")) {
 if ($failedSmokes.Count -gt 0) {
     throw "Retained Chart3D WPF smoke failed: $($failedSmokes -join ', '). See build/logs/chart3d-*-smoke.*.log"
 }
+
+$demoRoot = Join-Path $RepoRoot "termin-csharp\examples\PlotDemoApp"
+& dotnet build (Join-Path $demoRoot "PlotDemoApp.csproj") -c Release -p:TerminCsharpProfile=plot-d3d11
+if ($LASTEXITCODE -ne 0) { throw "PlotDemoApp build failed with exit code $LASTEXITCODE" }
+$env:TERMIN_PLOT_DEMO_CAPTURE_DIR = $logRoot
+$demoExecutable = Join-Path $demoRoot "bin\Release\net8.0-windows\PlotDemoApp.exe"
+$demoProcess = Start-Process -FilePath $demoExecutable -ArgumentList "--smoke-axis-display" -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput (Join-Path $logRoot "plot-demo-axis-display.stdout.log") `
+    -RedirectStandardError (Join-Path $logRoot "plot-demo-axis-display.stderr.log")
+$demoHandle = $demoProcess.Handle
+if (-not $demoProcess.WaitForExit(60000)) {
+    Stop-Process -Id $demoProcess.Id -Force
+    throw "PlotDemoApp axis display smoke timed out. See build/logs/plot-demo-axis-display.*.log"
+}
+$demoProcess.WaitForExit()
+if ($demoProcess.ExitCode -ne 0) {
+    throw "PlotDemoApp axis display smoke failed with exit code $($demoProcess.ExitCode). See build/logs/plot-demo-axis-display.*.log"
+}
+Write-Host "PlotDemoApp axis display WPF smoke passed."

@@ -66,7 +66,12 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     public void Attach(RetainedChart3D chart)
     {
         ThrowIfDisposed();
-        _chart = chart ?? throw new ArgumentNullException(nameof(chart));
+        if (chart is null)
+            throw new ArgumentNullException(nameof(chart));
+        if (_chart is not null)
+            _chart.RenderInvalidated -= OnChartRenderInvalidated;
+        _chart = chart;
+        _chart.RenderInvalidated += OnChartRenderInvalidated;
         _lastWidth = 0;
         _lastHeight = 0;
         _lastPixelScale = 0;
@@ -77,6 +82,8 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     public void Detach()
     {
         UnsubscribeRendering();
+        if (_chart is not null)
+            _chart.RenderInvalidated -= OnChartRenderInvalidated;
         _chart = null;
         _pointerInteractionActive = false;
         _renderRequested = false;
@@ -154,6 +161,7 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     /// <summary>
     /// Schedules one composition render when <see cref="ContinuousRendering"/>
     /// is false. Call this after mutating chart data, style, camera, or chrome.
+    /// Axis display offsets and explicit tick labels request rendering automatically.
     /// </summary>
     public void RequestRender()
     {
@@ -173,11 +181,10 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
         _renderHost.FramebufferMouseMove -= OnMouseMove;
         _renderHost.FramebufferMouseUp -= OnMouseUp;
         _renderHost.FramebufferMouseWheel -= OnMouseWheel;
-        UnsubscribeRendering();
+        Detach();
         _renderHost.ReleaseNativeResources();
         _portals.Clear();
         _portalLayer.Children.Clear();
-        _chart = null;
         _disposed = true;
         GC.SuppressFinalize(this);
     }
@@ -186,6 +193,11 @@ public sealed class RetainedChart3DHost : Grid, IDisposable
     {
         _renderRequested = true;
         UpdateRenderingSubscription();
+    }
+
+    private void OnChartRenderInvalidated(object? sender, EventArgs e)
+    {
+        RequestRender();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

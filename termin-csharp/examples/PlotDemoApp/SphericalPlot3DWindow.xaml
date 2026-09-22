@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:termin="clr-namespace:Termin.Wpf;assembly=Termin.Wpf"
-        Title="tcplot - spherical mesh demo"
-        Width="1000" Height="760"
+        Title="tcplot - spherical values and display offset"
+        Width="1180" Height="820"
         MinWidth="720" MinHeight="520"
         Background="#15171B"
         Foreground="White"
@@ -15,12 +15,21 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <DockPanel Margin="0,0,0,8">
-            <TextBlock Text="Spherical surface: radius by azimuth and polar angle"
-                       VerticalAlignment="Center"
-                       FontSize="16"
-                       FontWeight="SemiBold"/>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <StackPanel Margin="0,0,0,8">
+            <TextBlock Text="Spherical surface: geometry radius and displayed values"
+                       FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+            <WrapPanel>
+                <ComboBox x:Name="DatasetBox" Width="245" SelectedIndex="0"
+                          SelectionChanged="OnDatasetChanged" VerticalContentAlignment="Center">
+                    <ComboBoxItem Content="Radius wave"/>
+                    <ComboBoxItem Content="ЭПР: −40 … +10 dBsm"/>
+                    <ComboBoxItem Content="Constant ЭПР: 0.002 m²"/>
+                    <ComboBoxItem Content="ЭПР including zero radii"/>
+                </ComboBox>
+                <Button x:Name="OffsetButton" Content="Show geometry values"
+                        Padding="12,6" Margin="8,0,0,0" Click="OnToggleOffset"/>
+                <Button Content="Replace surface + grid"
+                        Padding="12,6" Margin="8,0,0,0" Click="OnReplaceSurface"/>
                 <Button Content="Advance wave"
                         Padding="12,6" Margin="8,0,0,0"
                         Click="OnAdvanceWave"/>
@@ -31,8 +40,8 @@
                 <Button Content="Fit camera"
                         Padding="12,6" Margin="8,0,0,0"
                         Click="OnFitCamera"/>
-            </StackPanel>
-        </DockPanel>
+            </WrapPanel>
+        </StackPanel>
 
         <Border Grid.Row="1"
                 BorderBrush="#4C5362"
@@ -47,6 +56,7 @@
                    Margin="2,8,2,0"
                    Foreground="#D9DCE3"
                    FontSize="13"
+                   TextWrapping="Wrap"
                    Text="Left-drag: orbit; middle-drag: pan; mouse wheel: zoom."/>
     </Grid>
 </Window>

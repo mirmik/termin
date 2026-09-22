@@ -365,6 +365,9 @@ New-Item -ItemType Directory -Force -Path $CtestShaderCacheRoot | Out-Null
 $env:TEMP = $CtestTempRoot
 $env:TMP = $CtestTempRoot
 $env:TERMIN_SDK_SHADER_CACHE_ROOT = $CtestShaderCacheRoot
+# Offscreen GUI consumers must use the artifacts built by this test graph,
+# independently of whether the installed SDK contains the same backends.
+$env:TERMIN_SHADER_ARTIFACT_ROOT = Join-Path $BuildDir "share\termin"
 # CTest may leave an existing JUnit document untouched, so remove only the
 # report owned by this build directory before starting a new run.
 Remove-Item -LiteralPath $CtestJunitPath -Force -ErrorAction SilentlyContinue

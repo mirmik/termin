@@ -9,6 +9,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--smoke-axis-display", StringComparer.OrdinalIgnoreCase))
+        {
+            var displayWindow = new SphericalPlot3DWindow();
+            MainWindow = displayWindow;
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            displayWindow.Show();
+            displayWindow.StartDisplaySmoke();
+            return;
+        }
+
         bool smoke = e.Args.Any(arg => arg.StartsWith("--smoke-", StringComparison.OrdinalIgnoreCase));
         Window window = SmokeWindow(e.Args) ?? new MainWindow();
 

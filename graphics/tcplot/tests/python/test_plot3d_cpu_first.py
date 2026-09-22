@@ -1,6 +1,7 @@
 import numpy as np
+import pytest
 
-from termin.plot import RetainedChart3D, SrgbColor
+from termin.plot import PlotAxis3D, RetainedChart3D, SrgbColor
 
 
 def test_retained_chart3d_accepts_series_before_gpu_attachment():
@@ -37,3 +38,25 @@ def test_retained_chart3d_accepts_series_before_gpu_attachment():
     assert plot.destroy_item(line)
     assert plot.destroy_item(scatter)
     assert plot.destroy_item(surface)
+
+
+def test_axis_display_bindings_validate_and_keep_independent_offsets():
+    plot = RetainedChart3D()
+    for axis in (PlotAxis3D.X, PlotAxis3D.Y, PlotAxis3D.Z):
+        assert plot.get_axis_display_offset(axis) == 0
+    plot.set_axis_display_offset(PlotAxis3D.X, 100)
+    plot.set_axis_display_offset(PlotAxis3D.Z, -40)
+    assert plot.get_axis_display_offset(PlotAxis3D.X) == 100
+    assert plot.get_axis_display_offset(PlotAxis3D.Y) == 0
+    assert plot.get_axis_display_offset(PlotAxis3D.Z) == -40
+    plot.set_axis_tick_label(PlotAxis3D.Z, 0, "≤ −40 dBsm")
+    plot.set_axis_tick_label(PlotAxis3D.Z, 0, None)
+    plot.clear_axis_tick_labels(PlotAxis3D.Z)
+    for value in (float("nan"), float("inf"), -float("inf")):
+        with pytest.raises(RuntimeError):
+            plot.set_axis_display_offset(PlotAxis3D.Z, value)
+        with pytest.raises(RuntimeError):
+            plot.set_axis_tick_label(PlotAxis3D.Z, value, "invalid")
+    with pytest.raises(RuntimeError):
+        plot.set_axis_display_offset(PlotAxis3D.Radius, -40)
+    assert plot.get_axis_display_offset(PlotAxis3D.Z) == -40

@@ -1,7 +1,11 @@
 #pragma once
 
 #include <array>
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -9,6 +13,7 @@
 #include <termin/render/render_item_source.hpp>
 
 #include "tcplot/retained_chart3d.h"
+#include "tcplot/axes.hpp"
 #include "tcplot/tcplot_api.h"
 
 namespace tcplot {
@@ -51,6 +56,49 @@ namespace tcplot {
         uint32_t draw_vertex_count = 0;
     };
 
+    struct PlotAxis3DDisplay {
+        double offset = 0.0;
+        std::map<double, std::string> tick_labels;
+    };
+
+    struct PlotAxis3DDisplayTick {
+        double value;
+        std::string label;
+    };
+
+    inline std::string plot_axis3d_tick_label(const PlotAxis3DDisplay& display, double value) {
+        const auto label = display.tick_labels.find(value);
+        return label == display.tick_labels.end() ? axes::format_tick(value + display.offset) : label->second;
+    }
+
+    // One pure source of raw positions and displayed text for drawing, text
+    // measurement and CPU tests. Overrides outside this domain are irrelevant.
+    inline std::vector<PlotAxis3DDisplayTick> plot_axis3d_display_ticks(
+        const PlotAxis3DDisplay& display, double lo, double hi, int count) {
+        if (!std::isfinite(lo) || !std::isfinite(hi) || hi < lo)
+            return {};
+        auto values = axes::nice_ticks(lo, hi, count);
+        for (const auto& [value, label] : display.tick_labels) {
+            if (value < lo || value > hi)
+                continue;
+            const double tolerance = 16.0 * std::numeric_limits<double>::epsilon() *
+                std::max({std::abs(lo), std::abs(hi), std::abs(value)});
+            const auto existing = std::find_if(values.begin(), values.end(), [=](double tick) {
+                return std::abs(tick - value) <= tolerance;
+            });
+            if (existing == values.end())
+                values.push_back(value);
+            else
+                *existing = value;
+        }
+        std::sort(values.begin(), values.end());
+        std::vector<PlotAxis3DDisplayTick> ticks;
+        ticks.reserve(values.size());
+        for (double value : values)
+            ticks.push_back({value, plot_axis3d_tick_label(display, value)});
+        return ticks;
+    }
+
     // Chart-wide values captured independently for every publication. They are
     // intentionally values rather than a retained-chart pointer so an encoder can
     // consume a snapshot after later chart mutations or destruction.
@@ -62,6 +110,7 @@ namespace tcplot {
         std::array<double, 3> spherical_quarter_longitude{0.0, 1.0, 0.0};
         tc_orbit_camera3d_state camera{};
         std::array<float, 3> axis_scale{1.0f, 1.0f, 1.0f};
+        std::array<PlotAxis3DDisplay, 4> axis_display;
         bool surface_shading = true;
         float surface_shading_strength = 0.38f;
         std::array<float, 3> surface_light_direction{-0.4f, -0.6f, 0.7f};
@@ -88,15 +137,13 @@ namespace tcplot {
         };
     }
 
-    // Both the shader and colorbar consume this range. Constant radii use a
-    // zero-based range, including a useful unit range for a collapsed surface.
+    // Both the shader and colorbar consume this true scalar range. Equal bounds
+    // map to the palette midpoint and the colorbar displays a single value.
     inline std::array<double, 2> plot_scene3d_surface_color_range(
         const PlotScene3DItemRenderData& item, const PlotScene3DFrameRenderState& frame) {
         if (!item.spherical_surface)
             return {frame.bounds_min[2], frame.bounds_max[2]};
-        if (item.radius_max > item.radius_min)
-            return {item.radius_min, item.radius_max};
-        return {0.0, item.radius_max > 0.0 ? item.radius_max : 1.0};
+        return {item.radius_min, item.radius_max};
     }
 
     struct PlotScene3DRenderItemPayload {

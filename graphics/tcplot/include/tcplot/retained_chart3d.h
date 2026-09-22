@@ -12,6 +12,15 @@ extern "C" {
 
 typedef struct tc_retained_chart3d tc_retained_chart3d;
 
+// Semantic scalar axes. Cartesian charts accept X/Y/Z; spherical charts accept
+// RADIUS. Angular coordinates keep their degree labels.
+typedef enum tc_plot_axis3d {
+    TC_PLOT_AXIS3D_X = 0,
+    TC_PLOT_AXIS3D_Y = 1,
+    TC_PLOT_AXIS3D_Z = 2,
+    TC_PLOT_AXIS3D_RADIUS = 3
+} tc_plot_axis3d;
+
 typedef struct tc_plot_item3d_handle {
     uint64_t scene_id;
     uint32_t index;
@@ -250,6 +259,21 @@ TCPLOT_API int tc_retained_chart3d_set_colorbar(tc_retained_chart3d* chart,
                                                 const char* label,
                                                 const tc_colorbar3d_style* style);
 TCPLOT_API void tc_retained_chart3d_clear_colorbar(tc_retained_chart3d* chart);
+
+// Display-only settings persist across grid/surface/colorbar replacement.
+// Labels show raw_value + offset; geometry, tick positions and color mapping
+// remain in raw coordinates. Colorbars share their Z or RADIUS axis settings.
+// Unsupported axes and non-finite numbers fail without changing chart state.
+TCPLOT_API int tc_retained_chart3d_set_axis_display_offset(
+    tc_retained_chart3d* chart, tc_plot_axis3d axis, double offset);
+TCPLOT_API int tc_retained_chart3d_get_axis_display_offset(
+    const tc_retained_chart3d* chart, tc_plot_axis3d axis, double* offset);
+// Overrides are keyed by raw value. Visible overrides add a label even when
+// automatic ticks omit that value. Null removes an override; empty hides text.
+TCPLOT_API int tc_retained_chart3d_set_axis_tick_label(
+    tc_retained_chart3d* chart, tc_plot_axis3d axis, double value, const char* label);
+TCPLOT_API int tc_retained_chart3d_clear_axis_tick_labels(
+    tc_retained_chart3d* chart, tc_plot_axis3d axis);
 
 TCPLOT_API void tc_retained_chart3d_set_axis_labels(tc_retained_chart3d* chart,
                                                     const char* x_label,
