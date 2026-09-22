@@ -309,10 +309,8 @@ namespace {
         const double longitudes[] = {0.0, pi / 2, pi};
         const double polar[] = {0.0, pi / 2, pi};
         const double radii[] = {2, 2, 2, 3, 4, 5, 2, 2, 2};
-        tc_surface_item3d_style style{};
-        style.color_r = style.color_g = style.color_b = style.color_a = 1.0f;
         const auto surface = tc_retained_chart3d_add_spherical_surface(
-            owner.get(), longitudes, 3, polar, 3, radii, 0, &style);
+            owner.get(), longitudes, 3, polar, 3, radii, 0, nullptr);
         require(tc_retained_chart3d_item_is_valid(owner.get(), surface),
                 "oriented spherical surface creation failed");
 
