@@ -41,6 +41,17 @@ bindings из имён, подменять отсутствующую stage др
 возвращаться к старому GLSL preprocessing path. Ошибка shader ABI обязана
 появиться в логе и остановить невалидную операцию.
 
+Кеш native shader handles принадлежит устройству. Рендереры разрешают handles
+через `tc_shader_ensure_tgfx2` / `tc_shader_resolve_tgfx2` перед рисованием:
+ненулевой сохранённый handle не гарантирует, что он пережил смену shader source
+или artifact revision. Backend повторно использует актуальную запись кеша,
+а при замене handles инвалидирует зависимые pipelines.
+
+Повторная установка того же значения через setters `ShaderArtifactResolver`
+сохраняет revision. Это позволяет нескольким WPF-контролам безопасно повторять
+настройку одного shader runtime. `configure()` явно заменяет конфигурацию,
+включая callback чтения, и всегда меняет revision.
+
 ## Capabilities вместо строк
 
 Плохой branching:

@@ -9,6 +9,15 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--smoke-2d-hosts", StringComparer.OrdinalIgnoreCase) ||
+            e.Args.Contains("--smoke-2d-hosts-1x1", StringComparer.OrdinalIgnoreCase) ||
+            e.Args.Contains("--smoke-2d-hosts-2x2", StringComparer.OrdinalIgnoreCase))
+        {
+            int bootstrapSize = e.Args.Contains("--smoke-2d-hosts-2x2", StringComparer.OrdinalIgnoreCase) ? 2 : 1;
+            StartMultiHostSmoke(bootstrapSize);
+            return;
+        }
+
         if (e.Args.Contains("--smoke-color-presentation", StringComparer.OrdinalIgnoreCase))
         {
             MainWindow = new ColorPresentationSmokeWindow();
@@ -47,6 +56,54 @@ public partial class App : Application
             };
             timer.Start();
         }
+    }
+
+    private void StartMultiHostSmoke(int bootstrapSize)
+    {
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        int cycle = 0;
+        var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+        timeout.Tick += (_, _) =>
+        {
+            timeout.Stop();
+            Console.Error.WriteLine($"PLOT_2D_HOSTS_SMOKE_FAILED timeout bootstrap={bootstrapSize} cycle={cycle}; expected three visible series before and after resize");
+            ((Plot2DWindow)MainWindow).DumpMultiHostSmokeDiagnostics();
+            Shutdown(1);
+        };
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Console.Error.WriteLine($"PLOT_2D_HOSTS_SMOKE_FAILED bootstrap={bootstrapSize} cycle={cycle}: {args.Exception}");
+            args.Handled = true;
+            timeout.Stop();
+            Shutdown(1);
+        };
+
+        void OpenWindow()
+        {
+            ++cycle;
+            var window = new Plot2DWindow(multipleHosts: true,
+                smokeBootstrapSize: bootstrapSize, smokeCycle: cycle);
+            MainWindow = window;
+            window.MultiHostSmokeCompleted += (_, _) =>
+            {
+                window.Close();
+                if (cycle < 2)
+                {
+                    // Let Unloaded/Closed finish releasing every host lease
+                    // before recreating the graphics host in this process.
+                    Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(OpenWindow));
+                    return;
+                }
+                timeout.Stop();
+                Console.WriteLine($"PLOT_2D_HOSTS_SMOKE_OK bootstrap={bootstrapSize} cycles={cycle}; three visible plots, resize, close and reopen");
+                Shutdown(0);
+            };
+            Console.WriteLine($"PLOT_2D_HOSTS_WINDOW_OPEN bootstrap={bootstrapSize} cycle={cycle}");
+            window.Show();
+        }
+
+        timeout.Start();
+        OpenWindow();
     }
 
     private static Window? SmokeWindow(string[] args)

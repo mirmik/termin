@@ -471,16 +471,13 @@ namespace tcplot {
         release_meshes_();
         shader_vs_id_ = 0;
         shader_fs_id_ = 0;
-        shader_device_ = nullptr;
         if (text3d_)
             text3d_->release_gpu();
     }
 
     void PlotEngine3D::ensure_shader_(tgfx::IRenderDevice& device) {
-        if (shader_device_ == &device && shader_vs_id_ != 0 && shader_fs_id_ != 0) {
-            return;
-        }
-
+        // Native handles are device-cache snapshots, invalidated by shader or
+        // artifact changes even while this engine and its meshes remain alive.
         tgfx::ShaderHandle vs{};
         tgfx::ShaderHandle fs{};
         tc_shader* raw = tc_shader_get(tcplot3d_shader_handle());
@@ -488,13 +485,11 @@ namespace tcplot {
             tc::Log::error("PlotEngine3D: failed to prepare builtin shader %s", TCPLOT_3D_SHADER_UUID);
             shader_vs_id_ = 0;
             shader_fs_id_ = 0;
-            shader_device_ = nullptr;
             return;
         }
 
         shader_vs_id_ = vs.id;
         shader_fs_id_ = fs.id;
-        shader_device_ = &device;
     }
 
     // ---------------------------------------------------------------------------

@@ -1,5 +1,78 @@
 using Termin.Native;
 
+static void TestPlotViewsAfterShaderArtifactChange(GpuHost host)
+{
+    const string artifactRootVariable = "TERMIN_SHADER_ARTIFACT_ROOT";
+    ShaderRuntime.ConfigureFromAssemblyDirectory();
+    string originalRoot = Environment.GetEnvironmentVariable(artifactRootVariable)
+        ?? throw new InvalidOperationException("Shader artifact root was not configured.");
+    double[] x = { 0, 1, 2, 3 };
+    double[] y = { 0, 1, -1, 0 };
+    double[] z = { 0, 0.5, 1, 2 };
+
+    void Populate2D(PlotView2D view)
+    {
+        view.plot(x, y, (uint)x.Length, 0.2f, 0.6f, 1, 1, 2, "solid");
+        view.plot(x, z, (uint)x.Length, 1, 0.5f, 0.2f, 1, 2, "dashed");
+        if (!view.set_line_style(1, LineStyle.Dash))
+            throw new InvalidOperationException("Failed to configure the dashed regression series.");
+        view.scatter(x, y, (uint)x.Length, 0.2f, 1, 0.2f, 1, 7, "scatter");
+        view.fit();
+    }
+
+    void Populate3D(PlotView3D view)
+    {
+        view.plot(x, y, z, (uint)x.Length, 0.2f, 0.6f, 1, 1, 2, "line");
+        view.scatter(x, y, z, (uint)x.Length, 0.2f, 1, 0.2f, 1, 7, "scatter");
+        view.surface(new[] { 0.0, 1.0, 0.0, 1.0 },
+            new[] { 0.0, 0.0, 1.0, 1.0 }, z,
+            2, 2, 0.2f, 0.5f, 0.8f, 1, false, "surface before first framebuffer");
+        view.fit_camera();
+    }
+
+    using var first = new PlotView2D(host);
+    using var second = new PlotView2D(host);
+    using var original3D = new PlotView3D(host);
+    Populate2D(first);
+    Populate2D(second);
+    Populate3D(original3D);
+    if (original3D.render_to_texture_handle_id(1, 1) == 0)
+        throw new InvalidOperationException("3D surface bootstrap at 1x1 failed.");
+    if (first.render_to_texture_handle_id(640, 480) == 0 ||
+        second.render_to_texture_handle_id(640, 480) == 0 ||
+        original3D.render_to_texture_handle_id(640, 480) == 0)
+        throw new InvalidOperationException("Initial shared-device plot render failed.");
+
+    try
+    {
+        // Different resolver setting, same installed artifacts. A newly
+        // rendered view retires the device's old cached shader handles before
+        // the existing renderers get their next frame.
+        Environment.SetEnvironmentVariable(artifactRootVariable,
+            originalRoot + Path.DirectorySeparatorChar + ".");
+        ShaderRuntime.ConfigureFromAssemblyDirectory();
+        using var fresh = new PlotView2D(host);
+        using var fresh3D = new PlotView3D(host);
+        Populate2D(fresh);
+        Populate3D(fresh3D);
+        if (fresh3D.render_to_texture_handle_id(2, 2) == 0)
+            throw new InvalidOperationException("3D surface bootstrap at 2x2 failed.");
+        if (fresh.render_to_texture_handle_id(640, 480) == 0 ||
+            fresh3D.render_to_texture_handle_id(640, 480) == 0)
+            throw new InvalidOperationException("Fresh plot render after shader reconfiguration failed.");
+        if (first.render_to_texture_handle_id(640, 480) == 0 ||
+            second.render_to_texture_handle_id(640, 480) == 0 ||
+            original3D.render_to_texture_handle_id(640, 480) == 0)
+            throw new InvalidOperationException("Existing plot render after shader reconfiguration failed.");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable(artifactRootVariable, originalRoot);
+        ShaderRuntime.ConfigureFromAssemblyDirectory();
+    }
+    Console.WriteLine("PLOT_SHADER_RECONFIGURE_OK existing 2D solid/dashed/scatter and 3D surface plots rendered after tiny bootstrap, resize and shared-device invalidation");
+}
+
 static void TestRetainedVisualSceneFactories()
 {
     var scene = new TcVisualScene2D();
@@ -652,10 +725,39 @@ if (!OperatingSystem.IsWindows())
 else
 {
     using var host = new GpuHost(fontPath, BackendType.D3D11);
+    TestPlotViewsAfterShaderArtifactChange(host);
     TestManagedChartComposition(host);
     TestSphericalChart(host);
     TestAxisDisplaySettings(host);
     TestChart3DBackgroundColor(host);
+    using (var firstFrameView = new PlotView2D(host))
+    using (var secondFrameView = new PlotView2D(host))
+    using (var thirdFrameView = new PlotView2D(host))
+    {
+        PlotView2D[] views = { firstFrameView, secondFrameView, thirdFrameView };
+        double[] x = { 0.0, 1.0, 2.0 };
+        double[] y = { 0.0, 1.0, 0.0 };
+        foreach (PlotView2D frameView in views)
+        {
+            frameView.set_msaa_samples(4);
+            frameView.clear();
+            frameView.plot(x, y, (uint)x.Length, 1f, 0f, 0f, 1f, 1.5, "first frame");
+            frameView.set_title("S_C: I / Q / magnitude");
+            frameView.set_x_label("t, s");
+            frameView.set_y_label("model units");
+            frameView.fit();
+        }
+        foreach (PlotView2D frameView in views)
+        {
+            if (frameView.render_to_texture_handle_id(1, 1) == 0)
+                throw new InvalidOperationException("PlotView2D failed to render first-frame 1x1 texture.");
+        }
+        foreach (PlotView2D frameView in views)
+        {
+            if (frameView.render_to_texture_handle_id(640, 480) == 0)
+                throw new InvalidOperationException("PlotView2D failed to render resized texture.");
+        }
+    }
     using var view = new PlotView2D(host);
     using var otherView = new PlotView2D(host);
     view.set_view(0.0, 10.0, 0.0, 10.0);

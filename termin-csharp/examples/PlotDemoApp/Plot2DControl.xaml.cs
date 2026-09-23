@@ -14,6 +14,25 @@ public partial class Plot2DControl : UserControl, IDisposable
     private bool _initialized;
     private bool _disposed;
     private bool _hostLeaseHeld;
+    private bool _smokeBootstrapPresented;
+    private long _renderAttempts;
+    private long _successfulPresents;
+
+    // Only set by the multi-host smoke: exercise tiny startup textures even
+    // when WPF happens to complete layout before its first rendering callback.
+    internal int SmokeBootstrapSize { get; set; }
+    internal bool HasPresentedCurrentSize =>
+        PresentedWidth == RenderHost.FramebufferWidth &&
+        PresentedHeight == RenderHost.FramebufferHeight &&
+        PresentedFramesAtSize >= 2;
+    internal int PresentedWidth { get; private set; }
+    internal int PresentedHeight { get; private set; }
+    internal int PresentedFramesAtSize { get; private set; }
+    internal string SmokeRenderDiagnostics =>
+        $"framebuffer={RenderHost.FramebufferWidth}x{RenderHost.FramebufferHeight} " +
+        $"presented={PresentedWidth}x{PresentedHeight} framesAtSize={PresentedFramesAtSize} " +
+        $"attempts={_renderAttempts} successfulPresents={_successfulPresents} " +
+        $"bootstrapPresented={_smokeBootstrapPresented} initialized={_initialized} disposed={_disposed}";
 
     public Plot2DControl()
     {
@@ -104,6 +123,7 @@ public partial class Plot2DControl : UserControl, IDisposable
 
     private void OnRender(object? sender, EventArgs e)
     {
+        ++_renderAttempts;
         if (!_initialized)
         {
             InitializeNative();
@@ -112,8 +132,23 @@ public partial class Plot2DControl : UserControl, IDisposable
 
         var w = Math.Max(1, RenderHost.FramebufferWidth);
         var h = Math.Max(1, RenderHost.FramebufferHeight);
+        bool bootstrap = SmokeBootstrapSize > 0 && !_smokeBootstrapPresented;
+        if (bootstrap)
+            w = h = SmokeBootstrapSize;
         uint colorTex = _view.render_to_texture_handle_id(w, h);
-        _ = RenderHost.Present(colorTex, w, h);
+        if (RenderHost.Present(colorTex, w, h))
+        {
+            ++_successfulPresents;
+            PresentedFramesAtSize = PresentedWidth == w && PresentedHeight == h
+                ? PresentedFramesAtSize + 1 : 1;
+            PresentedWidth = w;
+            PresentedHeight = h;
+            if (bootstrap)
+            {
+                _smokeBootstrapPresented = true;
+                Console.WriteLine($"PLOT_2D_HOST_BOOTSTRAP {w}x{h}");
+            }
+        }
     }
 
     private void OnFramebufferMouseDown(object? sender, Tgfx2D3D11MouseButtonEventArgs e)

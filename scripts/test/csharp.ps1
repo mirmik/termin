@@ -53,7 +53,7 @@ $demoRoot = Join-Path $RepoRoot "termin-csharp\examples\PlotDemoApp"
 if ($LASTEXITCODE -ne 0) { throw "PlotDemoApp build failed with exit code $LASTEXITCODE" }
 $env:TERMIN_PLOT_DEMO_CAPTURE_DIR = $logRoot
 $demoExecutable = Join-Path $demoRoot "bin\Release\net8.0-windows\PlotDemoApp.exe"
-foreach ($demoMode in @("axis-display", "color-presentation")) {
+foreach ($demoMode in @("axis-display", "color-presentation", "2d-hosts-1x1", "2d-hosts-2x2")) {
     $demoProcess = Start-Process -FilePath $demoExecutable -ArgumentList "--smoke-$demoMode" -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") `
         -RedirectStandardError (Join-Path $logRoot "plot-demo-$demoMode.stderr.log")
@@ -65,6 +65,10 @@ foreach ($demoMode in @("axis-display", "color-presentation")) {
     $demoProcess.WaitForExit()
     if ($demoProcess.ExitCode -ne 0) {
         throw "PlotDemoApp $demoMode smoke failed with exit code $($demoProcess.ExitCode). See build/logs/plot-demo-$demoMode.*.log"
+    }
+    if ($demoMode.StartsWith("2d-hosts") -and
+        -not (Select-String -Path (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") -Pattern "PLOT_2D_HOSTS_SMOKE_OK" -Quiet)) {
+        throw "PlotDemoApp $demoMode smoke did not render all plots. See build/logs/plot-demo-$demoMode.*.log"
     }
     Write-Host "PlotDemoApp $demoMode WPF smoke passed."
 }

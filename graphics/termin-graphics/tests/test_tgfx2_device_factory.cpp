@@ -343,6 +343,55 @@ TEST_CASE("shader artifact resolvers isolate runtime roots") {
     CHECK(second.fallback_artifact_roots().empty());
 }
 
+TEST_CASE("shader artifact resolver setters invalidate only changed settings") {
+    termin::ShaderArtifactResolver resolver;
+    const uint64_t initial_revision = resolver.revision();
+    resolver.set_artifact_root("");
+    resolver.set_cache_root("");
+    resolver.set_compiler_path("");
+    resolver.set_dev_compile_enabled(false);
+    resolver.set_fallback_artifact_roots({});
+    CHECK(resolver.revision() == initial_revision);
+
+    // Several views may repeat the same runtime setup on a shared device.
+    // No-op setters must leave its existing shader handles valid, while each
+    // actual setting change must still invalidate the backend shader cache.
+    const auto check_change_then_repeat = [&](const auto& change) {
+        const uint64_t before = resolver.revision();
+        change();
+        const uint64_t after = resolver.revision();
+        CHECK(after > before);
+        change();
+        CHECK(resolver.revision() == after);
+    };
+    check_change_then_repeat([&] { resolver.set_artifact_root("/runtime/artifacts"); });
+    check_change_then_repeat([&] { resolver.set_cache_root("/runtime/cache"); });
+    check_change_then_repeat([&] { resolver.set_compiler_path("/runtime/compiler"); });
+    check_change_then_repeat([&] { resolver.set_dev_compile_enabled(true); });
+    check_change_then_repeat([&] {
+        resolver.set_fallback_artifact_roots({"/runtime/first", "/runtime/second"});
+    });
+    // Fallback search order is significant even when membership is unchanged.
+    check_change_then_repeat([&] {
+        resolver.set_fallback_artifact_roots({"/runtime/second", "/runtime/first"});
+    });
+    check_change_then_repeat([&] { resolver.set_artifact_root(""); });
+    check_change_then_repeat([&] { resolver.set_cache_root(""); });
+    check_change_then_repeat([&] { resolver.set_compiler_path(""); });
+    check_change_then_repeat([&] { resolver.set_dev_compile_enabled(false); });
+    check_change_then_repeat([&] { resolver.set_fallback_artifact_roots({}); });
+}
+
+TEST_CASE("shader artifact resolver configure explicitly invalidates unchanged settings") {
+    termin::ShaderArtifactResolver resolver("/runtime/artifacts", "/runtime/cache", "compiler", false);
+    uint64_t before = resolver.revision();
+    resolver.configure("/runtime/artifacts", "/runtime/cache", "compiler", false);
+    CHECK(resolver.revision() > before);
+    before = resolver.revision();
+    resolver.configure("/runtime/artifacts", "/runtime/cache", "compiler", false, {}, {});
+    CHECK(resolver.revision() > before);
+}
+
 TEST_CASE("shader artifact resolver loads immutable fallback without writing it") {
     namespace fs = std::filesystem;
 

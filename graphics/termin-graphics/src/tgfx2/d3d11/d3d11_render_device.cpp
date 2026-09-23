@@ -778,6 +778,10 @@ float4 main(VSOut input) : SV_Target {
         auto* vs = get_shader(desc.vertex_shader);
         auto* fs = get_shader(desc.fragment_shader);
         if (!vs || !vs->vertex_shader || !fs || !fs->pixel_shader) {
+            tc::Log::error("D3D11RenderDevice::create_pipeline: invalid shader handles vs=%u (valid=%d) "
+                           "ps=%u (valid=%d)",
+                           desc.vertex_shader.id, vs && vs->vertex_shader ? 1 : 0,
+                           desc.fragment_shader.id, fs && fs->pixel_shader ? 1 : 0);
             throw std::runtime_error("D3D11 pipeline requires valid vertex and fragment shader bytecode");
         }
 

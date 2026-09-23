@@ -53,6 +53,9 @@ namespace termin {
                        bool dev_compile_enabled,
                        ReadCallback read_callback,
                        std::vector<std::string> fallback_artifact_roots);
+        // Reapplying the same setting preserves the revision and live shader
+        // handles. configure() explicitly replaces the configuration (including
+        // its read callback) and always starts a new revision.
         void set_artifact_root(std::string value);
         void set_fallback_artifact_roots(std::vector<std::string> values);
         void set_cache_root(std::string value);

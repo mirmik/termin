@@ -164,26 +164,36 @@ namespace termin {
     }
 
     void ShaderArtifactResolver::set_artifact_root(std::string value) {
+        if (artifact_root_ == value)
+            return;
         artifact_root_ = std::move(value);
         ++revision_;
     }
 
     void ShaderArtifactResolver::set_fallback_artifact_roots(std::vector<std::string> values) {
+        if (fallback_artifact_roots_ == values)
+            return;
         fallback_artifact_roots_ = std::move(values);
         ++revision_;
     }
 
     void ShaderArtifactResolver::set_cache_root(std::string value) {
+        if (cache_root_ == value)
+            return;
         cache_root_ = std::move(value);
         ++revision_;
     }
 
     void ShaderArtifactResolver::set_compiler_path(std::string value) {
+        if (compiler_path_ == value)
+            return;
         compiler_path_ = std::move(value);
         ++revision_;
     }
 
     void ShaderArtifactResolver::set_dev_compile_enabled(bool value) {
+        if (dev_compile_enabled_ == value)
+            return;
         dev_compile_enabled_ = value;
         ++revision_;
     }
