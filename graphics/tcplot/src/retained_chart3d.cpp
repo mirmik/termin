@@ -677,6 +677,50 @@ namespace {
             z_label_ = std::move(z);
         }
 
+        size_t display_axis_index(tc_plot_axis3d axis) const {
+            if ((spherical_ && axis == TC_PLOT_AXIS3D_RADIUS) ||
+                (!spherical_ && axis >= TC_PLOT_AXIS3D_X && axis <= TC_PLOT_AXIS3D_Z))
+                return static_cast<size_t>(axis);
+            throw std::invalid_argument("display axis is unavailable in this coordinate system");
+        }
+
+        void set_axis_display_offset(tc_plot_axis3d axis, double offset) {
+            const auto index = display_axis_index(axis);
+            if (!std::isfinite(offset))
+                throw std::invalid_argument("axis display offset must be finite");
+            axis_display_[index].offset = offset;
+        }
+
+        double axis_display_offset(tc_plot_axis3d axis) const {
+            return axis_display_[display_axis_index(axis)].offset;
+        }
+
+        void set_axis_tick_label(tc_plot_axis3d axis, double value, const char* label) {
+            const auto index = display_axis_index(axis);
+            if (!std::isfinite(value))
+                throw std::invalid_argument("axis tick value must be finite");
+            if (label)
+                axis_display_[index].tick_labels[value] = label;
+            else
+                axis_display_[index].tick_labels.erase(value);
+        }
+
+        void clear_axis_tick_labels(tc_plot_axis3d axis) {
+            axis_display_[display_axis_index(axis)].tick_labels.clear();
+        }
+
+        void set_background_color(tc_visual_color4f color) {
+            for (float channel : {color.r, color.g, color.b, color.a}) {
+                if (!std::isfinite(channel) || channel < 0.0f || channel > 1.0f)
+                    throw std::invalid_argument("background color channels must be finite and in [0, 1]");
+            }
+            background_color_ = color;
+        }
+
+        tc_visual_color4f background_color() const {
+            return background_color_;
+        }
+
         void set_shading(bool enabled, float strength) {
             if (!std::isfinite(strength)) {
                 throw std::invalid_argument("shading strength must be finite");
@@ -844,6 +888,7 @@ namespace {
                                                                                             colorbar_surface_.generation,
                                                                                             colorbar_label_,
                                                                                             colorbar_style_,
+                                                                                            background_color_,
                                                                                             color_,
                                                                                             width,
                                                                                             height);
@@ -1083,6 +1128,7 @@ namespace {
         tcplot::PlotScene3DFrameRenderState frame_render_state() const {
             tcplot::PlotScene3DFrameRenderState frame;
             frame.camera = camera_state();
+            frame.axis_display = axis_display_;
             frame.axis_scale = {
                 axis_scale_[0],
                 axis_scale_[1],
@@ -1161,6 +1207,8 @@ namespace {
         float shading_strength_ = 0.38f;
         termin::Vec3f light_{-0.4f, -0.6f, 0.7f};
         float axis_scale_[3] = {1, 1, 1};
+        std::array<tcplot::PlotAxis3DDisplay, 4> axis_display_;
+        tc_visual_color4f background_color_{0.08f, 0.09f, 0.11f, 1.0f};
         std::string x_label_ = "x";
         std::string y_label_ = "y";
         std::string z_label_ = "z";
@@ -1614,6 +1662,61 @@ void tc_retained_chart3d_set_axis_labels(tc_retained_chart3d* chart,
     if (!chart)
         return;
     chart->value.set_axis_labels(x_label ? x_label : "", y_label ? y_label : "", z_label ? z_label : "");
+}
+
+int tc_retained_chart3d_set_axis_display_offset(tc_retained_chart3d* chart, tc_plot_axis3d axis, double offset) {
+    return logged("set_axis_display_offset", 0, [&] {
+        if (!chart)
+            throw std::invalid_argument("chart must not be null");
+        chart->value.set_axis_display_offset(axis, offset);
+        return 1;
+    });
+}
+
+int tc_retained_chart3d_get_axis_display_offset(const tc_retained_chart3d* chart, tc_plot_axis3d axis, double* offset) {
+    return logged("get_axis_display_offset", 0, [&] {
+        if (!chart || !offset)
+            throw std::invalid_argument("chart and output offset must not be null");
+        *offset = chart->value.axis_display_offset(axis);
+        return 1;
+    });
+}
+
+int tc_retained_chart3d_set_axis_tick_label(tc_retained_chart3d* chart, tc_plot_axis3d axis, double value,
+                                          const char* label) {
+    return logged("set_axis_tick_label", 0, [&] {
+        if (!chart)
+            throw std::invalid_argument("chart must not be null");
+        chart->value.set_axis_tick_label(axis, value, label);
+        return 1;
+    });
+}
+
+int tc_retained_chart3d_clear_axis_tick_labels(tc_retained_chart3d* chart, tc_plot_axis3d axis) {
+    return logged("clear_axis_tick_labels", 0, [&] {
+        if (!chart)
+            throw std::invalid_argument("chart must not be null");
+        chart->value.clear_axis_tick_labels(axis);
+        return 1;
+    });
+}
+
+int tc_retained_chart3d_set_background_color(tc_retained_chart3d* chart, tc_visual_color4f color) {
+    return logged("set_background_color", 0, [&] {
+        if (!chart)
+            throw std::invalid_argument("chart must not be null");
+        chart->value.set_background_color(color);
+        return 1;
+    });
+}
+
+int tc_retained_chart3d_get_background_color(const tc_retained_chart3d* chart, tc_visual_color4f* color) {
+    return logged("get_background_color", 0, [&] {
+        if (!chart || !color)
+            throw std::invalid_argument("chart and output color must not be null");
+        *color = chart->value.background_color();
+        return 1;
+    });
 }
 
 int tc_retained_chart3d_set_surface_shading(tc_retained_chart3d* chart, int enabled, float strength) {

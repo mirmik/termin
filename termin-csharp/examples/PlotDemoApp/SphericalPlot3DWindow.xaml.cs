@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using Termin.Native;
 using Termin.Wpf;
@@ -13,8 +14,16 @@ public partial class SphericalPlot3DWindow : Window
 
     private readonly GpuHost _gpuHost;
     private readonly RetainedChart3D _chart;
-    private readonly SphericalSurfaceItemRef3D _surface;
+    private SphericalSurfaceItemRef3D _surface;
+    private const double DisplayFloor = -40;
+    private static readonly double ConstantRadius = 10 * Math.Log10(0.002) - DisplayFloor;
+    private bool _initialized;
+    private bool _showPhysicalValues = true;
+    private int _dataset;
     private bool _wireframe;
+    private bool _blueBackground;
+    private static readonly VisualSrgbColor DefaultBackground = new(0.08f, 0.09f, 0.11f, 1);
+    private static readonly VisualSrgbColor BlueBackground = new(0.30f, 0.40f, 0.60f, 1);
     private bool _closed;
     private double _phase;
 
@@ -63,12 +72,97 @@ public partial class SphericalPlot3DWindow : Window
         }
 
         Closed += OnClosed;
+        _initialized = true;
+        UpdateDisplay();
+    }
+
+    private void OnDatasetChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized)
+            return;
+        SelectDataset(DatasetBox.SelectedIndex);
+    }
+
+    private void SelectDataset(int dataset)
+    {
+        _dataset = dataset;
+        _surface.SetRadii(CreateDatasetRadii());
+        UpdateDisplay();
+        _chart.Camera.Fit();
+        ChartHost.RequestRender();
+        StatusText.Text = dataset switch
+        {
+            0 => "Radius wave. Offset = 0; values equal geometry radii.",
+            1 => "ЭПР in dBsm: radius = value + 40. Negative, zero and positive displayed values.",
+            2 => "ЭПР = 0.002 m² → −26.9897 dBsm; radius = 13.0103. Colorbar has one true value.",
+            _ => "≤ −40 dBsm: включая 0 м² / −∞ dBsm. The custom label belongs only to radius 0.",
+        };
+    }
+
+    private double[] CreateDatasetRadii()
+    {
+        if (_dataset == 0)
+            return CreateRadii(_phase);
+        if (_dataset == 2)
+        {
+            var constant = new double[checked((int)(PolarCount * AzimuthCount))];
+            Array.Fill(constant, ConstantRadius);
+            return constant;
+        }
+        var values = new double[checked((int)(PolarCount * AzimuthCount))];
+        for (uint row = 0; row < PolarCount; ++row)
+        {
+            double polar = Math.PI * row / (PolarCount - 1);
+            for (uint column = 0; column < AzimuthCount; ++column)
+            {
+                double azimuth = 2 * Math.PI * column / AzimuthCount;
+                double wave = row == 0 || row == PolarCount - 1 ? 0
+                    : Math.Pow(Math.Sin(polar), 2) * Math.Cos(2 * azimuth + _phase);
+                double radius = 25 * (1 + wave);
+                values[row * AzimuthCount + column] = _dataset == 3 && radius < 7 ? 0 : radius;
+            }
+        }
+        return values;
+    }
+
+    private void UpdateDisplay()
+    {
+        bool physical = _dataset != 0 && _showPhysicalValues;
+        _chart.SetAxisLabels("azimuth", "polar", physical ? "dBsm" : "radius");
+        _chart.ShowColorBar(_surface, physical ? "ЭПР, dBsm" : "radius",
+            new ColorBarStyle3D(tickCount: 7, widthPx: 20, textSizePx: 14));
+        _chart.SetAxisTickLabel(PlotAxis3D.Radius, 0,
+            physical && _dataset == 3 ? "≤ −40 dBsm" : null);
+        _chart.SetAxisDisplayOffset(PlotAxis3D.Radius, physical ? DisplayFloor : 0);
+        OffsetButton.Content = physical ? "Show geometry values" : "Show physical values";
+    }
+
+    private void OnToggleOffset(object sender, RoutedEventArgs e)
+    {
+        _showPhysicalValues = !_showPhysicalValues;
+        UpdateDisplay();
+        StatusText.Text = "Only displayed values changed; surface colors, geometry and camera stay fixed.";
+    }
+
+    private void OnReplaceSurface(object sender, RoutedEventArgs e)
+    {
+        _surface.Destroy();
+        _surface = _chart.Scene.AddSphericalSurface(CreateAzimuths(), CreatePolarAngles(),
+            CreateDatasetRadii(), closeAzimuth: true, style: CreateSurfaceStyle(_wireframe));
+        GridItemRef3D? previousGrid = _chart.Parts.Grid;
+        _chart.Parts.ReplaceGrid(_chart.Scene.AddGrid());
+        previousGrid?.Destroy();
+        _chart.HideColorBar();
+        _chart.ShowColorBar(_surface, _showPhysicalValues && _dataset != 0 ? "ЭПР, dBsm" : "radius",
+            new ColorBarStyle3D(tickCount: 7, widthPx: 20, textSizePx: 14));
+        ChartHost.RequestRender();
+        StatusText.Text = "Surface, grid and colorbar replaced; display settings and camera preserved.";
     }
 
     private void OnAdvanceWave(object sender, RoutedEventArgs e)
     {
         _phase += Math.PI / 6;
-        _surface.SetRadii(CreateRadii(_phase));
+        _surface.SetRadii(CreateDatasetRadii());
         ChartHost.RequestRender();
         PlotItemSnapshot3D snapshot = _surface.Snapshot;
         StatusText.Text =
@@ -93,12 +187,23 @@ public partial class SphericalPlot3DWindow : Window
         StatusText.Text = "Camera fitted to the spherical grid and surface.";
     }
 
+    private void OnToggleBackground(object sender, RoutedEventArgs e)
+    {
+        _blueBackground = !_blueBackground;
+        _chart.BackgroundColor = _blueBackground ? BlueBackground : DefaultBackground;
+        BackgroundButton.Content = _blueBackground ? "Dark background" : "Blue background";
+        StatusText.Text = "Background changed; the chart requests a new frame automatically.";
+    }
+
     private void OnRenderFailed(
         object? sender,
         RetainedSceneRenderFailedEventArgs e)
     {
         StatusText.Text = $"Rendering stopped: {e.Error.Message}";
         StatusText.Foreground = Brushes.OrangeRed;
+        Console.Error.WriteLine($"SPHERICAL_PLOT_RENDER_FAILED {e.Error}");
+        if (_smokeTimer is not null)
+            FailSmoke(e.Error);
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -106,6 +211,7 @@ public partial class SphericalPlot3DWindow : Window
         if (_closed)
             return;
         _closed = true;
+        _smokeTimer?.Stop();
         Closed -= OnClosed;
         ChartHost.RenderFailed -= OnRenderFailed;
         try

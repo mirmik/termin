@@ -455,6 +455,12 @@
         "reason": "Built only with the Vulkan backend."
       },
       {
+        "path": "graphics/termin-graphics/tests/test_tgfx2_d3dimage_color.cpp",
+        "profiles": ["windows-d3d11"],
+        "capabilities": ["d3d11"],
+        "reason": "Reads the shared D3D9 surface to verify the WPF bridge encodes linear RGB to sRGB once and preserves alpha."
+      },
+      {
         "path": "graphics/termin-graphics/tests/test_tgfx2_d3d11_smoke.cpp",
         "profiles": [
           "windows-d3d11"

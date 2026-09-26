@@ -43,6 +43,7 @@ namespace tcplot {
                                         std::uint32_t colorbar_surface_generation,
                                         const std::string& colorbar_label,
                                         const tc_colorbar3d_style& colorbar_style,
+                                        tc_visual_color4f background_color,
                                         tgfx::TextureHandle color,
                                         int width,
                                         int height);

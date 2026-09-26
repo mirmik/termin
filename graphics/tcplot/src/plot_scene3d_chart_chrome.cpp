@@ -96,17 +96,19 @@ namespace tcplot {
                      {radius * 1.10 * std::sin(angle), radius * 0.08, radius * 1.10 * std::cos(angle)},
                      polar_color);
             }
+            const auto& radial_display = frame.axis_display[TC_PLOT_AXIS3D_RADIUS];
+            const auto radial_ticks = plot_axis3d_display_ticks(radial_display, 0.0, radius, 5);
             for (size_t axis = 0; axis < 3; ++axis) {
-                for (double tick : axes::nice_ticks(0.0, radius, 5)) {
-                    if (tick <= 0.0)
+                for (const auto& tick : radial_ticks) {
+                    if (tick.value <= 0.0 || tick.label.empty())
                         continue;
                     std::array<double, 3> point{};
-                    point[axis] = tick;
+                    point[axis] = tick.value;
                     point[(axis + 1) % 3] = -radius * 0.055;
-                    text(frame.z_label + " " + axes::format_tick(tick), point, label_color);
+                    text(frame.z_label + " " + tick.label, point, label_color);
                 }
             }
-            text("0", {0.0, 0.0, -radius * 0.04}, label_color);
+            text(plot_axis3d_tick_label(radial_display, 0.0), {0.0, 0.0, -radius * 0.04}, label_color);
             canvas_->end();
             context.set_depth_test(true);
             context.set_depth_write(true);
@@ -114,20 +116,21 @@ namespace tcplot {
         }
 
         for (size_t axis = 0; axis < 3; ++axis) {
-            for (double tick : axes::nice_ticks(frame.bounds_min[axis], frame.bounds_max[axis], 6)) {
+            for (const auto& tick : plot_axis3d_display_ticks(
+                     frame.axis_display[axis], frame.bounds_min[axis], frame.bounds_max[axis], 6)) {
                 termin::Vec3f position{
                     static_cast<float>(frame.bounds_min[0] * frame.axis_scale[0]),
                     static_cast<float>(frame.bounds_min[1] * frame.axis_scale[1]),
                     static_cast<float>(frame.bounds_min[2] * frame.axis_scale[2]),
                 };
-                position[axis] = static_cast<float>(tick * frame.axis_scale[axis]);
+                position[axis] = static_cast<float>(tick.value * frame.axis_scale[axis]);
                 if (axis == 0) {
                     position[1] -= static_cast<float>(offset);
                 } else {
                     position[0] -= static_cast<float>(offset);
                 }
                 const tgfx::CanvasVec2 screen = project(position);
-                canvas_->draw_text(axes::format_tick(tick),
+                canvas_->draw_text(tick.label,
                                    screen.x,
                                    screen.y - kTickTextSizePx * 0.5f,
                                    kTickTextSizePx,
@@ -186,11 +189,12 @@ namespace tcplot {
         }
 
         const auto range = plot_scene3d_surface_color_range(surface, frame);
-        const float range_min = static_cast<float>(range[0]);
-        const float range_max = static_cast<float>(range[1]);
-        if (!std::isfinite(range_min) || !std::isfinite(range_max) || range_max <= range_min) {
+        const double range_min = range[0];
+        const double range_max = range[1];
+        if (!std::isfinite(range_min) || !std::isfinite(range_max) || range_max < range_min) {
             return;
         }
+        const bool constant = range_min == range_max;
 
         const float available_height = std::max(1.0f, static_cast<float>(viewport_height) - 32.0f);
         const float bar_height = std::clamp(static_cast<float>(viewport_height) * colorbar_style.height_ratio,
@@ -198,12 +202,14 @@ namespace tcplot {
                                             available_height);
         const float bar_width = std::min(colorbar_style.width_px, std::max(1.0f, viewport_width * 0.2f));
         const float bar_y = (static_cast<float>(viewport_height) - bar_height) * 0.5f;
-        const auto ticks = axes::nice_ticks(range_min, range_max, static_cast<int>(colorbar_style.tick_count));
+        const auto axis = surface.spherical_surface ? TC_PLOT_AXIS3D_RADIUS : TC_PLOT_AXIS3D_Z;
+        const auto ticks = plot_axis3d_display_ticks(
+            frame.axis_display[axis], range_min, range_max, static_cast<int>(colorbar_style.tick_count));
 
         float widest_tick = 0.0f;
-        for (double tick : ticks) {
+        for (const auto& tick : ticks) {
             widest_tick = std::max(widest_tick,
-                                   canvas_->measure_text(axes::format_tick(tick), colorbar_style.text_size_px, &font)
+                                   canvas_->measure_text(tick.label, colorbar_style.text_size_px, &font)
                                        .width);
         }
         const float right = static_cast<float>(viewport_width) - colorbar_style.margin_right_px - widest_tick;
@@ -219,8 +225,8 @@ namespace tcplot {
         for (int step = 0; step < kGradientSteps; ++step) {
             const float t0 = static_cast<float>(step) / kGradientSteps;
             const float t1 = static_cast<float>(step + 1) / kGradientSteps;
-            const float palette_t = surface_style.colormap_reversed != 0 ? 1.0f - (t0 + t1) * 0.5f
-                                                                          : (t0 + t1) * 0.5f;
+            const float palette_t = constant ? 0.5f : (surface_style.colormap_reversed != 0
+                ? 1.0f - (t0 + t1) * 0.5f : (t0 + t1) * 0.5f);
             const auto color = styles::colormap(static_cast<SurfaceColorMap>(surface_style.colormap), palette_t);
             const float y0 = bar_y + bar_height * (1.0f - t1);
             const float y1 = bar_y + bar_height * (1.0f - t0);
@@ -236,13 +242,12 @@ namespace tcplot {
                                            colorbar_style.label_b,
                                            colorbar_style.label_a};
         canvas_->draw_rect_outline(bar_x, bar_y, bar_width, bar_height, border, 1.0f);
-        for (double tick : ticks) {
-            const float normalized = std::clamp(static_cast<float>((tick - range_min) / (range_max - range_min)),
-                                                0.0f,
-                                                1.0f);
+        for (const auto& tick : ticks) {
+            const float normalized = constant ? 0.5f : std::clamp(
+                static_cast<float>((tick.value - range_min) / (range_max - range_min)), 0.0f, 1.0f);
             const float y = bar_y + bar_height * (1.0f - normalized);
             canvas_->draw_line(bar_x + bar_width, y, bar_x + bar_width + 4.0f, y, border, 1.0f);
-            canvas_->draw_text(axes::format_tick(tick),
+            canvas_->draw_text(tick.label,
                                bar_x + bar_width + colorbar_style.text_gap_px,
                                y - colorbar_style.text_size_px * 0.5f,
                                colorbar_style.text_size_px,

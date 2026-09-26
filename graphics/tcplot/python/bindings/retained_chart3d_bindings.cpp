@@ -1,8 +1,10 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 
 #include <memory>
+#include <optional>
 #include <stdexcept>
 
 #include <tgfx2/font_atlas.hpp>
@@ -167,6 +169,43 @@ namespace tcplot_bindings {
                 require_success(tc_retained_chart3d_set_axis_scale(chart_, x, y, z), "set_axis_scale");
             }
 
+            tcplot::SrgbColor background_color() const {
+                tc_visual_color4f color{};
+                require_success(tc_retained_chart3d_get_background_color(chart_, &color),
+                                "get_background_color");
+                return {color.r, color.g, color.b, color.a};
+            }
+
+            void set_background_color(tcplot::SrgbColor color) {
+                require_success(tc_retained_chart3d_set_background_color(
+                                    chart_, {color.r, color.g, color.b, color.a}),
+                                "set_background_color");
+            }
+
+            void set_axis_display_offset(tc_plot_axis3d axis, double offset) {
+                require_success(tc_retained_chart3d_set_axis_display_offset(chart_, axis, offset),
+                                "set_axis_display_offset");
+            }
+
+            double get_axis_display_offset(tc_plot_axis3d axis) const {
+                double offset = 0.0;
+                require_success(tc_retained_chart3d_get_axis_display_offset(chart_, axis, &offset),
+                                "get_axis_display_offset");
+                return offset;
+            }
+
+            void set_axis_tick_label(tc_plot_axis3d axis, double value,
+                                     const std::optional<std::string>& label) {
+                require_success(tc_retained_chart3d_set_axis_tick_label(
+                                    chart_, axis, value, label ? label->c_str() : nullptr),
+                                "set_axis_tick_label");
+            }
+
+            void clear_axis_tick_labels(tc_plot_axis3d axis) {
+                require_success(tc_retained_chart3d_clear_axis_tick_labels(chart_, axis),
+                                "clear_axis_tick_labels");
+            }
+
             void set_surface_shading(bool enabled, float strength) {
                 require_success(tc_retained_chart3d_set_surface_shading(chart_, enabled ? 1 : 0, strength),
                                 "set_surface_shading");
@@ -254,6 +293,12 @@ namespace tcplot_bindings {
     } // namespace
 
     void bind_retained_chart3d(nb::module_& m) {
+        nb::enum_<tc_plot_axis3d>(m, "PlotAxis3D")
+            .value("X", TC_PLOT_AXIS3D_X)
+            .value("Y", TC_PLOT_AXIS3D_Y)
+            .value("Z", TC_PLOT_AXIS3D_Z)
+            .value("Radius", TC_PLOT_AXIS3D_RADIUS);
+
         nb::class_<tc_plot_item3d_handle>(m, "PlotItem3DHandle")
             .def_prop_ro("scene_id", [](const tc_plot_item3d_handle& value) { return value.scene_id; })
             .def_prop_ro("index", [](const tc_plot_item3d_handle& value) { return value.index; })
@@ -261,6 +306,8 @@ namespace tcplot_bindings {
 
         nb::class_<PythonRetainedChart3D>(m, "RetainedChart3D")
             .def(nb::init<>())
+            .def_prop_rw("background_color", &PythonRetainedChart3D::background_color,
+                         &PythonRetainedChart3D::set_background_color)
             .def("add_line",
                  &PythonRetainedChart3D::add_line,
                  nb::arg("x"),
@@ -305,6 +352,14 @@ namespace tcplot_bindings {
             .def("destroy_item", &PythonRetainedChart3D::destroy_item)
             .def("set_axis_labels", &PythonRetainedChart3D::set_axis_labels)
             .def("set_axis_scale", &PythonRetainedChart3D::set_axis_scale)
+            .def("set_axis_display_offset", &PythonRetainedChart3D::set_axis_display_offset,
+                 nb::arg("axis"), nb::arg("offset"))
+            .def("get_axis_display_offset", &PythonRetainedChart3D::get_axis_display_offset,
+                 nb::arg("axis"))
+            .def("set_axis_tick_label", &PythonRetainedChart3D::set_axis_tick_label,
+                 nb::arg("axis"), nb::arg("value"), nb::arg("label").none())
+            .def("clear_axis_tick_labels", &PythonRetainedChart3D::clear_axis_tick_labels,
+                 nb::arg("axis"))
             .def("set_surface_shading",
                  &PythonRetainedChart3D::set_surface_shading,
                  nb::arg("enabled"),

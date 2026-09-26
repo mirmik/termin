@@ -15,6 +15,8 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
     private int _framebufferWidth;
     private int _framebufferHeight;
     private bool _backBufferSet;
+    private bool _changingBridgeSurface;
+    private bool _hasPresentedFrame;
     private bool _disposed;
     private ulong _presentCount;
 #if !TERMIN_CSHARP_PLOT_ONLY
@@ -36,6 +38,7 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         KeyDown += OnKeyDown;
         KeyUp += OnKeyUp;
         TextInput += OnTextInput;
+        _image.IsFrontBufferAvailableChanged += OnFrontBufferAvailableChanged;
         Trace("constructed");
     }
 
@@ -151,6 +154,14 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         {
             return false;
         }
+        if (!_backBufferSet)
+        {
+            SetBackBufferFromBridge();
+            if (!_backBufferSet)
+            {
+                return false;
+            }
+        }
 
         _image.Lock();
         try
@@ -161,6 +172,7 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
                 return false;
             }
 
+            _hasPresentedFrame = true;
             _image.AddDirtyRect(new Int32Rect(0, 0, width, height));
             if (TraceEnabled && (_presentCount <= 8 || (_presentCount % 120) == 0))
             {
@@ -211,6 +223,7 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         if (_bridge == IntPtr.Zero)
         {
             Trace($"creating bridge size={width}x{height}");
+            _hasPresentedFrame = false;
             _bridge = TerminCore.Tgfx2CreateD3D11D3DImageBridge((uint)width, (uint)height);
             if (_bridge == IntPtr.Zero)
             {
@@ -241,20 +254,34 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         }
 
         Trace($"resizing bridge ptr=0x{_bridge.ToInt64():X} from={_framebufferWidth}x{_framebufferHeight} to={width}x{height}");
-        ClearBackBuffer();
-        if (TerminCore.Tgfx2ResizeD3D11D3DImageBridge(_bridge, (uint)width, (uint)height) == 0)
+        _hasPresentedFrame = false;
+        _changingBridgeSurface = true;
+        try
         {
-            throw new InvalidOperationException(
-                "Tgfx2D3D11ImageHost: failed to resize D3DImage bridge. See native log for details.");
-        }
+            ClearBackBuffer();
+            if (TerminCore.Tgfx2ResizeD3D11D3DImageBridge(_bridge, (uint)width, (uint)height) == 0)
+            {
+                throw new InvalidOperationException(
+                    "Tgfx2D3D11ImageHost: failed to resize D3DImage bridge. See native log for details.");
+            }
 
-        _framebufferWidth = width;
-        _framebufferHeight = height;
-        SetBackBufferFromBridge();
+            _framebufferWidth = width;
+            _framebufferHeight = height;
+            SetBackBufferFromBridge();
+        }
+        finally
+        {
+            _changingBridgeSurface = false;
+        }
     }
 
-    private void SetBackBufferFromBridge()
+    private void SetBackBufferFromBridge(bool invalidate = false)
     {
+        if (!_image.IsFrontBufferAvailable)
+        {
+            Trace($"backbuffer binding deferred while front buffer is unavailable bridge=0x{_bridge.ToInt64():X}");
+            return;
+        }
         IntPtr surface = TerminCore.Tgfx2GetD3D11D3DImageSurface(_bridge);
         if (surface == IntPtr.Zero)
         {
@@ -267,11 +294,40 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         {
             _image.SetBackBuffer(D3DResourceType.IDirect3DSurface9, surface);
             _backBufferSet = true;
+            if (invalidate)
+            {
+                _image.AddDirtyRect(new Int32Rect(0, 0, _framebufferWidth, _framebufferHeight));
+            }
             Trace($"set backbuffer bridge=0x{_bridge.ToInt64():X} surface=0x{surface.ToInt64():X} size={_framebufferWidth}x{_framebufferHeight}");
         }
         finally
         {
             _image.Unlock();
+        }
+    }
+
+    private void OnFrontBufferAvailableChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // Without software fallback D3DImage releases its back-buffer reference
+        // when the front buffer is lost. Restore and invalidate its current
+        // surface immediately: hosts with ContinuousRendering=false may never
+        // call Present again until their scene changes.
+        if (!_image.IsFrontBufferAvailable)
+        {
+            _backBufferSet = false;
+        }
+        Trace($"front-buffer availability={_image.IsFrontBufferAvailable} backbuffer-set={_backBufferSet}");
+        if (_image.IsFrontBufferAvailable && !_backBufferSet &&
+            _bridge != IntPtr.Zero && !_changingBridgeSurface)
+        {
+            // A resize allocates an uninitialized native surface. Only expose
+            // pixels if a successful native Present has populated this surface.
+            SetBackBufferFromBridge(invalidate: _hasPresentedFrame);
         }
     }
 
@@ -297,12 +353,16 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
 
     private void ReleaseBridge()
     {
+        // Detach before calling WPF so a reentrant availability notification
+        // cannot bind a surface whose native bridge is being destroyed.
+        IntPtr bridge = _bridge;
+        _bridge = IntPtr.Zero;
+        _hasPresentedFrame = false;
         ClearBackBuffer();
-        if (_bridge != IntPtr.Zero)
+        if (bridge != IntPtr.Zero)
         {
-            Trace($"destroy bridge ptr=0x{_bridge.ToInt64():X}");
-            TerminCore.Tgfx2DestroyD3D11D3DImageBridge(_bridge);
-            _bridge = IntPtr.Zero;
+            Trace($"destroy bridge ptr=0x{bridge.ToInt64():X}");
+            TerminCore.Tgfx2DestroyD3D11D3DImageBridge(bridge);
         }
         _framebufferWidth = 0;
         _framebufferHeight = 0;
@@ -539,6 +599,7 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         }
 
         _disposed = true;
+        _image.IsFrontBufferAvailableChanged -= OnFrontBufferAvailableChanged;
         Trace("dispose");
 #if !TERMIN_CSHARP_PLOT_ONLY
         UnbindDisplay();

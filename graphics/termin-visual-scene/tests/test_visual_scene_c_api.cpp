@@ -4,6 +4,9 @@
 
 #include "termin_visual_scene/graphic_item2d.hpp"
 #include "termin_visual_scene/items/text_item2d.hpp"
+#include "termin_visual_scene/items/rect_item2d.hpp"
+#include "termin_visual_scene/scene2d.hpp"
+#include "termin_visual_scene/scene_render2d.hpp"
 #include "termin_visual_scene/tc_builtin_items2d.h"
 
 namespace {
@@ -48,9 +51,85 @@ namespace {
         return lhs.scene_id == rhs.scene_id && lhs.index == rhs.index && lhs.generation == rhs.generation;
     }
 
+    class ColorResolver final : public termin::visual::SceneRenderResourceResolver2D {
+    public:
+        std::optional<tgfx::FontHandle> resolve_font(std::string_view) override { return tgfx::FontHandle{1}; }
+        std::optional<tgfx::TextureHandle> resolve_image(std::string_view) override { return tgfx::TextureHandle{2}; }
+        std::optional<termin::visual::ResolvedCustomBatch2D> resolve_custom_batch(
+            std::string_view, termin::Bounds2f) override { return std::nullopt; }
+    };
+
+    void check_linear(termin::LinearColor actual, tc_visual_color4f authored) {
+        const auto expected = termin::srgb_to_linear(termin::SrgbColor{authored.r, authored.g, authored.b, authored.a});
+        assert(std::abs(actual.r - expected.r) < 1e-6f);
+        assert(std::abs(actual.g - expected.g) < 1e-6f);
+        assert(std::abs(actual.b - expected.b) < 1e-6f);
+        assert(actual.a == authored.a);
+    }
+
+    void test_authored_color_boundary() {
+        const auto handle = tc_visual_scene_create();
+        termin::visual::TcVisualScene scene{handle};
+        const auto no_parent = tc_graphic_item_handle_invalid();
+        auto authored = color(0.3f, 0.4f, 0.6f, 0.7f);
+        auto fill_paint = fill(authored);
+        auto stroke_paint = stroke(authored);
+        const auto rect = tc_visual_rect_item2d_create(handle, no_parent, {0, 0, 20, 20}, fill_paint, &stroke_paint);
+        const auto path = tc_visual_path_item2d_create(handle, no_parent, triangle(), &fill_paint, &stroke_paint);
+        tc_visual_text_desc2d text_desc{"test", "font://test", {0, 0}, 12, authored,
+            TC_VISUAL_TEXT_ANCHOR_LEFT, {0, 0, 30, 15}, false, 1};
+        tc_visual_image_desc2d image_desc{"image://test", {0, 0, 20, 20}, {0, 0, 1, 1}, authored,
+            TC_VISUAL_TEXTURE_SAMPLING_LINEAR};
+        const auto text = tc_visual_text_item2d_create(handle, no_parent, &text_desc);
+        const auto image = tc_visual_image_item2d_create(handle, no_parent, &image_desc);
+        for (auto item : {rect, path, text, image})
+            assert(tc_visual_scene_item_is_valid(handle, item));
+        ColorResolver resolver;
+        for (int mutation = 0; mutation < 2; ++mutation) {
+            if (mutation) {
+                authored = color(0.7f, 0.2f, 0.5f, 0.4f);
+                fill_paint = fill(authored);
+                stroke_paint = stroke(authored);
+                text_desc.color = authored;
+                image_desc.tint = authored;
+                assert(tc_visual_rect_item2d_set(handle, rect, {0, 0, 20, 20}, fill_paint, &stroke_paint));
+                assert(tc_visual_path_item2d_set(handle, path, triangle(), &fill_paint, &stroke_paint));
+                assert(tc_visual_text_item2d_set(handle, text, &text_desc));
+                assert(tc_visual_image_item2d_set(handle, image, &image_desc));
+            }
+            const auto* base = tc_visual_scene_resolve_item_const(handle, rect);
+            assert(base);
+            const auto* body = static_cast<const termin::visual::RectItem2D*>(base->body);
+            check_linear(body->fill().color, authored);
+            assert(body->stroke());
+            check_linear(body->stroke()->color, authored);
+            tgfx::DrawList2DBuilder builder;
+            assert(scene.paint(builder, resolver));
+            const auto list = builder.freeze();
+            assert(list);
+            bool saw_path = false, saw_text = false, saw_image = false;
+            for (const auto& command : list->commands()) {
+                if (const auto* value = std::get_if<tgfx::DrawPath2D>(&command)) {
+                    if (value->fill) check_linear(value->fill->color, authored);
+                    if (value->stroke) check_linear(value->stroke->color, authored);
+                    saw_path = true;
+                } else if (const auto* value = std::get_if<tgfx::DrawText2D>(&command)) {
+                    check_linear(value->color, authored);
+                    saw_text = true;
+                } else if (const auto* value = std::get_if<tgfx::DrawImage2D>(&command)) {
+                    check_linear(value->tint, authored);
+                    saw_image = true;
+                }
+            }
+            assert(saw_path && saw_text && saw_image);
+        }
+        tc_visual_scene_destroy(handle);
+    }
+
 } // namespace
 
 int main() {
+    test_authored_color_boundary();
     const auto scene = tc_visual_scene_create();
     const auto other = tc_visual_scene_create();
     assert(tc_visual_scene_is_valid(scene));

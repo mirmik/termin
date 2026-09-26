@@ -52,6 +52,14 @@ namespace tcplot {
         };
         static_assert(sizeof(ScatterPush) == 96);
 
+        void write_linear_color(float (&destination)[4], SrgbColor authored, float opacity) {
+            const auto linear = termin::srgb_to_linear(authored);
+            destination[0] = linear.r;
+            destination[1] = linear.g;
+            destination[2] = linear.b;
+            destination[3] = linear.a * opacity;
+        }
+
         tc_shader_handle shader_handle(const char* uuid) {
             if (std::strcmp(uuid, kLineShader) == 0) {
                 static tc_shader_handle value = tc_shader_handle_invalid();
@@ -281,10 +289,6 @@ namespace tcplot {
 
     struct PlotLineSeriesGpu2D::Impl {
         tgfx::IRenderDevice* device = nullptr;
-        tgfx::ShaderHandle line_vs{};
-        tgfx::ShaderHandle line_fs{};
-        tgfx::ShaderHandle styled_vs{};
-        tgfx::ShaderHandle styled_fs{};
         tgfx::BufferHandle vbo{};
         std::uint32_t capacity = 0;
         std::uint32_t gpu_count = 0;
@@ -302,30 +306,10 @@ namespace tcplot {
             capacity = 0;
             gpu_count = 0;
             floats_per_vertex = 0;
-            line_vs = {};
-            line_fs = {};
-            styled_vs = {};
-            styled_fs = {};
             full_dirty = true;
             append_only = false;
             styled_uploaded = false;
             styled_cumulative_end = 0.0;
-        }
-
-        bool ensure_shader(tgfx::IRenderDevice& requested, bool styled) {
-            if (device != &requested)
-                release();
-            device = &requested;
-            auto& vs = styled ? styled_vs : line_vs;
-            auto& fs = styled ? styled_fs : line_fs;
-            if (vs && fs)
-                return true;
-            tc_shader* raw = tc_shader_get(shader_handle(styled ? kStyledLineShader : kLineShader));
-            if (!raw || !termin::tc_shader_ensure_tgfx2(raw, &requested, &vs, &fs)) {
-                tc::Log::error("PlotLineSeriesGpu2D failed to prepare %s", styled ? kStyledLineShader : kLineShader);
-                return false;
-            }
-            return true;
         }
 
         bool ensure_capacity(tgfx::IRenderDevice& target, std::uint32_t wanted, std::uint32_t stride_floats) {
@@ -398,8 +382,17 @@ namespace tcplot {
             return false;
         }
         const bool styled = !scalar.empty() || style.line_style != LineStyle::Solid;
-        if (!impl_->ensure_shader(context.device(), styled))
+        if (impl_->device != &context.device())
+            impl_->release();
+        impl_->device = &context.device();
+        // The device owns shader caching and can retire its handles after a
+        // source or artifact revision. Resolve them for each draw, not per VBO.
+        tgfx::ShaderHandle vs{}, fs{};
+        tc_shader* raw = tc_shader_get(shader_handle(styled ? kStyledLineShader : kLineShader));
+        if (!raw || !termin::tc_shader_ensure_tgfx2(raw, impl_->device, &vs, &fs)) {
+            tc::Log::error("PlotLineSeriesGpu2D failed to prepare %s", styled ? kStyledLineShader : kLineShader);
             return false;
+        }
         const auto viewport = transformed_viewport(frame, transform);
         set_draw_area(context, viewport, clip_rect);
 
@@ -427,8 +420,7 @@ namespace tcplot {
             impl_->full_dirty = false;
             impl_->append_only = false;
 
-            context.bind_shader(impl_->line_vs, impl_->line_fs);
-            tc_shader* raw = tc_shader_get(shader_handle(kLineShader));
+            context.bind_shader(vs, fs);
             context.use_shader_resource_layout(raw);
             tgfx::VertexBufferLayout layout;
             layout.stride = 2 * sizeof(float);
@@ -437,10 +429,7 @@ namespace tcplot {
             context.set_topology(tgfx::PrimitiveTopology::LineStrip);
             LinePush push{};
             data_to_clip(frame, transform, viewport, push.matrix);
-            push.color[0] = style.color.r;
-            push.color[1] = style.color.g;
-            push.color[2] = style.color.b;
-            push.color[3] = style.color.a * opacity;
+            write_linear_color(push.color, style.color, opacity);
             context.bind_uniform_data("tcplot2d_line_draw", &push, sizeof(push));
             context.draw_arrays(impl_->vbo, impl_->gpu_count);
             return true;
@@ -496,8 +485,7 @@ namespace tcplot {
             impl_->append_only = false;
         }
 
-        context.bind_shader(impl_->styled_vs, impl_->styled_fs);
-        tc_shader* raw = tc_shader_get(shader_handle(kStyledLineShader));
+        context.bind_shader(vs, fs);
         context.use_shader_resource_layout(raw);
         tgfx::VertexBufferLayout layout;
         layout.stride = 10 * sizeof(float);
@@ -509,10 +497,7 @@ namespace tcplot {
         context.set_topology(tgfx::PrimitiveTopology::TriangleStrip);
         StyledLinePush push{};
         data_to_clip(frame, transform, viewport, push.matrix);
-        push.color[0] = style.color.r;
-        push.color[1] = style.color.g;
-        push.color[2] = style.color.b;
-        push.color[3] = style.color.a * opacity;
+        write_linear_color(push.color, style.color, opacity);
         push.params[0] = style.thickness_px;
         push.params[1] = static_cast<float>(style.line_style);
         push.params[2] =
@@ -532,8 +517,6 @@ namespace tcplot {
 
     struct PlotScatterSeriesGpu2D::Impl {
         tgfx::IRenderDevice* device = nullptr;
-        tgfx::ShaderHandle vs{};
-        tgfx::ShaderHandle fs{};
         tgfx::BufferHandle corners{};
         tgfx::BufferHandle instances{};
         std::uint32_t capacity = 0;
@@ -548,8 +531,6 @@ namespace tcplot {
                     device->destroy(instances);
             }
             device = nullptr;
-            vs = {};
-            fs = {};
             corners = {};
             instances = {};
             capacity = 0;
@@ -592,12 +573,11 @@ namespace tcplot {
         if (impl_->device != &context.device())
             impl_->release();
         impl_->device = &context.device();
-        if (!impl_->vs || !impl_->fs) {
-            tc_shader* raw = tc_shader_get(shader_handle(kScatterShader));
-            if (!raw || !termin::tc_shader_ensure_tgfx2(raw, impl_->device, &impl_->vs, &impl_->fs)) {
-                tc::Log::error("PlotScatterSeriesGpu2D failed to prepare %s", kScatterShader);
-                return false;
-            }
+        tgfx::ShaderHandle vs{}, fs{};
+        tc_shader* raw = tc_shader_get(shader_handle(kScatterShader));
+        if (!raw || !termin::tc_shader_ensure_tgfx2(raw, impl_->device, &vs, &fs)) {
+            tc::Log::error("PlotScatterSeriesGpu2D failed to prepare %s", kScatterShader);
+            return false;
         }
         if (!impl_->corners) {
             constexpr std::array<float, 12> corners{
@@ -644,8 +624,7 @@ namespace tcplot {
         }
         const auto viewport = transformed_viewport(frame, transform);
         set_draw_area(context, viewport, clip_rect);
-        context.bind_shader(impl_->vs, impl_->fs);
-        tc_shader* raw = tc_shader_get(shader_handle(kScatterShader));
+        context.bind_shader(vs, fs);
         context.use_shader_resource_layout(raw);
         tgfx::VertexBufferLayout corners_layout;
         corners_layout.stride = 2 * sizeof(float);
@@ -659,10 +638,7 @@ namespace tcplot {
         context.set_topology(tgfx::PrimitiveTopology::TriangleList);
         ScatterPush push{};
         data_to_clip(frame, transform, viewport, push.matrix);
-        push.color[0] = style.color.r;
-        push.color[1] = style.color.g;
-        push.color[2] = style.color.b;
-        push.color[3] = style.color.a * opacity;
+        write_linear_color(push.color, style.color, opacity);
         push.params[0] = viewport.width;
         push.params[1] = viewport.height;
         push.params[2] = style.diameter_px;

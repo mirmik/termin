@@ -205,6 +205,17 @@ RenderHost.Present(colorTex, width, height);
 в DIPs, а native D3DImage bridge работает в физических пикселях. После render tick
 передавайте tgfx2 texture handle в `RenderHost.Present(...)`.
 
+Размеры 1×1 и 2×2 допустимы: данные можно заполнять до первого layout,
+без пустого bootstrap-кадра. При потере front buffer WPF освобождает ссылку
+на backbuffer; `Tgfx2D3D11ImageHost` восстанавливает её при возвращении
+доступности, включая последний кадр графика без непрерывного рендера.
+См. [контракт D3DImage.SetBackBuffer](https://learn.microsoft.com/en-us/dotnet/api/system.windows.interop.d3dimage.setbackbuffer).
+
+Графики рендерят RGB в линейном пространстве. D3DImage bridge выполняет
+финальное преобразование в sRGB при записи в общую текстуру WPF; не добавляйте
+гамма-коррекцию в прикладной код или настройки темы. Alpha при этом не меняется;
+преобразование RGB в premultiplied alpha этим шагом не выполняется.
+
 Перед освобождением shared `Tgfx2Host` потребитель должен освободить D3DImage bridge
 через `RenderHost.ReleaseNativeResources()`. Иначе `HwndHost` может удалить
 native D3DImage bridge уже после уничтожения D3D11 device.

@@ -266,11 +266,14 @@ namespace {
             tgfx::TextureDesc desc{};
             desc.width = width_;
             desc.height = height_;
-            desc.format = tgfx::PixelFormat::BGRA8_UNorm;
+            // D3D9 sharing requires UNORM storage, but WPF consumes display-
+            // encoded bytes. As for the window swapchain, use an sRGB render
+            // target view to encode linear RGB exactly once at presentation.
+            // The shared texture is an output sink, not a sampled source.
+            desc.format = tgfx::PixelFormat::BGRA8_sRGB;
             desc.mip_levels = 1;
             desc.sample_count = 1;
-            desc.usage =
-                tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled | tgfx::TextureUsage::CopyDst;
+            desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopyDst;
             shared_texture_handle_ =
                 device_.register_external_texture(reinterpret_cast<uintptr_t>(d3d11_texture_.Get()), desc);
             if (!shared_texture_handle_) {

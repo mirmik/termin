@@ -51,7 +51,6 @@ namespace tcplot {
             tgfx::PrimitiveTopology topology = tgfx::PrimitiveTopology::TriangleList;
         };
         float vx_ = 0.0f, vy_ = 0.0f, vw_ = 0.0f, vh_ = 0.0f;
-        tgfx::IRenderDevice* shader_device_ = nullptr;
         uint32_t shader_vs_id_ = 0, shader_fs_id_ = 0;
         tgfx::IRenderDevice* mesh_device_ = nullptr;
         std::optional<MeshGpu> lines_mesh_, scatter_mesh_, grid_mesh_;

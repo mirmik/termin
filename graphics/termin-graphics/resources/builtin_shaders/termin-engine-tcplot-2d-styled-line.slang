@@ -62,6 +62,16 @@ float3 colormap(float id, float t, float3 fallback) {
     return fallback;
 }
 
+float srgb_channel_to_linear(float value) {
+    return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4);
+}
+
+float3 srgb_to_linear(float3 value) {
+    return float3(srgb_channel_to_linear(value.r),
+                  srgb_channel_to_linear(value.g),
+                  srgb_channel_to_linear(value.b));
+}
+
 [shader("vertex")]
 VertexOutput vs_main(VertexInput input) {
     VertexOutput output;
@@ -114,7 +124,9 @@ FragmentOutput fs_main(VertexOutput input) {
     }
 
     float4 c = tcplot2d_styled_line_draw.u_color;
-    if (tcplot2d_styled_line_draw.u_params.z < 5.5) {
+    // Solid color is already linearized by the host. Palettes are authored
+    // sRGB and are converted here after scalar interpolation.
+    if (tcplot2d_styled_line_draw.u_params.z < 4.5) {
         float denom = max(tcplot2d_styled_line_draw.u_range.y -
                           tcplot2d_styled_line_draw.u_range.x, 1e-12);
         float t = clamp((input.color.r - tcplot2d_styled_line_draw.u_range.x) / denom,
@@ -122,7 +134,7 @@ FragmentOutput fs_main(VertexOutput input) {
         if (tcplot2d_styled_line_draw.u_params.w != 0.0) {
             t = 1.0 - t;
         }
-        c.rgb = colormap(tcplot2d_styled_line_draw.u_params.z, t, input.color.rgb);
+        c.rgb = srgb_to_linear(colormap(tcplot2d_styled_line_draw.u_params.z, t, c.rgb));
     }
     output.color = c;
     return output;

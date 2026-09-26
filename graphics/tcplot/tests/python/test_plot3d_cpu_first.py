@@ -1,6 +1,23 @@
 import numpy as np
+import pytest
 
-from termin.plot import RetainedChart3D, SrgbColor
+from termin.plot import PlotAxis3D, RetainedChart3D, SrgbColor
+
+
+def test_background_color_before_gpu_attachment():
+    plot = RetainedChart3D()
+
+    def components():
+        color = plot.background_color
+        return color.r, color.g, color.b, color.a
+
+    assert components() == pytest.approx((0.08, 0.09, 0.11, 1))
+    plot.background_color = SrgbColor(0.12, 0.24, 0.38, 0.75)
+    assert components() == pytest.approx((0.12, 0.24, 0.38, 0.75))
+    for invalid in (float("nan"), float("inf"), -0.01, 1.01):
+        with pytest.raises(RuntimeError):
+            plot.background_color = SrgbColor(invalid, 0.24, 0.38, 0.75)
+        assert components() == pytest.approx((0.12, 0.24, 0.38, 0.75))
 
 
 def test_retained_chart3d_accepts_series_before_gpu_attachment():
@@ -37,3 +54,25 @@ def test_retained_chart3d_accepts_series_before_gpu_attachment():
     assert plot.destroy_item(line)
     assert plot.destroy_item(scatter)
     assert plot.destroy_item(surface)
+
+
+def test_axis_display_bindings_validate_and_keep_independent_offsets():
+    plot = RetainedChart3D()
+    for axis in (PlotAxis3D.X, PlotAxis3D.Y, PlotAxis3D.Z):
+        assert plot.get_axis_display_offset(axis) == 0
+    plot.set_axis_display_offset(PlotAxis3D.X, 100)
+    plot.set_axis_display_offset(PlotAxis3D.Z, -40)
+    assert plot.get_axis_display_offset(PlotAxis3D.X) == 100
+    assert plot.get_axis_display_offset(PlotAxis3D.Y) == 0
+    assert plot.get_axis_display_offset(PlotAxis3D.Z) == -40
+    plot.set_axis_tick_label(PlotAxis3D.Z, 0, "≤ −40 dBsm")
+    plot.set_axis_tick_label(PlotAxis3D.Z, 0, None)
+    plot.clear_axis_tick_labels(PlotAxis3D.Z)
+    for value in (float("nan"), float("inf"), -float("inf")):
+        with pytest.raises(RuntimeError):
+            plot.set_axis_display_offset(PlotAxis3D.Z, value)
+        with pytest.raises(RuntimeError):
+            plot.set_axis_tick_label(PlotAxis3D.Z, value, "invalid")
+    with pytest.raises(RuntimeError):
+        plot.set_axis_display_offset(PlotAxis3D.Radius, -40)
+    assert plot.get_axis_display_offset(PlotAxis3D.Z) == -40
