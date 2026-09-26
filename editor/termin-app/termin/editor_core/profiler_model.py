@@ -71,7 +71,7 @@ class ProfilerPresentationModel:
         self._interval_ms = None
         self._revision += 1
 
-    def update(self, frame: FrameProfile) -> ProfilerSnapshot:
+    def update(self, frame: FrameProfile, *, sample_count: int = 1) -> ProfilerSnapshot:
         sections = _flatten_sections(frame.sections)
         root_total = sum(
             stats.cpu_ms for path, stats in sections.items() if len(path) == 1
@@ -79,7 +79,7 @@ class ProfilerPresentationModel:
         active_sample_ms = max(float(frame.active_ms), 0.0)
         if active_sample_ms == 0.0:
             active_sample_ms = max(float(frame.total_ms), root_total, 0.0)
-        alpha = self.ema_alpha
+        alpha = 1.0 - (1.0 - self.ema_alpha) ** max(sample_count, 1)
         if self._active_ms is None:
             self._active_ms = active_sample_ms
         else:
@@ -196,6 +196,7 @@ class ProfilerController:
         self._capture_coordinator = capture_coordinator
         self._consumer_id = consumer_id
         self._last_frame_number: int | None = None
+        self._last_presented_frame_number: int | None = None
 
     @property
     def enabled(self) -> bool:
@@ -220,6 +221,7 @@ class ProfilerController:
         if not enabled:
             self.presentation.reset()
             self._last_frame_number = None
+            self._last_presented_frame_number = None
 
     def set_include_ui(self, include: bool) -> None:
         if self._set_include_ui is None:
@@ -232,15 +234,27 @@ class ProfilerController:
             self.profiler.clear_history()
         self.presentation.reset()
         self._last_frame_number = None
+        self._last_presented_frame_number = None
 
     def poll(self) -> ProfilerSnapshot | None:
+        frame = self.poll_frame()
+        return self.present_frame(frame) if frame is not None else None
+
+    def poll_frame(self) -> FrameProfile | None:
         if not self.enabled:
             return None
         frame = self.profiler.last_complete_frame()
         if frame is None or frame.frame_number == self._last_frame_number:
             return None
         self._last_frame_number = frame.frame_number
-        return self.presentation.update(frame)
+        return frame
+
+    def present_frame(self, frame: FrameProfile) -> ProfilerSnapshot:
+        previous = self._last_presented_frame_number
+        sample_count = max(frame.frame_number - previous, 1) if previous is not None else 1
+        snapshot = self.presentation.update(frame, sample_count=sample_count)
+        self._last_presented_frame_number = frame.frame_number
+        return snapshot
 
 
 __all__ = [

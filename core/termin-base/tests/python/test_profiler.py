@@ -1,4 +1,39 @@
+from types import SimpleNamespace
+
 from termin.base.profiler import Profiler
+
+
+def test_profiler_build_sections_preserves_order_and_branch_names():
+    sections = [
+        SimpleNamespace(parent_index=-1, name="Root", cpu_ms=8.0, children_ms=5.0, call_count=1),
+        SimpleNamespace(parent_index=0, name="Shared", cpu_ms=3.0, children_ms=0.0, call_count=2),
+        SimpleNamespace(parent_index=-1, name="Other", cpu_ms=4.0, children_ms=2.0, call_count=1),
+        SimpleNamespace(parent_index=2, name="Shared", cpu_ms=2.0, children_ms=0.0, call_count=3),
+        SimpleNamespace(parent_index=0, name="Last", cpu_ms=2.0, children_ms=0.0, call_count=1),
+    ]
+    result = {}
+    Profiler.instance()._build_sections(sections, result)
+
+    assert list(result) == ["Root", "Other"]
+    assert list(result["Root"].children) == ["Shared", "Last"]
+    assert result["Root"].children["Shared"].call_count == 2
+    assert result["Other"].children["Shared"].call_count == 3
+    assert result["Root"].cpu_ms == 8.0
+    assert result["Root"].children_ms == 5.0
+
+
+def test_profiler_build_sections_keeps_last_duplicate_sibling_value():
+    sections = [
+        SimpleNamespace(parent_index=-1, name="Root", cpu_ms=1.0, children_ms=0.0, call_count=1),
+        SimpleNamespace(parent_index=0, name="Same", cpu_ms=1.0, children_ms=0.0, call_count=1),
+        SimpleNamespace(parent_index=0, name="Other", cpu_ms=1.0, children_ms=0.0, call_count=1),
+        SimpleNamespace(parent_index=0, name="Same", cpu_ms=2.0, children_ms=0.0, call_count=2),
+    ]
+    result = {}
+    Profiler.instance()._build_sections(sections, result)
+
+    assert list(result["Root"].children) == ["Same", "Other"]
+    assert result["Root"].children["Same"].cpu_ms == 2.0
 
 
 def test_profiler_last_complete_frame_excludes_open_history_slot():

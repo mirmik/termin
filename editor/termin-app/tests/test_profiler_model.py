@@ -85,6 +85,14 @@ def test_profiler_presentation_uses_frame_interval_for_fps():
     assert snapshot.active_ms == pytest.approx(2.0)
 
 
+def test_profiler_presentation_keeps_smoothing_timescale_when_frames_are_skipped():
+    model = ProfilerPresentationModel(ema_alpha=0.5)
+    model.update(_frame(1, 10.0))
+    snapshot = model.update(_frame(4, 18.0), sample_count=3)
+    render = next(row for row in snapshot.rows if row.path == ("Render",))
+    assert render.cpu_ms == pytest.approx(17.0)
+
+
 def test_profiler_presentation_keeps_slashes_structural_and_sorts_siblings_only():
     model = ProfilerPresentationModel(ema_alpha=1.0)
     frame = FrameProfile(

@@ -75,8 +75,8 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
             },
         )
     )
-    assert panel.update()
-    assert not panel.update()
+    assert panel.update(now=0.0)
+    assert not panel.update(now=0.01)
     assert panel.frame_time_model.samples == [100.0]
     assert panel.table_model.node_count == 3
     assert "10 FPS" in panel.status_bar.text
@@ -108,7 +108,7 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
             },
         )
     )
-    assert panel.update()
+    assert panel.update(now=0.11)
     assert panel.table_model.find('["Render"]') == render
     assert not panel.table_widget.expanded(render)
 
@@ -116,6 +116,41 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
     draw_list = DrawList()
     document.paint(PaintContext(draw_list))
     assert draw_list.command_count > 20
+    tc_ui_document_destroy(document)
+
+
+def test_native_profiler_panel_samples_each_frame_and_refreshes_table_on_cadence():
+    document = tc_ui_document_create()
+    profiler = FakeProfiler()
+    controller = ProfilerController(profiler)
+    panel = build_native_profiler_panel(document, controller)
+    controller.set_enabled(True)
+
+    for number, now in ((1, 0.0), (2, 0.03), (3, 0.08), (4, 0.11)):
+        profiler.frames.append(
+            FrameProfile(
+                frame_number=number,
+                interval_ms=10.0 + number,
+                active_ms=5.0,
+                sections={"Work": SectionTiming("Work", cpu_ms=float(number))},
+            )
+        )
+        previous_revision = panel.table_model.revision
+        assert panel.update(now=now)
+        assert panel.table_model.revision == previous_revision + (number in (1, 4))
+
+    assert panel.frame_time_model.samples == [11.0, 12.0, 13.0, 14.0]
+    work = panel.table_model.find('["Work"]')
+    assert "frame 4" in panel.status_bar.text
+    assert panel.table_model.node(work).data.cells[0] == "Work"
+
+    panel.clear()
+    profiler.frames.append(
+        FrameProfile(frame_number=5, interval_ms=15.0, sections={"Work": SectionTiming("Work")})
+    )
+    assert panel.update(now=0.12)
+    assert panel.frame_time_model.samples == [15.0]
+    assert "frame 5" in panel.status_bar.text
     tc_ui_document_destroy(document)
 
 

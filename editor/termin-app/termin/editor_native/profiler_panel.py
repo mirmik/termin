@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import time
 
 from termin.editor_core.profiler_model import ProfilerController, ProfilerSnapshot
 from termin.editor_native.metrics import EDITOR_UI_METRICS
@@ -28,7 +29,10 @@ def _ref(document: TcDocument, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
-@dataclass(frozen=True)
+_PRESENTATION_INTERVAL_S = 0.1
+
+
+@dataclass
 class NativeProfilerPanel:
     root: WidgetRef
     controller: ProfilerController
@@ -44,9 +48,12 @@ class NativeProfilerPanel:
     include_ui_command: int
     clear_command: int
     known_node_ids: set[str] = field(default_factory=set)
+    last_presentation_time: float | None = None
 
     def set_visible(self, visible: bool) -> None:
         visible = bool(visible)
+        if visible and not self.root.visible:
+            self.last_presentation_time = None
         self.root.visible = visible
         if visible and not self.controller.enabled:
             self.controller.set_enabled(True)
@@ -58,17 +65,22 @@ class NativeProfilerPanel:
         self.table_model.clear()
         self.expansion_model.clear()
         self.known_node_ids.clear()
+        self.last_presentation_time = None
         self.status_bar.text = "Profiler | waiting for a complete frame"
 
-    def update(self) -> bool:
-        snapshot = self.controller.poll()
-        if snapshot is None:
+    def update(self, *, now: float | None = None) -> bool:
+        frame = self.controller.poll_frame()
+        if frame is None:
             return False
-        self._apply_snapshot(snapshot)
+        self.frame_time_model.add_sample(frame.interval_ms)
+        now = time.monotonic() if now is None else now
+        if (self.last_presentation_time is None or
+                now - self.last_presentation_time >= _PRESENTATION_INTERVAL_S):
+            self._apply_snapshot(self.controller.present_frame(frame))
+            self.last_presentation_time = now
         return True
 
     def _apply_snapshot(self, snapshot: ProfilerSnapshot) -> None:
-        self.frame_time_model.add_sample(snapshot.interval_ms)
         cadence = (
             f"{snapshot.fps:.0f} FPS | interval {snapshot.interval_ms:.2f} ms"
             if snapshot.interval_ms > 0.0

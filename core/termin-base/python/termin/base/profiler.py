@@ -168,16 +168,22 @@ class Profiler:
 
     def _build_sections(self, c_sections: list, out: Dict[str, SectionTiming],
                         parent_idx: int = -1) -> None:
+        children_by_parent: Dict[int, list[tuple[str, SectionTiming]]] = {}
+        timings: list[SectionTiming] = []
+        for s in c_sections:
+            timing = SectionTiming(
+                name=s.name,
+                cpu_ms=s.cpu_ms,
+                children_ms=s.children_ms,
+                call_count=s.call_count,
+            )
+            timings.append(timing)
+            children_by_parent.setdefault(s.parent_index, []).append((s.name, timing))
+
         for i, s in enumerate(c_sections):
-            if s.parent_index == parent_idx:
-                timing = SectionTiming(
-                    name=s.name,
-                    cpu_ms=s.cpu_ms,
-                    children_ms=s.children_ms,
-                    call_count=s.call_count,
-                )
-                out[s.name] = timing
-                self._build_sections(c_sections, timing.children, i)
+            if 0 <= s.parent_index < len(c_sections):
+                timings[s.parent_index].children[s.name] = timings[i]
+        out.update(children_by_parent.get(parent_idx, ()))
 
     def last_frame(self) -> FrameProfile | None:
         history = self._convert_history()
