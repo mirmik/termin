@@ -25,12 +25,12 @@ namespace {
             std::abort();
         }
     }
-    void tile(const char* uuid, unsigned short inset, bool create) {
+    void tile(const char* uuid, unsigned short inset, bool create, unsigned char area = 1) {
         const unsigned short upper = 100 - inset;
         const unsigned short vertices[] = {inset, 0, inset, upper, 0, inset, upper, 0, upper, inset, 0, upper};
         const unsigned short polygons[] = {0, 1, 2, 3, 0xffff, 0xffff, 0xffff, 0xffff};
         const unsigned short flags[] = {1};
-        const unsigned char areas[] = {1};
+        const unsigned char areas[] = {area};
         dtNavMeshCreateParams params{};
         params.verts = vertices;
         params.vertCount = 4;
@@ -159,6 +159,36 @@ int main() {
     parent_pose.ang = Quat::from_axis_angle(Vec3{1, 2, 3}.normalized(), 1.2);
     parent.transform().set_local_pose(parent_pose);
     complete(forward(), world(b, {9, 6, 0}), expected_length);
+
+    // A query on an excluded wall must not silently snap to nearby ground.
+    tile("wall-area", 2, true, 12);
+    auto wall_scene = TcSceneRef::create("wall-area-policy");
+    auto floor = entity(wall_scene, "floor"), wall = entity(wall_scene, "wall");
+    auto* floor_nav = new DetourPathfindingWorldComponent;
+    floor_nav->navmesh_uuid = "world-seam-inset";
+    floor.add_component(floor_nav);
+    auto* wall_nav = new DetourPathfindingWorldComponent;
+    wall_nav->navmesh_uuid = "wall-area";
+    wall.add_component(wall_nav);
+    GeneralPose3 wall_pose;
+    wall_pose.ang = Quat::from_axis_angle({1, 0, 0}, 1.5707963267948966);
+    wall.transform().set_local_pose(wall_pose);
+    auto* wall_navigation = PathfindingWorld::ensure_scene(wall_scene.handle());
+    wall_navigation->rebuild_from_scene();
+    const auto wall_start = world(wall, {5, 1, 0});
+    const auto wall_end = world(wall, {5, 2, 0});
+    complete(wall_navigation->find_detailed_path_world(wall_start, wall_end), wall_end, 1);
+    PathfindingWorldQueryOptions forbidden;
+    forbidden.traversal.area_mask &= ~(uint64_t{1} << 12);
+    require(!wall_navigation->find_detailed_path_world(world(floor, {5, 5, 0}), wall_start, forbidden).success,
+            "excluded nearest wall destination must not snap to nearby allowed floor");
+    require(!wall_navigation->find_detailed_path_world(wall_start, world(floor, {5, 5, 0}), forbidden).success,
+            "excluded nearest wall start must not snap to nearby allowed floor");
+    complete(wall_navigation->find_detailed_path_world(wall_start, wall_end), wall_end, 1);
+    complete(wall_navigation->find_detailed_path_world(world(floor, {5, 5, 0}), world(floor, {6, 5, 0}), forbidden),
+             world(floor, {6, 5, 0}),
+             1);
+    wall_scene.destroy();
 
     scene.destroy();
     tc_navmesh_shutdown();

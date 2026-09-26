@@ -9,6 +9,7 @@
 
 #include <termin/entity/entity.hpp>
 #include <termin/navmesh/detour_pathfinding_world_component.hpp>
+#include <termin/navmesh/surface_navigation.hpp>
 #include <termin/navmesh/tc_pathfinding_world.h>
 
 namespace termin {
@@ -18,6 +19,7 @@ namespace termin {
 
     struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldQueryOptions {
         bool navmesh_precast = true;
+        SurfaceTraversalPolicy traversal;
     };
 
     struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldCandidate {

@@ -38,7 +38,8 @@ namespace termin {
                                                                          const Vec3f& end,
                                                                          const PathfindingWorldQueryOptions& options) {
         PathfindingWorldPathResult result;
-        (void)options; // Both endpoints snap to the unified traversable surface.
+        if (!options.traversal.valid())
+            return result;
         std::vector<DetourPathfindingWorldComponent*> components;
         std::vector<Entity> entities;
         std::vector<Pose3> world_frames;
@@ -149,7 +150,14 @@ namespace termin {
             tc_log_warn("[PathfindingWorld] endpoint outside navigation query extents");
             return result;
         }
-        auto corridor = find_surface_corridor(graph, af, sa, bf, sb);
+        // Select the geometric support before applying permissions. Filtering
+        // candidates first would redirect a click on an excluded wall to a
+        // farther allowed floor within query extents.
+        if (!options.traversal.allows(graph.faces[af].area) || !options.traversal.allows(graph.faces[bf].area)) {
+            tc_log_warn("[PathfindingWorld] endpoint area excluded by traversal policy");
+            return result;
+        }
+        auto corridor = find_surface_corridor(graph, af, sa, bf, sb, options.traversal);
         if (!corridor.success) {
             tc_log_warn("[PathfindingWorld] no traversable corridor");
             return result;

@@ -51,7 +51,7 @@ namespace {
         }
     }
 
-    dtNavMesh* build_linear_navmesh() {
+    dtNavMesh* build_linear_navmesh(bool vertical = false, bool overlap = false) {
         static const unsigned short verts[] = {
             0,
             0,
@@ -79,7 +79,7 @@ namespace {
         static const unsigned short polyFlags[] = {1};
         static const unsigned char polyAreas[] = {1};
 
-        static const float linearVerts[] = {
+        float linearVerts[] = {
             12.0f,
             0.0f,
             5.0f,
@@ -100,7 +100,7 @@ namespace {
             {1, 2, 65535, 0, DT_LINEAR_LINK_BIDIR, {0, 0, 0}},
         };
 
-        static const float offMeshVerts[] = {
+        float offMeshVerts[] = {
             10.0f,
             0.0f,
             5.0f,
@@ -113,6 +113,19 @@ namespace {
         static const unsigned char offMeshAreas[] = {3};
         static const unsigned char offMeshDirs[] = {DT_OFFMESH_CON_BIDIR};
         static const unsigned int offMeshUserIds[] = {2001};
+
+        if (vertical) {
+            for (int i = 0; i < 4; ++i) {
+                linearVerts[i * 3 + 1] = linearVerts[i * 3] - 12;
+                linearVerts[i * 3] = 12;
+            }
+        }
+        if (overlap) {
+            linearVerts[0] = 8;
+            offMeshVerts[0] = 5;
+            offMeshVerts[1] = -1;
+            offMeshVerts[3] = 8;
+        }
 
         dtNavMeshCreateParams params;
         std::memset(&params, 0, sizeof(params));
@@ -141,7 +154,7 @@ namespace {
         params.bmin[1] = -1.0f;
         params.bmin[2] = 0.0f;
         params.bmax[0] = 20.0f;
-        params.bmax[1] = 1.0f;
+        params.bmax[1] = vertical ? 7.0f : 1.0f;
         params.bmax[2] = 10.0f;
         params.walkableHeight = 2.0f;
         params.walkableRadius = 0.5f;
@@ -163,9 +176,49 @@ namespace {
         return nav;
     }
 
+    void test_vertical_and_floor_contact() {
+        for (int variant = 0; variant < 2; ++variant) {
+            dtNavMesh* nav = build_linear_navmesh(variant == 0, variant == 1);
+            dtNavMeshQuery query;
+            require(dtStatusSucceed(query.init(nav, 64)), "query init");
+            dtQueryFilter filter;
+            const dtMeshTile* tile = static_cast<const dtNavMesh*>(nav)->getTile(0);
+            const dtPolyRef base = nav->getPolyRefBase(tile);
+            const float start[] = {5, -1, 5};
+            const float finish[] = {variant == 0 ? 12.0f : 17.0f, variant == 0 ? 4.5f : 0.0f, 5};
+            const float extent[] = {.5f, .5f, .5f};
+            dtPolyRef endRef = 0;
+            float nearest[3];
+            require(dtStatusSucceed(query.findNearestPoly(finish, extent, &filter, &endRef, nearest)), "vertical nearest");
+            require(endRef == (base | 2), "wrong linear ref");
+            for (int i = 0; i < 3; ++i) require_near(nearest[i], finish[i], "3D nearest point");
+            float boundary[3], height = 0;
+            require(dtStatusSucceed(query.closestPointOnPolyBoundary(endRef, finish, boundary)), "linear boundary");
+            for (int i = 0; i < 3; ++i) require_near(boundary[i], finish[i], "3D boundary point");
+            require(dtStatusSucceed(query.getPolyHeight(endRef, finish, &height)), "linear height");
+            require_near(height, finish[1], "vertical height");
+            for (int reverse = 0; reverse < 2; ++reverse) {
+                dtPolyRef corridor[16]; int count = 0;
+                const float* a = reverse ? finish : start;
+                const float* b = reverse ? start : finish;
+                require(dtStatusSucceed(query.findPath(reverse ? endRef : base, reverse ? base : endRef,
+                    a, b, &filter, corridor, &count, 16)), "ladder corridor");
+                require(count == 4, "floor contact must connect through offmesh and both linear segments");
+                float points[48]; unsigned char flags[16]; dtPolyRef refs[16]; int pointCount = 0;
+                require(dtStatusSucceed(query.findStraightPath(a, b, corridor, count, points, flags, refs, &pointCount, 16)), "ladder straight path");
+                for (int i = 0; i < 3; ++i) {
+                    require_near(points[i], a[i], "straight start");
+                    require_near(points[(pointCount - 1) * 3 + i], b[i], "straight end");
+                }
+            }
+            dtFreeNavMesh(nav);
+        }
+    }
+
 } // namespace
 
 int main() {
+    test_vertical_and_floor_contact();
     dtNavMesh* nav = build_linear_navmesh();
 
     const dtMeshTile* tile = static_cast<const dtNavMesh*>(nav)->getTile(0);

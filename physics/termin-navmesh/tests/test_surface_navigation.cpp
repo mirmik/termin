@@ -1,10 +1,12 @@
 #include <termin/navmesh/surface_navigation.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <new>
 
 // Test-only instrumentation of ordinary C++ allocations. The solver's vectors
@@ -129,6 +131,59 @@ namespace {
         require(c.success && c.partial && c.faces.back() == 199,
                 "unreachable goal returns nearest reachable partial corridor");
         near(c.end.x, 200, "partial endpoint clamped to last reachable face");
+    }
+    void traversal_permissions_and_costs() {
+        // Three lower cells offer the short route; the upper row is a bypass.
+        SurfaceGraph graph;
+        for (int y = 0; y < 2; ++y)
+            for (int x = 0; x < 3; ++x)
+                graph.faces.push_back(face({{double(x), double(y), 0},
+                                            {double(x + 1), double(y), 0},
+                                            {double(x + 1), double(y + 1), 0},
+                                            {double(x), double(y + 1), 0}}));
+        connect(graph, 0, 1, {1, 0, 0}, {1, 1, 0});
+        connect(graph, 1, 2, {2, 0, 0}, {2, 1, 0});
+        connect(graph, 0, 3, {0, 1, 0}, {1, 1, 0});
+        connect(graph, 3, 4, {1, 1, 0}, {1, 2, 0});
+        connect(graph, 4, 5, {2, 1, 0}, {2, 2, 0});
+        connect(graph, 5, 2, {2, 1, 0}, {3, 1, 0});
+        graph.faces[1].area = 12;
+        for (size_t i : {3, 4, 5})
+            graph.faces[i].area = 13;
+        graph.index();
+        const Vec3 start{.5, .5, 0}, end{2.5, .5, 0};
+        auto query = [&](const SurfaceTraversalPolicy& policy) {
+            return find_surface_corridor(graph, 0, start, 2, end, policy);
+        };
+        const std::vector<size_t> direct{0, 1, 2}, bypass{0, 3, 4, 5, 2};
+        require(query({}).faces == direct, "default policy preserves geometric route");
+        SurfaceTraversalPolicy policy;
+        policy.area_mask &= ~(uint64_t{1} << 12);
+        require(query(policy).faces == bypass, "excluded intermediate area uses allowed bypass");
+        require(!find_surface_corridor(graph, 0, start, 1, {1.5, .5, 0}, policy).success,
+                "excluded destination rejected, not converted into a partial approach");
+        require(!find_surface_corridor(graph, 1, {1.5, .5, 0}, 2, end, policy).success, "excluded start rejected");
+        policy.area_mask &= ~(uint64_t{1} << 13);
+        auto partial = query(policy);
+        require(partial.success && partial.partial && partial.faces == std::vector<size_t>{0},
+                "unreachable permitted goal retains partial behavior without entering forbidden faces");
+        policy = {};
+        policy.area_costs[12] = 10;
+        require(query(policy).faces == bypass, "longer but cheaper bypass selected");
+        policy = {};
+        policy.area_costs[13] = .1;
+        require(query(policy).faces == bypass, "subunit costs preserve admissible heuristic");
+        require(query({}).faces == direct, "policy changes never mutate shared graph");
+        for (double invalid :
+             {0., -1., std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+            policy = {};
+            policy.area_costs[12] = invalid;
+            require(!query(policy).success, "nonpositive and nonfinite area costs rejected");
+        }
+        policy = {};
+        policy.area_mask = 0;
+        require(!query(policy).success, "empty area mask rejects every endpoint");
+        require(!policy.allows(64), "out-of-range areas cannot shift beyond the mask");
     }
     void folded_strip() {
         auto graph = strip(3);
@@ -329,6 +384,7 @@ namespace {
 } // namespace
 int main() {
     planar_and_long_strip();
+    traversal_permissions_and_costs();
     folded_strip();
     multiaxis_folds();
     bent_corridor();

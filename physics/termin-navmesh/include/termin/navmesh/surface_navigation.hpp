@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <termin/geom/vec3.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
@@ -27,6 +29,22 @@ namespace termin {
         std::vector<std::vector<size_t>> outgoing;
         void index();
     };
+    // Per-query traversal permissions and relative time per unit distance.
+    // Geometry and connectivity remain shared between all actors.
+    struct TERMIN_NAVMESH_COMPONENTS_API SurfaceTraversalPolicy {
+        uint64_t area_mask = std::numeric_limits<uint64_t>::max();
+        std::array<double, 64> area_costs = [] {
+            std::array<double, 64> costs{};
+            costs.fill(1.0);
+            return costs;
+        }();
+
+        bool allows(unsigned char area) const {
+            return area < area_costs.size() && (area_mask & (uint64_t{1} << area)) != 0;
+        }
+        // All costs, including disabled areas, must be finite and positive.
+        bool valid() const;
+    };
     struct SurfaceCorridor {
         bool success = false;
         bool partial = false;
@@ -43,8 +61,12 @@ namespace termin {
         std::string error;
         std::vector<SurfacePathVertex> points;
     };
-    TERMIN_NAVMESH_COMPONENTS_API SurfaceCorridor find_surface_corridor(
-        const SurfaceGraph& graph, size_t start_face, const Vec3& start, size_t end_face, const Vec3& end);
+    TERMIN_NAVMESH_COMPONENTS_API SurfaceCorridor find_surface_corridor(const SurfaceGraph& graph,
+                                                                        size_t start_face,
+                                                                        const Vec3& start,
+                                                                        size_t end_face,
+                                                                        const Vec3& end,
+                                                                        const SurfaceTraversalPolicy& traversal = {});
     TERMIN_NAVMESH_COMPONENTS_API SurfacePath straighten_surface_corridor(const SurfaceGraph& graph,
                                                                           const SurfaceCorridor& corridor);
     TERMIN_NAVMESH_COMPONENTS_API Vec3 closest_surface_point(const SurfaceFace& face, const Vec3& point);

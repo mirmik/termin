@@ -70,3 +70,29 @@ Component query extents still bound endpoint snapping. The unified graph uses
 its own dynamically sized corridor rather than local Detour fixed-buffer limits.
 `navmesh_precast` is retained in the public options for source compatibility;
 both settings snap endpoints to the same unified navigable geometry.
+
+## Per-query traversal policy
+
+`PathfindingWorldQueryOptions::traversal` is a `SurfaceTraversalPolicy`:
+`area_mask` permits any of the 64 Detour areas, and `area_costs[area]` gives
+relative travel time per unit distance. Defaults permit all areas at cost 1,
+preserving existing callers. All costs must be finite and strictly positive;
+invalid policies fail with an error log. A zero mask permits no endpoints.
+The policy is also an optional last argument of `find_surface_corridor`.
+
+Endpoint support is selected geometrically within existing query extents before
+permissions are checked. If the nearest surface is excluded, the query fails:
+a click on an unclimbable wall is never redirected onto a farther floor.
+Excluded intermediate faces are never expanded; an unreachable permitted goal
+can still return the existing partial corridor on permitted faces.
+
+A* weights each center-to-portal half-edge by its face's area cost; its distance
+heuristic is scaled by the minimum permitted cost (including values below 1).
+This chooses a corridor using the existing center/portal approximation, not an
+exact global minimum-time path. Straightening remains geometric inside the
+selected corridor; it does not solve refraction at unequal-cost boundaries.
+Traversal policy does not enter the geometry cache or mutate shared surfaces.
+
+Python exposes `SurfaceTraversalPolicy` and the optional `traversal=` argument of
+`PathfindingWorld.find_detailed_path_world`. `area_costs` is a copied 64-element
+sequence: assign the modified sequence back to the property after editing it.

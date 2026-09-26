@@ -308,14 +308,37 @@ namespace termin {
         return positive && negative ? nearest : projected;
     }
 
-    SurfaceCorridor find_surface_corridor(
-        const SurfaceGraph& graph, size_t start_face, const Vec3& start, size_t end_face, const Vec3& end) {
+    bool SurfaceTraversalPolicy::valid() const {
+        for (double cost : area_costs)
+            if (!std::isfinite(cost) || cost <= 0) {
+                tc_log_error("[SurfaceNavigation] area costs must be finite and positive");
+                return false;
+            }
+        return true;
+    }
+
+    SurfaceCorridor find_surface_corridor(const SurfaceGraph& graph,
+                                          size_t start_face,
+                                          const Vec3& start,
+                                          size_t end_face,
+                                          const Vec3& end,
+                                          const SurfaceTraversalPolicy& traversal) {
         SurfaceCorridor result;
         if (start_face >= graph.faces.size() || end_face >= graph.faces.size() ||
             graph.outgoing.size() != graph.faces.size() || !start.is_finite() || !end.is_finite()) {
             tc_log_error("[SurfaceNavigation] invalid corridor query or unindexed graph");
             return result;
         }
+        if (!traversal.valid())
+            return result;
+        if (!traversal.allows(graph.faces[start_face].area) || !traversal.allows(graph.faces[end_face].area)) {
+            tc_log_warn("[SurfaceNavigation] endpoint area excluded by traversal policy");
+            return result;
+        }
+        double minimum_cost = std::numeric_limits<double>::infinity();
+        for (size_t area = 0; area < traversal.area_costs.size(); ++area)
+            if (traversal.allows(static_cast<unsigned char>(area)))
+                minimum_cost = std::min(minimum_cost, traversal.area_costs[area]);
         std::vector<Vec3> centers;
         centers.reserve(graph.faces.size());
         for (const auto& face : graph.faces)
@@ -325,7 +348,7 @@ namespace termin {
         using Entry = std::pair<double, size_t>;
         std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry>> queue;
         auto heuristic = [&](size_t i) {
-            return (centers[i] - centers[end_face]).norm();
+            return (centers[i] - centers[end_face]).norm() * minimum_cost;
         };
         distance[start_face] = 0;
         queue.push({heuristic(start_face), start_face});
@@ -349,11 +372,13 @@ namespace termin {
                 if (portal_index >= graph.portals.size())
                     continue;
                 const auto& portal = graph.portals[portal_index];
-                if (portal.from != face || portal.to >= graph.faces.size())
+                if (portal.from != face || portal.to >= graph.faces.size() ||
+                    !traversal.allows(graph.faces[portal.to].area))
                     continue;
                 const Vec3 midpoint = (portal.a + portal.b) * 0.5;
                 const double candidate =
-                    distance[face] + (centers[face] - midpoint).norm() + (centers[portal.to] - midpoint).norm();
+                    distance[face] + (centers[face] - midpoint).norm() * traversal.area_costs[graph.faces[face].area] +
+                    (centers[portal.to] - midpoint).norm() * traversal.area_costs[graph.faces[portal.to].area];
                 if (candidate + epsilon >= distance[portal.to])
                     continue;
                 distance[portal.to] = candidate;
