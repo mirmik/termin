@@ -1,4 +1,5 @@
 #include <termin/render/world_text_component.hpp>
+#include "world_text_font_cache.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -354,6 +355,7 @@ namespace termin {
             return;
         }
         font_path = value;
+        renderer_.reset();
         font_.reset();
         loaded_font_path_.clear();
     }
@@ -488,6 +490,7 @@ namespace termin {
         set_plane_normal(plane_normal);
         set_text_up(text_up);
         material_ = TcMaterial();
+        renderer_.reset();
         font_.reset();
         loaded_font_path_.clear();
     }
@@ -556,7 +559,11 @@ namespace termin {
         }
 
         try {
-            font_ = std::make_unique<tgfx::FontAtlas>(path, 16);
+            // All world labels use the same atlas settings. Do not rebake and upload
+            // the same font once for every newly visible label. Render-thread owned.
+            static detail::WorldTextFontCache fonts;
+            renderer_.reset();
+            font_ = fonts.acquire(path);
             loaded_font_path_ = path;
         } catch (const std::exception& exc) {
             tc::Log::error("[WorldTextComponent] failed to load font '%s': %s", path.c_str(), exc.what());

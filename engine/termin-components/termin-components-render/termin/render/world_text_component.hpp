@@ -52,7 +52,7 @@ namespace termin {
 
     private:
         mutable TcMaterial material_;
-        mutable std::unique_ptr<tgfx::FontAtlas> font_;
+        mutable std::shared_ptr<tgfx::FontAtlas> font_;
         mutable std::string loaded_font_path_;
         mutable std::unique_ptr<tgfx::Text3DRenderer> renderer_;
 

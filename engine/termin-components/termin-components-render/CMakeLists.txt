@@ -177,8 +177,24 @@ if(TERMIN_BUILD_TESTS)
         NAME termin_components_render_xr_interaction_test
         COMMAND termin_components_render_xr_interaction_test
     )
+    add_executable(termin_components_render_world_text_font_cache_test
+        tests/test_world_text_font_cache.cpp
+    )
+    target_include_directories(termin_components_render_world_text_font_cache_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/guard
+    )
+    target_compile_definitions(termin_components_render_world_text_font_cache_test PRIVATE
+        WORLD_TEXT_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/recastnavigation/RecastDemo/Contrib/imgui/misc/fonts/DroidSans.ttf"
+        WORLD_TEXT_TEST_FONT_OTHER="${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/recastnavigation/RecastDemo/Contrib/imgui/misc/fonts/Roboto-Medium.ttf"
+    )
+    target_link_libraries(termin_components_render_world_text_font_cache_test PRIVATE
+        termin_components_render
+    )
+    add_test(NAME termin_components_render_world_text_font_cache_test
+        COMMAND termin_components_render_world_text_font_cache_test)
     set_target_properties(
         termin_components_render_line_renderer_contract_test
+        termin_components_render_world_text_font_cache_test
         termin_components_render_sprite_renderer_2d_test
         termin_components_render_xr_interaction_test
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
