@@ -43,6 +43,7 @@ set(TERMIN_RENDER_CORE_SOURCES
     src/render_pipeline.cpp
     src/color_output.cpp
     src/render_engine.cpp
+    src/render_engine_timing.cpp
     src/render_execution_capabilities.cpp
     src/render_item_mesh.cpp
     src/render_item_source.cpp

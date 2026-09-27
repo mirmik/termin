@@ -84,7 +84,9 @@ def _run_supervisor(state_path: Path) -> int:
         _wait_for_state(state_path)
         state_path.with_suffix(".ready").write_text("ready\n", encoding="utf-8")
         while True:
-            time.sleep(60.0)
+            # Python dispatches SIGBREAK in the main thread between bytecode
+            # instructions; a long Windows sleep can defer that dispatch.
+            time.sleep(0.1)
 
 
 def main() -> int:

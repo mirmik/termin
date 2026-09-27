@@ -173,6 +173,7 @@ set(TGFX2_SOURCES
     src/tgfx2/pixel_format_utils.cpp
     src/tgfx2/pipeline_cache.cpp
     src/tgfx2/render_context.cpp
+    src/tgfx2/shader_artifact_resolver.cpp
     src/tgfx2/graphics_host.cpp
     src/tgfx2_interop.cpp
     src/tgfx2/tc_mesh_bridge.cpp
@@ -209,6 +210,7 @@ if(EMSCRIPTEN)
         src/tgfx2/pixel_format_utils.cpp
         src/tgfx2/pipeline_cache.cpp
         src/tgfx2/render_context.cpp
+        src/tgfx2/shader_artifact_resolver.cpp
         src/tgfx2/graphics_host.cpp
         src/tgfx2_interop.cpp
         src/tgfx2/tc_mesh_bridge.cpp
@@ -238,6 +240,7 @@ if(_TGFX2_ENABLE_GL_IMPLEMENTATION)
     list(APPEND TGFX2_SOURCES
         src/tgfx2/opengl/gl_platform_operations.cpp
         src/tgfx2/opengl/opengl_render_device.cpp
+        src/tgfx2/opengl/opengl_render_device_rings.cpp
         src/tgfx2/opengl/opengl_texture_readback.cpp
         src/tgfx2/opengl/opengl_command_list.cpp
         src/tgfx2/opengl/opengl_type_conversions.cpp
@@ -306,6 +309,7 @@ if(TGFX2_ENABLE_VULKAN)
 
     list(APPEND TGFX2_SOURCES
         src/tgfx2/vulkan/vulkan_render_device.cpp
+        src/tgfx2/vulkan/vulkan_render_device_resources.cpp
         src/tgfx2/vulkan/vulkan_command_list.cpp
         src/tgfx2/vulkan/vulkan_pipeline_resource_sets.cpp
         src/tgfx2/vulkan/vulkan_spirv_reflection.cpp

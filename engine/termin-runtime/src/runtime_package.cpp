@@ -99,46 +99,6 @@ namespace termin::runtime {
             return static_cast<double>(v->as_numer());
         }
 
-        std::vector<std::string> classification_names(const nos::trent& classification,
-                                                      const char* field_name) {
-            const nos::trent* field = dict_get(classification, field_name);
-            if (!field || !field->is_list() || field->as_list().size() != 64) {
-                throw std::runtime_error(
-                    std::string("entity_classification.") + field_name +
-                    " must contain exactly 64 string entries");
-            }
-            std::vector<std::string> names;
-            names.reserve(64);
-            for (const nos::trent& value : field->as_list()) {
-                if (!value.is_string()) {
-                    throw std::runtime_error(
-                        std::string("entity_classification.") + field_name +
-                        " must contain exactly 64 string entries");
-                }
-                names.push_back(value.as_string());
-            }
-            return names;
-        }
-
-        void parse_entity_classification(const nos::trent& manifest,
-                                         RuntimePackageLoadResult& result) {
-            const nos::trent* classification = dict_get(manifest, "entity_classification");
-            if (!classification || !classification->is_dict()) {
-                throw std::runtime_error("manifest entity_classification must be an object");
-            }
-            const std::vector<std::string> layer_names =
-                classification_names(*classification, "layer_names");
-            const std::vector<std::string> flag_names =
-                classification_names(*classification, "flag_names");
-            EntityClassificationRegistry registry;
-            std::string error;
-            if (!registry.configure(layer_names, flag_names, &error)) {
-                throw std::runtime_error("invalid entity_classification: " + error);
-            }
-            result.layer_names.assign(registry.layer_names().begin(), registry.layer_names().end());
-            result.flag_names.assign(registry.flag_names().begin(), registry.flag_names().end());
-        }
-
         uint32_t uint32_field(const nos::trent& t, const char* key, uint32_t def = 0) {
             const nos::trent* v = dict_get(t, key);
             if (!v || !v->is_numer()) {
@@ -154,15 +114,8 @@ namespace termin::runtime {
             return static_cast<uint32_t>(value);
         }
 
-        std::string lowercase_copy(std::string s) {
-            for (char& ch : s) {
-                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-            }
-            return s;
-        }
-
         bool shader_language_from_spec(const nos::trent& spec, tc_shader_language& out, std::string& error) {
-            const std::string language = lowercase_copy(string_field(spec, "language"));
+            const std::string language = detail::lowercase_copy(string_field(spec, "language"));
             if (language.empty()) {
                 error = "shader resource has no explicit language";
                 return false;
@@ -181,20 +134,6 @@ namespace termin::runtime {
             }
             error = "shader resource has unsupported language '" + language + "'";
             return false;
-        }
-
-        void validate_scene_identity(const std::string& identity) {
-            if (identity.empty() || identity.front() == '/' || identity.back() == '/' ||
-                identity.find('\\') != std::string::npos || identity.find(':') != std::string::npos ||
-                !lowercase_copy(identity).ends_with(".scene")) {
-                throw std::runtime_error("runtime scene identity must be a project-relative .scene path: " + identity);
-            }
-            const std::filesystem::path path(identity);
-            for (const std::filesystem::path& component : path) {
-                if (component == "." || component == "..") {
-                    throw std::runtime_error("runtime scene identity must not contain dot segments: " + identity);
-                }
-            }
         }
 
         std::vector<TcTexture>& runtime_builtin_texture_keepalive() {
@@ -1628,7 +1567,7 @@ namespace termin::runtime {
                 pivot_x = static_cast<float>(pivot->as_list()[0].as_numer());
                 pivot_y = static_cast<float>(pivot->as_list()[1].as_numer());
             }
-            const std::string sampling_name = lowercase_copy(string_field(spec, "sampling", "linear"));
+            const std::string sampling_name = detail::lowercase_copy(string_field(spec, "sampling", "linear"));
             if (sampling_name != "linear" && sampling_name != "nearest") {
                 error = "sprite_asset sampling must be 'linear' or 'nearest'";
                 tc_log_error("RuntimePackageLoader: %s", error.c_str());
@@ -1917,7 +1856,7 @@ namespace termin::runtime {
                 return result;
             }
             result.world_controller = detail::parse_world_controller_selection(manifest);
-            parse_entity_classification(manifest, result);
+            detail::parse_entity_classification(manifest, result);
             const nos::trent* artifact_root_field = dict_get(manifest, "shader_artifact_root");
             std::string shader_root;
             if (artifact_root_field) {
@@ -2058,7 +1997,7 @@ namespace termin::runtime {
                 if (identity.empty() || scene_path.empty()) {
                     throw std::runtime_error("runtime scene entries require non-empty identity and path");
                 }
-                validate_scene_identity(identity);
+                detail::validate_scene_identity(identity);
                 if (!scene_identities.insert(identity).second) {
                     throw std::runtime_error("duplicate runtime scene identity '" + identity + "'");
                 }
