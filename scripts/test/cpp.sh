@@ -189,12 +189,15 @@ FILE_API_QUERY_DIR="$BUILD_DIR/.cmake/api/v1/query"
 mkdir -p "$FILE_API_QUERY_DIR"
 touch "$FILE_API_QUERY_DIR/codemodel-v2"
 
+TEST_SHADER_ARTIFACTS=OFF
+TEST_SHADER_ARTIFACT_TARGETS=""
+if [[ "$TERMIN_ENABLE_VULKAN" == "ON" ]]; then
+    TEST_SHADER_ARTIFACTS=ON
+    TEST_SHADER_ARTIFACT_TARGETS="vulkan"
+fi
 if [[ "$TERMIN_ENABLE_OPENGL" == "ON" ]]; then
     TEST_SHADER_ARTIFACTS=ON
-    TEST_SHADER_ARTIFACT_TARGETS="opengl330"
-else
-    TEST_SHADER_ARTIFACTS=OFF
-    TEST_SHADER_ARTIFACT_TARGETS=""
+    TEST_SHADER_ARTIFACT_TARGETS="${TEST_SHADER_ARTIFACT_TARGETS:+${TEST_SHADER_ARTIFACT_TARGETS};}opengl330"
 fi
 
 if ! cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}" \
@@ -291,6 +294,7 @@ export TMPDIR="$CTEST_TEMP_ROOT"
 export TEMP="$CTEST_TEMP_ROOT"
 export TMP="$CTEST_TEMP_ROOT"
 export TERMIN_SDK_SHADER_CACHE_ROOT="$CTEST_SHADER_CACHE_ROOT"
+export TERMIN_SHADER_ARTIFACT_ROOT="$BUILD_DIR/share/termin"
 # CTest does not reliably replace an existing JUnit document. A stale failure
 # must never be reported as the result of a later successful run.
 rm -f -- "$CTEST_JUNIT"

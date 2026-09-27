@@ -203,6 +203,24 @@ def _windows_pid_exists(process_id: int) -> bool:
         kernel32.CloseHandle(handle)
 
 
+def _windows_console_process_ids() -> set[int]:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetConsoleProcessList.argtypes = [
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_uint32,
+    ]
+    kernel32.GetConsoleProcessList.restype = ctypes.c_uint32
+    capacity = 16
+    while True:
+        process_ids = (ctypes.c_uint32 * capacity)()
+        count = kernel32.GetConsoleProcessList(process_ids, capacity)
+        if count == 0:
+            return set()
+        if count <= capacity:
+            return set(process_ids[:count])
+        capacity = count
+
+
 def _wait_for_windows_pid_exit(process_id: int, timeout: float = 10.0) -> None:
     deadline = time.monotonic() + timeout
     while _windows_pid_exists(process_id) and time.monotonic() < deadline:
@@ -320,6 +338,10 @@ def test_windows_console_break_cleans_managed_tree(tmp_path: Path) -> None:
                 time.sleep(0.02)
             assert ready_path.exists()
             state = _wait_for_json(state_path)
+            if supervisor.pid not in _windows_console_process_ids():
+                supervisor.terminate()
+                supervisor.wait(timeout=10.0)
+                pytest.skip("CTRL_BREAK_EVENT requires a shared Windows console")
             supervisor.send_signal(signal.CTRL_BREAK_EVENT)
             try:
                 supervisor.wait(timeout=10.0)
