@@ -58,7 +58,7 @@ try {
         await host.load("./fixtures/invalid-package/");
         throw new Error("invalid package unexpectedly loaded");
     } catch (error) {
-        if (!error.message.includes("version 2") ||
+        if (!error.message.includes("version 4") ||
                 host.state !== TerminWebHostState.Error) {
             throw error;
         }

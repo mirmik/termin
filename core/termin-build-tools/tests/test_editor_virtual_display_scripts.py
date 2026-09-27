@@ -142,7 +142,7 @@ def test_virtual_display_wrapper_closes_managed_xvfb_group(
 
     assert result == 0
     command, options = events[0]
-    assert command[0] == "/usr/bin/xvfb-run"
+    assert command[0] == str(Path("/usr/bin") / "xvfb-run")
     assert options["env"]["TERMIN_VIRTUAL_DISPLAY_INTERNAL"] == "1"
     assert events[-2:] == ["wait", "close"]
 

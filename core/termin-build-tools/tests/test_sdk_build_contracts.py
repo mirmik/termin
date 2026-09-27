@@ -159,7 +159,7 @@ def test_windows_dry_run_uses_powershell_stages_and_windows_python_layout(
 def test_linux_sdk_build_skips_csharp_unless_requested(tmp_path, monkeypatch, capsys):
     interpreter = tmp_path / "python"
     interpreter.write_text("", encoding="utf-8")
-    monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk.sys, "platform", "linux")
     monkeypatch.setattr(sdk, "_python_executable", lambda: str(interpreter))
     monkeypatch.setattr(
         sdk,
@@ -186,7 +186,7 @@ def test_linux_sdk_build_skips_csharp_unless_requested(tmp_path, monkeypatch, ca
 def test_linux_sdk_build_can_request_csharp(tmp_path, monkeypatch, capsys):
     interpreter = tmp_path / "python"
     interpreter.write_text("", encoding="utf-8")
-    monkeypatch.setattr(sdk, "_is_windows", lambda: False)
+    monkeypatch.setattr(sdk.sys, "platform", "linux")
     monkeypatch.setattr(
         sdk,
         "_python_version_and_paths",

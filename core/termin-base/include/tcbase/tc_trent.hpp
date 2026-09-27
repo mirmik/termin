@@ -112,7 +112,10 @@ namespace tc {
         }
 
         bool as_bool(bool fallback = false) const noexcept {
-            return is_bool() ? value_->data.b : fallback;
+            if (!value_ || value_->type != TC_VALUE_BOOL) {
+                return fallback;
+            }
+            return value_->data.b;
         }
 
         int64_t as_integer(int64_t fallback = 0) const noexcept {

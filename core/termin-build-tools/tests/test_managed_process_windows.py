@@ -305,20 +305,26 @@ def test_windows_parent_termination_closes_job_and_cleans_tree(tmp_path: Path) -
 def test_windows_console_break_cleans_managed_tree(tmp_path: Path) -> None:
     state_path = tmp_path / "console-break-supervisor-tree.json"
     ready_path = state_path.with_suffix(".ready")
-    supervisor = subprocess.Popen(
-        [sys.executable, str(FIXTURE), "supervisor", str(state_path)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-    )
-    with _emergency_windows_cleanup(state_path):
-        deadline = time.monotonic() + 10.0
-        while not ready_path.exists() and time.monotonic() < deadline:
-            time.sleep(0.02)
-        assert ready_path.exists()
-        state = _wait_for_json(state_path)
-        supervisor.send_signal(signal.CTRL_BREAK_EVENT)
-        output, _ = supervisor.communicate(timeout=10.0)
-        assert supervisor.returncode != 0, output
-        _wait_for_windows_pid_exit(int(state["grandchild_pid"]))
+    output_path = tmp_path / "console-break-supervisor.log"
+    with output_path.open("w", encoding="utf-8") as output_file:
+        supervisor = subprocess.Popen(
+            [sys.executable, str(FIXTURE), "supervisor", str(state_path)],
+            stdout=output_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+        with _emergency_windows_cleanup(state_path):
+            deadline = time.monotonic() + 10.0
+            while not ready_path.exists() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert ready_path.exists()
+            state = _wait_for_json(state_path)
+            supervisor.send_signal(signal.CTRL_BREAK_EVENT)
+            try:
+                supervisor.wait(timeout=10.0)
+            except subprocess.TimeoutExpired as error:
+                output = output_path.read_text(encoding="utf-8")
+                raise AssertionError(f"supervisor did not exit after CTRL_BREAK_EVENT:\n{output}") from error
+            assert supervisor.returncode != 0, output_path.read_text(encoding="utf-8")
+            _wait_for_windows_pid_exit(int(state["grandchild_pid"]))
