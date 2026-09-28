@@ -3,10 +3,12 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include "termin_modules/native_module_abi.h"
+#include "termin_modules/termin_modules_api.hpp"
 
 namespace termin_modules {
 
@@ -74,6 +76,38 @@ namespace termin_modules {
         termin_native_module_host_v1 host_api{};
         const termin_native_module_descriptor_v1_data* descriptor = nullptr;
         bool shutdown_called = false;
+        bool symbols_available = false;
+        mutable std::mutex symbols_mutex;
+        size_t active_symbol_calls = 0;
+    };
+
+    // Pins a call, not a binding. Backend refuses unload while any call is active,
+    // including reentrant unload and free-threaded Python callers.
+    class TERMIN_MODULES_API NativeModuleCall {
+    public:
+        NativeModuleCall(std::shared_ptr<CppModuleHandle> handle, uintptr_t address);
+        ~NativeModuleCall();
+        NativeModuleCall(const NativeModuleCall&) = delete;
+        NativeModuleCall& operator=(const NativeModuleCall&) = delete;
+        uintptr_t address() const { return _address; }
+        void release();
+    private:
+        std::shared_ptr<CppModuleHandle> _handle;
+        uintptr_t _address;
+    };
+
+    // Non-owning view of one loaded generation. Never opens or retains an OS
+    // library handle. acquire() protects only the duration of a native call.
+    class TERMIN_MODULES_API NativeModuleSymbols {
+    public:
+        explicit NativeModuleSymbols(const std::shared_ptr<CppModuleHandle>& handle);
+        bool valid() const;
+        uintptr_t resolve(const std::string& name) const;
+        std::shared_ptr<NativeModuleCall> acquire(const std::string& name) const;
+
+    private:
+        std::weak_ptr<CppModuleHandle> _handle;
+        std::string _module_id;
     };
 
     struct PythonModuleHandle : IModuleHandle {};

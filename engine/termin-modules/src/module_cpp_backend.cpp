@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #ifdef _WIN32
@@ -648,6 +649,54 @@ namespace termin_modules {
         return false;
     }
 
+    NativeModuleSymbols::NativeModuleSymbols(const std::shared_ptr<CppModuleHandle>& handle)
+        : _handle(handle), _module_id(handle->module_id) {}
+
+    NativeModuleCall::NativeModuleCall(std::shared_ptr<CppModuleHandle> handle, uintptr_t address)
+        : _handle(std::move(handle)), _address(address) {}
+
+    NativeModuleCall::~NativeModuleCall() { release(); }
+
+    void NativeModuleCall::release() {
+        if (!_handle) return;
+        auto handle = std::move(_handle);
+        std::lock_guard<std::mutex> lock(handle->symbols_mutex);
+        --handle->active_symbol_calls;
+        _address = 0;
+    }
+
+    bool NativeModuleSymbols::valid() const {
+        const auto handle = _handle.lock();
+        if (!handle) return false;
+        std::lock_guard<std::mutex> lock(handle->symbols_mutex);
+        return handle->symbols_available && handle->native_handle;
+    }
+
+    uintptr_t NativeModuleSymbols::resolve(const std::string& name) const {
+        const auto call = acquire(name);
+        return call->address();
+    }
+
+    std::shared_ptr<NativeModuleCall> NativeModuleSymbols::acquire(const std::string& name) const {
+        const auto handle = _handle.lock();
+        std::unique_lock<std::mutex> lock;
+        if (handle) lock = std::unique_lock<std::mutex>(handle->symbols_mutex);
+        if (!handle || !handle->symbols_available || !handle->native_handle) {
+            const std::string error = "Native module binding has been unloaded: " + _module_id;
+            tc::Log::error("NativeModuleSymbols: %s", error.c_str());
+            throw std::runtime_error(error);
+        }
+        void* symbol = resolve_symbol(handle->native_handle, name.c_str());
+        if (!symbol) {
+            const std::string error = "Native symbol not found: " + _module_id + ":" + name;
+            tc::Log::error("NativeModuleSymbols: %s", error.c_str());
+            throw std::runtime_error(error);
+        }
+        auto call = std::make_shared<NativeModuleCall>(handle, reinterpret_cast<uintptr_t>(symbol));
+        ++handle->active_symbol_calls;
+        return call;
+    }
+
     bool CppModuleBackend::needs_rebuild(const ModuleRecord& record, const ModuleEnvironment& environment) {
         (void)environment;
 
@@ -877,6 +926,7 @@ namespace termin_modules {
             return false;
         }
 
+        handle->symbols_available = true;
         record.handle = handle;
         return true;
     }
@@ -894,6 +944,15 @@ namespace termin_modules {
         auto handle = std::dynamic_pointer_cast<CppModuleHandle>(record.handle);
         if (!handle) {
             return true;
+        }
+        {
+            std::lock_guard<std::mutex> lock(handle->symbols_mutex);
+            if (handle->active_symbol_calls != 0) {
+                record.error_message = "Native module still has active bound calls: " + record.spec.id;
+                tc::Log::error("CppModuleBackend: %s", record.error_message.c_str());
+                return false;
+            }
+            handle->symbols_available = false;
         }
         if (handle->shutdown_called) {
             return true;
@@ -932,9 +991,14 @@ namespace termin_modules {
             return true;
         }
 
-        unload_shared_library(handle->native_handle);
-        handle->native_handle = nullptr;
-        handle->descriptor = nullptr;
+        void* native_handle;
+        {
+            std::lock_guard<std::mutex> lock(handle->symbols_mutex);
+            native_handle = handle->native_handle;
+            handle->native_handle = nullptr;
+            handle->descriptor = nullptr;
+        }
+        unload_shared_library(native_handle);
         return remove_shadow_artifacts(record, handle->loaded_path);
     }
 

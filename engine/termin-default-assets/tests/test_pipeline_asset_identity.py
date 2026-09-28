@@ -348,3 +348,47 @@ def test_graph_and_its_lowered_pass_list_publish_equivalent_descriptors(tmp_path
     finally:
         manager.clear_runtime_state()
         shutdown_player()
+
+
+def test_color_overlay_after_postprocess_keeps_composed_input(tmp_path: Path) -> None:
+    """A ColorPass input spec must not allocate over a generated FBO recipe."""
+    from termin.bootstrap import bootstrap_player, shutdown_player
+
+    bootstrap_player()
+    path = tmp_path / "overlay.pipeline"
+    path.write_text(json.dumps({
+        "uuid": "postprocess-overlay-regression",
+        "nodes": [
+            {"type": "FBO", "params": {"samples": "1"}},
+            {"type": "ColorPass", "params": {"phase_mark": "opaque"}},
+            {"type": "BloomPass"},
+            {"type": "FBO", "params": {"samples": "1"}},
+            {"type": "ColorPass", "params": {"phase_mark": "ui"}},
+            {"type": "PipelineOutput", "node_type": "pipeline_output"},
+        ],
+        "connections": [
+            {"from_node": 0, "from_socket": "fbo", "to_node": 1, "to_socket": "input_res"},
+            {"from_node": 1, "from_socket": "output_res", "to_node": 2, "to_socket": "input_res"},
+            {"from_node": 3, "from_socket": "fbo", "to_node": 2, "to_socket": "output_res_target"},
+            {"from_node": 2, "from_socket": "output_res", "to_node": 4, "to_socket": "input_res"},
+            {"from_node": 4, "from_socket": "output_res", "to_node": 5, "to_socket": "color"},
+        ],
+    }), encoding="utf-8")
+    manager = DefaultResourceManager()
+    try:
+        result = PipelineImportPlugin().preload(str(path))
+        assert result is not None
+        manager.register_file(result)
+        asset = manager.get_pipeline_asset("overlay")
+        assert asset.ensure_loaded()
+        resource = asset.canonical_resource
+        assert "BloomPass_2_output_res" in resource.fbo_compositions
+        assert all(item["name"] != "BloomPass_2_output_res" for item in resource.resources)
+        instance = asset.pipeline
+        try:
+            assert instance.serialize()["fbo_compositions"] == resource.fbo_compositions
+        finally:
+            instance.destroy()
+    finally:
+        manager.clear_runtime_state()
+        shutdown_player()

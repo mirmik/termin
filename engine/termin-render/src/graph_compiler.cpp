@@ -1059,6 +1059,12 @@ namespace tc {
         for (const ResourceSpec& spec : specs) {
             if (spec.resource.empty() || resource_indices.contains(spec.resource))
                 continue;
+            // Pass defaults describe their input attachment requirements. They
+            // must not allocate a second resource when graph lowering already
+            // resolved that input to a view or a composed framebuffer.
+            if (cache.resource_views.contains(spec.resource) ||
+                cache.fbo_compositions.contains(spec.resource))
+                continue;
             resource_indices[spec.resource] = resource_storage.size();
             resource_storage.push_back({
                 spec.resource,

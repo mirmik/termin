@@ -90,6 +90,12 @@ class ProjectModulesRuntime:
         self._configure_environment()
         self._configure_runtime()
 
+    def bind_native_library(self, module_id: str):
+        """Borrow the loaded generation; caller must declare its module dependency."""
+        from termin_modules.native_library import NativeLibrary
+
+        return NativeLibrary(self._runtime.native_symbols(module_id))
+
     @property
     def closed(self) -> bool:
         return self._closed

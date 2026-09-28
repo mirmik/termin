@@ -2,6 +2,7 @@
 #include <nanobind/stl/filesystem.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/vector.h>
 
 #include "termin_modules/module_cpp_backend.hpp"
@@ -132,6 +133,15 @@ NB_MODULE(_termin_modules_native, m) {
     nb::class_<CppModuleBackend>(m, "CppModuleBackend").def(nb::init<>());
     nb::class_<PythonModuleBackend>(m, "PythonModuleBackend").def(nb::init<>());
 
+    nb::class_<NativeModuleCall>(m, "NativeModuleCall")
+        .def_prop_ro("address", &NativeModuleCall::address)
+        .def("release", &NativeModuleCall::release);
+
+    nb::class_<NativeModuleSymbols>(m, "NativeModuleSymbols")
+        .def_prop_ro("valid", &NativeModuleSymbols::valid)
+        .def("resolve", &NativeModuleSymbols::resolve, nb::arg("name"))
+        .def("acquire", &NativeModuleSymbols::acquire, nb::arg("name"));
+
     nb::class_<ModuleRuntime>(m, "ModuleRuntime")
         .def(nb::init<>())
         .def("set_environment", &ModuleRuntime::set_environment, nb::arg("environment"))
@@ -151,6 +161,7 @@ NB_MODULE(_termin_modules_native, m) {
         .def("unload_module", &ModuleRuntime::unload_module, nb::arg("module_id"))
         .def("reload_module", &ModuleRuntime::reload_module, nb::arg("module_id"))
         .def("reload_module_with_dependents", &ModuleRuntime::reload_module_with_dependents, nb::arg("module_id"))
+        .def("native_symbols", &ModuleRuntime::native_symbols, nb::arg("module_id"))
         .def("needs_rebuild", &ModuleRuntime::needs_rebuild, nb::arg("module_id"))
         .def("build_module",
              &ModuleRuntime::build_module,

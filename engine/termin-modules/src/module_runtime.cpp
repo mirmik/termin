@@ -6,6 +6,7 @@
 #include <exception>
 #include <filesystem>
 #include <sstream>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -850,6 +851,17 @@ namespace termin_modules {
         }
         emit(ModuleEventKind::Unloaded, module_id);
         return true;
+    }
+
+    NativeModuleSymbols ModuleRuntime::native_symbols(const std::string& module_id) const {
+        const ModuleRecord* record = find(module_id);
+        const auto handle = record ? std::dynamic_pointer_cast<CppModuleHandle>(record->handle) : nullptr;
+        if (!record || record->state != ModuleState::Loaded || !handle || !handle->symbols_available) {
+            const std::string error = "Native module is not loaded: " + module_id;
+            tc::Log::error("ModuleRuntime: %s", error.c_str());
+            throw std::runtime_error(error);
+        }
+        return NativeModuleSymbols(handle);
     }
 
     bool ModuleRuntime::reload_module(const std::string& module_id) {
