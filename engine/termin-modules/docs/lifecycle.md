@@ -74,7 +74,10 @@ Runtime публикует batch атомарно: все успешно раз�
 `CppModuleBackend`:
 
 1. читает `CppModuleConfig`
-2. если указан `build.command`, запускает сборку в директории дескриптора
+2. если `needs_rebuild()` обнаруживает отсутствующий или устаревший artifact,
+   запускает `build.command` в директории дескриптора; свежий artifact загружается
+   без повторной сборки. Явные `build_module()` / `rebuild_module()` по-прежнему
+   запускают сборку без этой проверки
 3. проверяет наличие `build.output`
 4. если в `ModuleEnvironment.sdk_prefix` доступен
    `bin/termin_module_native_validator`, запускает отдельный helper-процесс,
@@ -319,10 +322,35 @@ live create/change/remove события помечают модуль dirty.
 Применение изменений выполняется явным действием (`Reload Changed` /
 `Build & Reload Changed`) или Play-gate перед входом в Game Mode. Play-gate
 сначала запускает isolated artifact preparation, затем вызывает
-editor-level `prepare_changed_modules_for_play()`: dirty/stale модули
+editor-level `prepare_changed_modules_for_play()`: dirty/stale модули и модули
+с внешне заменённым native artifact
 reload-ятся через dependency-aware cascade, а уже подготовленный C++ artifact
 не требует долгого build в commit phase. Если build/reload падает, Play не стартует, модуль остаётся в
 `Failed`/degraded состоянии с диагностикой.
+
+`needs_rebuild()` сравнивает inputs с artifact на диске. Отдельный
+`needs_reload()` сравнивает содержимое `build.output` с неизменяемой shadow-копией
+успешно загруженного поколения. Shadow-копия служит точным снимком версии:
+сохранённые размер/mtime не скрывают замену, а изменение только mtime не вызывает
+reload. Проверка читает файлы блоками и не требует watcher dirty. Изменения только
+соседних библиотек, не являющихся `build.output`, этой проверкой не отслеживаются.
+Ошибки чтения логируются и требуют reload; неудачная загрузка не принимается за
+актуальное поколение. При сбое каскада runtime сохраняет pending для всех
+затронутых модулей, включая уже выгруженные зависимые модули,
+и повторяет их в порядке зависимостей при следующем Play. Намеренно выгруженные
+модули без pending не загружаются только из-за этой проверки.
+
+Native input-событие watcher также фиксирует `inputs_changed_at` в runtime.
+Это сохраняет потребность сборки при удалении файла или правке с сохранённым
+mtime. Её удовлетворяет успешная build-команда либо artifact, опубликованный
+позже последнего наблюдаемого изменения. При неоднозначных timestamps выполняется
+сборка; её ошибка не снимает pending. Проверка байтов загруженного поколения
+остаётся независимой от этой проверки inputs.
+Isolated preparation передаёт такие задачи worker-у через явный Build до warmup:
+свежий процесс не может восстановить историю удалённых файлов самостоятельно.
+Успех worker-а подтверждает только захваченную revision inputs, поэтому более
+новое watcher-событие не теряется. Ошибка preparation оставляет live-поколение
+загруженным и не допускает commit.
 
 Standalone `.py` вне ownership активного `.pymodule` остаётся inert при initial
 scan, filesystem change и Play. Project browser продолжает показывать такой файл,

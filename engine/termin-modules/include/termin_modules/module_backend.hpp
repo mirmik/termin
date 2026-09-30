@@ -76,6 +76,14 @@ namespace termin_modules {
             return false;
         }
 
+        // Independent of input freshness: a ready artifact may differ from the
+        // generation currently loaded in this process.
+        virtual bool needs_reload(const ModuleRecord& record, const ModuleEnvironment& environment) {
+            (void)record;
+            (void)environment;
+            return false;
+        }
+
         virtual void set_output_callback(BuildOutputCallback callback) {
             (void)callback;
         }

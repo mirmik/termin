@@ -59,6 +59,9 @@ namespace termin_modules {
         bool reload_module_with_dependents(const std::string& module_id);
         NativeModuleSymbols native_symbols(const std::string& module_id) const;
         bool needs_rebuild(const std::string& module_id);
+        bool needs_reload(const std::string& module_id);
+        void mark_inputs_changed(const std::string& module_id);
+        void acknowledge_inputs_built(const std::string& module_id, uint64_t revision);
         bool build_module(const std::string& module_id);
         bool clean_module(const std::string& module_id);
         bool rebuild_module(const std::string& module_id);

@@ -1311,6 +1311,31 @@ namespace {
         expect(count_regular_files(shadow_root) == 0, "shadow reload final unload must leave no native shadow files");
     }
 
+    void test_cpp_reload_tracks_missing_artifact_and_failed_replacement() {
+        TempDir tmp;
+        const auto artifact = write_shadow_test_descriptor(tmp.path, "shadow_test");
+        const auto backup = artifact.parent_path() / "saved-artifact";
+        ModuleRuntime runtime;
+        runtime.set_environment(ModuleEnvironment{});
+        runtime.register_backend(std::make_shared<CppModuleBackend>());
+        expect(runtime.discover(tmp.path), runtime.last_error());
+        expect(!runtime.needs_reload("shadow_test"), "discovered module is not a changed generation");
+        expect(runtime.load_module("shadow_test"), runtime.last_error());
+        expect(!runtime.needs_reload("shadow_test"), "loaded artifact matches its shadow");
+
+        std::filesystem::rename(artifact, backup);
+        expect(runtime.needs_reload("shadow_test"), "missing artifact must require reload");
+        expect(!runtime.reload_module("shadow_test"), "missing artifact must fail replacement");
+        expect(runtime.find("shadow_test")->state == ModuleState::Failed, "replacement remains failed");
+        expect(runtime.needs_reload("shadow_test"), "failed replacement must remain pending");
+
+        std::filesystem::rename(backup, artifact);
+        expect(runtime.reload_module("shadow_test"), runtime.last_error());
+        expect(!runtime.needs_reload("shadow_test"), "successful retry clears pending replacement");
+        expect(runtime.unload_module("shadow_test"), runtime.last_error());
+        expect(!runtime.needs_reload("shadow_test"), "intentional unload must not request reload");
+    }
+
     void test_cpp_backend_cleans_shadow_after_post_copy_load_failure() {
         TempDir tmp;
         write_shadow_test_descriptor(tmp.path, "shadow_test");
@@ -1684,6 +1709,10 @@ TEST_CASE("cpp reload removes the old shadow before publishing its replacement")
 
 TEST_CASE("cpp backend cleans shadow artifacts after post-copy load failure") {
     test_cpp_backend_cleans_shadow_after_post_copy_load_failure();
+}
+
+TEST_CASE("cpp reload detects missing artifacts and retries failed replacements") {
+    test_cpp_reload_tracks_missing_artifact_and_failed_replacement();
 }
 
 TEST_CASE("cpp backend shadow sessions are collision-free across concurrent runtimes") {

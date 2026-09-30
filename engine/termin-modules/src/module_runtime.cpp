@@ -994,6 +994,31 @@ namespace termin_modules {
         return backend->needs_rebuild(*mutable_target, _environment);
     }
 
+    void ModuleRuntime::mark_inputs_changed(const std::string& module_id) {
+        ModuleRecord* target = find_mutable_record(_records, module_id);
+        if (target != nullptr && target->spec.kind == ModuleKind::Cpp) {
+            target->inputs_changed_at = std::filesystem::file_time_type::clock::now();
+            ++target->input_revision;
+        }
+    }
+
+    void ModuleRuntime::acknowledge_inputs_built(const std::string& module_id, uint64_t revision) {
+        ModuleRecord* target = find_mutable_record(_records, module_id);
+        if (target != nullptr && target->input_revision == revision)
+            target->inputs_changed_at.reset();
+    }
+
+    bool ModuleRuntime::needs_reload(const std::string& module_id) {
+        if (!refresh_descriptor_snapshot())
+            return false;
+        ModuleRecord* target = find_mutable_record(_records, module_id);
+        if (target == nullptr)
+            return false;
+
+        IModuleBackend* backend = get_backend(target->spec.kind);
+        return backend != nullptr && backend->needs_reload(*target, _environment);
+    }
+
     bool ModuleRuntime::build_module(const std::string& module_id) {
         if (!refresh_descriptor_snapshot()) {
             return false;

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -119,6 +121,10 @@ namespace termin_modules {
         std::string error_message;
         std::string diagnostics;
         std::shared_ptr<IModuleHandle> handle;
+        // Watcher observations also cover deletions and timestamp-preserving
+        // edits, which cannot be recovered by scanning existing inputs.
+        std::optional<std::filesystem::file_time_type> inputs_changed_at;
+        uint64_t input_revision = 0;
     };
 
     struct ModuleEnvironment {

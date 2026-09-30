@@ -87,6 +87,7 @@ NB_MODULE(_termin_modules_native, m) {
         .def_ro("dependencies", &ModuleSpec::dependencies);
 
     nb::class_<ModuleRecord>(m, "ModuleRecord")
+        .def_ro("input_revision", &ModuleRecord::input_revision)
         .def_prop_ro("id", [](const ModuleRecord& self) { return self.spec.id; })
         .def_prop_ro("kind", [](const ModuleRecord& self) { return self.spec.kind; })
         .def_prop_ro("descriptor_path", [](const ModuleRecord& self) { return self.spec.descriptor_path; })
@@ -163,6 +164,10 @@ NB_MODULE(_termin_modules_native, m) {
         .def("reload_module_with_dependents", &ModuleRuntime::reload_module_with_dependents, nb::arg("module_id"))
         .def("native_symbols", &ModuleRuntime::native_symbols, nb::arg("module_id"))
         .def("needs_rebuild", &ModuleRuntime::needs_rebuild, nb::arg("module_id"))
+        .def("needs_reload", &ModuleRuntime::needs_reload, nb::arg("module_id"))
+        .def("mark_inputs_changed", &ModuleRuntime::mark_inputs_changed, nb::arg("module_id"))
+        .def("acknowledge_inputs_built", &ModuleRuntime::acknowledge_inputs_built,
+             nb::arg("module_id"), nb::arg("revision"))
         .def("build_module",
              &ModuleRuntime::build_module,
              nb::arg("module_id"),

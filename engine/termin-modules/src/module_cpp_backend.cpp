@@ -5,6 +5,7 @@
 #include <tcbase/tc_log.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cerrno>
 #include <chrono>
@@ -12,6 +13,7 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -37,6 +39,29 @@ namespace termin_modules {
     namespace {
 
         constexpr auto kAbandonedShadowAge = std::chrono::hours(24);
+
+        bool same_artifact_contents(const std::filesystem::path& artifact,
+                                    const std::filesystem::path& loaded_shadow) {
+            if (std::filesystem::file_size(artifact) != std::filesystem::file_size(loaded_shadow))
+                return false;
+
+            std::ifstream current(artifact, std::ios::binary);
+            std::ifstream loaded(loaded_shadow, std::ios::binary);
+            if (!current.is_open() || !loaded.is_open())
+                throw std::runtime_error("Cannot open native artifact or loaded shadow for comparison");
+            std::array<char, 64 * 1024> current_bytes;
+            std::array<char, 64 * 1024> loaded_bytes;
+            do {
+                current.read(current_bytes.data(), current_bytes.size());
+                loaded.read(loaded_bytes.data(), loaded_bytes.size());
+                if (current.bad() || loaded.bad())
+                    throw std::runtime_error("Cannot read native artifact or loaded shadow for comparison");
+                if (current.gcount() != loaded.gcount() ||
+                    !std::equal(current_bytes.begin(), current_bytes.begin() + current.gcount(), loaded_bytes.begin()))
+                    return false;
+            } while (!current.eof() && !loaded.eof());
+            return current.eof() && loaded.eof();
+        }
 
         void native_module_host_log(void*, int level, const char* message) {
             const char* text = message ? message : "";
@@ -705,16 +730,15 @@ namespace termin_modules {
             return false;
         if (config->artifact_path.empty())
             return true;
-        if (!std::filesystem::exists(config->artifact_path))
-            return true;
-
-        auto artifact_time = std::filesystem::last_write_time(config->artifact_path);
-
-        std::filesystem::path module_dir = record.spec.descriptor_path.parent_path();
-        if (!std::filesystem::exists(module_dir))
-            return true;
-
         try {
+            if (!std::filesystem::exists(config->artifact_path))
+                return true;
+            const auto artifact_time = std::filesystem::last_write_time(config->artifact_path);
+            if (record.inputs_changed_at && *record.inputs_changed_at >= artifact_time)
+                return true;
+            const std::filesystem::path module_dir = record.spec.descriptor_path.parent_path();
+            if (!std::filesystem::exists(module_dir))
+                return true;
             if (std::filesystem::last_write_time(record.spec.descriptor_path) > artifact_time) {
                 return true;
             }
@@ -757,6 +781,31 @@ namespace termin_modules {
         return false;
     }
 
+    bool CppModuleBackend::needs_reload(const ModuleRecord& record, const ModuleEnvironment& environment) {
+        (void)environment;
+        // A failed replacement must remain pending on the next Play attempt.
+        // Intentionally unloaded and undiscovered generations are not changes.
+        if (record.state == ModuleState::Failed || record.state == ModuleState::CleanupFailed)
+            return true;
+        if (record.state != ModuleState::Loaded)
+            return false;
+        const auto config = std::dynamic_pointer_cast<CppModuleConfig>(record.spec.config);
+        const auto handle = std::dynamic_pointer_cast<CppModuleHandle>(record.handle);
+        if (!config || !handle || !handle->symbols_available)
+            return true;
+        if (config->artifact_path != handle->artifact_path)
+            return true;
+        try {
+            // The immutable shadow is the exact loaded-version snapshot. Compare
+            // bytes instead of mtimes: external tools can preserve size and time.
+            return !same_artifact_contents(config->artifact_path, handle->loaded_path);
+        } catch (const std::exception& e) {
+            tc::Log::warn(e, "CppModuleBackend::needs_reload: cannot compare artifact for '%s', reload required",
+                          record.spec.id.c_str());
+            return true;
+        }
+    }
+
     void CppModuleBackend::set_output_callback(BuildOutputCallback callback) {
         _output_callback = std::move(callback);
     }
@@ -777,6 +826,7 @@ namespace termin_modules {
 
         std::string output;
         std::string error;
+        const auto input_revision = record.input_revision;
         if (!run_build_command(record.spec.id,
                                config->build_command,
                                record.spec.descriptor_path.parent_path(),
@@ -788,12 +838,14 @@ namespace termin_modules {
             return false;
         }
         record.diagnostics = output;
+        if (record.input_revision == input_revision)
+            record.inputs_changed_at.reset();
         return true;
     }
 
     bool CppModuleBackend::load(ModuleRecord& record, const ModuleEnvironment& environment) {
         record.error_message.clear();
-        if (!build(record, environment)) {
+        if (needs_rebuild(record, environment) && !build(record, environment)) {
             return false;
         }
 

@@ -48,6 +48,8 @@ namespace termin_modules {
 
         bool needs_rebuild(const ModuleRecord& record, const ModuleEnvironment& environment) override;
 
+        bool needs_reload(const ModuleRecord& record, const ModuleEnvironment& environment) override;
+
         void set_output_callback(BuildOutputCallback callback) override;
 
         bool ensure_shadow_session(const ModuleEnvironment& environment, std::string& error);

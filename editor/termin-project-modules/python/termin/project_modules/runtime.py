@@ -266,6 +266,8 @@ class ProjectModulesRuntime:
         for change in self.module_file_changes_for_path(path):
             reasons = self._dirty_module_reasons.setdefault(change.module_id, set())
             reasons.add(f"{change.reason}: {change.path}")
+            if change.kind in {"cpp_input", "cpp_descriptor"}:
+                self.mark_inputs_changed(change.module_id)
             if change.module_id not in module_ids:
                 module_ids.append(change.module_id)
         return module_ids
@@ -282,6 +284,14 @@ class ProjectModulesRuntime:
     def needs_rebuild(self, module_id: str) -> bool:
         return self._runtime.needs_rebuild(module_id)
 
+    def mark_inputs_changed(self, module_id: str) -> None:
+        """Record native input events that mtime scans alone cannot detect."""
+        self._runtime.mark_inputs_changed(module_id)
+
+    def needs_reload(self, module_id: str) -> bool:
+        """Whether a native artifact differs from the loaded generation or load failed."""
+        return self._runtime.needs_reload(module_id)
+
     def stale_modules(self) -> list[str]:
         """Return list of module IDs that need rebuild."""
         result = []
@@ -291,9 +301,10 @@ class ProjectModulesRuntime:
         return result
 
     def changed_modules(self) -> list[str]:
-        """Return dirty or stale module IDs in runtime record order."""
+        """Return dirty, stale or externally replaced modules in runtime record order."""
         pending = set(self._dirty_module_reasons)
         pending.update(self.stale_modules())
+        pending.update(record.id for record in self.records() if self.needs_reload(record.id))
         return [record.id for record in self.records() if record.id in pending]
 
     def reload_dirty_modules(self) -> bool:
@@ -310,8 +321,19 @@ class ProjectModulesRuntime:
                 break
 
             affected = self._loaded_dependent_closure(module_id)
-            log.info(f"[ProjectModulesRuntime] Reloading changed module: {module_id}")
+            reasons = list(self._dirty_module_reasons.get(module_id, ()))
+            if self.needs_rebuild(module_id):
+                reasons.append("native inputs changed since artifact publication or artifact is missing")
+            if self.needs_reload(module_id):
+                reasons.append("native artifact differs from loaded generation or previous load failed")
+            log.info(f"[ProjectModulesRuntime] Reloading changed module: {module_id}; {'; '.join(reasons)}")
             if not self.reload_module(module_id):
+                # The cascade may already have unloaded dependents. Preserve
+                # their work so the next Play retries the entire affected set.
+                for affected_id in affected:
+                    self._dirty_module_reasons.setdefault(affected_id, set()).add(
+                        f"retry failed reload of {module_id}"
+                    )
                 log.error(
                     f"[ProjectModulesRuntime] Failed to reload changed module '{module_id}': "
                     f"{self._runtime.last_error}"
@@ -376,6 +398,29 @@ class ProjectModulesRuntime:
             log.error(f"[ProjectModulesRuntime] {self._background_error}")
             return False
 
+        # Watcher observations live in this process. Explicitly build these
+        # inputs in the worker: a fresh worker cannot discover deleted files or
+        # timestamp-preserving edits by scanning the filesystem.
+        same_project = target_root == self._project_root
+        if operation == "warmup" and same_project:
+            observed_stale = {
+                record.id for record in self.records()
+                if record.kind == ModuleKind.Cpp
+                and record.id in self._dirty_module_reasons
+                and self.needs_rebuild(record.id)
+            }
+            for record in self._runtime.resolve_closure(sorted(observed_stale)):
+                if record.id in observed_stale and not self.prepare_module_artifacts(
+                    project_root=target_root, operation="build", module_id=record.id,
+                ):
+                    return False
+
+        prepared_revision = None
+        if same_project and operation in {"build", "rebuild"} and module_id is not None:
+            record = self.find(module_id)
+            if record is not None:
+                prepared_revision = record.input_revision
+
         command = [
             python_executable,
             "-m",
@@ -424,6 +469,8 @@ class ProjectModulesRuntime:
             self._background_error = f"Isolated module build failed with exit code {return_code}"
             log.error(f"[ProjectModulesRuntime] {self._background_error}")
             return False
+        if prepared_revision is not None:
+            self._runtime.acknowledge_inputs_built(module_id, prepared_revision)
         return True
 
     def unload_module(self, module_id: str) -> bool:
@@ -536,7 +583,7 @@ class ProjectModulesRuntime:
 
     def _first_pending_module(self, pending: set[str]) -> str | None:
         for record in self.records():
-            if record.id in pending:
+            if record.id in pending and not any(dependency in pending for dependency in record.dependencies):
                 return record.id
         return next(iter(pending), None)
 

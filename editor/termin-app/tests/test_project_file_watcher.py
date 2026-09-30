@@ -79,6 +79,9 @@ class RuntimeUnderTest(ProjectModulesRuntime):
     def records(self) -> list[object]:
         return list(self._records)
 
+    def mark_inputs_changed(self, module_id: str) -> None:
+        pass
+
 
 class ReloadRuntimeUnderTest(RuntimeUnderTest):
     def __init__(self, records: list[object], stale_modules: list[str] | None = None) -> None:
@@ -96,6 +99,12 @@ class ReloadRuntimeUnderTest(RuntimeUnderTest):
 
     def stale_modules(self) -> list[str]:
         return list(self._stale_modules)
+
+    def needs_rebuild(self, module_id: str) -> bool:
+        return module_id in self._stale_modules
+
+    def needs_reload(self, module_id: str) -> bool:
+        return False
 
     def reload_module(self, module_id: str) -> bool:
         self.reloaded_modules.append(module_id)
