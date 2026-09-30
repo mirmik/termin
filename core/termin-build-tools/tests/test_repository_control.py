@@ -1358,6 +1358,33 @@ def test_windows_process_smoke_requires_a_supported_runner(tmp_path: Path) -> No
     ]
 
 
+@pytest.mark.parametrize("suffix", [".bat", ".cmd", ".ps1"])
+def test_windows_process_smoke_runner_rejects_non_windows_platform(
+    tmp_path: Path, suffix: str,
+) -> None:
+    repo = _repository(tmp_path)
+    _add_process_smoke_suite(
+        repo, profile="linux-smoke", platform="linux",
+        root=f"scripts/windows-smoke{suffix}", capability="host",
+    )
+    errors = repository_control.validate_catalog(repo, repository_control.load_catalog(repo))
+    assert errors == [
+        "alpha-process-smoke: Windows process-smoke root is declared for "
+        f"a non-Windows platform: scripts/windows-smoke{suffix}"
+    ]
+
+
+def test_pytest_excluded_root_outside_suite_reports_validation_error(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
+    (repo / "outside").mkdir()
+    manifest = repo / repository_control.TEST_MANIFEST
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["suites"][0]["excluded_roots"] = ["outside"]
+    _write_json(manifest, data)
+    errors = repository_control.validate_catalog(repo, repository_control.load_catalog(repo))
+    assert errors == ["alpha-python: excluded test root is outside suite roots: outside"]
+
+
 def test_windows_process_smoke_executes_from_canonical_plan(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:

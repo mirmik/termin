@@ -919,6 +919,13 @@ def validate_catalog(repo_root: Path, catalog: RepositoryCatalog) -> list[str]:
                         f"{suite.id}: Windows process-smoke root has no supported "
                         f"runner: {root}"
                     )
+                if suffix in {".bat", ".cmd", ".ps1"} and any(
+                    platform != "windows" for platform in suite.platforms
+                ):
+                    errors.append(
+                        f"{suite.id}: Windows process-smoke root is declared for "
+                        f"a non-Windows platform: {root}"
+                    )
         for excluded_root in suite.excluded_roots:
             if not _is_repository_relative(excluded_root):
                 errors.append(
@@ -936,13 +943,6 @@ def validate_catalog(repo_root: Path, catalog: RepositoryCatalog) -> list[str]:
                     f"{suite.id}: excluded test root is outside suite roots: "
                     f"{excluded_root}"
                 )
-                if suffix in {".bat", ".cmd", ".ps1"} and any(
-                    platform != "windows" for platform in suite.platforms
-                ):
-                    errors.append(
-                        f"{suite.id}: Windows process-smoke root is declared for "
-                        f"a non-Windows platform: {root}"
-                    )
 
     documentation = catalog.documentation
     public_roots = [site.root for site in documentation.sites]
