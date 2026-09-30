@@ -9,13 +9,15 @@ import subprocess
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 IGNORED_DIRECTORIES = {
     ".git",
     ".pytest_cache",
     "__pycache__",
     "build",
     "sdk",
+    "sdk-core",
+    "sdk-graphics",
     "termin-thirdparty",
 }
 
@@ -60,6 +62,7 @@ def _balanced_calls(source: str, function_name: str) -> list[str]:
 
 def test_every_nanobind_entry_point_uses_the_canonical_shared_profile() -> None:
     entry_points: dict[str, Path] = {}
+    embedded_modules: dict[str, Path] = {}
     for path in _repository_files({".cc", ".cpp", ".cxx", ".h", ".hpp"}):
         source = path.read_text(encoding="utf-8", errors="replace")
         for name in re.findall(
@@ -68,6 +71,17 @@ def test_every_nanobind_entry_point_uses_the_canonical_shared_profile() -> None:
         ):
             assert name not in entry_points, f"duplicate NB_MODULE {name}"
             entry_points[name] = path
+        for arguments in _balanced_calls(source, "PyImport_AppendInittab"):
+            registration = re.fullmatch(
+                r'\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*,\s*&?PyInit_([A-Za-z_][A-Za-z0-9_]*)\s*',
+                arguments,
+            )
+            if registration is None:
+                continue
+            name, initializer = registration.groups()
+            assert name == initializer, f"{path}: embedded module {name} uses PyInit_{initializer}"
+            assert name not in embedded_modules, f"duplicate embedded module registration {name}"
+            embedded_modules[name] = path
 
     module_targets: dict[str, Path] = {}
     for path in _repository_files({".cmake"}, {"CMakeLists.txt"}):
@@ -87,18 +101,49 @@ def test_every_nanobind_entry_point_uses_the_canonical_shared_profile() -> None:
             module_targets[name] = path
 
     assert entry_points
-    assert entry_points.keys() == module_targets.keys(), (
-        f"entry points without canonical targets: "
-        f"{sorted(entry_points.keys() - module_targets.keys())}; "
-        f"targets without entry points: "
-        f"{sorted(module_targets.keys() - entry_points.keys())}"
+    declared_modules = module_targets.keys() | embedded_modules.keys()
+    assert entry_points.keys() == declared_modules, (
+        f"entry points without canonical targets or embedded registrations: "
+        f"{sorted(entry_points.keys() - declared_modules)}; "
+        f"targets or embedded registrations without entry points: "
+        f"{sorted(declared_modules - entry_points.keys())}"
     )
+
+
+@pytest.mark.parametrize("registration,expected_error", [
+    ('PyImport_AppendInittab("_embedded", PyInit__embedded);', None),
+    ("", "without canonical targets or embedded registrations"),
+    ('PyImport_AppendInittab("_embedded", PyInit__other);', "uses PyInit__other"),
+    ('PyImport_AppendInittab("_other", PyInit__other);', "without canonical targets or embedded registrations"),
+])
+def test_embedded_entrypoint_requires_explicit_matching_registration(
+    tmp_path: Path, monkeypatch, registration: str, expected_error: str | None
+) -> None:
+    monkeypatch.setitem(globals(), "REPO_ROOT", tmp_path)
+    graphics = tmp_path / "graphics" / "probe"
+    graphics.mkdir(parents=True)
+    (graphics / "probe.cpp").write_text(
+        "NB_MODULE(_extension, module) {}\nNB_MODULE(_embedded, module) {}\n"
+        + registration + "\n", encoding="utf-8",
+    )
+    (graphics / "CMakeLists.txt").write_text(
+        "nanobind_add_module(_extension NB_SHARED probe.cpp)\n", encoding="utf-8"
+    )
+    for generated in ("sdk", "sdk-core", "sdk-graphics"):
+        directory = tmp_path / generated
+        directory.mkdir()
+        (directory / "generated.cpp").write_text("NB_MODULE(_ignored, module) {}\n")
+    if expected_error:
+        with pytest.raises(AssertionError, match=expected_error):
+            test_every_nanobind_entry_point_uses_the_canonical_shared_profile()
+    else:
+        test_every_nanobind_entry_point_uses_the_canonical_shared_profile()
 
 
 def test_cmake_consumers_do_not_link_bare_nanobind_runtime() -> None:
     bypasses = []
     for path in _repository_files({".cmake"}, {"CMakeLists.txt"}):
-        if path.is_relative_to(REPO_ROOT / "termin-nanobind-sdk" / "cmake"):
+        if path.is_relative_to(REPO_ROOT / "core" / "termin-nanobind-sdk" / "cmake"):
             continue
         source = path.read_text(encoding="utf-8", errors="replace")
         if re.search(r"(?m)^\s+nanobind\s*$", source):
@@ -123,7 +168,7 @@ def test_profile_derives_module_contract_from_runtime_abi(
     build_dir = tmp_path / "build"
     source_dir.mkdir()
     (source_dir / "probe.cpp").write_text("int probe = 0;\n", encoding="utf-8")
-    profile_path = REPO_ROOT / "termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake"
+    profile_path = REPO_ROOT / "core/termin-nanobind-sdk/cmake/TerminNanobindProfile.cmake"
     (source_dir / "CMakeLists.txt").write_text(
         "cmake_minimum_required(VERSION 3.16)\n"
         "project(termin_nanobind_profile_unit LANGUAGES CXX)\n"

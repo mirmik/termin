@@ -39,12 +39,31 @@ namespace {
 
 } // namespace
 
+// An embedded interpreter must import a nanobind module to initialize the
+// shared runtime before bridge callbacks format Python exceptions.
+NB_MODULE(_termin_inspect_test_runtime, module) {
+    (void)module;
+}
+
 int main() {
     tc::init_cpp_inspect_vtable();
     (void)tc::KindRegistryCpp::instance();
     tc::register_builtin_cpp_kinds();
 
+    if (!require_check(
+            PyImport_AppendInittab("_termin_inspect_test_runtime", PyInit__termin_inspect_test_runtime) == 0,
+            "registered embedded nanobind runtime module"))
+        return 1;
     Py_Initialize();
+    PyObject* runtime_module = PyImport_ImportModule("_termin_inspect_test_runtime");
+    if (!runtime_module) {
+        std::fprintf(stderr, "test_python_inspect failed: could not initialize embedded nanobind runtime\n");
+        PyErr_Print();
+        Py_Finalize();
+        return 1;
+    }
+    Py_DECREF(runtime_module);
+
     tc::init_python_lang_vtable();
     tc::init_python_inspect_vtable();
     {
