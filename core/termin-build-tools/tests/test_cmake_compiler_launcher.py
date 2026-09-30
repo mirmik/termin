@@ -29,7 +29,7 @@ class LauncherProject:
             "project(compiler_launcher_regression LANGUAGES C CXX)\n"
             "option(TERMIN_USE_CCACHE \"Use ccache\" ON)\n"
             "option(TEST_MSVC_POLICY \"Exercise MSVC launcher policy\" OFF)\n"
-            "if(TEST_MSVC_POLICY)\n  set(MSVC TRUE)\nendif()\n"
+            "set(MSVC ${TEST_MSVC_POLICY})\n"
             f'include("{module.as_posix()}")\n'
             "add_library(sample STATIC sample.c sample.cpp)\n",
             encoding="utf-8",
