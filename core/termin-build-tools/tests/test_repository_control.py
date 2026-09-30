@@ -385,6 +385,52 @@ def test_test_discovery_ignores_generated_build_and_install_trees(
     ) == ()
 
 
+@pytest.mark.parametrize("sdk_prefix", ["sdk", "sdk-core", "sdk-graphics"])
+def test_test_discovery_ignores_stale_sdk_product_trees(
+    tmp_path: Path, sdk_prefix: str
+) -> None:
+    repo = _repository(tmp_path)
+    manifest = repo / repository_control.TEST_MANIFEST
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    production = json.loads(
+        (Path(__file__).resolve().parents[3] / repository_control.TEST_MANIFEST)
+        .read_text(encoding="utf-8")
+    )
+    for inventory in ("python_test_inventory", "native_test_inventory"):
+        data[inventory]["exclude_roots"] = production[inventory]["exclude_roots"]
+    _write_json(manifest, data)
+
+    dependency_tests = (
+        repo / sdk_prefix / "lib" / "python3.14t" / "site-packages"
+        / "dependency" / "tests"
+    )
+    dependency_tests.mkdir(parents=True)
+    (dependency_tests / "test_dependency.py").write_text(
+        "def test_dependency(): pass\n", encoding="utf-8"
+    )
+    (dependency_tests / "test_dependency.cpp").write_text(
+        "int main() { return 0; }\n", encoding="utf-8"
+    )
+    owned = repo / "alpha" / "tests"
+    (owned / "test_owned.py").write_text(
+        "def test_owned(): pass\n", encoding="utf-8"
+    )
+    (owned / "test_owned.cpp").write_text(
+        "int main() { return 0; }\n", encoding="utf-8"
+    )
+
+    catalog = repository_control.load_catalog(repo)
+    assert repository_control.discover_python_tests(
+        repo, catalog.python_test_inventory
+    ) == ("alpha/tests/test_owned.py",)
+    assert repository_control.discover_native_tests(
+        repo, catalog.native_test_inventory
+    ) == ("alpha/tests/test_owned.cpp",)
+    assert repository_control.validate_catalog(repo, catalog) == [
+        "orphan native test: alpha/tests/test_owned.cpp"
+    ]
+
+
 def test_catalog_rejects_orphan_native_test(tmp_path: Path) -> None:
     repo = _repository(tmp_path)
     source = repo / "alpha" / "tests" / "test_native.cpp"
