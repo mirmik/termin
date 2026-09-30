@@ -247,6 +247,8 @@ namespace termin::gui_native {
             return TC_UI_EVENT_IGNORED;
         const bool captured = tc_widget_handle_eq(tc_ui_document_pointer_capture(document), handle());
         if (event->type == TC_UI_POINTER_CANCEL) {
+            // The document clears capture before notifying its previous owner.
+            const bool had_captured_button = captured_button_.has_value();
             if (captured_button_ && surface_valid()) {
                 try {
                     surface_host_->pointer_button(*captured_button_, kInputRelease, event->modifiers, 1);
@@ -259,7 +261,7 @@ namespace termin::gui_native {
             captured_button_.reset();
             if (captured)
                 tc_ui_document_release_pointer_capture(document, handle());
-            return captured ? TC_UI_EVENT_HANDLED : TC_UI_EVENT_IGNORED;
+            return captured || had_captured_button ? TC_UI_EVENT_HANDLED : TC_UI_EVENT_IGNORED;
         }
         if (event->type == TC_UI_POINTER_MOVE) {
             sync_pointer_position(*event);
@@ -293,9 +295,11 @@ namespace termin::gui_native {
                 }
             }
             if (event->type == TC_UI_POINTER_DOWN) {
-                captured_button_ = event->button;
-                tc_ui_document_set_pointer_capture(document, handle());
-            } else {
+                if (!captured_button_) {
+                    captured_button_ = event->button;
+                    tc_ui_document_set_pointer_capture(document, handle());
+                }
+            } else if (captured_button_ && *captured_button_ == event->button) {
                 captured_button_.reset();
                 if (captured)
                     tc_ui_document_release_pointer_capture(document, handle());

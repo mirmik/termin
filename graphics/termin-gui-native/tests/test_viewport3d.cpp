@@ -217,11 +217,105 @@ namespace {
         tc_ui_document_destroy(document_handle);
     }
 
+    void test_capture_lasts_until_the_original_button_is_released() {
+        tc_ui_document_handle document_handle = tc_ui_document_create();
+        TcDocument document(document_handle);
+        auto trace = std::make_shared<HostTrace>();
+        auto* viewport = new Viewport3D();
+        const tc_widget_handle handle = document.adopt(viewport);
+        assert(document.add_root(*viewport));
+        document.layout_roots(tc_ui_rect{10.0f, 20.0f, 100.0f, 50.0f});
+        viewport->set_surface_host(std::make_shared<TestSurfaceHost>(trace));
+
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_DOWN, 30.0f, 40.0f, 0, 1, 3}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_eq(document.pointer_capture(), handle));
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_DOWN, 200.0f, 100.0f, 1, 2, 5}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_eq(document.pointer_capture(), handle));
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_UP, 200.0f, 100.0f, 1, 1, 7}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_eq(document.pointer_capture(), handle));
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_MOVE, 220.0f, 120.0f}) == TC_UI_EVENT_HANDLED);
+        assert((trace->moves.back() == std::tuple<double, double>{210.0, 100.0}));
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_UP, 220.0f, 120.0f, 0, 1, 9}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_is_invalid(document.pointer_capture()));
+        assert((trace->buttons == std::vector<std::tuple<int, int, int, uint32_t>>{
+                                      {0, 1, 3, 1}, {1, 1, 5, 2}, {1, 0, 7, 1}, {0, 0, 9, 1}}));
+        const size_t move_count = trace->moves.size();
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_MOVE, 240.0f, 140.0f}) == TC_UI_EVENT_IGNORED);
+        assert(trace->moves.size() == move_count);
+
+        // Releasing the original button also ends capture while the second is still held.
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_DOWN, 30.0f, 40.0f, 0, 1, 0}) == TC_UI_EVENT_HANDLED);
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_DOWN, 30.0f, 40.0f, 1, 1, 0}) == TC_UI_EVENT_HANDLED);
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_UP, 200.0f, 100.0f, 0, 1, 0}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_is_invalid(document.pointer_capture()));
+        assert((trace->buttons.back() == std::tuple<int, int, int, uint32_t>{0, 0, 0, 1}));
+        const size_t button_count = trace->buttons.size();
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_UP, 200.0f, 100.0f, 1, 1, 0}) == TC_UI_EVENT_IGNORED);
+        assert(trace->buttons.size() == button_count);
+
+        assert(tc_ui_document_destroy_widget(document.get(), handle));
+        tc_ui_document_destroy(document_handle);
+    }
+
+    void test_cancel_releases_the_original_button_once_and_allows_a_new_gesture() {
+        tc_ui_document_handle document_handle = tc_ui_document_create();
+        TcDocument document(document_handle);
+        auto trace = std::make_shared<HostTrace>();
+        auto* viewport = new Viewport3D();
+        const tc_widget_handle handle = document.adopt(viewport);
+        assert(document.add_root(*viewport));
+        document.layout_roots(tc_ui_rect{0.0f, 0.0f, 100.0f, 50.0f});
+        viewport->set_surface_host(std::make_shared<TestSurfaceHost>(trace));
+
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_DOWN, 20.0f, 20.0f, 0, 1, 3}) == TC_UI_EVENT_HANDLED);
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_DOWN, 200.0f, 100.0f, 1, 2, 5}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_eq(document.pointer_capture(), handle));
+        tc_ui_pointer_event cancel{};
+        cancel.type = TC_UI_POINTER_CANCEL;
+        cancel.modifiers = 7;
+        cancel.cancel_reason = TC_UI_POINTER_CANCEL_WINDOW_FOCUS_LOST;
+        assert(document.dispatch_pointer_event(cancel) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_is_invalid(document.pointer_capture()));
+        assert((trace->buttons == std::vector<std::tuple<int, int, int, uint32_t>>{
+                                      {0, 1, 3, 1}, {1, 1, 5, 2}, {0, 0, 7, 1}}));
+        assert(document.dispatch_pointer_event(cancel) == TC_UI_EVENT_IGNORED);
+        assert(trace->buttons.size() == 3);
+        assert(viewport->pointer_event(document_handle, &cancel) == TC_UI_EVENT_IGNORED);
+        assert(trace->buttons.size() == 3);
+
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_DOWN, 20.0f, 20.0f, 1, 1, 9}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_eq(document.pointer_capture(), handle));
+        assert(document.dispatch_pointer_event(
+                   tc_ui_pointer_event{TC_UI_POINTER_UP, 200.0f, 100.0f, 1, 1, 11}) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_is_invalid(document.pointer_capture()));
+        assert(trace->buttons.size() == 5);
+        assert((trace->buttons[3] == std::tuple<int, int, int, uint32_t>{1, 1, 9, 1}));
+        assert((trace->buttons[4] == std::tuple<int, int, int, uint32_t>{1, 0, 11, 1}));
+
+        assert(tc_ui_document_destroy_widget(document.get(), handle));
+        tc_ui_document_destroy(document_handle);
+    }
+
 } // namespace
 
 int main() {
     test_surface_resize_paint_input_and_drag_contract();
     test_detach_destroy_and_stale_surface_are_safe();
     test_pointer_coordinates_scale_to_display_pixels();
+    test_capture_lasts_until_the_original_button_is_released();
+    test_cancel_releases_the_original_button_once_and_allows_a_new_gesture();
     return EXIT_SUCCESS;
 }
