@@ -20,12 +20,9 @@ def clip_from_fbx(fbx_clip, uuid_hint: str = "") -> TcAnimationClip:
     for ch in fbx_clip.channels:
         channels_data.append(channel_data_from_fbx(ch))
 
-    clip = TcAnimationClip.create(fbx_clip.name, uuid_hint)
-    clip.set_tps(fbx_clip.ticks_per_second or 30.0)
-    clip.set_loop(True)
-    clip.set_channels(channels_data)
-
-    return clip
+    return TcAnimationClip.publish_channels(
+        fbx_clip.name, uuid_hint, fbx_clip.ticks_per_second or 30.0, True, channels_data,
+    )
 
 
 def clip_from_glb(glb_clip, uuid_hint: str = "") -> TcAnimationClip:
@@ -51,12 +48,9 @@ def clip_from_glb(glb_clip, uuid_hint: str = "") -> TcAnimationClip:
         for track in glb_clip.tracks
     ]
 
-    clip = TcAnimationClip.create(glb_clip.name, uuid_hint)
-    clip.set_tps(1.0)  # GLB uses seconds directly
-    clip.set_loop(True)
-    clip.set_tracks(tracks)
-
-    return clip
+    # GLB uses seconds directly. Publish metadata and tracks together so a bad
+    # import cannot partially change an existing resource or lazy declaration.
+    return TcAnimationClip.publish_tracks(glb_clip.name, uuid_hint, 1.0, True, tracks)
 
 
 __all__ = ["TcAnimationClip", "clip_from_fbx", "clip_from_glb"]

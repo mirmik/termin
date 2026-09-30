@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 import struct
+import subprocess
+import sys
 import uuid
 
 import numpy as np
@@ -170,6 +172,54 @@ def test_portable_gltf_preserves_exact_tracks_and_publishes_bulk_payload(tmp_pat
     assert tuple(clip.sample_track(1, 0.5)) == pytest.approx([2, 4, 6])
     with pytest.raises(RuntimeError, match="unsupported"):
         clip.sample_track(3, 0.5)
+
+
+def test_extracted_tanim_reconstructs_exact_gltf_tracks_in_fresh_process(tmp_path) -> None:
+    from termin.glb.extractor import extract_animations
+
+    source = _write_exact_animation_gltf(tmp_path / "exact-animation.gltf")
+    scene = load_glb_file(source)
+    expected_tracks = [{
+        "target_node_index": track.node_index,
+        "path": track.path,
+        "interpolation": track.interpolation,
+        "components": track.components,
+        "times": track.times.tolist(),
+        "values": track.values.reshape(-1).tolist(),
+    } for track in scene.animations[0].tracks]
+
+    paths = extract_animations(source, tmp_path / "extracted", scene)
+
+    assert len(paths) == 1
+    assert paths[0].name == "ExactPortable.tanim"
+    document = json.loads(paths[0].read_text(encoding="utf-8"))
+    assert document["format"] == "termin.animation"
+    assert document["version"] == 1
+    assert document["tracks"] == expected_tracks
+    result = subprocess.run(
+        [sys.executable, "-c", """
+import json
+import sys
+from termin.animation import TcAnimationClip, load_animation_clip
+assert not TcAnimationClip.from_uuid(sys.argv[2]).is_valid
+clip = load_animation_clip(sys.argv[1])
+print(json.dumps({
+    "name": clip.name, "tps": clip.tps, "loop": clip.loop,
+    "tracks": clip.tracks, "duration": clip.duration,
+    "step": list(clip.sample_track(0, 0.5)),
+    "scale": list(clip.sample_track(1, 0.5)),
+}))
+""", str(paths[0]), document["uuid"]],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert json.loads(result.stdout) == {
+        "name": "ExactPortable", "tps": 1.0, "loop": True,
+        "tracks": expected_tracks, "duration": 1.0,
+        "step": [1.0, 2.0, 3.0], "scale": [2.0, 4.0, 6.0],
+    }
 
 
 def test_portable_gltf_rejects_truncated_cubic_output(tmp_path) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from termin.base import log
 from termin_assets import DataAsset
 
 if TYPE_CHECKING:
@@ -23,6 +24,14 @@ class AnimationClipAsset(DataAsset["TcAnimationClip"]):
         source_path: Path | str | None = None,
         uuid: str | None = None,
     ):
+        if clip is not None:
+            if uuid is not None and uuid != clip.uuid:
+                log.error(
+                    f"[AnimationClipAsset] Asset UUID '{uuid}' "
+                    f"does not match clip UUID '{clip.uuid}'"
+                )
+                raise ValueError("Animation asset and native handle UUIDs must match")
+            uuid = clip.uuid
         super().__init__(data=clip, name=name, source_path=source_path, uuid=uuid)
 
     @property
@@ -41,7 +50,7 @@ class AnimationClipAsset(DataAsset["TcAnimationClip"]):
     def _parse_content(self, content: str) -> "TcAnimationClip | None":
         from termin.animation.clip_io import parse_animation_content
 
-        return parse_animation_content(content)
+        return parse_animation_content(content, uuid_hint=self.uuid)
 
     @classmethod
     def from_clip(

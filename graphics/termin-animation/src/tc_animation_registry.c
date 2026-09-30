@@ -788,6 +788,106 @@ bool tc_animation_replace_channels(tc_animation* anim,
     return true;
 }
 
+static bool animation_prepare_publication(tc_animation* prepared, const char* uuid, double tps, bool loop) {
+    if (uuid && strlen(uuid) >= TC_UUID_SIZE) {
+        tc_log_error("tc_animation_publish: UUID exceeds %d bytes", TC_UUID_SIZE - 1);
+        return false;
+    }
+    if (!isfinite(tps) || tps <= 0.0) {
+        tc_log_error("tc_animation_publish: ticks per second must be finite and positive");
+        return false;
+    }
+    if (uuid)
+        memcpy(prepared->header.uuid, uuid, strlen(uuid) + 1);
+    prepared->tps = tps;
+    prepared->loop = loop;
+    return true;
+}
+
+static tc_animation_handle animation_publish_prepared(tc_animation* prepared, const char* name) {
+    if (!isfinite(prepared->duration)) {
+        tc_log_error("tc_animation_publish: clip duration must be finite");
+        animation_free_data(prepared);
+        return tc_animation_handle_invalid();
+    }
+    if (name) {
+        prepared->header.name = tc_intern_string(name);
+        if (!prepared->header.name) {
+            tc_log_error("tc_animation_publish: failed to intern clip name");
+            animation_free_data(prepared);
+            return tc_animation_handle_invalid();
+        }
+    }
+
+    if (!g_initialized)
+        tc_animation_init();
+    if (!g_initialized) {
+        tc_log_error("tc_animation_publish: registry initialization failed");
+        animation_free_data(prepared);
+        return tc_animation_handle_invalid();
+    }
+
+    const tc_animation_handle handle = prepared->header.uuid[0]
+        ? tc_animation_get_or_create(prepared->header.uuid)
+        : tc_animation_create(NULL);
+    if (tc_animation_handle_is_invalid(handle)) {
+        tc_log_error("tc_animation_publish: failed to obtain clip registry entry");
+        animation_free_data(prepared);
+        return tc_animation_handle_invalid();
+    }
+    tc_animation* target = tc_animation_get(handle);
+    if (!target) {
+        tc_log_error("tc_animation_publish: clip registry entry is no longer valid");
+        animation_free_data(prepared);
+        return tc_animation_handle_invalid();
+    }
+
+    // All fallible work is complete. No callbacks or allocations may occur
+    // between freeing the old payload and publishing the new clip.
+    const tc_resource_header header = target->header;
+    animation_free_data(target);
+    *target = *prepared;
+    target->header = header;
+    target->header.name = prepared->header.name;
+    target->header.is_loaded = 1;
+    target->header.version++;
+    return handle;
+}
+
+tc_animation_handle tc_animation_publish_tracks(const char* uuid,
+                                                const char* name,
+                                                double tps,
+                                                bool loop,
+                                                const tc_animation_track_desc* tracks,
+                                                size_t count) {
+    tc_animation prepared = {0};
+    if (!animation_prepare_publication(&prepared, uuid, tps, loop) ||
+        !tc_animation_replace_tracks(&prepared, tracks, count))
+        return tc_animation_handle_invalid();
+    return animation_publish_prepared(&prepared, name);
+}
+
+tc_animation_handle tc_animation_publish_channels(const char* uuid,
+                                                  const char* name,
+                                                  double tps,
+                                                  bool loop,
+                                                  const tc_animation_channel_desc* channels,
+                                                  size_t count) {
+    tc_animation prepared = {0};
+    if (!animation_prepare_publication(&prepared, uuid, tps, loop) ||
+        !tc_animation_replace_channels(&prepared, channels, count))
+        return tc_animation_handle_invalid();
+    for (size_t index = 0; index < count; ++index) {
+        if (channels[index].target_name && strlen(channels[index].target_name) >= TC_CHANNEL_NAME_MAX) {
+            tc_log_error("tc_animation_publish_channels: channel[%zu] target name exceeds %d bytes",
+                         index, TC_CHANNEL_NAME_MAX - 1);
+            animation_free_data(&prepared);
+            return tc_animation_handle_invalid();
+        }
+    }
+    return animation_publish_prepared(&prepared, name);
+}
+
 void tc_animation_recompute_duration(tc_animation* anim) {
     if (!anim)
         return;

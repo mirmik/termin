@@ -150,7 +150,10 @@ def extract_animations(
     output_dir: Path = None,
     scene_data=None,
 ) -> List[Path]:
-    """Extract animations from GLB file into .tanim files.
+    """Extract animations into self-contained, versioned .tanim files.
+
+    Typed tracks, interpolation and morph-weight payload are preserved; the
+    resulting files can be loaded without the source GLB or a warm registry.
 
     Args:
         glb_path: Path to the GLB file

@@ -720,4 +720,147 @@ TEST_CASE("animation sample_into returns safely when error callbacks destroy its
     tc_log_set_callback(nullptr);
 }
 
+TEST_CASE("complete animation publication preserves lazy identity and replaces payload and metadata once") {
+    AnimationRegistryScope registry;
+    const auto placeholder = tc_animation_declare("published-animation", "placeholder");
+    REQUIRE(tc_animation_is_valid(placeholder));
+    tc_animation_get(placeholder)->header.ref_count = 7;
+    tc_animation_get(placeholder)->header.pool_index = 23;
+    const uint32_t initial_version = tc_animation_get(placeholder)->header.version;
+
+    double times[] = {0.0, 60.0};
+    double values[] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+    const tc_animation_track_desc track{
+        4, TC_ANIMATION_PATH_SCALE, TC_ANIMATION_INTERPOLATION_STEP, 3, 2, 6, times, values};
+    const auto typed = tc_animation_publish_tracks("published-animation", "typed", 20.0, false, &track, 1);
+    REQUIRE(tc_animation_is_valid(typed));
+    CHECK(typed.index == placeholder.index);
+    CHECK(typed.generation == placeholder.generation);
+    auto* clip = tc_animation_get(typed);
+    CHECK(std::strcmp(clip->header.uuid, "published-animation") == 0);
+    CHECK(std::strcmp(clip->header.name, "typed") == 0);
+    CHECK(clip->header.version == initial_version + 1);
+    CHECK(clip->header.ref_count == 7);
+    CHECK(clip->header.pool_index == 23);
+    CHECK(clip->header.is_loaded == 1);
+    CHECK(clip->tps == 20.0);
+    CHECK(clip->loop == 0);
+    CHECK(clip->duration == 3.0);
+    CHECK(clip->channel_count == 0);
+    REQUIRE(clip->track_count == 1);
+    CHECK(clip->tracks[0].interpolation == TC_ANIMATION_INTERPOLATION_STEP);
+    values[3] = -100.0;
+    times[1] = 1000.0;
+    CHECK(clip->tracks[0].values.vec3_values[1].x == 4.0);
+    CHECK(clip->tracks[0].times[1] == 60.0);
+
+    tc_keyframe_vec3 translation{45.0, {2.0, 3.0, 4.0}};
+    const tc_animation_channel_desc channel{"Root", &translation, 1, nullptr, 0, nullptr, 0};
+    const auto legacy = tc_animation_publish_channels(clip->header.uuid, "legacy", 15.0, true, &channel, 1);
+    REQUIRE(tc_animation_is_valid(legacy));
+    CHECK(legacy.index == placeholder.index);
+    CHECK(legacy.generation == placeholder.generation);
+    clip = tc_animation_get(legacy);
+    CHECK(clip->header.version == initial_version + 2);
+    CHECK(clip->header.ref_count == 7);
+    CHECK(clip->header.pool_index == 23);
+    CHECK(std::strcmp(clip->header.name, "legacy") == 0);
+    CHECK(clip->duration == 3.0);
+    CHECK(clip->tps == 15.0);
+    CHECK(clip->loop == 1);
+    CHECK(clip->track_count == 0);
+    REQUIRE(clip->channel_count == 1);
+    CHECK(std::strcmp(clip->channels[0].target_name, "Root") == 0);
+    translation.value.x = -100.0;
+    CHECK(clip->channels[0].translation_keys[0].value.x == 2.0);
+    CHECK(tc_animation_count() == 1);
+}
+
+TEST_CASE("invalid complete animation publication leaves live and declared clips untouched") {
+    AnimationRegistryScope registry;
+    double time = 30.0;
+    double values[] = {1.0, 2.0, 3.0};
+    const tc_animation_track_desc valid{
+        0, TC_ANIMATION_PATH_TRANSLATION, TC_ANIMATION_INTERPOLATION_LINEAR, 3, 1, 3, &time, values};
+    const auto live = tc_animation_publish_tracks("publish-live", "original", 30.0, true, &valid, 1);
+    const auto lazy = tc_animation_declare("publish-lazy", "unloaded");
+    REQUIRE(tc_animation_is_valid(live));
+    REQUIRE(tc_animation_is_valid(lazy));
+    unsigned char original_live[sizeof(tc_animation)];
+    unsigned char original_lazy[sizeof(tc_animation)];
+    std::memcpy(original_live, tc_animation_get(live), sizeof(tc_animation));
+    std::memcpy(original_lazy, tc_animation_get(lazy), sizeof(tc_animation));
+    auto invalid_track = valid;
+    invalid_track.components = 4;
+    const tc_keyframe_quat invalid_rotation{0.0, {0.0, 0.0, 0.0, 0.0}};
+    const tc_animation_channel_desc invalid_channel{"Root", nullptr, 0, &invalid_rotation, 1, nullptr, 0};
+    const tc_keyframe_vec3 translation{30.0, {1.0, 2.0, 3.0}};
+    const tc_animation_channel_desc valid_channel{"Root", &translation, 1, nullptr, 0, nullptr, 0};
+    char overlong_name[TC_CHANNEL_NAME_MAX + 1];
+    std::memset(overlong_name, 'x', TC_CHANNEL_NAME_MAX);
+    overlong_name[TC_CHANNEL_NAME_MAX] = '\0';
+    auto long_named_channel = valid_channel;
+    long_named_channel.target_name = overlong_name;
+
+    for (const char* uuid : {"publish-live", "publish-lazy", "publish-missing"}) {
+        LogCapture capture;
+        CHECK(tc_animation_handle_is_invalid(
+            tc_animation_publish_tracks(uuid, "broken", 60.0, false, &invalid_track, 1)));
+        CHECK(tc_animation_handle_is_invalid(
+            tc_animation_publish_channels(uuid, "broken", 60.0, false, &invalid_channel, 1)));
+        for (double tps : {0.0, -1.0, std::numeric_limits<double>::infinity(),
+                           std::numeric_limits<double>::quiet_NaN()}) {
+            CHECK(tc_animation_handle_is_invalid(
+                tc_animation_publish_tracks(uuid, "broken", tps, false, &valid, 1)));
+            CHECK(tc_animation_handle_is_invalid(
+                tc_animation_publish_channels(uuid, "broken", tps, false, nullptr, 0)));
+        }
+        CHECK(tc_animation_handle_is_invalid(tc_animation_publish_tracks(
+            uuid, "overflow", std::numeric_limits<double>::min(), false, &valid, 1)));
+        CHECK(tc_animation_handle_is_invalid(tc_animation_publish_channels(
+            uuid, "overflow", std::numeric_limits<double>::min(), false, &valid_channel, 1)));
+        CHECK(tc_animation_handle_is_invalid(
+            tc_animation_publish_channels(uuid, "long name", 30.0, false, &long_named_channel, 1)));
+        CHECK(error_log_count == 13);
+        CHECK(std::memcmp(tc_animation_get(live), original_live, sizeof(tc_animation)) == 0);
+        CHECK(std::memcmp(tc_animation_get(lazy), original_lazy, sizeof(tc_animation)) == 0);
+        CHECK(tc_animation_get(live)->tracks[0].values.vec3_values[0].x == 1.0);
+        CHECK(tc_animation_count() == 2);
+        CHECK_FALSE(tc_animation_contains("publish-missing"));
+    }
+}
+
+TEST_CASE("complete animation publication validates UUIDs and generates independent anonymous clips") {
+    AnimationRegistryScope registry;
+    char overlong[TC_UUID_SIZE + 1];
+    std::memset(overlong, 'x', TC_UUID_SIZE);
+    overlong[TC_UUID_SIZE] = '\0';
+    {
+        LogCapture capture;
+        CHECK(tc_animation_handle_is_invalid(
+            tc_animation_publish_tracks(overlong, "invalid", 30.0, true, nullptr, 0)));
+        CHECK(tc_animation_handle_is_invalid(
+            tc_animation_publish_channels(overlong, "invalid", 30.0, true, nullptr, 0)));
+        CHECK(error_log_count == 2);
+    }
+    CHECK(tc_animation_count() == 0);
+    overlong[TC_UUID_SIZE - 1] = '\0';
+    const auto longest = tc_animation_publish_tracks(overlong, "longest", 30.0, false, nullptr, 0);
+    REQUIRE(tc_animation_is_valid(longest));
+    CHECK(std::strcmp(tc_animation_get(longest)->header.uuid, overlong) == 0);
+
+    const auto first = tc_animation_publish_tracks(nullptr, nullptr, 10.0, false, nullptr, 0);
+    const auto second = tc_animation_publish_channels("", "", 20.0, true, nullptr, 0);
+    REQUIRE(tc_animation_is_valid(first));
+    REQUIRE(tc_animation_is_valid(second));
+    CHECK(std::strcmp(tc_animation_get(first)->header.uuid, tc_animation_get(second)->header.uuid) != 0);
+    CHECK(tc_animation_get(first)->header.uuid[0] != '\0');
+    CHECK(tc_animation_get(first)->header.name == nullptr);
+    CHECK(tc_animation_get(first)->header.is_loaded == 1);
+    CHECK(tc_animation_get(first)->duration == 0.0);
+    CHECK(tc_animation_get(second)->header.name[0] == '\0');
+    CHECK(tc_animation_get(second)->header.is_loaded == 1);
+    CHECK(tc_animation_count() == 3);
+}
+
 GUARD_TEST_MAIN();

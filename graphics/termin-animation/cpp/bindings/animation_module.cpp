@@ -16,6 +16,11 @@ using namespace termin::animation;
 
 namespace {
 
+void validate_publication_strings(const std::string& name, const std::string& uuid) {
+    if (name.find('\0') != std::string::npos || uuid.find('\0') != std::string::npos)
+        throw std::invalid_argument("animation name and UUID must not contain NUL");
+}
+
 tc_animation_path animation_path_from_string(const std::string& value) {
     if (value == "translation")
         return TC_ANIMATION_PATH_TRANSLATION;
@@ -181,6 +186,125 @@ nb::dict animation_track_to_dict(const tc_animation_track& track) {
     return result;
 }
 
+struct ParsedTracks {
+    struct Track {
+        tc_animation_track_desc desc{};
+        std::vector<double> times;
+        std::vector<double> values;
+    };
+    std::vector<Track> storage;
+    std::vector<tc_animation_track_desc> descriptors;
+
+    explicit ParsedTracks(nb::list data) {
+        storage.reserve(nb::len(data));
+        for (size_t i = 0; i < nb::len(data); ++i) {
+            const nb::dict item = nb::cast<nb::dict>(data[i]);
+            const char* required[] = {"target_node_index", "path", "interpolation", "components", "times", "values"};
+            for (const char* field : required) {
+                if (!item.contains(field))
+                    throw std::invalid_argument(std::string("animation track is missing '") + field + "'");
+            }
+            Track track;
+            track.desc.target_node_index = nb::cast<int32_t>(item["target_node_index"]);
+            track.desc.path = animation_path_from_string(nb::cast<std::string>(item["path"]));
+            track.desc.interpolation = animation_interpolation_from_string(nb::cast<std::string>(item["interpolation"]));
+            track.desc.components = nb::cast<uint32_t>(item["components"]);
+            track.times = doubles_from_sequence(item["times"], "times");
+            track.values = doubles_from_sequence(item["values"], "values");
+            storage.push_back(std::move(track));
+        }
+        descriptors.reserve(storage.size());
+        for (Track& track : storage) {
+            track.desc.key_count = track.times.size();
+            track.desc.value_count = track.values.size();
+            track.desc.times = track.times.data();
+            track.desc.values = track.values.data();
+            descriptors.push_back(track.desc);
+        }
+    }
+};
+
+struct ParsedChannels {
+    struct Channel {
+        std::string name;
+        std::vector<tc_keyframe_vec3> translation;
+        std::vector<tc_keyframe_quat> rotation;
+        std::vector<tc_keyframe_scalar> scale;
+    };
+    std::vector<Channel> storage;
+    std::vector<tc_animation_channel_desc> descriptors;
+
+    explicit ParsedChannels(nb::list data) {
+        try {
+            storage.reserve(nb::len(data));
+            for (size_t i = 0; i < nb::len(data); ++i) {
+                const nb::dict item = nb::cast<nb::dict>(data[i]);
+                Channel channel;
+                if (item.contains("target_name"))
+                    channel.name = nb::cast<std::string>(item["target_name"]);
+                if (channel.name.find('\0') != std::string::npos)
+                    throw std::invalid_argument("animation target name must not contain NUL");
+                if (item.contains("translation_keys")) {
+                    const nb::list keys = nb::cast<nb::list>(item["translation_keys"]);
+                    for (size_t key = 0; key < nb::len(keys); ++key) {
+                        const nb::tuple frame = animation_keyframe_tuple(keys[key], "translation_keys");
+                        channel.translation.push_back({nb::cast<double>(frame[0]), nb::cast<Vec3>(frame[1])});
+                    }
+                }
+                if (item.contains("rotation_keys")) {
+                    const nb::list keys = nb::cast<nb::list>(item["rotation_keys"]);
+                    for (size_t key = 0; key < nb::len(keys); ++key) {
+                        const nb::tuple frame = animation_keyframe_tuple(keys[key], "rotation_keys");
+                        channel.rotation.push_back({nb::cast<double>(frame[0]), nb::cast<Quat>(frame[1])});
+                    }
+                }
+                if (item.contains("scale_keys")) {
+                    const nb::list keys = nb::cast<nb::list>(item["scale_keys"]);
+                    for (size_t key = 0; key < nb::len(keys); ++key) {
+                        const nb::tuple frame = animation_keyframe_tuple(keys[key], "scale_keys");
+                        channel.scale.push_back({nb::cast<double>(frame[0]), nb::cast<double>(frame[1])});
+                    }
+                }
+                storage.push_back(std::move(channel));
+            }
+            descriptors.reserve(storage.size());
+            for (const Channel& channel : storage) {
+                descriptors.push_back({channel.name.c_str(), channel.translation.data(), channel.translation.size(),
+                                       channel.rotation.data(), channel.rotation.size(),
+                                       channel.scale.data(), channel.scale.size()});
+            }
+        } catch (const nb::cast_error& error) {
+            tc::Log::error("TcAnimationClip: failed to parse channels: %s", error.what());
+            throw nb::type_error("animation channels contain a value of the wrong type");
+        } catch (const std::exception& error) {
+            tc::Log::error("TcAnimationClip: failed to parse channels: %s", error.what());
+            throw;
+        }
+    }
+};
+
+nb::dict animation_channel_to_dict(const tc_animation_channel& channel) {
+    nb::dict result;
+    result["target_name"] = std::string(channel.target_name);
+    nb::list translation, rotation, scale;
+    for (size_t i = 0; i < channel.translation_count; ++i) {
+        const auto& key = channel.translation_keys[i];
+        translation.append(nb::make_tuple(key.time, nb::make_tuple(key.value.x, key.value.y, key.value.z)));
+    }
+    for (size_t i = 0; i < channel.rotation_count; ++i) {
+        const auto& key = channel.rotation_keys[i];
+        rotation.append(nb::make_tuple(key.time, nb::make_tuple(key.value.x, key.value.y, key.value.z, key.value.w)));
+    }
+    for (size_t i = 0; i < channel.scale_count; ++i) {
+        const auto& key = channel.scale_keys[i];
+        scale.append(nb::make_tuple(key.time, key.value));
+    }
+    result["translation_keys"] = std::move(translation);
+    result["rotation_keys"] = std::move(rotation);
+    result["scale_keys"] = std::move(scale);
+    return result;
+}
+
 } // namespace
 
 void bind_tc_animation_clip(nb::module_& m) {
@@ -199,6 +323,36 @@ void bind_tc_animation_clip(nb::module_& m) {
         .def_static("from_uuid", &TcAnimationClip::from_uuid, nb::arg("uuid"))
         .def_static("get_or_create", &TcAnimationClip::get_or_create, nb::arg("uuid"))
         .def_static("create", &TcAnimationClip::create, nb::arg("name") = "", nb::arg("uuid_hint") = "")
+        .def_static("publish_tracks", [](const std::string& name, const std::string& uuid,
+                                         double tps, bool loop, nb::list tracks) {
+            try {
+                validate_publication_strings(name, uuid);
+                const ParsedTracks parsed(tracks);
+                const auto handle = tc_animation_publish_tracks(uuid.c_str(), name.c_str(), tps, loop,
+                                                                 parsed.descriptors.data(), parsed.descriptors.size());
+                if (tc_animation_handle_is_invalid(handle))
+                    throw std::invalid_argument("animation track publication failed; previous clip was preserved");
+                return TcAnimationClip(handle);
+            } catch (const std::exception& error) {
+                tc::Log::error("TcAnimationClip::publish_tracks: %s", error.what());
+                throw;
+            }
+        }, nb::arg("name"), nb::arg("uuid"), nb::arg("tps"), nb::arg("loop"), nb::arg("tracks"))
+        .def_static("publish_channels", [](const std::string& name, const std::string& uuid,
+                                           double tps, bool loop, nb::list channels) {
+            try {
+                validate_publication_strings(name, uuid);
+                const ParsedChannels parsed(channels);
+                const auto handle = tc_animation_publish_channels(uuid.c_str(), name.c_str(), tps, loop,
+                                                                   parsed.descriptors.data(), parsed.descriptors.size());
+                if (tc_animation_handle_is_invalid(handle))
+                    throw std::invalid_argument("animation channel publication failed; previous clip was preserved");
+                return TcAnimationClip(handle);
+            } catch (const std::exception& error) {
+                tc::Log::error("TcAnimationClip::publish_channels: %s", error.what());
+                throw;
+            }
+        }, nb::arg("name"), nb::arg("uuid"), nb::arg("tps"), nb::arg("loop"), nb::arg("channels"))
         .def_prop_ro("is_valid", &TcAnimationClip::is_valid)
         .def_prop_ro("uuid", &TcAnimationClip::uuid)
         .def_prop_ro("name", &TcAnimationClip::name)
@@ -220,6 +374,15 @@ void bind_tc_animation_clip(nb::module_& m) {
         .def("ensure_loaded", &TcAnimationClip::ensure_loaded)
         .def("recompute_duration", &TcAnimationClip::recompute_duration)
         .def("find_channel", &TcAnimationClip::find_channel, nb::arg("target_name"))
+        .def_prop_ro("channels", [](const TcAnimationClip& self) {
+            nb::list result;
+            const tc_animation* animation = self.get();
+            if (animation) {
+                for (size_t i = 0; i < animation->channel_count; ++i)
+                    result.append(animation_channel_to_dict(animation->channels[i]));
+            }
+            return result;
+        })
         .def_prop_ro(
             "tracks",
             [](const TcAnimationClip& self) {
@@ -234,44 +397,8 @@ void bind_tc_animation_clip(nb::module_& m) {
         .def(
             "set_tracks",
             [](TcAnimationClip& self, nb::list track_data) {
-                struct PendingTrack {
-                    tc_animation_track_desc desc{};
-                    std::vector<double> times;
-                    std::vector<double> values;
-                };
-
-                std::vector<PendingTrack> pending;
-                pending.reserve(nb::len(track_data));
-                for (size_t i = 0; i < nb::len(track_data); ++i) {
-                    nb::dict data = nb::cast<nb::dict>(track_data[i]);
-                    const char* required[] = {
-                        "target_node_index", "path", "interpolation", "components", "times", "values"};
-                    for (const char* field : required) {
-                        if (!data.contains(field))
-                            throw std::invalid_argument(std::string("animation track is missing '") + field + "'");
-                    }
-
-                    PendingTrack track;
-                    track.desc.target_node_index = nb::cast<int32_t>(data["target_node_index"]);
-                    track.desc.path = animation_path_from_string(nb::cast<std::string>(data["path"]));
-                    track.desc.interpolation =
-                        animation_interpolation_from_string(nb::cast<std::string>(data["interpolation"]));
-                    track.desc.components = nb::cast<uint32_t>(data["components"]);
-                    track.times = doubles_from_sequence(data["times"], "times");
-                    track.values = doubles_from_sequence(data["values"], "values");
-                    pending.push_back(std::move(track));
-                }
-
-                std::vector<tc_animation_track_desc> descriptors;
-                descriptors.reserve(pending.size());
-                for (PendingTrack& track : pending) {
-                    track.desc.key_count = track.times.size();
-                    track.desc.value_count = track.values.size();
-                    track.desc.times = track.times.data();
-                    track.desc.values = track.values.data();
-                    descriptors.push_back(track.desc);
-                }
-                if (!self.replace_tracks(descriptors.data(), descriptors.size()))
+                const ParsedTracks parsed(track_data);
+                if (!self.replace_tracks(parsed.descriptors.data(), parsed.descriptors.size()))
                     throw std::runtime_error("animation track replacement failed; previous payload was preserved");
             },
             nb::arg("tracks"))
@@ -377,80 +504,8 @@ void bind_tc_animation_clip(nb::module_& m) {
                     throw std::runtime_error("cannot set channels on an invalid animation clip");
                 }
 
-                struct ParsedChannel {
-                    std::string target_name;
-                    std::vector<tc_keyframe_vec3> translation_keys;
-                    std::vector<tc_keyframe_quat> rotation_keys;
-                    std::vector<tc_keyframe_scalar> scale_keys;
-                };
-
-                std::vector<ParsedChannel> parsed;
-                try {
-                    const size_t count = nb::len(channels_data);
-                    parsed.reserve(count);
-                    for (size_t i = 0; i < count; ++i) {
-                        const nb::dict channel_data = nb::cast<nb::dict>(channels_data[i]);
-                        ParsedChannel channel;
-                        if (channel_data.contains("target_name")) {
-                            channel.target_name = nb::cast<std::string>(channel_data["target_name"]);
-                        }
-                        if (channel_data.contains("translation_keys")) {
-                            const nb::list keys = nb::cast<nb::list>(channel_data["translation_keys"]);
-                            channel.translation_keys.reserve(nb::len(keys));
-                            for (size_t key = 0; key < nb::len(keys); ++key) {
-                                const nb::tuple frame = animation_keyframe_tuple(keys[key], "translation_keys");
-                                channel.translation_keys.push_back(
-                                    {nb::cast<double>(frame[0]), nb::cast<Vec3>(frame[1])});
-                            }
-                        }
-                        if (channel_data.contains("rotation_keys")) {
-                            const nb::list keys = nb::cast<nb::list>(channel_data["rotation_keys"]);
-                            channel.rotation_keys.reserve(nb::len(keys));
-                            for (size_t key = 0; key < nb::len(keys); ++key) {
-                                const nb::tuple frame = animation_keyframe_tuple(keys[key], "rotation_keys");
-                                channel.rotation_keys.push_back(
-                                    {nb::cast<double>(frame[0]), nb::cast<Quat>(frame[1])});
-                            }
-                        }
-                        if (channel_data.contains("scale_keys")) {
-                            const nb::list keys = nb::cast<nb::list>(channel_data["scale_keys"]);
-                            channel.scale_keys.reserve(nb::len(keys));
-                            for (size_t key = 0; key < nb::len(keys); ++key) {
-                                const nb::tuple frame = animation_keyframe_tuple(keys[key], "scale_keys");
-                                channel.scale_keys.push_back(
-                                    {nb::cast<double>(frame[0]), nb::cast<double>(frame[1])});
-                            }
-                        }
-                        parsed.push_back(std::move(channel));
-                    }
-                } catch (const nb::cast_error& error) {
-                    tc::Log::error("TcAnimationClip::set_channels: failed to parse channels: %s", error.what());
-                    throw nb::type_error("animation channels contain a value of the wrong type");
-                } catch (const std::exception& error) {
-                    tc::Log::error("TcAnimationClip::set_channels: failed to parse channels: %s", error.what());
-                    throw;
-                }
-
-                std::vector<tc_animation_channel_desc> descriptors;
-                try {
-                    descriptors.reserve(parsed.size());
-                    for (const ParsedChannel& channel : parsed) {
-                        descriptors.push_back({
-                            channel.target_name.c_str(),
-                            channel.translation_keys.data(),
-                            channel.translation_keys.size(),
-                            channel.rotation_keys.data(),
-                            channel.rotation_keys.size(),
-                            channel.scale_keys.data(),
-                            channel.scale_keys.size(),
-                        });
-                    }
-                } catch (const std::exception& error) {
-                    tc::Log::error("TcAnimationClip::set_channels: failed to build channel descriptors: %s",
-                                   error.what());
-                    throw;
-                }
-                if (!tc_animation_replace_channels(self.get(), descriptors.data(), descriptors.size())) {
+                const ParsedChannels parsed(channels_data);
+                if (!tc_animation_replace_channels(self.get(), parsed.descriptors.data(), parsed.descriptors.size())) {
                     throw std::runtime_error("animation channel replacement failed; previous payload was preserved");
                 }
             },

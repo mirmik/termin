@@ -89,6 +89,26 @@ TC_API bool tc_animation_replace_tracks(tc_animation* anim,
                                         const tc_animation_track_desc* tracks,
                                         size_t count);
 
+// Publish a complete clip after validating and copying its payload off-registry.
+// Invalid input leaves both existing clips and lazy declarations unchanged and
+// never creates a registry entry. UUID must fit TC_UUID_SIZE (including NUL);
+// NULL/empty UUID generates a new identity. TPS must be finite and positive,
+// resulting duration finite, and channel names shorter than TC_CHANNEL_NAME_MAX.
+// Success preserves an existing handle and resource header identity/refcount,
+// replaces name/TPS/loop/payload, marks loaded and increments version once.
+TC_API tc_animation_handle tc_animation_publish_tracks(const char* uuid,
+                                                       const char* name,
+                                                       double tps,
+                                                       bool loop,
+                                                       const tc_animation_track_desc* tracks,
+                                                       size_t count);
+TC_API tc_animation_handle tc_animation_publish_channels(const char* uuid,
+                                                         const char* name,
+                                                         double tps,
+                                                         bool loop,
+                                                         const tc_animation_channel_desc* channels,
+                                                         size_t count);
+
 TC_API const tc_animation_track* tc_animation_get_track(const tc_animation* anim, size_t index);
 
 // Sample one supported bulk track at a time expressed in animation ticks.
