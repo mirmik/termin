@@ -21,7 +21,7 @@ static int near_identity_basis(tc_basis3d basis, double epsilon) {
            near_vec3(basis.z, TC_VEC3(0.0, 0.0, 1.0), epsilon);
 }
 
-int main(void) {
+GUARD_C_TEST(test_affine3_abi_layout) {
     GUARD_C_CHECK(sizeof(tc_basis3d) == sizeof(double) * 9);
     GUARD_C_CHECK(offsetof(tc_basis3d, x) == sizeof(double) * 0);
     GUARD_C_CHECK(offsetof(tc_basis3d, y) == sizeof(double) * 3);
@@ -31,6 +31,10 @@ int main(void) {
     GUARD_C_CHECK(offsetof(tc_affine3d, translation) == sizeof(double) * 9);
     GUARD_C_CHECK(sizeof(tc_aabbf) == sizeof(float) * 6);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_vec3_checked_normalization) {
     tc_vec3f checked_normalized = TC_VEC3F(9.0f, 8.0f, 7.0f);
     GUARD_C_CHECK(!tc_vec3f_try_normalized(tc_vec3f_zero(), 1.0e-6f, &checked_normalized));
     GUARD_C_CHECK(checked_normalized.x == 9.0f && checked_normalized.y == 8.0f && checked_normalized.z == 7.0f);
@@ -47,6 +51,10 @@ int main(void) {
     GUARD_C_CHECK(tc_vec3_try_normalized(TC_VEC3(DBL_MAX, DBL_MAX, DBL_MAX), 0.0, &checked_normalized_double));
     GUARD_C_CHECK(fabs(tc_vec3_dot(checked_normalized_double, checked_normalized_double) - 1.0) < 2.0e-15);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_aabbf_bounds) {
     tc_aabbf float_bounds = tc_aabbf_zero();
     GUARD_C_CHECK(tc_aabbf_is_valid(float_bounds));
     tc_aabbf_extend(&float_bounds, TC_VEC3F(-2.0f, 3.0f, -4.0f));
@@ -55,6 +63,10 @@ int main(void) {
     GUARD_C_CHECK(float_bounds.max_point.z == 7.0f);
     GUARD_C_CHECK(tc_aabbf_contains(float_bounds, TC_VEC3F(0.0f, 1.0f, 2.0f)));
 
+    return 0;
+}
+
+GUARD_C_TEST(test_affine3_composition_inverse_normals_and_matrix) {
     tc_quat child_rotation = tc_quat_from_axis_angle(tc_vec3_unit_z(), 0.63);
     tc_affine3d parent = tc_affine3d_mul(tc_affine3d_translation(5.0, -3.0, 2.0), tc_affine3d_scaling(2.0, 0.5, 1.25));
     tc_affine3d child = tc_affine3d_trs(TC_VEC3(-1.0, 4.0, 0.75), child_rotation, TC_VEC3(0.8, 1.4, 2.0));
@@ -186,4 +198,13 @@ int main(void) {
     GUARD_C_CHECK(near_vec3(matrix_round_trip.translation, TC_VEC3(9.0, 11.0, 13.0), 0.0));
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_affine3_abi_layout);
+    GUARD_C_RUN(test_vec3_checked_normalization);
+    GUARD_C_RUN(test_aabbf_bounds);
+    GUARD_C_RUN(test_affine3_composition_inverse_normals_and_matrix);
+    return GUARD_C_END();
 }

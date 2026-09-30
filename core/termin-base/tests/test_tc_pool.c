@@ -32,8 +32,11 @@ static void capture_log(tc_log_level level, const char* message) {
     captured_message[sizeof(captured_message) - 1] = '\0';
 }
 
-int main(void) {
+GUARD_C_TEST(test_pool_handle_diagnostics) {
     tc_pool pool;
+    captured_count = 0;
+    captured_level = TC_LOG_DEBUG;
+    captured_message[0] = '\0';
     GUARD_C_CHECK(tc_pool_init(&pool, sizeof(int), 1));
 
     tc_handle handle = tc_pool_alloc(&pool);
@@ -60,6 +63,11 @@ int main(void) {
     tc_log_set_callback(NULL);
     tc_pool_free(&pool);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_pool_allocation_failures_preserve_state) {
+    tc_pool pool;
     for (size_t successful = 0; successful < 4; ++successful) {
         failing_allocator allocator = {successful};
         const tc_pool_config config = {
@@ -104,6 +112,11 @@ int main(void) {
     GUARD_C_CHECK(pool.capacity == 2);
     tc_pool_free(&pool);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_pool_rebootstrap_invalidates_old_handles) {
+    tc_pool pool;
     tc_pool_generation_epoch epoch = {0};
     GUARD_C_CHECK(tc_pool_init_rebootstrap(&pool, sizeof(int), 1, &epoch));
     tc_handle before_rebootstrap = tc_pool_alloc(&pool);
@@ -133,4 +146,12 @@ int main(void) {
     GUARD_C_CHECK(final_second.generation > grown.generation);
     tc_pool_free(&pool);
     return 0;
+}
+
+int main(int argc, char** argv) {
+    GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_pool_handle_diagnostics);
+    GUARD_C_RUN(test_pool_allocation_failures_preserve_state);
+    GUARD_C_RUN(test_pool_rebootstrap_invalidates_old_handles);
+    return GUARD_C_END();
 }

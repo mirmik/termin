@@ -25,7 +25,7 @@ static void reset_logging(void) {
     g_callback_message[0] = '\0';
 }
 
-static void test_capture_preserves_callback_and_drops_oldest(void) {
+GUARD_C_TEST(test_capture_preserves_callback_and_drops_oldest) {
     reset_logging();
     tc_log_set_callback(capture_callback);
     GUARD_C_CHECK(tc_log_capture_start(2));
@@ -53,9 +53,10 @@ static void test_capture_preserves_callback_and_drops_oldest(void) {
     GUARD_C_CHECK(count == 0);
     GUARD_C_CHECK(dropped == 0);
     reset_logging();
+    return 0;
 }
 
-static void test_stop_disables_capture_only(void) {
+GUARD_C_TEST(test_stop_disables_capture_only) {
     reset_logging();
     tc_log_set_callback(capture_callback);
     GUARD_C_CHECK(tc_log_capture_start(1));
@@ -70,10 +71,12 @@ static void test_stop_disables_capture_only(void) {
     GUARD_C_CHECK(g_callback_count == 1);
     GUARD_C_CHECK(strcmp(g_callback_message, "after stop") == 0);
     reset_logging();
+    return 0;
 }
 
-int main(void) {
-    test_capture_preserves_callback_and_drops_oldest();
-    test_stop_disables_capture_only();
-    return 0;
+int main(int argc, char** argv) {
+    GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_capture_preserves_callback_and_drops_oldest);
+    GUARD_C_RUN(test_stop_disables_capture_only);
+    return GUARD_C_END();
 }

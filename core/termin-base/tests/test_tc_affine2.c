@@ -11,7 +11,7 @@ static int nearf(float a, float b, float epsilon) {
     return fabsf(a - b) <= epsilon;
 }
 
-int main(void) {
+GUARD_C_TEST(test_affine2_abi_layout) {
     GUARD_C_CHECK(sizeof(tc_vec2f) == sizeof(float) * 2);
     GUARD_C_CHECK(sizeof(tc_size2f) == sizeof(float) * 2);
     GUARD_C_CHECK(sizeof(tc_rect2f) == sizeof(float) * 4);
@@ -24,6 +24,10 @@ int main(void) {
     GUARD_C_CHECK(offsetof(tc_affine2f, tx) == sizeof(float) * 4);
     GUARD_C_CHECK(offsetof(tc_affine2f, ty) == sizeof(float) * 5);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_vec2_checked_normalization) {
     tc_vec2f checked_normalized = TC_VEC2F(9.0f, 8.0f);
     GUARD_C_CHECK(!tc_vec2f_try_normalized(tc_vec2f_zero(), 1.0e-6f, &checked_normalized));
     GUARD_C_CHECK(checked_normalized.x == 9.0f && checked_normalized.y == 8.0f);
@@ -44,6 +48,10 @@ int main(void) {
     GUARD_C_CHECK(fabs(checked_normalized_double.y - sqrt(0.5)) < 1.0e-15);
     GUARD_C_CHECK(tc_vec2f_mul(TC_VEC2F(2.0f, 3.0f), TC_VEC2F(4.0f, 5.0f)).y == 15.0f);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_affine2_composition_inverse_bounds_and_pose) {
     tc_affine2f parent = tc_affine2f_mul(tc_affine2f_translation(5.0f, -3.0f), tc_affine2f_scaling(2.0f, 0.5f));
     tc_affine2f child = tc_affine2f_mul(tc_affine2f_rotation(0.6f), tc_affine2f_shear(0.25f, -0.4f));
     tc_vec2f point = TC_VEC2F(3.0f, -2.0f);
@@ -95,4 +103,12 @@ int main(void) {
     GUARD_C_CHECK(nearf(pose_point.y, (float)(s * point.x + c * point.y + pose.lin.y), 1.0e-5f));
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_affine2_abi_layout);
+    GUARD_C_RUN(test_vec2_checked_normalization);
+    GUARD_C_RUN(test_affine2_composition_inverse_bounds_and_pose);
+    return GUARD_C_END();
 }

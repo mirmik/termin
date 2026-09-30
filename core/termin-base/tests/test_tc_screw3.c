@@ -2,7 +2,7 @@
 
 #include "guard_c.h"
 
-int main(void) {
+GUARD_C_TEST(test_screw3_division) {
     const tc_screw3 screw = tc_screw3_new(TC_VEC3(2.0, 4.0, 6.0), TC_VEC3(8.0, 10.0, 12.0));
     const tc_screw3 half = tc_screw3_div(screw, 2.0);
     GUARD_C_CHECK(half.ang.x == 1.0);
@@ -12,6 +12,11 @@ int main(void) {
     GUARD_C_CHECK(half.lin.y == 5.0);
     GUARD_C_CHECK(half.lin.z == 6.0);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_screw3_vector_orders) {
+    const tc_screw3 screw = tc_screw3_new(TC_VEC3(2.0, 4.0, 6.0), TC_VEC3(8.0, 10.0, 12.0));
     double vw[6];
     tc_screw3_to_vector_vw_order(screw, vw);
     GUARD_C_CHECK(vw[0] == 8.0);
@@ -28,6 +33,11 @@ int main(void) {
     GUARD_C_CHECK(recovered_wv.ang.y == screw.ang.y);
     GUARD_C_CHECK(recovered_wv.lin.y == screw.lin.y);
 
+    return 0;
+}
+
+GUARD_C_TEST(test_screw3_twist_transform_round_trip) {
+    const tc_screw3 screw = tc_screw3_new(TC_VEC3(2.0, 4.0, 6.0), TC_VEC3(8.0, 10.0, 12.0));
     const tc_pose3 frame = tc_pose3_new(tc_quat_identity(), TC_VEC3(3.0, -2.0, 1.0));
     const tc_screw3 twist = tc_screw3_transform_as_twist_by(screw, frame);
     const tc_screw3 recovered_twist = tc_screw3_inverse_transform_as_twist_by(twist, frame);
@@ -35,4 +45,12 @@ int main(void) {
     GUARD_C_CHECK(recovered_twist.lin.x == screw.lin.x);
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_screw3_division);
+    GUARD_C_RUN(test_screw3_vector_orders);
+    GUARD_C_RUN(test_screw3_twist_transform_round_trip);
+    return GUARD_C_END();
 }

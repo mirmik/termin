@@ -15,7 +15,7 @@ static bool probe_loader(const char* uuid, void* user_data) {
     return probe->result;
 }
 
-int main(void) {
+GUARD_C_TEST(test_resource_loader_routing) {
     loader_probe first = {{0}, 0, true};
     loader_probe second = {{0}, 0, true};
 
@@ -36,6 +36,10 @@ int main(void) {
     tc_resource_clear_loader();
     GUARD_C_CHECK(!tc_resource_request_load("second"));
 
+    return 0;
+}
+
+GUARD_C_TEST(test_resource_loader_preserves_registry_storage) {
     tc_resource_header header;
     loader_probe probe = {{0}, 0, false};
     tc_resource_header_init(&header, "lazy-resource");
@@ -53,4 +57,11 @@ int main(void) {
 
     tc_resource_clear_loader();
     return 0;
+}
+
+int main(int argc, char** argv) {
+    GUARD_C_BEGIN_ARGS(argc, argv);
+    GUARD_C_RUN(test_resource_loader_routing);
+    GUARD_C_RUN(test_resource_loader_preserves_registry_storage);
+    return GUARD_C_END();
 }
