@@ -87,7 +87,7 @@
         "capabilities": [
           "python-bindings"
         ],
-        "reason": "Compiled by termin_tests only when the C++ Python bindings are enabled."
+        "reason": "Compiled by _cpp_tests when the editor Python bindings and tests are enabled."
       },
       {
         "path": "graphics/termin-window/tests/test_opengl33_tier.cpp",

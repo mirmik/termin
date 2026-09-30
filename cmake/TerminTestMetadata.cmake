@@ -93,7 +93,6 @@ function(termin_label_tests_in_directory module)
         termin_require_gpu_validation("${_termin_test}")
         set(_termin_build_target "")
         set(_termin_preserve_release_semantics FALSE)
-        set(_termin_requires_python_bindings FALSE)
         set(_termin_requires_window FALSE)
         set(_termin_requires_unconfigured_backend FALSE)
         foreach(_termin_label IN LISTS _termin_labels)
@@ -107,9 +106,6 @@ function(termin_label_tests_in_directory module)
             elseif(_termin_label STREQUAL
                    "termin:assert-policy:preserve-release-semantics")
                 set(_termin_preserve_release_semantics TRUE)
-            elseif(_termin_label STREQUAL
-                   "termin:capability:python-bindings")
-                set(_termin_requires_python_bindings TRUE)
             elseif(_termin_label STREQUAL "termin:capability:window")
                 set(_termin_requires_window TRUE)
             elseif(_termin_label MATCHES
@@ -145,8 +141,7 @@ function(termin_label_tests_in_directory module)
         else()
             termin_enable_test_assertions("${_termin_build_target}")
         endif()
-        if(NOT _termin_requires_python_bindings
-           AND NOT _termin_requires_unconfigured_backend)
+        if(NOT _termin_requires_unconfigured_backend)
             set_property(
                 GLOBAL APPEND PROPERTY
                 TERMIN_NATIVE_TEST_TARGETS_WITH_WINDOW

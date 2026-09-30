@@ -15,6 +15,7 @@ $BuildType = "Release"
 $BuildJobs = if ($env:BUILD_JOBS) { [int]$env:BUILD_JOBS } else { [Environment]::ProcessorCount }
 $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { "" }
 $Full = $false
+$PythonMode = "auto"
 $RunOnly = $false
 $VulkanMode = "auto"
 $OpenGlMode = "on"
@@ -59,6 +60,9 @@ function Show-Help {
     Write-Host "  --profile PRODUCT Select full, graphics, or core SDK product"
     Write-Host "  --debug, -d       Debug build"
     Write-Host "  --full            Include window/full C++ tests"
+    Write-Host "  --python          Enable Python bindings and their CTest tests"
+    Write-Host "  --no-python       Disable Python bindings and their CTest tests"
+    Write-Host "                    Default preserves the configured graph; a new graph defaults OFF"
     Write-Host "  --run-only        Run the configured test selection without rebuilding its targets"
     Write-Host "  --no-vulkan       Disable Vulkan support"
     Write-Host "  --vulkan          Require Vulkan support (default: auto-detect SDK)"
@@ -102,6 +106,8 @@ while ($index -lt $args.Count) {
         "--debug"           { $BuildType = "Debug" }
         "-d"                { $BuildType = "Debug" }
         "--full"            { $Full = $true; $WindowTestsMode = "on" }
+        "--python"          { $PythonMode = "on" }
+        "--no-python"       { $PythonMode = "off" }
         "--run-only"        { $RunOnly = $true }
         "--no-vulkan"       { $VulkanMode = "off" }
         "--vulkan"          { $VulkanMode = "on" }
@@ -191,14 +197,31 @@ switch ($WindowTestsMode) {
 
 $buildBinDir = Join-Path $BuildDir "bin"
 $buildLibDir = Join-Path $BuildDir "lib"
-$PythonForCMake = if ($env:PYTHON_BIN) {
-    $env:PYTHON_BIN
-} else {
-    Join-Path $ScriptDir "build\python-runtime\build-env\Scripts\python.exe"
+$PythonCapabilityBootstrap = "import sys; from pathlib import Path; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import load_configured_test_python_bindings; print('ON' if load_configured_test_python_bindings(Path(sys.argv[1])) else 'OFF')"
+$TerminBuildPython = "OFF"
+if ($PythonMode -eq "on") {
+    $TerminBuildPython = "ON"
+} elseif ($PythonMode -eq "auto" -and (Test-Path (Join-Path $BuildDir "CMakeCache.txt"))) {
+    $ConfiguredPython = & $ContextPython -c $PythonCapabilityBootstrap (Join-Path $ScriptDir "core/termin-build-tools") $BuildDir
+    if ($LASTEXITCODE -ne 0) { throw "Configured Python bindings metadata is invalid" }
+    $TerminBuildPython = ($ConfiguredPython | Out-String).Trim()
+}
+$PythonBuildEnv = if ($env:TERMIN_PYTHON_BUILD_ENV) { $env:TERMIN_PYTHON_BUILD_ENV } else { Join-Path $ScriptDir "build\python-runtime\build-env" }
+$PinnedPython = Join-Path $PythonBuildEnv "Scripts\python.exe"
+$PythonForCMake = if ($env:PYTHON_BIN) { $env:PYTHON_BIN } elseif ($env:PYTHON_EXECUTABLE) { $env:PYTHON_EXECUTABLE } else { "" }
+if (-not $PythonForCMake) {
+    if (Test-Path $PinnedPython -PathType Leaf) {
+        $PythonForCMake = $PinnedPython
+    } elseif ($TerminBuildPython -eq "ON") {
+        throw "Pinned Python build frontend is missing: $PinnedPython. Run 'task build' first."
+    } else {
+        $PythonForCMake = $ContextPython
+    }
 }
 if (-not (Test-Path $PythonForCMake -PathType Leaf)) {
-    Write-Error "Pinned SDK Python is required for CMake test configuration: $PythonForCMake. Run 'task build' first."
-    exit 1
+    $PythonCommand = Get-Command $PythonForCMake -CommandType Application -ErrorAction SilentlyContinue
+    if (-not $PythonCommand) { throw "Python build interpreter is missing: $PythonForCMake" }
+    $PythonForCMake = $PythonCommand.Path
 }
 
 $pathEntries = @(
@@ -239,6 +262,7 @@ Write-Host "OpenGL:      $TerminEnableOpenGl"
 Write-Host "SDL2:        $TerminEnableSdl"
 Write-Host "Window tests:$TerminBuildWindowTests ($WindowTestsMode)"
 Write-Host "Full set:    $Full"
+Write-Host "Python:      $TerminBuildPython ($PythonMode)"
 Write-Host "ccache:      $TerminUseCcache"
 Write-Host "Unity build: $TerminEnableUnityBuild"
 Write-Host "PCH:         $TerminEnablePch"
@@ -258,6 +282,8 @@ if ($TerminEnableVulkan -eq "ON") {
 & (Join-Path $ScriptDir "scripts\Ensure-ThirdpartySubmodules.ps1") -RepoRoot $ScriptDir -RequiredPaths $requiredSubmodules
 
 $cmakeArgs = @("-S", $ScriptDir, "-B", $BuildDir)
+if ($PythonMode -eq "on") { $cmakeArgs += "-DTERMIN_BUILD_PYTHON=ON" }
+if ($PythonMode -eq "off") { $cmakeArgs += "-DTERMIN_BUILD_PYTHON=OFF" }
 if ($CmakeGeneratorName -and -not (Test-Path (Join-Path $BuildDir "CMakeCache.txt"))) {
     $cmakeArgs += @("-G", $CmakeGeneratorName)
 }
@@ -299,12 +325,13 @@ $ConfiguredProfile = & $ContextPython -c "import sys; from pathlib import Path; 
 if ($LASTEXITCODE -ne 0 -or ($ConfiguredProfile | Out-String).Trim() -ne $SdkProfile) {
     throw "Configured SDK profile differs from requested test context"
 }
-$PythonCommand = Get-Command python -ErrorAction SilentlyContinue
-if (-not $PythonCommand) {
-    Write-Error "python is required for repository CTest control"
-    exit 1
+$ConfiguredPython = & $ContextPython -c $PythonCapabilityBootstrap (Join-Path $ScriptDir "core/termin-build-tools") $BuildDir
+if ($LASTEXITCODE -ne 0) { throw "Configured Python bindings metadata is invalid" }
+$TerminBuildPython = ($ConfiguredPython | Out-String).Trim()
+if (($PythonMode -eq "on" -and $TerminBuildPython -ne "ON") -or ($PythonMode -eq "off" -and $TerminBuildPython -ne "OFF")) {
+    throw "Configured Python bindings conflict with the requested --python/--no-python mode"
 }
-$PythonExe = $PythonCommand.Path
+$PythonExe = $ContextPython
 $env:PYTHONPATH = (Join-Path $ScriptDir "core/termin-build-tools") + $(
     if ($env:PYTHONPATH) { [IO.Path]::PathSeparator + $env:PYTHONPATH } else { "" }
 )
@@ -314,6 +341,9 @@ $RepositoryControl = @(
 )
 $RepositoryProfile = if ($Full) { "windows-d3d11" } else { "pr" }
 $RepositoryCapabilities = @("--capability", "host")
+if ($TerminBuildPython -eq "ON") {
+    $RepositoryCapabilities += @("--capability", "python-bindings")
+}
 if (Test-CMakeCacheBoolean $BuildDir "TGFX2_ENABLE_D3D11") {
     $RepositoryCapabilities += @("--capability", "d3d11")
 }

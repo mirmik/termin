@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 $Full = $false
+$PythonMode = "auto"
 $SdkProfile = ""
 $CsharpOnly = $false
 $ProcessSmokeOnly = $false
@@ -34,6 +35,14 @@ while ($index -lt $args.Count) {
             $Full = $true
             $CppArgs.Add("--full")
         }
+        "--python" {
+            $PythonMode = "on"
+            $CppArgs.Add("--python")
+        }
+        "--no-python" {
+            $PythonMode = "off"
+            $CppArgs.Add("--no-python")
+        }
         "--process-smoke-only" {
             $ProcessSmokeOnly = $true
         }
@@ -53,6 +62,8 @@ while ($index -lt $args.Count) {
             Write-Host "  --csharp-only  Run Graphics C# bindings and retained WPF chart smoke (Windows D3D11)"
             Write-Host "  --profile PRODUCT Select full, graphics, or core SDK product"
             Write-Host "  --full      Include window/full C++ tests and pytest tests marked full"
+            Write-Host "  --python    Enable Python bindings and Python test phases"
+            Write-Host "  --no-python Disable Python bindings and skip Python test phases"
             Write-Host "  --process-smoke-only"
             Write-Host "              Run only the selected manifest process-smoke profile"
             Write-Host "  --process-smoke-profile=<profile>"
@@ -98,13 +109,15 @@ $ContextPython = if ($env:TERMIN_TEST_TOOLS_PYTHON) { $env:TERMIN_TEST_TOOLS_PYT
     $pinnedPython = Join-Path $ScriptDir "build\python-runtime\build-env\Scripts\python.exe"
     if (Test-Path $pinnedPython -PathType Leaf) { $pinnedPython } else { (Get-Command python -ErrorAction Stop).Path }
 }
-$ContextArgs = @("--repo-root", $ScriptDir)
+$ContextArgs = @("--repo-root", $ScriptDir, "--build-type", $TestBuildType)
 if ($SdkProfile) { $ContextArgs += @("--profile", $SdkProfile) }
 $ContextJson = & $ContextPython -c $ContextBootstrap (Join-Path $ScriptDir "core/termin-build-tools") @ContextArgs
 if ($LASTEXITCODE -ne 0) { throw "SDK test context resolution failed" }
 $TestSdkContext = ($ContextJson -join "`n") | ConvertFrom-Json
 $SdkProfile = $TestSdkContext.profile
 $SdkPrefix = $TestSdkContext.'sdk-prefix'
+$BuildDir = $TestSdkContext.'build-dir'
+$env:BUILD_DIR = $BuildDir
 $env:SDK_PREFIX = $SdkPrefix
 $env:TERMIN_SDK = $SdkPrefix
 $CppArgs.Add("--profile=$SdkProfile")
@@ -113,56 +126,76 @@ if ($SdkProfile -ne "full") {
     $ProcessSmokeDisabled = $true
 }
 
+if ($PythonMode -eq "off") { $ProcessSmokeDisabled = $true }
 if ($ProcessSmokeOnly -and $ProcessSmokeDisabled) {
     throw "--process-smoke-only cannot be combined with --no-process-smoke"
 }
 
+$PythonEnabled = $PythonMode -ne "off"
 if (-not $ProcessSmokeOnly) {
+    $CppSucceeded = $false
     try {
         $CppArgArray = $CppArgs.ToArray()
         & (Join-Path $ScriptDir "scripts\test\cpp.ps1") @CppArgArray
         if ($LASTEXITCODE -ne 0) {
             $Failures.Add("C/C++")
+        } else {
+            $CppSucceeded = $true
         }
     } catch {
         Write-Warning "[run-tests] C/C++ test runner failed: $_"
         $Failures.Add("C/C++")
     }
 
-    try {
-        $PythonArgs = @("--profile=$SdkProfile")
-        if ($Full) {
-            $PythonArgs += "--full"
-        }
-
-        & (Join-Path $ScriptDir "scripts\test\setup-python-env.ps1") "--profile=$SdkProfile"
+    $PythonEnabled = $false
+    if ($CppSucceeded) {
+        $PythonCapabilityBootstrap = "import sys; from pathlib import Path; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import load_configured_test_python_bindings; print('ON' if load_configured_test_python_bindings(Path(sys.argv[1])) else 'OFF')"
+        $ConfiguredPython = & $ContextPython -c $PythonCapabilityBootstrap (Join-Path $ScriptDir "core/termin-build-tools") $BuildDir
         if ($LASTEXITCODE -ne 0) {
-            throw "Python test environment refresh failed."
+            $Failures.Add("Python bindings context")
+        } else {
+            $PythonEnabled = ($ConfiguredPython | Out-String).Trim() -eq "ON"
         }
-
-        $OldTestCapabilities = $env:TERMIN_TEST_CAPABILITIES
-        $TestCapabilities = @("host")
-        if ($PythonWindowCapability) {
-            $TestCapabilities += "window"
-        }
-        $env:TERMIN_TEST_CAPABILITIES = $TestCapabilities -join ","
+    }
+    if ($PythonEnabled) {
         try {
-            & (Join-Path $ScriptDir "scripts\test\python.ps1") @PythonArgs
+            $PythonArgs = @("--profile=$SdkProfile")
+            if ($Full) {
+                $PythonArgs += "--full"
+            }
+
+            & (Join-Path $ScriptDir "scripts\test\setup-python-env.ps1") "--profile=$SdkProfile"
             if ($LASTEXITCODE -ne 0) {
-                $Failures.Add("Python")
+                throw "Python test environment refresh failed."
             }
-        } finally {
-            if ($null -eq $OldTestCapabilities) {
-                Remove-Item Env:TERMIN_TEST_CAPABILITIES -ErrorAction SilentlyContinue
-            } else {
-                $env:TERMIN_TEST_CAPABILITIES = $OldTestCapabilities
+
+            $OldTestCapabilities = $env:TERMIN_TEST_CAPABILITIES
+            $TestCapabilities = @("host")
+            if ($PythonWindowCapability) {
+                $TestCapabilities += "window"
             }
+            $env:TERMIN_TEST_CAPABILITIES = $TestCapabilities -join ","
+            try {
+                & (Join-Path $ScriptDir "scripts\test\python.ps1") @PythonArgs
+                if ($LASTEXITCODE -ne 0) {
+                    $Failures.Add("Python")
+                }
+            } finally {
+                if ($null -eq $OldTestCapabilities) {
+                    Remove-Item Env:TERMIN_TEST_CAPABILITIES -ErrorAction SilentlyContinue
+                } else {
+                    $env:TERMIN_TEST_CAPABILITIES = $OldTestCapabilities
+                }
+            }
+        } catch {
+            Write-Warning "[run-tests] Python test runner failed: $_"
+            $Failures.Add("Python")
         }
-    } catch {
-        Write-Warning "[run-tests] Python test runner failed: $_"
-        $Failures.Add("Python")
+    } else {
+        Write-Host "Python test phases skipped: configured Python bindings are disabled or C/C++ validation failed."
     }
 }
+if (-not $PythonEnabled) { $ProcessSmokeDisabled = $true }
 
 if (-not $ProcessSmokeDisabled) {
     if (-not $ProcessSmokeProfile -and ($Full -or $ProcessSmokeOnly)) {

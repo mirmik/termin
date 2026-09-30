@@ -216,8 +216,9 @@ def test_cpp_runners_isolate_ctest_temporary_and_shader_cache_roots() -> None:
     assert '$env:TERMIN_SDK_SHADER_CACHE_ROOT = $CtestShaderCacheRoot' in windows_runner
 
 
+@pytest.mark.parametrize("python_enabled", (False, True))
 def test_native_test_aggregates_follow_configured_backend_capabilities(
-    tmp_path: Path,
+    tmp_path: Path, python_enabled: bool,
 ) -> None:
     repo_root = Path(__file__).resolve().parents[3]
     source_dir = tmp_path / "source"
@@ -230,6 +231,7 @@ def test_native_test_aggregates_follow_configured_backend_capabilities(
 project(test_metadata LANGUAGES CXX)
 enable_testing()
 set(TGFX2_ENABLE_VULKAN OFF)
+option(TERMIN_BUILD_PYTHON \"Build Python bindings\" OFF)
 include(\"{metadata}\")
 
 foreach(target IN ITEMS host_test vulkan_test window_test)
@@ -238,6 +240,14 @@ foreach(target IN ITEMS host_test vulkan_test window_test)
 endforeach()
 termin_add_test_labels(vulkan_test \"termin:capability:vulkan\")
 termin_add_test_labels(window_test \"termin:capability:window\")
+if(TERMIN_BUILD_PYTHON)
+    foreach(target IN ITEMS python_test python_window_test)
+        add_executable(${{target}} test.cpp)
+        add_test(NAME ${{target}} COMMAND ${{target}})
+        termin_add_test_labels(${{target}} \"termin:capability:python-bindings\")
+    endforeach()
+    termin_add_test_labels(python_window_test \"termin:capability:window\")
+endif()
 termin_label_tests_in_directory(\"test-module\")
 
 get_property(headless GLOBAL PROPERTY TERMIN_NATIVE_TEST_TARGETS)
@@ -251,15 +261,20 @@ file(WRITE \"${{CMAKE_BINARY_DIR}}/aggregates.txt\"
     )
 
     subprocess.run(
-        ["cmake", "-S", str(source_dir), "-B", str(build_dir)],
+        ["cmake", "-S", str(source_dir), "-B", str(build_dir),
+         f"-DTERMIN_BUILD_PYTHON:BOOL={'ON' if python_enabled else 'OFF'}"],
         check=True,
         capture_output=True,
         text=True,
     )
 
+    headless = "host_test;python_test" if python_enabled else "host_test"
+    with_window = (
+        "host_test;python_test;python_window_test;window_test"
+        if python_enabled else "host_test;window_test"
+    )
     assert (build_dir / "aggregates.txt").read_text(encoding="utf-8") == (
-        "headless=host_test\n"
-        "with_window=host_test;window_test\n"
+        f"headless={headless}\nwith_window={with_window}\n"
     )
 
 

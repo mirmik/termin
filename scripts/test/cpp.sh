@@ -12,6 +12,7 @@ BUILD_TYPE="Release"
 BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
 BUILD_DIR="${BUILD_DIR:-}"
 FULL=0
+PYTHON_MODE="auto"
 VULKAN_MODE="on"
 OPENGL_MODE="on"
 SDL_MODE="on"
@@ -36,6 +37,8 @@ while (( $# > 0 )); do
 
         --debug|-d)  BUILD_TYPE="Debug" ;;
         --full)      FULL=1; WINDOW_TESTS_MODE="on" ;;
+        --python)    PYTHON_MODE="on" ;;
+        --no-python) PYTHON_MODE="off" ;;
         --no-vulkan) VULKAN_MODE="off" ;;
         --vulkan)    VULKAN_MODE="on" ;;
         --no-opengl) OPENGL_MODE="off" ;;
@@ -61,6 +64,9 @@ while (( $# > 0 )); do
             echo "  --profile PRODUCT Select full, graphics, or core SDK product"
             echo "  --debug, -d       Debug build"
             echo "  --full            Include window/full C++ tests"
+            echo "  --python          Enable Python bindings and their CTest tests"
+            echo "  --no-python       Disable Python bindings and their CTest tests"
+            echo "                    Default preserves the configured graph; a new graph defaults OFF"
             echo "  --no-vulkan       Disable Vulkan support"
             echo "  --vulkan          Enable Vulkan support (default)"
             echo "  --no-opengl       Disable OpenGL support"
@@ -179,17 +185,37 @@ echo "Generator:   ${CMAKE_GENERATOR_NAME:-existing/default}"
 echo "Jobs:        $BUILD_JOBS"
 echo ""
 
-PY_EXEC="${PYTHON_BIN:-}"
-if [[ -z "$PY_EXEC" && -x "$SCRIPT_DIR/build/python-runtime/build-env/bin/python" ]]; then
-    PY_EXEC="$SCRIPT_DIR/build/python-runtime/build-env/bin/python"
-fi
+PYTHON_CAPABILITY_BOOTSTRAP='import sys; from pathlib import Path; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import load_configured_test_python_bindings; print("ON" if load_configured_test_python_bindings(Path(sys.argv[1])) else "OFF")'
+TERMIN_BUILD_PYTHON=OFF
+case "$PYTHON_MODE" in
+    on) TERMIN_BUILD_PYTHON=ON ;;
+    off) TERMIN_BUILD_PYTHON=OFF ;;
+    auto)
+        if [[ -f "$BUILD_DIR/CMakeCache.txt" ]]; then
+            TERMIN_BUILD_PYTHON="$("$CONTEXT_PYTHON" -c "$PYTHON_CAPABILITY_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "$BUILD_DIR")" || exit 1
+        fi ;;
+esac
+PYTHON_BUILD_ENV="${TERMIN_PYTHON_BUILD_ENV:-$SCRIPT_DIR/build/python-runtime/build-env}"
+PINNED_PYTHON="$PYTHON_BUILD_ENV/bin/python"
+PY_EXEC="${PYTHON_BIN:-${PYTHON_EXECUTABLE:-}}"
 if [[ -z "$PY_EXEC" ]]; then
-    PY_EXEC="$(command -v python3 || command -v python || true)"
+    if [[ -x "$PINNED_PYTHON" ]]; then
+        PY_EXEC="$PINNED_PYTHON"
+    elif [[ "$TERMIN_BUILD_PYTHON" == "ON" ]]; then
+        echo "ERROR: pinned Python build frontend is missing: $PINNED_PYTHON. Run task build first." >&2
+        exit 1
+    else
+        PY_EXEC="$CONTEXT_PYTHON"
+    fi
 fi
-if [[ -z "$PY_EXEC" ]]; then
-    echo "ERROR: python3 not found; cannot run build doctor" >&2
+if command -v "$PY_EXEC" >/dev/null 2>&1; then
+    PY_EXEC="$(command -v "$PY_EXEC")"
+fi
+if [[ ! -x "$PY_EXEC" ]]; then
+    echo "ERROR: Python build interpreter is missing or not executable: $PY_EXEC" >&2
     exit 1
 fi
+echo "Python bindings: $TERMIN_BUILD_PYTHON ($PYTHON_MODE)"
 export PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools${PYTHONPATH:+:$PYTHONPATH}"
 REPOSITORY_CONTROL=(
     "$PY_EXEC"
@@ -205,6 +231,10 @@ if ! "$PY_EXEC" -m termin_build.sdk --repo-root "$SCRIPT_DIR" doctor \
 fi
 
 cmake_args=()
+case "$PYTHON_MODE" in
+    on) cmake_args+=(-DTERMIN_BUILD_PYTHON=ON) ;;
+    off) cmake_args+=(-DTERMIN_BUILD_PYTHON=OFF) ;;
+esac
 if [[ -n "$CMAKE_GENERATOR_NAME" && ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
     cmake_args+=(-G "$CMAKE_GENERATOR_NAME")
 fi
@@ -252,8 +282,17 @@ if [[ "$CONFIGURED_PROFILE" != "$SDK_PROFILE" ]]; then
     echo "ERROR: configured SDK profile differs from requested test context." >&2
     exit 1
 fi
+TERMIN_BUILD_PYTHON="$("$CONTEXT_PYTHON" -c "$PYTHON_CAPABILITY_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "$BUILD_DIR")" || exit 1
+if [[ "$PYTHON_MODE" == "on" && "$TERMIN_BUILD_PYTHON" != "ON" ]] \
+    || [[ "$PYTHON_MODE" == "off" && "$TERMIN_BUILD_PYTHON" != "OFF" ]]; then
+    echo "ERROR: configured Python bindings conflict with the requested --python/--no-python mode." >&2
+    exit 1
+fi
 REPOSITORY_PROFILE="pr"
 REPOSITORY_CAPABILITIES=(--capability host)
+if [[ "$TERMIN_BUILD_PYTHON" == "ON" ]]; then
+    REPOSITORY_CAPABILITIES+=(--capability python-bindings)
+fi
 if [[ "$FULL" -eq 1 ]]; then
     REPOSITORY_PROFILE="linux-full"
 fi

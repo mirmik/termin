@@ -31,7 +31,7 @@ def load_installed_test_sdk_profile(sdk_prefix: Path) -> str:
     return _test_profile(product.profile_id, str(sdk_prefix))
 
 
-def load_configured_test_sdk_profile(build_dir: Path) -> str:
+def _configured_value(build_dir: Path, name: str, types: frozenset[str]) -> str:
     cache = Path(build_dir) / "CMakeCache.txt"
     try:
         lines = cache.read_text(encoding="utf-8").splitlines()
@@ -39,15 +39,32 @@ def load_configured_test_sdk_profile(build_dir: Path) -> str:
         raise TestSdkContextError(f"cannot read configured SDK context {cache}: {error}") from error
     values = []
     for line in lines:
-        if line.startswith("TERMIN_SDK_PROFILE:"):
+        if line.startswith(f"{name}:"):
             key, separator, value = line.partition("=")
-            if separator and key in {"TERMIN_SDK_PROFILE:STRING", "TERMIN_SDK_PROFILE:INTERNAL"}:
+            if separator and key in {f"{name}:{kind}" for kind in types}:
                 values.append(value)
             else:
-                raise TestSdkContextError(f"{cache}: malformed TERMIN_SDK_PROFILE declaration")
+                raise TestSdkContextError(f"{cache}: malformed {name} declaration")
     if len(values) != 1:
-        raise TestSdkContextError(f"{cache}: requires exactly one TERMIN_SDK_PROFILE declaration")
-    return _test_profile(values[0], str(cache))
+        raise TestSdkContextError(f"{cache}: requires exactly one {name} declaration")
+    return values[0]
+
+
+def load_configured_test_sdk_profile(build_dir: Path) -> str:
+    value = _configured_value(build_dir, "TERMIN_SDK_PROFILE", frozenset({"STRING", "INTERNAL"}))
+    return _test_profile(value, str(Path(build_dir) / "CMakeCache.txt"))
+
+
+def load_configured_test_python_bindings(build_dir: Path) -> bool:
+    value = _configured_value(build_dir, "TERMIN_BUILD_PYTHON", frozenset({"BOOL"}))
+    normalized = value.upper()
+    enabled = {"ON", "TRUE", "YES", "Y", "1"}
+    disabled = {"OFF", "FALSE", "NO", "N", "0"}
+    if normalized not in enabled | disabled:
+        raise TestSdkContextError(
+            f"{Path(build_dir) / 'CMakeCache.txt'}: unsupported TERMIN_BUILD_PYTHON BOOL value {value!r}"
+        )
+    return normalized in enabled
 
 
 def resolve_test_sdk_context(

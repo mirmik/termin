@@ -1168,6 +1168,21 @@ Python runners читают `sdk-product.json` установленного SDK,
 Неподдерживаемый продукт, отсутствующая metadata и несовпадение контекстов
 завершают команду с ошибкой; имена директорий не используются как metadata.
 
+`task test:cpp` и `task test` принимают `--python` / `--no-python`: флаги
+настраивают `TERMIN_BUILD_PYTHON=ON` / `OFF`. Без флага сохраняется значение
+configured graph; новая директория использует CMake default `OFF`.
+После configure CTest runner читает обязательную BOOL metadata
+`TERMIN_BUILD_PYTHON` и объявляет `python-bindings` только для включённых
+биндингов. Их тесты входят в обычные headless/window build aggregates.
+При `OFF` центральный `task test` пропускает Python environment setup,
+pytest, Python import/lint и editor/process smoke; `--python` возвращает
+эти фазы. Отдельный `task test:python` по-прежнему проверяет установленный SDK.
+`--no-python` отключает биндинги и их тесты; отдельные native consumers
+в Full встраивают Python независимо от биндингов и всё ещё требуют pinned
+Python frontend. CTest runner использует установленный frontend и при `OFF`;
+host Python допустим при `OFF`, когда frontend отсутствует и native graph
+продукта не требует embedded Python.
+
 Python suite roots больше не перечисляются в публичной задаче `task test:python`.
 Их source of truth — `build-system/test-suites.json`.
 Локальные runners вызывают `termin_build.repository_control`: профиль `pr`

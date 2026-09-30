@@ -41,6 +41,8 @@ while (( $# > 0 )); do
             echo "Options:"
             echo "  --profile PRODUCT  Select full, graphics, or core SDK product"
             echo "  --full             Include window tests, full pytest tests, and editor smoke tests"
+            echo "  --python           Enable Python bindings and Python test phases"
+            echo "  --no-python        Disable Python bindings and skip Python test phases"
             echo "  --no-editor-smoke  Skip editor-process smoke tests even with --full"
             echo "  --help, -h         Show this help"
             echo ""
@@ -58,19 +60,25 @@ while (( $# > 0 )); do
     esac
 done
 
+TEST_BUILD_TYPE="Release"
+for arg in "${CPP_ARGS[@]}"; do
+    if [[ "$arg" == "--debug" || "$arg" == "-d" ]]; then TEST_BUILD_TYPE="Debug"; fi
+done
+
 CONTEXT_BOOTSTRAP='import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import main; raise SystemExit(main())'
 CONTEXT_PYTHON="${TERMIN_TEST_TOOLS_PYTHON:-$(command -v python3 || command -v python || true)}"
 if [[ -z "$CONTEXT_PYTHON" ]]; then
     echo "ERROR: Python is required to resolve the SDK test context." >&2
     exit 1
 fi
-CONTEXT_ARGS=(--repo-root "$SCRIPT_DIR")
+CONTEXT_ARGS=(--repo-root "$SCRIPT_DIR" --build-type "$TEST_BUILD_TYPE")
 if [[ -n "$SDK_PROFILE" ]]; then
     CONTEXT_ARGS+=(--profile "$SDK_PROFILE")
 fi
 SDK_PROFILE="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field profile)" || exit 1
 SDK_PREFIX="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field sdk-prefix)" || exit 1
-export SDK_PREFIX
+BUILD_DIR="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field build-dir)" || exit 1
+export SDK_PREFIX BUILD_DIR
 export TERMIN_SDK="$SDK_PREFIX"
 CPP_ARGS+=(--profile "$SDK_PROFILE")
 failures=()
@@ -84,30 +92,39 @@ if [[ "$FULL" -eq 1 ]]; then
     PYTHON_ARGS+=(--full)
 fi
 
-if ! bash "$SCRIPT_DIR/scripts/test/cpp.sh" "${CPP_ARGS[@]}"; then
+CPP_SUCCEEDED=0
+if bash "$SCRIPT_DIR/scripts/test/cpp.sh" "${CPP_ARGS[@]}"; then
+    CPP_SUCCEEDED=1
+else
     failures+=("C/C++")
 fi
 
-TEST_BUILD_TYPE="Release"
-for arg in "${CPP_ARGS[@]}"; do
-    if [[ "$arg" == "--debug" || "$arg" == "-d" ]]; then
-        TEST_BUILD_TYPE="Debug"
+PYTHON_ENABLED=OFF
+if [[ "$CPP_SUCCEEDED" -eq 1 ]]; then
+    PYTHON_CAPABILITY_BOOTSTRAP='import sys; from pathlib import Path; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import load_configured_test_python_bindings; print("ON" if load_configured_test_python_bindings(Path(sys.argv[1])) else "OFF")'
+    if ! PYTHON_ENABLED="$("$CONTEXT_PYTHON" -c "$PYTHON_CAPABILITY_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "$BUILD_DIR")"; then
+        failures+=("Python bindings context")
+        PYTHON_ENABLED=OFF
     fi
-done
-if ! bash "$SCRIPT_DIR/scripts/test/setup-python-env.sh" --profile "$SDK_PROFILE"; then
-    failures+=("Python environment")
-elif ! TERMIN_TEST_CAPABILITIES="$(
-        if [[ "$PYTHON_WINDOW_CAPABILITY" -eq 1 ]]; then
-            printf 'host,window'
-        else
-            printf 'host'
-        fi
-    )" \
-    bash "$SCRIPT_DIR/scripts/test/python.sh" "${PYTHON_ARGS[@]}"; then
-    failures+=("Python")
+fi
+if [[ "$PYTHON_ENABLED" == "ON" ]]; then
+    if ! bash "$SCRIPT_DIR/scripts/test/setup-python-env.sh" --profile "$SDK_PROFILE"; then
+        failures+=("Python environment")
+    elif ! TERMIN_TEST_CAPABILITIES="$(
+            if [[ "$PYTHON_WINDOW_CAPABILITY" -eq 1 ]]; then
+                printf 'host,window'
+            else
+                printf 'host'
+            fi
+        )" \
+        bash "$SCRIPT_DIR/scripts/test/python.sh" "${PYTHON_ARGS[@]}"; then
+        failures+=("Python")
+    fi
+else
+    echo "Python test phases skipped: configured Python bindings are disabled or C/C++ validation failed."
 fi
 
-if [[ "$SDK_PROFILE" == "full" && "$FULL" -eq 1 && "$NO_EDITOR_SMOKE" -eq 0 ]]; then
+if [[ "$PYTHON_ENABLED" == "ON" && "$SDK_PROFILE" == "full" && "$FULL" -eq 1 && "$NO_EDITOR_SMOKE" -eq 0 ]]; then
     echo ""
     echo "========================================"
     echo "  Editor smoke tests"
