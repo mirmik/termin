@@ -315,8 +315,8 @@ bool tc_skeleton_ensure_loaded(tc_skeleton_handle h) {
     }
 
     skeleton = tc_skeleton_get(h);
-    if (!skeleton) {
-        tc_log_error("tc_skeleton_ensure_loaded: resource '%s' disappeared while its loader was running", uuid);
+    if (!skeleton || strcmp(skeleton->header.uuid, uuid) != 0) {
+        tc_log_error("tc_skeleton_ensure_loaded: resource '%s' disappeared or changed identity during loading", uuid);
         return false;
     }
     skeleton->header.is_loaded = 1;

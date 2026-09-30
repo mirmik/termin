@@ -297,11 +297,21 @@ bool tc_animation_ensure_loaded(tc_animation_handle h) {
     if (!animation)
         return false;
 
-    bool success = tc_resource_header_ensure_loaded(&animation->header);
-    if (!success) {
-        tc_log_error("tc_animation_ensure_loaded: resource loader failed for '%s'", animation->header.uuid);
+    if (animation->header.is_loaded)
+        return true;
+    char uuid[TC_UUID_SIZE];
+    memcpy(uuid, animation->header.uuid, sizeof(uuid));
+    if (!tc_resource_request_load(uuid)) {
+        tc_log_error("tc_animation_ensure_loaded: resource loader failed for '%s'", uuid);
+        return false;
     }
-    return success;
+    animation = tc_animation_get(h);
+    if (!animation || strcmp(animation->header.uuid, uuid) != 0) {
+        tc_log_error("tc_animation_ensure_loaded: resource '%s' disappeared or changed identity during loading", uuid);
+        return false;
+    }
+    animation->header.is_loaded = 1;
+    return true;
 }
 
 void tc_animation_add_ref(tc_animation* animation) {
@@ -1103,12 +1113,18 @@ size_t tc_animation_sample(const tc_animation* anim, double t_seconds, tc_channe
             t_seconds += anim->duration;
     }
 
+    const size_t count = anim->channel_count;
     double t_ticks = t_seconds * anim->tps;
-    for (size_t i = 0; i < anim->channel_count; i++) {
+    for (size_t i = 0; i < count; i++) {
         tc_channel_sample_init(&out_samples[i]);
-        (void)tc_animation_channel_sample(&anim->channels[i], t_ticks, &out_samples[i]);
     }
-    return anim->channel_count;
+    for (size_t i = 0; i < count; i++) {
+        // Failure logging can invoke user code, relocating the registry or
+        // replacing its payload. Do not inspect borrowed storage afterwards.
+        if (!tc_animation_channel_sample(&anim->channels[i], t_ticks, &out_samples[i]))
+            return 0;
+    }
+    return count;
 }
 
 typedef struct {

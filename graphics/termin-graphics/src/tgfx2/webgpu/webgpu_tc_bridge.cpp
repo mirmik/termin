@@ -153,8 +153,19 @@ namespace tgfx {
     TextureHandle WebGpuRenderDevice::ensure_tc_texture(tc_texture* texture) {
         if (!texture)
             return {};
-        if (!texture->header.is_loaded)
-            tc_texture_ensure_loaded_ptr(texture);
+        if (!texture->header.is_loaded) {
+            const tc_texture_handle handle = tc_texture_find(texture->header.uuid);
+            if (tc_texture_get(handle) != texture) {
+                tc_log_error("WebGpuRenderDevice::ensure_tc_texture: unloaded texture '%s' is not a registered resource",
+                             texture->header.uuid);
+                return {};
+            }
+            if (!tc_texture_ensure_loaded(handle))
+                return {};
+            texture = tc_texture_get(handle);
+            if (!texture)
+                return {};
+        }
         const bool gpu_first = texture->storage_kind == TC_TEXTURE_STORAGE_GPU_FIRST;
         if (texture->width == 0 || texture->height == 0 || (!gpu_first && !texture->data)) {
             tc::Log::error("WebGpuRenderDevice::ensure_tc_texture: texture '%s' has no image data",

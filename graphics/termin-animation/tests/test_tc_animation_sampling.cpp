@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <cstdio>
 #include <limits>
 #include <type_traits>
 
@@ -208,7 +209,7 @@ TEST_CASE("typed channel sampling rejects a non-finite single-key timeline trans
     CHECK(std::memcmp(&sample, sentinel, sizeof(sample)) == 0);
 }
 
-TEST_CASE("animation sampling leaves invalid channels empty and keeps topology count") {
+TEST_CASE("animation sampling stops on invalid channels without accessing storage after logging") {
     tc_keyframe_quat good_key = {0.0, {0.0, 0.0, 0.0, 2.0}};
     tc_keyframe_quat bad_key = {0.0, {0.0, 0.0, 0.0, 0.0}};
     tc_animation_channel channels[2]{};
@@ -227,7 +228,7 @@ TEST_CASE("animation sampling leaves invalid channels empty and keeps topology c
     std::memset(samples, 0xA5, sizeof(samples));
     {
         LogCapture capture;
-        CHECK(tc_animation_sample(&animation, 0.0, samples) == 2);
+        CHECK(tc_animation_sample(&animation, 0.0, samples) == 0);
         CHECK(error_log_count > 0);
     }
     CHECK(samples[0].has_rotation == 1);
@@ -616,6 +617,107 @@ TEST_CASE("TcAnimationClip set_tps validates input and recomputes active payload
         CHECK(clip.duration() == duration);
     }
     tc_animation_shutdown();
+}
+
+namespace {
+    enum class LoadAction { Grow, Fail, Destroy, Replace, Rename, Restart };
+
+    struct AnimationLoaderProbe {
+        tc_animation_handle original;
+        tc_animation_handle replacement = tc_animation_handle_invalid();
+        LoadAction action;
+        int calls = 0;
+        bool uuid_stable = false;
+    };
+
+    bool grow_animation_pool(const char* uuid, void* data) {
+        auto& probe = *static_cast<AnimationLoaderProbe*>(data);
+        ++probe.calls;
+        for (int i = 0; i < 256; ++i) {
+            char name[48];
+            std::snprintf(name, sizeof(name), "animation-loader-growth-%d", i);
+            (void)tc_animation_create(name);
+        }
+        probe.uuid_stable = std::strcmp(uuid, "animation-lazy-original") == 0;
+        if (probe.action == LoadAction::Destroy || probe.action == LoadAction::Replace) {
+            (void)tc_animation_destroy(probe.original);
+            if (probe.action == LoadAction::Replace)
+                probe.replacement = tc_animation_declare(uuid, "replacement");
+        } else if (probe.action == LoadAction::Rename) {
+            tc_resource_header_set_uuid(&tc_animation_get(probe.original)->header, "renamed", "test");
+        } else if (probe.action == LoadAction::Restart) {
+            tc_animation_shutdown();
+            tc_animation_init();
+            probe.replacement = tc_animation_declare(uuid, "replacement");
+        }
+        return probe.action != LoadAction::Fail;
+    }
+
+    struct AnimationRegistryScope {
+        AnimationRegistryScope() { tc_animation_init(); }
+        ~AnimationRegistryScope() {
+            tc_resource_clear_loader();
+            tc_log_set_callback(nullptr);
+            tc_animation_shutdown();
+        }
+    };
+
+    bool sampling_callback_ran = false;
+
+    void destroy_animation_storage_on_error(tc_log_level level, const char*) {
+        if (level != TC_LOG_ERROR || sampling_callback_ran)
+            return;
+        sampling_callback_ran = true;
+        tc_animation_shutdown();
+    }
+} // namespace
+
+TEST_CASE("animation lazy loading reacquires the generation and identity after callbacks") {
+    for (LoadAction action : {LoadAction::Grow, LoadAction::Fail, LoadAction::Destroy,
+                              LoadAction::Replace, LoadAction::Rename, LoadAction::Restart}) {
+        AnimationRegistryScope registry;
+        AnimationLoaderProbe probe{tc_animation_declare("animation-lazy-original", "lazy"),
+                                   tc_animation_handle_invalid(), action};
+        REQUIRE(tc_animation_is_valid(probe.original));
+        const uintptr_t before = reinterpret_cast<uintptr_t>(tc_animation_get(probe.original));
+        tc_resource_set_loader(grow_animation_pool, &probe);
+        LogCapture capture;
+        CHECK(tc_animation_ensure_loaded(probe.original) == (action == LoadAction::Grow));
+        CHECK(probe.uuid_stable);
+        CHECK(probe.calls == 1);
+        if (action == LoadAction::Grow) {
+            CHECK(reinterpret_cast<uintptr_t>(tc_animation_get(probe.original)) != before);
+            CHECK(tc_animation_is_loaded(probe.original));
+            CHECK(tc_animation_ensure_loaded(probe.original));
+            CHECK(probe.calls == 1);
+        } else {
+            CHECK(error_log_count > 0);
+            if (tc_animation_is_valid(probe.original))
+                CHECK_FALSE(tc_animation_is_loaded(probe.original));
+            if (tc_animation_is_valid(probe.replacement))
+                CHECK_FALSE(tc_animation_is_loaded(probe.replacement));
+        }
+    }
+}
+
+TEST_CASE("animation sample_into returns safely when error callbacks destroy its registry") {
+    AnimationRegistryScope registry;
+    auto clip = termin::animation::TcAnimationClip::create("sampling", "sampling-callback-destroy");
+    const tc_keyframe_vec3 key{0.0, {1.0, 2.0, 3.0}};
+    const tc_animation_channel_desc channels[2] = {
+        {"First", &key, 1, nullptr, 0, nullptr, 0},
+        {"Second", &key, 1, nullptr, 0, nullptr, 0},
+    };
+    REQUIRE(tc_animation_replace_channels(clip.get(), channels, 2));
+    // Exercise the sampler's error boundary, independent of publication validation.
+    clip.get()->channels[0].translation_keys[0].time = std::numeric_limits<double>::quiet_NaN();
+    sampling_callback_ran = false;
+    tc_log_set_callback(destroy_animation_storage_on_error);
+    tc_channel_sample output[2];
+    CHECK(clip.sample_into(0.0, output, 2) == 0);
+    CHECK(sampling_callback_ran);
+    CHECK_FALSE(clip.is_valid());
+    tc_log_set_callback(nullptr);
 }
 
 GUARD_TEST_MAIN();

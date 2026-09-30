@@ -260,7 +260,7 @@ namespace termin {
         }
 
         tc_mesh_hit packed_hit{};
-        if (!tc_mesh_raycast(mesh, &packed_ray, &packed_hit)) {
+        if (!tc_mesh_raycast_handle(handle, &packed_ray, &packed_hit)) {
             return std::nullopt;
         }
 
@@ -297,7 +297,7 @@ namespace termin {
         query.metric = packed.metric;
 
         tc_mesh_surface_edge_hit hit{};
-        if (!tc_mesh_find_surface_edge_query(mesh, &query, &hit)) {
+        if (!tc_mesh_find_surface_edge_query_handle(handle, &query, &hit)) {
             return std::nullopt;
         }
         return unpack_surface_edge_hit(hit);
@@ -336,7 +336,7 @@ namespace termin {
         query.use_direction_filter = true;
 
         tc_mesh_surface_edge_hit hit{};
-        if (!tc_mesh_find_surface_edge_query(mesh, &query, &hit)) {
+        if (!tc_mesh_find_surface_edge_query_handle(handle, &query, &hit)) {
             return std::nullopt;
         }
         return unpack_surface_edge_hit(hit);
@@ -356,7 +356,7 @@ namespace termin {
         }
 
         tc_mesh_surface_edge_hit hit{};
-        if (!tc_mesh_find_nearest_surface_edge_metric(mesh, packed.point, packed.up, packed.metric, &hit)) {
+        if (!tc_mesh_find_nearest_surface_edge_metric_handle(handle, packed.point, packed.up, packed.metric, &hit)) {
             return std::nullopt;
         }
         return unpack_surface_edge_hit(hit);

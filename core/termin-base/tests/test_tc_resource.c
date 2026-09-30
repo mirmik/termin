@@ -41,16 +41,14 @@ int main(void) {
     tc_resource_header_init(&header, "lazy-resource");
     tc_resource_set_loader(probe_loader, &probe);
 
-    GUARD_C_CHECK(!tc_resource_header_ensure_loaded(&header));
+    GUARD_C_CHECK(!tc_resource_request_load(header.uuid));
     GUARD_C_CHECK(header.is_loaded == 0);
     GUARD_C_CHECK(strcmp(probe.observed_uuid, "lazy-resource") == 0);
 
     probe.result = true;
-    GUARD_C_CHECK(tc_resource_header_ensure_loaded(&header));
-    GUARD_C_CHECK(header.is_loaded == 1);
-    GUARD_C_CHECK(probe.calls == 2);
-
-    GUARD_C_CHECK(tc_resource_header_ensure_loaded(&header));
+    GUARD_C_CHECK(tc_resource_request_load(header.uuid));
+    // The routing layer does not mutate storage owned by a resource registry.
+    GUARD_C_CHECK(header.is_loaded == 0);
     GUARD_C_CHECK(probe.calls == 2);
 
     tc_resource_clear_loader();

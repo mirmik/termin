@@ -76,17 +76,10 @@ static inline void tc_resource_header_init(tc_resource_header* header, const cha
     header->is_loaded = 0;
 }
 
-// Trigger process-wide UUID loading when the resource is not loaded.
-static inline bool tc_resource_header_ensure_loaded(tc_resource_header* header) {
-    if (header->is_loaded)
-        return true;
-
-    bool success = tc_resource_request_load(header->uuid);
-    if (success) {
-        header->is_loaded = 1;
-    }
-    return success;
-}
+// Lazy loading belongs to the handle-based registry API. A loader can grow or
+// destroy a registry pool: copy the UUID before invoking it and reacquire the
+// exact generation handle before reading or committing any resource fields.
+// A bare header pointer cannot provide that lifetime contract.
 
 // Bump version (call after data change)
 static inline void tc_resource_header_bump_version(tc_resource_header* header) {

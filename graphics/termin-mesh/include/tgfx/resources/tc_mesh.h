@@ -169,6 +169,10 @@ TGFX_API void tc_mesh_compute_uuid(
 // Mesh queries
 // ============================================================================
 
+// Pointer queries inspect resident CPU data only; they never invoke the asset
+// loader. Raycast/surface-edge queries require header.is_loaded, including for
+// standalone meshes. Use the handle queries in tc_mesh_registry.h for lazy loads.
+
 TGFX_API bool tc_mesh_get_position3f(const tc_mesh* mesh, uint32_t vertex_index, tc_vec3f* out_position);
 
 TGFX_API bool

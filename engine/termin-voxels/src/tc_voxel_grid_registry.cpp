@@ -255,14 +255,20 @@ bool tc_voxel_grid_ensure_loaded(tc_voxel_grid_handle h) {
         return false;
     if (grid->is_loaded)
         return true;
-    bool success = tc_resource_request_load(grid->uuid);
-    if (success) {
-        grid->is_loaded = 1;
-        voxel_grid_bump_version(grid);
-    } else {
-        tc_log_error("tc_voxel_grid_ensure_loaded: resource loader failed for '%s'", grid->uuid);
+    char uuid[TC_UUID_SIZE];
+    std::memcpy(uuid, grid->uuid, sizeof(uuid));
+    if (!tc_resource_request_load(uuid)) {
+        tc_log_error("tc_voxel_grid_ensure_loaded: resource loader failed for '%s'", uuid);
+        return false;
     }
-    return success;
+    grid = tc_voxel_grid_get(h);
+    if (!grid || std::strcmp(grid->uuid, uuid) != 0) {
+        tc_log_error("tc_voxel_grid_ensure_loaded: resource '%s' disappeared or changed identity during loading", uuid);
+        return false;
+    }
+    grid->is_loaded = 1;
+    voxel_grid_bump_version(grid);
+    return true;
 }
 
 bool tc_voxel_grid_set_metadata(tc_voxel_grid* grid, const char* name, const char* source_path) {

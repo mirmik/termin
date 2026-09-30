@@ -1,6 +1,7 @@
 #include <DetourAlloc.h>
 #include <DetourNavMesh.h>
 #include <DetourNavMeshBuilder.h>
+#include <tcbase/tc_resource.h>
 #include <termin/navmesh/detour_pathfinding_world_component.hpp>
 #include <termin/navmesh/tc_navmesh_registry.h>
 
@@ -8,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace {
@@ -249,10 +251,51 @@ namespace {
         }
         tc_navmesh_shutdown();
     }
+
+    struct NavMeshLoadProbe {
+        tc_navmesh_handle original;
+        tc_navmesh_handle replacement = tc_navmesh_handle_invalid();
+        bool replace = false;
+        bool success = false;
+    };
+
+    bool replace_navmesh_during_load(const char* uuid, void* user_data) {
+        auto& probe = *static_cast<NavMeshLoadProbe*>(user_data);
+        const std::string expected(uuid);
+        require(tc_navmesh_destroy(probe.original), "loader must destroy original navmesh");
+        if (probe.replace)
+            probe.replacement = tc_navmesh_declare(expected.c_str(), "replacement");
+        require(expected == uuid, "loader UUID must survive destroying the original resource");
+        return probe.success;
+    }
+
+    void test_lazy_load_identity() {
+        for (const bool replace : {false, true}) {
+            for (const bool success : {false, true}) {
+                tc_navmesh_init();
+                NavMeshLoadProbe probe;
+                probe.original = tc_navmesh_declare("navmesh-loader-identity", "deferred");
+                probe.replace = replace;
+                probe.success = success;
+                tc_resource_set_loader(replace_navmesh_during_load, &probe);
+                const bool loaded = tc_navmesh_ensure_loaded(probe.original);
+                tc_resource_clear_loader();
+                require(!loaded, "loader must reject a destroyed/replaced navmesh even after successful callback");
+                require(!tc_navmesh_is_valid(probe.original), "original handle must remain invalid");
+                if (replace) {
+                    require(probe.replacement.index == probe.original.index, "replacement must recycle the pool slot");
+                    require(tc_navmesh_is_valid(probe.replacement), "replacement must remain valid");
+                    require(!tc_navmesh_is_loaded(probe.replacement), "loader must not mark the replacement loaded");
+                }
+                tc_navmesh_shutdown();
+            }
+        }
+    }
 } // namespace
 
 int main() {
     test_snapshot();
     test_resource_reload();
+    test_lazy_load_identity();
     return 0;
 }

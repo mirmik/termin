@@ -32,8 +32,9 @@ TGFX_API tc_texture_handle tc_texture_get_white_1x1_srgb(void);
 TGFX_API tc_texture_handle tc_texture_get_normal_1x1(void);
 TGFX_API tc_texture_handle tc_texture_declare(const char* uuid, const char* name);
 TGFX_API bool tc_texture_is_loaded(tc_texture_handle h);
+// Loading can relocate registry storage. Reacquire pointers with get(h) after
+// this call. Returns false if the original handle/UUID no longer exists.
 TGFX_API bool tc_texture_ensure_loaded(tc_texture_handle h);
-TGFX_API bool tc_texture_ensure_loaded_ptr(tc_texture* tex);
 TGFX_API tc_texture* tc_texture_get(tc_texture_handle h);
 TGFX_API bool tc_texture_is_valid(tc_texture_handle h);
 TGFX_API bool tc_texture_destroy(tc_texture_handle h);

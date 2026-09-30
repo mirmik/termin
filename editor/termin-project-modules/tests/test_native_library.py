@@ -69,7 +69,7 @@ def test_native_binding_follows_dependency_reload(tmp_path: Path, monkeypatch):
         old_function = old_module.api.probe_value
         assert old_module.value == old_function() == 11
         with pytest.raises(RuntimeError, match="Native symbol not found"):
-            old_module.api.missing_symbol
+            _ = old_module.api.missing_symbol
         with pytest.raises(RuntimeError, match="Native module is not loaded"):
             runtime.bind_native_library("client")
 

@@ -20,6 +20,7 @@ static tc_mesh* alloc_mesh(size_t vertex_count, size_t index_count) {
     mesh->vertex_count = vertex_count;
     mesh->index_count = index_count;
     mesh->draw_mode = TC_DRAW_TRIANGLES;
+    mesh->header.is_loaded = 1; // Standalone primitives own resident CPU data.
 
     size_t stride = mesh->layout.stride;
     mesh->vertices = calloc(vertex_count, stride);

@@ -25,8 +25,19 @@ TGFX_API tc_mesh_handle tc_mesh_get_or_create(const char* uuid);
 TGFX_API tc_mesh_handle tc_mesh_declare(const char* uuid, const char* name);
 TGFX_API bool tc_mesh_is_loaded(tc_mesh_handle h);
 TGFX_API bool tc_mesh_ensure_loaded(tc_mesh_handle h);
-TGFX_API bool tc_mesh_ensure_loaded_ptr(tc_mesh* mesh);
 TGFX_API tc_mesh* tc_mesh_get(tc_mesh_handle h);
+
+// Registry queries load through a stable handle and reacquire the mesh after
+// the loader returns. A destroyed/replaced handle fails without publishing a hit.
+TGFX_API bool tc_mesh_raycast_handle(tc_mesh_handle h, const tc_mesh_ray* ray, tc_mesh_hit* out_hit);
+TGFX_API bool tc_mesh_find_surface_edge_query_handle(tc_mesh_handle h,
+                                                    const tc_mesh_surface_edge_query* query,
+                                                    tc_mesh_surface_edge_hit* out_hit);
+TGFX_API bool tc_mesh_find_nearest_surface_edge_metric_handle(tc_mesh_handle h,
+                                                             tc_vec3f point,
+                                                             tc_vec3f up,
+                                                             tc_vec3f metric,
+                                                             tc_mesh_surface_edge_hit* out_hit);
 
 static inline const char* tc_mesh_uuid(tc_mesh_handle h) {
     tc_mesh* m = tc_mesh_get(h);

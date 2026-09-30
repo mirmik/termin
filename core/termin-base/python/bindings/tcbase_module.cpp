@@ -107,7 +107,7 @@ static void bind_log(nb::module_& m) {
                 tc_log_set_callback(py_log_callback_wrapper);
             }
         },
-        nb::arg("callback"),
+        nb::arg("callback").none(),
         "Set callback for log interception. Callback signature: (level: int, message: str)");
 
     m.def(

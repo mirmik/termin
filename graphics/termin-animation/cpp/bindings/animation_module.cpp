@@ -305,12 +305,17 @@ void bind_tc_animation_clip(nb::module_& m) {
                 }
 
                 std::vector<tc_channel_sample> samples(anim->channel_count);
-                tc_animation_sample(anim, t_seconds, samples.data());
+                std::vector<std::string> names;
+                names.reserve(anim->channel_count);
+                for (size_t i = 0; i < anim->channel_count; ++i) {
+                    names.emplace_back(anim->channels[i].target_name);
+                }
+                const size_t count = tc_animation_sample(anim, t_seconds, samples.data());
 
                 nb::list result;
-                for (size_t i = 0; i < anim->channel_count; i++) {
+                for (size_t i = 0; i < count; i++) {
                     nb::dict ch_dict;
-                    ch_dict["target_name"] = anim->channels[i].target_name;
+                    ch_dict["target_name"] = names[i];
 
                     const tc_channel_sample& s = samples[i];
                     if (s.has_translation) {
@@ -445,7 +450,7 @@ void bind_tc_animation_clip(nb::module_& m) {
                                    error.what());
                     throw;
                 }
-                if (!tc_animation_replace_channels(anim, descriptors.data(), descriptors.size())) {
+                if (!tc_animation_replace_channels(self.get(), descriptors.data(), descriptors.size())) {
                     throw std::runtime_error("animation channel replacement failed; previous payload was preserved");
                 }
             },

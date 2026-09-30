@@ -159,7 +159,17 @@ namespace tgfx {
             return {};
 
         if (!tex->header.is_loaded) {
-            tc_texture_ensure_loaded_ptr(tex);
+            const tc_texture_handle handle = tc_texture_find(tex->header.uuid);
+            if (tc_texture_get(handle) != tex) {
+                tc_log_error("D3D11RenderDevice::ensure_tc_texture: unloaded texture '%s' is not a registered resource",
+                             tex->header.uuid);
+                return {};
+            }
+            if (!tc_texture_ensure_loaded(handle))
+                return {};
+            tex = tc_texture_get(handle);
+            if (!tex)
+                return {};
         }
 
         const bool gpu_first = tex->storage_kind == TC_TEXTURE_STORAGE_GPU_FIRST;

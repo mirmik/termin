@@ -310,22 +310,48 @@ bool tc_mesh_ensure_loaded(tc_mesh_handle h) {
     tc_mesh* mesh = tc_mesh_get(h);
     if (!mesh)
         return false;
+    if (mesh->header.is_loaded)
+        return true;
 
-    bool success = tc_resource_header_ensure_loaded(&mesh->header);
-    if (!success) {
-        tc_log(TC_LOG_ERROR, "tc_mesh_ensure_loaded: resource loader failed for '%s'", mesh->header.uuid);
+    // Loading may relocate the pool or destroy/replace this slot. Neither the
+    // pointer nor a UUID pointer into its header may survive the callback.
+    char uuid[TC_UUID_SIZE];
+    memcpy(uuid, mesh->header.uuid, sizeof(uuid));
+    if (!tc_resource_request_load(uuid)) {
+        tc_log(TC_LOG_ERROR, "tc_mesh_ensure_loaded: resource loader failed for '%s'", uuid);
+        return false;
     }
-    return success;
+    mesh = tc_mesh_get(h);
+    if (!mesh || strcmp(mesh->header.uuid, uuid) != 0) {
+        tc_log(TC_LOG_ERROR, "tc_mesh_ensure_loaded: resource '%s' disappeared or changed identity during loading", uuid);
+        return false;
+    }
+    mesh->header.is_loaded = 1;
+    return true;
 }
 
-bool tc_mesh_ensure_loaded_ptr(tc_mesh* mesh) {
-    if (!mesh)
+bool tc_mesh_raycast_handle(tc_mesh_handle h, const tc_mesh_ray* ray, tc_mesh_hit* out_hit) {
+    if (!tc_mesh_ensure_loaded(h))
         return false;
-    bool success = tc_resource_header_ensure_loaded(&mesh->header);
-    if (!success) {
-        tc_log(TC_LOG_ERROR, "tc_mesh_ensure_loaded_ptr: resource loader failed for '%s'", mesh->header.uuid);
-    }
-    return success;
+    return tc_mesh_raycast(tc_mesh_get(h), ray, out_hit);
+}
+
+bool tc_mesh_find_surface_edge_query_handle(tc_mesh_handle h,
+                                           const tc_mesh_surface_edge_query* query,
+                                           tc_mesh_surface_edge_hit* out_hit) {
+    if (!tc_mesh_ensure_loaded(h))
+        return false;
+    return tc_mesh_find_surface_edge_query(tc_mesh_get(h), query, out_hit);
+}
+
+bool tc_mesh_find_nearest_surface_edge_metric_handle(tc_mesh_handle h,
+                                                    tc_vec3f point,
+                                                    tc_vec3f up,
+                                                    tc_vec3f metric,
+                                                    tc_mesh_surface_edge_hit* out_hit) {
+    if (!tc_mesh_ensure_loaded(h))
+        return false;
+    return tc_mesh_find_nearest_surface_edge_metric(tc_mesh_get(h), point, up, metric, out_hit);
 }
 
 tc_mesh* tc_mesh_get(tc_mesh_handle h) {
@@ -348,17 +374,27 @@ bool tc_mesh_destroy(tc_mesh_handle h) {
     if (!mesh)
         return false;
 
+    char uuid[TC_UUID_SIZE];
+    memcpy(uuid, mesh->header.uuid, sizeof(uuid));
+    const uint32_t pool_index = mesh->header.pool_index;
     tc_log(TC_LOG_INFO,
            "[tc_mesh_destroy] DESTROYING mesh uuid=%s name=%s refcount=%d",
-           mesh->header.uuid,
+           uuid,
            mesh->header.name ? mesh->header.name : "(null)",
            mesh->header.ref_count);
 
     // Fire destroy-hooks before releasing CPU data / pool slot so GPU-side
     // caches keyed by pool_index can drop their entries first.
-    const uint32_t pool_index = mesh->header.pool_index;
     for (int i = 0; i < g_destroy_hook_count; i++) {
+        if (!tc_mesh_is_valid(h))
+            break;
         g_destroy_hooks[i](pool_index, g_destroy_hook_user[i]);
+    }
+
+    mesh = tc_mesh_get(h);
+    if (!mesh || strcmp(mesh->header.uuid, uuid) != 0) {
+        tc_log(TC_LOG_ERROR, "tc_mesh_destroy: resource '%s' disappeared or changed identity during callbacks", uuid);
+        return false;
     }
 
     // Remove from UUID map
@@ -903,8 +939,8 @@ tc_mesh_info* tc_mesh_get_all_info(size_t* count) {
         return NULL;
     }
 
-    size_t mesh_count = tc_pool_count(&g_mesh_pool);
-    tc_log(TC_LOG_INFO, "[tc_mesh_get_all_info] pool_count=%zu", mesh_count);
+    tc_log(TC_LOG_INFO, "[tc_mesh_get_all_info] pool_count=%zu", tc_pool_count(&g_mesh_pool));
+    const size_t mesh_count = tc_pool_count(&g_mesh_pool);
     if (mesh_count == 0)
         return NULL;
 

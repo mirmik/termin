@@ -395,6 +395,9 @@ namespace tgfx {
         // `header.pool_index`, re-uploading when `header.version` bumps. Returned
         // handles are OWNED by the device - the caller must NOT pass them to
         // `destroy()`.
+        // Texture loading may relocate the entire tc_texture registry. Incoming
+        // pointers are borrowed only until the call; reacquire registry pointers
+        // by their generation handles afterwards, including unrelated textures.
         //
         // Backends that cannot materialize canonical tc_* resources leave the
         // default empty implementation in place.

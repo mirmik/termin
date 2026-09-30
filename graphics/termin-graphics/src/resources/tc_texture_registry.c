@@ -287,17 +287,25 @@ bool tc_texture_ensure_loaded(tc_texture_handle h) {
     tc_texture* tex = tc_texture_get(h);
     if (!tex)
         return false;
-    return tc_texture_ensure_loaded_ptr(tex);
-}
+    if (tex->header.is_loaded)
+        return true;
 
-bool tc_texture_ensure_loaded_ptr(tc_texture* tex) {
-    if (!tex)
+    // Loading may grow the registry or destroy/recreate this resource. Keep
+    // identity outside the pool and never retain a pool pointer across it.
+    char uuid[TC_UUID_SIZE];
+    memcpy(uuid, tex->header.uuid, sizeof(uuid));
+    const bool success = tc_resource_request_load(uuid);
+    tex = tc_texture_get(h);
+    if (!tex || strcmp(tex->header.uuid, uuid) != 0) {
+        tc_log(TC_LOG_ERROR, "tc_texture_ensure_loaded: resource '%s' disappeared or changed identity during load", uuid);
         return false;
-    bool success = tc_resource_header_ensure_loaded(&tex->header);
-    if (!success) {
-        tc_log(TC_LOG_ERROR, "tc_texture_ensure_loaded_ptr: resource loader failed for '%s'", tex->header.uuid);
     }
-    return success;
+    if (!success) {
+        tc_log(TC_LOG_ERROR, "tc_texture_ensure_loaded: resource loader failed for '%s'", uuid);
+        return false;
+    }
+    tex->header.is_loaded = 1;
+    return true;
 }
 
 tc_texture* tc_texture_get(tc_texture_handle h) {
@@ -325,8 +333,15 @@ bool tc_texture_destroy(tc_texture_handle h) {
     // per-device tc_texture cache) can drop their entries and destroy the
     // underlying VkImage / GLuint before the index is recycled.
     const uint32_t pool_index = tex->header.pool_index;
+    char uuid[TC_UUID_SIZE];
+    memcpy(uuid, tex->header.uuid, sizeof(uuid));
     for (int i = 0; i < g_destroy_hook_count; i++) {
         g_destroy_hooks[i](pool_index, g_destroy_hook_user[i]);
+        tex = tc_texture_get(h);
+        if (!tex || strcmp(tex->header.uuid, uuid) != 0) {
+            tc_log(TC_LOG_ERROR, "tc_texture_destroy: resource '%s' disappeared or changed identity in destroy hook", uuid);
+            return false;
+        }
     }
 
     tc_resource_map_remove(g_texture_uuid_to_index, tex->header.uuid);

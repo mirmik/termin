@@ -249,6 +249,9 @@ TC_API bool tc_animation_channel_sample(const tc_animation_channel* ch,
 // Sample animation at time t_seconds (handles looping and tps conversion)
 // out_samples must be preallocated with animation->channel_count elements
 // Returns number of channels sampled
+// Returns zero on the first sampling error; discard partial output in that
+// case. Error logging may run user callbacks: no borrowed animation storage
+// is accessed after an error, and callers must reacquire it before reuse.
 TC_API size_t tc_animation_sample(const tc_animation* anim, double t_seconds, tc_channel_sample* out_samples);
 
 // ============================================================================

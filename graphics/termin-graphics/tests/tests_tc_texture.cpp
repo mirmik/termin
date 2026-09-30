@@ -14,6 +14,69 @@ extern "C" {
 
 namespace {
 
+    enum class TextureLoadAction { Grow, Destroy, Replace, Rename, Rebootstrap };
+
+    struct TextureLoadProbe {
+        tc_texture_handle handle;
+        TextureLoadAction action = TextureLoadAction::Grow;
+        bool success = true;
+        bool relocated = false;
+        bool uuid_survived = false;
+        tc_texture_handle replacement = tc_texture_handle_invalid();
+        int calls = 0;
+    };
+
+    bool load_texture_with_registry_mutation(const char* uuid, void* user_data) {
+        auto& probe = *static_cast<TextureLoadProbe*>(user_data);
+        ++probe.calls;
+        const std::string expected_uuid(uuid);
+        const auto old_address = reinterpret_cast<uintptr_t>(tc_texture_get(probe.handle));
+        switch (probe.action) {
+        case TextureLoadAction::Grow:
+            // Each test starts with one entry in a 64-slot registry. The 64th
+            // allocation grows it while the original allocation still exists.
+            for (int i = 0; i < 64; ++i)
+                tc_texture_create(nullptr);
+            probe.relocated = reinterpret_cast<uintptr_t>(tc_texture_get(probe.handle)) != old_address;
+            break;
+        case TextureLoadAction::Destroy:
+            tc_texture_destroy(probe.handle);
+            break;
+        case TextureLoadAction::Replace:
+            tc_texture_destroy(probe.handle);
+            probe.replacement = tc_texture_declare(expected_uuid.c_str(), "replacement");
+            break;
+        case TextureLoadAction::Rename:
+            tc_resource_header_set_uuid(&tc_texture_get(probe.handle)->header, "changed-identity", "test");
+            break;
+        case TextureLoadAction::Rebootstrap:
+            tc_texture_shutdown();
+            tc_texture_init();
+            probe.replacement = tc_texture_declare(expected_uuid.c_str(), "replacement");
+            break;
+        }
+        // Access the callback argument after relocation/destruction: it must be
+        // a stable copy, not the UUID embedded in the old pool allocation.
+        probe.uuid_survived = expected_uuid == uuid;
+        return probe.success;
+    }
+
+    struct TextureLoaderScope {
+        explicit TextureLoaderScope(TextureLoadProbe& probe) {
+            tc_texture_init();
+            tc_resource_set_loader(load_texture_with_registry_mutation, &probe);
+        }
+        ~TextureLoaderScope() {
+            tc_resource_clear_loader();
+            tc_texture_shutdown();
+        }
+    };
+
+    void grow_texture_registry_on_destroy(uint32_t, void*) {
+        for (int i = 0; i < 64; ++i)
+            tc_texture_create(nullptr);
+    }
+
     tc_log_level g_encoding_log_level = TC_LOG_DEBUG;
     std::string g_encoding_log_message;
 
@@ -25,6 +88,64 @@ namespace {
     }
 
 } // namespace
+
+TEST_CASE("tc_texture lazy loading reacquires storage after registry relocation") {
+    for (const bool success : {false, true}) {
+        TextureLoadProbe probe{};
+        TextureLoaderScope scope(probe);
+        probe.handle = tc_texture_declare("texture-load-relocation", "deferred");
+        probe.success = success;
+        REQUIRE(tc_texture_is_valid(probe.handle));
+        CHECK_EQ(tc_texture_ensure_loaded(probe.handle), success);
+        CHECK(probe.relocated);
+        CHECK(probe.uuid_survived);
+        CHECK_EQ(probe.calls, 1);
+        CHECK_EQ(tc_texture_is_loaded(probe.handle), success);
+        if (success) {
+            CHECK(tc_texture_ensure_loaded(probe.handle));
+            CHECK_EQ(probe.calls, 1);
+        }
+    }
+}
+
+TEST_CASE("tc_texture lazy loading rejects destroyed or replaced resource identity") {
+    for (const auto action : {TextureLoadAction::Destroy, TextureLoadAction::Replace,
+                              TextureLoadAction::Rename, TextureLoadAction::Rebootstrap}) {
+        for (const bool success : {false, true}) {
+            TextureLoadProbe probe{};
+            TextureLoaderScope scope(probe);
+            probe.handle = tc_texture_declare("texture-load-identity", "deferred");
+            probe.action = action;
+            probe.success = success;
+            CHECK_FALSE(tc_texture_ensure_loaded(probe.handle));
+            CHECK(probe.uuid_survived);
+            CHECK_EQ(probe.calls, 1);
+            if (!tc_texture_handle_is_invalid(probe.replacement)) {
+                CHECK_FALSE(tc_texture_handle_eq(probe.handle, probe.replacement));
+                CHECK_EQ(probe.handle.index, probe.replacement.index);
+                CHECK_FALSE(tc_texture_is_loaded(probe.replacement));
+            }
+            if (action == TextureLoadAction::Rename)
+                CHECK_FALSE(tc_texture_is_loaded(probe.handle));
+        }
+    }
+}
+
+TEST_CASE("tc_texture destroy reacquires storage after a destroy hook grows the registry") {
+    tc_texture_init();
+    const auto handle = tc_texture_create("texture-destroy-relocation");
+    const uint8_t pixel[4] = {1, 2, 3, 4};
+    const tc_texture_pixel_data pixels{pixel, sizeof(pixel), 1, 1, 4};
+    REQUIRE(tc_texture_set_data(tc_texture_get(handle), &pixels, nullptr, nullptr));
+    tc_texture_registry_add_destroy_hook(grow_texture_registry_on_destroy, nullptr);
+    const bool destroyed = tc_texture_destroy(handle);
+    tc_texture_registry_remove_destroy_hook(grow_texture_registry_on_destroy, nullptr);
+    CHECK(destroyed);
+    CHECK_FALSE(tc_texture_is_valid(handle));
+    CHECK_FALSE(tc_texture_contains("texture-destroy-relocation"));
+    CHECK_EQ(tc_texture_count(), 64u);
+    tc_texture_shutdown();
+}
 
 TEST_CASE("tc_texture formats report canonical byte sizes") {
     struct FormatCase {

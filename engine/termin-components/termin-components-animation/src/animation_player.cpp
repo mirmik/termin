@@ -9,6 +9,15 @@
 
 namespace termin {
     namespace {
+        const tc_animation* resolve_animation_version(tc_animation_handle handle, uint32_t version) {
+            const tc_animation* animation = tc_animation_get(handle);
+            if (!animation || animation->header.version != version) {
+                tc::Log::error("[AnimationPlayer] animation disappeared or changed during a callback");
+                return nullptr;
+            }
+            return animation;
+        }
+
         void apply_entity_transform(Entity entity,
                                     const Vec3* translation,
                                     const Quat* rotation,
@@ -164,21 +173,31 @@ namespace termin {
             return;
         }
 
-        const animation::TcAnimationClip& clip = clips[_current_index];
-        tc_animation* anim = clip.get();
+        const tc_animation_handle handle = clips[_current_index].handle;
+        const tc_animation* anim = tc_animation_get(handle);
         if (!anim) {
             return;
         }
+        const uint32_t version = anim->header.version;
 
         TcSkeleton skeleton_owner;
         if (SkeletonInstance* skel_inst = target_skeleton()) {
             skeleton_owner = skel_inst->skeleton();
         }
+        anim = resolve_animation_version(handle, version);
+        if (!anim) {
+            return;
+        }
 
         if (anim->track_count > 0) {
             SkeletonController* skeleton_controller = _target_skeleton_controller.get();
-            _track_mappings.resize(anim->track_count);
-            for (size_t i = 0; i < anim->track_count; ++i) {
+            const size_t count = anim->track_count;
+            _track_mappings.resize(count);
+            for (size_t i = 0; i < count; ++i) {
+                anim = resolve_animation_version(handle, version);
+                if (!anim) {
+                    return;
+                }
                 const tc_animation_track& track = anim->tracks[i];
                 ChannelMapping& mapping = _track_mappings[i];
                 if (track.target_node_index >= 0 &&
@@ -210,13 +229,20 @@ namespace termin {
                         track.target_node_index);
                 }
             }
-            _mapped_clip_version = anim->header.version;
+            if (resolve_animation_version(handle, version)) {
+                _mapped_clip_version = version;
+            }
             return;
         }
 
         // Build mapping from channel index to either bone index or imported node entity.
-        _channel_mappings.resize(anim->channel_count);
-        for (size_t i = 0; i < anim->channel_count; i++) {
+        const size_t count = anim->channel_count;
+        _channel_mappings.resize(count);
+        for (size_t i = 0; i < count; i++) {
+            anim = resolve_animation_version(handle, version);
+            if (!anim) {
+                return;
+            }
             const char* target_name = anim->channels[i].target_name;
             const bool has_target_name = target_name && target_name[0] != '\0';
             const tc_skeleton* skel = skeleton_owner.get();
@@ -232,8 +258,10 @@ namespace termin {
         }
 
         // Resize samples buffer
-        _samples_buffer.resize(anim->channel_count);
-        _mapped_clip_version = anim->header.version;
+        if (resolve_animation_version(handle, version)) {
+            _samples_buffer.resize(count);
+            _mapped_clip_version = version;
+        }
     }
 
     void AnimationPlayer::update(float dt) {
@@ -243,23 +271,7 @@ namespace termin {
 
         time += dt;
 
-        if (_current_index >= static_cast<int>(clips.size())) {
-            return;
-        }
-        const animation::TcAnimationClip& clip = clips[_current_index];
-        tc_animation* anim = clip.get();
-        if (!anim) {
-            return;
-        }
-        if (_mapped_clip_version != anim->header.version) {
-            _build_channel_mapping();
-        }
-        if (anim->track_count > 0) {
-            _apply_tracks_at_time(anim, time);
-            return;
-        }
-        size_t count = clip.sample_into(time, _samples_buffer.data(), _samples_buffer.size());
-        _apply_sample(_samples_buffer.data(), count);
+        _apply_current_clip(time);
     }
 
     void AnimationPlayer::update_bones_at_time(double t) {
@@ -275,20 +287,36 @@ namespace termin {
             _acquire_skeleton();
         }
 
-        const animation::TcAnimationClip& clip = clips[_current_index];
-        tc_animation* anim = clip.get();
+        _apply_current_clip(t);
+    }
+
+    void AnimationPlayer::_apply_current_clip(double t) {
+        if (_current_index < 0 || _current_index >= static_cast<int>(clips.size())) {
+            return;
+        }
+        const tc_animation_handle handle = clips[_current_index].handle;
+        const tc_animation* anim = tc_animation_get(handle);
         if (!anim) {
             return;
         }
         if (_mapped_clip_version != anim->header.version) {
             _build_channel_mapping();
         }
-        if (anim->track_count > 0) {
-            _apply_tracks_at_time(anim, t);
+        if (_mapped_clip_version == 0) {
             return;
         }
-        size_t count = clip.sample_into(t, _samples_buffer.data(), _samples_buffer.size());
-        _apply_sample(_samples_buffer.data(), count);
+        anim = resolve_animation_version(handle, _mapped_clip_version);
+        if (!anim) {
+            return;
+        }
+        if (anim->track_count > 0) {
+            _apply_tracks_at_time(handle, t);
+            return;
+        }
+        size_t count = tc_animation_sample(anim, t, _samples_buffer.data());
+        if (count > 0) {
+            _apply_sample(_samples_buffer.data(), count);
+        }
     }
 
     Entity AnimationPlayer::_find_node_target(const char* target_name) const {
@@ -308,13 +336,13 @@ namespace termin {
         return Entity();
     }
 
-    void AnimationPlayer::_apply_tracks_at_time(const tc_animation* animation, double t_seconds) {
+    void AnimationPlayer::_apply_tracks_at_time(tc_animation_handle handle, double t_seconds) {
+        const uint32_t version = _mapped_clip_version;
+        const tc_animation* animation = resolve_animation_version(handle, version);
         if (!animation || animation->track_count == 0) {
             return;
         }
-        if (_track_mappings.size() != animation->track_count) {
-            _build_channel_mapping();
-        }
+        const size_t count = animation->track_count;
 
         if (animation->loop && animation->duration > 0.0) {
             t_seconds = std::fmod(t_seconds, animation->duration);
@@ -324,7 +352,11 @@ namespace termin {
         }
         const double t_ticks = t_seconds * animation->tps;
         SkeletonController* skeleton_controller = _target_skeleton_controller.get();
-        for (size_t i = 0; i < animation->track_count && i < _track_mappings.size(); ++i) {
+        for (size_t i = 0; i < count && i < _track_mappings.size(); ++i) {
+            animation = resolve_animation_version(handle, version);
+            if (!animation) {
+                return;
+            }
             const tc_animation_track& track = animation->tracks[i];
             if (track.interpolation == TC_ANIMATION_INTERPOLATION_CUBIC_SPLINE ||
                 track.path == TC_ANIMATION_PATH_WEIGHTS) {

@@ -4,9 +4,12 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <tcbase/tc_log.h>
 #include <tgfx/resources/tc_mesh.h>
+#include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx/resources/tc_primitive_mesh.h>
 
 static int g_raycast_error_log_count = 0;
 static char g_last_raycast_error[256];
@@ -285,12 +288,253 @@ GUARD_C_TEST(test_raycast_never_publishes_non_finite_geometry) {
     return 0;
 }
 
+enum lazy_load_mode {
+    LOAD_GROW,
+    LOAD_FAIL,
+    LOAD_DESTROY,
+    LOAD_REPLACE,
+    LOAD_CHANGE_UUID,
+    LOAD_REBOOTSTRAP
+};
+
+typedef struct lazy_load_state {
+    tc_mesh_handle target;
+    tc_mesh_handle replacement;
+    enum lazy_load_mode mode;
+    int calls;
+    bool moved;
+    bool uuid_survived;
+} lazy_load_state;
+
+static bool mesh_test_loader(const char* uuid, void* user_data) {
+    lazy_load_state* state = user_data;
+    ++state->calls;
+    const uintptr_t old_address = (uintptr_t)tc_mesh_get(state->target);
+    // The initial pool holds 64 slots. Allocating 128 additional slots forces
+    // growth; tc_pool allocates the new storage before releasing the old one.
+    for (int i = 0; i < 128; ++i) {
+        char extra_uuid[40];
+        snprintf(extra_uuid, sizeof(extra_uuid), "mesh-loader-extra-%d", i);
+        const tc_mesh_handle extra = tc_mesh_create(extra_uuid);
+        GUARD_C_CHECK(tc_mesh_is_valid(extra));
+    }
+    state->moved = old_address != (uintptr_t)tc_mesh_get(state->target);
+    // Read the loader argument after relocation, not just at callback entry.
+    state->uuid_survived = strcmp(uuid, "mesh-loader-target") == 0;
+    if (state->mode == LOAD_FAIL)
+        return false;
+    if (state->mode == LOAD_DESTROY || state->mode == LOAD_REPLACE) {
+        GUARD_C_CHECK(tc_mesh_destroy(state->target));
+        if (state->mode == LOAD_REPLACE)
+            state->replacement = tc_mesh_declare(uuid, "replacement");
+        return true;
+    }
+    if (state->mode == LOAD_REBOOTSTRAP) {
+        tc_mesh_shutdown();
+        tc_mesh_init();
+        state->replacement = tc_mesh_declare(uuid, "replacement");
+        return true;
+    }
+    tc_mesh* mesh = tc_mesh_get(state->target);
+    if (state->mode == LOAD_CHANGE_UUID) {
+        tc_resource_header_set_uuid(&mesh->header, "changed-identity", "mesh_test_loader");
+        return true;
+    }
+    const float vertices[] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+    const uint32_t indices[] = {0, 1, 2};
+    const tc_vertex_layout layout = tc_vertex_layout_pos();
+    const bool success = tc_mesh_set_data(mesh, vertices, 3, &layout, indices, 3, "lazy triangle");
+    // ensure_loaded, rather than set_data, must publish the load state.
+    mesh->header.is_loaded = 0;
+    return success;
+}
+
+static lazy_load_state begin_lazy_mesh_test(enum lazy_load_mode mode) {
+    tc_mesh_shutdown();
+    tc_mesh_init();
+    lazy_load_state state = {0};
+    state.target = tc_mesh_declare("mesh-loader-target", "lazy triangle");
+    state.replacement = tc_mesh_handle_invalid();
+    state.mode = mode;
+    return state;
+}
+
+static void end_lazy_mesh_test(void) {
+    tc_resource_clear_loader();
+    tc_log_set_callback(NULL);
+    tc_mesh_shutdown();
+}
+
+GUARD_C_TEST(test_mesh_lazy_queries_reacquire_after_pool_growth) {
+    for (int query_kind = 0; query_kind < 4; ++query_kind) {
+        lazy_load_state state = begin_lazy_mesh_test(LOAD_GROW);
+        tc_resource_set_loader(mesh_test_loader, &state);
+        const tc_mesh_ray ray = make_default_ray();
+        tc_mesh_hit hit;
+        tc_mesh_surface_edge_hit edge;
+        const tc_mesh_surface_edge_query query = {
+            .start_triangle = 0,
+            .point = {0.25f, 0.25f, 0},
+            .normal = {0, 0, 1},
+            .up = {0, 1, 0},
+            .metric = {1, 1, 1},
+        };
+        if (query_kind == 0) {
+            GUARD_C_CHECK(tc_mesh_ensure_loaded(state.target));
+        } else if (query_kind == 1) {
+            GUARD_C_CHECK(tc_mesh_raycast_handle(state.target, &ray, &hit));
+            check_triangle_hit(&hit, 0.25f, 0.25f);
+        } else if (query_kind == 2) {
+            GUARD_C_CHECK(tc_mesh_find_surface_edge_query_handle(state.target, &query, &edge));
+            GUARD_C_CHECK(isfinite(edge.distance));
+        } else {
+            GUARD_C_CHECK(tc_mesh_find_nearest_surface_edge_metric_handle(
+                state.target, query.point, query.up, query.metric, &edge));
+            GUARD_C_CHECK(isfinite(edge.distance));
+        }
+        GUARD_C_CHECK(state.moved);
+        GUARD_C_CHECK(state.uuid_survived);
+        GUARD_C_CHECK(tc_mesh_is_loaded(state.target));
+        GUARD_C_CHECK(tc_mesh_ensure_loaded(state.target));
+        GUARD_C_CHECK_EQ_INT(1, state.calls);
+        end_lazy_mesh_test();
+    }
+    return 0;
+}
+
+GUARD_C_TEST(test_mesh_lazy_load_rejects_failure_disappearance_and_identity_change) {
+    for (enum lazy_load_mode mode = LOAD_FAIL; mode <= LOAD_REBOOTSTRAP; ++mode) {
+        lazy_load_state state = begin_lazy_mesh_test(mode);
+        tc_resource_set_loader(mesh_test_loader, &state);
+        g_raycast_error_log_count = 0;
+        tc_log_set_callback(capture_raycast_log);
+        tc_mesh_hit hit;
+        memset(&hit, 0xA5, sizeof(hit));
+        const tc_mesh_hit unchanged = hit;
+        const tc_mesh_ray ray = make_default_ray();
+        GUARD_C_CHECK_FALSE(tc_mesh_raycast_handle(state.target, &ray, &hit));
+        GUARD_C_CHECK(memcmp(&hit, &unchanged, sizeof(hit)) == 0);
+        GUARD_C_CHECK(state.moved);
+        GUARD_C_CHECK(state.uuid_survived);
+        GUARD_C_CHECK(g_raycast_error_log_count > 0);
+        GUARD_C_CHECK(strstr(g_last_raycast_error, "mesh-loader-target") != NULL);
+        if (mode == LOAD_FAIL || mode == LOAD_CHANGE_UUID) {
+            GUARD_C_CHECK_FALSE(tc_mesh_is_loaded(state.target));
+        } else {
+            GUARD_C_CHECK_FALSE(tc_mesh_is_valid(state.target));
+        }
+        if (mode == LOAD_REPLACE || mode == LOAD_REBOOTSTRAP) {
+            GUARD_C_CHECK(tc_mesh_is_valid(state.replacement));
+            GUARD_C_CHECK_FALSE(tc_mesh_is_loaded(state.replacement));
+            GUARD_C_CHECK_EQ_UINT(state.target.index, state.replacement.index);
+            GUARD_C_CHECK(state.target.generation != state.replacement.generation);
+        }
+        end_lazy_mesh_test();
+    }
+    return 0;
+}
+
+GUARD_C_TEST(test_mesh_pointer_queries_require_resident_data_without_loading) {
+    lazy_load_state state = begin_lazy_mesh_test(LOAD_GROW);
+    tc_resource_set_loader(mesh_test_loader, &state);
+    const tc_mesh_ray ray = make_default_ray();
+    tc_mesh* mesh = tc_mesh_get(state.target);
+    expect_rejected(mesh, &ray, "unloaded pointer query", 1);
+    tc_mesh_surface_edge_hit edge;
+    const tc_mesh_surface_edge_query query = {
+        .point = {0.25f, 0.25f, 0}, .normal = {0, 0, 1}, .up = {0, 1, 0}, .metric = {1, 1, 1}};
+    GUARD_C_CHECK_FALSE(tc_mesh_find_surface_edge_query(mesh, &query, &edge));
+    GUARD_C_CHECK_FALSE(tc_mesh_find_nearest_surface_edge_metric(mesh, query.point, query.up, query.metric, &edge));
+    GUARD_C_CHECK_EQ_INT(0, state.calls);
+    GUARD_C_CHECK_FALSE(tc_mesh_is_loaded(state.target));
+    tc_mesh* standalone = tc_primitive_plane_new(2, 2, 1, 1);
+    GUARD_C_CHECK(standalone != NULL);
+    if (standalone) {
+        tc_mesh_hit hit;
+        GUARD_C_CHECK(tc_mesh_raycast(standalone, &ray, &hit));
+        GUARD_C_CHECK_EQ_INT(0, state.calls);
+        free(standalone->vertices);
+        free(standalone->indices);
+        free(standalone);
+    }
+    end_lazy_mesh_test();
+    return 0;
+}
+
+static void grow_mesh_pool(void) {
+    for (int i = 0; i < 128; ++i)
+        GUARD_C_CHECK(tc_mesh_is_valid(tc_mesh_create(NULL)));
+}
+
+static void grow_mesh_pool_on_log(tc_log_level level, const char* message) {
+    if (level == TC_LOG_INFO && strstr(message, "DESTROYING mesh")) {
+        tc_log_set_callback(NULL);
+        grow_mesh_pool();
+    }
+}
+
+static void grow_mesh_pool_on_info_log(tc_log_level level, const char* message) {
+    if (level == TC_LOG_INFO && strstr(message, "[tc_mesh_get_all_info] pool_count=")) {
+        tc_log_set_callback(NULL);
+        grow_mesh_pool();
+    }
+}
+
+static void grow_mesh_pool_on_destroy(uint32_t pool_index, void* user_data) {
+    unsigned* hook_calls = user_data;
+    (void)pool_index;
+    ++*hook_calls;
+    grow_mesh_pool();
+}
+
+GUARD_C_TEST(test_mesh_destroy_reacquires_after_log_and_hook_callbacks) {
+    for (int use_hook = 0; use_hook < 2; ++use_hook) {
+        lazy_load_state state = begin_lazy_mesh_test(LOAD_GROW);
+        unsigned hook_calls = 0;
+        if (use_hook)
+            tc_mesh_registry_add_destroy_hook(grow_mesh_pool_on_destroy, &hook_calls);
+        else
+            tc_log_set_callback(grow_mesh_pool_on_log);
+        GUARD_C_CHECK(tc_mesh_destroy(state.target));
+        GUARD_C_CHECK_FALSE(tc_mesh_contains("mesh-loader-target"));
+        GUARD_C_CHECK_FALSE(tc_mesh_is_valid(state.target));
+        GUARD_C_CHECK_EQ_UINT(128, tc_mesh_count());
+        if (use_hook) {
+            GUARD_C_CHECK_EQ_UINT(1, hook_calls);
+            tc_mesh_registry_remove_destroy_hook(grow_mesh_pool_on_destroy, &hook_calls);
+        }
+        end_lazy_mesh_test();
+    }
+    return 0;
+}
+
+GUARD_C_TEST(test_mesh_info_sizes_snapshot_after_log_callback) {
+    begin_lazy_mesh_test(LOAD_GROW);
+    tc_log_set_callback(grow_mesh_pool_on_info_log);
+    size_t count = 0;
+    tc_mesh_info* infos = tc_mesh_get_all_info(&count);
+    GUARD_C_CHECK(infos != NULL);
+    GUARD_C_CHECK_EQ_UINT(129, count);
+    if (infos) {
+        for (size_t i = 0; i < count; ++i)
+            GUARD_C_CHECK(tc_mesh_is_valid(infos[i].handle));
+        free(infos);
+    }
+    end_lazy_mesh_test();
+    return 0;
+}
+
 int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_raycast_reports_finite_rich_hits);
     GUARD_C_RUN(test_raycast_rejects_non_finite_public_inputs_transactionally);
     GUARD_C_RUN(test_raycast_rejects_degenerate_direction_and_reversed_range);
     GUARD_C_RUN(test_raycast_never_publishes_non_finite_geometry);
+    GUARD_C_RUN(test_mesh_lazy_queries_reacquire_after_pool_growth);
+    GUARD_C_RUN(test_mesh_lazy_load_rejects_failure_disappearance_and_identity_change);
+    GUARD_C_RUN(test_mesh_pointer_queries_require_resident_data_without_loading);
+    GUARD_C_RUN(test_mesh_destroy_reacquires_after_log_and_hook_callbacks);
+    GUARD_C_RUN(test_mesh_info_sizes_snapshot_after_log_callback);
     tc_log_set_callback(NULL);
     return GUARD_C_END();
 }

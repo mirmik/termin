@@ -1409,8 +1409,8 @@ namespace termin {
         }
         MeshComponent* mesh_component = result.entity.get_component<MeshComponent>();
         if (mesh_component) {
-            tc_mesh* mesh = mesh_component->mesh.get();
-            if (!mesh)
+            const tc_mesh_handle mesh_handle = mesh_component->mesh.handle;
+            if (!tc_mesh_is_valid(mesh_handle))
                 return result;
 
             auto log_mesh_refinement_failure = [&](const char* reason) {
@@ -1439,7 +1439,7 @@ namespace termin {
             }
 
             tc_mesh_hit hit;
-            if (tc_mesh_raycast(mesh, &ray, &hit)) {
+            if (tc_mesh_raycast_handle(mesh_handle, &ray, &hit)) {
                 if (!_try_apply_surface_mesh_hit(result, hit, mesh_offset, entity_affine)) {
                     log_mesh_refinement_failure("checked mesh hit or normal conversion rejected the result");
                     return result;

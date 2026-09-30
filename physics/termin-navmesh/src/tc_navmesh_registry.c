@@ -228,13 +228,19 @@ bool tc_navmesh_ensure_loaded(tc_navmesh_handle h) {
         return false;
     if (navmesh->is_loaded)
         return true;
-    bool success = tc_resource_request_load(navmesh->uuid);
-    if (success) {
-        navmesh->is_loaded = 1;
-    } else {
-        tc_log_error("tc_navmesh_ensure_loaded: resource loader failed for '%s'", navmesh->uuid);
+    char uuid[TC_UUID_SIZE];
+    memcpy(uuid, navmesh->uuid, sizeof(uuid));
+    if (!tc_resource_request_load(uuid)) {
+        tc_log_error("tc_navmesh_ensure_loaded: resource loader failed for '%s'", uuid);
+        return false;
     }
-    return success;
+    navmesh = tc_navmesh_get(h);
+    if (!navmesh || strcmp(navmesh->uuid, uuid) != 0) {
+        tc_log_error("tc_navmesh_ensure_loaded: resource '%s' disappeared or changed identity during loading", uuid);
+        return false;
+    }
+    navmesh->is_loaded = 1;
+    return true;
 }
 
 bool tc_navmesh_set_metadata(tc_navmesh* navmesh,

@@ -593,10 +593,11 @@ bool tc_mesh_raycast(const tc_mesh* mesh, const tc_mesh_ray* ray, tc_mesh_hit* o
                (double)ray->t_max);
         return false;
     }
-    if (mesh->draw_mode != TC_DRAW_TRIANGLES) {
+    if (!mesh->header.is_loaded) {
+        tc_log(TC_LOG_ERROR, "tc_mesh_raycast: mesh must be loaded; use tc_mesh_raycast_handle for lazy loading");
         return false;
     }
-    if (!tc_mesh_ensure_loaded_ptr((tc_mesh*)mesh)) {
+    if (mesh->draw_mode != TC_DRAW_TRIANGLES) {
         return false;
     }
     if (!mesh->indices || !mesh->vertices) {
@@ -780,10 +781,11 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
     if (!mesh || !query || !out_hit) {
         return false;
     }
-    if (mesh->draw_mode != TC_DRAW_TRIANGLES) {
+    if (!mesh->header.is_loaded) {
+        tc_log(TC_LOG_ERROR, "%s: mesh must be loaded; use a handle query for lazy loading", api_name);
         return false;
     }
-    if (!tc_mesh_ensure_loaded_ptr((tc_mesh*)mesh)) {
+    if (mesh->draw_mode != TC_DRAW_TRIANGLES) {
         return false;
     }
     if (!mesh->indices || !mesh->vertices) {
@@ -1151,10 +1153,11 @@ static bool tc_mesh_find_nearest_surface_edge_checked(const char* api_name,
     if (!tc_mesh_surface_edge_validate_nearest(api_name, mesh, point, up, metric, out_hit)) {
         return false;
     }
-    if (mesh->draw_mode != TC_DRAW_TRIANGLES) {
+    if (!mesh->header.is_loaded) {
+        tc_log(TC_LOG_ERROR, "%s: mesh must be loaded; use a handle query for lazy loading", api_name);
         return false;
     }
-    if (!tc_mesh_ensure_loaded_ptr((tc_mesh*)mesh)) {
+    if (mesh->draw_mode != TC_DRAW_TRIANGLES) {
         return false;
     }
     if (!mesh->indices || !mesh->vertices) {

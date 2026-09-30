@@ -18,6 +18,7 @@
 
 extern "C" {
 #include <tgfx/resources/tc_shader.h>
+#include <tgfx/resources/tc_texture_registry.h>
 }
 
 namespace termin {
@@ -270,7 +271,10 @@ namespace termin {
             for (size_t index = begin; index < end; ++index) {
                 append_quad_vertices(vertices, *submissions[order[index].submission_index]);
             }
-            tgfx::TextureHandle texture = ctx.ctx2->device().ensure_tc_texture(first.payload.world_quad.texture);
+            // A previous batch may have loaded a texture and relocated the
+            // registry. Snapshot pointers cannot survive that callback.
+            tc_texture* source = tc_texture_get(first.payload.world_quad.texture_handle);
+            tgfx::TextureHandle texture = ctx.ctx2->device().ensure_tc_texture(source);
             const tgfx::SamplerHandle sampler = first.payload.world_quad.sampling == TC_WORLD_QUAD_SAMPLING_NEAREST
                                                     ? nearest_sampler_
                                                     : linear_sampler_;

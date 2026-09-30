@@ -191,7 +191,7 @@ namespace termin {
                 }
 
                 std::vector<tc_channel_sample> samples(a->channel_count);
-                tc_animation_sample(a, t_seconds, samples.data());
+                samples.resize(tc_animation_sample(a, t_seconds, samples.data()));
                 return samples;
             }
 
@@ -208,8 +208,7 @@ namespace termin {
                                    a->channel_count);
                     return 0;
                 }
-                tc_animation_sample(a, t_seconds, out_samples);
-                return a->channel_count;
+                return tc_animation_sample(a, t_seconds, out_samples);
             }
 
             // Serialize for kind registry (returns tc_value)

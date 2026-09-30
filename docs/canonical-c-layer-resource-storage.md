@@ -26,6 +26,44 @@ index и generation. Для намеренных проверок без диа�
 `tc_*_is_valid`; на уровне общего пула этим контрактам соответствуют
 `tc_pool_get_checked` и тихий `tc_pool_is_valid`.
 
+## Указатели через callbacks и lazy loading
+
+Указатель, полученный из registry, заимствован до следующего вызова, способного
+изменить пул. Пользовательский loader, log callback и destroy hook могут
+создать ресурсы и переместить storage, удалить исходный ресурс или выполнить
+shutdown/rebootstrap. Сохранение strong resource handle не закрепляет адрес
+слота в памяти.
+
+`tc_*_ensure_loaded(handle)` для mesh, texture, animation, skeleton, navmesh и
+voxel grid копирует UUID до вызова loader. После успешного callback registry
+повторно разрешает исходный generation handle и сверяет UUID. Только этот
+ресурс может получить `is_loaded`; создание нового ресурса с тем же UUID не
+считается успешной загрузкой старого handle. Ошибки loader и исчезновение или
+смена identity логируются, а операция возвращает false.
+
+Общий `tc_resource_header_ensure_loaded` и pointer-only
+`tc_mesh_ensure_loaded_ptr`/`tc_texture_ensure_loaded_ptr` удалены: одного
+указателя на header недостаточно для такого контракта. Вызывающий код также
+обязан заново разрешать handle после загрузки. Это правило относится и к
+указателям, сохранённым в render submissions между загрузками разных ресурсов.
+
+Pointer-based mesh raycast и surface-edge queries работают только с уже
+загруженными CPU-данными, в том числе standalone meshes. Для lazy-loaded
+registry meshes используются `tc_mesh_raycast_handle`,
+`tc_mesh_find_surface_edge_query_handle` и
+`tc_mesh_find_nearest_surface_edge_metric_handle`; C++ `TcMesh` использует их.
+
+AnimationPlayer повторно разрешает handle и проверяет версию payload после
+callback boundaries. Если данные клипа заменились во время построения
+привязок, частичный результат не публикуется как актуальный; следующий update
+строит привязки заново. Полный payload не копируется на каждый кадр.
+`tc_animation_sample` прекращает работу при первой ошибке и возвращает 0;
+вызывающий код отбрасывает частичные samples и не использует прежний указатель
+после callback, вызванного диагностикой ошибки.
+
+Этот контракт защищает повторный вход через callbacks. Он сам по себе не
+объявляет параллельные изменения registry из нескольких потоков безопасными.
+
 ## Generation contract при rebootstrap
 
 Каждый process-global `tc_pool`, который освобождает storage при shutdown,

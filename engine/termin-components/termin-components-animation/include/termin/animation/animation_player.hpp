@@ -126,8 +126,10 @@ namespace termin {
         // Build channel target mapping for current clip
         void _build_channel_mapping();
 
-        // Sample and apply exact bulk tracks (vec3 scale and STEP included).
-        void _apply_tracks_at_time(const tc_animation* animation, double t_seconds);
+        void _apply_current_clip(double t_seconds);
+
+        // Only handles cross callbacks; payload versions must match mappings.
+        void _apply_tracks_at_time(tc_animation_handle handle, double t_seconds);
 
         // Resolve non-bone target entity by channel target name
         Entity _find_node_target(const char* target_name) const;

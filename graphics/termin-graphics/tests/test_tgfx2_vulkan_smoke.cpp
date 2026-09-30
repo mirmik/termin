@@ -958,6 +958,56 @@ static bool render_texture_encoding_sampling_smoke(tgfx::IRenderDevice& device) 
 }
 
 #ifdef TGFX2_HAS_VULKAN
+struct TextureBridgeLoadProbe {
+    tc_texture_handle handle;
+    bool success;
+    bool replace;
+    bool relocated = false;
+};
+
+static bool load_bridge_texture(const char* uuid, void* user_data) {
+    auto& probe = *static_cast<TextureBridgeLoadProbe*>(user_data);
+    const std::string stable_uuid(uuid);
+    const auto old_address = reinterpret_cast<uintptr_t>(tc_texture_get(probe.handle));
+    for (int i = 0; i < 64; ++i)
+        tc_texture_create(nullptr);
+    probe.relocated = reinterpret_cast<uintptr_t>(tc_texture_get(probe.handle)) != old_address;
+    if (probe.replace) {
+        tc_texture_destroy(probe.handle);
+        probe.handle = tc_texture_declare(stable_uuid.c_str(), "replacement");
+    }
+    const uint8_t pixel[] = {17, 99, 231, 255};
+    const tc_texture_pixel_data pixels{pixel, sizeof(pixel), 1, 1, 4};
+    if (!tc_texture_set_data(tc_texture_get(probe.handle), &pixels, nullptr, nullptr))
+        return false;
+    return probe.success;
+}
+
+static bool verify_texture_bridge_loading(tgfx::IRenderDevice& device) {
+    for (const bool replace : {false, true}) {
+        for (const bool success : {false, true}) {
+            tc_texture_init();
+            TextureBridgeLoadProbe probe{tc_texture_declare("vulkan-lazy-texture", "deferred"), success, replace};
+            tc_resource_set_loader(load_bridge_texture, &probe);
+            const auto gpu = device.ensure_tc_texture(tc_texture_get(probe.handle));
+            tc_resource_clear_loader();
+            bool valid = probe.relocated && static_cast<bool>(gpu) == (success && !replace);
+            if (gpu) {
+                const auto desc = device.texture_desc(gpu);
+                valid = valid && desc.width == 1 && desc.height == 1;
+            }
+            tc_texture_destroy(probe.handle);
+            tc_texture_shutdown();
+            if (!valid) {
+                std::fprintf(stderr, "Vulkan texture bridge lazy-load lifetime regression: success=%d replace=%d\n",
+                             success, replace);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool verify_vertex_format_conversions() {
     struct Case {
         tgfx::VertexFormat source;
@@ -1045,6 +1095,8 @@ int main(int argc, char** argv) {
            caps.supports_geometry_shaders ? "yes" : "no");
 
     auto* vulkan_device = static_cast<tgfx::VulkanRenderDevice*>(device.get());
+    if (!verify_texture_bridge_loading(*device))
+        return 1;
     const uint8_t rgb8_pixel[] = {17, 99, 231};
     const tc_texture_pixel_data rgb8_input{rgb8_pixel, sizeof(rgb8_pixel), 1, 1, 3};
     tc_texture rgb8_texture{};
@@ -1062,6 +1114,7 @@ int main(int argc, char** argv) {
     tc_texture rgb16f_texture{};
     rgb16f_texture.header.pool_index = 0x52474216u;
     rgb16f_texture.header.version = 1;
+    rgb16f_texture.header.is_loaded = 1;
     rgb16f_texture.data = const_cast<uint16_t*>(rgb16f_pixel);
     rgb16f_texture.width = 1;
     rgb16f_texture.height = 1;
