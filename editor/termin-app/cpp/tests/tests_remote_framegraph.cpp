@@ -19,6 +19,7 @@
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/rendering_manager.hpp>
 #include <termin/render/tc_pass.hpp>
+#include <tcbase/tc_log.h>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/i_render_device.hpp>
 
@@ -31,6 +32,41 @@ extern "C" {
 }
 
 namespace {
+
+    bool wait_for_live_preview_publication(
+        termin::framegraph_remote_target::RemoteFrameGraphTarget& target_service,
+        termin::FrameGraphDebuggerView& view,
+        bool expected_active,
+        std::chrono::milliseconds timeout) {
+        using namespace std::chrono_literals;
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (true) {
+            target_service.pump_render_thread();
+            view.update();
+            const auto snapshot = view.source_snapshot();
+            const std::string status = view.state_status()->text();
+            const bool ui_live = status.find("[LIVE]") != std::string::npos;
+            // The transport can publish a newer snapshot after update() has
+            // projected the previous one. Completion requires both surfaces.
+            if (snapshot->live_preview_active == expected_active && ui_live == expected_active) {
+                return true;
+            }
+            if (std::chrono::steady_clock::now() >= deadline) {
+                tc_log_error(
+                    "[framegraph-debugger-view-test] timed out waiting for live preview publication: "
+                    "expected_live=%d revision=%llu source_live=%d ui_live=%d "
+                    "source_status='%s' ui_status='%s'",
+                    expected_active,
+                    static_cast<unsigned long long>(snapshot->revision),
+                    snapshot->live_preview_active,
+                    ui_live,
+                    snapshot->status_detail.c_str(),
+                    status.c_str());
+                return false;
+            }
+            std::this_thread::sleep_for(5ms);
+        }
+    }
 
     class RemoteProbePass final : public termin::CxxFramePass {
     public:
@@ -567,30 +603,11 @@ TEST_CASE("FrameGraphDebuggerView switches local remote stale and local in one t
     REQUIRE_FALSE(view.source_snapshot()->resources.empty());
     REQUIRE(view.show_resource(view.source_snapshot()->resources.front()));
     REQUIRE(view.start_live_preview(5'000, 320));
-    bool preview_started = false;
-    for (int attempt = 0; attempt < 200; ++attempt) {
-        target_service.pump_render_thread();
-        view.update();
-        if (view.source_snapshot()->live_preview_active) {
-            preview_started = true;
-            break;
-        }
-        std::this_thread::sleep_for(5ms);
-    }
-    REQUIRE(preview_started);
+    REQUIRE(wait_for_live_preview_publication(target_service, view, true, 1s));
     CHECK(view.state_status()->text().find("[LIVE]") != std::string::npos);
     REQUIRE(view.stop_live_preview());
-    bool preview_stopped = false;
-    for (int attempt = 0; attempt < 200; ++attempt) {
-        target_service.pump_render_thread();
-        view.update();
-        if (!view.source_snapshot()->live_preview_active) {
-            preview_stopped = true;
-            break;
-        }
-        std::this_thread::sleep_for(5ms);
-    }
-    REQUIRE(preview_stopped);
+    REQUIRE(wait_for_live_preview_publication(target_service, view, false, 1s));
+    CHECK(view.state_status()->text().find("[LIVE]") == std::string::npos);
 
     view.disconnect_remote();
     CHECK(view.source_snapshot()->stale);
