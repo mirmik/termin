@@ -11,13 +11,15 @@ from typing import Iterable, Mapping
 EXPECTED_KIND = "termin-test-expected"
 EXECUTION_KIND = "termin-test-execution"
 VERIFICATION_KIND = "termin-test-verification"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+SUPPORTED_SDK_PROFILES = frozenset({"full", "graphics", "core"})
 _RESULT_FIELDS = ("executed", "skipped", "failed")
 _EXPECTED_FIELDS = {
     "schema",
     "kind",
     "profile",
     "platform",
+    "sdk_profile",
     "suites",
     "inapplicable",
     "fingerprint",
@@ -28,6 +30,7 @@ _EXECUTION_FIELDS = {
     "expected_fingerprint",
     "profile",
     "platform",
+    "sdk_profile",
     "executor",
     "selected",
     "executed",
@@ -74,6 +77,11 @@ def _validate_header(payload: Mapping[str, object], kind: str, context: str) -> 
         )
     _non_empty_string(payload.get("profile"), f"{context} profile")
     _non_empty_string(payload.get("platform"), f"{context} platform")
+    sdk_profile = payload.get("sdk_profile")
+    if not isinstance(sdk_profile, str) or sdk_profile not in SUPPORTED_SDK_PROFILES:
+        raise TestExecutionContractError(
+            f"{context} has unsupported SDK profile: {payload.get('sdk_profile')!r}"
+        )
 
 
 def _reject_unknown_fields(
@@ -91,6 +99,8 @@ def build_expected_manifest(
     platform: str,
     applicable: Iterable[Mapping[str, object]],
     inapplicable: Iterable[Mapping[str, object]],
+    *,
+    sdk_profile: str = "full",
 ) -> dict[str, object]:
     """Build and validate the checkout-local expected coverage manifest."""
     payload: dict[str, object] = {
@@ -98,6 +108,7 @@ def build_expected_manifest(
         "kind": EXPECTED_KIND,
         "profile": profile,
         "platform": platform,
+        "sdk_profile": sdk_profile,
         "suites": [dict(entry) for entry in applicable],
         "inapplicable": [dict(entry) for entry in inapplicable],
     }
@@ -156,6 +167,7 @@ def build_execution_manifest(
         "expected_fingerprint": expected["fingerprint"],
         "profile": expected["profile"],
         "platform": expected["platform"],
+        "sdk_profile": expected["sdk_profile"],
         "executor": executor,
         "selected": [{"id": suite_id} for suite_id in selected],
         "executed": [{"id": suite_id} for suite_id in executed],
@@ -213,6 +225,10 @@ def validate_execution_manifest(
     if payload.get("platform") != expected.get("platform"):
         raise TestExecutionContractError(
             f"{executor} execution platform does not match expected manifest"
+        )
+    if payload["sdk_profile"] != expected["sdk_profile"]:
+        raise TestExecutionContractError(
+            f"{executor} execution SDK profile does not match expected manifest"
         )
     if payload.get("expected_fingerprint") != expected.get("fingerprint"):
         raise TestExecutionContractError(
@@ -306,6 +322,7 @@ def verify_execution_manifests(
         "kind": VERIFICATION_KIND,
         "profile": expected["profile"],
         "platform": expected["platform"],
+        "sdk_profile": expected["sdk_profile"],
         "expected_fingerprint": expected["fingerprint"],
         "success": successful,
         "selected": sorted(selected_all),

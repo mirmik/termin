@@ -19,6 +19,17 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture(autouse=True)
+def _isolate_sdk_build_environment(monkeypatch):
+    """Keep mocked builds and their metadata inside each test's synthetic repo."""
+    for variable in (
+        "SDK_PREFIX", "BUILD_DIR", "WHEEL_DIR", "TERMIN_SDK_PROFILE",
+        "TERMIN_SDK", "TERMIN_ARTIFACT_MANIFEST", "TERMIN_CORE_SDK",
+        "TERMIN_CORE_BUILD_ID",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _repository_profiles_for_mechanism_tests(monkeypatch):
     """Use the real repository recipe when a synthetic repo omits product policy."""
     real_loader = load_sdk_profiles

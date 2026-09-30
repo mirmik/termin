@@ -616,6 +616,7 @@
     {
       "id": "editor-python-module-reload-smoke",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-python-module-hot-reload"
@@ -628,6 +629,7 @@
     {
       "id": "editor-cpp-module-cascade-reload-smoke",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-cpp-module-cascade-hot-reload"
@@ -640,6 +642,7 @@
     {
       "id": "editor-sdk-shader-smoke",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-sdk-editor-shaders"
@@ -652,6 +655,7 @@
     {
       "id": "editor-virtual-display-smoke",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-editor-virtual-display"
@@ -667,6 +671,7 @@
     {
       "id": "editor-mcp-offscreen-smoke",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-editor-mcp-offscreen"
@@ -679,6 +684,7 @@
     {
       "id": "relocated-sdk-acceptance",
       "module": "termin-build-tools",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-relocated-sdk.py"
@@ -699,6 +705,7 @@
     {
       "id": "native-player-mcp-smoke",
       "module": "termin-player",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-native-player-mcp.py"
@@ -718,6 +725,7 @@
     {
       "id": "tgfx2-d3d11-bound-smoke",
       "module": "termin-graphics",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "process-smoke",
       "roots": [
         "scripts/validate-tgfx2-d3d11-bound-path.ps1"
@@ -736,6 +744,7 @@
     {
       "id": "editor-d3d11-scene-smoke",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-windows-d3d11-editor.py"
@@ -754,6 +763,7 @@
     {
       "id": "player-d3d11-scene-smoke",
       "module": "termin-player",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-windows-d3d11-player.py"
@@ -772,6 +782,7 @@
     {
       "id": "wpf-d3d11-scene-smoke",
       "module": "termin-csharp",
+      "sdk_profiles": ["full"],
       "executor": "process-smoke",
       "roots": [
         "scripts/smoke-windows-d3d11-wpf-scene.py"
@@ -790,6 +801,7 @@
     {
       "id": "android-apk-build-gate",
       "module": "termin-android",
+      "sdk_profiles": ["full"],
       "executor": "device",
       "roots": [
         "scripts/build/android-apk.sh"
@@ -805,6 +817,7 @@
     {
       "id": "quest-openxr-apk-build-gate",
       "module": "termin-openxr",
+      "sdk_profiles": ["full"],
       "executor": "device",
       "roots": [
         "scripts/build/quest-openxr-apk.sh"
@@ -820,6 +833,7 @@
     {
       "id": "manual-smoke-check-catalog",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "manual",
       "roots": [
         "docs/smoke-checks.md"
@@ -829,6 +843,7 @@
     {
       "id": "termin-app-cpp-tests",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "editor/termin-app/cpp/tests"
@@ -837,6 +852,7 @@
     {
       "id": "termin-audio-tests-native",
       "module": "termin-audio",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-audio/tests"
@@ -845,6 +861,7 @@
     {
       "id": "termin-bootstrap-tests-native",
       "module": "termin-bootstrap",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-bootstrap/tests"
@@ -853,6 +870,7 @@
     {
       "id": "termin-collision-tests-native",
       "module": "termin-collision",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "physics/termin-collision/tests"
@@ -861,6 +879,7 @@
     {
       "id": "termin-components-collision-tests-native",
       "module": "termin-components-collision",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-collision/tests"
@@ -869,6 +888,7 @@
     {
       "id": "termin-components-foliage-tests-native",
       "module": "termin-components-foliage",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-foliage/tests"
@@ -877,6 +897,7 @@
     {
       "id": "termin-components-kinematic-tests-native",
       "module": "termin-components-kinematic",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-kinematic/tests"
@@ -885,6 +906,7 @@
     {
       "id": "termin-components-mesh-tests-native",
       "module": "termin-components-mesh",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-mesh/tests"
@@ -893,6 +915,7 @@
     {
       "id": "termin-components-physics-tests-native",
       "module": "termin-components-physics",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-physics/tests"
@@ -901,6 +924,7 @@
     {
       "id": "termin-components-physics-fem-tests-native",
       "module": "termin-components-physics-fem",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-physics-fem/tests"
@@ -909,6 +933,7 @@
     {
       "id": "termin-components-render-tests-native",
       "module": "termin-components-render",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-render/tests"
@@ -917,6 +942,7 @@
     {
       "id": "termin-components-ui-tests-native",
       "module": "termin-components-ui",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-components/termin-components-ui/tests"
@@ -925,6 +951,7 @@
     {
       "id": "termin-csg-tests-native",
       "module": "termin-csg",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-csg/tests"
@@ -933,6 +960,7 @@
     {
       "id": "termin-display-tests-native",
       "module": "termin-display",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-display/tests"
@@ -941,6 +969,7 @@
     {
       "id": "termin-window-tests-native",
       "module": "termin-window",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-window/tests"
@@ -949,6 +978,7 @@
     {
       "id": "termin-window-tests-python",
       "module": "termin-window",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-window/python/tests"
@@ -957,6 +987,7 @@
     {
       "id": "termin-engine-tests-native",
       "module": "termin-engine",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-engine/tests"
@@ -965,6 +996,7 @@
     {
       "id": "termin-glb-tests-native",
       "module": "termin-glb",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-glb/tests"
@@ -973,6 +1005,7 @@
     {
       "id": "termin-graphics-tests-native",
       "module": "termin-graphics",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-graphics/tests"
@@ -981,6 +1014,7 @@
     {
       "id": "termin-animation-tests-native",
       "module": "termin-animation",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-animation/tests"
@@ -989,6 +1023,7 @@
     {
       "id": "termin-mesh-tests-native",
       "module": "termin-mesh",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-mesh/tests"
@@ -997,6 +1032,7 @@
     {
       "id": "termin-visual-scene-tests-native",
       "module": "termin-visual-scene",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-visual-scene/tests"
@@ -1005,6 +1041,7 @@
     {
       "id": "termin-visual-scene-tests-python",
       "module": "termin-visual-scene",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-visual-scene/python/tests"
@@ -1013,6 +1050,7 @@
     {
       "id": "tcplot-tests-native",
       "module": "tcplot",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/tcplot/tests"
@@ -1021,6 +1059,7 @@
     {
       "id": "tcplot-gui-native-tests",
       "module": "tcplot-gui-native",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/tcplot-gui-native/tests"
@@ -1029,6 +1068,7 @@
     {
       "id": "tcplot-gui-native-tests-python",
       "module": "tcplot-gui-native",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/tcplot-gui-native/tests/python"
@@ -1037,6 +1077,7 @@
     {
       "id": "termin-gui-native-tests",
       "module": "termin-gui-native",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-gui-native/tests"
@@ -1045,6 +1086,7 @@
     {
       "id": "termin-image-tests-native",
       "module": "termin-image",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-image/tests"
@@ -1053,6 +1095,7 @@
     {
       "id": "termin-framegraph-remote-tests-native",
       "module": "termin-framegraph-remote",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-framegraph-remote/tests"
@@ -1061,6 +1104,7 @@
     {
       "id": "termin-framegraph-remote-target-tests-native",
       "module": "termin-framegraph-remote-target",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-framegraph-remote-target/tests"
@@ -1069,6 +1113,7 @@
     {
       "id": "termin-profiler-remote-tests-native",
       "module": "termin-profiler-remote",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-profiler-remote/tests"
@@ -1077,6 +1122,7 @@
     {
       "id": "termin-profiler-tests-native",
       "module": "termin-profiler",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-profiler/tests"
@@ -1085,6 +1131,7 @@
     {
       "id": "termin-input-tests-native",
       "module": "termin-input",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-input/tests"
@@ -1093,6 +1140,7 @@
     {
       "id": "termin-materials-tests-native",
       "module": "termin-materials",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-materials/tests"
@@ -1101,6 +1149,7 @@
     {
       "id": "termin-modules-tests-native",
       "module": "termin-modules",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-modules/tests"
@@ -1109,6 +1158,7 @@
     {
       "id": "termin-navmesh-tests-native",
       "module": "termin-navmesh",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "physics/termin-navmesh/tests"
@@ -1117,6 +1167,7 @@
     {
       "id": "termin-nodegraph-tests-native",
       "module": "termin-nodegraph",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-nodegraph/tests"
@@ -1125,6 +1176,7 @@
     {
       "id": "termin-prefab-tests-native",
       "module": "termin-prefab",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-prefab/tests"
@@ -1133,6 +1185,7 @@
     {
       "id": "termin-physics-tests-native",
       "module": "termin-physics",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "physics/termin-physics/tests"
@@ -1141,6 +1194,7 @@
     {
       "id": "termin-qopt-tests-native",
       "module": "termin-qopt",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "physics/termin-qopt/tests"
@@ -1149,6 +1203,7 @@
     {
       "id": "termin-robotics-tests-native",
       "module": "termin-robotics",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "physics/termin-robotics/tests"
@@ -1157,6 +1212,7 @@
     {
       "id": "termin-robotics-tests-python",
       "module": "termin-robotics",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-robotics/python/tests"
@@ -1165,6 +1221,7 @@
     {
       "id": "termin-physics-qopt-tests-native",
       "module": "termin-physics-qopt",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "physics/termin-physics-qopt/tests"
@@ -1173,6 +1230,7 @@
     {
       "id": "termin-render-passes-tests-native",
       "module": "termin-render-passes",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-render-passes/tests"
@@ -1181,6 +1239,7 @@
     {
       "id": "termin-render-tests-native",
       "module": "termin-render",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-render/tests"
@@ -1189,6 +1248,7 @@
     {
       "id": "termin-runtime-tests-native",
       "module": "termin-runtime",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-runtime/tests"
@@ -1197,6 +1257,7 @@
     {
       "id": "termin-scene-tests-native",
       "module": "termin-scene",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-scene/tests"
@@ -1205,6 +1266,7 @@
     {
       "id": "termin-skeleton-tests-native",
       "module": "termin-skeleton",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-skeleton/tests"
@@ -1213,6 +1275,7 @@
     {
       "id": "termin-lighting-tests-native",
       "module": "termin-lighting",
+      "sdk_profiles": ["full"],
       "executor": "ctest",
       "roots": [
         "engine/termin-lighting/tests"
@@ -1221,6 +1284,7 @@
     {
       "id": "tcplot-tests-python",
       "module": "tcplot",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/tcplot/tests/python"
@@ -1229,6 +1293,7 @@
     {
       "id": "termin-animation-tests",
       "module": "termin-animation",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-animation/tests"
@@ -1237,6 +1302,7 @@
     {
       "id": "termin-components-animation-tests",
       "module": "termin-components-animation",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-animation/tests"
@@ -1245,6 +1311,7 @@
     {
       "id": "termin-audio-tests",
       "module": "termin-audio",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-audio/tests"
@@ -1253,6 +1320,7 @@
     {
       "id": "termin-app-tests",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-app/tests"
@@ -1269,6 +1337,7 @@
     {
       "id": "termin-app-window-tests",
       "module": "termin-app",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-app/tests/test_native_build_profiles_window.py",
@@ -1285,6 +1354,7 @@
     {
       "id": "termin-assets-tests",
       "module": "termin-assets",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-assets/tests"
@@ -1293,6 +1363,7 @@
     {
       "id": "termin-bootstrap-tests",
       "module": "termin-bootstrap",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-bootstrap/tests"
@@ -1301,15 +1372,29 @@
     {
       "id": "termin-build-tools-tests",
       "module": "termin-build-tools",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "pytest",
       "roots": [
         "core/termin-build-tools/tests",
         "scripts/tests"
+      ],
+      "excluded_roots": [
+        "core/termin-build-tools/tests/test_graphics_showcase_contract.py"
+      ]
+    },
+    {
+      "id": "termin-build-tools-graphics-tests",
+      "module": "termin-build-tools",
+      "sdk_profiles": ["full", "graphics"],
+      "executor": "pytest",
+      "roots": [
+        "core/termin-build-tools/tests/test_graphics_showcase_contract.py"
       ]
     },
     {
       "id": "graphics-showcase-tests",
       "module": "graphics-showcase",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "examples/graphics-showcase/tests"
@@ -1318,6 +1403,7 @@
     {
       "id": "termin-cli-tests",
       "module": "termin-cli",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-cli/tests"
@@ -1326,6 +1412,7 @@
     {
       "id": "termin-model-viewer-tests",
       "module": "termin-model-viewer",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-model-viewer/tests"
@@ -1334,6 +1421,7 @@
     {
       "id": "termin-collision-tests",
       "module": "termin-collision",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-collision/tests"
@@ -1342,6 +1430,7 @@
     {
       "id": "termin-display-tests-python",
       "module": "termin-display",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-display/tests/python"
@@ -1353,6 +1442,7 @@
     {
       "id": "termin-components-collision-tests",
       "module": "termin-components-collision",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-collision/tests"
@@ -1361,6 +1451,7 @@
     {
       "id": "termin-components-foliage-tests",
       "module": "termin-components-foliage",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-foliage/tests"
@@ -1369,6 +1460,7 @@
     {
       "id": "termin-components-kinematic-tests",
       "module": "termin-components-kinematic",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-kinematic/tests"
@@ -1377,6 +1469,7 @@
     {
       "id": "termin-components-mesh-tests",
       "module": "termin-components-mesh",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-mesh/tests"
@@ -1385,6 +1478,7 @@
     {
       "id": "termin-components-physics-tests",
       "module": "termin-components-physics",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-physics/tests"
@@ -1393,6 +1487,7 @@
     {
       "id": "termin-components-render-tests-python",
       "module": "termin-components-render",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-render/tests/python"
@@ -1401,6 +1496,7 @@
     {
       "id": "termin-components-voxels-tests",
       "module": "termin-components-voxels",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-voxels/tests"
@@ -1409,6 +1505,7 @@
     {
       "id": "termin-components-skeleton-tests",
       "module": "termin-components-skeleton",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-skeleton/tests"
@@ -1417,6 +1514,7 @@
     {
       "id": "termin-components-tween-tests",
       "module": "termin-components-tween",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-tween/tests"
@@ -1425,6 +1523,7 @@
     {
       "id": "termin-components-ui-tests",
       "module": "termin-components-ui",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-components/termin-components-ui/tests"
@@ -1433,6 +1532,7 @@
     {
       "id": "termin-csg-tests",
       "module": "termin-csg",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-csg/tests"
@@ -1441,6 +1541,7 @@
     {
       "id": "termin-default-assets-tests",
       "module": "termin-default-assets",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-default-assets/tests"
@@ -1449,6 +1550,7 @@
     {
       "id": "termin-engine-tests",
       "module": "termin-engine",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-engine/tests"
@@ -1457,6 +1559,7 @@
     {
       "id": "termin-glb-native-tests",
       "module": "termin-glb-native",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-glb-native/tests"
@@ -1465,14 +1568,32 @@
     {
       "id": "termin-glb-tests",
       "module": "termin-glb",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-glb/tests"
+      ],
+      "excluded_roots": [
+        "graphics/termin-glb/tests/test_glb_loader.py",
+        "graphics/termin-glb/tests/test_glb_native_backend.py",
+        "graphics/termin-glb/tests/test_glb_native_reference_models.py"
+      ]
+    },
+    {
+      "id": "termin-glb-full-integration-tests",
+      "module": "termin-glb",
+      "sdk_profiles": ["full"],
+      "executor": "pytest",
+      "roots": [
+        "graphics/termin-glb/tests/test_glb_loader.py",
+        "graphics/termin-glb/tests/test_glb_native_backend.py",
+        "graphics/termin-glb/tests/test_glb_native_reference_models.py"
       ]
     },
     {
       "id": "termin-glb-adapters-tests",
       "module": "termin-glb-adapters",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-glb-adapters/tests"
@@ -1481,6 +1602,7 @@
     {
       "id": "termin-graphics-tests-python",
       "module": "termin-graphics",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-graphics/tests/python"
@@ -1489,6 +1611,7 @@
     {
       "id": "termin-gui-native-python-tests",
       "module": "termin-gui-native",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-gui-native/python/tests"
@@ -1497,14 +1620,28 @@
     {
       "id": "termin-materials-tests",
       "module": "termin-materials",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-materials/tests"
+      ],
+      "excluded_roots": [
+        "graphics/termin-materials/tests/test_shader_parser_full_integration.py"
+      ]
+    },
+    {
+      "id": "termin-materials-full-integration-tests",
+      "module": "termin-materials",
+      "sdk_profiles": ["full"],
+      "executor": "pytest",
+      "roots": [
+        "graphics/termin-materials/tests/test_shader_parser_full_integration.py"
       ]
     },
     {
       "id": "termin-graphics-mcp-tests",
       "module": "termin-graphics-mcp",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-graphics-mcp/tests"
@@ -1513,6 +1650,7 @@
     {
       "id": "termin-mesh-tests-python",
       "module": "termin-mesh",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-mesh/tests/python"
@@ -1521,6 +1659,7 @@
     {
       "id": "termin-navmesh-tests",
       "module": "termin-navmesh",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-navmesh/tests"
@@ -1529,6 +1668,7 @@
     {
       "id": "termin-nodegraph-tests",
       "module": "termin-nodegraph",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-nodegraph/tests"
@@ -1537,6 +1677,7 @@
     {
       "id": "termin-pga-tests",
       "module": "termin-pga",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-pga/tests"
@@ -1545,6 +1686,7 @@
     {
       "id": "termin-physics-fem-tests",
       "module": "termin-physics-fem",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-physics-fem/tests"
@@ -1553,6 +1695,7 @@
     {
       "id": "termin-physics-tests",
       "module": "termin-physics",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-physics/tests"
@@ -1561,6 +1704,7 @@
     {
       "id": "termin-player-tests",
       "module": "termin-player",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-player/tests"
@@ -1572,6 +1716,7 @@
     {
       "id": "termin-player-window-tests",
       "module": "termin-player",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-player/tests/test_player_window.py"
@@ -1583,6 +1728,7 @@
     {
       "id": "termin-prefab-tests",
       "module": "termin-prefab",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-prefab/tests"
@@ -1591,6 +1737,7 @@
     {
       "id": "termin-project-build-tests",
       "module": "termin-project-build",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-project-build/tests"
@@ -1599,6 +1746,7 @@
     {
       "id": "termin-project-modules-tests",
       "module": "termin-project-modules",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-project-modules/tests"
@@ -1607,6 +1755,7 @@
     {
       "id": "termin-project-tests",
       "module": "termin-project",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-project/tests"
@@ -1615,6 +1764,7 @@
     {
       "id": "termin-qopt-tests",
       "module": "termin-qopt",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-qopt/tests"
@@ -1623,6 +1773,7 @@
     {
       "id": "termin-physics-qopt-tests-python",
       "module": "termin-physics-qopt",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "physics/termin-physics-qopt/tests/multibody_oracle_test.py"
@@ -1631,6 +1782,7 @@
     {
       "id": "termin-render-passes-tests",
       "module": "termin-render-passes",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-render-passes/tests"
@@ -1639,6 +1791,7 @@
     {
       "id": "termin-render-tests",
       "module": "termin-render",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-render/tests"
@@ -1647,6 +1800,7 @@
     {
       "id": "termin-scene-recipe-tests",
       "module": "termin-scene-recipe",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "editor/termin-scene-recipe/tests"
@@ -1655,6 +1809,7 @@
     {
       "id": "termin-scene-tests",
       "module": "termin-scene",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-scene/tests"
@@ -1663,6 +1818,7 @@
     {
       "id": "termin-shader-runtime-tests",
       "module": "termin-shader-runtime",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-shader-runtime/tests"
@@ -1671,6 +1827,7 @@
     {
       "id": "termin-skeleton-tests",
       "module": "termin-skeleton",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-skeleton/tests"
@@ -1679,6 +1836,7 @@
     {
       "id": "termin-stdlib-tests",
       "module": "termin-stdlib",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-stdlib/tests"
@@ -1687,6 +1845,7 @@
     {
       "id": "termin-tween-tests",
       "module": "termin-tween",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "pytest",
       "roots": [
         "graphics/termin-tween/tests"
@@ -1695,6 +1854,7 @@
     {
       "id": "termin-voxels-tests",
       "module": "termin-voxels",
+      "sdk_profiles": ["full"],
       "executor": "pytest",
       "roots": [
         "engine/termin-voxels/tests"
@@ -1703,6 +1863,7 @@
     {
       "id": "termin-base-tests-native",
       "module": "termin-base",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "ctest",
       "roots": [
         "core/termin-base/tests"
@@ -1711,6 +1872,7 @@
     {
       "id": "termin-base-tests-python",
       "module": "termin-base",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "pytest",
       "roots": [
         "core/termin-base/tests/python"
@@ -1719,6 +1881,7 @@
     {
       "id": "termin-dispatch-tests-native",
       "module": "termin-dispatch",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "ctest",
       "roots": [
         "core/termin-dispatch/tests"
@@ -1727,6 +1890,7 @@
     {
       "id": "termin-dispatch-tests-python",
       "module": "termin-dispatch",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "pytest",
       "roots": [
         "core/termin-dispatch/tests/python"
@@ -1735,6 +1899,7 @@
     {
       "id": "termin-inspect-tests-native",
       "module": "termin-inspect",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "ctest",
       "roots": [
         "core/termin-inspect/tests"
@@ -1743,6 +1908,7 @@
     {
       "id": "termin-inspect-tests",
       "module": "termin-inspect",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "pytest",
       "roots": [
         "core/termin-inspect/tests"
@@ -1751,6 +1917,7 @@
     {
       "id": "termin-mcp-tests",
       "module": "termin-mcp",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "pytest",
       "roots": [
         "core/termin-mcp/tests"
@@ -1759,6 +1926,7 @@
     {
       "id": "termin-nanobind-tests",
       "module": "termin-nanobind-sdk",
+      "sdk_profiles": ["full", "graphics", "core"],
       "executor": "pytest",
       "roots": [
         "core/termin-nanobind-sdk/tests"
@@ -1767,6 +1935,7 @@
     {
       "id": "termin-render-core-tests-native",
       "module": "termin-render-core",
+      "sdk_profiles": ["full", "graphics"],
       "executor": "ctest",
       "roots": [
         "graphics/termin-render-core/tests"

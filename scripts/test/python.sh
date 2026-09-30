@@ -15,12 +15,22 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTEST_TARGETS=()
 FULL=0
+SDK_PROFILE=""
 PYTEST_JOBS="${TERMIN_PYTEST_JOBS:-1}"
 
 while (( $# > 0 )); do
     arg="$1"
     shift
     case "$arg" in
+        --profile)
+            if (( $# == 0 )); then
+                echo "ERROR: --profile requires full, graphics, or core." >&2
+                exit 1
+            fi
+            SDK_PROFILE="$1"; shift
+            if [[ -z "$SDK_PROFILE" ]]; then echo "ERROR: --profile cannot be empty." >&2; exit 1; fi ;;
+        --profile=*) SDK_PROFILE="${arg#--profile=}"
+            if [[ -z "$SDK_PROFILE" ]]; then echo "ERROR: --profile cannot be empty." >&2; exit 1; fi ;;
         --full)
             FULL=1
             ;;
@@ -43,6 +53,7 @@ while (( $# > 0 )); do
             echo "Usage: $0 [pytest-target ...]"
             echo ""
             echo "  (no flags)  Use SDK Python + checkout overlay and run working tests"
+            echo "  --profile PRODUCT Select full, graphics, or core SDK product"
             echo "  --full      Include pytest tests marked full"
             echo "  --jobs N    Run up to N manifest-selected pytest suites concurrently"
             echo "  pytest-target"
@@ -61,33 +72,38 @@ if [[ ! "$PYTEST_JOBS" =~ ^[1-9][0-9]*$ ]]; then
     exit 1
 fi
 
-# --- TERMIN_SDK ---
-if [[ -z "${TERMIN_SDK:-}" ]]; then
-    if [[ -d "$SCRIPT_DIR/sdk/lib" ]]; then
-        export TERMIN_SDK="$SCRIPT_DIR/sdk"
-    elif [[ -d "/opt/termin/lib" ]]; then
-        export TERMIN_SDK="/opt/termin"
-    fi
-fi
-if [[ -z "${TERMIN_SDK:-}" ]]; then
-    echo "ERROR: Termin SDK was not found." >&2
+# --- SDK product context ---
+CONTEXT_BOOTSTRAP='import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import main; raise SystemExit(main())'
+CONTEXT_PYTHON="${TERMIN_TEST_TOOLS_PYTHON:-$(command -v python3 || command -v python || true)}"
+if [[ -z "$CONTEXT_PYTHON" ]]; then
+    echo "ERROR: Python is required to resolve the SDK test context." >&2
     exit 1
 fi
+CONTEXT_ARGS=(--repo-root "$SCRIPT_DIR")
+if [[ -n "$SDK_PROFILE" ]]; then
+    CONTEXT_ARGS+=(--profile "$SDK_PROFILE")
+fi
+CONTEXT_ARGS+=(--installed)
+SDK_PROFILE="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field profile)" || exit 1
+SDK_PREFIX="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field sdk-prefix)" || exit 1
+export TERMIN_SDK="$SDK_PREFIX"
+DEFAULT_ENV_ROOT="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field environment-root)" || exit 1
+
 echo "TERMIN_SDK: $TERMIN_SDK"
 
 PYTHON_BIN="${PYTHON_BIN:-$TERMIN_SDK/bin/termin_python}"
-OVERLAY_MANIFEST="${TERMIN_PYTHON_OVERLAY:-$SCRIPT_DIR/build/python-envs/test/overlay.json}"
+OVERLAY_MANIFEST="${TERMIN_PYTHON_OVERLAY:-$DEFAULT_ENV_ROOT/overlay.json}"
 export TERMIN_PYTHON_OVERLAY="$OVERLAY_MANIFEST"
 BUILD_TOOLS_ROOT="$SCRIPT_DIR/core/termin-build-tools"
 TOOLS_REQUIREMENTS="$SCRIPT_DIR/build-system/python-test-requirements.txt"
 if [[ ! -x "$PYTHON_BIN" ]]; then
     echo "ERROR: SDK Python launcher is missing: $PYTHON_BIN" >&2
-    echo "Run ./scripts/build/sdk.sh first." >&2
+    echo "Run task build first." >&2
     exit 1
 fi
 if [[ ! -f "$OVERLAY_MANIFEST" ]]; then
     echo "ERROR: Python test overlay is missing: $OVERLAY_MANIFEST" >&2
-    echo "Run ./scripts/test/setup-python-env.sh first." >&2
+    echo "Run task test:python:setup first." >&2
     exit 1
 fi
 ENVIRONMENT_BOOTSTRAP='import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.python_test_environment import main; raise SystemExit(main())'
@@ -105,25 +121,27 @@ export LD_LIBRARY_PATH="${SDK_PREFIX}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 # Python tests exercise the compiler installed in the same verified SDK as the
 # bundled Python runtime.  TERMIN_SHADERC remains an explicit override.
-if [[ -z "${TERMIN_SHADERC:-}" ]]; then
-    ARTIFACT_RESOLUTION_BOOTSTRAP='import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.artifact_resolution import main; raise SystemExit(main())'
-    if ! TERMIN_SHADERC="$(
-        "$PYTHON_BIN" -c "$ARTIFACT_RESOLUTION_BOOTSTRAP" "$BUILD_TOOLS_ROOT" \
-            sdk-shader-compiler \
-            --sdk-root "$SDK_PREFIX" \
-            --platform linux
-    )"; then
-        echo "ERROR: failed to resolve termin_shaderc from the active SDK." >&2
+if [[ "$SDK_PROFILE" != "core" ]]; then
+    if [[ -z "${TERMIN_SHADERC:-}" ]]; then
+        ARTIFACT_RESOLUTION_BOOTSTRAP='import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.artifact_resolution import main; raise SystemExit(main())'
+        if ! TERMIN_SHADERC="$(
+            "$PYTHON_BIN" -c "$ARTIFACT_RESOLUTION_BOOTSTRAP" "$BUILD_TOOLS_ROOT" \
+                sdk-shader-compiler \
+                --sdk-root "$SDK_PREFIX" \
+                --platform linux
+        )"; then
+            echo "ERROR: failed to resolve termin_shaderc from the active SDK." >&2
+            exit 1
+        fi
+    fi
+    if [[ ! -x "$TERMIN_SHADERC" ]]; then
+        echo "ERROR: TERMIN_SHADERC is not executable: $TERMIN_SHADERC" >&2
         exit 1
     fi
+    TERMIN_SHADERC="$(cd "$(dirname "$TERMIN_SHADERC")" && pwd)/$(basename "$TERMIN_SHADERC")"
+    export TERMIN_SHADERC
+    echo "TERMIN_SHADERC: $TERMIN_SHADERC"
 fi
-if [[ ! -x "$TERMIN_SHADERC" ]]; then
-    echo "ERROR: TERMIN_SHADERC is not executable: $TERMIN_SHADERC" >&2
-    exit 1
-fi
-TERMIN_SHADERC="$(cd "$(dirname "$TERMIN_SHADERC")" && pwd)/$(basename "$TERMIN_SHADERC")"
-export TERMIN_SHADERC
-echo "TERMIN_SHADERC: $TERMIN_SHADERC"
 
 # The launcher deliberately ignores ambient Python configuration.
 unset PYTHONHOME PYTHONPATH PYTHONUSERBASE
@@ -167,7 +185,7 @@ if (( ${#PYTEST_TARGETS[@]} > 0 )); then
     fi
     run_suite "selected python" \
         "${PYTHON_COMMAND[@]}" -m termin_build.repository_control \
-        --repo-root "$SCRIPT_DIR" run-selected-pytest \
+        --repo-root "$SCRIPT_DIR" run-selected-pytest --sdk-profile "$SDK_PROFILE" \
         --python "$PYTHON_BIN" \
         --python-arg=--termin-overlay --python-arg="$OVERLAY_MANIFEST" \
         "${SELECTED_MARK_ARGS[@]}" -- "${PYTEST_TARGETS[@]}"
@@ -190,7 +208,7 @@ else
         fi
     done
     if ! "${PYTHON_COMMAND[@]}" -m termin_build.repository_control \
-        --repo-root "$SCRIPT_DIR" run "$TEST_PROFILE" \
+        --repo-root "$SCRIPT_DIR" run "$TEST_PROFILE" --sdk-profile "$SDK_PROFILE" \
         --platform linux --executor pytest --python "$PYTHON_BIN" \
         --pytest-jobs "$PYTEST_JOBS" \
         "${TEST_CAPABILITY_ARGS[@]}" \
@@ -199,16 +217,17 @@ else
         failures+=("manifest Python suites")
     fi
 
-run_suite "free-threaded SDK import graph" \
-    "${PYTHON_COMMAND[@]}" -m termin_build.sdk \
-        --repo-root "$SCRIPT_DIR" verify-python-import-graph \
-        --sdk-prefix "$TERMIN_SDK"
+    run_suite "free-threaded SDK import graph" \
+        "${PYTHON_COMMAND[@]}" -m termin_build.sdk \
+            --repo-root "$SCRIPT_DIR" verify-python-import-graph \
+            --sdk-prefix "$TERMIN_SDK"
 
-run_suite "termin-modules import smoke" \
-    "${PYTHON_COMMAND[@]}" -c "import termin_modules; env = termin_modules.ModuleEnvironment(); runtime = termin_modules.ModuleRuntime(); runtime.set_environment(env); runtime.register_cpp_backend(termin_modules.CppModuleBackend()); runtime.register_python_backend(termin_modules.PythonModuleBackend())"
-
-run_suite "Python lint" \
-    "${PYTHON_COMMAND[@]}" -m ruff check "$SCRIPT_DIR"
+    if [[ "$SDK_PROFILE" == "full" ]]; then
+        run_suite "termin-modules import smoke" \
+            "${PYTHON_COMMAND[@]}" -c "import termin_modules; env = termin_modules.ModuleEnvironment(); runtime = termin_modules.ModuleRuntime(); runtime.set_environment(env); runtime.register_cpp_backend(termin_modules.CppModuleBackend()); runtime.register_python_backend(termin_modules.PythonModuleBackend())"
+    fi
+    run_suite "Python lint" \
+        "${PYTHON_COMMAND[@]}" -m ruff check "$SCRIPT_DIR"
 fi
 
 if (( ${#failures[@]} > 0 )); then

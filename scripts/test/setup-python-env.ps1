@@ -5,24 +5,50 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 . (Join-Path $ScriptDir "scripts\Normalize-WindowsSdkPermissions.ps1")
 $Force = $false
+$SdkProfile = ""
 
-foreach ($arg in $args) {
+$index = 0
+while ($index -lt $args.Count) {
+    $arg = $args[$index]; $index += 1
+    if ($arg -eq "--profile") {
+        if ($index -ge $args.Count) { throw "--profile requires full, graphics, or core" }
+        $SdkProfile = $args[$index]; $index += 1
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    } elseif ($arg.StartsWith("--profile=")) {
+        $SdkProfile = $arg.Substring("--profile=".Length)
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    }
     if ($arg -eq "--force" -or $arg -eq "-f") {
         $Force = $true
     } elseif ($arg -eq "--help" -or $arg -eq "-h") {
-        Write-Host "Usage: .\setup-sdk-python-env.ps1 [--force]"
+        Write-Host "Usage: task test:python:setup -- [--profile full|graphics|core] [--force]"
         exit 0
     } else {
         throw "Unknown argument: $arg"
     }
 }
 
-$SdkRoot = if ($env:TERMIN_SDK) { $env:TERMIN_SDK } else { Join-Path $ScriptDir "sdk" }
+$ContextBootstrap = "import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import main; raise SystemExit(main())"
+$ContextPython = if ($env:TERMIN_TEST_TOOLS_PYTHON) { $env:TERMIN_TEST_TOOLS_PYTHON } else {
+    $pinnedPython = Join-Path $ScriptDir "build\python-runtime\build-env\Scripts\python.exe"
+    if (Test-Path $pinnedPython -PathType Leaf) { $pinnedPython } else { (Get-Command python -ErrorAction Stop).Path }
+}
+$ContextArgs = @("--repo-root", $ScriptDir)
+if ($SdkProfile) { $ContextArgs += @("--profile", $SdkProfile) }
+$ContextArgs += "--installed"
+$ContextJson = & $ContextPython -c $ContextBootstrap (Join-Path $ScriptDir "core/termin-build-tools") @ContextArgs
+if ($LASTEXITCODE -ne 0) { throw "SDK test context resolution failed" }
+$TestSdkContext = ($ContextJson -join "`n") | ConvertFrom-Json
+$SdkProfile = $TestSdkContext.profile
+$SdkPrefix = $TestSdkContext.'sdk-prefix'
+$SdkRoot = $SdkPrefix
 $SdkPython = Join-Path $SdkRoot "bin\termin_python.exe"
-$EnvRoot = if ($env:TERMIN_TEST_ENV) { $env:TERMIN_TEST_ENV } else { Join-Path $ScriptDir "build\python-envs\test" }
+$EnvRoot = if ($env:TERMIN_PYTHON_OVERLAY) { Split-Path -Parent $env:TERMIN_PYTHON_OVERLAY } else { $TestSdkContext.'environment-root' }
 $ToolsSite = Join-Path $EnvRoot "site-packages"
 $ToolsRequirements = Join-Path $ScriptDir "build-system\python-test-requirements.txt"
-$OverlayManifest = Join-Path $EnvRoot "overlay.json"
+$OverlayManifest = if ($env:TERMIN_PYTHON_OVERLAY) { $env:TERMIN_PYTHON_OVERLAY } else { Join-Path $EnvRoot "overlay.json" }
 $BuildToolsRoot = Join-Path $ScriptDir "core/termin-build-tools"
 $PythonBuildEnv = if ($env:TERMIN_PYTHON_BUILD_ENV) {
     $env:TERMIN_PYTHON_BUILD_ENV

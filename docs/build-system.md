@@ -1158,6 +1158,16 @@ task test --
 task test -- --full
 ```
 
+SDK product и scheduling profile выбираются независимо. Флаг
+`--profile=full|graphics|core` у `task test`, `task test:cpp`,
+`task test:python` и `task test:python:setup` выбирает продукт и его штатные
+SDK/build directories; `--full` расширяет набор тестов внутри этого продукта.
+Python runners читают `sdk-product.json` установленного SDK, а CTest planner —
+`TERMIN_SDK_PROFILE` из configured `CMakeCache.txt`. Явно заданный профиль
+проверяется на совпадение с выбранным SDK или configured build tree.
+Неподдерживаемый продукт, отсутствующая metadata и несовпадение контекстов
+завершают команду с ошибкой; имена директорий не используются как metadata.
+
 Python suite roots больше не перечисляются в публичной задаче `task test:python`.
 Их source of truth — `build-system/test-suites.json`.
 Локальные runners вызывают `termin_build.repository_control`: профиль `pr`
@@ -1167,12 +1177,17 @@ Python suite roots больше не перечисляются в публич�
 упавших suites.
 
 Suite manifest описывает только реально исполняемый scheduling contract:
-`executor`, `roots`, `profiles`, `platforms` и диагностический `reason`.
+`executor`, `roots`, `profiles`, `platforms`, `sdk_profiles` и диагностический
+`reason`. `sdk_profiles` задаёт продуктовую применимость декларативно: Core
+suites доступны во всех трёх продуктах, Graphics — в Full/Graphics, остальные
+— в Full. Suite без override имеет Full scope. Отсутствие CTest registration
+или native test source допустимо только для неприменимого продукта; пропажа
+обязательного теста текущего продукта остаётся ошибкой inventory gate.
 Общих полей `environment` и `capabilities` нет: planner не создаёт отдельное
 окружение и не фильтрует обычные suites по таким декларациям, поэтому старые
-поля отклоняются как schema error. Единственное executor-specific исключение —
-`required_capabilities` у `process-smoke`: этот список непосредственно
-проверяется process adapter перед запуском. CTest requirements по-прежнему
+поля отклоняются как schema error. Executor-specific поле
+`required_capabilities` у `process-smoke` и `pytest` непосредственно
+проверяется соответствующим adapter перед запуском. CTest requirements по-прежнему
 принадлежат configured `termin:capability:*` labels и native source
 classifications, а не suite-level metadata.
 
@@ -1191,13 +1206,14 @@ SDK, venv и third-party roots исключены явно в manifest. План
 ```bash
 PYTHONPATH=core/termin-build-tools \
 python3 -m termin_build.repository_control --repo-root . \
-plan pr --platform linux --json
+plan pr --platform linux --sdk-profile graphics --json
 ```
 
 Команда `plan --json` выдаёт канонический expected manifest
-`termin-test-expected` для текущего checkout, profile и platform. Поле `suites`
+`termin-test-expected` schema 2 для текущего checkout, profile, platform и
+`sdk_profile`. Поле `suites`
 содержит применимые suites, а `inapplicable` — неприменимые suites с
-детерминированной причиной несовпадения profile/platform. `fingerprint` —
+детерминированной причиной несовпадения profile/platform/sdk_profile. `fingerprint` —
 SHA-256 канонического содержимого manifest; executor result принимается только
 для того expected manifest, fingerprint которого он явно указывает. Поэтому
 manifest с другим test inventory нельзя случайно принять за результат текущего
@@ -1207,7 +1223,7 @@ manifest с другим test inventory нельзя случайно приня
 отдельный `termin-test-execution` manifest и не передаёт управление тестами
 универсальному runner. Общий suite-level контракт содержит:
 
-- `executor`, `profile`, `platform` и `expected_fingerprint`;
+- `executor`, `profile`, `platform`, `sdk_profile` и `expected_fingerprint`;
 - `selected` — suites, которые adapter принял к исполнению;
 - ровно один terminal outcome для каждой применимой suite: `executed`,
   `skipped` или `failed`;
@@ -1245,8 +1261,10 @@ checkout и сравнивает с fingerprints executor results. CTest adapter
 registration-level JUnit outcomes в suite-level `termin-test-execution`, сохраняя
 исходные registrations и причины skip/failure в `details`.
 
-Focused-вызов `task test:python -- <pytest-target ...>` остаётся прямым pytest
-запуском и не меняет repository inventory.
+Focused-вызов `task test:python -- <pytest-target ...>` запускает выбранные
+manifest-owned suites и не меняет repository inventory. Явный target,
+принадлежащий suite другого SDK продукта, отклоняется до запуска pytest;
+directory target также не может молча исключить неподдерживаемые suites.
 
 Полный набор дополнительно запускает editor-process smoke tests:
 

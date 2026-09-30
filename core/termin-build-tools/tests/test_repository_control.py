@@ -729,7 +729,7 @@ def test_cli_emits_stable_json_plan(tmp_path: Path, capsys) -> None:
 
     assert result == 0
     output = json.loads(capsys.readouterr().out)
-    assert output["schema"] == 1
+    assert output["schema"] == 2
     assert output["kind"] == "termin-test-expected"
     assert output["profile"] == "pr"
     assert output["platform"] == "linux"
@@ -1135,7 +1135,7 @@ def test_run_schedules_longest_historical_pytest_suite_first(
         {
             "schema": 1,
             "profiles": {
-                "pr/linux": {
+                "pr/linux/full": {
                     "alpha-python": 1.0,
                     "beta-python": 20.0,
                 }
@@ -1206,7 +1206,7 @@ def test_run_logs_and_replaces_invalid_pytest_duration_cache(
     assert "ignoring invalid pytest duration cache" in captured.err
     cache = json.loads(duration_cache.read_text(encoding="utf-8"))
     assert cache["schema"] == 1
-    assert cache["profiles"]["pr/linux"]["alpha-python"] >= 0
+    assert cache["profiles"]["pr/linux/full"]["alpha-python"] >= 0
 
 
 def test_run_rejects_non_positive_pytest_jobs(tmp_path: Path, capsys) -> None:
@@ -1577,9 +1577,10 @@ def test_ctest_report_records_selected_executed_and_skipped(tmp_path: Path) -> N
     _write_json(
         selection,
         {
-            "schema": 1,
+            "schema": 2,
             "profile": "pr",
             "platform": "linux",
+            "sdk_profile": "full",
             "configuration": "Release",
             "capabilities": ["host"],
             "selected": [
@@ -1679,3 +1680,199 @@ def test_verify_suite_execution_requires_exact_executor_coverage(
 
     assert result == 1
     assert json.loads(capsys.readouterr().out)["missing"] == ["installed-smoke"]
+
+
+def _sdk_profile_repository(tmp_path: Path) -> Path:
+    repo = _repository(tmp_path)
+    _add_ctest_suite(repo)
+    module_manifest = repo / repository_control.MODULE_MANIFEST
+    modules = json.loads(module_manifest.read_text())
+    test_manifest = repo / repository_control.TEST_MANIFEST
+    tests = json.loads(test_manifest.read_text())
+    for suite in tests["suites"]:
+        suite["sdk_profiles"] = ["full", "graphics", "core"]
+    for module, sdk_profiles in (
+        ("beta", ["full", "graphics"]), ("gamma", ["full"])
+    ):
+        # Deliberately use domain-neutral paths: eligibility belongs to metadata.
+        (repo / module / "tests").mkdir(parents=True)
+        modules["modules"].append({
+            "id": module, "path": module, "kinds": ["native-library"],
+        })
+        for executor in ("pytest", "ctest"):
+            tests["suites"].append({
+                "id": f"{module}-{executor}", "module": module,
+                "executor": executor, "roots": [f"{module}/tests"],
+                "profiles": ["pr"], "platforms": ["linux"],
+                "sdk_profiles": sdk_profiles,
+            })
+    for module in ("alpha", "beta", "gamma"):
+        (repo / module / "tests" / f"test_{module}.cpp").write_text(
+            "int main() { return 0; }\n", encoding="utf-8"
+        )
+    _write_json(module_manifest, modules)
+    _write_json(test_manifest, tests)
+    return repo
+
+
+@pytest.mark.parametrize("sdk_profile,modules", [
+    ("full", {"alpha", "beta", "gamma"}),
+    ("graphics", {"alpha", "beta"}), ("core", {"alpha"}),
+])
+def test_sdk_scope_filters_suites_and_keeps_missing_native_coverage_strict(
+    tmp_path: Path, sdk_profile: str, modules: set[str]
+) -> None:
+    repo = _sdk_profile_repository(tmp_path)
+    catalog = repository_control.load_catalog(repo)
+    assert repository_control.validate_catalog(repo, catalog) == []
+    plan = repository_control.build_plan(catalog, "pr", "linux", sdk_profile)
+    assert plan["sdk_profile"] == sdk_profile
+    assert {suite["module"] for suite in plan["suites"]} == modules
+    assert all("SDK profile" in suite["reason"] for suite in plan["inapplicable"])
+
+    compiled = [{"file": str(repo / module / "tests" / f"test_{module}.cpp")}
+                for module in modules]
+    assert repository_control.validate_native_compile_inventory(
+        repo, catalog, compiled, "pr", ("host",), sdk_profile
+    ) == []
+    errors = repository_control.validate_native_compile_inventory(
+        repo, catalog, [], "pr", ("host",), sdk_profile
+    )
+    assert len(errors) == len(modules)
+    assert any("alpha/tests/test_alpha.cpp" in error for error in errors)
+
+    payload = {"tests": [{
+        "name": f"{module}_test", "properties": [{
+            "name": "LABELS", "value": [
+                f"termin:module:{module}", "termin:tier:pr",
+                "termin:capability:host", f"termin:build-target:{module}_test",
+            ],
+        }],
+    } for module in modules]}
+    assert repository_control.validate_ctest_inventory(catalog, payload, sdk_profile) == []
+    errors = repository_control.validate_ctest_inventory(catalog, {"tests": []}, sdk_profile)
+    assert len(errors) == len(modules)
+    selection = repository_control.build_ctest_execution_plan(
+        catalog, payload, "pr", "linux", ("host",), sdk_profile
+    )
+    assert selection["sdk_profile"] == sdk_profile
+    assert {test["module"] for test in selection["selected"]} == modules
+
+
+def test_sdk_scope_rejects_unsupported_explicit_pytest_targets(tmp_path: Path) -> None:
+    repo = _sdk_profile_repository(tmp_path)
+    catalog = repository_control.load_catalog(repo)
+    selected = repository_control._selected_pytest_suites(
+        repo, catalog, ("alpha/tests/test_alpha.py::test_case",), "core"
+    )
+    assert [suite.id for suite in selected] == ["alpha-python"]
+    for targets in (("beta/tests",), (str(repo),)):
+        with pytest.raises(repository_control.ManifestError, match="unsupported by SDK profile"):
+            repository_control._selected_pytest_suites(repo, catalog, targets, "core")
+
+
+def test_sdk_scope_run_omits_unsupported_suites_and_reports_product_identity(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    repo = _sdk_profile_repository(tmp_path)
+    calls = []
+
+    def fake_run(command, repo_root, environment, *, stream_output):
+        calls.append(command)
+        return 0, "passed\n"
+
+    monkeypatch.setattr(repository_control, "_run_pytest_command", fake_run)
+    report = repo / "execution.json"
+    assert repository_control.main([
+        "--repo-root", str(repo), "run", "pr", "--platform", "linux",
+        "--sdk-profile", "core", "--executor", "pytest", "--report-output", str(report),
+    ]) == 0
+    assert len(calls) == 1
+    assert "alpha/tests" in calls[0]
+    execution = json.loads(report.read_text())
+    assert execution["sdk_profile"] == "core"
+    assert execution["executed"] == [{"id": "alpha-python"}]
+    capsys.readouterr()
+
+
+def test_sdk_scope_ctest_commands_require_configured_product_identity(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    repo = _sdk_profile_repository(tmp_path)
+    build = repo / "build"
+    build.mkdir()
+    cache = build / "CMakeCache.txt"
+    cache.write_text("TERMIN_SDK_PROFILE:STRING=core\n")
+    calls = []
+
+    def fake_discovery(command, **kwargs):
+        calls.append(command)
+        return type("Result", (), {"returncode": 0, "stdout": '{"tests": []}'})()
+
+    monkeypatch.setattr(repository_control.subprocess, "run", fake_discovery)
+    arguments = ["--repo-root", str(repo), "ctest-plan", "--build-dir", str(build),
+                 "--profile", "pr", "--platform", "linux", "--json"]
+    assert repository_control.main(arguments) == 0
+    assert json.loads(capsys.readouterr().out)["sdk_profile"] == "core"
+    calls.clear()
+    assert repository_control.main([*arguments, "--sdk-profile", "full"]) == 1
+    assert "does not match configured CMake SDK profile" in capsys.readouterr().err
+    assert calls == []
+    cache.unlink()
+    assert repository_control.main(arguments) == 1
+    assert "ERROR:" in capsys.readouterr().err
+    assert calls == []
+
+
+def test_sdk_scope_manifest_rejects_unknown_product(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
+    manifest = repo / repository_control.TEST_MANIFEST
+    tests = json.loads(manifest.read_text())
+    tests["suites"][0]["sdk_profiles"] = ["typo"]
+    _write_json(manifest, tests)
+    assert repository_control.validate_catalog(repo, repository_control.load_catalog(repo)) == [
+        "alpha-python: unsupported SDK profile: typo"
+    ]
+
+
+def test_graphics_showcase_contract_has_one_graphics_eligible_suite_owner() -> None:
+    repo = Path(__file__).resolve().parents[3]
+    catalog = repository_control.load_catalog(repo)
+    owners = repository_control._pytest_owners(
+        "core/termin-build-tools/tests/test_graphics_showcase_contract.py", catalog.suites
+    )
+    assert owners == ["termin-build-tools-graphics-tests"]
+    for sdk_profile in ("full", "graphics", "core"):
+        plan = repository_control.build_plan(catalog, "pr", "linux", sdk_profile)
+        applicable = {suite["id"] for suite in plan["suites"]}
+        assert (owners[0] in applicable) == (sdk_profile != "core")
+        assert "termin-build-tools-tests" in applicable
+
+
+@pytest.mark.parametrize("source,suite_id,profiles", [
+    ("graphics/termin-glb/tests/test_glb_loader.py",
+     "termin-glb-full-integration-tests", {"full"}),
+    ("graphics/termin-glb/tests/test_glb_native_backend.py",
+     "termin-glb-full-integration-tests", {"full"}),
+    ("graphics/termin-glb/tests/test_glb_native_reference_models.py",
+     "termin-glb-full-integration-tests", {"full"}),
+    ("graphics/termin-glb/tests/test_glb_portable_animation_tracks.py",
+     "termin-glb-tests", {"full", "graphics"}),
+    ("graphics/termin-glb/tests/test_portable_import_boundary.py",
+     "termin-glb-tests", {"full", "graphics"}),
+    ("graphics/termin-materials/tests/test_shader_parser.py",
+     "termin-materials-tests", {"full", "graphics"}),
+    ("graphics/termin-materials/tests/test_shader_parser_full_integration.py",
+     "termin-materials-full-integration-tests", {"full"}),
+])
+def test_portable_graphics_and_full_integration_have_distinct_suite_owners(
+    source: str, suite_id: str, profiles: set[str]
+) -> None:
+    repo = Path(__file__).resolve().parents[3]
+    catalog = repository_control.load_catalog(repo)
+    assert repository_control._pytest_owners(source, catalog.suites) == [suite_id]
+    for sdk_profile in ("full", "graphics", "core"):
+        plan = repository_control.build_plan(catalog, "pr", "linux", sdk_profile)
+        assert (suite_id in {suite["id"] for suite in plan["suites"]}) == (
+            sdk_profile in profiles
+        )

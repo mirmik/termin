@@ -299,10 +299,12 @@ if(TERMIN_BUILD_TESTS)
     # Shader-driven native tests must use the compiler from this exact build
     # graph.  It is a support tool rather than a CTest executable, so it is an
     # explicit dependency but intentionally absent from the membership file.
-    if(NOT TARGET termin_shaderc)
-        message(FATAL_ERROR
-            "TERMIN_BUILD_TESTS=ON produced no termin_shaderc target")
+    if(NOT TERMIN_SDK_PROFILE STREQUAL "core")
+        if(NOT TARGET termin_shaderc)
+            message(FATAL_ERROR
+                "TERMIN_BUILD_TESTS=ON produced no termin_shaderc target")
+        endif()
+        add_dependencies(termin_native_tests termin_shaderc)
+        add_dependencies(termin_native_tests_with_window termin_shaderc)
     endif()
-    add_dependencies(termin_native_tests termin_shaderc)
-    add_dependencies(termin_native_tests_with_window termin_shaderc)
 endif()

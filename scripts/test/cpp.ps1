@@ -10,7 +10,7 @@ $ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvoc
 . (Join-Path $ScriptDir "scripts\Invoke-CMakeBuild.ps1")
 Normalize-WindowsBuildEnvironment
 
-$SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDir "sdk" }
+$SdkProfile = ""
 $BuildType = "Release"
 $BuildJobs = if ($env:BUILD_JOBS) { [int]$env:BUILD_JOBS } else { [Environment]::ProcessorCount }
 $BuildDir = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { "" }
@@ -56,6 +56,7 @@ function Show-Help {
     Write-Host "tests that create windows/GL contexts. Use --full to include them."
     Write-Host ""
     Write-Host "Options:"
+    Write-Host "  --profile PRODUCT Select full, graphics, or core SDK product"
     Write-Host "  --debug, -d       Debug build"
     Write-Host "  --full            Include window/full C++ tests"
     Write-Host "  --run-only        Run the configured test selection without rebuilding its targets"
@@ -84,7 +85,19 @@ function Show-Help {
     Write-Host "                    CMake generator for a new build dir (default: CMake default)"
 }
 
-foreach ($arg in $args) {
+$index = 0
+while ($index -lt $args.Count) {
+    $arg = $args[$index]; $index += 1
+    if ($arg -eq "--profile") {
+        if ($index -ge $args.Count) { throw "--profile requires full, graphics, or core" }
+        $SdkProfile = $args[$index]; $index += 1
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    } elseif ($arg.StartsWith("--profile=")) {
+        $SdkProfile = $arg.Substring("--profile=".Length)
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    }
     switch ($arg) {
         "--debug"           { $BuildType = "Debug" }
         "-d"                { $BuildType = "Debug" }
@@ -111,9 +124,21 @@ foreach ($arg in $args) {
     }
 }
 
-if (-not $BuildDir) {
-    $BuildDir = Join-Path (Join-Path $ScriptDir "build") $BuildType
+$ContextBootstrap = "import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import main; raise SystemExit(main())"
+$ContextPython = if ($env:TERMIN_TEST_TOOLS_PYTHON) { $env:TERMIN_TEST_TOOLS_PYTHON } else {
+    $pinnedPython = Join-Path $ScriptDir "build\python-runtime\build-env\Scripts\python.exe"
+    if (Test-Path $pinnedPython -PathType Leaf) { $pinnedPython } else { (Get-Command python -ErrorAction Stop).Path }
 }
+$ContextArgs = @("--repo-root", $ScriptDir)
+if ($SdkProfile) { $ContextArgs += @("--profile", $SdkProfile) }
+$ContextArgs += @("--build-type", $BuildType)
+$ContextJson = & $ContextPython -c $ContextBootstrap (Join-Path $ScriptDir "core/termin-build-tools") @ContextArgs
+if ($LASTEXITCODE -ne 0) { throw "SDK test context resolution failed" }
+$TestSdkContext = ($ContextJson -join "`n") | ConvertFrom-Json
+$SdkProfile = $TestSdkContext.profile
+$SdkPrefix = $TestSdkContext.'sdk-prefix'
+$BuildDir = $TestSdkContext.'build-dir'
+
 
 switch ($VulkanMode) {
     "on" {
@@ -142,6 +167,10 @@ $TerminBuiltinShaderArtifactTargets = if ($TerminEnableOpenGl -eq "ON") {
     "d3d11;opengl330"
 } else {
     "d3d11"
+}
+if ($SdkProfile -eq "core") {
+    $TerminBuildBuiltinShaderArtifacts = "OFF"
+    $TerminBuiltinShaderArtifactTargets = ""
 }
 $TerminEnableSdl = if ($SdlMode -eq "on") { "ON" } else { "OFF" }
 $TerminUseCcache = if ($CcacheMode -eq "on") { "ON" } else { "OFF" }
@@ -242,6 +271,7 @@ $cmakeArgs += @(
     "-DTERMIN_USE_CCACHE=$TerminUseCcache",
     "-DTERMIN_ENABLE_UNITY_BUILD=$TerminEnableUnityBuild",
     "-DTERMIN_ENABLE_PCH=$TerminEnablePch",
+    "-DTERMIN_SDK_PROFILE=$SdkProfile",
     "-DTERMIN_BUILD_TESTS=ON",
     "-DTERMIN_BUILD_TGFX2_TESTS=ON",
     "-DTERMIN_BUILD_WINDOW_TESTS=$TerminBuildWindowTests",
@@ -265,6 +295,10 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+$ConfiguredProfile = & $ContextPython -c "import sys; from pathlib import Path; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import load_configured_test_sdk_profile; print(load_configured_test_sdk_profile(Path(sys.argv[1])))" (Join-Path $ScriptDir "core/termin-build-tools") $BuildDir
+if ($LASTEXITCODE -ne 0 -or ($ConfiguredProfile | Out-String).Trim() -ne $SdkProfile) {
+    throw "Configured SDK profile differs from requested test context"
+}
 $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
 if (-not $PythonCommand) {
     Write-Error "python is required for repository CTest control"
@@ -298,7 +332,7 @@ if (Test-CMakeCacheBoolean $BuildDir "TERMIN_TGFX2_GLFW_AVAILABLE") {
 
 & $PythonExe @RepositoryControl check-ctest `
     --build-dir $BuildDir `
-    --profile $RepositoryProfile `
+    --profile $RepositoryProfile --sdk-profile $SdkProfile `
     --config $BuildType `
     @RepositoryCapabilities
 if ($LASTEXITCODE -ne 0) {
@@ -310,6 +344,7 @@ $CtestPlanArgs = @(
     "ctest-plan",
     "--build-dir", $BuildDir,
     "--profile", $RepositoryProfile,
+    "--sdk-profile", $SdkProfile,
     "--platform", "windows",
     "--config", $BuildType
 ) + $RepositoryCapabilities

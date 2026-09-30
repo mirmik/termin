@@ -71,6 +71,43 @@ def test_inapplicable_suite_requires_a_reason() -> None:
         )
 
 
+def test_sdk_product_scope_changes_fingerprint_and_is_required() -> None:
+    full = _expected()
+    core = build_expected_manifest(
+        full["profile"], full["platform"], full["suites"], full["inapplicable"],
+        sdk_profile="core",
+    )
+    assert full["sdk_profile"] == "full"
+    assert core["sdk_profile"] == "core"
+    assert full["fingerprint"] != core["fingerprint"]
+    del core["sdk_profile"]
+    with pytest.raises(TestExecutionContractError, match="unsupported SDK profile"):
+        validate_expected_manifest(core)
+
+
+def test_verifier_rejects_execution_from_another_sdk_product() -> None:
+    expected = _expected()
+    manifest = build_execution_manifest(
+        expected, "pytest", selected=["python"], executed=["python"],
+        skipped={}, failed={},
+    )
+    manifest["sdk_profile"] = "graphics"
+    with pytest.raises(TestExecutionContractError, match="SDK profile does not match"):
+        verify_execution_manifests(expected, [manifest])
+
+    manifest["sdk_profile"] = "full"
+    report = verify_execution_manifests(expected, [manifest])
+    assert report["sdk_profile"] == "full"
+
+
+def test_legacy_execution_contract_schema_is_rejected() -> None:
+    legacy = _expected()
+    legacy["schema"] = 1
+    del legacy["sdk_profile"]
+    with pytest.raises(TestExecutionContractError, match="unsupported schema"):
+        validate_expected_manifest(legacy)
+
+
 def test_verifier_combines_independent_executor_manifests() -> None:
     expected = _expected()
     pytest_manifest = build_execution_manifest(

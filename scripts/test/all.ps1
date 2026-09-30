@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 $Full = $false
+$SdkProfile = ""
 $CsharpOnly = $false
 $ProcessSmokeOnly = $false
 $ProcessSmokeDisabled = $false
@@ -12,7 +13,19 @@ $PythonWindowCapability = $true
 $ProcessSmokeProfile = if ($env:TERMIN_PROCESS_SMOKE_PROFILE) { $env:TERMIN_PROCESS_SMOKE_PROFILE } else { "" }
 $CppArgs = New-Object System.Collections.Generic.List[string]
 
-foreach ($arg in $args) {
+$index = 0
+while ($index -lt $args.Count) {
+    $arg = $args[$index]; $index += 1
+    if ($arg -eq "--profile") {
+        if ($index -ge $args.Count) { throw "--profile requires full, graphics, or core" }
+        $SdkProfile = $args[$index]; $index += 1
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    } elseif ($arg.StartsWith("--profile=")) {
+        $SdkProfile = $arg.Substring("--profile=".Length)
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    }
     switch ($arg) {
         "--csharp-only" {
             $CsharpOnly = $true
@@ -38,6 +51,7 @@ foreach ($arg in $args) {
             Write-Host ""
             Write-Host "Options:"
             Write-Host "  --csharp-only  Run Graphics C# bindings and retained WPF chart smoke (Windows D3D11)"
+            Write-Host "  --profile PRODUCT Select full, graphics, or core SDK product"
             Write-Host "  --full      Include window/full C++ tests and pytest tests marked full"
             Write-Host "  --process-smoke-only"
             Write-Host "              Run only the selected manifest process-smoke profile"
@@ -79,6 +93,26 @@ if ($CsharpOnly) {
     exit $LASTEXITCODE
 }
 
+$ContextBootstrap = "import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import main; raise SystemExit(main())"
+$ContextPython = if ($env:TERMIN_TEST_TOOLS_PYTHON) { $env:TERMIN_TEST_TOOLS_PYTHON } else {
+    $pinnedPython = Join-Path $ScriptDir "build\python-runtime\build-env\Scripts\python.exe"
+    if (Test-Path $pinnedPython -PathType Leaf) { $pinnedPython } else { (Get-Command python -ErrorAction Stop).Path }
+}
+$ContextArgs = @("--repo-root", $ScriptDir)
+if ($SdkProfile) { $ContextArgs += @("--profile", $SdkProfile) }
+$ContextJson = & $ContextPython -c $ContextBootstrap (Join-Path $ScriptDir "core/termin-build-tools") @ContextArgs
+if ($LASTEXITCODE -ne 0) { throw "SDK test context resolution failed" }
+$TestSdkContext = ($ContextJson -join "`n") | ConvertFrom-Json
+$SdkProfile = $TestSdkContext.profile
+$SdkPrefix = $TestSdkContext.'sdk-prefix'
+$env:SDK_PREFIX = $SdkPrefix
+$env:TERMIN_SDK = $SdkPrefix
+$CppArgs.Add("--profile=$SdkProfile")
+if ($SdkProfile -ne "full") {
+    if ($ProcessSmokeOnly -or $ProcessSmokeProfile) { throw "Process smokes require the Full SDK product" }
+    $ProcessSmokeDisabled = $true
+}
+
 if ($ProcessSmokeOnly -and $ProcessSmokeDisabled) {
     throw "--process-smoke-only cannot be combined with --no-process-smoke"
 }
@@ -96,12 +130,12 @@ if (-not $ProcessSmokeOnly) {
     }
 
     try {
-        $PythonArgs = @()
+        $PythonArgs = @("--profile=$SdkProfile")
         if ($Full) {
             $PythonArgs += "--full"
         }
 
-        & (Join-Path $ScriptDir "scripts\test\setup-python-env.ps1")
+        & (Join-Path $ScriptDir "scripts\test\setup-python-env.ps1") "--profile=$SdkProfile"
         if ($LASTEXITCODE -ne 0) {
             throw "Python test environment refresh failed."
         }
@@ -136,7 +170,7 @@ if (-not $ProcessSmokeDisabled) {
     }
     if ($ProcessSmokeProfile) {
         try {
-            $PythonExe = Join-Path $ScriptDir "sdk\bin\termin_python.exe"
+            $PythonExe = Join-Path $SdkPrefix "bin\termin_python.exe"
             if (-not (Test-Path $PythonExe -PathType Leaf)) {
                 throw "Bundled SDK Python is missing: $PythonExe. Run 'task build' first."
             }
@@ -152,7 +186,7 @@ if (-not $ProcessSmokeDisabled) {
                 "-m", "termin_build.repository_control",
                 "--repo-root", $ScriptDir
             )
-            $ExpectedJson = & $PythonExe @RepositoryControl plan $ProcessSmokeProfile `
+            $ExpectedJson = & $PythonExe @RepositoryControl plan $ProcessSmokeProfile --sdk-profile $SdkProfile `
                 --platform windows --json
             if ($LASTEXITCODE -ne 0) {
                 throw "Process-smoke expected plan generation failed"
@@ -179,7 +213,7 @@ if (-not $ProcessSmokeDisabled) {
             } else {
                 900.0
             }
-            & $PythonExe @RepositoryControl run $ProcessSmokeProfile `
+            & $PythonExe @RepositoryControl run $ProcessSmokeProfile --sdk-profile $SdkProfile `
                 --platform windows `
                 --executor process-smoke `
                 --configuration $TestBuildType `

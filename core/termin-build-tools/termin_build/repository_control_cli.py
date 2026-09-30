@@ -7,6 +7,8 @@ import sys
 from collections.abc import Callable, Collection
 from pathlib import Path
 
+from .execution_manifest import SUPPORTED_SDK_PROFILES
+
 
 def build_parser(
     supported_platforms: Collection[str],
@@ -134,4 +136,14 @@ def build_parser(
     selected_parser.add_argument("--python-arg", action="append", default=[])
     selected_parser.add_argument("--mark-expression")
     selected_parser.add_argument("targets", nargs="+")
+    for command_parser in (plan_parser, run_parser, selected_parser):
+        command_parser.add_argument(
+            "--sdk-profile", choices=sorted(SUPPORTED_SDK_PROFILES), default="full",
+            help="SDK product scope, independent of the test scheduling profile.",
+        )
+    for command_parser in (ctest_parser, ctest_plan_parser):
+        command_parser.add_argument(
+            "--sdk-profile", choices=sorted(SUPPORTED_SDK_PROFILES),
+            help="Assert the SDK product scope recorded by the configured CMake tree.",
+        )
     return parser

@@ -25,6 +25,8 @@ from .ctest_planning import (
     resolve_ctest_build_targets as resolve_ctest_build_targets,
 )
 from .execution_manifest import (
+    SCHEMA_VERSION as EXECUTION_SCHEMA_VERSION,
+    SUPPORTED_SDK_PROFILES,
     TestExecutionContractError,
     build_execution_manifest,
     build_expected_manifest,
@@ -56,6 +58,7 @@ from .source_size_policy import (
     find_long_files,
     load_source_size_policy,
 )
+from .sdk_test_context import TestSdkContextError, load_configured_test_sdk_profile
 
 
 def _run_timed_pytest_command(
@@ -108,6 +111,7 @@ class SuiteEntry:
     platforms: tuple[str, ...]
     required_capabilities: tuple[str, ...]
     reason: str | None
+    sdk_profiles: tuple[str, ...] = ("full",)
 
 
 @dataclass(frozen=True)
@@ -328,7 +332,7 @@ def load_profiles_and_suites(
             raise ManifestError(
                 f"{path}: suite_defaults.{executor} must be an object"
             )
-        allowed = {"profiles", "platforms"}
+        allowed = {"profiles", "platforms", "sdk_profiles"}
         if executor in {"process-smoke", "pytest"}:
             allowed.add("required_capabilities")
         _reject_unknown_fields(
@@ -420,6 +424,7 @@ def load_profiles_and_suites(
             "roots",
             "profiles",
             "platforms",
+            "sdk_profiles",
             "reason",
         }
         if executor in {"process-smoke", "pytest"}:
@@ -459,6 +464,10 @@ def load_profiles_and_suites(
                     else ()
                 ),
                 reason=_optional_string(raw, "reason", context),
+                sdk_profiles=_string_tuple_with_default(
+                    raw, "sdk_profiles", context,
+                    {"sdk_profiles": ["full"], **executor_defaults}, required=True,
+                ),
             )
         )
     return tuple(profiles), tuple(suites), inventory, native_inventory
@@ -637,7 +646,7 @@ def _native_owners(test_path: str, suites: Iterable[SuiteEntry]) -> list[str]:
 
 
 def validate_ctest_inventory(
-    catalog: RepositoryCatalog, ctest_payload: object
+    catalog: RepositoryCatalog, ctest_payload: object, sdk_profile: str = "full"
 ) -> list[str]:
     """Validate CTest's configured registrations against native-suite metadata."""
     if not isinstance(ctest_payload, dict):
@@ -674,7 +683,8 @@ def validate_ctest_inventory(
             )
 
     for suite in catalog.suites:
-        if suite.executor == "ctest" and suite.module not in observed_modules:
+        if (suite.executor == "ctest" and sdk_profile in suite.sdk_profiles
+                and suite.module not in observed_modules):
             errors.append(f"{suite.id}: no configured CTest registration for module {suite.module}")
     return errors
 
@@ -685,6 +695,7 @@ def build_ctest_execution_plan(
     profile: str,
     platform: str,
     capabilities: Iterable[str],
+    sdk_profile: str = "full",
 ) -> dict[str, object]:
     if not isinstance(ctest_payload, dict) or not isinstance(
         ctest_payload.get("tests"), list
@@ -692,7 +703,7 @@ def build_ctest_execution_plan(
         raise ManifestError("CTest JSON must contain a tests array")
     selected_suites = {
         suite["module"]: suite["id"]
-        for suite in build_plan(catalog, profile, platform)["suites"]
+        for suite in build_plan(catalog, profile, platform, sdk_profile)["suites"]
         if suite["executor"] == "ctest"
     }
     enabled_capabilities = set(capabilities)
@@ -733,9 +744,10 @@ def build_ctest_execution_plan(
         else:
             selected.append(entry)
     return {
-        "schema": 1,
+        "schema": EXECUTION_SCHEMA_VERSION,
         "profile": profile,
         "platform": platform,
+        "sdk_profile": sdk_profile,
         "capabilities": sorted(enabled_capabilities),
         "selected": selected,
         "skipped": skipped,
@@ -748,6 +760,7 @@ def validate_native_compile_inventory(
     compile_commands: object,
     profile: str,
     capabilities: Iterable[str],
+    sdk_profile: str = "full",
 ) -> list[str]:
     """Ensure each declared native test translation unit reached CMake's graph."""
     if not isinstance(compile_commands, list):
@@ -767,7 +780,14 @@ def validate_native_compile_inventory(
         for entry in catalog.native_test_inventory.source_classifications
     }
     errors = []
+    native_suites = tuple(suite for suite in catalog.suites if suite.executor == "ctest")
+    eligible_suite_ids = {
+        suite.id for suite in native_suites if sdk_profile in suite.sdk_profiles
+    }
     for source in discover_native_tests(repo_root, catalog.native_test_inventory):
+        owners = _native_owners(source, native_suites)
+        if owners and not eligible_suite_ids.intersection(owners):
+            continue
         classification = classifications.get(source)
         required_in_configuration = classification is None or (
             profile in classification.profiles
@@ -872,6 +892,9 @@ def validate_catalog(repo_root: Path, catalog: RepositoryCatalog) -> list[str]:
         for profile in suite.profiles:
             if profile not in profile_ids:
                 errors.append(f"{suite.id}: unknown profile: {profile}")
+        for sdk_profile in suite.sdk_profiles:
+            if sdk_profile not in SUPPORTED_SDK_PROFILES:
+                errors.append(f"{suite.id}: unsupported SDK profile: {sdk_profile}")
         for platform in suite.platforms:
             if platform not in SUPPORTED_PLATFORMS:
                 errors.append(f"{suite.id}: unsupported platform: {platform}")
@@ -1009,6 +1032,7 @@ def build_plan(
     catalog: RepositoryCatalog,
     profile: str,
     platform: str | None,
+    sdk_profile: str = "full",
 ) -> dict[str, object]:
     profile_ids = {entry.id for entry in catalog.profiles}
     if profile not in profile_ids:
@@ -1016,11 +1040,18 @@ def build_plan(
     resolved_platform = platform or _host_platform()
     if resolved_platform not in SUPPORTED_PLATFORMS:
         raise ManifestError(f"unsupported platform: {resolved_platform}")
+    if not isinstance(sdk_profile, str) or sdk_profile not in SUPPORTED_SDK_PROFILES:
+        raise ManifestError(f"unsupported SDK profile: {sdk_profile}")
 
     suites = []
     inapplicable = []
     for suite in catalog.suites:
         reasons = []
+        if sdk_profile not in suite.sdk_profiles:
+            reasons.append(
+                f"SDK profile {sdk_profile!r} is not in declared SDK profiles: "
+                + ", ".join(suite.sdk_profiles)
+            )
         if profile not in suite.profiles:
             reasons.append(
                 f"profile {profile!r} is not in declared profiles: "
@@ -1045,7 +1076,7 @@ def build_plan(
             suites.append(entry)
     try:
         return build_expected_manifest(
-            profile, resolved_platform, suites, inapplicable
+            profile, resolved_platform, suites, inapplicable, sdk_profile=sdk_profile
         )
     except TestExecutionContractError as exc:
         raise ManifestError(str(exc)) from exc
@@ -1060,6 +1091,7 @@ def run_pytest_plan(
     python_arguments: tuple[str, ...] = (),
     capabilities: Iterable[str] = (),
     jobs: int = 1,
+    sdk_profile: str = "full",
 ) -> tuple[int, list[str]]:
     if jobs < 1:
         raise ManifestError("pytest jobs must be greater than zero")
@@ -1069,7 +1101,7 @@ def run_pytest_plan(
     if profile is None:
         raise ManifestError(f"unknown profile: {profile_id}")
 
-    plan = build_plan(catalog, profile_id, platform)
+    plan = build_plan(catalog, profile_id, platform, sdk_profile)
     enabled_capabilities = set(capabilities)
     pytest_suites = []
     skipped_suites = []
@@ -1089,7 +1121,7 @@ def run_pytest_plan(
     run_root.mkdir(parents=True, exist_ok=True)
     cache_root.mkdir(parents=True, exist_ok=True)
     duration_profiles = _load_pytest_duration_cache(duration_cache_path)
-    duration_profile_key = f"{profile_id}/{platform}"
+    duration_profile_key = f"{profile_id}/{platform}/{sdk_profile}"
     historical_durations = duration_profiles.get(duration_profile_key, {})
     print(f"Pytest execution plan: {profile_id} / {platform}")
     print(f"Pytest suites: {len(pytest_suites)}")
@@ -1206,6 +1238,7 @@ def _selected_pytest_suites(
     repo_root: Path,
     catalog: RepositoryCatalog,
     targets: tuple[str, ...],
+    sdk_profile: str = "full",
 ) -> list[SelectedPytestSuite]:
     pytest_suites = tuple(
         suite for suite in catalog.suites if suite.executor == "pytest"
@@ -1256,6 +1289,15 @@ def _selected_pytest_suites(
         for suite_id, roots in containing_suites:
             selected.setdefault(suite_id, []).extend(roots)
 
+    unsupported = [
+        suite.id for suite in pytest_suites
+        if suite.id in selected and sdk_profile not in suite.sdk_profiles
+    ]
+    if unsupported:
+        raise ManifestError(
+            f"selected pytest targets are unsupported by SDK profile {sdk_profile!r}: "
+            + ", ".join(unsupported)
+        )
     return [
         SelectedPytestSuite(
             id=suite.id,
@@ -1276,10 +1318,11 @@ def run_process_smoke_plan(
     configuration: str | None = None,
     timeout_seconds: float = 900.0,
     log_dir: Path | None = None,
+    sdk_profile: str = "full",
 ) -> ProcessSmokeRun:
     if timeout_seconds <= 0:
         raise ManifestError("process-smoke timeout must be greater than zero")
-    plan = build_plan(catalog, profile_id, platform)
+    plan = build_plan(catalog, profile_id, platform, sdk_profile)
     suites = [
         suite for suite in plan["suites"] if suite["executor"] == "process-smoke"
     ]
@@ -1367,8 +1410,9 @@ def _cmd_plan(
     profile: str,
     platform: str | None,
     json_output: bool,
+    sdk_profile: str = "full",
 ) -> int:
-    plan = build_plan(_load_valid_catalog(repo_root), profile, platform)
+    plan = build_plan(_load_valid_catalog(repo_root), profile, platform, sdk_profile)
     if json_output:
         _print_json(plan)
     else:
@@ -1377,13 +1421,25 @@ def _cmd_plan(
     return 0
 
 
+def _configured_sdk_profile(build_dir: Path, explicit_profile: str | None) -> str:
+    configured = load_configured_test_sdk_profile(build_dir)
+    if explicit_profile is not None and explicit_profile != configured:
+        raise ManifestError(
+            f"SDK profile {explicit_profile!r} does not match configured "
+            f"CMake SDK profile {configured!r}: {build_dir}"
+        )
+    return configured
+
+
 def _cmd_check_ctest(
     repo_root: Path,
     build_dir: Path,
     profile: str,
     capabilities: tuple[str, ...],
     config: str | None = None,
+    sdk_profile: str | None = None,
 ) -> int:
+    sdk_profile = _configured_sdk_profile(build_dir, sdk_profile)
     catalog = _load_valid_catalog(repo_root)
     result = subprocess.run(
         _ctest_discovery_command(build_dir, config),
@@ -1401,10 +1457,10 @@ def _cmd_check_ctest(
     except json.JSONDecodeError as exc:
         raise ManifestError(f"invalid CTest JSON from {build_dir}: {exc}") from exc
     compile_commands = _load_configured_native_sources(build_dir)
-    errors = validate_ctest_inventory(catalog, payload)
+    errors = validate_ctest_inventory(catalog, payload, sdk_profile)
     errors.extend(
         validate_native_compile_inventory(
-            repo_root, catalog, compile_commands, profile, capabilities
+            repo_root, catalog, compile_commands, profile, capabilities, sdk_profile
         )
     )
     if errors:
@@ -1424,7 +1480,9 @@ def _cmd_ctest_plan(
     build_targets_output: bool,
     build_aggregate_output: bool,
     config: str | None = None,
+    sdk_profile: str | None = None,
 ) -> int:
+    sdk_profile = _configured_sdk_profile(build_dir, sdk_profile)
     catalog = _load_valid_catalog(repo_root)
     result = subprocess.run(
         _ctest_discovery_command(build_dir, config),
@@ -1442,7 +1500,7 @@ def _cmd_ctest_plan(
     except json.JSONDecodeError as exc:
         raise ManifestError(f"invalid CTest JSON from {build_dir}: {exc}") from exc
     plan = build_ctest_execution_plan(
-        catalog, payload, profile, platform, capabilities
+        catalog, payload, profile, platform, capabilities, sdk_profile
     )
     if config:
         plan["configuration"] = config
@@ -1475,15 +1533,18 @@ def _cmd_report_ctest(
         raise ManifestError(f"invalid CTest selection JSON: {selection_path}: {exc}") from exc
     if not isinstance(selection, dict) or not isinstance(selection.get("selected"), list):
         raise ManifestError(f"CTest selection has no selected test list: {selection_path}")
+    if selection.get("schema") != EXECUTION_SCHEMA_VERSION:
+        raise ManifestError(f"CTest selection has unsupported schema: {selection_path}")
     if not isinstance(selection.get("skipped"), list):
         raise ManifestError(f"CTest selection has no skipped test list: {selection_path}")
     profile = selection.get("profile")
     platform = selection.get("platform")
+    sdk_profile = selection.get("sdk_profile")
     if not isinstance(profile, str) or not isinstance(platform, str):
         raise ManifestError(
             f"CTest selection has no profile/platform identity: {selection_path}"
         )
-    expected = build_plan(_load_valid_catalog(repo_root), profile, platform)
+    expected = build_plan(_load_valid_catalog(repo_root), profile, platform, sdk_profile)
     expected_suite_ids = [
         suite["id"] for suite in expected["suites"] if suite["executor"] == "ctest"
     ]
@@ -1690,10 +1751,11 @@ def _cmd_run(
     process_timeout: float,
     process_log_dir: Path | None,
     pytest_jobs: int,
+    sdk_profile: str = "full",
 ) -> int:
     resolved_platform = platform or _host_platform()
     catalog = _load_valid_catalog(repo_root)
-    expected = build_plan(catalog, profile, resolved_platform)
+    expected = build_plan(catalog, profile, resolved_platform, sdk_profile)
     if executor_filter:
         catalog = RepositoryCatalog(
             modules=catalog.modules,
@@ -1705,7 +1767,7 @@ def _cmd_run(
             native_test_inventory=catalog.native_test_inventory,
             documentation=catalog.documentation,
         )
-    plan = build_plan(catalog, profile, resolved_platform)
+    plan = build_plan(catalog, profile, resolved_platform, sdk_profile)
     executors = {suite["executor"] for suite in plan["suites"]}
     unsupported = executors - {"pytest", "process-smoke"}
     if unsupported:
@@ -1725,6 +1787,7 @@ def _cmd_run(
             python_arguments,
             capabilities,
             pytest_jobs,
+            sdk_profile,
         )
         exit_code |= pytest_exit_code
         failures.extend(pytest_failures)
@@ -1738,6 +1801,7 @@ def _cmd_run(
             configuration,
             process_timeout,
             process_log_dir,
+            sdk_profile,
         )
         exit_code |= process_run.exit_code
         failures.extend(process_run.failed)
@@ -1806,6 +1870,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.profile,
                 args.platform,
                 args.json_output,
+                args.sdk_profile,
             )
         if args.command == "check-ctest":
             return _cmd_check_ctest(
@@ -1814,6 +1879,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.profile,
                 tuple(args.capability),
                 args.config,
+                args.sdk_profile,
             )
         if args.command == "ctest-plan":
             return _cmd_ctest_plan(
@@ -1827,6 +1893,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.build_targets_output,
                 args.build_aggregate_output,
                 args.config,
+                args.sdk_profile,
             )
         if args.command == "report-ctest":
             return _cmd_report_ctest(
@@ -1847,7 +1914,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run-selected-pytest":
             catalog = _load_valid_catalog(repo_root)
             suites = _selected_pytest_suites(
-                repo_root, catalog, tuple(args.targets)
+                repo_root, catalog, tuple(args.targets), args.sdk_profile
             )
             return _run_selected_pytest_suites(
                 repo_root,
@@ -1879,8 +1946,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.process_timeout,
                 args.process_log_dir.resolve() if args.process_log_dir else None,
                 pytest_jobs,
+                args.sdk_profile,
             )
-    except (ManifestError, TestExecutionContractError, OSError) as exc:
+    except (ManifestError, TestExecutionContractError, TestSdkContextError, OSError) as exc:
         for line in str(exc).splitlines():
             print(f"ERROR: {line}", file=sys.stderr)
         return 1

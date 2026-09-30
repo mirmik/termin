@@ -16,12 +16,14 @@ $ScriptDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvoc
 . (Join-Path $ScriptDir "scripts\Normalize-WindowsSdkPermissions.ps1")
 $PytestTargets = New-Object System.Collections.Generic.List[string]
 $Full = $false
+$SdkProfile = ""
 $PytestJobs = if ($env:TERMIN_PYTEST_JOBS) { $env:TERMIN_PYTEST_JOBS } else { "1" }
 
 function Show-Help {
     Write-Host "Usage: .\run-tests-python.ps1 [pytest-target ...]"
     Write-Host ""
     Write-Host "  (no flags)  Use SDK Python + checkout overlay and run working tests"
+    Write-Host "  --profile PRODUCT Select full, graphics, or core SDK product"
     Write-Host "  --full      Include pytest tests marked full"
     Write-Host "  --jobs N    Run up to N manifest-selected pytest suites concurrently"
     Write-Host "  pytest-target"
@@ -33,6 +35,16 @@ $index = 0
 while ($index -lt $args.Count) {
     $arg = $args[$index]
     $index += 1
+    if ($arg -eq "--profile") {
+        if ($index -ge $args.Count) { throw "--profile requires full, graphics, or core" }
+        $SdkProfile = $args[$index]; $index += 1
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    } elseif ($arg.StartsWith("--profile=")) {
+        $SdkProfile = $arg.Substring("--profile=".Length)
+        if (-not $SdkProfile) { throw "--profile cannot be empty" }
+        continue
+    }
     if ($arg -eq "--no-venv") {
         Write-Error "--no-venv is no longer supported; run 'task test:python:setup' first."
         exit 1
@@ -67,27 +79,25 @@ if (
     exit 1
 }
 
-if (-not $env:TERMIN_SDK) {
-    $localSdk = Join-Path $ScriptDir "sdk"
-    if (Test-Path (Join-Path $localSdk "lib")) {
-        $env:TERMIN_SDK = $localSdk
-    } else {
-        $localAppDataSdk = if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "termin-sdk" } else { "" }
-        if ($localAppDataSdk -and (Test-Path (Join-Path $localAppDataSdk "lib"))) {
-            $env:TERMIN_SDK = $localAppDataSdk
-        } elseif (Test-Path "/opt/termin/lib") {
-            $env:TERMIN_SDK = "/opt/termin"
-        }
-    }
+$ContextBootstrap = "import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import main; raise SystemExit(main())"
+$ContextPython = if ($env:TERMIN_TEST_TOOLS_PYTHON) { $env:TERMIN_TEST_TOOLS_PYTHON } else {
+    $pinnedPython = Join-Path $ScriptDir "build\python-runtime\build-env\Scripts\python.exe"
+    if (Test-Path $pinnedPython -PathType Leaf) { $pinnedPython } else { (Get-Command python -ErrorAction Stop).Path }
 }
-if ($env:TERMIN_SDK) {
-    Write-Host "TERMIN_SDK: $($env:TERMIN_SDK)"
-} else {
-    throw "Termin SDK was not found."
-}
+$ContextArgs = @("--repo-root", $ScriptDir)
+if ($SdkProfile) { $ContextArgs += @("--profile", $SdkProfile) }
+$ContextArgs += "--installed"
+$ContextJson = & $ContextPython -c $ContextBootstrap (Join-Path $ScriptDir "core/termin-build-tools") @ContextArgs
+if ($LASTEXITCODE -ne 0) { throw "SDK test context resolution failed" }
+$TestSdkContext = ($ContextJson -join "`n") | ConvertFrom-Json
+$SdkProfile = $TestSdkContext.profile
+$SdkPrefix = $TestSdkContext.'sdk-prefix'
+$env:TERMIN_SDK = $SdkPrefix
+
+Write-Host "TERMIN_SDK: $($env:TERMIN_SDK)"
 
 $PythonBin = if ($env:PYTHON_BIN) { $env:PYTHON_BIN } else { Join-Path $env:TERMIN_SDK "bin\termin_python.exe" }
-$OverlayManifest = if ($env:TERMIN_PYTHON_OVERLAY) { $env:TERMIN_PYTHON_OVERLAY } else { Join-Path $ScriptDir "build\python-envs\test\overlay.json" }
+$OverlayManifest = if ($env:TERMIN_PYTHON_OVERLAY) { $env:TERMIN_PYTHON_OVERLAY } else { Join-Path ($TestSdkContext.'environment-root') "overlay.json" }
 $BuildToolsRoot = Join-Path $ScriptDir "core/termin-build-tools"
 $ToolsRequirements = Join-Path $ScriptDir "build-system\python-test-requirements.txt"
 if (-not (Test-Path $PythonBin -PathType Leaf)) {
@@ -119,22 +129,24 @@ if ($pathEntries.Count -gt 0) {
 
 # Python tests exercise the compiler installed in the same verified SDK as the
 # bundled Python runtime. TERMIN_SHADERC remains an explicit override.
-if (-not $env:TERMIN_SHADERC) {
-    $ArtifactResolutionBootstrap = "import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.artifact_resolution import main; raise SystemExit(main())"
-    $ResolvedShaderCompiler = & $PythonBin -c $ArtifactResolutionBootstrap $BuildToolsRoot `
-        sdk-shader-compiler `
-        --sdk-root $SdkPrefix `
-        --platform windows
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to resolve termin_shaderc from the active SDK."
+if ($SdkProfile -ne "core") {
+    if (-not $env:TERMIN_SHADERC) {
+        $ArtifactResolutionBootstrap = "import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.artifact_resolution import main; raise SystemExit(main())"
+        $ResolvedShaderCompiler = & $PythonBin -c $ArtifactResolutionBootstrap $BuildToolsRoot `
+            sdk-shader-compiler `
+            --sdk-root $SdkPrefix `
+            --platform windows
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to resolve termin_shaderc from the active SDK."
+        }
+        $env:TERMIN_SHADERC = ($ResolvedShaderCompiler | Out-String).Trim()
     }
-    $env:TERMIN_SHADERC = ($ResolvedShaderCompiler | Out-String).Trim()
+    if (-not (Test-Path $env:TERMIN_SHADERC -PathType Leaf)) {
+        throw "TERMIN_SHADERC does not point to a file: $env:TERMIN_SHADERC"
+    }
+    $env:TERMIN_SHADERC = (Resolve-Path $env:TERMIN_SHADERC).Path
+    Write-Host "TERMIN_SHADERC: $($env:TERMIN_SHADERC)"
 }
-if (-not (Test-Path $env:TERMIN_SHADERC -PathType Leaf)) {
-    throw "TERMIN_SHADERC does not point to a file: $env:TERMIN_SHADERC"
-}
-$env:TERMIN_SHADERC = (Resolve-Path $env:TERMIN_SHADERC).Path
-Write-Host "TERMIN_SHADERC: $($env:TERMIN_SHADERC)"
 
 $sdkLib = Join-Path $SdkPrefix "lib"
 if ($env:LD_LIBRARY_PATH) {
@@ -160,36 +172,11 @@ Set-Location $ScriptDir
 $Failures = New-Object System.Collections.Generic.List[string]
 
 $PytestTempRoot = Join-Path (Join-Path $ScriptDir "build") "pt"
-$PytestCacheRoot = Join-Path (Join-Path $ScriptDir "build") "pytest-cache"
 $PytestRunTempDir = Join-Path $PytestTempRoot ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Path $PytestRunTempDir -Force | Out-Null
-New-Item -ItemType Directory -Path $PytestCacheRoot -Force | Out-Null
 $env:TEMP = $PytestRunTempDir
 $env:TMP = $PytestRunTempDir
 Write-Host "Pytest temp root: $PytestRunTempDir"
-
-$PytestMarkerArgs = @()
-if (-not $Full) {
-    $PytestMarkerArgs = @("-m", "not full")
-}
-
-function New-PytestSuiteArgs {
-    param([string]$Name)
-
-    $safeName = $Name -replace "[^A-Za-z0-9_.-]", "-"
-    $sha256 = [Security.Cryptography.SHA256]::Create()
-    try {
-        $suiteHash = $sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($safeName))
-    } finally {
-        $sha256.Dispose()
-    }
-    $suiteTempName = [BitConverter]::ToString($suiteHash).Replace("-", "").Substring(0, 8).ToLowerInvariant()
-    $suiteTempDir = Join-Path $PytestRunTempDir $suiteTempName
-    $suiteCacheDir = Join-Path $PytestCacheRoot $safeName
-    New-Item -ItemType Directory -Path $suiteTempDir -Force | Out-Null
-    New-Item -ItemType Directory -Path $suiteCacheDir -Force | Out-Null
-    return @("--basetemp", $suiteTempDir, "-o", "cache_dir=$suiteCacheDir")
-}
 
 function Invoke-TestSuite {
     param(
@@ -210,7 +197,12 @@ function Invoke-TestSuite {
 
 try {
     if ($PytestTargets.Count -gt 0) {
-        Invoke-TestSuite "selected python" (@("-m", "pytest") + $PytestMarkerArgs + $PytestTargets.ToArray() + (New-PytestSuiteArgs "selected-python") + @("-v"))
+        $SelectedMarkArgs = if ($Full) { @() } else { @("--mark-expression", "not full") }
+        Invoke-TestSuite "selected python" (@(
+            "-m", "termin_build.repository_control", "--repo-root", $ScriptDir,
+            "run-selected-pytest", "--sdk-profile", $SdkProfile, "--python", $PythonBin,
+            "--python-arg=--termin-overlay", "--python-arg=$OverlayManifest"
+        ) + $SelectedMarkArgs + @("--") + $PytestTargets.ToArray())
     } else {
         $TestProfile = if ($Full) { "windows-d3d11" } else { "pr" }
         $CapabilityArgs = @()
@@ -223,7 +215,7 @@ try {
             $CapabilityArgs += @("--capability", $capability)
         }
         & $PythonBin @PythonPrefixArgs -m termin_build.repository_control `
-            --repo-root $ScriptDir run $TestProfile `
+            --repo-root $ScriptDir run $TestProfile --sdk-profile $SdkProfile `
             --platform windows --executor pytest --python $PythonBin `
             --pytest-jobs $parsedPytestJobs `
             @CapabilityArgs `
@@ -238,7 +230,9 @@ try {
             "verify-python-import-graph",
             "--sdk-prefix", $env:TERMIN_SDK
         )
-        Invoke-TestSuite "termin-modules import smoke" @("-c", "import termin_modules; env = termin_modules.ModuleEnvironment(); runtime = termin_modules.ModuleRuntime(); runtime.set_environment(env); runtime.register_cpp_backend(termin_modules.CppModuleBackend()); runtime.register_python_backend(termin_modules.PythonModuleBackend())")
+        if ($SdkProfile -eq "full") {
+            Invoke-TestSuite "termin-modules import smoke" @("-c", "import termin_modules; env = termin_modules.ModuleEnvironment(); runtime = termin_modules.ModuleRuntime(); runtime.set_environment(env); runtime.register_cpp_backend(termin_modules.CppModuleBackend()); runtime.register_python_backend(termin_modules.PythonModuleBackend())")
+        }
         Invoke-TestSuite "Python lint" @("-m", "ruff", "check", $ScriptDir)
     }
 } finally {

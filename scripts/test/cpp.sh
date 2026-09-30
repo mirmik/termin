@@ -6,7 +6,8 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
+SDK_PREFIX="${SDK_PREFIX:-}"
+SDK_PROFILE=""
 BUILD_TYPE="Release"
 BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
 BUILD_DIR="${BUILD_DIR:-}"
@@ -20,8 +21,19 @@ UNITY_MODE="off"
 PCH_MODE="on"
 CMAKE_GENERATOR_NAME="${CMAKE_GENERATOR_NAME:-${TERMIN_CMAKE_GENERATOR:-}}"
 
-for arg in "$@"; do
+while (( $# > 0 )); do
+    arg="$1"; shift
     case "$arg" in
+        --profile)
+            if (( $# == 0 )); then
+                echo "ERROR: --profile requires full, graphics, or core." >&2
+                exit 1
+            fi
+            SDK_PROFILE="$1"; shift
+            if [[ -z "$SDK_PROFILE" ]]; then echo "ERROR: --profile cannot be empty." >&2; exit 1; fi ;;
+        --profile=*) SDK_PROFILE="${arg#--profile=}"
+            if [[ -z "$SDK_PROFILE" ]]; then echo "ERROR: --profile cannot be empty." >&2; exit 1; fi ;;
+
         --debug|-d)  BUILD_TYPE="Debug" ;;
         --full)      FULL=1; WINDOW_TESTS_MODE="on" ;;
         --no-vulkan) VULKAN_MODE="off" ;;
@@ -46,6 +58,7 @@ for arg in "$@"; do
             echo "tests that create windows/GL contexts. Use --full to include them."
             echo ""
             echo "Options:"
+            echo "  --profile PRODUCT Select full, graphics, or core SDK product"
             echo "  --debug, -d       Debug build"
             echo "  --full            Include window/full C++ tests"
             echo "  --no-vulkan       Disable Vulkan support"
@@ -80,9 +93,20 @@ for arg in "$@"; do
     esac
 done
 
-if [[ -z "$BUILD_DIR" ]]; then
-    BUILD_DIR="$SCRIPT_DIR/build/$BUILD_TYPE"
+CONTEXT_BOOTSTRAP='import sys; sys.path.insert(0, sys.argv.pop(1)); from termin_build.sdk_test_context import main; raise SystemExit(main())'
+CONTEXT_PYTHON="${TERMIN_TEST_TOOLS_PYTHON:-$(command -v python3 || command -v python || true)}"
+if [[ -z "$CONTEXT_PYTHON" ]]; then
+    echo "ERROR: Python is required to resolve the SDK test context." >&2
+    exit 1
 fi
+CONTEXT_ARGS=(--repo-root "$SCRIPT_DIR")
+if [[ -n "$SDK_PROFILE" ]]; then
+    CONTEXT_ARGS+=(--profile "$SDK_PROFILE")
+fi
+CONTEXT_ARGS+=(--build-type "$BUILD_TYPE")
+SDK_PROFILE="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field profile)" || exit 1
+SDK_PREFIX="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field sdk-prefix)" || exit 1
+BUILD_DIR="$("$CONTEXT_PYTHON" -c "$CONTEXT_BOOTSTRAP" "$SCRIPT_DIR/core/termin-build-tools" "${CONTEXT_ARGS[@]}" --field build-dir)" || exit 1
 
 case "$VULKAN_MODE" in
     off) TERMIN_ENABLE_VULKAN=OFF ;;
@@ -191,11 +215,11 @@ touch "$FILE_API_QUERY_DIR/codemodel-v2"
 
 TEST_SHADER_ARTIFACTS=OFF
 TEST_SHADER_ARTIFACT_TARGETS=""
-if [[ "$TERMIN_ENABLE_VULKAN" == "ON" ]]; then
+if [[ "$SDK_PROFILE" != "core" && "$TERMIN_ENABLE_VULKAN" == "ON" ]]; then
     TEST_SHADER_ARTIFACTS=ON
     TEST_SHADER_ARTIFACT_TARGETS="vulkan"
 fi
-if [[ "$TERMIN_ENABLE_OPENGL" == "ON" ]]; then
+if [[ "$SDK_PROFILE" != "core" && "$TERMIN_ENABLE_OPENGL" == "ON" ]]; then
     TEST_SHADER_ARTIFACTS=ON
     TEST_SHADER_ARTIFACT_TARGETS="${TEST_SHADER_ARTIFACT_TARGETS:+${TEST_SHADER_ARTIFACT_TARGETS};}opengl330"
 fi
@@ -210,6 +234,7 @@ if ! cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}" \
     -DTERMIN_USE_CCACHE="$TERMIN_USE_CCACHE" \
     -DTERMIN_ENABLE_UNITY_BUILD="$TERMIN_ENABLE_UNITY_BUILD" \
     -DTERMIN_ENABLE_PCH="$TERMIN_ENABLE_PCH" \
+    -DTERMIN_SDK_PROFILE="$SDK_PROFILE" \
     -DTERMIN_BUILD_TESTS=ON \
     -DTERMIN_BUILD_TGFX2_TESTS=ON \
     -DTERMIN_BUILD_WINDOW_TESTS="$TERMIN_BUILD_WINDOW_TESTS" \
@@ -222,6 +247,11 @@ if ! cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}" \
     exit 1
 fi
 
+CONFIGURED_PROFILE="$("$PY_EXEC" -c 'import sys; from pathlib import Path; from termin_build.sdk_test_context import load_configured_test_sdk_profile; print(load_configured_test_sdk_profile(Path(sys.argv[1])))' "$BUILD_DIR")" || exit 1
+if [[ "$CONFIGURED_PROFILE" != "$SDK_PROFILE" ]]; then
+    echo "ERROR: configured SDK profile differs from requested test context." >&2
+    exit 1
+fi
 REPOSITORY_PROFILE="pr"
 REPOSITORY_CAPABILITIES=(--capability host)
 if [[ "$FULL" -eq 1 ]]; then
@@ -242,7 +272,7 @@ if [[ -f "$BUILD_DIR/CMakeCache.txt" ]] \
 fi
 if ! "${REPOSITORY_CONTROL[@]}" check-ctest \
     --build-dir "$BUILD_DIR" \
-    --profile "$REPOSITORY_PROFILE" \
+    --profile "$REPOSITORY_PROFILE" --sdk-profile "$SDK_PROFILE" \
     "${REPOSITORY_CAPABILITIES[@]}"; then
     echo "ERROR: CTest inventory validation failed" >&2
     exit 1
@@ -252,6 +282,7 @@ CTEST_PLAN_COMMAND=(
     ctest-plan
     --build-dir "$BUILD_DIR"
     --profile "$REPOSITORY_PROFILE"
+    --sdk-profile "$SDK_PROFILE"
     --platform linux
     "${REPOSITORY_CAPABILITIES[@]}"
 )
