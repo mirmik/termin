@@ -178,7 +178,7 @@ namespace termin {
             const Pose3 bake_frame = navmesh_bake_frame_from_transform(entity.transform());
             DetourClosestPointResult closest = entry.component->closest_point_world(bake_frame, point);
             if (!closest.success) {
-                tc_log_warn("[PathfindingWorld] skipped point query world: entity='%s' "
+                tc_log_debug("[PathfindingWorld] skipped point query world: entity='%s' "
                             "navmesh_uuid='%s' closest_success=0",
                             entity.name(),
                             entry.component->navmesh_uuid.c_str());
@@ -241,7 +241,7 @@ namespace termin {
             DetourClosestPointResult start_closest = entry.component->closest_point_world(bake_frame, start);
             DetourClosestPointResult end_closest = entry.component->closest_point_world(bake_frame, end);
             if (!start_closest.success || !end_closest.success) {
-                tc_log_warn("[PathfindingWorld] skipped pathfinding world: entity='%s' "
+                tc_log_debug("[PathfindingWorld] skipped pathfinding world: entity='%s' "
                             "navmesh_uuid='%s' start_success=%d end_success=%d",
                             entity.name(),
                             entry.component->navmesh_uuid.c_str(),
