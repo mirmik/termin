@@ -9,8 +9,10 @@
 
 #include <termin/camera/camera_component.hpp>
 
+#include <array>
 #include <cmath>
 #include <optional>
+#include <stdexcept>
 
 extern "C" {
 #include "core/tc_entity_pool.h"
@@ -47,6 +49,32 @@ namespace {
         rig.entity.add_component(rig.camera);
         rig.entity.add_component(rig.controller);
         return rig;
+    }
+
+    std::array<termin::GeneralPose3, 4> camera_parent_poses() {
+        const termin::Quat rotation = termin::Quat::from_axis_angle(termin::Vec3::unit_z(), 0.7) *
+                                      termin::Quat::from_axis_angle(termin::Vec3::unit_x(), -0.3);
+        return {{
+            {termin::Quat::identity(), {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}},
+            {termin::Quat::identity(), {8.0, -3.0, 4.0}, {1.0, 1.0, 1.0}},
+            {rotation, {8.0, -3.0, 4.0}, {1.0, 1.0, 1.0}},
+            {rotation, {8.0, -3.0, 4.0}, {2.0, 0.5, 1.25}},
+        }};
+    }
+
+    void check_world_pose(const Entity& entity, const termin::Pose3& expected) {
+        const termin::Pose3 actual = entity.transform().global_pose();
+        CHECK((actual.lin - expected.lin).norm() < 1e-10);
+        for (const termin::Vec3 axis : {termin::Vec3::unit_x(), termin::Vec3::unit_y(), termin::Vec3::unit_z()}) {
+            CHECK((actual.ang.rotate(axis) - expected.ang.rotate(axis)).norm() < 1e-10);
+        }
+    }
+
+    void check_matching_camera_state(const CameraRig& rig, const CameraRig& reference, const termin::Vec3& scale) {
+        check_world_pose(rig.entity, reference.entity.transform().global_pose());
+        CHECK((rig.controller->target() - reference.controller->target()).norm() < 1e-10);
+        CHECK((rig.entity.transform().local_scale() - scale).norm() < 1e-10);
+        CHECK_EQ(rig.controller->radius, Approx(reference.controller->radius).epsilon(1e-12));
     }
 
     PointerEvent make_pointer_event(tc_viewport_handle viewport,
@@ -346,6 +374,128 @@ TEST_CASE("OrbitCameraController fly_move accepts one local displacement vector"
     tc_entity_free(rig.entity.handle());
 }
 
+TEST_CASE("OrbitCameraController orbit pan zoom and snap preserve world pose under transformed parents") {
+    const termin::Vec3 authored_scale{0.75, 1.5, 2.0};
+    const termin::Pose3 initial_pose{
+        termin::Quat::from_axis_angle(termin::Vec3::unit_z(), 0.4) *
+            termin::Quat::from_axis_angle(termin::Vec3::unit_x(), -0.2),
+        {10.0, -4.0, 8.0},
+    };
+    for (const termin::GeneralPose3& parent_pose : camera_parent_poses()) {
+        Entity parent = Entity::create(Entity::standalone_pool_handle(), "orbit-parent");
+        parent.transform().set_local_pose(parent_pose);
+        CameraRig rig = make_camera_rig("parented-orbit-camera");
+        CameraRig reference = make_camera_rig("reference-orbit-camera");
+        rig.entity.transform().set_parent(parent.transform());
+        for (CameraRig* camera : {&rig, &reference}) {
+            camera->entity.transform().set_local_scale(authored_scale);
+            camera->entity.transform().set_global_pose(initial_pose);
+            camera->controller->_sync_from_transform();
+        }
+        CHECK((rig.controller->target() - initial_pose.lin -
+               initial_pose.ang.rotate(termin::Vec3::unit_y()) * rig.controller->radius).norm() < 1e-10);
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        rig.controller->orbit(23.0, 12.0);
+        reference.controller->orbit(23.0, 12.0);
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        const termin::Vec3 before_pan = rig.entity.transform().global_position();
+        const termin::Quat pan_rotation = rig.entity.transform().global_rotation();
+        const termin::Vec3 expected_pan = pan_rotation.rotate({0.4, 0.0, -0.3});
+        rig.controller->translate_target({0.4, -0.3});
+        reference.controller->translate_target({0.4, -0.3});
+        CHECK((rig.entity.transform().global_position() - before_pan - expected_pan).norm() < 1e-10);
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        const termin::Vec3 target_before_zoom = rig.controller->target();
+        rig.controller->zoom(1.25);
+        reference.controller->zoom(1.25);
+        CHECK((rig.controller->target() - target_before_zoom).norm() < 1e-10);
+        CHECK_EQ((rig.entity.transform().global_position() - target_before_zoom).norm(),
+                 Approx(rig.controller->radius).epsilon(1e-12));
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        rig.controller->center_on({-2.0, 5.0, 3.0});
+        reference.controller->center_on({-2.0, 5.0, 3.0});
+        check_matching_camera_state(rig, reference, authored_scale);
+        rig.controller->snap_view(termin::ViewDirection::Top);
+        reference.controller->snap_view(termin::ViewDirection::Top);
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        const termin::Vec3 target_after_operations = rig.controller->target();
+        rig.controller->update(0.0f);
+        CHECK((rig.controller->target() - target_after_operations).norm() < 1e-10);
+        tc_entity_free(reference.entity.handle());
+        tc_entity_free(rig.entity.handle());
+        tc_entity_free(parent.handle());
+    }
+}
+
+TEST_CASE("OrbitCameraController fly movement and horizon lock use world axes under transformed parents") {
+    const termin::Vec3 authored_scale{0.75, 1.5, 2.0};
+    const termin::Pose3 initial_pose{
+        termin::Quat::from_axis_angle(termin::Vec3::unit_z(), 0.4) *
+            termin::Quat::from_axis_angle(termin::Vec3::unit_x(), -0.2),
+        {10.0, -4.0, 8.0},
+    };
+    for (const termin::GeneralPose3& parent_pose : camera_parent_poses()) {
+        Entity parent = Entity::create(Entity::standalone_pool_handle(), "fly-parent");
+        parent.transform().set_local_pose(parent_pose);
+        CameraRig rig = make_camera_rig("parented-fly-camera");
+        CameraRig reference = make_camera_rig("reference-fly-camera");
+        rig.entity.transform().set_parent(parent.transform());
+        for (CameraRig* camera : {&rig, &reference}) {
+            camera->entity.transform().set_local_scale(authored_scale);
+            camera->entity.transform().set_global_pose(initial_pose);
+            camera->controller->_sync_from_transform();
+            camera->controller->horizon_lock = false;
+        }
+
+        const termin::Vec3 displacement{1.0, 2.0, -0.5};
+        rig.controller->fly_move(displacement);
+        reference.controller->fly_move(displacement);
+        check_world_pose(rig.entity, {initial_pose.ang, initial_pose.lin + initial_pose.ang.rotate(displacement)});
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        termin::Pose3 before = rig.entity.transform().global_pose();
+        rig.controller->fly_forward(1.3);
+        reference.controller->fly_forward(1.3);
+        check_world_pose(rig.entity, {before.ang, before.lin + before.ang.rotate(termin::Vec3::unit_y()) * 1.3});
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        before = rig.entity.transform().global_pose();
+        rig.controller->fly_rotate(17.0, -9.0, 11.0);
+        reference.controller->fly_rotate(17.0, -9.0, 11.0);
+        CHECK((rig.entity.transform().global_position() - before.lin).norm() < 1e-10);
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        rig.controller->horizon_lock = true;
+        reference.controller->horizon_lock = true;
+        before = rig.entity.transform().global_pose();
+        termin::Vec3 forward = before.ang.rotate(termin::Vec3::unit_y());
+        forward.z = 0.0;
+        forward = forward / forward.norm();
+        rig.controller->fly_forward(-0.7);
+        reference.controller->fly_forward(-0.7);
+        check_world_pose(rig.entity, {before.ang, before.lin + forward * -0.7});
+        check_matching_camera_state(rig, reference, authored_scale);
+
+        before = rig.entity.transform().global_pose();
+        rig.controller->fly_rotate(-13.0, 7.0, 23.0);
+        reference.controller->fly_rotate(-13.0, 7.0, 23.0);
+        CHECK((rig.entity.transform().global_position() - before.lin).norm() < 1e-10);
+        CHECK(std::abs(rig.entity.transform().global_rotation().rotate(termin::Vec3::unit_x()).z) < 1e-10);
+        check_matching_camera_state(rig, reference, authored_scale);
+        CHECK((rig.controller->target() - rig.entity.transform().global_position() -
+               rig.entity.transform().global_rotation().rotate(termin::Vec3::unit_y()) * rig.controller->radius).norm() < 1e-10);
+
+        tc_entity_free(reference.entity.handle());
+        tc_entity_free(rig.entity.handle());
+        tc_entity_free(parent.handle());
+    }
+}
+
 TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch") {
     tc_scene_handle scene = tc_scene_new_named("orbit-camera-touch-test");
     REQUIRE(tc_scene_alive(scene));
@@ -390,45 +540,80 @@ TEST_CASE("OrbitCameraController handles one-finger orbit and two-finger pinch")
     tc_scene_free(scene);
 }
 
-TEST_CASE("OrbitCameraController pan keeps the grabbed point under the cursor for both projections") {
+TEST_CASE("OrbitCameraController rejects movement through a singular parent transform") {
+    Entity parent = Entity::create(Entity::standalone_pool_handle(), "singular-camera-parent");
+    parent.transform().set_local_scale({1.0, 0.0, 1.0});
+    CameraRig rig = make_camera_rig("singular-parent-camera");
+    rig.entity.transform().set_parent(parent.transform());
+    rig.entity.transform().set_local_scale({0.75, 1.5, 2.0});
+    const termin::Pose3 before = rig.entity.transform().global_pose();
+    CHECK_THROWS_AS(rig.controller->fly_move({1.0, 0.0, 0.0}), std::runtime_error);
+    check_world_pose(rig.entity, before);
+    CHECK((rig.entity.transform().local_scale() - termin::Vec3{0.75, 1.5, 2.0}).norm() < 1e-10);
+    tc_entity_free(rig.entity.handle());
+    tc_entity_free(parent.handle());
+}
+
+TEST_CASE("OrbitCameraController pan keeps the grabbed point under the cursor for both projections under transformed parents") {
     constexpr double width = 800.0;
     constexpr double height = 600.0;
 
-    for (const CameraProjection projection : {CameraProjection::Perspective, CameraProjection::Orthographic}) {
-        tc_scene_handle scene = tc_scene_new_named("orbit-camera-pan-test");
-        REQUIRE(tc_scene_alive(scene));
-        tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(tc_scene_entity_pool(scene));
-        REQUIRE(tc_entity_pool_handle_valid(scene_pool));
+    for (const termin::GeneralPose3& parent_pose : camera_parent_poses()) {
+        for (const CameraProjection projection : {CameraProjection::Perspective, CameraProjection::Orthographic}) {
+            tc_scene_handle scene = tc_scene_new_named("orbit-camera-pan-test");
+            REQUIRE(tc_scene_alive(scene));
+            tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(tc_scene_entity_pool(scene));
+            REQUIRE(tc_entity_pool_handle_valid(scene_pool));
 
-        CameraRig rig = make_camera_rig("pan-camera", scene_pool);
-        rig.camera->projection_type = projection;
-        rig.camera->ortho_size = 3.0;
-        tc_render_target_handle render_target = tc_render_target_new("pan-rt");
-        REQUIRE(tc_render_target_handle_valid(render_target));
-        tc_render_target_set_scene(render_target, scene);
-        tc_render_target_set_camera(render_target, rig.camera->tc_component_ptr());
-        tc_viewport_handle viewport = tc_viewport_new("pan-viewport", TC_SCENE_HANDLE_INVALID);
-        REQUIRE(tc_viewport_handle_valid(viewport));
-        tc_viewport_set_render_target(viewport, render_target);
-        tc_viewport_set_pixel_rect(viewport, 0, 0, static_cast<int>(width), static_cast<int>(height));
+            Entity parent = Entity::create(scene_pool, "pan-parent");
+            parent.transform().set_local_pose(parent_pose);
+            CameraRig rig = make_camera_rig("pan-camera", scene_pool);
+            rig.entity.transform().set_parent(parent.transform());
+            rig.entity.transform().set_local_scale({0.75, 1.5, 2.0});
+            rig.entity.transform().set_global_pose({termin::Quat::identity(), {0.0, 0.0, 0.0}});
+            rig.controller->_sync_from_transform();
+            rig.camera->projection_type = projection;
+            rig.camera->ortho_size = 3.0;
+            tc_render_target_handle render_target = tc_render_target_new("pan-rt");
+            REQUIRE(tc_render_target_handle_valid(render_target));
+            tc_render_target_set_scene(render_target, scene);
+            tc_render_target_set_camera(render_target, rig.camera->tc_component_ptr());
+            tc_viewport_handle viewport = tc_viewport_new("pan-viewport", TC_SCENE_HANDLE_INVALID);
+            REQUIRE(tc_viewport_handle_valid(viewport));
+            tc_viewport_set_render_target(viewport, render_target);
+            tc_viewport_set_pixel_rect(viewport, 0, 0, static_cast<int>(width), static_cast<int>(height));
 
-        const termin::Vec3 grabbed = rig.controller->target();
-        MouseButtonEvent press(viewport,
-                               width * 0.5,
-                               height * 0.5,
-                               rig.controller->pan_mouse_button,
-                               static_cast<int>(tcbase::Action::PRESS));
-        rig.controller->on_mouse_button(&press);
-        MouseMoveEvent move(viewport, 515.0, 365.0, 115.0, 65.0);
-        rig.controller->on_mouse_move(&move);
+            const termin::Vec3 grabbed = rig.controller->target();
+            MouseButtonEvent press(viewport,
+                                   width * 0.5,
+                                   height * 0.5,
+                                   rig.controller->pan_mouse_button,
+                                   static_cast<int>(tcbase::Action::PRESS));
+            rig.controller->on_mouse_button(&press);
+            MouseMoveEvent move(viewport, 515.0, 365.0, 115.0, 65.0);
+            rig.controller->on_mouse_move(&move);
 
-        const termin::Vec3 projected = project_to_screen(*rig.camera, grabbed, width, height);
-        CHECK_EQ(projected.x, Approx(515.0).epsilon(1e-10));
-        CHECK_EQ(projected.y, Approx(365.0).epsilon(1e-10));
+            const termin::Vec3 projected = project_to_screen(*rig.camera, grabbed, width, height);
+            CHECK_EQ(projected.x, Approx(515.0).epsilon(1e-10));
+            CHECK_EQ(projected.y, Approx(365.0).epsilon(1e-10));
 
-        tc_viewport_free(viewport);
-        tc_render_target_free(render_target);
-        tc_entity_free(rig.entity.handle());
-        tc_scene_free(scene);
+            if (projection == CameraProjection::Orthographic) {
+                const termin::Pose3 before_zoom = rig.entity.transform().global_pose();
+                const termin::Vec3 target_before_zoom = rig.controller->target();
+                const double radius_before_zoom = rig.controller->radius;
+                rig.controller->zoom(1.0);
+                CHECK_EQ(rig.camera->ortho_size, Approx(3.3).epsilon(1e-12));
+                check_world_pose(rig.entity, before_zoom);
+                CHECK((rig.controller->target() - target_before_zoom).norm() < 1e-10);
+                CHECK_EQ(rig.controller->radius, Approx(radius_before_zoom).epsilon(1e-12));
+            }
+
+            tc_viewport_free(viewport);
+            tc_render_target_free(render_target);
+            CHECK((rig.entity.transform().local_scale() - termin::Vec3{0.75, 1.5, 2.0}).norm() < 1e-10);
+            tc_entity_free(rig.entity.handle());
+            tc_entity_free(parent.handle());
+            tc_scene_free(scene);
+        }
     }
 }

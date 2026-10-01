@@ -245,7 +245,7 @@ namespace termin {
         const Quat rotation = Quat::from_axis_angle(Vec3::unit_z(), _azimuth) *
                               Quat::from_axis_angle(Vec3::unit_x(), -_elevation);
         Pose3 pose{rotation, eye};
-        entity().transform().relocate(pose);
+        entity().transform().set_global_pose(pose);
 
         // Update last known position to avoid re-sync
         _last_position = entity().transform().global_position();
@@ -350,7 +350,7 @@ namespace termin {
         Vec3 pos = entity().transform().global_position();
         pos += rot.rotate(local_displacement);
 
-        entity().transform().relocate(Pose3{rot, pos});
+        entity().transform().set_global_pose(Pose3{rot, pos});
         _sync_from_transform();
     }
 
@@ -373,7 +373,7 @@ namespace termin {
         Vec3 pos = entity().transform().global_position();
         pos = pos + forward * delta;
 
-        entity().transform().relocate(Pose3{rot, pos});
+        entity().transform().set_global_pose(Pose3{rot, pos});
         _sync_from_transform();
     }
 
@@ -403,7 +403,7 @@ namespace termin {
             new_rot = level_pose.ang;
         }
 
-        entity().transform().relocate(Pose3{new_rot, eye});
+        entity().transform().set_global_pose(Pose3{new_rot, eye});
         _sync_from_transform();
     }
 

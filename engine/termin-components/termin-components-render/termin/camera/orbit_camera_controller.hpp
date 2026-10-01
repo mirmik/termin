@@ -58,6 +58,8 @@ namespace termin {
      *
      * Transform is the single source of truth. Internal state (azimuth, elevation, target)
      * is derived from transform and updated when external changes are detected.
+     * Target, eye and orientation use logical world coordinates. Camera movement
+     * preserves local scale and uses the parent's checked affine inverse for position.
      *
      * Coordinate convention: Y-forward, Z-up
      *   - At azimuth=0, elevation=0: camera is behind target (-Y), looking at +Y
