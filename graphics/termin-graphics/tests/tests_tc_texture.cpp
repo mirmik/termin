@@ -2,8 +2,10 @@
 #include "tgfx/tgfx_texture_handle.hpp"
 
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
+#include <type_traits>
 
 extern "C" {
 #include "tcbase/tc_log.h"
@@ -266,6 +268,184 @@ TEST_CASE("tc_texture encoding changes are validated and versioned") {
     CHECK_EQ(texture->encoding, TC_TEXTURE_ENCODING_SRGB);
     CHECK_EQ(texture->header.version, initial_version + 1u);
     tc_texture_shutdown();
+}
+
+TEST_CASE("tc texture creation and lazy declaration share explicit sampler defaults") {
+    static_assert(std::is_standard_layout_v<tc_sampler_desc>);
+    static_assert(std::is_trivially_copyable_v<tc_sampler_desc>);
+    tc_texture_init();
+    const auto created = tc_texture_create("sampler-default-created");
+    const auto declared = tc_texture_declare("sampler-default-declared", "deferred");
+    REQUIRE(tc_texture_is_valid(created));
+    REQUIRE(tc_texture_is_valid(declared));
+    for (const auto handle : {created, declared}) {
+        const auto& sampler = tc_texture_get(handle)->sampler;
+        CHECK_EQ(sampler.min_filter, TC_SAMPLER_FILTER_LINEAR);
+        CHECK_EQ(sampler.mag_filter, TC_SAMPLER_FILTER_LINEAR);
+        CHECK_EQ(sampler.mip_filter, TC_SAMPLER_FILTER_LINEAR);
+        CHECK_EQ(sampler.address_u, TC_SAMPLER_ADDRESS_REPEAT);
+        CHECK_EQ(sampler.address_v, TC_SAMPLER_ADDRESS_REPEAT);
+        CHECK_EQ(sampler.address_w, TC_SAMPLER_ADDRESS_REPEAT);
+        CHECK_EQ(sampler.max_anisotropy, 1.0f);
+        CHECK_EQ(sampler.compare_enable, 0u);
+        CHECK_EQ(sampler.compare_op, TC_SAMPLER_COMPARE_NEVER);
+        CHECK(tc_sampler_desc_validate(&sampler));
+    }
+    tc_texture_shutdown();
+}
+
+TEST_CASE("tc sampler replacement is atomic and does not change the image version") {
+    tc_texture_init();
+    const auto handle = tc_texture_create("sampler-atomic-setter");
+    auto* texture = tc_texture_get(handle);
+    REQUIRE(texture != nullptr);
+    const auto version = texture->header.version;
+    auto sampler = tc_sampler_desc_default();
+    sampler.min_filter = TC_SAMPLER_FILTER_NEAREST;
+    sampler.mag_filter = TC_SAMPLER_FILTER_NEAREST;
+    sampler.mip_filter = TC_SAMPLER_FILTER_NEAREST;
+    sampler.address_u = TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+    sampler.address_v = TC_SAMPLER_ADDRESS_MIRRORED_REPEAT;
+    sampler.address_w = TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER;
+    sampler.max_anisotropy = 2.0f;
+    sampler.compare_enable = 1;
+    sampler.compare_op = TC_SAMPLER_COMPARE_LESS_EQUAL;
+    REQUIRE(tc_texture_set_sampler(texture, &sampler));
+    CHECK_EQ(texture->header.version, version);
+    const auto equal_state = [&]() {
+        CHECK_EQ(texture->sampler.min_filter, sampler.min_filter);
+        CHECK_EQ(texture->sampler.mag_filter, sampler.mag_filter);
+        CHECK_EQ(texture->sampler.mip_filter, sampler.mip_filter);
+        CHECK_EQ(texture->sampler.address_u, sampler.address_u);
+        CHECK_EQ(texture->sampler.address_v, sampler.address_v);
+        CHECK_EQ(texture->sampler.address_w, sampler.address_w);
+        CHECK_EQ(texture->sampler.max_anisotropy, sampler.max_anisotropy);
+        CHECK_EQ(texture->sampler.compare_enable, sampler.compare_enable);
+        CHECK_EQ(texture->sampler.compare_op, sampler.compare_op);
+        CHECK_EQ(texture->header.version, version);
+    };
+    equal_state();
+    REQUIRE(tc_texture_set_sampler(texture, &sampler));
+    equal_state();
+
+    // Reject every invalid enum field, a nonboolean comparison flag, and
+    // nonfinite/out-of-range anisotropy without partially applying the edit.
+    for (const auto field : {&tc_sampler_desc::min_filter, &tc_sampler_desc::mag_filter,
+            &tc_sampler_desc::mip_filter, &tc_sampler_desc::address_u, &tc_sampler_desc::address_v,
+            &tc_sampler_desc::address_w, &tc_sampler_desc::compare_enable, &tc_sampler_desc::compare_op}) {
+        auto invalid = sampler;
+        invalid.*field = 255;
+        CHECK_FALSE(tc_texture_set_sampler(texture, &invalid));
+        equal_state();
+    }
+    for (const auto value : {0.0f, -1.0f, std::numeric_limits<float>::infinity(),
+                            -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
+        auto invalid = sampler;
+        invalid.max_anisotropy = value;
+        CHECK_FALSE(tc_texture_set_sampler(texture, &invalid));
+        equal_state();
+    }
+    CHECK_FALSE(tc_texture_set_sampler(texture, nullptr));
+    CHECK_FALSE(tc_texture_set_sampler(nullptr, &sampler));
+    CHECK_FALSE(tc_sampler_desc_validate(nullptr));
+    equal_state();
+    tc_texture_shutdown();
+}
+
+TEST_CASE("tc texture mip generation changes the image version independently of its sampler") {
+    tc_texture_init();
+    const auto handle = tc_texture_create("sampler-mip-image-version");
+    auto* texture = tc_texture_get(handle);
+    REQUIRE(texture != nullptr);
+    const auto version = texture->header.version;
+    tc_texture_set_mipmap(texture, false);
+    CHECK_EQ(texture->header.version, version);
+    tc_texture_set_mipmap(texture, true);
+    CHECK_EQ(texture->mipmap, 1u);
+    CHECK_EQ(texture->header.version, version + 1u);
+    tc_texture_set_mipmap(texture, true);
+    CHECK_EQ(texture->header.version, version + 1u);
+    auto sampler = texture->sampler;
+    sampler.mip_filter = TC_SAMPLER_FILTER_NEAREST;
+    REQUIRE(tc_texture_set_sampler(texture, &sampler));
+    CHECK_EQ(texture->mipmap, 1u);
+    CHECK_EQ(texture->header.version, version + 1u);
+    tc_texture_set_mipmap(texture, false);
+    CHECK_EQ(texture->mipmap, 0u);
+    CHECK_EQ(texture->header.version, version + 2u);
+    CHECK_EQ(texture->sampler.mip_filter, TC_SAMPLER_FILTER_NEAREST);
+    tc_texture_shutdown();
+}
+
+TEST_CASE("texture wrapper preserves independent sampler axes and rejects wide invalid enums") {
+    struct RegistryAndLogScope {
+        RegistryAndLogScope() { tc_texture_init(); tc_log_capture_start(32); }
+        ~RegistryAndLogScope() { tc_log_capture_stop(); tc_texture_shutdown(); }
+    } scope;
+    termin::TcTexture texture(tc_texture_create("wrapper-sampler-axes"));
+    REQUIRE(texture.is_valid());
+    auto expected = tc_sampler_desc_default();
+    expected.min_filter = TC_SAMPLER_FILTER_NEAREST;
+    expected.mip_filter = TC_SAMPLER_FILTER_NEAREST;
+    expected.max_anisotropy = 2.5f;
+    expected.compare_enable = 1;
+    expected.compare_op = TC_SAMPLER_COMPARE_LESS_EQUAL;
+    REQUIRE(texture.set_sampler(expected));
+    texture.set_mipmap(true);
+    const auto version = texture.get()->header.version;
+    const auto check_state = [&]() {
+        const auto actual = texture.sampler();
+        CHECK_EQ(actual.min_filter, expected.min_filter);
+        CHECK_EQ(actual.mag_filter, expected.mag_filter);
+        CHECK_EQ(actual.mip_filter, expected.mip_filter);
+        CHECK_EQ(actual.address_u, expected.address_u);
+        CHECK_EQ(actual.address_v, expected.address_v);
+        CHECK_EQ(actual.address_w, expected.address_w);
+        CHECK_EQ(actual.max_anisotropy, expected.max_anisotropy);
+        CHECK_EQ(actual.compare_enable, expected.compare_enable);
+        CHECK_EQ(actual.compare_op, expected.compare_op);
+        CHECK_EQ(texture.get()->header.version, version);
+        CHECK(texture.mipmap());
+    };
+    REQUIRE(texture.set_wraps(TC_SAMPLER_ADDRESS_MIRRORED_REPEAT, TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE,
+                              TC_SAMPLER_ADDRESS_REPEAT));
+    expected.address_u = TC_SAMPLER_ADDRESS_MIRRORED_REPEAT;
+    expected.address_v = TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+    CHECK(texture.address_u() == TC_SAMPLER_ADDRESS_MIRRORED_REPEAT);
+    CHECK(texture.address_v() == TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE);
+    CHECK(texture.address_w() == TC_SAMPLER_ADDRESS_REPEAT);
+    check_state();
+    REQUIRE(texture.set_wraps(TC_SAMPLER_ADDRESS_REPEAT, TC_SAMPLER_ADDRESS_MIRRORED_REPEAT,
+                              TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER));
+    expected.address_u = TC_SAMPLER_ADDRESS_REPEAT;
+    expected.address_v = TC_SAMPLER_ADDRESS_MIRRORED_REPEAT;
+    expected.address_w = TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER;
+    check_state();
+    const auto require_error = [&](const char* method) {
+        tc_log_record records[32]{};
+        const auto count = tc_log_capture_drain(records, 32, nullptr);
+        bool found = false;
+        for (size_t i = 0; i < count; ++i)
+            found |= records[i].level == TC_LOG_ERROR && std::strstr(records[i].message, method) != nullptr;
+        CHECK(found);
+        check_state();
+    };
+    for (const int invalid : {-1, 256}) {
+        const auto address = static_cast<tc_sampler_address>(invalid);
+        CHECK_FALSE(texture.set_wraps(address, TC_SAMPLER_ADDRESS_REPEAT, TC_SAMPLER_ADDRESS_REPEAT));
+        require_error("TcTexture::set_wraps");
+        CHECK_FALSE(texture.set_wraps(TC_SAMPLER_ADDRESS_REPEAT, address, TC_SAMPLER_ADDRESS_REPEAT));
+        require_error("TcTexture::set_wraps");
+        CHECK_FALSE(texture.set_wraps(TC_SAMPLER_ADDRESS_REPEAT, TC_SAMPLER_ADDRESS_REPEAT, address));
+        require_error("TcTexture::set_wraps");
+        const auto filter = static_cast<tc_sampler_filter>(invalid);
+        CHECK_FALSE(texture.set_filters(filter, TC_SAMPLER_FILTER_LINEAR, TC_SAMPLER_FILTER_LINEAR));
+        require_error("TcTexture::set_filters");
+        CHECK_FALSE(texture.set_filters(TC_SAMPLER_FILTER_LINEAR, filter, TC_SAMPLER_FILTER_LINEAR));
+        require_error("TcTexture::set_filters");
+        CHECK_FALSE(texture.set_filters(TC_SAMPLER_FILTER_LINEAR, TC_SAMPLER_FILTER_LINEAR, filter));
+        require_error("TcTexture::set_filters");
+    }
 }
 
 TEST_CASE("content texture identity includes transfer encoding") {

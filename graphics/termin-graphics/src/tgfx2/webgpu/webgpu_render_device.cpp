@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -1038,6 +1039,17 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     SamplerHandle WebGpuRenderDevice::create_sampler(const SamplerDesc& desc) {
+        if (!std::isfinite(desc.max_anisotropy) || desc.max_anisotropy < 1.0f || desc.max_anisotropy > 16.0f ||
+            std::floor(desc.max_anisotropy) != desc.max_anisotropy) {
+            tc_log_error("WebGPU: unsupported sampler anisotropy=%g (integer range 1..16)", desc.max_anisotropy);
+            return {};
+        }
+        if (desc.max_anisotropy > 1.0f && (desc.min_filter != FilterMode::Linear ||
+                                         desc.mag_filter != FilterMode::Linear ||
+                                         desc.mip_filter != FilterMode::Linear)) {
+            tc_log_error("WebGPU: anisotropic sampler requires linear min/mag/mip filters");
+            return {};
+        }
         wgpu::SamplerDescriptor native;
         native.minFilter = filter(desc.min_filter);
         native.magFilter = filter(desc.mag_filter);
@@ -1045,7 +1057,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         native.addressModeU = address(desc.address_u);
         native.addressModeV = address(desc.address_v);
         native.addressModeW = address(desc.address_w);
-        native.maxAnisotropy = static_cast<uint16_t>(std::max(1.0f, desc.max_anisotropy));
+        native.maxAnisotropy = static_cast<uint16_t>(desc.max_anisotropy);
         if (desc.compare_enable)
             native.compare = compare(desc.compare_op);
         wgpu::Sampler object = device_.CreateSampler(&native);

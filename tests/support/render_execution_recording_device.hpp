@@ -69,7 +69,7 @@ namespace termin::test {
         ExecutionRecordingState& state_;
     };
 
-    class ExecutionRecordingDevice final : public tgfx::IRenderDevice {
+    class ExecutionRecordingDevice : public tgfx::IRenderDevice {
     public:
         ExecutionRecordingState state;
 

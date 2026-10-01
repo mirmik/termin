@@ -128,6 +128,8 @@ if(TERMIN_BUILD_TESTS)
     termin_render_core_add_test(material_pipeline_contracts test_material_pipeline_contracts.cpp)
     termin_render_core_add_test(material_pipeline_shader_assembler test_material_pipeline_shader_assembler.cpp)
     termin_render_core_add_test(material_ubo_apply test_material_ubo_apply.cpp)
+    target_include_directories(termin_render_core_material_ubo_apply_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/support)
     termin_render_core_add_test(pass_ownership test_pass_ownership.cpp)
     termin_render_core_add_test(pipeline_template test_pipeline_template.cpp)
     termin_render_core_add_test(raster_pass_contract test_raster_pass_contract.cpp)

@@ -13,6 +13,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -717,13 +718,19 @@ float4 main(VSOut input) : SV_Target {
     }
 
     SamplerHandle D3D11RenderDevice::create_sampler(const SamplerDesc& desc) {
+        if (!std::isfinite(desc.max_anisotropy) || desc.max_anisotropy < 1.0f || desc.max_anisotropy > 16.0f ||
+            std::floor(desc.max_anisotropy) != desc.max_anisotropy) {
+            tc::Log::error("D3D11RenderDevice::create_sampler: unsupported anisotropy=%g (integer range 1..16)",
+                           desc.max_anisotropy);
+            return {};
+        }
         D3D11_SAMPLER_DESC sd{};
         sd.Filter = d3d11::to_d3d_filter(desc);
         sd.AddressU = d3d11::to_d3d_address(desc.address_u);
         sd.AddressV = d3d11::to_d3d_address(desc.address_v);
         sd.AddressW = d3d11::to_d3d_address(desc.address_w);
         sd.MipLODBias = 0.0f;
-        sd.MaxAnisotropy = static_cast<UINT>(std::max(1.0f, desc.max_anisotropy));
+        sd.MaxAnisotropy = static_cast<UINT>(desc.max_anisotropy);
         sd.ComparisonFunc = d3d11::to_d3d_compare(desc.compare_op);
         sd.BorderColor[0] = sd.BorderColor[1] = sd.BorderColor[2] = 0.0f;
         sd.BorderColor[3] = 1.0f;

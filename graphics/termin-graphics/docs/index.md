@@ -80,6 +80,30 @@ handles; `tc_texture_shutdown()` releases them with the rest of the registry.
 Python helpers are stateless views over these accessors and must not retain
 parallel module-level texture or handle caches.
 
+Sampling state lives in the texture's authoritative `tc_sampler_desc`: min,
+mag and mip filters, U/V/W addressing, anisotropy and comparison. Registry
+creation and lazy declaration initialize linear filtering, repeat addressing,
+anisotropy 1 and disabled comparison. `tc_texture_set_sampler()` validates the
+complete descriptor and replaces it atomically without changing the image
+version. `tc_texture_set_mipmap()` changes image version when the generated mip
+chain changes. Manually constructed C textures must explicitly initialize
+their sampler with `tc_sampler_desc_default()`.
+
+The material bridge resolves the image, reacquires the generational CPU handle
+after lazy loading, converts sampling state through `tc_sampler_to_tgfx2()` and
+binds both image and sampler. `IRenderDevice::ensure_sampler()` caches the full
+descriptor per device. Its handles are borrowed and remain owned by the native
+device until teardown; callers must not destroy them. Backend-specific limits
+are checked at creation, including integral anisotropy for D3D11/WebGPU and
+WebGPU's linear-filter requirement for anisotropy.
+
+Python exposes `TextureFilter`, `TcTexture.set_filters(min, mag, mip)` and
+filter getters, plus `TextureAddress`, `TcTexture.set_wraps(u, v, w)` and
+`address_u/v/w` getters for independent addressing, including mirrored repeat.
+The existing clamp and mipmap setters use the same descriptor
+and image-version contract. `TextureAsset` forwards `filter`, `wrap` and
+`mipmaps` metadata on initial load and reload.
+
 `tc_texture_storage_kind` describes the source of truth:
 
 - `TC_TEXTURE_STORAGE_CPU_FIRST` — pixels in `tc_texture::data` are authoritative.

@@ -6,6 +6,39 @@
 
 namespace termin {
 
+    bool TcTexture::set_filters(tc_sampler_filter min_filter,
+                                tc_sampler_filter mag_filter,
+                                tc_sampler_filter mip_filter) {
+        const auto valid_filter = [](tc_sampler_filter value) {
+            return value == TC_SAMPLER_FILTER_NEAREST || value == TC_SAMPLER_FILTER_LINEAR;
+        };
+        if (!valid_filter(min_filter) || !valid_filter(mag_filter) || !valid_filter(mip_filter)) {
+            tc::Log::error("TcTexture::set_filters: invalid sampler filter");
+            return false;
+        }
+        tc_sampler_desc value = sampler();
+        value.min_filter = static_cast<uint8_t>(min_filter);
+        value.mag_filter = static_cast<uint8_t>(mag_filter);
+        value.mip_filter = static_cast<uint8_t>(mip_filter);
+        return set_sampler(value);
+    }
+
+    bool TcTexture::set_wraps(tc_sampler_address u, tc_sampler_address v, tc_sampler_address w) {
+        const auto valid_address = [](tc_sampler_address value) {
+            return value == TC_SAMPLER_ADDRESS_REPEAT || value == TC_SAMPLER_ADDRESS_MIRRORED_REPEAT ||
+                   value == TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE || value == TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER;
+        };
+        if (!valid_address(u) || !valid_address(v) || !valid_address(w)) {
+            tc::Log::error("TcTexture::set_wraps: invalid sampler address mode");
+            return false;
+        }
+        tc_sampler_desc value = sampler();
+        value.address_u = static_cast<uint8_t>(u);
+        value.address_v = static_cast<uint8_t>(v);
+        value.address_w = static_cast<uint8_t>(w);
+        return set_sampler(value);
+    }
+
     TcTexture TcTexture::from_data(const TcTextureCreateInfo& info) {
         const TexturePixelDataView& pixels = info.pixels;
         if (!tc_texture_validate_pixel_data(&pixels, nullptr))
@@ -124,9 +157,16 @@ namespace termin {
         tex->height = 1;
         tex->channels = 1;
         tex->format = TC_TEXTURE_DEPTH24;
-        tex->compare_mode = 1; // Enable depth comparison for sampler2DShadow
-        tex->clamp = 1;
-        tex->mipmap = 0;
+        tc_sampler_desc sampler = tc_sampler_desc_default();
+        sampler.address_u = sampler.address_v = sampler.address_w = TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+        sampler.compare_enable = 1;
+        sampler.compare_op = TC_SAMPLER_COMPARE_LESS_EQUAL;
+        if (!tc_texture_set_sampler(tex, &sampler)) {
+            tc::Log::error("TcTexture::dummy_shadow_1x1: failed to set comparison sampler");
+            tc_texture_destroy(h);
+            return TcTexture();
+        }
+        tc_texture_set_mipmap(tex, false);
         tex->header.version = 1;
 
         if (tex->header.name) {

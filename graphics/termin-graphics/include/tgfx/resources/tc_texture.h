@@ -63,6 +63,48 @@ typedef enum tc_texture_usage_flags {
     TC_TEXTURE_USAGE_COPY_DST = 1u << 4,         // valid destination for blit / copy / upload
 } tc_texture_usage_flags;
 
+// Sampler state is independent of the image's storage and generated mip chain.
+typedef enum tc_sampler_filter {
+    TC_SAMPLER_FILTER_NEAREST = 0,
+    TC_SAMPLER_FILTER_LINEAR = 1,
+} tc_sampler_filter;
+
+typedef enum tc_sampler_address {
+    TC_SAMPLER_ADDRESS_REPEAT = 0,
+    TC_SAMPLER_ADDRESS_MIRRORED_REPEAT = 1,
+    TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE = 2,
+    TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER = 3,
+} tc_sampler_address;
+
+typedef enum tc_sampler_compare_op {
+    TC_SAMPLER_COMPARE_NEVER = 0,
+    TC_SAMPLER_COMPARE_LESS = 1,
+    TC_SAMPLER_COMPARE_EQUAL = 2,
+    TC_SAMPLER_COMPARE_LESS_EQUAL = 3,
+    TC_SAMPLER_COMPARE_GREATER = 4,
+    TC_SAMPLER_COMPARE_NOT_EQUAL = 5,
+    TC_SAMPLER_COMPARE_GREATER_EQUAL = 6,
+    TC_SAMPLER_COMPARE_ALWAYS = 7,
+} tc_sampler_compare_op;
+
+typedef struct tc_sampler_desc {
+    uint8_t min_filter;     // tc_sampler_filter
+    uint8_t mag_filter;     // tc_sampler_filter
+    uint8_t mip_filter;     // tc_sampler_filter
+    uint8_t address_u;      // tc_sampler_address
+    uint8_t address_v;      // tc_sampler_address
+    uint8_t address_w;      // tc_sampler_address
+    uint8_t compare_enable; // boolean, 0 or 1
+    uint8_t compare_op;     // tc_sampler_compare_op
+    float max_anisotropy;
+} tc_sampler_desc;
+
+// Linear min/mag/mip, Repeat U/V/W, anisotropy 1, comparison disabled/Never.
+TGFX_API tc_sampler_desc tc_sampler_desc_default(void);
+// Portable descriptor validation. Device-specific limits are checked by the
+// native backend. Invalid descriptors are logged and rejected unchanged.
+TGFX_API bool tc_sampler_desc_validate(const tc_sampler_desc* sampler);
+
 // ============================================================================
 // Texture data
 // ============================================================================
@@ -79,8 +121,7 @@ typedef struct tc_texture {
     uint8_t flip_y;          // transform flag (default true for OpenGL)
     uint8_t transpose;       // transform flag
     uint8_t mipmap;          // generate mipmaps on upload
-    uint8_t clamp;           // use clamp wrapping (vs repeat)
-    uint8_t compare_mode;    // enable depth comparison for sampler2DShadow
+    tc_sampler_desc sampler; // authoritative sampling state, independent of image version
     uint8_t storage_kind;    // tc_texture_storage_kind, default = CPU_FIRST
     uint32_t usage;          // tc_texture_usage_flags bitset, default = SAMPLED
     const char* source_path; // optional source file path (interned string)
@@ -137,6 +178,14 @@ TGFX_API void tc_texture_set_usage(tc_texture* tex, uint32_t usage);
 // for an unknown enum value. A real change bumps header.version so every
 // per-device native texture cache recreates the image with the new format.
 TGFX_API bool tc_texture_set_encoding(tc_texture* tex, tc_texture_encoding encoding);
+
+// Atomic sampler replacement. Changes do not bump header.version or reupload
+// the image; material binding resolves the descriptor on each use.
+TGFX_API bool tc_texture_set_sampler(tc_texture* tex, const tc_sampler_desc* sampler);
+
+// Generated mip levels belong to the image. A changed flag bumps its version;
+// reapplying the same flag is a no-op.
+TGFX_API void tc_texture_set_mipmap(tc_texture* tex, bool enable);
 
 // Set width/height/format in one call. Bumps `header.version` so cached
 // GPU handles get re-created on the next bridge lookup. Used by render

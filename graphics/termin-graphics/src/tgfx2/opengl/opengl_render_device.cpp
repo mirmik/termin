@@ -6,11 +6,13 @@
 #include "tgfx2/opengl/opengl_type_conversions.hpp"
 #include "tgfx2/pixel_format_utils.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
+#include "tgfx2/tc_sampler_bridge.hpp"
 #include "tgfx2/tc_texture_upload.hpp"
 
 #include <array>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -392,6 +394,65 @@ namespace tgfx {
             return true;
         }
 
+        bool validate_sampler_anisotropy(float anisotropy) {
+            if (!std::isfinite(anisotropy) || anisotropy < 1.0f) {
+                tc_log_error("OpenGLRenderDevice: unsupported sampler anisotropy=%g (must be finite and >=1)",
+                             anisotropy);
+                return false;
+            }
+            if (anisotropy == 1.0f)
+                return true;
+            GLint extension_count = 0;
+            glGetIntegerv(GL_NUM_EXTENSIONS, &extension_count);
+            bool supported = false;
+            for (GLint index = 0; index < extension_count; ++index) {
+                const char* extension = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, index));
+                if (extension && (std::strcmp(extension, "GL_EXT_texture_filter_anisotropic") == 0 ||
+                                  std::strcmp(extension, "GL_ARB_texture_filter_anisotropic") == 0)) {
+                    supported = true;
+                    break;
+                }
+            }
+            if (!supported) {
+                tc_log_error("OpenGLRenderDevice: sampler anisotropy=%g requires texture_filter_anisotropic",
+                             anisotropy);
+                return false;
+            }
+            GLfloat maximum = 1.0f;
+            glGetFloatv(0x84FF, &maximum); // GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT/ARB
+            if (anisotropy > maximum) {
+                tc_log_error("OpenGLRenderDevice: sampler anisotropy=%g exceeds hardware maximum=%g",
+                             anisotropy, maximum);
+                return false;
+            }
+            return true;
+        }
+
+        bool validate_native_sampler(const SamplerDesc& sampler, GlFeatureTier tier) {
+            if (tier == GlFeatureTier::WebGL2 && (sampler.address_u == AddressMode::ClampToBorder ||
+                                                sampler.address_v == AddressMode::ClampToBorder ||
+                                                sampler.address_w == AddressMode::ClampToBorder)) {
+                tc_log_error("OpenGLRenderDevice: ClampToBorder samplers are unsupported by WebGL2");
+                return false;
+            }
+            return validate_sampler_anisotropy(sampler.max_anisotropy);
+        }
+
+        void apply_texture_sampler(GLenum target, const SamplerDesc& sampler, uint32_t mip_levels) {
+            glTexParameteri(target, GL_TEXTURE_MIN_FILTER,
+                            mip_levels > 1 ? gl::to_gl_min_filter(sampler.min_filter, sampler.mip_filter)
+                                           : gl::to_gl_filter(sampler.min_filter));
+            glTexParameteri(target, GL_TEXTURE_MAG_FILTER, gl::to_gl_filter(sampler.mag_filter));
+            glTexParameteri(target, GL_TEXTURE_WRAP_S, gl::to_gl_address_mode(sampler.address_u));
+            glTexParameteri(target, GL_TEXTURE_WRAP_T, gl::to_gl_address_mode(sampler.address_v));
+            glTexParameteri(target, GL_TEXTURE_WRAP_R, gl::to_gl_address_mode(sampler.address_w));
+            glTexParameteri(target, GL_TEXTURE_COMPARE_MODE,
+                            sampler.compare_enable ? GL_COMPARE_REF_TO_TEXTURE : GL_NONE);
+            glTexParameteri(target, GL_TEXTURE_COMPARE_FUNC, gl::to_gl_compare(sampler.compare_op));
+            if (sampler.max_anisotropy > 1.0f)
+                glTexParameterf(target, 0x84FE, sampler.max_anisotropy); // GL_TEXTURE_MAX_ANISOTROPY_EXT/ARB
+        }
+
     } // anonymous namespace
 
     TextureHandle OpenGLRenderDevice::ensure_tc_texture(tc_texture* tex) {
@@ -430,6 +491,9 @@ namespace tgfx {
         if (it != tc_texture_cache_.end() && it->second.version == version) {
             return it->second.handle;
         }
+        SamplerDesc sampler;
+        if (!tc_sampler_to_tgfx2(tex->sampler, sampler) || !validate_native_sampler(sampler, gl_features_.tier))
+            return {};
         if (it != tc_texture_cache_.end()) {
             if (it->second.handle)
                 destroy(it->second.handle);
@@ -468,13 +532,10 @@ namespace tgfx {
                              tex->header.name ? tex->header.name : tex->header.uuid);
                 return {};
             }
-            if (tex->compare_mode) {
-                if (auto* gl_tex = get_texture(handle)) {
-                    glBindTexture(gl_tex->target, gl_tex->gl_id);
-                    glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-                    glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-                    glBindTexture(gl_tex->target, 0);
-                }
+            if (auto* gl_tex = get_texture(handle)) {
+                glBindTexture(gl_tex->target, gl_tex->gl_id);
+                apply_texture_sampler(gl_tex->target, sampler, desc.mip_levels);
+                glBindTexture(gl_tex->target, 0);
             }
             CachedTcTextureEntry entry;
             entry.handle = handle;
@@ -506,15 +567,7 @@ namespace tgfx {
 
         if (auto* gl_tex = get_texture(handle)) {
             glBindTexture(gl_tex->target, gl_tex->gl_id);
-            if (desc.mip_levels > 1) {
-                glTexParameteri(gl_tex->target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            }
-            glTexParameteri(gl_tex->target, GL_TEXTURE_WRAP_S, tex->clamp ? GL_CLAMP_TO_EDGE : GL_REPEAT);
-            glTexParameteri(gl_tex->target, GL_TEXTURE_WRAP_T, tex->clamp ? GL_CLAMP_TO_EDGE : GL_REPEAT);
-            if (tex->compare_mode) {
-                glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-                glTexParameteri(gl_tex->target, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-            }
+            apply_texture_sampler(gl_tex->target, sampler, desc.mip_levels);
             glBindTexture(gl_tex->target, 0);
         }
 
@@ -830,6 +883,8 @@ namespace tgfx {
     // --- Sampler ---
 
     SamplerHandle OpenGLRenderDevice::create_sampler(const SamplerDesc& desc) {
+        if (!validate_native_sampler(desc, gl_features_.tier))
+            return {};
         GLSampler samp;
         glGenSamplers(1, &samp.gl_id);
 

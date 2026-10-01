@@ -257,15 +257,54 @@ namespace termin {
         // Set mipmap flag (affects next upload)
         void set_mipmap(bool enable) {
             if (tc_texture* t = get()) {
-                t->mipmap = enable ? 1 : 0;
+                tc_texture_set_mipmap(t, enable);
             }
         }
 
-        // Set clamp flag (affects next upload)
+        tc_sampler_desc sampler() const {
+            tc_texture* t = get();
+            return t ? t->sampler : tc_sampler_desc_default();
+        }
+
+        // Sampler changes leave the image version unchanged.
+        bool set_sampler(const tc_sampler_desc& value) {
+            tc_texture* t = get();
+            return t && tc_texture_set_sampler(t, &value);
+        }
+
+        bool set_filters(tc_sampler_filter min_filter, tc_sampler_filter mag_filter, tc_sampler_filter mip_filter);
+
+        tc_sampler_filter min_filter() const {
+            return static_cast<tc_sampler_filter>(sampler().min_filter);
+        }
+
+        tc_sampler_filter mag_filter() const {
+            return static_cast<tc_sampler_filter>(sampler().mag_filter);
+        }
+
+        tc_sampler_filter mip_filter() const {
+            return static_cast<tc_sampler_filter>(sampler().mip_filter);
+        }
+
+        bool set_wraps(tc_sampler_address u, tc_sampler_address v, tc_sampler_address w);
+
+        tc_sampler_address address_u() const {
+            return static_cast<tc_sampler_address>(sampler().address_u);
+        }
+
+        tc_sampler_address address_v() const {
+            return static_cast<tc_sampler_address>(sampler().address_v);
+        }
+
+        tc_sampler_address address_w() const {
+            return static_cast<tc_sampler_address>(sampler().address_w);
+        }
+
+        // Convenience wrap setting, preserving filters and comparison state.
         void set_clamp(bool enable) {
-            if (tc_texture* t = get()) {
-                t->clamp = enable ? 1 : 0;
-            }
+            const tc_sampler_address address =
+                enable ? TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE : TC_SAMPLER_ADDRESS_REPEAT;
+            set_wraps(address, address, address);
         }
 
         bool mipmap() const {
@@ -275,7 +314,9 @@ namespace termin {
 
         bool clamp() const {
             tc_texture* t = get();
-            return t && t->clamp;
+            return t && t->sampler.address_u == TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE &&
+                   t->sampler.address_v == TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE &&
+                   t->sampler.address_w == TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
         }
     };
 

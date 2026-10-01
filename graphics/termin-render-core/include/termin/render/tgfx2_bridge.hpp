@@ -35,6 +35,16 @@ namespace termin {
     // fails.
     RENDER_CORE_API tgfx::TextureHandle wrap_tc_texture_as_tgfx2(tgfx::IRenderDevice& device, tc_texture_handle handle);
 
+    struct Tgfx2TextureBinding {
+        tgfx::TextureHandle texture;
+        tgfx::SamplerHandle sampler;
+    };
+
+    // Both handles are borrowed from the device. Resolve the CPU handle again
+    // after lazy image loading, which may relocate or destroy registry entries.
+    RENDER_CORE_API Tgfx2TextureBinding resolve_tc_texture_binding(tgfx::IRenderDevice& device,
+                                                                  tc_texture_handle handle);
+
     // Complement to wrap_tc_texture_as_tgfx2. Currently a no-op: the
     // IRenderDevice cache owns the handle and releases it on cache
     // invalidation, device teardown, or tc_texture destroy-hook.

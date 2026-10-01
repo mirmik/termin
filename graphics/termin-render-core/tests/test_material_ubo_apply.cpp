@@ -8,10 +8,20 @@ GUARD_TEST_MAIN();
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include <tcbase/tc_log.h>
 #include <termin/render/material_ubo_apply.hpp>
 #include <tgfx2/frame_data_cache.hpp>
+#include <tgfx2/pipeline_cache.hpp>
+#include <tgfx2/render_context.hpp>
+#include <termin/render/tgfx2_bridge.hpp>
+#include "render_execution_recording_device.hpp"
+
+extern "C" {
+#include <tcbase/tc_resource.h>
+#include <tgfx/resources/tc_texture_registry.h>
+}
 
 namespace {
 
@@ -77,6 +87,189 @@ namespace {
     }
 
 } // namespace
+
+namespace {
+    struct MaterialTextureRegistry {
+        MaterialTextureRegistry() { tc_texture_init(); }
+        ~MaterialTextureRegistry() {
+            tc_resource_clear_loader();
+            tc_texture_shutdown();
+        }
+    };
+
+    class MaterialTextureDevice : public termin::test::ExecutionRecordingDevice {
+    public:
+        std::vector<tgfx::SamplerDesc> samplers;
+        std::vector<std::vector<tgfx::BoundResourceBinding>> bound_sets;
+        uint32_t image_uploads = 0;
+        uint32_t image_version = 0;
+        bool destroy_after_image = false;
+
+        tgfx::SamplerHandle create_sampler(const tgfx::SamplerDesc& desc) override {
+            samplers.push_back(desc);
+            return tgfx::SamplerHandle{static_cast<uint32_t>(samplers.size())};
+        }
+        uintptr_t pipeline_resource_layout_token(tgfx::PipelineHandle) const override { return 1; }
+        tgfx::ResourceSetHandle create_bound_resource_set(const tgfx::BoundResourceSetDesc& desc) override {
+            std::vector<tgfx::BoundResourceBinding> values;
+            tgfx::for_each_bound_resource_binding(desc, [&](const auto& binding) {
+                values.push_back(binding);
+            });
+            bound_sets.push_back(std::move(values));
+            return tgfx::ResourceSetHandle{static_cast<uint32_t>(bound_sets.size())};
+        }
+        tgfx::TextureHandle ensure_tc_texture(tc_texture* texture) override {
+            const auto handle = tc_texture_find(texture->header.uuid);
+            if (!texture->header.is_loaded && !tc_texture_ensure_loaded(handle))
+                return {};
+            texture = tc_texture_get(handle);
+            if (!texture)
+                return {};
+            if (image_version != texture->header.version) {
+                image_version = texture->header.version;
+                ++image_uploads;
+            }
+            if (destroy_after_image)
+                tc_texture_destroy(handle);
+            return tgfx::TextureHandle{100 + image_uploads};
+        }
+    };
+
+    struct MaterialTextureLoader {
+        tc_texture_handle handle = tc_texture_handle_invalid();
+        bool relocated = false;
+
+        static bool load(const char*, void* user) {
+            auto& loader = *static_cast<MaterialTextureLoader*>(user);
+            const auto old = reinterpret_cast<uintptr_t>(tc_texture_get(loader.handle));
+            for (int i = 0; i < 64; ++i)
+                tc_texture_create(nullptr);
+            tc_texture* texture = tc_texture_get(loader.handle);
+            loader.relocated = old != reinterpret_cast<uintptr_t>(texture);
+            auto sampler = tc_sampler_desc_default();
+            sampler.address_u = TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+            sampler.min_filter = TC_SAMPLER_FILTER_NEAREST;
+            if (!tc_texture_set_sampler(texture, &sampler))
+                return false;
+            const uint8_t pixel[] = {255, 255, 255, 255};
+            const tc_texture_pixel_data pixels{pixel, sizeof(pixel), 1, 1, 4};
+            return tc_texture_set_data(texture, &pixels, nullptr, nullptr);
+        }
+    };
+}
+
+TEST_CASE("material binding passes the CPU sampler and reuses the image after sampler edits") {
+    MaterialTextureRegistry registry;
+    const auto handle = tc_texture_create("material-sampler-test");
+    tc_texture* texture = tc_texture_get(handle);
+    REQUIRE(texture != nullptr);
+    const uint8_t pixel[] = {255, 255, 255, 255};
+    const tc_texture_pixel_data pixels{pixel, sizeof(pixel), 1, 1, 4};
+    REQUIRE(tc_texture_set_data(texture, &pixels, nullptr, nullptr));
+    auto sampler = tc_sampler_desc_default();
+    sampler.min_filter = TC_SAMPLER_FILTER_NEAREST;
+    sampler.mag_filter = TC_SAMPLER_FILTER_LINEAR;
+    sampler.mip_filter = TC_SAMPLER_FILTER_NEAREST;
+    sampler.address_v = TC_SAMPLER_ADDRESS_MIRRORED_REPEAT;
+    sampler.address_w = TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+    REQUIRE(tc_texture_set_sampler(texture, &sampler));
+    const uint32_t original_version = texture->header.version;
+
+    tc_shader_resource_binding resource{};
+    std::snprintf(resource.name, sizeof(resource.name), "%s", "u_checker");
+    resource.kind = TC_SHADER_RESOURCE_TEXTURE;
+    resource.scope = TC_SHADER_RESOURCE_SCOPE_MATERIAL;
+    resource.stage_mask = TC_SHADER_STAGE_FRAGMENT;
+    tc_shader shader{};
+    shader.has_resource_layout = 1;
+    shader.resource_bindings = &resource;
+    shader.resource_binding_count = 1;
+    tc_material_texture entry{};
+    std::snprintf(entry.name, sizeof(entry.name), "%s", "u_checker");
+    entry.texture = handle;
+    tc_material_phase phase{};
+    phase.owner_material = tc_material_handle_invalid();
+    phase.textures[0] = entry;
+    phase.texture_count = 1;
+
+    MaterialTextureDevice device;
+    tgfx::PipelineCache cache(device);
+    tgfx::RenderContext2 context(device, cache);
+    context.begin_frame();
+    tgfx::RenderPassDesc pass;
+    pass.colors.resize(1);
+    tgfx::TextureDesc target;
+    target.usage = tgfx::TextureUsage::ColorAttachment;
+    pass.colors[0].texture = device.create_texture(target);
+    REQUIRE(context.begin_pass(pass));
+    context.bind_shader(tgfx::ShaderHandle{1}, tgfx::ShaderHandle{2});
+    context.use_shader_resource_layout(&shader);
+    const auto draw = [&]() {
+        REQUIRE(termin::apply_material_phase_ubo(&phase, &shader, device, context));
+        context.draw_arrays(tgfx::BufferHandle{12}, 3);
+    };
+    draw();
+    REQUIRE(device.samplers.size() == 1u);
+    CHECK(device.samplers[0].min_filter == tgfx::FilterMode::Nearest);
+    CHECK(device.samplers[0].mag_filter == tgfx::FilterMode::Linear);
+    CHECK(device.samplers[0].mip_filter == tgfx::FilterMode::Nearest);
+    CHECK(device.samplers[0].address_u == tgfx::AddressMode::Repeat);
+    CHECK(device.samplers[0].address_v == tgfx::AddressMode::MirroredRepeat);
+    CHECK(device.samplers[0].address_w == tgfx::AddressMode::ClampToEdge);
+    REQUIRE(!device.bound_sets.empty());
+    REQUIRE(device.bound_sets.back().size() == 1u);
+    const auto first = device.bound_sets.back()[0].value;
+    CHECK(first.texture.id == 101u);
+    CHECK(first.sampler.id == 1u);
+
+    sampler.min_filter = TC_SAMPLER_FILTER_LINEAR;
+    sampler.address_u = TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+    REQUIRE(tc_texture_set_sampler(texture, &sampler));
+    draw();
+    CHECK(texture->header.version == original_version);
+    CHECK(device.image_uploads == 1u);
+    REQUIRE(device.samplers.size() == 2u);
+    REQUIRE(device.bound_sets.back().size() == 1u);
+    CHECK(device.bound_sets.back()[0].value.texture == first.texture);
+    CHECK(device.bound_sets.back()[0].value.sampler.id == 2u);
+    draw();
+    CHECK(device.samplers.size() == 2u);
+    CHECK(device.image_uploads == 1u);
+
+    tc_texture_set_mipmap(texture, !texture->mipmap);
+    draw();
+    CHECK(device.image_uploads == 2u);
+    CHECK(device.samplers.size() == 2u);
+    CHECK(device.bound_sets.back()[0].value.texture.id == 102u);
+    CHECK(device.bound_sets.back()[0].value.sampler.id == 2u);
+    context.end_pass();
+    context.end_frame();
+}
+
+TEST_CASE("texture binding reacquires sampler state after lazy registry relocation") {
+    MaterialTextureRegistry registry;
+    MaterialTextureLoader loader;
+    loader.handle = tc_texture_declare("material-lazy-sampler", "lazy sampler");
+    tc_resource_set_loader(MaterialTextureLoader::load, &loader);
+    MaterialTextureDevice device;
+    const auto binding = termin::resolve_tc_texture_binding(device, loader.handle);
+    REQUIRE(loader.relocated);
+    CHECK(static_cast<bool>(binding.texture));
+    CHECK(static_cast<bool>(binding.sampler));
+    REQUIRE(device.samplers.size() == 1u);
+    CHECK(device.samplers[0].address_u == tgfx::AddressMode::ClampToEdge);
+    CHECK(device.samplers[0].min_filter == tgfx::FilterMode::Nearest);
+
+    device.destroy_after_image = true;
+    captured_log.clear();
+    tc_log_set_callback(capture_log);
+    const auto disappeared = termin::resolve_tc_texture_binding(device, loader.handle);
+    tc_log_set_callback(nullptr);
+    CHECK_FALSE(static_cast<bool>(disappeared.texture));
+    CHECK_FALSE(static_cast<bool>(disappeared.sampler));
+    CHECK(captured_log.find("disappeared") != std::string::npos);
+    CHECK(device.samplers.size() == 1u);
+}
 
 TEST_CASE("material UBO Bool field packs Bool uniforms as int32") {
     std::array<uint8_t, 16> buffer{};

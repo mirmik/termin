@@ -1,10 +1,14 @@
 #pragma once
 
 #include <atomic>
+#include <cmath>
 #include <cstdint>
+#include <exception>
+#include <map>
 #include <memory>
 #include <span>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 #include "tgfx2/backend_binding_plan.hpp"
@@ -17,6 +21,7 @@
 #include "tgfx2/tgfx2_api.h"
 #include <termin/geom/bounds2.hpp>
 #include <termin/geom/color.hpp>
+#include <tcbase/tc_log.h>
 
 // Forward-declare tc_texture / tc_mesh — the per-device tc-resource
 // cache hooks below take pointers to them. Full definitions live in C
@@ -43,6 +48,10 @@ namespace tgfx {
     class IRenderDevice {
     private:
         struct LifetimeToken {};
+
+        using SamplerKey = std::tuple<FilterMode, FilterMode, FilterMode, AddressMode, AddressMode, AddressMode,
+                                      float, bool, CompareOp>;
+        std::map<SamplerKey, SamplerHandle> sampler_cache_;
 
         termin::ShaderArtifactResolver shader_artifact_resolver_;
         bool shader_artifact_resolver_configured_ = false;
@@ -129,6 +138,51 @@ namespace tgfx {
         virtual BufferHandle create_buffer(const BufferDesc& desc) = 0;
         virtual TextureHandle create_texture(const TextureDesc& desc) = 0;
         virtual SamplerHandle create_sampler(const SamplerDesc& desc) = 0;
+
+        // Borrowed sampler handles are owned by this device's native pool.
+        // Callers must not destroy them. Variants remain alive until device
+        // teardown, including variants referenced by pending GPU work. The
+        // base cache never calls virtual destroy() during destruction.
+        // Like other device resource creation, calls are serialized by the
+        // owning runtime; this cache adds no GPU thread-safety guarantee.
+        SamplerHandle ensure_sampler(const SamplerDesc& desc) {
+            const auto valid_filter = [](FilterMode value) {
+                return value == FilterMode::Nearest || value == FilterMode::Linear;
+            };
+            const auto valid_address = [](AddressMode value) {
+                return value >= AddressMode::Repeat && value <= AddressMode::ClampToBorder;
+            };
+            if (!valid_filter(desc.min_filter) || !valid_filter(desc.mag_filter) || !valid_filter(desc.mip_filter) ||
+                !valid_address(desc.address_u) || !valid_address(desc.address_v) || !valid_address(desc.address_w) ||
+                desc.compare_op < CompareOp::Never || desc.compare_op > CompareOp::Always ||
+                !std::isfinite(desc.max_anisotropy) || desc.max_anisotropy < 1.0f) {
+                tc_log_error("IRenderDevice::ensure_sampler: invalid sampler descriptor");
+                return {};
+            }
+            // Compare explicit values, never object representation or padding.
+            const SamplerKey key{desc.min_filter, desc.mag_filter, desc.mip_filter,
+                                 desc.address_u, desc.address_v, desc.address_w,
+                                 desc.max_anisotropy, desc.compare_enable, desc.compare_op};
+            if (const auto it = sampler_cache_.find(key); it != sampler_cache_.end())
+                return it->second;
+            SamplerHandle handle;
+            try {
+                handle = create_sampler(desc);
+            } catch (const std::exception& error) {
+                tc_log_error("IRenderDevice::ensure_sampler: backend sampler creation failed: %s", error.what());
+                throw;
+            } catch (...) {
+                tc_log_error("IRenderDevice::ensure_sampler: backend sampler creation failed");
+                throw;
+            }
+            if (!handle) {
+                tc_log_error("IRenderDevice::ensure_sampler: backend returned an empty sampler handle");
+                return {};
+            }
+            sampler_cache_.emplace(key, handle);
+            return handle;
+        }
+
         virtual ShaderHandle create_shader(const ShaderDesc& desc) = 0;
         virtual PipelineHandle create_pipeline(const PipelineDesc& desc) = 0;
         // Backend-neutral binding boundary. Values are paired with placement

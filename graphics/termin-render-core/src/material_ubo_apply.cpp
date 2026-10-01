@@ -462,7 +462,7 @@ namespace termin {
             log_missing_material_resource_once(shader, TC_SHADER_RESOURCE_MATERIAL, reason);
         }
 
-        // Wrap each phase texture as a tgfx::TextureHandle. Textures bind by
+        // Resolve each phase texture's device image and sampler. Textures bind by
         // material property name so RenderContext2 can resolve kind/scope/backend
         // placement from tc_shader_resource_binding.
         for (size_t i = 0; i < phase->texture_count; i++) {
@@ -470,11 +470,11 @@ namespace termin {
             if (tc_texture_handle_is_invalid(mat_tex.texture)) {
                 continue;
             }
-            tgfx::TextureHandle tex2 = wrap_tc_texture_as_tgfx2(device, mat_tex.texture);
-            if (tex2) {
+            const Tgfx2TextureBinding binding = resolve_tc_texture_binding(device, mat_tex.texture);
+            if (binding.texture) {
                 const tc_shader_resource_binding* rb = tc_shader_find_resource_binding(shader, mat_tex.name);
                 if (rb && rb->kind == TC_SHADER_RESOURCE_TEXTURE) {
-                    ctx.bind_texture(rb, tex2);
+                    ctx.bind_texture(rb, binding.texture, binding.sampler);
                     bound_any = true;
                 } else {
                     if (!rb && tc_shader_has_resource_layout(shader)) {

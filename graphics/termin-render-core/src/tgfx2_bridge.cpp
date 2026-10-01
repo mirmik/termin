@@ -9,6 +9,7 @@
 #include "tgfx/resources/tc_texture_registry.h"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/i_render_device.hpp"
+#include "tgfx2/tc_sampler_bridge.hpp"
 
 namespace termin {
 
@@ -26,6 +27,28 @@ namespace termin {
         }
 
         return device.ensure_tc_texture(tex);
+    }
+
+    Tgfx2TextureBinding resolve_tc_texture_binding(tgfx::IRenderDevice& device, tc_texture_handle handle) {
+        const tgfx::TextureHandle image = wrap_tc_texture_as_tgfx2(device, handle);
+        if (!image)
+            return {};
+        const tc_texture* texture = tc_texture_get(handle);
+        if (!texture) {
+            tc::Log::error("resolve_tc_texture_binding: texture disappeared during image loading (index=%u gen=%u)",
+                           handle.index, handle.generation);
+            return {};
+        }
+        tgfx::SamplerDesc descriptor;
+        if (!tgfx::tc_sampler_to_tgfx2(texture->sampler, descriptor)) {
+            tc::Log::error("resolve_tc_texture_binding: invalid sampler (index=%u gen=%u)",
+                           handle.index, handle.generation);
+            return {};
+        }
+        const tgfx::SamplerHandle sampler = device.ensure_sampler(descriptor);
+        if (!sampler)
+            return {};
+        return {image, sampler};
     }
 
     void release_texture_binding(tgfx::IRenderDevice& device, tgfx::TextureHandle binding) {

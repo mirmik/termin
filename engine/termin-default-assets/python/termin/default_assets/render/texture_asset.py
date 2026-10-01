@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin_assets import DataAsset
-from termin.graphics import TcTexture, TextureEncoding
+from termin.base import log
+from termin.graphics import TcTexture, TextureEncoding, TextureFilter
 
 from termin.default_assets.render.texture_spec import validate_texture_encoding
 
@@ -201,6 +202,11 @@ class TextureAsset(DataAsset[TcTexture]):
     # --- Content parsing ---
 
     def _texture_from_decoded(self, decoded, source_path: str = "") -> TcTexture:
+        native_filter = self._native_filter()
+        if self._wrap not in {"clamp", "repeat"}:
+            message = f"Unsupported texture wrap: {self._wrap}"
+            log.error(f"[TextureAsset] {message}")
+            raise ValueError(message)
         data = decoded.to_numpy(copy=True)
         texture = TcTexture.from_data(
             data=data,
@@ -215,9 +221,16 @@ class TextureAsset(DataAsset[TcTexture]):
             uuid=self.uuid,
             encoding=self._native_encoding(),
         )
+        self._apply_sampler_settings(texture, native_filter)
+        return texture
+
+    def _apply_sampler_settings(self, texture: TcTexture, native_filter: TextureFilter) -> None:
+        if not texture.set_filters(native_filter, native_filter, native_filter):
+            message = f"Failed to configure sampler for texture {self._name!r}"
+            log.error(f"[TextureAsset] {message}")
+            raise RuntimeError(message)
         texture.set_mipmap(self._mipmaps)
         texture.set_clamp(self._wrap == "clamp")
-        return texture
 
     def _parse_content(self, content: bytes) -> TcTexture | None:
         """Parse image bytes into TcTexture."""
@@ -292,12 +305,14 @@ class TextureAsset(DataAsset[TcTexture]):
                 else TextureEncoding.LINEAR
             ),
         )
-        return cls(
+        asset = cls(
             texture_data=texture_data,
             name=name,
             uuid=texture_data.uuid,
             encoding=encoding,
         )
+        asset._apply_sampler_settings(texture_data, TextureFilter.LINEAR)
+        return asset
 
     @classmethod
     def white_1x1(cls) -> "TextureAsset":
@@ -312,3 +327,12 @@ class TextureAsset(DataAsset[TcTexture]):
         if self._encoding == "srgb":
             return TextureEncoding.SRGB
         return TextureEncoding.LINEAR
+
+    def _native_filter(self) -> TextureFilter:
+        if self._filter == "nearest":
+            return TextureFilter.NEAREST
+        if self._filter == "linear":
+            return TextureFilter.LINEAR
+        message = f"Unsupported texture filter: {self._filter}"
+        log.error(f"[TextureAsset] {message}")
+        raise ValueError(message)

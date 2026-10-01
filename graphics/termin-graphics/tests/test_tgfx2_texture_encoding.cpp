@@ -94,6 +94,36 @@ TEST_CASE("native format mappings preserve sRGB storage") {
 #endif
 }
 
+#ifdef TGFX2_HAS_D3D11
+TEST_CASE("D3D11 preserves independent min mag mip filters and comparison semantics") {
+    for (const auto min : {tgfx::FilterMode::Nearest, tgfx::FilterMode::Linear}) {
+        for (const auto mag : {tgfx::FilterMode::Nearest, tgfx::FilterMode::Linear}) {
+            for (const auto mip : {tgfx::FilterMode::Nearest, tgfx::FilterMode::Linear}) {
+                for (const bool comparison : {false, true}) {
+                    tgfx::SamplerDesc desc;
+                    desc.min_filter = min;
+                    desc.mag_filter = mag;
+                    desc.mip_filter = mip;
+                    desc.compare_enable = comparison;
+                    const auto native = static_cast<unsigned>(tgfx::d3d11::to_d3d_filter(desc));
+                    // Check the native D3D11 filter fields independently of the conversion table.
+                    CHECK_EQ((native >> 4u) & 3u, min == tgfx::FilterMode::Linear ? 1u : 0u);
+                    CHECK_EQ((native >> 2u) & 3u, mag == tgfx::FilterMode::Linear ? 1u : 0u);
+                    CHECK_EQ(native & 3u, mip == tgfx::FilterMode::Linear ? 1u : 0u);
+                    CHECK_EQ(native & 0x80u, comparison ? 0x80u : 0u);
+                }
+            }
+        }
+    }
+
+    tgfx::SamplerDesc anisotropic;
+    anisotropic.max_anisotropy = 4.0f;
+    CHECK_EQ(tgfx::d3d11::to_d3d_filter(anisotropic), D3D11_FILTER_ANISOTROPIC);
+    anisotropic.compare_enable = true;
+    CHECK_EQ(tgfx::d3d11::to_d3d_filter(anisotropic), D3D11_FILTER_COMPARISON_ANISOTROPIC);
+}
+#endif
+
 TEST_CASE("sRGB reference transfer preserves alpha as linear data") {
     const float encoded = 128.0f / 255.0f;
     const float linear_rgb = encoded <= 0.04045f ? encoded / 12.92f : std::pow((encoded + 0.055f) / 1.055f, 2.4f);

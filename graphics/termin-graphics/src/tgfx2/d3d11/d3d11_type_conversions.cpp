@@ -234,25 +234,34 @@ namespace tgfx::d3d11 {
     }
 
     D3D11_FILTER to_d3d_filter(const SamplerDesc& desc) {
+        if (desc.max_anisotropy > 1.0f) {
+            return desc.compare_enable ? D3D11_FILTER_COMPARISON_ANISOTROPIC : D3D11_FILTER_ANISOTROPIC;
+        }
         const bool min_linear = desc.min_filter == FilterMode::Linear;
         const bool mag_linear = desc.mag_filter == FilterMode::Linear;
         const bool mip_linear = desc.mip_filter == FilterMode::Linear;
-        if (desc.compare_enable) {
-            if (min_linear && mag_linear && mip_linear)
-                return D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
-            if (!min_linear && !mag_linear && !mip_linear)
-                return D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
-            return D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
-        }
-        if (min_linear && mag_linear && mip_linear)
-            return D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        if (!min_linear && !mag_linear && !mip_linear)
-            return D3D11_FILTER_MIN_MAG_MIP_POINT;
-        if (min_linear && mag_linear && !mip_linear)
-            return D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-        if (!min_linear && !mag_linear && mip_linear)
-            return D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR;
-        return D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        const unsigned index = (min_linear ? 4u : 0u) | (mag_linear ? 2u : 0u) | (mip_linear ? 1u : 0u);
+        static constexpr D3D11_FILTER filters[] = {
+            D3D11_FILTER_MIN_MAG_MIP_POINT,
+            D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+            D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
+            D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR,
+            D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT,
+            D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+            D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+            D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+        };
+        static constexpr D3D11_FILTER comparison_filters[] = {
+            D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
+            D3D11_FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR,
+            D3D11_FILTER_COMPARISON_MIN_POINT_MAG_LINEAR_MIP_POINT,
+            D3D11_FILTER_COMPARISON_MIN_POINT_MAG_MIP_LINEAR,
+            D3D11_FILTER_COMPARISON_MIN_LINEAR_MAG_MIP_POINT,
+            D3D11_FILTER_COMPARISON_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+            D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+            D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+        };
+        return desc.compare_enable ? comparison_filters[index] : filters[index];
     }
 
     D3D11_TEXTURE_ADDRESS_MODE to_d3d_address(AddressMode mode) {

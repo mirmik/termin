@@ -35,6 +35,16 @@ namespace tgfx_bindings {
             .value("SRGB", tgfx::TextureEncoding::SRGB)
             .export_values();
 
+        nb::enum_<tc_sampler_filter>(m, "TextureFilter")
+            .value("NEAREST", TC_SAMPLER_FILTER_NEAREST)
+            .value("LINEAR", TC_SAMPLER_FILTER_LINEAR);
+
+        nb::enum_<tc_sampler_address>(m, "TextureAddress")
+            .value("REPEAT", TC_SAMPLER_ADDRESS_REPEAT)
+            .value("MIRRORED_REPEAT", TC_SAMPLER_ADDRESS_MIRRORED_REPEAT)
+            .value("CLAMP_TO_EDGE", TC_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+            .value("CLAMP_TO_BORDER", TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER);
+
         nb::class_<TcTexture>(m, "TcTexture")
             .def(nb::init<>())
 
@@ -52,6 +62,14 @@ namespace tgfx_bindings {
             .def_prop_ro("transpose", &TcTexture::transpose)
             .def_prop_ro("source_path", &TcTexture::source_path)
             .def_prop_ro("data_size", &TcTexture::data_size)
+            .def_prop_ro("min_filter", &TcTexture::min_filter)
+            .def_prop_ro("mag_filter", &TcTexture::mag_filter)
+            .def_prop_ro("mip_filter", &TcTexture::mip_filter)
+            .def_prop_ro("address_u", &TcTexture::address_u)
+            .def_prop_ro("address_v", &TcTexture::address_v)
+            .def_prop_ro("address_w", &TcTexture::address_w)
+            .def_prop_ro("mipmap", &TcTexture::mipmap)
+            .def_prop_ro("clamp", &TcTexture::clamp)
 
             // Data as numpy array (read-only, returns copy)
             .def_prop_ro("data",
@@ -84,7 +102,19 @@ namespace tgfx_bindings {
                  "After a successful call, .data returns pixel content.")
 
             .def("set_mipmap", &TcTexture::set_mipmap, nb::arg("enable"), "Enable/disable mipmap generation on upload")
-            .def("set_clamp", &TcTexture::set_clamp, nb::arg("enable"), "Enable/disable clamp wrapping on upload")
+            .def("set_clamp", &TcTexture::set_clamp, nb::arg("enable"), "Set all axes to clamp-to-edge or repeat")
+            .def("set_filters",
+                 &TcTexture::set_filters,
+                 nb::arg("min_filter"),
+                 nb::arg("mag_filter"),
+                 nb::arg("mip_filter"),
+                 "Set minification, magnification and mip-level filters without changing the image version")
+            .def("set_wraps",
+                 &TcTexture::set_wraps,
+                 nb::arg("u"),
+                 nb::arg("v"),
+                 nb::arg("w"),
+                 "Set independent U/V/W addressing without changing the image version")
 
             .def("set_transforms",
                  &TcTexture::set_transforms,

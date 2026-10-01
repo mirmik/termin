@@ -1,5 +1,6 @@
 // tc_texture_registry.c - Texture registry with pool + hash table
 #include "tgfx/resources/tc_texture_registry.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,6 +113,7 @@ tc_texture_handle tc_texture_create(const char* uuid) {
     tex->header.is_loaded = 1;
     tex->flip_y = 1; // Default for OpenGL
     tex->encoding = TC_TEXTURE_ENCODING_LINEAR;
+    tex->sampler = tc_sampler_desc_default();
     tex->storage_kind = TC_TEXTURE_STORAGE_CPU_FIRST;
     tex->usage = TC_TEXTURE_USAGE_SAMPLED;
 
@@ -260,6 +262,7 @@ tc_texture_handle tc_texture_declare(const char* uuid, const char* name) {
     tex->header.pool_index = h.index;
     tex->header.is_loaded = 0;
     tex->flip_y = 1;
+    tex->sampler = tc_sampler_desc_default();
     tex->storage_kind = TC_TEXTURE_STORAGE_CPU_FIRST;
     tex->usage = TC_TEXTURE_USAGE_SAMPLED;
 
@@ -530,6 +533,65 @@ void tc_texture_set_transforms(tc_texture* tex, bool flip_x, bool flip_y, bool t
     tex->flip_x = flip_x ? 1 : 0;
     tex->flip_y = flip_y ? 1 : 0;
     tex->transpose = transpose ? 1 : 0;
+    tex->header.version++;
+}
+
+tc_sampler_desc tc_sampler_desc_default(void) {
+    tc_sampler_desc sampler = {0};
+    sampler.min_filter = TC_SAMPLER_FILTER_LINEAR;
+    sampler.mag_filter = TC_SAMPLER_FILTER_LINEAR;
+    sampler.mip_filter = TC_SAMPLER_FILTER_LINEAR;
+    sampler.address_u = TC_SAMPLER_ADDRESS_REPEAT;
+    sampler.address_v = TC_SAMPLER_ADDRESS_REPEAT;
+    sampler.address_w = TC_SAMPLER_ADDRESS_REPEAT;
+    sampler.compare_op = TC_SAMPLER_COMPARE_NEVER;
+    sampler.max_anisotropy = 1.0f;
+    return sampler;
+}
+
+bool tc_sampler_desc_validate(const tc_sampler_desc* sampler) {
+    if (!sampler) {
+        tc_log_error("tc_sampler_desc_validate: sampler is null");
+        return false;
+    }
+    if (sampler->min_filter > TC_SAMPLER_FILTER_LINEAR || sampler->mag_filter > TC_SAMPLER_FILTER_LINEAR ||
+        sampler->mip_filter > TC_SAMPLER_FILTER_LINEAR || sampler->address_u > TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER ||
+        sampler->address_v > TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER ||
+        sampler->address_w > TC_SAMPLER_ADDRESS_CLAMP_TO_BORDER || sampler->compare_enable > 1 ||
+        sampler->compare_op > TC_SAMPLER_COMPARE_ALWAYS || !isfinite(sampler->max_anisotropy) ||
+        sampler->max_anisotropy < 1.0f) {
+        tc_log_error("tc_sampler_desc_validate: invalid sampler filters=%u/%u/%u address=%u/%u/%u compare=%u/%u "
+                     "anisotropy=%g",
+                     (unsigned)sampler->min_filter, (unsigned)sampler->mag_filter, (unsigned)sampler->mip_filter,
+                     (unsigned)sampler->address_u, (unsigned)sampler->address_v, (unsigned)sampler->address_w,
+                     (unsigned)sampler->compare_enable, (unsigned)sampler->compare_op, sampler->max_anisotropy);
+        return false;
+    }
+    return true;
+}
+
+bool tc_texture_set_sampler(tc_texture* tex, const tc_sampler_desc* sampler) {
+    if (!tex) {
+        tc_log_error("tc_texture_set_sampler: texture is null");
+        return false;
+    }
+    if (!tc_sampler_desc_validate(sampler)) {
+        tc_log_error("tc_texture_set_sampler: invalid sampler for texture '%s'", tex->header.uuid);
+        return false;
+    }
+    tex->sampler = *sampler;
+    return true;
+}
+
+void tc_texture_set_mipmap(tc_texture* tex, bool enable) {
+    if (!tex) {
+        tc_log_error("tc_texture_set_mipmap: texture is null");
+        return;
+    }
+    const uint8_t value = enable ? 1 : 0;
+    if (tex->mipmap == value)
+        return;
+    tex->mipmap = value;
     tex->header.version++;
 }
 

@@ -177,6 +177,7 @@ set(TGFX2_SOURCES
     src/tgfx2/graphics_host.cpp
     src/tgfx2_interop.cpp
     src/tgfx2/tc_mesh_bridge.cpp
+    src/tgfx2/tc_sampler_bridge.cpp
     src/tgfx2/tc_shader_bridge.cpp
     src/tgfx2/tc_texture_upload.cpp
     src/tgfx2/texture_pool.cpp
@@ -214,6 +215,7 @@ if(EMSCRIPTEN)
         src/tgfx2/graphics_host.cpp
         src/tgfx2_interop.cpp
         src/tgfx2/tc_mesh_bridge.cpp
+        src/tgfx2/tc_sampler_bridge.cpp
         src/tgfx2/tc_shader_bridge.cpp
         src/tgfx2/tc_texture_upload.cpp
         src/tgfx2/texture_pool.cpp
@@ -842,6 +844,7 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         tests/test_tgfx2_gl_features.cpp
         tests/test_tgfx2_point_cloud_contract.cpp
         tests/test_tgfx2_pipeline_cache_stats.cpp
+        tests/test_tgfx2_sampler_cache.cpp
         tests/test_tgfx2_texture_encoding.cpp
         tests/test_tgfx2_tc_mesh_bridge.cpp
         tests/test_tgfx2_webgpu_binding_layout.cpp
