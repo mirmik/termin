@@ -9,6 +9,7 @@ DEFAULT_ASSET_PLUGIN_SETUP_FILES = (
 )
 
 EXPECTED_PLUGIN_TYPES = {
+    "animation_clip",
     "audio_clip",
     "glb",
     "material",
@@ -23,6 +24,7 @@ EXPECTED_PLUGIN_TYPES = {
 }
 
 EXPECTED_IMPORT_EXTENSIONS = {
+    ".tanim": "animation_clip",
     ".glb": "glb",
     ".gltf": "glb",
     ".jpeg": "texture",

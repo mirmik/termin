@@ -118,6 +118,7 @@ def test_mesh_reload_updates_existing_tc_mesh_data(tmp_path) -> None:
 def test_asset_plugin_registry_can_find_default_import_plugins_by_extension() -> None:
     rm = DefaultResourceManager()
     expected_types = {
+        ".tanim": "animation_clip",
         ".obj": "mesh",
         ".wav": "audio_clip",
         ".ogg": "audio_clip",
@@ -335,6 +336,7 @@ def test_default_preloaders_use_plugin_adapters_for_direct_asset_files() -> None
     rm = DefaultResourceManager()
     preloaders = create_default_preloaders(rm)
     expected_types = {
+        ".tanim": "animation_clip",
         ".obj": "mesh",
         ".wav": "audio_clip",
         ".png": "texture",
@@ -356,6 +358,7 @@ def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
     preloaders = create_default_preloaders(rm)
 
     migrated = {
+        "animation_clip",
         "shader",
         "material",
         "pipeline",

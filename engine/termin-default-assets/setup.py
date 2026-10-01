@@ -37,6 +37,7 @@ setup(
     ],
     entry_points={
         "termin.asset_import_plugins": [
+            "animation_clip = termin.default_assets.animation.asset_plugin:create_import_plugin",
             "audio_clip = termin.default_assets.audio.asset_plugin:create_import_plugin",
             "material = termin.default_assets.render.material_plugin:create_import_plugin",
             "mesh = termin.default_assets.mesh.asset_plugin:create_import_plugin",
@@ -49,6 +50,7 @@ setup(
             "voxel_grid = termin.default_assets.voxels.asset_plugin:create_import_plugin",
         ],
         "termin.asset_runtime_plugins": [
+            "animation_clip = termin.default_assets.animation.asset_plugin:create_runtime_plugin",
             "audio_clip = termin.default_assets.audio.asset_plugin:create_runtime_plugin",
             "material = termin.default_assets.render.material_plugin:create_runtime_plugin",
             "mesh = termin.default_assets.mesh.asset_plugin:create_runtime_plugin",

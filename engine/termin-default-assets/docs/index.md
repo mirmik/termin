@@ -41,6 +41,12 @@ Current adapters:
   plugins.
 - `termin.default_assets.audio`: `AudioClipAsset` plus audio-clip import/runtime
   plugins; runtime references use canonical `termin.audio.TcAudioClip` handles.
+- `termin.default_assets.animation`: `AnimationClipAsset` and standalone `.tanim`
+  import/runtime plugins. Project scans declare lazy `TcAnimationClip` handles
+  using the sidecar metadata UUID; a UUID stored in the animation payload does
+  not replace that identity. Successful reload updates the existing native
+  handle, while malformed content leaves its published data unchanged and
+  logs an error. GLB animation children retain their separate import path.
 - `termin.default_assets.render`: texture, GLSL, material, shader, pipeline
   and scene-pipeline asset adapters/plugins plus render asset helper modules.
 - `termin.default_assets.ui`: `.uiscript` project-file indexing and
