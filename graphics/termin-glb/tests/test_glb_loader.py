@@ -640,17 +640,102 @@ def test_load_gltf_decomposes_column_major_matrix_before_coordinate_conversion(t
     )
 
 
-@pytest.mark.parametrize("scale", [[-2.0, 3.0, 4.0], [0.0, 3.0, 4.0]])
+@pytest.mark.parametrize("scale", [
+    [-2.0, 3.0, 4.0],
+    [0.0, 3.0, 4.0], [2.0, 0.0, 4.0], [2.0, 3.0, 0.0],
+    [2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 4.0],
+    [0.0, 0.0, 0.0],
+])
 def test_load_gltf_decomposes_reflected_and_zero_scale_matrix_nodes(scale):
-    source_matrix = np.eye(4, dtype=np.float32)
-    source_matrix[:3, :3] = np.diag(scale)
-    source_matrix[:3, 3] = [4.0, 5.0, 6.0]
+    authored = GLBNodeData(
+        name="Authored", children=[], mesh_index=None,
+        translation=np.asarray([4.0, 5.0, 6.0]),
+        rotation=np.asarray([1.0, -2.0, 3.0, 4.0]) / np.sqrt(30.0),
+        scale=np.asarray(scale),
+    )
+    source_matrix = _matrix_from_node_trs(authored)
+    document = {"nodes": [{"matrix": _matrix_to_gltf_values(source_matrix)}]}
 
-    scene_data = _build_scene_data({
-        "nodes": [{"matrix": _matrix_to_gltf_values(source_matrix)}],
+    first = _build_scene_data(document, []).nodes[0]
+    second = _build_scene_data(document, []).nodes[0]
+
+    np.testing.assert_allclose(_matrix_from_node_trs(first), source_matrix, atol=1e-5)
+    assert np.linalg.norm(first.rotation) == pytest.approx(1.0, abs=1e-6)
+    np.testing.assert_array_equal(first.rotation, second.rotation)
+    np.testing.assert_array_equal(first.scale, second.scale)
+
+
+@pytest.mark.parametrize("magnitude", [5.0e-324, 1.0e-300, 7.0, 1.0e300, 2.5e307])
+@pytest.mark.parametrize("convert_to_z_up,blender_z_up_fix", [
+    (False, False), (True, False), (False, True), (True, True),
+])
+def test_portable_nodes_normalize_authored_rotations_before_float32_and_pose_fixes(
+    tmp_path, magnitude, convert_to_z_up, blender_z_up_fix,
+):
+    directions = np.asarray([[1.0, 2.0, 3.0, 4.0], [-4.0, 3.0, -2.0, 1.0]])
+    document = {
+        "asset": {"version": "2.0"},
+        "scene": 0, "scenes": [{"nodes": [0]}],
+        "nodes": [
+            {"name": "Root", "children": [1], "rotation": (directions[0] * magnitude).tolist()},
+            {"name": "Joint", "rotation": (directions[1] * magnitude).tolist()},
+        ],
+        "skins": [{"joints": [1]}],
+    }
+    path = tmp_path / "scaled-node-rotations.gltf"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    actual = load_glb_file_normalized(
+        path, normalize_scale=False, convert_to_z_up=convert_to_z_up,
+        blender_z_up_fix=blender_z_up_fix,
+    )
+    for node, direction in zip(document["nodes"], directions, strict=True):
+        node["rotation"] = (direction / np.linalg.norm(direction)).tolist()
+    path.write_text(json.dumps(document), encoding="utf-8")
+    expected = load_glb_file_normalized(
+        path, normalize_scale=False, convert_to_z_up=convert_to_z_up,
+        blender_z_up_fix=blender_z_up_fix,
+    )
+
+    for actual_node, expected_node in zip(actual.nodes, expected.nodes, strict=True):
+        assert np.isfinite(actual_node.rotation).all()
+        assert np.linalg.norm(actual_node.rotation) == pytest.approx(1.0, abs=1e-6)
+        np.testing.assert_allclose(actual_node.rotation, expected_node.rotation, atol=1e-6)
+
+
+@pytest.mark.parametrize("rotation", [
+    [0.0, 0.0, 0.0, 0.0], [float("nan"), 0.0, 0.0, 1.0],
+    [0.0, float("inf"), 0.0, 1.0], [0.0, 0.0, -float("inf"), 1.0],
+    [0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 1.0, 2.0],
+])
+def test_portable_invalid_later_node_rotation_logs_and_preserves_existing_nodes(
+    monkeypatch, rotation,
+):
+    scene = _build_scene_data({
+        "scene": 0, "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": "Retained", "rotation": [1.0, 2.0, 3.0, 4.0]}],
     }, [])
+    retained_nodes = scene.nodes
+    retained_roots = scene.root_nodes
+    retained_rotation = scene.nodes[0].rotation.copy()
+    messages = []
+    monkeypatch.setattr(glb_loader_module.log, "error", lambda message, **_: messages.append(message))
 
-    np.testing.assert_allclose(_matrix_from_node_trs(scene_data.nodes[0]), source_matrix, atol=1e-5)
+    with pytest.raises(ValueError, match="node 2.*Broken"):
+        glb_loader_module._parse_nodes({
+            "scene": 0, "scenes": [{"nodes": [1]}],
+            "nodes": [
+                {"name": "First", "rotation": [0.0, 0.0, 0.0, 2.0]},
+                {"name": "Second", "rotation": [1.0, 0.0, 0.0, 1.0]},
+                {"name": "Broken", "rotation": rotation},
+            ],
+        }, scene)
+
+    assert scene.nodes is retained_nodes
+    assert len(scene.nodes) == 1
+    assert scene.root_nodes is retained_roots
+    assert scene.nodes[0].name == "Retained"
+    np.testing.assert_array_equal(scene.nodes[0].rotation, retained_rotation)
+    assert any("node 2" in message and "Broken" in message and "rotation" in message for message in messages)
 
 
 @pytest.mark.parametrize(

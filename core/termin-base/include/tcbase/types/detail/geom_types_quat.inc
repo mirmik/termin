@@ -306,6 +306,20 @@ struct tc_quat {
         return {nan, nan, nan};
     }
 
+    // Checked row-major 3x3 proper rotation; failure preserves out.
+    static bool try_from_rotation_matrix(const double* row_major_9,
+                                         tc_quat& out,
+                                         double epsilon = 1.0e-8) noexcept {
+        double result[4];
+        if (!tc_detail_try_quat_from_rotation_matrix_row_major_f64(row_major_9, epsilon, result)) {
+            return false;
+        }
+        out = {result[0], result[1], result[2], result[3]};
+        return true;
+    }
+
+    // Unchecked legacy conversion: m must point to a finite row-major proper
+    // rotation matrix. Use try_from_rotation_matrix for uncertain input.
     static tc_quat from_rotation_matrix(const double* m) {
         double trace = m[0] + m[4] + m[8];
         double x, y, z, w;

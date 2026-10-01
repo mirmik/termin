@@ -370,7 +370,8 @@ class NativeGLBDocument:
         """Return a cached, consistently converted node/skin snapshot."""
         import numpy as np
 
-        from termin.glb.loader import _decompose_node_matrix
+        from termin.geombase import Quat
+        from termin.glb.loader import _checked_node_rotation, _decompose_node_matrix
 
         key = (convert_to_z_up, blender_z_up_fix, normalize_scale)
         cached = self._prepared_rigs.get(key)
@@ -397,7 +398,9 @@ class NativeGLBDocument:
                 )
             else:
                 translation = np.asarray(source["translation"], dtype=np.float64)
-                rotation = np.asarray(source["rotation"], dtype=np.float64)
+                rotation = _checked_node_rotation(
+                    source["rotation"], node_index, source["name"], str(self._path)
+                )
                 scale = np.asarray(source["scale"], dtype=np.float64)
             nodes.append(
                 {
@@ -441,18 +444,18 @@ class NativeGLBDocument:
             positive_x = (0.70710678, 0.0, 0.0, 0.70710678)
             for node in nodes:
                 if node["default_scene_root"]:
-                    node["rotation"] = self._quaternion_left_multiply(
-                        negative_x, node["rotation"].reshape(1, 4)
-                    )[0]
+                    node["rotation"] = np.asarray(
+                        tuple(Quat(negative_x) * Quat(node["rotation"])), dtype=np.float64
+                    )
             if skins and skins[0]["joints"]:
                 root_joint = nodes[skins[0]["joints"][0]]
                 x, y, z = root_joint["translation"]
                 root_joint["translation"] = np.asarray((x, -z, y), dtype=np.float64)
                 x, y, z = root_joint["scale"]
                 root_joint["scale"] = np.asarray((x, z, y), dtype=np.float64)
-                root_joint["rotation"] = self._quaternion_left_multiply(
-                    positive_x, root_joint["rotation"].reshape(1, 4)
-                )[0]
+                root_joint["rotation"] = np.asarray(
+                    tuple(Quat(positive_x) * Quat(root_joint["rotation"])), dtype=np.float64
+                )
 
         skin_scale = 1.0
         root_nodes = tuple(
@@ -538,18 +541,9 @@ class NativeGLBDocument:
     @staticmethod
     def _quaternion_left_multiply(left, right):
         import numpy as np
+        from termin.geombase import Quat
 
-        x1, y1, z1, w1 = left
-        values = np.asarray(right, dtype=np.float64)
-        x2, y2, z2, w2 = values.T
-        return np.column_stack(
-            (
-                w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-                w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-                w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-                w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-            )
-        )
+        return Quat(left).left_multiply_rows(np.asarray(right, dtype=np.float64))
 
     @staticmethod
     def _uniform_scale_factor(scale) -> float:

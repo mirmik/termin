@@ -64,6 +64,17 @@ state, но не callbacks или Python objects.
   Euler XYZ передаётся одним `Vec3`; native `Pose3` сохраняет unit-precondition,
   а Python semantic boundary нормализует временную копию или бросает
   `ValueError`.
+- `tc_quat_try_from_rotation_matrix` и `Quat::try_from_rotation_matrix`
+  проверяют конечную row-major матрицу 3×3, ортонормальность и determinant +1;
+  выход при отказе не изменяется. Допуск конечный, `0 <= epsilon < 1`
+  (по умолчанию `1e-8` в C++/Python). Python `Quat.from_rotation_matrix`
+  принимает native-endian ndarray `float64` формы `(3, 3)`, включая strided/read-only buffers,
+  и логирует ошибку перед исключением. Низкоуровневый unchecked C++ overload
+  сохраняет precondition корректной rotation matrix.
+- Python `Quat.left_multiply_rows` умножает raw `float64` ndarray `(N, 4)`
+  через native quaternion kernel и возвращает отдельный массив. Вход и выход
+  не нормализуются: нулевые и non-unit строки могут представлять animation
+  tangents. Non-finite данные и непредставимый результат отвергаются с логом.
 - `termin/geom/color.hpp` разделяет scalar colors по смыслу. `SrgbColor`
   хранит authored/display-referred SDR-компоненты в кодировке IEC sRGB, а
   `LinearColor` — линейный RGB в рабочем пространстве renderer-а: sRGB

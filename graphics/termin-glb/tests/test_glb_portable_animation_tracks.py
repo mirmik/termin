@@ -9,12 +9,17 @@ import numpy as np
 import pytest
 
 from termin.animation import clip_from_glb
-from termin.glb import GLBAnimationClip, GLBAnimationTrack, GLBNodeData, GLBSceneData, GLBSkinData
+from termin.geombase import Quat
+from termin.glb import (
+    GLBAnimationClip, GLBAnimationTrack, GLBNodeData, GLBSceneData, GLBSkinData,
+    NativeStaticMeshDocument,
+)
 from termin.glb.loader import (
     _qmul,
     apply_blender_z_up_fix,
     convert_y_up_to_z_up,
     load_glb_file,
+    load_glb_file_normalized,
     normalize_glb_scale,
 )
 
@@ -329,3 +334,91 @@ def test_blender_and_scale_fixes_transform_all_cubic_value_and_derivative_rows()
     )
     np.testing.assert_allclose(tracks[3].values, rows3[:, [0, 2, 1]])
     assert np.linalg.norm(tracks[2].values[0]) == pytest.approx(np.linalg.norm(rows4[0]))
+
+
+@pytest.mark.parametrize("sign", [1.0, -1.0])
+def test_glb_quaternion_batch_agrees_with_scalar_sign_and_preserves_raw_rows(sign) -> None:
+    s = np.sqrt(0.5) * sign
+    left = Quat(s, 0.0, 0.0, s)
+    storage = np.asarray([
+        [0.0, 0.0, 0.0, 0.0],
+        [2.0, 3.0, 4.0, 5.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 0.0, -1.0],
+        [-6.0, 7.0, -8.0, 9.0],
+    ], dtype=np.float64)
+    rows = storage[::-1]
+    before = rows.copy()
+    expected = np.column_stack((
+        s * (rows[:, 0] + rows[:, 3]),
+        s * (rows[:, 1] - rows[:, 2]),
+        s * (rows[:, 1] + rows[:, 2]),
+        s * (rows[:, 3] - rows[:, 0]),
+    ))
+
+    canonical = left.left_multiply_rows(rows)
+    bridge = NativeStaticMeshDocument._quaternion_left_multiply((left.x, left.y, left.z, left.w), rows)
+    scalar = []
+    for row in rows:
+        product = left * Quat(row)
+        scalar.append([product.x, product.y, product.z, product.w])
+
+    assert canonical.dtype == np.float64
+    assert bridge.dtype == np.float64
+    assert not np.shares_memory(canonical, rows)
+    np.testing.assert_array_equal(rows, before)
+    np.testing.assert_allclose(canonical, expected, atol=1e-14)
+    np.testing.assert_allclose(bridge, expected, atol=1e-14)
+    np.testing.assert_allclose(scalar, expected, atol=1e-14)
+    np.testing.assert_allclose(np.linalg.norm(bridge, axis=1), np.linalg.norm(rows, axis=1), atol=1e-14)
+    np.testing.assert_array_equal(bridge[1], -bridge[2])
+    np.testing.assert_array_equal(bridge[-1], np.zeros(4))
+
+
+@pytest.mark.parametrize("convert_to_z_up,blender_z_up_fix", [
+    (True, False), (False, True), (True, True),
+])
+def test_native_and_portable_pose_corrections_preserve_cubic_rotation_tangents(
+    tmp_path, convert_to_z_up, blender_z_up_fix,
+) -> None:
+    path = _write_exact_animation_gltf(tmp_path / "cubic-pose-corrections.gltf")
+    document = json.loads(path.read_text(encoding="utf-8"))
+    binary = (path.parent / document["buffers"][0].pop("uri")).read_bytes()
+    json_chunk = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    json_chunk += b" " * (-len(json_chunk) % 4)
+    binary_chunk = binary + b"\0" * (-len(binary) % 4)
+    native_path = tmp_path / "cubic-pose-corrections.glb"
+    native_path.write_bytes(
+        struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(json_chunk) + 8 + len(binary_chunk))
+        + struct.pack("<II", len(json_chunk), 0x4E4F534A)
+        + json_chunk
+        + struct.pack("<II", len(binary_chunk), 0x004E4942)
+        + binary_chunk
+    )
+    original = load_glb_file(path).animations[0].tracks[2].values.astype(np.float64)
+    expected = original.copy()
+    if convert_to_z_up:
+        expected = expected[:, [0, 2, 1, 3]]
+        expected[:, 1] *= -1.0
+    if blender_z_up_fix:
+        # Left multiplication by -90 degrees about X, preserving derivative magnitude.
+        s = np.sqrt(0.5)
+        x, y, z, w = expected.T.copy()
+        expected = np.column_stack((s * (x - w), s * (y + z), s * (z - y), s * (w + x)))
+    flags = {"convert_to_z_up": convert_to_z_up, "blender_z_up_fix": blender_z_up_fix}
+
+    portable = load_glb_file_normalized(path, normalize_scale=False, **flags)
+    native = NativeStaticMeshDocument(native_path).build_animation_clip(0, str(uuid.uuid4()), **flags)
+    portable_rows = portable.animations[0].tracks[2].values
+    native_rows = np.asarray(native.tracks[2]["values"]).reshape(-1, 4)
+
+    np.testing.assert_allclose(portable_rows, expected, atol=1e-6)
+    np.testing.assert_allclose(native_rows, expected, atol=1e-6)
+    np.testing.assert_allclose(native_rows, portable_rows, atol=1e-6)
+    tangent_rows = [0, 2, 3, 5]
+    assert all(np.linalg.norm(row) > 1.0 for row in original[tangent_rows])
+    for rows in (portable_rows, native_rows):
+        np.testing.assert_allclose(
+            np.linalg.norm(rows[tangent_rows], axis=1),
+            np.linalg.norm(original[tangent_rows], axis=1), atol=1e-6,
+        )

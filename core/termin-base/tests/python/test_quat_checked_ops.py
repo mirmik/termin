@@ -1,7 +1,9 @@
 import math
 
+import numpy as np
 import pytest
 
+from termin.base import log
 from termin.geombase import Pose3, Quat, Vec3, qslerp
 from termin.geombase import _geom_native
 
@@ -331,3 +333,176 @@ def test_euler_checked_and_convenience_failures_are_explicit() -> None:
 
 def test_native_module_has_no_duplicate_module_level_slerp() -> None:
     assert not hasattr(_geom_native, "slerp")
+
+
+def _rotation_matrix(q: Quat) -> np.ndarray:
+    x, y, z, w = _components(q)
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ], dtype=np.float64)
+
+
+def _array_layout(values: np.ndarray, layout: str) -> np.ndarray:
+    if layout == "fortran":
+        return np.asfortranarray(values)
+    if layout == "reversed":
+        return values[::-1, ::-1].copy()[::-1, ::-1]
+    if layout == "sliced":
+        storage = np.zeros((values.shape[0] * 2, values.shape[1] * 2), dtype=np.float64)
+        storage[::2, ::2] = values
+        return storage[::2, ::2]
+    result = values.copy()
+    if layout == "readonly":
+        result.setflags(write=False)
+    return result
+
+
+def _assert_logged_rejection(operation, exception: type[Exception]) -> None:
+    log.capture_start(32)
+    try:
+        with pytest.raises(exception):
+            operation()
+    finally:
+        records, dropped = log.capture_drain(32)
+        log.capture_stop()
+    assert dropped == 0
+    assert any(level == log.Level.ERROR and message for level, message in records)
+
+
+@pytest.mark.parametrize("rotation", [
+    Quat.identity(), Quat(-1.0, 0.0, 0.0, 0.0), Quat(0.0, -1.0, 0.0, 0.0),
+    Quat(0.0, 0.0, -1.0, 0.0), Quat.from_euler(Vec3(0.4, -0.7, 1.1)),
+    Quat.from_euler(Vec3(-2.6, 0.3, -2.1)),
+])
+def test_from_rotation_matrix_is_unit_canonical_and_preserves_orientation(rotation: Quat) -> None:
+    matrix = _rotation_matrix(rotation)
+    original = matrix.copy()
+    result = Quat.from_rotation_matrix(matrix)
+    assert result.norm() == pytest.approx(1.0, abs=1.0e-15)
+    assert _same_rotation(result, rotation)
+    assert result.w >= 0.0
+    components = np.array(_components(result))
+    assert not np.signbit(components[components == 0.0]).any()
+    if rotation.w == 0.0:
+        assert _components(result) == tuple(-value for value in _components(rotation))
+    np.testing.assert_allclose(_rotation_matrix(result), matrix, atol=1.0e-14, rtol=0.0)
+    np.testing.assert_array_equal(matrix, original)
+
+
+@pytest.mark.parametrize("layout", ["contiguous", "fortran", "reversed", "sliced", "readonly"])
+def test_from_rotation_matrix_reads_row_major_values_with_arbitrary_strides(layout: str) -> None:
+    matrix = _array_layout(np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]), layout)
+    original = matrix.copy()
+    result = Quat.from_rotation_matrix(matrix, epsilon=0.0)
+    assert _components(result) == pytest.approx((0.0, 0.0, math.sqrt(0.5), math.sqrt(0.5)))
+    assert tuple(result.rotate(Vec3(1.0, 0.0, 0.0))) == pytest.approx((0.0, 1.0, 0.0), abs=1.0e-15)
+    np.testing.assert_array_equal(matrix, original)
+
+
+@pytest.mark.parametrize("matrix", [
+    np.diag([-1.0, 1.0, 1.0]), np.zeros((3, 3)), np.eye(3) * 2.0,
+    np.array([[1.0, 0.2, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+    np.diag([math.nan, 1.0, 1.0]), np.diag([1.0, math.inf, 1.0]),
+    np.diag([float.fromhex("0x1.fffffffffffffp+1023"), 1.0, 1.0]),
+    np.ones(9), np.ones((4, 4)), np.ones((3, 2)), np.ones((1, 3, 3)),
+])
+def test_from_rotation_matrix_rejects_invalid_values_and_shape_without_mutation(matrix: np.ndarray) -> None:
+    original = matrix.copy()
+    _assert_logged_rejection(lambda: Quat.from_rotation_matrix(matrix), ValueError)
+    np.testing.assert_array_equal(matrix, original)
+
+
+@pytest.mark.parametrize("epsilon", [-1.0, 1.0, math.nan, math.inf])
+def test_from_rotation_matrix_rejects_bad_tolerance(epsilon: float) -> None:
+    matrix = np.eye(3)
+    _assert_logged_rejection(lambda: Quat.from_rotation_matrix(matrix, epsilon), ValueError)
+    np.testing.assert_array_equal(matrix, np.eye(3))
+
+
+@pytest.mark.parametrize("matrix", [np.eye(3, dtype=np.float32), np.eye(3, dtype=np.int64), [[1, 0, 0], [0, 1, 0], [0, 0, 1]]])
+def test_from_rotation_matrix_requires_float64_ndarray(matrix) -> None:
+    _assert_logged_rejection(lambda: Quat.from_rotation_matrix(matrix), TypeError)
+
+
+def test_from_rotation_matrix_uses_explicit_tolerance_and_returns_normalized_value() -> None:
+    matrix = np.diag([1.0 + 1.0e-7, 1.0, 1.0])
+    _assert_logged_rejection(lambda: Quat.from_rotation_matrix(matrix, 1.0e-8), ValueError)
+    assert _components(Quat.from_rotation_matrix(matrix, 1.0e-6)) == (0.0, 0.0, 0.0, 1.0)
+
+
+@pytest.mark.parametrize("layout", ["contiguous", "fortran", "reversed", "sliced", "readonly"])
+def test_left_multiply_rows_matches_scalar_product_and_preserves_raw_cubic_rows(layout: str) -> None:
+    # Raw cubic payload includes nonunit keys, zero and nonunit derivative rows.
+    rows = _array_layout(np.array([
+        [0.0, 0.0, 0.0, 2.0], [0.0, 0.0, 0.0, 0.0],
+        [1.0, -2.0, 3.0, -4.0], [-0.5, 0.25, -1.5, 0.75],
+    ]), layout)
+    original = rows.copy()
+    unit = Quat.from_euler(Vec3(0.4, -0.7, 1.1))
+    multiplier = Quat(*(-component for component in _components(unit)))
+    before = _components(multiplier)
+    result = multiplier.left_multiply_rows(rows)
+    expected = np.array([_components(multiplier * Quat(*row)) for row in rows])
+    assert result.dtype == np.float64
+    assert result.shape == rows.shape
+    assert result.flags.c_contiguous
+    assert not np.shares_memory(result, rows)
+    np.testing.assert_allclose(result, expected, atol=1.0e-15, rtol=0.0)
+    np.testing.assert_allclose(np.linalg.norm(result, axis=1), np.linalg.norm(rows, axis=1), atol=1.0e-14, rtol=0.0)
+    assert result[0, 3] < 0.0  # Batch operation preserves sign; it does not canonicalize.
+    np.testing.assert_array_equal(rows, original)
+    assert _components(multiplier) == before
+    result[0, 0] = 99.0
+    np.testing.assert_array_equal(rows, original)
+
+
+def test_left_multiply_rows_obeys_left_orientation_and_nonunit_linearity() -> None:
+    half = math.sqrt(0.5)
+    rows = np.eye(4, dtype=np.float64)
+    result = Quat(0.0, 0.0, half, half).left_multiply_rows(rows)
+    np.testing.assert_allclose(result, [
+        [half, half, 0.0, 0.0], [-half, half, 0.0, 0.0],
+        [0.0, 0.0, half, -half], [0.0, 0.0, half, half],
+    ], atol=0.0, rtol=0.0)
+    raw = np.array([[1.0, -2.0, 3.0, -4.0], [0.0, 0.0, 0.0, 0.0]])
+    np.testing.assert_array_equal(Quat(0.0, 0.0, 0.0, 2.0).left_multiply_rows(raw), raw * 2.0)
+    np.testing.assert_array_equal(Quat(0.0, 0.0, 0.0, 0.0).left_multiply_rows(raw), np.zeros_like(raw))
+    empty = Quat.identity().left_multiply_rows(np.empty((0, 4), dtype=np.float64))
+    assert empty.shape == (0, 4) and empty.dtype == np.float64 and empty.flags.c_contiguous
+
+
+@pytest.mark.parametrize("rows", [
+    np.array([[0.0, 0.0, 0.0, 1.0], [0.0, math.nan, 0.0, 0.0]]),
+    np.array([[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, math.inf, 0.0]]),
+    np.ones(4), np.ones((2, 3)), np.ones((1, 2, 4)),
+])
+def test_left_multiply_rows_rejects_invalid_values_or_shape_without_mutation(rows: np.ndarray) -> None:
+    original = rows.copy()
+    multiplier = Quat.identity()
+    _assert_logged_rejection(lambda: multiplier.left_multiply_rows(rows), ValueError)
+    np.testing.assert_array_equal(rows, original)
+    assert _components(multiplier) == (0.0, 0.0, 0.0, 1.0)
+
+
+@pytest.mark.parametrize("rows", [np.ones((2, 4), dtype=np.float32), np.ones((2, 4), dtype=np.int64), [[0.0, 0.0, 0.0, 1.0]]])
+def test_left_multiply_rows_requires_float64_ndarray(rows) -> None:
+    _assert_logged_rejection(lambda: Quat.identity().left_multiply_rows(rows), TypeError)
+
+
+@pytest.mark.parametrize("multiplier", [Quat(math.nan, 0.0, 0.0, 1.0), Quat(0.0, 0.0, 0.0, math.inf)])
+def test_left_multiply_rows_rejects_nonfinite_multiplier_without_mutating_rows(multiplier: Quat) -> None:
+    rows = np.eye(4)
+    _assert_logged_rejection(lambda: multiplier.left_multiply_rows(rows), ValueError)
+    np.testing.assert_array_equal(rows, np.eye(4))
+
+
+def test_left_multiply_rows_rejects_late_output_overflow_without_input_mutation() -> None:
+    largest = float.fromhex("0x1.fffffffffffffp+1023")
+    rows = np.array([[1.0, 2.0, 3.0, 4.0], [largest, 0.0, 0.0, 0.0]])
+    original = rows.copy()
+    multiplier = Quat(0.0, 0.0, 0.0, 4.0)
+    _assert_logged_rejection(lambda: multiplier.left_multiply_rows(rows), ValueError)
+    np.testing.assert_array_equal(rows, original)
+    assert _components(multiplier) == (0.0, 0.0, 0.0, 4.0)

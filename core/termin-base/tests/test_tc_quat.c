@@ -5,6 +5,7 @@
 #include <float.h>
 #include <math.h>
 #include <stddef.h>
+#include <string.h>
 
 static int near(double lhs, double rhs, double epsilon) {
     return fabs(lhs - rhs) <= epsilon;
@@ -357,6 +358,84 @@ GUARD_C_TEST(test_euler_checked_failures_are_transactional) {
     return 0;
 }
 
+GUARD_C_TEST(test_rotation_matrix_conversion_covers_branches_and_row_major_orientation) {
+    const tc_quat rotations[] = {
+        TC_QUAT(0.0, 0.0, 0.0, 1.0),
+        TC_QUAT(-1.0, 0.0, 0.0, 0.0),
+        TC_QUAT(0.0, -1.0, 0.0, 0.0),
+        TC_QUAT(0.0, 0.0, -1.0, 0.0),
+        tc_quat_from_euler(TC_VEC3(0.4, -0.7, 1.1)),
+        tc_quat_from_euler(TC_VEC3(-2.6, 0.3, -2.1)),
+    };
+    for (size_t i = 0; i < sizeof(rotations) / sizeof(rotations[0]); ++i) {
+        double matrix[9], restored[9];
+        tc_quat_to_matrix3_row_major(rotations[i], matrix);
+        tc_quat out = TC_QUAT(9.0, 8.0, 7.0, 6.0);
+        GUARD_C_REQUIRE(tc_quat_try_from_rotation_matrix(matrix, 1.0e-8, &out));
+        GUARD_C_CHECK(near(tc_quat_norm(out), 1.0, 1.0e-15));
+        GUARD_C_CHECK(same_rotation(out, rotations[i], 1.0e-15));
+        GUARD_C_CHECK(out.w >= 0.0);
+        if (i >= 1 && i <= 3) {
+            GUARD_C_CHECK(near_quat(out, TC_QUAT(-rotations[i].x, -rotations[i].y,
+                                               -rotations[i].z, -rotations[i].w), 0.0));
+        }
+        const double components[4] = {out.x, out.y, out.z, out.w};
+        for (int j = 0; j < 4; ++j) {
+            GUARD_C_CHECK(components[j] != 0.0 || !signbit(components[j]));
+        }
+        tc_quat_to_matrix3_row_major(out, restored);
+        for (int j = 0; j < 9; ++j) {
+            GUARD_C_CHECK(near(restored[j], matrix[j], 1.0e-14));
+        }
+    }
+    const double z_quarter_turn[9] = {0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+    tc_quat out;
+    GUARD_C_REQUIRE(tc_quat_try_from_rotation_matrix(z_quarter_turn, 0.0, &out));
+    const tc_vec3 rotated = tc_quat_rotate(out, TC_VEC3(1.0, 0.0, 0.0));
+    GUARD_C_CHECK(near(rotated.x, 0.0, 1.0e-15));
+    GUARD_C_CHECK(near(rotated.y, 1.0, 1.0e-15));
+    GUARD_C_CHECK(near(rotated.z, 0.0, 1.0e-15));
+    return 0;
+}
+
+GUARD_C_TEST(test_rotation_matrix_rejections_preserve_output_and_input) {
+    const double invalid[][9] = {
+        {-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0}, /* reflection */
+        {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+        {1.0, 0.2, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0}, /* shear */
+        {2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0},
+        {NAN, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0},
+        {1.0, 0.0, 0.0, 0.0, INFINITY, 0.0, 0.0, 0.0, 1.0},
+        {DBL_MAX, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0},
+    };
+    const tc_quat sentinel = TC_QUAT(9.0, 8.0, 7.0, 6.0);
+    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+        double matrix[9], original[9];
+        memcpy(matrix, invalid[i], sizeof(matrix));
+        memcpy(original, matrix, sizeof(matrix));
+        tc_quat out = sentinel;
+        GUARD_C_CHECK(!tc_quat_try_from_rotation_matrix(matrix, 1.0e-8, &out));
+        GUARD_C_CHECK(equal_quat(out, sentinel));
+        GUARD_C_CHECK(memcmp(matrix, original, sizeof(matrix)) == 0);
+    }
+    const double identity[9] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+    const double bad_epsilon[] = {-1.0, 1.0, NAN, INFINITY};
+    tc_quat out = sentinel;
+    for (size_t i = 0; i < sizeof(bad_epsilon) / sizeof(bad_epsilon[0]); ++i) {
+        GUARD_C_CHECK(!tc_quat_try_from_rotation_matrix(identity, bad_epsilon[i], &out));
+        GUARD_C_CHECK(equal_quat(out, sentinel));
+    }
+    GUARD_C_CHECK(!tc_quat_try_from_rotation_matrix(NULL, 1.0e-8, &out));
+    GUARD_C_CHECK(equal_quat(out, sentinel));
+    GUARD_C_CHECK(!tc_quat_try_from_rotation_matrix(identity, 1.0e-8, NULL));
+    double noisy_identity[9] = {1.0 + 1.0e-7, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+    GUARD_C_CHECK(!tc_quat_try_from_rotation_matrix(noisy_identity, 1.0e-8, &out));
+    GUARD_C_CHECK(equal_quat(out, sentinel));
+    GUARD_C_REQUIRE(tc_quat_try_from_rotation_matrix(noisy_identity, 1.0e-6, &out));
+    GUARD_C_CHECK(near_quat(out, tc_quat_identity(), 0.0));
+    return 0;
+}
+
 int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_quat_abi_and_raw_products);
@@ -369,5 +448,7 @@ int main(int argc, char** argv) {
     GUARD_C_RUN(test_checked_slerp_rejects_invalid_values_transactionally);
     GUARD_C_RUN(test_euler_xyz_composition_round_trip_and_gimbal_policy);
     GUARD_C_RUN(test_euler_checked_failures_are_transactional);
+    GUARD_C_RUN(test_rotation_matrix_conversion_covers_branches_and_row_major_orientation);
+    GUARD_C_RUN(test_rotation_matrix_rejections_preserve_output_and_input);
     return GUARD_C_END();
 }

@@ -288,6 +288,21 @@ TC_C_STATIC_INLINE tc_quat tc_quat_slerp(tc_quat a, tc_quat b, double t) {
 // Conversion
 // ============================================================================
 
+// Checked row-major 3x3 proper rotation. epsilon must be finite in [0, 1);
+// use 1.0e-8 for ordinary double-precision input. Failure preserves out_quat.
+TC_C_STATIC_INLINE bool
+tc_quat_try_from_rotation_matrix(const double* row_major_9, double epsilon, tc_quat* out_quat) {
+    if (out_quat == NULL) {
+        return false;
+    }
+    double result[4];
+    if (!tc_detail_try_quat_from_rotation_matrix_row_major_f64(row_major_9, epsilon, result)) {
+        return false;
+    }
+    *out_quat = TC_QUAT(result[0], result[1], result[2], result[3]);
+    return true;
+}
+
 // Fast row-major 3x3 conversion. q must be finite and unit.
 TC_C_STATIC_INLINE void tc_quat_to_matrix3_row_major(tc_quat q, double* out_row_major_9) {
     const double quat[4] = {q.x, q.y, q.z, q.w};

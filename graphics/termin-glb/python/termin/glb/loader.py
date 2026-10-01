@@ -1,7 +1,7 @@
 # termin/loaders/glb_loader.py
 """GLB/glTF 2.0 loader.
 
-Pure Python implementation without external dependencies (except numpy).
+NumPy decoding with checked native transform math.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterator, List, Optional
 import numpy as np
 
 from termin.base import log
+from termin.geombase import Quat
 
 
 class _GLBLoadTrace:
@@ -558,34 +559,29 @@ def _read_float_vertex_attribute(
     return _read_accessor(gltf, buffers, accessor_index).astype(np.float32)
 
 
-def _quaternion_from_rotation_matrix(rotation: np.ndarray) -> np.ndarray:
-    """Convert a proper 3x3 rotation matrix to a normalized xyzw quaternion."""
-    trace = float(np.trace(rotation))
-    if trace > 0.0:
-        root = np.sqrt(trace + 1.0) * 2.0
-        quaternion = np.array([
-            (rotation[2, 1] - rotation[1, 2]) / root,
-            (rotation[0, 2] - rotation[2, 0]) / root,
-            (rotation[1, 0] - rotation[0, 1]) / root,
-            0.25 * root,
-        ], dtype=np.float64)
-    else:
-        axis = int(np.argmax(np.diag(rotation)))
-        next_axis = (axis + 1) % 3
-        last_axis = (axis + 2) % 3
-        root = np.sqrt(
-            1.0 + rotation[axis, axis] - rotation[next_axis, next_axis] - rotation[last_axis, last_axis]
-        ) * 2.0
-        quaternion = np.zeros(4, dtype=np.float64)
-        quaternion[axis] = 0.25 * root
-        quaternion[next_axis] = (rotation[next_axis, axis] + rotation[axis, next_axis]) / root
-        quaternion[last_axis] = (rotation[last_axis, axis] + rotation[axis, last_axis]) / root
-        quaternion[3] = (rotation[last_axis, next_axis] - rotation[next_axis, last_axis]) / root
-
-    quaternion /= np.linalg.norm(quaternion)
-    if quaternion[3] < 0.0:
-        quaternion = -quaternion
-    return quaternion.astype(np.float32)
+def _checked_node_rotation(
+    rotation: Any, node_index: int, node_name: str, source: str = "glTF"
+) -> np.ndarray:
+    """Validate authored xyzw before narrowing the normalized rotation."""
+    message = (
+        f"{source}: node {node_index} {node_name!r} rotation must contain "
+        "four finite components and be nonzero"
+    )
+    try:
+        values = np.asarray(rotation, dtype=np.float64)
+    except (TypeError, ValueError, OverflowError) as error:
+        log.error(message)
+        raise ValueError(message) from error
+    if values.shape != (4,):
+        log.error(message)
+        raise ValueError(message)
+    # Authored scale is immaterial to a rotation. Epsilon zero accepts every
+    # representable finite nonzero magnitude through checked base math.
+    normalized = Quat(values).try_normalized(epsilon=0.0)
+    if normalized is None:
+        log.error(message)
+        raise ValueError(message)
+    return np.asarray(tuple(normalized), dtype=np.float64)
 
 
 def _complete_rotation_basis(columns: np.ndarray, nonzero_axes: list[int]) -> np.ndarray:
@@ -672,7 +668,13 @@ def _decompose_node_matrix(matrix_values: Any, node_index: int) -> tuple[np.ndar
     if not np.allclose(rotation @ np.diag(scale), linear, atol=1.0e-5, rtol=1.0e-5):
         raise ValueError(f"node {node_index} matrix cannot be reconstructed as TRS")
 
-    return translation, _quaternion_from_rotation_matrix(rotation), scale.astype(np.float32)
+    try:
+        quaternion = Quat.from_rotation_matrix(rotation, epsilon=1.0e-5)
+    except ValueError as error:
+        message = f"node {node_index} matrix has an invalid rotation basis"
+        log.error(f"[glb_loader] {message}: {error}")
+        raise ValueError(message) from error
+    return translation, np.asarray(tuple(quaternion), dtype=np.float32), scale.astype(np.float32)
 
 
 # ---------- PARSING FUNCTIONS ----------
@@ -1119,6 +1121,7 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
         for channel in animation.get("channels", [])
         if "target" in channel and "node" in channel["target"]
     }
+    nodes = []
     for node_idx, node in enumerate(gltf.get("nodes", [])):
         name = node.get("name", f"Node_{node_idx}")
         children = node.get("children", [])
@@ -1127,7 +1130,6 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
 
         # Transform
         translation = np.array(node.get("translation", [0, 0, 0]), dtype=np.float32)
-        rotation = np.array(node.get("rotation", [0, 0, 0, 1]), dtype=np.float32)  # xyzw
         scale = np.array(node.get("scale", [1, 1, 1]), dtype=np.float32)
 
         if "matrix" in node:
@@ -1136,8 +1138,12 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
             if node_idx in matrix_animation_targets:
                 raise ValueError(f"node {node_idx} uses matrix and must not be an animation target")
             translation, rotation, scale = _decompose_node_matrix(node["matrix"], node_idx)
+        else:
+            rotation = _checked_node_rotation(
+                node.get("rotation", [0, 0, 0, 1]), node_idx, name
+            ).astype(np.float32)
 
-        scene_data.nodes.append(GLBNodeData(
+        nodes.append(GLBNodeData(
             name=name,
             children=children,
             mesh_index=mesh_index,
@@ -1150,8 +1156,11 @@ def _parse_nodes(gltf: dict, scene_data: GLBSceneData):
     # Root nodes from default scene
     scenes = gltf.get("scenes", [])
     default_scene = gltf.get("scene", 0)
+    root_nodes = scene_data.root_nodes
     if scenes and default_scene < len(scenes):
-        scene_data.root_nodes = scenes[default_scene].get("nodes", [])
+        root_nodes = scenes[default_scene].get("nodes", [])
+    scene_data.nodes.extend(nodes)
+    scene_data.root_nodes = root_nodes
 
 
 def _parse_skins(gltf: dict, buffers: list[bytes], scene_data: GLBSceneData):
@@ -1625,15 +1634,8 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
 
 
 def _qmul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    """Multiply two quaternions (x, y, z, w)."""
-    x1, y1, z1, w1 = q1
-    x2, y2, z2, w2 = q2
-    return np.array([
-        w1*x2 + x1*w2 + y1*z2 - z1*y2,
-        w1*y2 - x1*z2 + y1*w2 + z1*x2,
-        w1*z2 + x1*y2 - y1*x2 + z1*w2,
-        w1*w2 - x1*x2 - y1*y2 - z1*z2,
-    ], dtype=np.float32)
+    """Adapt canonical raw quaternion multiplication to legacy packed xyzw."""
+    return np.asarray(tuple(Quat(q1) * Quat(q2)), dtype=np.float32)
 
 
 def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
@@ -1668,8 +1670,9 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
         for track in anim.tracks:
             if track.node_index not in root_node_indices or track.path != "rotation":
                 continue
-            for row_index, row in enumerate(track.values):
-                track.values[row_index] = _qmul(rot_neg_90_x, row)
+            track.values[:] = Quat(rot_neg_90_x).left_multiply_rows(
+                np.asarray(track.values, dtype=np.float64)
+            )
 
     # Transform root bone (first joint, e.g. Hips) by +90° X
     # This is a full transform: rotation, translation, and scale
@@ -1701,8 +1704,9 @@ def apply_blender_z_up_fix(scene_data: GLBSceneData) -> None:
                             for row_index, row in enumerate(track.values):
                                 track.values[row_index] = transform_pos_90_x(row)
                         elif track.path == "rotation":
-                            for row_index, row in enumerate(track.values):
-                                track.values[row_index] = _qmul(rot_pos_90_x, row)
+                            track.values[:] = Quat(rot_pos_90_x).left_multiply_rows(
+                                np.asarray(track.values, dtype=np.float64)
+                            )
                         elif track.path == "scale":
                             for row_index, row in enumerate(track.values):
                                 track.values[row_index] = transform_scale_90_x(row)

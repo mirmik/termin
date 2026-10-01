@@ -149,6 +149,88 @@ static inline bool tc_detail_try_quat_from_axis_angle_f64_components(const doubl
     return true;
 }
 
+// Accept only a finite proper rotation, with an absolute tolerance on every
+// row/column Gram coefficient and determinant. Failure never changes output.
+static inline bool tc_detail_try_quat_from_rotation_matrix_row_major_f64(const double* m,
+                                                                        double epsilon,
+                                                                        double* out_xyzw) {
+    if (m == NULL || out_xyzw == NULL || !isfinite(epsilon) || epsilon < 0.0 || epsilon >= 1.0) {
+        return false;
+    }
+    for (int i = 0; i < 9; ++i) {
+        if (!isfinite(m[i])) {
+            return false;
+        }
+    }
+    for (int i = 0; i < 3; ++i) {
+        for (int j = i; j < 3; ++j) {
+            double rows = 0.0;
+            double columns = 0.0;
+            for (int k = 0; k < 3; ++k) {
+                rows += m[i * 3 + k] * m[j * 3 + k];
+                columns += m[k * 3 + i] * m[k * 3 + j];
+            }
+            const double expected = i == j ? 1.0 : 0.0;
+            if (!isfinite(rows) || !isfinite(columns) || fabs(rows - expected) > epsilon ||
+                fabs(columns - expected) > epsilon) {
+                return false;
+            }
+        }
+    }
+    const double determinant = m[0] * (m[4] * m[8] - m[5] * m[7]) -
+                               m[1] * (m[3] * m[8] - m[5] * m[6]) +
+                               m[2] * (m[3] * m[7] - m[4] * m[6]);
+    if (!isfinite(determinant) || determinant <= 0.0 || fabs(determinant - 1.0) > epsilon) {
+        return false;
+    }
+
+    double raw[4];
+    const double trace = m[0] + m[4] + m[8];
+    if (trace > 0.0) {
+        const double s = 2.0 * sqrt(trace + 1.0);
+        raw[0] = (m[7] - m[5]) / s;
+        raw[1] = (m[2] - m[6]) / s;
+        raw[2] = (m[3] - m[1]) / s;
+        raw[3] = 0.25 * s;
+    } else if (m[0] > m[4] && m[0] > m[8]) {
+        const double s = 2.0 * sqrt(1.0 + m[0] - m[4] - m[8]);
+        raw[0] = 0.25 * s;
+        raw[1] = (m[1] + m[3]) / s;
+        raw[2] = (m[2] + m[6]) / s;
+        raw[3] = (m[7] - m[5]) / s;
+    } else if (m[4] > m[8]) {
+        const double s = 2.0 * sqrt(1.0 + m[4] - m[0] - m[8]);
+        raw[0] = (m[1] + m[3]) / s;
+        raw[1] = 0.25 * s;
+        raw[2] = (m[5] + m[7]) / s;
+        raw[3] = (m[2] - m[6]) / s;
+    } else {
+        const double s = 2.0 * sqrt(1.0 + m[8] - m[0] - m[4]);
+        raw[0] = (m[2] + m[6]) / s;
+        raw[1] = (m[5] + m[7]) / s;
+        raw[2] = 0.25 * s;
+        raw[3] = (m[3] - m[1]) / s;
+    }
+    double result[4];
+    if (!tc_detail_try_normalize_f64_components(raw, 4, 0.0, result)) {
+        return false;
+    }
+    // q and -q represent the same rotation. Prefer positive w, then the first
+    // nonzero x/y/z component for exact half turns.
+    const int sign_order[4] = {3, 0, 1, 2};
+    double sign = 1.0;
+    for (int i = 0; i < 4; ++i) {
+        if (result[sign_order[i]] != 0.0) {
+            sign = result[sign_order[i]] < 0.0 ? -1.0 : 1.0;
+            break;
+        }
+    }
+    for (int i = 0; i < 4; ++i) {
+        out_xyzw[i] = result[i] == 0.0 ? 0.0 : sign * result[i];
+    }
+    return true;
+}
+
 static inline void tc_detail_unit_quat_to_matrix3_row_major_f64(const double* quat_xyzw, double* out_row_major_9) {
     const double x = quat_xyzw[0];
     const double y = quat_xyzw[1];

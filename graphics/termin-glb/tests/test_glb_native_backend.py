@@ -1,3 +1,4 @@
+import copy
 import gc
 import json
 from pathlib import Path
@@ -1060,6 +1061,130 @@ def test_native_skin_keeps_column_major_inverse_bind_storage(tmp_path):
         inverse_bind_matrix[3, 1],
         inverse_bind_matrix[3, 2],
     ) == pytest.approx((-2.0, -3.0, -4.0))
+
+
+def _write_node_rotation_glb(path, magnitude=1.0):
+    directions = np.asarray([[1.0, 2.0, 3.0, 4.0], [-4.0, 3.0, -2.0, 1.0]])
+    return _write_glb(path, {
+        "asset": {"version": "2.0"},
+        "scene": 0, "scenes": [{"nodes": [0]}],
+        "nodes": [
+            {"name": "Root", "children": [1], "rotation": (directions[0] * magnitude).tolist()},
+            {"name": "Joint", "rotation": (directions[1] * magnitude).tolist()},
+        ],
+        "skins": [{"joints": [1]}],
+    }, b"")
+
+
+@pytest.mark.parametrize("magnitude", [2.0 ** -149, 1.0e-30, 7.0, 2.5e37])
+@pytest.mark.parametrize("convert_to_z_up,blender_z_up_fix", [
+    (False, False), (True, False), (False, True), (True, True),
+])
+def test_native_authored_rotations_normalize_before_pose_corrections(
+    tmp_path, magnitude, convert_to_z_up, blender_z_up_fix,
+):
+    flags = {"convert_to_z_up": convert_to_z_up, "blender_z_up_fix": blender_z_up_fix}
+    actual = NativeStaticMeshDocument(
+        _write_node_rotation_glb(tmp_path / "scaled.glb", magnitude),
+    ).prepared_rig_data(**flags)
+    expected = NativeStaticMeshDocument(
+        _write_node_rotation_glb(tmp_path / "unit-direction.glb"),
+    ).prepared_rig_data(**flags)
+
+    for actual_node, expected_node in zip(actual["nodes"], expected["nodes"], strict=True):
+        assert np.isfinite(actual_node["rotation"]).all()
+        assert np.linalg.norm(actual_node["rotation"]) == pytest.approx(1.0, abs=1e-6)
+        np.testing.assert_allclose(actual_node["rotation"], expected_node["rotation"], atol=1e-6)
+
+
+@pytest.mark.parametrize("magnitude", [5.0e-324, 1.0e-300, 1.0e300, 2.5e307])
+def test_native_python_rig_ingress_preserves_finite_double_extremes(tmp_path, monkeypatch, magnitude):
+    document = NativeStaticMeshDocument(_write_node_rotation_glb(tmp_path / "double-ingress.glb"))
+    rig = copy.deepcopy(document.rig_data())
+    for node in rig["nodes"]:
+        node["rotation"] = (np.asarray(node["rotation"]) * magnitude).tolist()
+    monkeypatch.setattr(document, "rig_data", lambda: rig)
+
+    prepared = document.prepared_rig_data(convert_to_z_up=False)
+
+    directions = np.asarray([[1.0, 2.0, 3.0, 4.0], [-4.0, 3.0, -2.0, 1.0]])
+    for node, direction in zip(prepared["nodes"], directions, strict=True):
+        assert np.isfinite(node["rotation"]).all()
+        np.testing.assert_allclose(node["rotation"], direction / np.linalg.norm(direction), atol=1e-12)
+
+
+@pytest.mark.parametrize("rotation", [
+    [0.0, 0.0, 0.0, 0.0], [float("nan"), 0.0, 0.0, 1.0],
+    [0.0, float("inf"), 0.0, 1.0], [0.0, 0.0, -float("inf"), 1.0],
+])
+def test_native_invalid_later_rotation_preserves_raw_rig_and_prepared_cache(
+    tmp_path, monkeypatch, rotation,
+):
+    path = _write_node_rotation_glb(tmp_path / "invalid-rotation.glb")
+    document = NativeStaticMeshDocument(path)
+    raw = document.rig_data()
+    retained = document.prepared_rig_data(convert_to_z_up=False)
+    retained_rotations = [node["rotation"].copy() for node in retained["nodes"]]
+    raw_rotations = [tuple(node["rotation"]) for node in raw["nodes"]]
+    keys_before = set(document._prepared_rigs)
+    incoming = copy.deepcopy(raw)
+    broken = copy.deepcopy(incoming["nodes"][1])
+    broken.update(name="Broken", rotation=rotation, parent_index=None, default_scene_root=False)
+    incoming["nodes"].append(broken)
+    monkeypatch.setattr(document, "rig_data", lambda: incoming)
+    messages = []
+    monkeypatch.setattr(log, "error", lambda message, **_: messages.append(message))
+
+    with pytest.raises(ValueError, match="node 2.*Broken"):
+        document.prepared_rig_data(convert_to_z_up=True, blender_z_up_fix=True)
+
+    assert set(document._prepared_rigs) == keys_before
+    assert document.prepared_rig_data(convert_to_z_up=False) is retained
+    assert [tuple(node["rotation"]) for node in raw["nodes"]] == raw_rotations
+    for node, expected in zip(retained["nodes"], retained_rotations, strict=True):
+        np.testing.assert_array_equal(node["rotation"], expected)
+    assert any(str(path) in message and "node 2" in message and "Broken" in message for message in messages)
+
+    incoming["nodes"][2]["rotation"] = [0.0, 0.0, 0.0, 2.0]
+    recovered = document.prepared_rig_data(convert_to_z_up=True, blender_z_up_fix=True)
+    assert len(recovered["nodes"]) == 3
+    np.testing.assert_array_equal(recovered["nodes"][2]["rotation"], [0.0, 0.0, 0.0, 1.0])
+
+
+@pytest.mark.parametrize("scale", [
+    [-2.0, 3.0, 4.0],
+    [0.0, 3.0, 4.0], [2.0, 0.0, 4.0], [2.0, 3.0, 0.0],
+    [2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 4.0],
+    [0.0, 0.0, 0.0],
+])
+def test_native_matrix_rotation_reconstructs_reflection_and_every_deficient_rank(tmp_path, scale):
+    rotation = np.asarray([
+        [2.0 / 15.0, -2.0 / 3.0, 11.0 / 15.0],
+        [14.0 / 15.0, 1.0 / 3.0, 2.0 / 15.0],
+        [-1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0],
+    ])
+    authored = np.eye(4)
+    authored[:3, :3] = rotation @ np.diag(scale)
+    authored[:3, 3] = [4.0, 5.0, 6.0]
+    path = _write_glb(tmp_path / "matrix-rank.glb", {
+        "asset": {"version": "2.0"},
+        "scene": 0, "scenes": [{"nodes": [0]}],
+        "nodes": [{"matrix": authored.T.reshape(-1).tolist()}],
+    }, b"")
+    first = NativeStaticMeshDocument(path).prepared_rig_data(convert_to_z_up=False)["nodes"][0]
+    second = NativeStaticMeshDocument(path).prepared_rig_data(convert_to_z_up=False)["nodes"][0]
+    x, y, z, w = first["rotation"]
+    restored_rotation = np.asarray([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ])
+
+    assert np.linalg.norm(first["rotation"]) == pytest.approx(1.0, abs=1e-6)
+    np.testing.assert_allclose(restored_rotation @ np.diag(first["scale"]), authored[:3, :3], atol=1e-5)
+    np.testing.assert_allclose(first["translation"], authored[:3, 3])
+    np.testing.assert_array_equal(first["rotation"], second["rotation"])
+    np.testing.assert_array_equal(first["scale"], second["scale"])
 
 
 def test_glb_asset_default_cgltf_backend_publishes_children_and_node_targets(

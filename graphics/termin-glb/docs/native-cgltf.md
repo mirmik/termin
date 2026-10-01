@@ -169,6 +169,13 @@ overwrite one clip silently.
 The current bridge can optionally apply the shared Y-up to Z-up basis mapping
 to translation, rotation, scale, and cubic tangent tuples. Native node/skin
 preparation applies the same policy to node TRS and inverse-bind matrices.
+Authored node rotations are normalized through the checked base quaternion
+API before narrowing; finite nonzero scaled quaternions, including subnormal
+and very large components, are accepted. Zero and non-finite rotations log
+the node identity and reject the node snapshot before publication. Matrix
+decomposition retains reflection in scale and completes rank-deficient bases
+before checked proper-rotation conversion. Quaternion row multiplication uses
+the base native adapter without normalizing animation keys or cubic tangents.
 `build_skeleton()` derives each bone parent from the nearest joint ancestor and
 publishes all bones and roots transactionally; failed validation or allocation
 leaves the prior resource/version intact. The optional Blender compatibility

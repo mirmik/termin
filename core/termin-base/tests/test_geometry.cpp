@@ -432,6 +432,52 @@ TEST_CASE("Quat checked slerp and Euler conversion have C++ parity") {
     CHECK_FALSE((Quat{0.0, 0.0, 0.0, 0.0}.to_euler().is_finite()));
 }
 
+TEST_CASE("Quat checked rotation matrix adapter matches C and preserves failure output") {
+    using termin::Quat;
+    const Quat rotations[] = {
+        Quat::identity(), Quat{-1.0, 0.0, 0.0, 0.0},
+        Quat{0.0, -1.0, 0.0, 0.0}, Quat{0.0, 0.0, -1.0, 0.0},
+        Quat::from_euler({0.4, -0.7, 1.1}),
+    };
+    for (const Quat& rotation : rotations) {
+        double matrix[9];
+        REQUIRE(rotation.try_to_matrix(matrix));
+        Quat cpp{9.0, 8.0, 7.0, 6.0}, c{9.0, 8.0, 7.0, 6.0};
+        REQUIRE(Quat::try_from_rotation_matrix(matrix, cpp));
+        REQUIRE(tc_quat_try_from_rotation_matrix(matrix, 1.0e-8, &c));
+        CHECK(cpp.x == c.x);
+        CHECK(cpp.y == c.y);
+        CHECK(cpp.z == c.z);
+        CHECK(cpp.w == c.w);
+        CHECK(std::abs(cpp.norm() - 1.0) < 1.0e-15);
+        CHECK(std::abs(std::abs(cpp.dot(rotation)) - 1.0) < 1.0e-15);
+    }
+    const Quat sentinel{9.0, 8.0, 7.0, 6.0};
+    Quat out = sentinel;
+    const double reflection[9] = {-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+    const double identity[9] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+    const auto unchanged = [&]() {
+        CHECK(out.x == sentinel.x);
+        CHECK(out.y == sentinel.y);
+        CHECK(out.z == sentinel.z);
+        CHECK(out.w == sentinel.w);
+    };
+    CHECK_FALSE(Quat::try_from_rotation_matrix(reflection, out));
+    unchanged();
+    CHECK_FALSE(Quat::try_from_rotation_matrix(nullptr, out));
+    unchanged();
+    for (double epsilon : {-1.0, 1.0, std::numeric_limits<double>::quiet_NaN(),
+                           std::numeric_limits<double>::infinity()}) {
+        CHECK_FALSE(Quat::try_from_rotation_matrix(identity, out, epsilon));
+        unchanged();
+    }
+    REQUIRE(Quat::try_from_rotation_matrix(identity, out, 0.0));
+    CHECK(out.x == 0.0);
+    CHECK(out.y == 0.0);
+    CHECK(out.z == 0.0);
+    CHECK(out.w == 1.0);
+}
+
 TEST_CASE("Mat66 follows the canonical column-major matrix contract") {
     termin::Mat66 matrix;
     matrix(2, 4) = 7.5;
