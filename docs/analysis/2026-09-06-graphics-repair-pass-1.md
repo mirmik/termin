@@ -27,7 +27,7 @@
   pool пуст, borrowed color сохраняется.
 
 Контракт texture API описан в
-[документации модуля](../../graphics/termin-graphics/docs/index.md#texture-cpu-sync).
+[документации модуля](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/docs/index.md#texture-cpu-sync).
 Изменение C/C++ сигнатуры требует пересборки consumers; SDK пересобран целиком.
 
 ## Проверки

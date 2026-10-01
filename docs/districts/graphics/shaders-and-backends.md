@@ -58,7 +58,7 @@ dependencies, compiler, stage, точного artifact target и конфигу�
 Изменение входов или `clear_failed_compilations()` разрешает новую попытку.
 Актуальный готовый artifact проверяется перед сохранённой ошибкой. Подробный
 контракт retry и callbacks описан в
-[shader artifact runtime](../../../graphics/termin-graphics/docs/shader-artifact-runtime.md).
+[shader artifact runtime](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/docs/shader-artifact-runtime.md).
 
 ## Capabilities вместо строк
 

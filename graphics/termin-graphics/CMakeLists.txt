@@ -1135,7 +1135,9 @@ if(TERMIN_BUILD_TESTS AND TERMIN_BUILD_TGFX2_TESTS)
         termin_add_test_labels(tgfx2_per_pipeline_layout_test
             "termin:capability:vulkan")
 
-        add_executable(tgfx2_vulkan_smoke tests/test_tgfx2_vulkan_smoke.cpp)
+        add_executable(tgfx2_vulkan_smoke
+            tests/test_tgfx2_vulkan_smoke.cpp
+            tests/tgfx2_vulkan_sampler_smoke.cpp)
         target_compile_definitions(tgfx2_vulkan_smoke
             PRIVATE
                 TGFX2_HAS_VULKAN

@@ -102,14 +102,14 @@ BUILD_JOBS=8 TGFX2_VULKAN_VALIDATION=1 \
 
 ### 1.1. RGB данные маркируются RGBA8 и читаются за границей allocation — P1, R, #2197
 
-[`tc_texture_registry.c:456–477`](../../graphics/termin-graphics/src/resources/tc_texture_registry.c#L456)
+[`tc_texture_registry.c:456–477`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/resources/tc_texture_registry.c#L456)
 выделяет `width * height * channels`, но безусловно записывает формат RGBA8.
-[`tc_texture_upload.cpp:274`](../../graphics/termin-graphics/src/tgfx2/tc_texture_upload.cpp#L274)
+[`tc_texture_upload.cpp:274`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/tc_texture_upload.cpp#L274)
 затем копирует размер, вычисленный по формату. Обычный RGB 1×1 даёт allocation=3,
 declared_bytes=4 и ASan heap-buffer-overflow. Это путь с корректными RGB входными
 данными, без необходимости подавать повреждённый файл.
 
-[`texture_bindings.cpp:52,107–119`](../../graphics/termin-graphics/python/bindings/texture_bindings.cpp#L52)
+[`texture_bindings.cpp:52,107–119`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/python/bindings/texture_bindings.cpp#L52)
 использует format-based размер для `.data`; `from_data` также не сверяет размер
 ndarray с запрошенными dimensions/channels. Последствия этих Python путей
 подтверждены анализом, отдельно в Python не воспроизводились.
@@ -118,7 +118,7 @@ mip layout, проверенная арифметика размеров и яв
 
 ### 1.2. Некратный четырём SPIR-V bytecode переполняет CPU vector — P1, R, #2203
 
-[`vulkan_pipeline_resource_sets.cpp:149–150`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_pipeline_resource_sets.cpp#L149)
+[`vulkan_pipeline_resource_sets.cpp:149–150`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_pipeline_resource_sets.cpp#L149)
 выделяет `bytecode.size()/4` слов, затем копирует все `bytecode.size()` байт.
 Обрезанный artifact длиной 1–3 байта пишет в нулевой vector; другие некратные
 четырём размеры переполняют его на 1–3 байта. Перед копированием отсутствует
@@ -130,7 +130,7 @@ mip layout, проверенная арифметика размеров и яв
 
 ### 1.3. Move assignment GPU pools теряет старые native resources — P2, R, #2198
 
-[`texture_pool.hpp:35,78`](../../graphics/termin-graphics/include/tgfx2/texture_pool.hpp#L35)
+[`texture_pool.hpp:35,78`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/include/tgfx2/texture_pool.hpp#L35)
 объявляет default move assignment. При замене непустого destination его vector
 уничтожает прежние entries, у которых нет освобождающего native handles destructor.
 Pool destructor позднее видит только новые entries. Probe подтвердил утечку для
@@ -141,7 +141,7 @@ Pool destructor позднее видит только новые entries. Probe
 
 ### 2.1. Upload/copy буфера не создаёт зависимости до draw — P1, R + S, #2200
 
-[`vulkan_transfer.cpp:227–233`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_transfer.cpp#L227)
+[`vulkan_transfer.cpp:227–233`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_transfer.cpp#L227)
 и `vulkan_command_list.cpp:545–556` записывают `vkCmdCopyBuffer` без дальнейшего
 barrier. Submission в `vulkan_render_device.cpp:1665–1697` рассчитывает на порядок
 command buffers. Он не заменяет execution/memory dependency. В реализации нет
@@ -151,7 +151,7 @@ access masks для vertex/index/uniform read; validation фиксирует upl
 
 ### 2.2. Image transitions не описывают реальных consumers — P1, R + S, #2201
 
-[`vulkan_transfer.cpp:120–154`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_transfer.cpp#L120)
+[`vulkan_transfer.cpp:120–154`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_transfer.cpp#L120)
 не задаёт destination transfer-read access для `TRANSFER_SRC_OPTIMAL`, а shader
 read связывает только с fragment stage. Readback/copy после записи получает
 неполную dependency; vertex sampling тоже исключён из stage coverage.
@@ -160,7 +160,7 @@ read связывает только с fragment stage. Readback/copy после
 
 ### 2.3. Swapchain error paths могут навсегда оставить fence/semaphore без signal — P1, S, #2205
 
-[`vulkan_swapchain.cpp:306–309,382–401`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_swapchain.cpp#L306)
+[`vulkan_swapchain.cpp:306–309,382–401`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_swapchain.cpp#L306)
 сбрасывает frame fence до acquire. Некоторые ошибки acquire выходят без submit,
 поэтому следующий frame ждёт несигнализируемый fence. Ветка отсутствующего source
 submit-ит пустую работу без signal semaphore, затем передаёт этот semaphore в
@@ -170,7 +170,7 @@ present; также отсутствует требуемый переход ima
 
 ### 2.4. Present semaphores переиспользуются по frame slot — P1, S, #2206
 
-[`vulkan_swapchain.cpp:262–276,530–549`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_swapchain.cpp#L262)
+[`vulkan_swapchain.cpp:262–276,530–549`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_swapchain.cpp#L262)
 выбирает `render_finished` по `current_frame_`. Graphics fence не подтверждает,
 что presentation engine уже завершил ожидание этого semaphore. Нужен semaphore
 на acquired swapchain image либо явный present-completion механизм.
@@ -179,14 +179,14 @@ present; также отсутствует требуемый переход ima
 ### 2.5. Разные graphics/present queue families выбираются, но ownership не передаётся — P1, S, #2207
 
 `vulkan_render_device.cpp:538–551` допускает отдельную present queue;
-[`vulkan_swapchain.cpp:198,422–449`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_swapchain.cpp#L198)
+[`vulkan_swapchain.cpp:198,422–449`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_swapchain.cpp#L198)
 создаёт exclusive swapchain без корректных release/acquire ownership transfers.
 На устройстве с разными queue families это нарушение native контракта.
 Нужно реализовать ownership transfer либо согласованное concurrent sharing.
 
 ### 2.6. Readback не обеспечивает host visibility и cache invalidation — P1/P2, S, #2202
 
-[`vulkan_transfer.cpp:495–498,579–583,664–668,944–948,1063–1065`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_transfer.cpp#L495)
+[`vulkan_transfer.cpp:495–498,579–583,664–668,944–948,1063–1065`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_transfer.cpp#L495)
 читает mapped GPU_TO_CPU allocations без `vmaInvalidateAllocation`; transfer→host
 read barrier тоже отсутствует. GPU_TO_CPU не гарантирует coherent memory.
 На non-coherent allocation можно получить старые picking/depth/capture данные.
@@ -195,7 +195,7 @@ read barrier тоже отсутствует. GPU_TO_CPU не гарантиру
 
 ### 2.7. Неуспешные native операции переводят состояние как при успехе — P1, S, #2213
 
-[`vulkan_render_device.cpp:1628–1704`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp#L1628)
+[`vulkan_render_device.cpp:1628–1704`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp#L1628)
 игнорирует результаты wait/reset/submit и отмечает fence in-flight после любого
 `vkQueueSubmit`. `vulkan_transfer.cpp:218–225,284–291` не проверяет allocation/map
 перед `memcpy`; command-list allocation/begin/end также не везде проверены.
@@ -205,7 +205,7 @@ success-only переходы. Частично созданные native объ
 
 ### 2.8. Shader target не согласован с API устройства — P1/P2, R, #2204
 
-[`vulkan_shader_compiler.cpp:191–193`](../../graphics/termin-graphics/src/tgfx2/vulkan/vulkan_shader_compiler.cpp#L191)
+[`vulkan_shader_compiler.cpp:191–193`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/vulkan/vulkan_shader_compiler.cpp#L191)
 всегда выбирает Vulkan 1.2/SPIR-V 1.5, а устройство может запрашивать Vulkan 1.0
 (включая Android default). В cache key target отсутствует. Два validation errors
 в центральном прогоне подтвердили несовместимость именно в API 1.0 smoke scenario;
@@ -251,10 +251,10 @@ Capabilities должны означать работоспособную пуб
 | P2 | Buffer upload сбрасывает index binding текущего VAO | После index upload EBO меняется `2→0`; последующий indexed draw лишается ранее установленного buffer |
 
 Опорные места:
-[`opengl_render_device.cpp`](../../graphics/termin-graphics/src/tgfx2/opengl/opengl_render_device.cpp)
+[`opengl_render_device.cpp`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/opengl/opengl_render_device.cpp)
 `:245–253,733–736,1192–1194,1214–1272,1283–1290,1497–1504,1527–1547`;
-[`opengl_command_list.cpp:162–185`](../../graphics/termin-graphics/src/tgfx2/opengl/opengl_command_list.cpp#L162);
-[`opengl_texture_readback.cpp:66–72,133–138`](../../graphics/termin-graphics/src/tgfx2/opengl/opengl_texture_readback.cpp#L66).
+[`opengl_command_list.cpp:162–185`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/opengl/opengl_command_list.cpp#L162);
+[`opengl_texture_readback.cpp:66–72,133–138`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/opengl/opengl_texture_readback.cpp#L66).
 
 Для borrowed teardown не найден текущий production GL consumer помимо самого
 публичного interop API. Partial clear в presenter сейчас обычно full-target,
@@ -281,7 +281,7 @@ Creation часто возвращает valid-looking handle после GL erro
 
 ### D3D11 — P2
 
-[`d3d11_render_device.cpp:944–952`](../../graphics/termin-graphics/src/tgfx2/d3d11/d3d11_render_device.cpp#L944)
+[`d3d11_render_device.cpp:944–952`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/d3d11/d3d11_render_device.cpp#L944)
 делает любой upload CPU-visible buffer через `WRITE_DISCARD`, затем записывает
 только patch. Вызов с offset или коротким prefix теряет гарантию сохранения всего
 остального buffer. Публичный offset API предполагает sub-update; current tcplot
@@ -303,8 +303,8 @@ timestamp capability=true не подкреплена frame-timing hooks; MSAA r
 | Sampling view используется как attachment view | `webgpu_render_device.cpp:1019` создаёт default view всех mips; `webgpu_command_list.cpp:67,85` использует его в pass, где нужен один mip |
 
 Опорные места для layouts:
-[`webgpu_render_device.hpp:25`](../../graphics/termin-graphics/include/tgfx2/webgpu/webgpu_render_device.hpp#L25),
-[`webgpu_render_device.cpp:1092–1110,1266`](../../graphics/termin-graphics/src/tgfx2/webgpu/webgpu_render_device.cpp#L1092).
+[`webgpu_render_device.hpp:25`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/include/tgfx2/webgpu/webgpu_render_device.hpp#L25),
+[`webgpu_render_device.cpp:1092–1110,1266`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/webgpu/webgpu_render_device.cpp#L1092).
 Также `attribute_count` в loop `:1139` не ограничен вместимостью массива: malformed
 native descriptor способен вызвать CPU out-of-bounds read. Нужна общая validation.
 
@@ -323,11 +323,11 @@ validation не обнаружит неправильный native layout, по�
 | P2, S | Authored clear/filter metadata теряется в template | `tc_pipeline_template` не хранит clear_color/depth/filter; resource-node значения не переживают template→instance |
 | P2, S | Split color/depth resources не получают requested clear | Runtime явно пропускает clear для color_texture/depth_texture; composed FBO не совпадает с именем исходного attachment для deferred clear |
 
-Опорные места: [`font_atlas.cpp:570–620,731–795`](../../graphics/termin-graphics/src/tgfx2/font_atlas.cpp#L570);
+Опорные места: [`font_atlas.cpp:570–620,731–795`](https://github.com/mirmik/termin/blob/master/graphics/termin-graphics/src/tgfx2/font_atlas.cpp#L570);
 `text2d_renderer.cpp:114`, `text3d_renderer.cpp:89`, `canvas2d_renderer.cpp:1072`,
 `point_cloud_renderer.cpp:195`, `line_renderer_common.cpp:22,54`;
-[`render_engine.cpp:428,644–798,1586–1601`](../../graphics/termin-render-core/src/render_engine.cpp#L428);
-[`tc_pipeline_template.h:39–50`](../../graphics/termin-render-core/include/render/tc_pipeline_template.h#L39);
+[`render_engine.cpp:428,644–798,1586–1601`](https://github.com/mirmik/termin/blob/master/graphics/termin-render-core/src/render_engine.cpp#L428);
+[`tc_pipeline_template.h:39–50`](https://github.com/mirmik/termin/blob/master/graphics/termin-render-core/include/render/tc_pipeline_template.h#L39);
 `engine/termin-render/src/graph_compiler.cpp:897–945,1085–1116`.
 
 Для FontAtlas требуется разделение устройств; обычный single-device editor этот
