@@ -7,22 +7,19 @@ import uuid
 import pytest
 
 
-try:
-    import termin.bootstrap
-    from termin.geombase import Pose3, Vec3
-    from termin.mesh.components import MeshComponent, TcMesh
-    from termin.navmesh import (
-        DetourQuerySession,
-        MeshSource,
-        RecastNavMeshBuilderComponent,
-        navmesh_bake_frame_from_transform,
-        navmesh_bake_to_world_point,
-        navmesh_world_to_bake_point,
-    )
-    from termin.scene import Entity, TransformKind
-    from termin.mesh import CubeMesh
-except ImportError as exc:  # pragma: no cover - depends on built SDK availability.
-    pytestmark = pytest.mark.skip(reason=str(exc))
+import termin.bootstrap
+from termin.geombase import Pose3, Vec3
+from termin.mesh.components import MeshComponent
+from termin.navmesh import (
+    DetourQuerySession,
+    MeshSource,
+    RecastNavMeshBuilderComponent,
+    navmesh_bake_frame_from_transform,
+    navmesh_bake_to_world_point,
+    navmesh_world_to_bake_point,
+)
+from termin.scene import Entity, TransformKind
+from termin.mesh import CubeMesh, TcMesh
 
 
 @pytest.fixture(scope="module", autouse=True)
