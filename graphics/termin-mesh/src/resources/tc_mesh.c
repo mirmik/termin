@@ -375,6 +375,32 @@ typedef struct tc_mesh_edge_adjacency {
     uint32_t count;
 } tc_mesh_edge_adjacency;
 
+typedef struct tc_mesh_edge_index {
+    // Zero denotes an empty slot; occupied slots store dense edge index + 1.
+    size_t* slots;
+    size_t capacity;
+} tc_mesh_edge_index;
+
+static bool tc_mesh_edge_index_capacity(size_t edge_capacity, size_t* out_capacity) {
+    if (edge_capacity > SIZE_MAX / 2u) {
+        return false;
+    }
+    // Reserve at least twice the maximum edge count, keeping probes short.
+    const size_t minimum = edge_capacity * 2u;
+    size_t capacity = 1;
+    while (capacity < minimum) {
+        if (capacity > SIZE_MAX / 2u) {
+            return false;
+        }
+        capacity *= 2u;
+    }
+    if (capacity > SIZE_MAX / sizeof(size_t)) {
+        return false;
+    }
+    *out_capacity = capacity;
+    return true;
+}
+
 static bool tc_mesh_quantize_coord(float value, int64_t* out_quantized) {
     if (!out_quantized || !isfinite(value)) {
         return false;
@@ -447,19 +473,35 @@ tc_mesh_make_geometric_edge_key(const tc_mesh* mesh, uint32_t a, uint32_t b, int
     return true;
 }
 
-static tc_mesh_edge_adjacency*
-tc_mesh_find_edge_record(tc_mesh_edge_adjacency* edges, size_t edge_count, const int64_t key[6], uint64_t hash) {
-    for (size_t i = 0; i < edge_count; ++i) {
-        if (edges[i].hash == hash && memcmp(edges[i].key, key, sizeof(int64_t) * 6) == 0) {
-            return &edges[i];
+static size_t tc_mesh_find_edge_slot(const tc_mesh_edge_adjacency* edges,
+                                    const tc_mesh_edge_index* index,
+                                    const int64_t key[6],
+                                    uint64_t hash) {
+    const size_t mask = index->capacity - 1u;
+    size_t slot = (size_t)hash & mask;
+    for (size_t probe = 0; probe < index->capacity; ++probe) {
+        const size_t entry = index->slots[slot];
+        if (entry == 0 ||
+            (edges[entry - 1u].hash == hash && memcmp(edges[entry - 1u].key, key, sizeof(int64_t) * 6) == 0)) {
+            return slot;
         }
+        slot = (slot + 1u) & mask;
     }
-    return NULL;
+    return SIZE_MAX;
+}
+
+static const tc_mesh_edge_adjacency* tc_mesh_find_edge_record(const tc_mesh_edge_adjacency* edges,
+                                                            const tc_mesh_edge_index* index,
+                                                            const int64_t key[6],
+                                                            uint64_t hash) {
+    const size_t slot = tc_mesh_find_edge_slot(edges, index, key, hash);
+    return slot != SIZE_MAX && index->slots[slot] != 0 ? &edges[index->slots[slot] - 1u] : NULL;
 }
 
 static bool tc_mesh_add_prepared_edge_record(tc_mesh_edge_adjacency* edges,
                                              size_t* edge_count,
                                              size_t edge_capacity,
+                                             const tc_mesh_edge_index* index,
                                              const int64_t key[6],
                                              uint64_t hash,
                                              uint32_t a,
@@ -468,13 +510,18 @@ static bool tc_mesh_add_prepared_edge_record(tc_mesh_edge_adjacency* edges,
     if (!edges || !edge_count || !key) {
         return false;
     }
-    tc_mesh_edge_adjacency* edge = tc_mesh_find_edge_record(edges, *edge_count, key, hash);
-    if (!edge) {
+    const size_t slot = tc_mesh_find_edge_slot(edges, index, key, hash);
+    if (slot == SIZE_MAX) {
+        return false;
+    }
+    tc_mesh_edge_adjacency* edge;
+    if (index->slots[slot] == 0) {
         if (*edge_count >= edge_capacity) {
             return false;
         }
         edge = &edges[*edge_count];
         (*edge_count)++;
+        index->slots[slot] = *edge_count;
         edge->hash = hash;
         memcpy(edge->key, key, sizeof(edge->key));
         edge->a = a;
@@ -484,6 +531,7 @@ static bool tc_mesh_add_prepared_edge_record(tc_mesh_edge_adjacency* edges,
         edge->count = 1;
         return true;
     }
+    edge = &edges[index->slots[slot] - 1u];
     if (edge->count < 2) {
         edge->tris[edge->count] = tri;
     }
@@ -493,7 +541,7 @@ static bool tc_mesh_add_prepared_edge_record(tc_mesh_edge_adjacency* edges,
 
 static bool tc_mesh_is_boundary_edge(const tc_mesh* mesh,
                                      const tc_mesh_edge_adjacency* edges,
-                                     size_t edge_count,
+                                     const tc_mesh_edge_index* index,
                                      const bool* accepted,
                                      uint32_t tri,
                                      uint32_t a,
@@ -503,8 +551,7 @@ static bool tc_mesh_is_boundary_edge(const tc_mesh* mesh,
     if (!tc_mesh_make_geometric_edge_key(mesh, a, b, key, &hash)) {
         return false;
     }
-    const tc_mesh_edge_adjacency* edge =
-        tc_mesh_find_edge_record((tc_mesh_edge_adjacency*)edges, edge_count, key, hash);
+    const tc_mesh_edge_adjacency* edge = tc_mesh_find_edge_record(edges, index, key, hash);
     if (!edge) {
         return true;
     }
@@ -841,21 +888,28 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
         return false;
     }
     const size_t edge_capacity = triangle_count * 3u;
+    size_t slot_capacity = 0;
     if (edge_capacity > SIZE_MAX / sizeof(tc_mesh_edge_adjacency) ||
         triangle_count > SIZE_MAX / sizeof(tc_vec3f) || triangle_count > SIZE_MAX / sizeof(bool) ||
-        triangle_count > SIZE_MAX / sizeof(uint32_t)) {
+        triangle_count > SIZE_MAX / sizeof(uint32_t) ||
+        !tc_mesh_edge_index_capacity(edge_capacity, &slot_capacity)) {
         tc_log(TC_LOG_ERROR, "%s: mesh topology allocation size overflows size_t", api_name);
         return false;
     }
 
     tc_mesh_edge_adjacency* edges = (tc_mesh_edge_adjacency*)calloc(edge_capacity, sizeof(tc_mesh_edge_adjacency));
+    const tc_mesh_edge_index edge_index = {
+        .slots = (size_t*)calloc(slot_capacity, sizeof(size_t)),
+        .capacity = slot_capacity,
+    };
     tc_vec3f* normals = (tc_vec3f*)calloc(triangle_count, sizeof(tc_vec3f));
     bool* has_normal = (bool*)calloc(triangle_count, sizeof(bool));
     bool* accepted = (bool*)calloc(triangle_count, sizeof(bool));
     uint32_t* queue = (uint32_t*)calloc(triangle_count, sizeof(uint32_t));
-    if (!edges || !normals || !has_normal || !accepted || !queue) {
+    if (!edges || !edge_index.slots || !normals || !has_normal || !accepted || !queue) {
         tc_log(TC_LOG_ERROR, "%s: failed to allocate surface-edge traversal state", api_name);
         free(edges);
+        free(edge_index.slots);
         free(normals);
         free(has_normal);
         free(accepted);
@@ -864,6 +918,7 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
     }
 
     size_t edge_count = 0;
+    bool topology_ready = true;
     for (uint32_t tri = 0; tri < (uint32_t)triangle_count; ++tri) {
         uint32_t idx[3];
         if (!tc_mesh_triangle_indices(mesh, tri, idx)) {
@@ -883,6 +938,7 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
         if (!tc_mesh_add_prepared_edge_record(edges,
                                               &edge_count,
                                               edge_capacity,
+                                              &edge_index,
                                               checked_keys[0],
                                               checked_hashes[0],
                                               idx[0],
@@ -891,6 +947,7 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
             !tc_mesh_add_prepared_edge_record(edges,
                                               &edge_count,
                                               edge_capacity,
+                                              &edge_index,
                                               checked_keys[1],
                                               checked_hashes[1],
                                               idx[1],
@@ -899,18 +956,22 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
             !tc_mesh_add_prepared_edge_record(edges,
                                               &edge_count,
                                               edge_capacity,
+                                              &edge_index,
                                               checked_keys[2],
                                               checked_hashes[2],
                                               idx[2],
                                               idx[0],
                                               tri)) {
-            continue;
+            tc_log(TC_LOG_ERROR, "%s: failed to index surface-edge topology", api_name);
+            topology_ready = false;
+            break;
         }
         has_normal[tri] = true;
     }
 
-    if (!has_normal[query->start_triangle]) {
+    if (!topology_ready || !has_normal[query->start_triangle]) {
         free(edges);
+        free(edge_index.slots);
         free(normals);
         free(has_normal);
         free(accepted);
@@ -940,7 +1001,7 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
             if (!tc_mesh_make_geometric_edge_key(mesh, a, b, edge_key, &edge_hash)) {
                 continue;
             }
-            tc_mesh_edge_adjacency* edge = tc_mesh_find_edge_record(edges, edge_count, edge_key, edge_hash);
+            const tc_mesh_edge_adjacency* edge = tc_mesh_find_edge_record(edges, &edge_index, edge_key, edge_hash);
             if (!edge) {
                 continue;
             }
@@ -1008,7 +1069,7 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
         for (int e = 0; e < 3; ++e) {
             uint32_t ia = idx[e];
             uint32_t ib = idx[(e + 1) % 3];
-            if (!tc_mesh_is_boundary_edge(mesh, edges, edge_count, accepted, tri, ia, ib)) {
+            if (!tc_mesh_is_boundary_edge(mesh, edges, &edge_index, accepted, tri, ia, ib)) {
                 continue;
             }
 
@@ -1064,6 +1125,7 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
     }
 
     free(edges);
+    free(edge_index.slots);
     free(normals);
     free(has_normal);
     free(accepted);

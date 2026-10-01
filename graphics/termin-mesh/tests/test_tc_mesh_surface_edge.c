@@ -5,7 +5,9 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <tcbase/tc_log.h>
 #include <tgfx/resources/tc_mesh.h>
 
@@ -186,6 +188,181 @@ GUARD_C_TEST(test_anisotropic_metric_uses_covector_normals_across_internal_diago
     return 0;
 }
 
+GUARD_C_TEST(test_surface_edge_welds_seam_split_coplanar_triangles) {
+    // The shared diagonal has distinct indices and sub-quantization offsets.
+    // It must remain internal after welding by the existing geometric key.
+    float vertices[] = {
+        0.0f, 0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,
+        0.000003f, 1.0f, 0.0f,
+        1.0f, 0.000003f, 0.0f,
+        1.0f, 1.0f, 0.0f,
+    };
+    uint32_t indices[] = {0, 1, 2, 3, 4, 5};
+    const tc_mesh mesh = make_mesh(vertices, 6, indices, 6);
+    tc_mesh_surface_edge_query query = make_query();
+    query.point.x = 0.4f;
+    tc_mesh_surface_edge_hit hit;
+    for (uint32_t start = 0; start < 2; ++start) {
+        query.start_triangle = start;
+        GUARD_C_REQUIRE(tc_mesh_find_surface_edge_query(&mesh, &query, &hit));
+        check_left_edge_hit(&hit, 0.4f);
+    }
+    query.edge_direction = tc_vec3f_unit_y();
+    query.max_angle_degrees = 0.0f;
+    GUARD_C_REQUIRE(tc_mesh_find_surface_edge_aligned(&mesh, &query, &hit));
+    check_left_edge_hit(&hit, 0.4f);
+    GUARD_C_REQUIRE(tc_mesh_find_nearest_surface_edge(&mesh, query.point, query.up, &hit));
+    check_left_edge_hit(&hit, 0.4f);
+    return 0;
+}
+
+GUARD_C_TEST(test_surface_edge_preserves_first_two_nonmanifold_neighbors) {
+    float vertices[] = {
+        0.0f, 0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,
+        0.0f, -1.0f, 0.0f,
+        1.0f, 1.0f, 0.0f,
+    };
+    // All three CCW triangles share (0,1). Only the first two are stored as
+    // neighbors, so traversal from either of them does not reach triangle 2.
+    uint32_t indices[] = {0, 1, 2, 1, 0, 3, 0, 1, 4};
+    const tc_mesh mesh = make_mesh(vertices, 5, indices, 9);
+    tc_mesh_surface_edge_query query = make_query();
+    query.point = (tc_vec3f){0.6f, 0.55f, 0.0f};
+    tc_mesh_surface_edge_hit hit;
+    for (uint32_t start = 0; start < 2; ++start) {
+        query.start_triangle = start;
+        GUARD_C_REQUIRE(tc_mesh_find_surface_edge_query(&mesh, &query, &hit));
+        GUARD_C_CHECK_NEAR_DOUBLE(0.525, hit.point.x, 1e-6);
+        GUARD_C_CHECK_NEAR_DOUBLE(0.475, hit.point.y, 1e-6);
+        GUARD_C_CHECK_NEAR_DOUBLE(sqrt(0.01125), hit.distance, 1e-6);
+        GUARD_C_CHECK_EQ_INT(1, hit.indices[0]);
+        GUARD_C_CHECK_EQ_INT(2, hit.indices[1]);
+    }
+    // Starting on the third triangle can still reach the first two. Its
+    // unshared (4,0) edge is then the nearest boundary of that larger surface.
+    query.start_triangle = 2;
+    GUARD_C_REQUIRE(tc_mesh_find_surface_edge_query(&mesh, &query, &hit));
+    GUARD_C_CHECK_NEAR_DOUBLE(0.575, hit.point.x, 1e-6);
+    GUARD_C_CHECK_NEAR_DOUBLE(0.575, hit.point.y, 1e-6);
+    GUARD_C_CHECK_NEAR_DOUBLE(sqrt(0.00125), hit.distance, 1e-6);
+    GUARD_C_CHECK_EQ_INT(4, hit.indices[0]);
+    GUARD_C_CHECK_EQ_INT(0, hit.indices[1]);
+    return 0;
+}
+
+GUARD_C_TEST(test_surface_edge_large_plane_has_only_outer_boundaries_with_bounded_cpu_time) {
+    enum { cells = 256, side = cells + 1 };
+    const size_t vertex_count = (size_t)side * side;
+    const size_t triangle_count = (size_t)cells * cells * 2u;
+    float* vertices = (float*)malloc(vertex_count * 3u * sizeof(float));
+    uint32_t* indices = (uint32_t*)malloc(triangle_count * 3u * sizeof(uint32_t));
+    if (!vertices || !indices) {
+        free(vertices);
+        free(indices);
+        GUARD_C_FAIL("failed to allocate deterministic plane fixture");
+    }
+    for (uint32_t y = 0; y < side; ++y) {
+        for (uint32_t x = 0; x < side; ++x) {
+            const size_t vertex = (size_t)y * side + x;
+            vertices[vertex * 3u] = (float)x;
+            vertices[vertex * 3u + 1u] = (float)y;
+            vertices[vertex * 3u + 2u] = 0.0f;
+        }
+    }
+    size_t index_count = 0;
+    for (uint32_t y = 0; y < cells; ++y) {
+        for (uint32_t x = 0; x < cells; ++x) {
+            const uint32_t a = y * side + x;
+            indices[index_count++] = a;
+            indices[index_count++] = a + 1u;
+            indices[index_count++] = a + side + 1u;
+            indices[index_count++] = a;
+            indices[index_count++] = a + side + 1u;
+            indices[index_count++] = a + side;
+        }
+    }
+    size_t boundary_count = 0;
+    for (size_t tri = 0; tri < triangle_count; ++tri) {
+        for (size_t e = 0; e < 3; ++e) {
+            const uint32_t a = indices[tri * 3u + e];
+            const uint32_t b = indices[tri * 3u + (e + 1u) % 3u];
+            const uint32_t ax = a % side, ay = a / side;
+            const uint32_t bx = b % side, by = b / side;
+            if ((ax == bx && (ax == 0 || ax == cells)) ||
+                (ay == by && (ay == 0 || ay == cells))) {
+                ++boundary_count;
+            }
+        }
+    }
+    GUARD_C_CHECK_EQ_INT(131072, triangle_count);
+    GUARD_C_CHECK_EQ_INT(1024, boundary_count);
+    const tc_mesh mesh = make_mesh(vertices, vertex_count, indices, index_count);
+    const tc_vec3f points[] = {
+        {0.25f, 105.375f, 0.0f},
+        {255.75f, 150.125f, 0.0f},
+        {130.5f, 0.25f, 0.0f},
+        {78.25f, 255.75f, 0.0f},
+    };
+    const tc_vec3f expected[] = {
+        {0.0f, 105.375f, 0.0f},
+        {256.0f, 150.125f, 0.0f},
+        {130.5f, 0.0f, 0.0f},
+        {78.25f, 256.0f, 0.0f},
+    };
+    tc_mesh_surface_edge_hit hits[6] = {0};
+    bool results[6];
+    tc_mesh_surface_edge_query query = make_query();
+    const clock_t started = clock();
+    for (size_t i = 0; i < 4; ++i) {
+        query.point = points[i];
+        results[i] = tc_mesh_find_surface_edge_query(&mesh, &query, &hits[i]);
+    }
+    query.point = points[0];
+    query.edge_direction = tc_vec3f_unit_y();
+    query.max_angle_degrees = 0.0f;
+    results[4] = tc_mesh_find_surface_edge_aligned(&mesh, &query, &hits[4]);
+    results[5] = tc_mesh_find_nearest_surface_edge(&mesh, query.point, query.up, &hits[5]);
+    const clock_t finished = clock();
+    free(vertices);
+    free(indices);
+
+    for (size_t i = 0; i < 6; ++i) {
+        GUARD_C_CHECK(results[i]);
+        if (!results[i]) {
+            continue;
+        }
+        const size_t boundary = i < 4 ? i : 0;
+        GUARD_C_CHECK(hit_is_finite(&hits[i]));
+        GUARD_C_CHECK_NEAR_DOUBLE(expected[boundary].x, hits[i].point.x, 1e-5);
+        GUARD_C_CHECK_NEAR_DOUBLE(expected[boundary].y, hits[i].point.y, 1e-5);
+        GUARD_C_CHECK_NEAR_DOUBLE(0.0, hits[i].point.z, 1e-6);
+        GUARD_C_CHECK_NEAR_DOUBLE(0.25, hits[i].distance, 1e-5);
+        for (size_t endpoint = 0; endpoint < 2; ++endpoint) {
+            const uint32_t vertex = hits[i].indices[endpoint];
+            GUARD_C_CHECK(vertex < vertex_count);
+            if (boundary == 0 || boundary == 1) {
+                GUARD_C_CHECK_EQ_INT(boundary == 0 ? 0 : cells, vertex % side);
+            } else {
+                GUARD_C_CHECK_EQ_INT(boundary == 2 ? 0 : cells, vertex / side);
+            }
+        }
+    }
+    GUARD_C_CHECK(started != (clock_t)-1 && finished != (clock_t)-1 && finished >= started);
+    // A generous ten-second clock bound accommodates slow builds while
+    // rejecting the previous quadratic scan on this mesh.
+    if (started != (clock_t)-1 && finished != (clock_t)-1 && finished >= started) {
+        const double elapsed = (double)(finished - started) / CLOCKS_PER_SEC;
+        printf("surface-edge plane: triangles=%zu boundary_edges=%zu queries=6 clock_seconds=%.6f\n",
+               triangle_count, boundary_count, elapsed);
+        GUARD_C_CHECK(elapsed < 10.0);
+    }
+    return 0;
+}
+
 GUARD_C_TEST(test_surface_edge_required_pointer_matrix_is_logged_and_transactional) {
     float vertices[] = {
         0.0f, 0.0f, 0.0f,
@@ -350,6 +527,9 @@ int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_surface_edge_reports_rich_finite_hits_and_preserves_c_semantics);
     GUARD_C_RUN(test_anisotropic_metric_uses_covector_normals_across_internal_diagonal);
+    GUARD_C_RUN(test_surface_edge_welds_seam_split_coplanar_triangles);
+    GUARD_C_RUN(test_surface_edge_preserves_first_two_nonmanifold_neighbors);
+    GUARD_C_RUN(test_surface_edge_large_plane_has_only_outer_boundaries_with_bounded_cpu_time);
     GUARD_C_RUN(test_surface_edge_required_pointer_matrix_is_logged_and_transactional);
     GUARD_C_RUN(test_surface_edge_rejects_invalid_numeric_matrix_with_logs);
     GUARD_C_RUN(test_surface_edge_ordinary_miss_is_silent_and_transactional);
