@@ -18,6 +18,28 @@ The Graphics wheel provides `termin_shaderc`, not the Slang backend compiler.
 Runtime Slang compilation is an explicit development mode and still resolves
 an external `slangc` through `TERMIN_SLANGC`, Termin settings, or `PATH`.
 
+Each resolver remembers a failed development compilation for the shader's
+current source/version, dependencies, compiler identity, stage, exact artifact
+target and resolver configuration. Repeated draws reuse that failure instead
+of starting the external compiler again. The first failure is logged; callers
+can distinguish a repeated failure through `ShaderArtifactLoadStatus`.
+An available current primary artifact or immutable fallback is still checked
+before the remembered failure.
+
+Changing the inputs permits another attempt. `configure()` and changed settings
+clear remembered failures; setting the same value preserves them. An explicit
+retry calls `device.shader_artifact_resolver().clear_failed_compilations()`.
+Use this retry after changing an external backend compiler such as `slangc`
+without changing the `termin_shaderc` executable or resolver configuration.
+Copies of a resolver retain configuration and start with independent empty
+failure caches. Destroying a registered tc shader clears its device resolver's
+failures even when that shader never produced a GPU handle.
+
+Concurrent CPU artifact loads with immutable inputs serialize development
+compilation within one resolver. Diagnostics and artifact read callbacks run
+outside that lock, so they can request a retry. Concurrent source or resolver
+configuration changes remain outside this contract, as do GPU device calls.
+
 Runtime package loading is transactional with respect to shader resolution:
 `RuntimePackageLoader` validates and loads a package, then returns a
 `ShaderRuntimeConfiguration` in its result. The player, Android and OpenXR

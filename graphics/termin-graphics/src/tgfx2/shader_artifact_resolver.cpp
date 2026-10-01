@@ -30,6 +30,46 @@ namespace termin {
 
     } // anonymous namespace
 
+    ShaderArtifactResolver::ShaderArtifactResolver(const ShaderArtifactResolver& other)
+        : ShaderArtifactResolver(other.artifact_root_, other.cache_root_, other.compiler_path_,
+                                 other.dev_compile_enabled_, other.environment_fallback_,
+                                 other.read_callback_, other.fallback_artifact_roots_) {
+        revision_ = other.revision_;
+    }
+
+    ShaderArtifactResolver& ShaderArtifactResolver::operator=(const ShaderArtifactResolver& other) {
+        if (this == &other)
+            return *this;
+        artifact_root_ = other.artifact_root_;
+        cache_root_ = other.cache_root_;
+        compiler_path_ = other.compiler_path_;
+        dev_compile_enabled_ = other.dev_compile_enabled_;
+        environment_fallback_ = other.environment_fallback_;
+        read_callback_ = other.read_callback_;
+        fallback_artifact_roots_ = other.fallback_artifact_roots_;
+        revision_ = other.revision_;
+        environment_artifact_root_.clear();
+        environment_cache_root_.clear();
+        environment_compiler_path_.clear();
+        clear_failed_compilations();
+        return *this;
+    }
+
+    void ShaderArtifactResolver::clear_failed_compilations() const {
+        std::lock_guard<std::mutex> lock(compile_mutex_);
+        failed_compilations_.clear();
+    }
+
+    void ShaderArtifactResolver::clear_failed_tc_shader_compilations(uint32_t pool_index) const {
+        std::lock_guard<std::mutex> lock(compile_mutex_);
+        for (auto it = failed_compilations_.begin(); it != failed_compilations_.end();) {
+            if (!std::get<0>(it->first) && it->second.tc_pool_index == pool_index)
+                it = failed_compilations_.erase(it);
+            else
+                ++it;
+        }
+    }
+
     ShaderArtifactResolver::ShaderArtifactResolver(std::string artifact_root,
                                                    std::string cache_root,
                                                    std::string compiler_path,
@@ -136,6 +176,7 @@ namespace termin {
         read_callback_ = std::move(read_callback);
         fallback_artifact_roots_ = std::move(fallback_artifact_roots);
         ++revision_;
+        clear_failed_compilations();
     }
 
     void ShaderArtifactResolver::set_artifact_root(std::string value) {
@@ -143,6 +184,7 @@ namespace termin {
             return;
         artifact_root_ = std::move(value);
         ++revision_;
+        clear_failed_compilations();
     }
 
     void ShaderArtifactResolver::set_fallback_artifact_roots(std::vector<std::string> values) {
@@ -150,6 +192,7 @@ namespace termin {
             return;
         fallback_artifact_roots_ = std::move(values);
         ++revision_;
+        clear_failed_compilations();
     }
 
     void ShaderArtifactResolver::set_cache_root(std::string value) {
@@ -157,6 +200,7 @@ namespace termin {
             return;
         cache_root_ = std::move(value);
         ++revision_;
+        clear_failed_compilations();
     }
 
     void ShaderArtifactResolver::set_compiler_path(std::string value) {
@@ -164,6 +208,7 @@ namespace termin {
             return;
         compiler_path_ = std::move(value);
         ++revision_;
+        clear_failed_compilations();
     }
 
     void ShaderArtifactResolver::set_dev_compile_enabled(bool value) {
@@ -171,6 +216,7 @@ namespace termin {
             return;
         dev_compile_enabled_ = value;
         ++revision_;
+        clear_failed_compilations();
     }
 
     ShaderArtifactResolver& tgfx2_legacy_shader_artifact_resolver() {

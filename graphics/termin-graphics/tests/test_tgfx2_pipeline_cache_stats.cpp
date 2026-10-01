@@ -1,20 +1,29 @@
 #include "guard_main.h"
 
+#include <algorithm>
 #include <memory>
+#include <chrono>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <span>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <tgfx2/i_render_device.hpp>
+#include <tgfx2/engine_shader_catalog.hpp>
 #include <tgfx2/canvas2d_renderer.hpp>
 #include <tgfx2/pipeline_cache.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/shader_artifact_resolver.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
 #include <tgfx2/texture_pool.hpp>
 
 extern "C" {
+#include <tcbase/tc_log.h>
 #include <tgfx/resources/tc_shader.h>
 #include <tgfx/resources/tc_shader_registry.h>
 }
@@ -88,6 +97,7 @@ namespace {
         void wait_idle() override {}
 
         tgfx::BufferHandle create_buffer(const tgfx::BufferDesc&) override {
+            ++create_buffer_count;
             return tgfx::BufferHandle{next_buffer_id_++};
         }
 
@@ -106,8 +116,9 @@ namespace {
             return tgfx::SamplerHandle{next_sampler_id_++};
         }
 
-        tgfx::ShaderHandle create_shader(const tgfx::ShaderDesc&) override {
-            return {};
+        tgfx::ShaderHandle create_shader(const tgfx::ShaderDesc& desc) override {
+            created_shader_descs.push_back(desc);
+            return shader_creation_enabled ? tgfx::ShaderHandle{next_shader_id_++} : tgfx::ShaderHandle{};
         }
 
         tgfx::PipelineHandle create_pipeline(const tgfx::PipelineDesc& desc) override {
@@ -200,9 +211,12 @@ namespace {
 
         int texture_failures_remaining = 0;
         int pipeline_failures_remaining = 0;
+        bool shader_creation_enabled = false;
+        uint32_t create_buffer_count = 0;
         uint32_t create_texture_count = 0;
         uint32_t create_pipeline_count = 0;
         std::vector<tgfx::PipelineDesc> created_pipeline_descs;
+        std::vector<tgfx::ShaderDesc> created_shader_descs;
         std::vector<tgfx::TextureHandle> destroyed_textures;
         std::vector<tgfx::PipelineHandle> destroyed_pipelines;
         std::vector<tgfx::PipelineHandle> submitted_pipelines;
@@ -237,7 +251,143 @@ namespace {
         return tgfx::make_vertex_layout_desc(layout);
     }
 
+    std::vector<std::string> fullscreen_shader_errors;
+
+    void capture_fullscreen_shader_error(tc_log_level level, const char* message) {
+        if (level == TC_LOG_ERROR && message)
+            fullscreen_shader_errors.emplace_back(message);
+    }
+
+    struct FullscreenArtifactFixture {
+        std::filesystem::path root;
+        std::string previous_builtin_root;
+        bool had_builtin_root = false;
+
+        FullscreenArtifactFixture() {
+            const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            root = std::filesystem::temp_directory_path() / ("termin-fsq-failed-artifact-" + std::to_string(stamp));
+            const char* previous = std::getenv("TERMIN_BUILTIN_SHADER_ROOT");
+            had_builtin_root = previous != nullptr;
+            if (previous)
+                previous_builtin_root = previous;
+        }
+
+        ~FullscreenArtifactFixture() {
+            tc_log_set_callback(nullptr);
+            set_builtin_root(had_builtin_root ? previous_builtin_root.c_str() : nullptr);
+            std::error_code error;
+            std::filesystem::remove_all(root, error);
+        }
+
+        static void set_builtin_root(const char* value) {
+#ifdef _WIN32
+            _putenv_s("TERMIN_BUILTIN_SHADER_ROOT", value ? value : "");
+#else
+            if (value)
+                setenv("TERMIN_BUILTIN_SHADER_ROOT", value, 1);
+            else
+                unsetenv("TERMIN_BUILTIN_SHADER_ROOT");
+#endif
+        }
+
+        std::string compiler_attempts() const {
+            std::ifstream input(root / "attempts.txt", std::ios::binary);
+            return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+        }
+    };
+
 } // namespace
+
+TEST_CASE("fullscreen quad caches artifact failures and recovers without replacing geometry buffers") {
+    namespace fs = std::filesystem;
+    const auto& engine_shader = tgfx::engine_fullscreen_quad_vertex_shader();
+    FullscreenArtifactFixture fixture;
+    const fs::path source_root = fixture.root / "sources";
+    fs::create_directories(source_root);
+    const std::string source_name = std::string(engine_shader.source_resource_path).substr(
+        std::strlen("builtin_shaders/"));
+    fs::create_directories((source_root / source_name).parent_path());
+    {
+        std::ofstream source(source_root / source_name, std::ios::binary);
+        source << "void main() {}\n";
+    }
+    FullscreenArtifactFixture::set_builtin_root(source_root.string().c_str());
+#ifdef _WIN32
+    const fs::path compiler = fixture.root / "failed_shaderc.cmd";
+    {
+        std::ofstream script(compiler, std::ios::binary);
+        script << "@echo off\r\necho attempt>>\"%~dp0attempts.txt\"\r\nexit /b 7\r\n";
+    }
+#else
+    const fs::path compiler = fixture.root / "failed_shaderc.sh";
+    {
+        std::ofstream script(compiler, std::ios::binary);
+        script << "#!/bin/sh\nprintf 'attempt\\n' >> \"$(dirname \"$0\")/attempts.txt\"\nexit 7\n";
+    }
+    fs::permissions(compiler, fs::perms::owner_exec, fs::perm_options::add);
+#endif
+    termin::ShaderArtifactResolver resolver(
+        (fixture.root / "missing-artifacts").string(), (fixture.root / "cache").string(), compiler.string(), true);
+    PipelineCacheStatsDevice device;
+    device.shader_creation_enabled = true;
+    device.configure_shader_artifacts(resolver);
+    tgfx::PipelineCache cache(device);
+    tgfx::RenderContext2 context(device, cache);
+    tgfx::TextureDesc color_desc;
+    color_desc.width = color_desc.height = 8;
+    color_desc.usage = tgfx::TextureUsage::ColorAttachment;
+    tgfx::RenderPassDesc pass;
+    pass.colors.resize(1);
+    pass.colors[0].texture = device.create_texture(color_desc);
+    context.begin_frame();
+    REQUIRE(context.begin_pass(pass));
+    context.bind_shader({}, tgfx::ShaderHandle{47});
+    fullscreen_shader_errors.clear();
+    tc_log_set_callback(capture_fullscreen_shader_error);
+
+    context.draw_fullscreen_quad();
+    CHECK(device.create_buffer_count == 2u);
+    CHECK(device.uniform_uploads.size() == 2u);
+    CHECK(device.created_shader_descs.empty());
+    CHECK(device.last_command_list->draw_pipelines.empty());
+    REQUIRE(!fullscreen_shader_errors.empty());
+    const size_t first_error_count = fullscreen_shader_errors.size();
+    const std::string first_attempts = fixture.compiler_attempts();
+    REQUIRE(std::count(first_attempts.begin(), first_attempts.end(), '\n') == 1);
+
+    context.draw_fullscreen_quad();
+    CHECK(device.create_buffer_count == 2u);
+    CHECK(device.uniform_uploads.size() == 2u);
+    CHECK(fullscreen_shader_errors.size() == first_error_count);
+    CHECK(fixture.compiler_attempts() == first_attempts);
+    CHECK(device.last_command_list->draw_pipelines.empty());
+
+    const fs::path fallback = fixture.root / "installed-artifacts";
+    termin::ShaderArtifactResolver installed(fallback.string(), "", "", false);
+    std::string artifact_path;
+    REQUIRE(termin::tgfx2_shader_artifact_path(
+        installed, engine_shader.uuid, device.shader_artifact_target(), engine_shader.stage, artifact_path));
+    fs::create_directories(fs::path(artifact_path).parent_path());
+    const std::string recovered_source = "#version 450\nvoid main() { gl_Position = vec4(0, 0, 0, 1); }\n";
+    {
+        std::ofstream artifact(artifact_path, std::ios::binary);
+        artifact << recovered_source;
+    }
+    resolver.set_fallback_artifact_roots({fallback.string()});
+    device.configure_shader_artifacts(resolver);
+    context.draw_fullscreen_quad();
+    CHECK(device.create_buffer_count == 2u);
+    CHECK(device.uniform_uploads.size() == 2u);
+    REQUIRE(device.created_shader_descs.size() == 1u);
+    CHECK(device.created_shader_descs[0].source == recovered_source);
+    REQUIRE(device.last_command_list->draw_pipelines.size() == 1u);
+    CHECK(static_cast<bool>(context.fsq_vertex_shader()));
+    CHECK(fullscreen_shader_errors.size() == first_error_count);
+    CHECK(fixture.compiler_attempts() == first_attempts);
+    context.end_pass();
+    context.end_frame();
+    CHECK(device.submitted_pipelines.size() == 1u);
+}
 
 TEST_CASE("PipelineCache exposes backend-neutral hit miss and layout stats") {
     PipelineCacheStatsDevice device;

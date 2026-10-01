@@ -1340,24 +1340,32 @@ namespace tgfx {
     // Drawing
     // ============================================================================
 
-    void RenderContext2::ensure_fsq_resources() {
-        if (fsq_vbo_)
+    void RenderContext2::ensure_fsq_resources(termin::ShaderArtifactLoadStatus* status) {
+        if (status)
+            *status = termin::ShaderArtifactLoadStatus::Success;
+        if (fsq_vbo_ && fsq_ibo_ && fsq_vs_)
             return;
 
         // Create VBO. Vertices are canonical TerminClip; backend-native Y
         // conversion happens in termin-engine-fsq.vert.slang.
-        BufferDesc vbo_desc;
-        vbo_desc.size = static_cast<uint64_t>(sizeof(FSQ_VERTICES));
-        vbo_desc.usage = BufferUsage::Vertex | BufferUsage::CopyDst;
-        fsq_vbo_ = device_.create_buffer(vbo_desc);
-        device_.upload_buffer(fsq_vbo_, {reinterpret_cast<const uint8_t*>(FSQ_VERTICES), sizeof(FSQ_VERTICES)});
+        if (!fsq_vbo_) {
+            BufferDesc vbo_desc;
+            vbo_desc.size = static_cast<uint64_t>(sizeof(FSQ_VERTICES));
+            vbo_desc.usage = BufferUsage::Vertex | BufferUsage::CopyDst;
+            fsq_vbo_ = device_.create_buffer(vbo_desc);
+            device_.upload_buffer(fsq_vbo_, {reinterpret_cast<const uint8_t*>(FSQ_VERTICES), sizeof(FSQ_VERTICES)});
+        }
 
         // Create IBO
-        BufferDesc ibo_desc;
-        ibo_desc.size = sizeof(FSQ_INDICES);
-        ibo_desc.usage = BufferUsage::Index | BufferUsage::CopyDst;
-        fsq_ibo_ = device_.create_buffer(ibo_desc);
-        device_.upload_buffer(fsq_ibo_, {reinterpret_cast<const uint8_t*>(FSQ_INDICES), sizeof(FSQ_INDICES)});
+        if (!fsq_ibo_) {
+            BufferDesc ibo_desc;
+            ibo_desc.size = sizeof(FSQ_INDICES);
+            ibo_desc.usage = BufferUsage::Index | BufferUsage::CopyDst;
+            fsq_ibo_ = device_.create_buffer(ibo_desc);
+            device_.upload_buffer(fsq_ibo_, {reinterpret_cast<const uint8_t*>(FSQ_INDICES), sizeof(FSQ_INDICES)});
+        }
+        if (fsq_vs_)
+            return;
 
         // Create built-in vertex shader
         const EngineShaderStageSource& fsq_shader = engine_fullscreen_quad_vertex_shader();
@@ -1366,11 +1374,17 @@ namespace tgfx {
         vs_desc.debug_name = std::string(fsq_shader.uuid) + ":vertex";
         vs_desc.entry_point = fsq_shader.entry_point;
         std::vector<uint8_t> shader_artifact;
+        termin::ShaderArtifactLoadStatus artifact_status = termin::ShaderArtifactLoadStatus::Failure;
         if (!termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
-                device_.shader_artifact_resolver(), fsq_shader, device_.shader_artifact_target(), shader_artifact)) {
-            tc_log(TC_LOG_ERROR,
-                   "RenderContext2: failed to load fullscreen quad shader artifact for backend=%s",
-                   render_context_backend_name(device_.backend_type()));
+                device_.shader_artifact_resolver(), fsq_shader, device_.shader_artifact_target(), shader_artifact,
+                &artifact_status)) {
+            if (status)
+                *status = artifact_status;
+            if (artifact_status != termin::ShaderArtifactLoadStatus::CachedFailure) {
+                tc_log(TC_LOG_ERROR,
+                       "RenderContext2: failed to load fullscreen quad shader artifact for backend=%s",
+                       render_context_backend_name(device_.backend_type()));
+            }
             return;
         }
         const ShaderArtifactTarget artifact_target = device_.shader_artifact_target();
@@ -1391,9 +1405,11 @@ namespace tgfx {
     }
 
     void RenderContext2::draw_fullscreen_quad() {
-        ensure_fsq_resources();
+        termin::ShaderArtifactLoadStatus status = termin::ShaderArtifactLoadStatus::Success;
+        ensure_fsq_resources(&status);
         if (!fsq_vs_) {
-            tc_log(TC_LOG_ERROR, "RenderContext2: fullscreen quad vertex shader is not available");
+            if (status != termin::ShaderArtifactLoadStatus::CachedFailure)
+                tc_log(TC_LOG_ERROR, "RenderContext2: fullscreen quad vertex shader is not available");
             return;
         }
 

@@ -52,6 +52,14 @@ bindings из имён, подменять отсутствующую stage др
 настройку одного shader runtime. `configure()` явно заменяет конфигурацию,
 включая callback чтения, и всегда меняет revision.
 
+Неудачная dev-компиляция запоминается в resolver для текущих source/version,
+dependencies, compiler, stage, точного artifact target и конфигурации. Первая
+ошибка попадает в лог; следующие draw не запускают компилятор для тех же входов.
+Изменение входов или `clear_failed_compilations()` разрешает новую попытку.
+Актуальный готовый artifact проверяется перед сохранённой ошибкой. Подробный
+контракт retry и callbacks описан в
+[shader artifact runtime](../../../graphics/termin-graphics/docs/shader-artifact-runtime.md).
+
 ## Capabilities вместо строк
 
 Плохой branching:

@@ -6,9 +6,12 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iterator>
 #include <string>
 #include <vector>
+
+#include <tcbase/tc_log.h>
 
 #include "tgfx/resources/tc_shader_registry.h"
 #include "tgfx2/backend_binding_plan.hpp"
@@ -860,6 +863,393 @@ TEST_CASE("tc_shader identity hash separates source languages") {
     tc_shader_destroy(slang);
     tc_shader_destroy(glsl);
 }
+
+#ifndef _WIN32
+namespace {
+    // The same external-process seam as the existing lazy artifact tests. Each
+    // invocation appends one record, so concurrent duplicate attempts remain
+    // observable even if their compiler-side counters would race.
+    struct FailedShaderCompileFixture {
+        ScopedTestEnvironmentVariable builtin_root{"TERMIN_BUILTIN_SHADER_ROOT"};
+        std::filesystem::path root;
+        std::filesystem::path compiler;
+        std::filesystem::path include_root;
+        tc_shader_handle handle{};
+        tc_shader* shader = nullptr;
+        termin::ShaderArtifactResolver resolver;
+
+        static constexpr const char* vertex = "import failure_direct;\nvoid main() {}\n";
+        static constexpr const char* fragment = "void main() {}\n";
+
+        FailedShaderCompileFixture() {
+            namespace fs = std::filesystem;
+            const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+            root = fs::temp_directory_path() / ("termin_failed_shader_" + std::to_string(unique));
+            compiler = root / "compiler.sh";
+            include_root = root / "include";
+            fs::create_directories(include_root);
+            builtin_root.set(include_root.string().c_str());
+            write(include_root / "failure_direct.slang", "import failure_transitive;\n");
+            write(include_root / "failure_transitive.slang", "static const float value = 1;\n");
+            write(include_root / "engine.slang", vertex);
+            write(compiler,
+                  "#!/bin/sh\n"
+                  "root=\"$(dirname \"$0\")\"\n"
+                  "printf 'attempt\\n' >> \"$root/attempts\"\n"
+                  "out=''\n"
+                  "while [ \"$#\" -gt 0 ]; do\n"
+                  "  if [ \"$1\" = '--output' ]; then shift; out=\"$1\"; fi\n"
+                  "  shift\n"
+                  "done\n"
+                  "if [ -f \"$root/pause\" ]; then sleep 0.05; fi\n"
+                  "mkdir -p \"$(dirname \"$out\")\"\n"
+                  "if [ ! -f \"$root/succeed\" ]; then\n"
+                  "  printf 'PARTIAL' > \"$out\"\n"
+                  "  echo 'injected compiler failure' >&2\n"
+                  "  exit 7\n"
+                  "fi\n"
+                  "if [ -f \"$root/empty-output\" ]; then : > \"$out\"; exit 0; fi\n"
+                  "printf 'COMPILED' > \"$out\"\n"
+                  "printf '{\"version\":1,\"resources\":[]}' > \"$out.layout.json\"\n");
+            fs::permissions(compiler, fs::perms::owner_exec, fs::perm_options::add);
+            const std::string uuid = "failed-shader-" + std::to_string(unique);
+            const tc_shader_create_desc desc = {
+                {vertex, fragment, nullptr, "failed_shader", nullptr, nullptr, nullptr, nullptr},
+                uuid.c_str(), TC_SHADER_LANGUAGE_SLANG, TC_SHADER_ARTIFACT_REQUIRED};
+            handle = tc_shader_from_sources_desc(&desc);
+            shader = tc_shader_get(handle);
+            resolver.configure((root / "writable").string(), (root / "cache").string(), compiler.string(),
+                               true, {}, {(root / "installed").string()});
+        }
+
+        ~FailedShaderCompileFixture() {
+            tc_shader_destroy(handle);
+            std::filesystem::remove_all(root);
+        }
+
+        static void write(const std::filesystem::path& path, const std::string& text) {
+            std::filesystem::create_directories(path.parent_path());
+            std::ofstream out(path, std::ios::binary);
+            out << text;
+        }
+
+        int attempts() const {
+            const auto text = read_test_text_file(root / "attempts");
+            return static_cast<int>(std::count(text.begin(), text.end(), '\n'));
+        }
+
+        std::filesystem::path artifact(tgfx::ShaderArtifactTarget target = tgfx::ShaderArtifactTarget::Vulkan,
+                                        tgfx::ShaderStage stage = tgfx::ShaderStage::Vertex) const {
+            std::string path;
+            termin::tgfx2_shader_artifact_path(resolver, shader->uuid, target, stage, path);
+            return path;
+        }
+
+        tgfx::EngineShaderStageSource engine_source() const {
+            return {shader->uuid, "failed_shader", tgfx::ShaderStage::Vertex, "slang", "engine.slang", "main"};
+        }
+
+        bool load(std::vector<uint8_t>& out, termin::ShaderArtifactLoadStatus* status = nullptr,
+                  tgfx::ShaderArtifactTarget target = tgfx::ShaderArtifactTarget::Vulkan,
+                  tgfx::ShaderStage stage = tgfx::ShaderStage::Vertex) {
+            return termin::tgfx2_load_or_compile_shader_artifact_for_target(resolver, shader, target, stage, out, status);
+        }
+    };
+
+    const termin::ShaderArtifactResolver* retry_from_log_resolver = nullptr;
+    void retry_failed_shader_from_log(tc_log_level level, const char*) {
+        if (level == TC_LOG_ERROR && retry_from_log_resolver)
+            retry_from_log_resolver->clear_failed_compilations();
+    }
+
+    struct ShaderRetryLogGuard {
+        explicit ShaderRetryLogGuard(const termin::ShaderArtifactResolver& resolver) {
+            retry_from_log_resolver = &resolver;
+            tc_log_set_callback(retry_failed_shader_from_log);
+        }
+        ~ShaderRetryLogGuard() {
+            tc_log_set_callback(nullptr);
+            retry_from_log_resolver = nullptr;
+        }
+    };
+
+    struct ShaderLogCaptureGuard {
+        ShaderLogCaptureGuard() { tc_log_capture_start(64); }
+        ~ShaderLogCaptureGuard() { tc_log_capture_stop(); }
+    };
+}
+
+TEST_CASE("shader artifact failures retry only after changed inputs or explicit retry") {
+    using Status = termin::ShaderArtifactLoadStatus;
+    FailedShaderCompileFixture fixture;
+    REQUIRE(fixture.shader != nullptr);
+    std::vector<uint8_t> bytes{'s', 't', 'a', 'l', 'e'};
+    Status status = Status::Success;
+    ShaderLogCaptureGuard logs;
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(bytes.empty());
+    for (int i = 0; i < 20; ++i) {
+        bytes = {'s', 't', 'a', 'l', 'e'};
+        CHECK_FALSE(fixture.load(bytes, &status));
+        CHECK(status == Status::CachedFailure);
+        CHECK(bytes.empty());
+    }
+    CHECK(fixture.attempts() == 1);
+    tc_log_record records[64]{};
+    const size_t logged = tc_log_capture_drain(records, 64, nullptr);
+    size_t failures = 0;
+    for (size_t i = 0; i < logged; ++i) {
+        if (records[i].level == TC_LOG_ERROR &&
+            std::string(records[i].message).find("termin_shaderc failed") != std::string::npos)
+            ++failures;
+    }
+    CHECK(failures == 1);
+
+    fixture.resolver.set_compiler_path(fixture.compiler.string());
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::CachedFailure);
+    CHECK(fixture.attempts() == 1);
+
+    ++fixture.shader->version;
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(fixture.attempts() == 2);
+    REQUIRE(tc_shader_set_sources(fixture.shader, "import failure_direct;\nvoid main() { /* edit */ }",
+                                  FailedShaderCompileFixture::fragment, nullptr, "failed_shader", nullptr));
+    CHECK_FALSE(fixture.load(bytes));
+    CHECK(fixture.attempts() == 3);
+    fixture.write(fixture.include_root / "failure_transitive.slang", "static const float value = 2;\n");
+    CHECK_FALSE(fixture.load(bytes));
+    CHECK(fixture.attempts() == 4);
+    std::filesystem::last_write_time(fixture.compiler,
+        std::filesystem::last_write_time(fixture.compiler) + std::chrono::seconds(1));
+    CHECK_FALSE(fixture.load(bytes));
+    CHECK(fixture.attempts() == 5);
+    fixture.resolver.configure((fixture.root / "writable").string(), (fixture.root / "cache").string(),
+                              fixture.compiler.string(), true, {}, {(fixture.root / "installed").string()});
+    CHECK_FALSE(fixture.load(bytes));
+    CHECK(fixture.attempts() == 6);
+    fixture.resolver.set_cache_root((fixture.root / "other-cache").string());
+    CHECK_FALSE(fixture.load(bytes));
+    CHECK(fixture.attempts() == 7);
+
+    fixture.write(fixture.root / "succeed", "");
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::CachedFailure);
+    fixture.resolver.clear_failed_compilations();
+    REQUIRE(fixture.load(bytes, &status));
+    CHECK(status == Status::Success);
+    CHECK(std::string(bytes.begin(), bytes.end()) == "COMPILED");
+    CHECK(fixture.attempts() == 8);
+
+    // An externally supplied current artifact also overrides a prior failure.
+    const auto artifact = fixture.artifact();
+    const auto metadata = read_test_text_file(artifact.string() + ".artifact");
+    std::filesystem::remove(fixture.root / "succeed");
+    std::filesystem::remove(artifact);
+    CHECK_FALSE(fixture.load(bytes));
+    CHECK(fixture.attempts() == 9);
+    fixture.write(artifact, "EXTERNAL");
+    fixture.write(artifact.string() + ".artifact", metadata);
+    REQUIRE(fixture.load(bytes, &status));
+    CHECK(status == Status::Success);
+    CHECK(std::string(bytes.begin(), bytes.end()) == "EXTERNAL");
+    CHECK(fixture.attempts() == 9);
+    std::filesystem::remove(artifact);
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(fixture.attempts() == 10);
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::CachedFailure);
+    CHECK(bytes.empty());
+    CHECK(fixture.attempts() == 10);
+}
+
+TEST_CASE("shader failures isolate stages targets kinds copies and destroyed tc owners") {
+    using Status = termin::ShaderArtifactLoadStatus;
+    FailedShaderCompileFixture fixture;
+    REQUIRE(fixture.shader != nullptr);
+    std::vector<uint8_t> bytes;
+    Status status;
+    CHECK_FALSE(fixture.load(bytes));
+    CHECK_FALSE(fixture.load(bytes, nullptr, tgfx::ShaderArtifactTarget::Vulkan, tgfx::ShaderStage::Fragment));
+    CHECK_FALSE(fixture.load(bytes, nullptr, tgfx::ShaderArtifactTarget::OpenGL450));
+    CHECK_FALSE(fixture.load(bytes, nullptr, tgfx::ShaderArtifactTarget::OpenGL330));
+    const auto engine = fixture.engine_source();
+    CHECK_FALSE(termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
+        fixture.resolver, engine, tgfx::ShaderArtifactTarget::Vulkan, bytes, &status));
+    CHECK(fixture.attempts() == 5);
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::CachedFailure);
+    CHECK_FALSE(termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
+        fixture.resolver, engine, tgfx::ShaderArtifactTarget::Vulkan, bytes, &status));
+    CHECK(status == Status::CachedFailure);
+
+    termin::ShaderArtifactResolver copied(fixture.resolver);
+    CHECK(copied.revision() == fixture.resolver.revision());
+    CHECK(copied.fallback_artifact_roots() == fixture.resolver.fallback_artifact_roots());
+    CHECK_FALSE(termin::tgfx2_load_or_compile_shader_artifact_for_target(
+        copied, fixture.shader, tgfx::ShaderArtifactTarget::Vulkan, tgfx::ShaderStage::Vertex, bytes, &status));
+    CHECK(status == Status::Failure);
+    termin::ShaderArtifactResolver assigned;
+    assigned = fixture.resolver;
+    CHECK(assigned.compiler_path() == fixture.compiler.string());
+    CHECK_FALSE(termin::tgfx2_load_or_compile_shader_artifact_for_target(
+        assigned, fixture.shader, tgfx::ShaderArtifactTarget::Vulkan, tgfx::ShaderStage::Vertex, bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(fixture.attempts() == 7);
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::CachedFailure);
+
+    fixture.resolver.clear_failed_tc_shader_compilations(fixture.shader->pool_index);
+    CHECK_FALSE(termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
+        fixture.resolver, engine, tgfx::ShaderArtifactTarget::Vulkan, bytes, &status));
+    CHECK(status == Status::CachedFailure);
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(fixture.attempts() == 8);
+
+    fixture.write(fixture.include_root / "engine.slang", "import failure_direct;\nvoid main() { /* edit */ }\n");
+    CHECK_FALSE(termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
+        fixture.resolver, engine, tgfx::ShaderArtifactTarget::Vulkan, bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(fixture.attempts() == 9);
+}
+
+TEST_CASE("shader failure cache leaves log fallback and layout callbacks outside the mutex") {
+    using Status = termin::ShaderArtifactLoadStatus;
+    FailedShaderCompileFixture fixture;
+    REQUIRE(fixture.shader != nullptr);
+    std::vector<uint8_t> bytes;
+    Status status;
+    {
+        ShaderRetryLogGuard retry(fixture.resolver);
+        CHECK_FALSE(fixture.load(bytes, &status));
+        CHECK(status == Status::Failure);
+    }
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(fixture.attempts() == 2);
+
+    // The failed compiler left PARTIAL at primary. Adding an installed artifact
+    // without changing configuration must recover before the negative lookup.
+    const auto relative = std::filesystem::relative(fixture.artifact(), fixture.root / "writable");
+    fixture.write(fixture.root / "installed" / relative, "INSTALLED");
+    REQUIRE(fixture.load(bytes, &status));
+    CHECK(status == Status::Success);
+    CHECK(std::string(bytes.begin(), bytes.end()) == "INSTALLED");
+    CHECK(fixture.attempts() == 2);
+    std::filesystem::remove(fixture.root / "installed" / relative);
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure); // successful fallback erased failure
+    CHECK(fixture.attempts() == 3);
+
+    const auto engine = fixture.engine_source();
+    CHECK_FALSE(termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
+        fixture.resolver, engine, tgfx::ShaderArtifactTarget::Vulkan, bytes, &status));
+    CHECK(fixture.attempts() == 4);
+    fixture.write(fixture.root / "installed" / relative, "ENGINE-INSTALLED");
+    REQUIRE(termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
+        fixture.resolver, engine, tgfx::ShaderArtifactTarget::Vulkan, bytes, &status));
+    CHECK(status == Status::Success);
+    CHECK(std::string(bytes.begin(), bytes.end()) == "ENGINE-INSTALLED");
+    CHECK(fixture.attempts() == 4);
+    std::filesystem::remove(fixture.root / "installed" / relative);
+
+    int callback_count = 0;
+    fixture.resolver.configure((fixture.root / "writable").string(), (fixture.root / "cache").string(),
+        fixture.compiler.string(), true,
+        [&](std::string_view path, std::vector<uint8_t>& result) {
+            ++callback_count;
+            fixture.resolver.clear_failed_compilations();
+            const auto text = read_test_text_file(std::filesystem::path(path));
+            result.assign(text.begin(), text.end());
+            return !result.empty();
+        }, {(fixture.root / "installed").string()});
+    fixture.write(fixture.root / "installed" / relative, "CALLBACK-FALLBACK");
+    REQUIRE(fixture.load(bytes));
+    CHECK(callback_count >= 2); // fallback bytes and layout
+    std::filesystem::remove(fixture.root / "installed" / relative);
+    fixture.write(fixture.root / "succeed", "");
+    const int before_layout = callback_count;
+    REQUIRE(fixture.load(bytes));
+    CHECK(callback_count > before_layout); // primary compile layout outside lock
+    fixture.write(fixture.artifact().string() + ".layout.json", "malformed layout");
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure);
+}
+
+TEST_CASE("immutable concurrent shader artifact requests share one compile attempt") {
+    using Status = termin::ShaderArtifactLoadStatus;
+    FailedShaderCompileFixture fixture;
+    REQUIRE(fixture.shader != nullptr);
+    fixture.write(fixture.root / "pause", "");
+    const auto engine = fixture.engine_source();
+    const auto concurrent_loads = [&]() {
+        std::promise<void> start;
+        const auto ready = start.get_future().share();
+        const auto load = [&]() {
+            ready.wait();
+            std::vector<uint8_t> bytes{'s', 't', 'a', 'l', 'e'};
+            Status status = Status::Success;
+            const bool success = termin::tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(
+                fixture.resolver, engine, tgfx::ShaderArtifactTarget::Vulkan, bytes, &status);
+            return std::make_tuple(success, status, bytes);
+        };
+        auto first = std::async(std::launch::async, load);
+        auto second = std::async(std::launch::async, load);
+        start.set_value();
+        return std::make_pair(first.get(), second.get());
+    };
+    const auto failures = concurrent_loads();
+    CHECK_FALSE(std::get<0>(failures.first));
+    CHECK_FALSE(std::get<0>(failures.second));
+    CHECK(std::get<2>(failures.first).empty());
+    CHECK(std::get<2>(failures.second).empty());
+    CHECK((std::get<1>(failures.first) == Status::Failure && std::get<1>(failures.second) == Status::CachedFailure) ||
+          (std::get<1>(failures.second) == Status::Failure && std::get<1>(failures.first) == Status::CachedFailure));
+    CHECK(fixture.attempts() == 1);
+
+    fixture.write(fixture.root / "succeed", "");
+    fixture.resolver.clear_failed_compilations();
+    const auto successes = concurrent_loads();
+    CHECK(std::get<0>(successes.first));
+    CHECK(std::get<0>(successes.second));
+    CHECK(std::get<1>(successes.first) == Status::Success);
+    CHECK(std::get<1>(successes.second) == Status::Success);
+    CHECK(std::get<2>(successes.first) == std::get<2>(successes.second));
+    CHECK(fixture.attempts() == 2);
+}
+
+TEST_CASE("successful shader compiler with empty output logs an error even in verbose mode") {
+    using Status = termin::ShaderArtifactLoadStatus;
+    FailedShaderCompileFixture fixture;
+    REQUIRE(fixture.shader != nullptr);
+    ScopedTestEnvironmentVariable verbose{"TERMIN_SHADER_VERBOSE"};
+    verbose.set("1");
+    fixture.write(fixture.root / "succeed", "");
+    fixture.write(fixture.root / "empty-output", "");
+    ShaderLogCaptureGuard logs;
+    std::vector<uint8_t> bytes;
+    Status status;
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::Failure);
+    CHECK(bytes.empty());
+    tc_log_record records[64]{};
+    const size_t count = tc_log_capture_drain(records, 64, nullptr);
+    size_t errors = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (records[i].level == TC_LOG_ERROR &&
+            std::string(records[i].message).find("failed to read compiler output") != std::string::npos)
+            ++errors;
+    }
+    CHECK(errors == 1);
+    CHECK_FALSE(fixture.load(bytes, &status));
+    CHECK(status == Status::CachedFailure);
+    CHECK(fixture.attempts() == 1);
+}
+#endif
 
 #ifndef _WIN32
 TEST_CASE("tgfx2 shader runtime lazily compiles stale artifacts in dev mode") {

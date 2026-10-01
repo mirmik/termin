@@ -139,6 +139,7 @@ namespace tgfx {
     }
 
     void WebGpuRenderDevice::invalidate_tc_shader_cache(uint32_t pool_index) {
+        shader_artifact_resolver().clear_failed_tc_shader_compilations(pool_index);
         auto entry = tc_shader_cache_.find(pool_index);
         if (entry == tc_shader_cache_.end())
             return;

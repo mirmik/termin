@@ -382,9 +382,10 @@ namespace tgfx {
                                                 tc_shader* shader,
                                                 ShaderArtifactTarget target,
                                                 ShaderStage stage,
-                                                std::string& out_source) {
+                                                std::string& out_source,
+                                                termin::ShaderArtifactLoadStatus* status) {
             std::vector<uint8_t> bytes;
-            if (!termin::tgfx2_load_or_compile_shader_artifact_for_target(resolver, shader, target, stage, bytes)) {
+            if (!termin::tgfx2_load_or_compile_shader_artifact_for_target(resolver, shader, target, stage, bytes, status)) {
                 return false;
             }
             out_source.assign(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -651,14 +652,17 @@ namespace tgfx {
             ShaderDesc vs_desc;
             vs_desc.stage = ShaderStage::Vertex;
             vs_desc.debug_name = std::string(shader->name ? shader->name : shader->uuid) + ":vertex";
+            termin::ShaderArtifactLoadStatus status = termin::ShaderArtifactLoadStatus::Failure;
             if (!load_opengl_shader_artifact_source(
-                    resolver, shader, shader_artifact_target(), vs_desc.stage, vs_desc.source)) {
+                    resolver, shader, shader_artifact_target(), vs_desc.stage, vs_desc.source, &status)) {
                 if (artifacts_required || shader_language != TC_SHADER_LANGUAGE_GLSL) {
-                    tc_log_error("OpenGLRenderDevice::ensure_tc_shader: %s vertex artifact missing or dev compile "
-                                 "failed for '%s' language=%u",
-                                 artifacts_required ? "required" : "non-GLSL",
-                                 shader->name ? shader->name : shader->uuid,
-                                 static_cast<unsigned>(shader->language));
+                    if (status != termin::ShaderArtifactLoadStatus::CachedFailure) {
+                        tc_log_error("OpenGLRenderDevice::ensure_tc_shader: %s vertex artifact missing or dev compile "
+                                     "failed for '%s' language=%u",
+                                     artifacts_required ? "required" : "non-GLSL",
+                                     shader->name ? shader->name : shader->uuid,
+                                     static_cast<unsigned>(shader->language));
+                    }
                     return false;
                 }
                 vs_desc.source = shader->vertex_source;
@@ -674,16 +678,19 @@ namespace tgfx {
         ShaderDesc fs_desc;
         fs_desc.stage = ShaderStage::Fragment;
         fs_desc.debug_name = std::string(shader->name ? shader->name : shader->uuid) + ":fragment";
+        termin::ShaderArtifactLoadStatus status = termin::ShaderArtifactLoadStatus::Failure;
         if (!load_opengl_shader_artifact_source(
-                resolver, shader, shader_artifact_target(), fs_desc.stage, fs_desc.source)) {
+                resolver, shader, shader_artifact_target(), fs_desc.stage, fs_desc.source, &status)) {
             if (artifacts_required || shader_language != TC_SHADER_LANGUAGE_GLSL) {
                 if (vs)
                     destroy(vs);
-                tc_log_error("OpenGLRenderDevice::ensure_tc_shader: %s fragment artifact missing or dev compile failed "
-                             "for '%s' language=%u",
-                             artifacts_required ? "required" : "non-GLSL",
-                             shader->name ? shader->name : shader->uuid,
-                             static_cast<unsigned>(shader->language));
+                if (status != termin::ShaderArtifactLoadStatus::CachedFailure) {
+                    tc_log_error("OpenGLRenderDevice::ensure_tc_shader: %s fragment artifact missing or dev compile failed "
+                                 "for '%s' language=%u",
+                                 artifacts_required ? "required" : "non-GLSL",
+                                 shader->name ? shader->name : shader->uuid,
+                                 static_cast<unsigned>(shader->language));
+                }
                 return false;
             }
             fs_desc.source = shader->fragment_source;
@@ -712,6 +719,7 @@ namespace tgfx {
     }
 
     void OpenGLRenderDevice::invalidate_tc_shader_cache(uint32_t pool_index) {
+        shader_artifact_resolver().clear_failed_tc_shader_compilations(pool_index);
         auto it = tc_shader_cache_.find(pool_index);
         if (it == tc_shader_cache_.end())
             return;

@@ -28,6 +28,7 @@
 #include "tgfx2_ordered_mrt_smoke.hpp"
 
 extern "C" {
+#include "tcbase/tc_log.h"
 #include "tgfx/resources/tc_shader.h"
 #include "tgfx/resources/tc_shader_registry.h"
 #include "tgfx/resources/tc_texture.h"
@@ -370,6 +371,156 @@ static bool render_fsq_artifact_smoke(tgfx::IRenderDevice& device) {
     device.destroy(fs);
     device.destroy(rt);
     return matches_canonical_uv;
+}
+
+static bool render_failed_slang_compile_recovery_smoke(tgfx::IRenderDevice& device,
+                                                       const std::filesystem::path& shaderc,
+                                                       const std::filesystem::path& artifact_root) {
+    constexpr const char* kName = "tgfx2 Vulkan failed compile recovery";
+    constexpr const char* kUuid = "termin-vulkan-failed-compile-recovery";
+    constexpr uint32_t kSize = 64;
+    const auto previous_resolver = device.shader_artifact_resolver();
+    device.configure_shader_artifacts(termin::ShaderArtifactResolver(
+        artifact_root.string(), (artifact_root / "cache").string(), shaderc.string(), true));
+
+    tc_shader_handle shader_handle = tc_shader_handle_invalid();
+    std::array<tgfx::BufferHandle, 4> meshes{};
+    tgfx::TextureHandle rt;
+    const bool ok = [&]() {
+        const tc_shader_create_desc desc = {{"[shader(\"vertex\")] invalid_slang vs_main() {}",
+                                             slang_matrix_fragment_src,
+                                             nullptr,
+                                             kName,
+                                             nullptr,
+                                             "vs_main",
+                                             "fs_main",
+                                             nullptr},
+                                            kUuid,
+                                            TC_SHADER_LANGUAGE_SLANG,
+                                            TC_SHADER_ARTIFACT_REQUIRED};
+        shader_handle = tc_shader_from_sources_desc(&desc);
+        tc_shader* shader = tc_shader_get(shader_handle);
+        if (!shader) {
+            fprintf(stderr, "Failed to create Slang compile recovery tc_shader\n");
+            return false;
+        }
+        const uint32_t initial_version = shader->version;
+        const float vertices[] = {-0.8f, -0.8f, 0.8f, -0.8f, 0.0f, 0.8f};
+        tgfx::BufferDesc vb_desc;
+        vb_desc.size = sizeof(vertices);
+        vb_desc.usage = tgfx::BufferUsage::Vertex | tgfx::BufferUsage::CopyDst;
+        for (auto& mesh : meshes) {
+            mesh = device.create_buffer(vb_desc);
+            if (!mesh) {
+                fprintf(stderr, "Failed to create Slang compile recovery mesh\n");
+                return false;
+            }
+            device.upload_buffer(mesh, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(vertices),
+                                                               sizeof(vertices)));
+        }
+
+        if (!tc_log_capture_start(128)) {
+            fprintf(stderr, "Failed to start Slang compile recovery diagnostic capture\n");
+            return false;
+        }
+        bool all_failed = true;
+        // Separate meshes and successive frame-equivalent lookups share the
+        // device resolver. Reconfiguring it here would erase the failure cache.
+        for (unsigned frame = 0; frame < 3; ++frame) {
+            for (const auto& mesh : meshes) {
+                (void)mesh;
+                tgfx::ShaderHandle vs;
+                tgfx::ShaderHandle fs;
+                const bool ensured = device.ensure_tc_shader(shader, &vs, &fs);
+                all_failed = !ensured && !vs && !fs && all_failed;
+            }
+        }
+        std::vector<tc_log_record> records(128);
+        uint64_t dropped = 0;
+        const size_t count = tc_log_capture_drain(records.data(), records.size(), &dropped);
+        tc_log_capture_stop();
+        size_t failed_compiler_attempts = 0;
+        for (size_t i = 0; i < count; ++i) {
+            if (std::strstr(records[i].message,
+                            "tgfx2 shader dev compile: termin_shaderc failed for "
+                            "'tgfx2 Vulkan failed compile recovery' stage=vertex target=vulkan")) {
+                ++failed_compiler_attempts;
+            }
+        }
+        if (!all_failed || dropped != 0 || failed_compiler_attempts != 1) {
+            fprintf(stderr, "Slang failure cache: invalid_handles=%d attempts=%zu dropped=%llu\n",
+                    all_failed, failed_compiler_attempts, static_cast<unsigned long long>(dropped));
+            return false;
+        }
+
+        const tc_shader_source_desc corrected = {slang_matrix_vertex_src, slang_matrix_fragment_src, nullptr,
+                                                  kName, nullptr, "vs_main", "fs_main", nullptr};
+        if (!tc_shader_set_sources_desc(shader, &corrected) || tc_shader_get(shader_handle) != shader ||
+            shader->version <= initial_version || std::strcmp(shader->uuid, kUuid) != 0) {
+            fprintf(stderr, "Slang source correction did not preserve handle/UUID and advance version\n");
+            return false;
+        }
+        tgfx::ShaderHandle vs;
+        tgfx::ShaderHandle fs;
+        if (!device.ensure_tc_shader(shader, &vs, &fs) || !vs || !fs) {
+            fprintf(stderr, "Corrected Slang shader did not recover on the same tc_shader handle\n");
+            return false;
+        }
+
+        tgfx::TextureDesc rt_desc;
+        rt_desc.width = kSize;
+        rt_desc.height = kSize;
+        rt_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        rt_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+        rt = device.create_texture(rt_desc);
+        if (!rt) {
+            fprintf(stderr, "Failed to create Slang compile recovery render target\n");
+            return false;
+        }
+        tgfx::VertexBufferLayout layout;
+        layout.stride = 2 * sizeof(float);
+        layout.attributes = {{0, tgfx::VertexFormat::Float2, 0}};
+        const std::array<float, 16> identity = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        {
+            tgfx::PipelineCache cache(device);
+            tgfx::RenderContext2 ctx(device, cache);
+            ctx.begin_frame();
+            termin::LinearColor clear{0, 0, 0, 1};
+            ctx.begin_pass(rt, {}, &clear);
+            ctx.set_viewport(0, 0, kSize, kSize);
+            ctx.set_depth_test(false);
+            ctx.set_depth_write(false);
+            ctx.set_blend(false);
+            ctx.set_cull(tgfx::CullMode::None);
+            ctx.set_polygon_mode(tgfx::PolygonMode::Fill);
+            ctx.bind_shader(vs, fs);
+            ctx.set_vertex_layout(layout);
+            ctx.use_shader_resource_layout(shader);
+            ctx.bind_uniform_data("u_transform", identity.data(), static_cast<uint32_t>(sizeof(identity)));
+            for (const auto& mesh : meshes)
+                ctx.draw_arrays(mesh, 3);
+            ctx.end_pass();
+            ctx.end_frame();
+        }
+        device.wait_idle();
+        float pixel[4] = {};
+        const bool read_ok = device.read_pixel_rgba8(rt, kSize / 2, kSize / 2, pixel);
+        printf("Slang failure cache: 12 failed ensures, %zu compiler attempt; recovered pixel "
+               "(%.2f %.2f %.2f %.2f)\n", failed_compiler_attempts, pixel[0], pixel[1], pixel[2], pixel[3]);
+        return read_ok && std::fabs(pixel[0] - 0.90f) < 0.06f && std::fabs(pixel[1] - 0.05f) < 0.06f &&
+               std::fabs(pixel[2] - 0.75f) < 0.06f && pixel[3] > 0.95f;
+    }();
+
+    if (rt)
+        device.destroy(rt);
+    for (const auto& mesh : meshes) {
+        if (mesh)
+            device.destroy(mesh);
+    }
+    if (!tc_shader_handle_is_invalid(shader_handle))
+        tc_shader_destroy(shader_handle);
+    device.configure_shader_artifacts(previous_resolver);
+    return ok;
 }
 
 static bool render_ordered_mrt_smoke(tgfx::IRenderDevice& device) {
@@ -1707,6 +1858,12 @@ int main(int argc, char** argv) {
 
         if (slang_artifact_ok && !render_fsq_artifact_smoke(*device)) {
             fprintf(stderr, "FSQ Slang artifact render smoke failed\n");
+            slang_artifact_ok = false;
+        }
+
+        if (slang_artifact_ok &&
+            !render_failed_slang_compile_recovery_smoke(*device, *shaderc, artifact_root / "failure-recovery")) {
+            fprintf(stderr, "Slang failed compile recovery render smoke failed\n");
             slang_artifact_ok = false;
         }
 

@@ -89,11 +89,14 @@ namespace tgfx {
             if (shader->vertex_entry && shader->vertex_entry[0]) {
                 vs_desc.entry_point = shader->vertex_entry;
             }
+            termin::ShaderArtifactLoadStatus status = termin::ShaderArtifactLoadStatus::Failure;
             if (!termin::tgfx2_load_or_compile_shader_artifact_for_backend(
-                    resolver, shader, BackendType::D3D11, vs_desc.stage, vs_desc.bytecode)) {
-                tc::Log::error(
-                    "D3D11RenderDevice::ensure_tc_shader: vertex .cso artifact missing or dev compile failed for '%s'",
-                    shader->name ? shader->name : shader->uuid);
+                    resolver, shader, BackendType::D3D11, vs_desc.stage, vs_desc.bytecode, &status)) {
+                if (status != termin::ShaderArtifactLoadStatus::CachedFailure) {
+                    tc::Log::error(
+                        "D3D11RenderDevice::ensure_tc_shader: vertex .cso artifact missing or dev compile failed for '%s'",
+                        shader->name ? shader->name : shader->uuid);
+                }
                 return false;
             }
             vs = create_shader(vs_desc);
@@ -110,13 +113,16 @@ namespace tgfx {
         if (shader->fragment_entry && shader->fragment_entry[0]) {
             fs_desc.entry_point = shader->fragment_entry;
         }
+        termin::ShaderArtifactLoadStatus status = termin::ShaderArtifactLoadStatus::Failure;
         if (!termin::tgfx2_load_or_compile_shader_artifact_for_backend(
-                resolver, shader, BackendType::D3D11, fs_desc.stage, fs_desc.bytecode)) {
+                resolver, shader, BackendType::D3D11, fs_desc.stage, fs_desc.bytecode, &status)) {
             if (vs)
                 destroy(vs);
-            tc::Log::error(
-                "D3D11RenderDevice::ensure_tc_shader: fragment .cso artifact missing or dev compile failed for '%s'",
-                shader->name ? shader->name : shader->uuid);
+            if (status != termin::ShaderArtifactLoadStatus::CachedFailure) {
+                tc::Log::error(
+                    "D3D11RenderDevice::ensure_tc_shader: fragment .cso artifact missing or dev compile failed for '%s'",
+                    shader->name ? shader->name : shader->uuid);
+            }
             return false;
         }
         ShaderHandle fs = create_shader(fs_desc);
@@ -143,6 +149,7 @@ namespace tgfx {
     }
 
     void D3D11RenderDevice::invalidate_tc_shader_cache(uint32_t pool_index) {
+        shader_artifact_resolver().clear_failed_tc_shader_compilations(pool_index);
         auto it = tc_shader_cache_.find(pool_index);
         if (it == tc_shader_cache_.end())
             return;

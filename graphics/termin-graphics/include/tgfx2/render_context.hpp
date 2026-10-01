@@ -38,6 +38,10 @@
 struct tc_shader;
 struct tc_shader_resource_binding;
 
+namespace termin {
+    enum class ShaderArtifactLoadStatus;
+}
+
 namespace tgfx {
 
     class GraphicsHost;
@@ -432,7 +436,7 @@ namespace tgfx {
         // Shared body for draw_immediate_lines / draw_immediate_triangles.
         void draw_immediate_generic(const float* data, uint32_t vertex_count, PrimitiveTopology topo);
 
-        void ensure_fsq_resources();
+        void ensure_fsq_resources(termin::ShaderArtifactLoadStatus* status = nullptr);
         // Returns false when the backend cannot create the requested pipeline.
         // Callers must not issue a draw in that case: an old bound pipeline may
         // still be active on the command list.

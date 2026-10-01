@@ -37,6 +37,8 @@ namespace termin {
 
     class ShaderArtifactResolver;
 
+    enum class ShaderArtifactLoadStatus { Success, Failure, CachedFailure };
+
     // Authoritative per-device view of one registry shader. Re-resolving the
     // view is cheap on a cache hit and observes both source and artifact
     // resolver generations before exposing native handles to a renderer.
@@ -107,29 +109,35 @@ namespace termin {
     TGFX2_API bool tgfx2_load_or_compile_shader_artifact_for_backend(::tc_shader* shader,
                                                                      tgfx::BackendType backend,
                                                                      tgfx::ShaderStage stage,
-                                                                     std::vector<uint8_t>& out);
+                                                                     std::vector<uint8_t>& out,
+                                                                     ShaderArtifactLoadStatus* status = nullptr);
     TGFX2_API bool tgfx2_load_or_compile_shader_artifact_for_backend(const ShaderArtifactResolver& resolver,
                                                                      ::tc_shader* shader,
                                                                      tgfx::BackendType backend,
                                                                      tgfx::ShaderStage stage,
-                                                                     std::vector<uint8_t>& out);
+                                                                     std::vector<uint8_t>& out,
+                                                                     ShaderArtifactLoadStatus* status = nullptr);
     TGFX2_API bool tgfx2_load_or_compile_shader_artifact_for_target(const ShaderArtifactResolver& resolver,
                                                                     ::tc_shader* shader,
                                                                     tgfx::ShaderArtifactTarget target,
                                                                     tgfx::ShaderStage stage,
-                                                                    std::vector<uint8_t>& out);
+                                                                    std::vector<uint8_t>& out,
+                                                                    ShaderArtifactLoadStatus* status = nullptr);
     TGFX2_API bool tgfx2_load_or_compile_engine_shader_stage_artifact_for_backend(
-        const tgfx::EngineShaderStageSource& shader, tgfx::BackendType backend, std::vector<uint8_t>& out);
+        const tgfx::EngineShaderStageSource& shader, tgfx::BackendType backend, std::vector<uint8_t>& out,
+        ShaderArtifactLoadStatus* status = nullptr);
     TGFX2_API bool
     tgfx2_load_or_compile_engine_shader_stage_artifact_for_backend(const ShaderArtifactResolver& resolver,
                                                                    const tgfx::EngineShaderStageSource& shader,
                                                                    tgfx::BackendType backend,
-                                                                   std::vector<uint8_t>& out);
+                                                                   std::vector<uint8_t>& out,
+                                                                   ShaderArtifactLoadStatus* status = nullptr);
     TGFX2_API bool
     tgfx2_load_or_compile_engine_shader_stage_artifact_for_target(const ShaderArtifactResolver& resolver,
                                                                   const tgfx::EngineShaderStageSource& shader,
                                                                   tgfx::ShaderArtifactTarget target,
-                                                                  std::vector<uint8_t>& out);
+                                                                  std::vector<uint8_t>& out,
+                                                                  ShaderArtifactLoadStatus* status = nullptr);
     TGFX2_API bool
     tgfx2_load_shader_artifact(const char* shader_uuid, tgfx::ShaderStage stage, std::vector<uint8_t>& out);
 

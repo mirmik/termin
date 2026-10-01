@@ -2,8 +2,11 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include "tgfx2/tgfx2_api.h"
@@ -15,6 +18,9 @@ namespace termin {
         using ReadCallback = std::function<bool(std::string_view, std::vector<std::uint8_t>&)>;
 
         ShaderArtifactResolver() = default;
+        // Configuration copies start with independent, empty compile caches.
+        ShaderArtifactResolver(const ShaderArtifactResolver& other);
+        ShaderArtifactResolver& operator=(const ShaderArtifactResolver& other);
         ShaderArtifactResolver(std::string artifact_root,
                                std::string cache_root,
                                std::string compiler_path,
@@ -62,7 +68,24 @@ namespace termin {
         void set_compiler_path(std::string value);
         void set_dev_compile_enabled(bool value);
 
+        // Retry unchanged inputs without invalidating successful GPU handles.
+        // Read/log callbacks may call these methods: callbacks never run under
+        // the compile-cache mutex. Configuration and shader source mutation
+        // must remain serialized with artifact loading by the owning runtime.
+        void clear_failed_compilations() const;
+        void clear_failed_tc_shader_compilations(uint32_t pool_index) const;
+
     private:
+        friend struct ShaderArtifactResolverAccess;
+        // One latest failure per source kind/UUID/exact target/stage, rather
+        // than retaining the history of failed source versions.
+        using FailureSlot = std::tuple<bool, std::string, uint8_t, uint8_t>;
+        struct FailedCompilation {
+            std::string fingerprint;
+            uint32_t tc_pool_index = 0;
+        };
+        mutable std::mutex compile_mutex_;
+        mutable std::map<FailureSlot, FailedCompilation> failed_compilations_;
         std::string artifact_root_;
         std::string cache_root_;
         std::string compiler_path_;

@@ -297,15 +297,18 @@ namespace tgfx {
             if (shader->vertex_entry && shader->vertex_entry[0]) {
                 vs_desc.entry_point = shader->vertex_entry;
             }
+            termin::ShaderArtifactLoadStatus status = termin::ShaderArtifactLoadStatus::Failure;
             if (!termin::tgfx2_load_or_compile_shader_artifact_for_backend(
-                    resolver, shader, BackendType::Vulkan, vs_desc.stage, vs_desc.bytecode)) {
+                    resolver, shader, BackendType::Vulkan, vs_desc.stage, vs_desc.bytecode, &status)) {
                 if (artifacts_required || shader_language != TC_SHADER_LANGUAGE_GLSL) {
-                    tc_log(TC_LOG_ERROR,
-                           "VulkanRenderDevice::ensure_tc_shader: %s vertex artifact missing or dev compile failed for "
-                           "'%s' language=%u",
-                           artifacts_required ? "required" : "non-GLSL",
-                           shader->name ? shader->name : shader->uuid,
-                           static_cast<unsigned>(shader->language));
+                    if (status != termin::ShaderArtifactLoadStatus::CachedFailure) {
+                        tc_log(TC_LOG_ERROR,
+                               "VulkanRenderDevice::ensure_tc_shader: %s vertex artifact missing or dev compile failed for "
+                               "'%s' language=%u",
+                               artifacts_required ? "required" : "non-GLSL",
+                               shader->name ? shader->name : shader->uuid,
+                               static_cast<unsigned>(shader->language));
+                    }
                     return false;
                 }
                 vs_desc.source = shader->vertex_source;
@@ -325,17 +328,20 @@ namespace tgfx {
         if (shader->fragment_entry && shader->fragment_entry[0]) {
             fs_desc.entry_point = shader->fragment_entry;
         }
+        termin::ShaderArtifactLoadStatus status = termin::ShaderArtifactLoadStatus::Failure;
         if (!termin::tgfx2_load_or_compile_shader_artifact_for_backend(
-                resolver, shader, BackendType::Vulkan, fs_desc.stage, fs_desc.bytecode)) {
+                resolver, shader, BackendType::Vulkan, fs_desc.stage, fs_desc.bytecode, &status)) {
             if (artifacts_required || shader_language != TC_SHADER_LANGUAGE_GLSL) {
                 if (vs)
                     destroy(vs);
-                tc_log(TC_LOG_ERROR,
-                       "VulkanRenderDevice::ensure_tc_shader: %s fragment artifact missing or dev compile failed for "
-                       "'%s' language=%u",
-                       artifacts_required ? "required" : "non-GLSL",
-                       shader->name ? shader->name : shader->uuid,
-                       static_cast<unsigned>(shader->language));
+                if (status != termin::ShaderArtifactLoadStatus::CachedFailure) {
+                    tc_log(TC_LOG_ERROR,
+                           "VulkanRenderDevice::ensure_tc_shader: %s fragment artifact missing or dev compile failed for "
+                           "'%s' language=%u",
+                           artifacts_required ? "required" : "non-GLSL",
+                           shader->name ? shader->name : shader->uuid,
+                           static_cast<unsigned>(shader->language));
+                }
                 return false;
             }
             fs_desc.source = shader->fragment_source;
@@ -375,6 +381,7 @@ namespace tgfx {
     }
 
     void VulkanRenderDevice::invalidate_tc_shader_cache(uint32_t pool_index) {
+        shader_artifact_resolver().clear_failed_tc_shader_compilations(pool_index);
         std::lock_guard<std::mutex> lock(tc_shader_cache_mtx_);
         auto it = tc_shader_cache_.find(pool_index);
         if (it == tc_shader_cache_.end())
