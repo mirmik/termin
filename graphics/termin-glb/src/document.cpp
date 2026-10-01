@@ -2,6 +2,8 @@
 
 #include <cgltf.h>
 #include <tcbase/tc_log.h>
+#include <termin/geom/vec3.hpp>
+#include <geom/tc_vec3f.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 
 #include <cstdarg>
@@ -90,35 +92,45 @@ namespace {
         return true;
     }
 
-    void add_cross(float* destination, const float* origin, const float* left, const float* right) {
-        const float ax = left[0] - origin[0];
-        const float ay = left[1] - origin[1];
-        const float az = left[2] - origin[2];
-        const float bx = right[0] - origin[0];
-        const float by = right[1] - origin[1];
-        const float bz = right[2] - origin[2];
-        destination[0] += ay * bz - az * by;
-        destination[1] += az * bx - ax * bz;
-        destination[2] += ax * by - ay * bx;
+    using termin::Vec3f;
+    constexpr float kVectorEpsilon = 1e-8f;
+
+    Vec3f load_packed_vector(const float* value) {
+        return {value[0], value[1], value[2]};
     }
 
-    void normalize3(float* vector) {
-        const float length = std::sqrt(vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]);
-        if (length <= 1e-8f)
-            return;
-        vector[0] /= length;
-        vector[1] /= length;
-        vector[2] /= length;
+    void store_packed_vector(float* destination, Vec3f value) {
+        destination[0] = value.x;
+        destination[1] = value.y;
+        destination[2] = value.z;
     }
 
-    float dot3(const float* left, const float* right) {
-        return left[0] * right[0] + left[1] * right[1] + left[2] * right[2];
+    bool normalize_vertex_vector(float* value, const char* path, size_t mesh_index,
+                                 size_t primitive_index, size_t vertex_index,
+                                 const char* semantic, termin_glb_error* error) {
+        Vec3f normalized;
+        if (!tc_vec3f_try_normalized(load_packed_vector(value), kVectorEpsilon, &normalized)) {
+            set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                      "%s: mesh[%zu] primitive[%zu] %s has a degenerate or non-finite vector at vertex[%zu]",
+                      path, mesh_index, primitive_index, semantic, vertex_index);
+            return false;
+        }
+        store_packed_vector(value, normalized);
+        return true;
     }
 
-    void cross3(const float* left, const float* right, float* destination) {
-        destination[0] = left[1] * right[2] - left[2] * right[1];
-        destination[1] = left[2] * right[0] - left[0] * right[2];
-        destination[2] = left[0] * right[1] - left[1] * right[0];
+    bool finite_vertex_components(const float* value, size_t count, const char* path,
+                                  size_t mesh_index, size_t primitive_index, size_t vertex_index,
+                                  const char* semantic, termin_glb_error* error) {
+        for (size_t component = 0; component < count; ++component) {
+            if (!std::isfinite(value[component])) {
+                set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                          "%s: mesh[%zu] primitive[%zu] %s has a non-finite component at vertex[%zu]",
+                          path, mesh_index, primitive_index, semantic, vertex_index);
+                return false;
+            }
+        }
+        return true;
     }
 
     bool is_supported_required_extension(const char* extension) {
@@ -1391,20 +1403,25 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
             const cgltf_accessor* joints = find_attribute(primitive, cgltf_attribute_type_joints);
             const cgltf_accessor* weights = find_attribute(primitive, cgltf_attribute_type_weights);
 
-            if (positions->type != cgltf_type_vec3 ||
-                (normals && !accessor_shape_is(normals, cgltf_type_vec3, vertex_count)) ||
-                (texcoords && !accessor_shape_is(texcoords, cgltf_type_vec2, vertex_count)) ||
-                (tangents && !accessor_shape_is(tangents, cgltf_type_vec4, vertex_count)) ||
-                (joints && !accessor_shape_is(joints, cgltf_type_vec4, vertex_count)) ||
-                (weights && !accessor_shape_is(weights, cgltf_type_vec4, vertex_count))) {
-                set_error(error,
-                          TERMIN_GLB_ERROR_INVALID_FORMAT,
-                          "%s: mesh[%zu] '%s' primitive[%zu] has incompatible static vertex accessor shape/count",
-                          document->path.c_str(),
-                          mesh_index,
-                          info.name,
-                          static_cast<size_t>(primitive_index));
-                goto cleanup;
+            struct AttributeShape {
+                const cgltf_accessor* accessor;
+                cgltf_type type;
+                const char* semantic;
+            };
+            const AttributeShape shapes[] = {{positions, cgltf_type_vec3, "POSITION"},
+                                              {normals, cgltf_type_vec3, "NORMAL"},
+                                              {texcoords, cgltf_type_vec2, "TEXCOORD_0"},
+                                              {tangents, cgltf_type_vec4, "TANGENT"},
+                                              {joints, cgltf_type_vec4, "JOINTS_0"},
+                                              {weights, cgltf_type_vec4, "WEIGHTS_0"}};
+            for (const auto& shape : shapes) {
+                if (shape.accessor && !accessor_shape_is(shape.accessor, shape.type, vertex_count)) {
+                    set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                              "%s: mesh[%zu] '%s' primitive[%zu] %s accessor has incompatible shape/count",
+                              document->path.c_str(), mesh_index, info.name,
+                              static_cast<size_t>(primitive_index), shape.semantic);
+                    goto cleanup;
+                }
             }
             if (primitive.indices && (primitive.indices->type != cgltf_type_scalar ||
                                       (primitive.indices->component_type != cgltf_component_type_r_8u &&
@@ -1435,6 +1452,9 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
                     goto cleanup;
                 if (convert_to_z_up)
                     convert_vector_to_z_up(destination);
+                if (!finite_vertex_components(destination, 3, document->path.c_str(), mesh_index,
+                                              primitive_index, vertex_index, "POSITION", error))
+                    goto cleanup;
                 if (normals) {
                     if (!read_attribute(normals,
                                         vertex_index,
@@ -1448,6 +1468,9 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
                         goto cleanup;
                     if (convert_to_z_up)
                         convert_vector_to_z_up(destination + 3);
+                    if (!normalize_vertex_vector(destination + 3, document->path.c_str(), mesh_index,
+                                                 primitive_index, vertex_index, "NORMAL", error))
+                        goto cleanup;
                 }
                 if (texcoords && !read_attribute(texcoords,
                                                  vertex_index,
@@ -1458,6 +1481,9 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
                                                  primitive_index,
                                                  "TEXCOORD_0",
                                                  error))
+                    goto cleanup;
+                if (texcoords && !finite_vertex_components(destination + 6, 2, document->path.c_str(), mesh_index,
+                                                           primitive_index, vertex_index, "TEXCOORD_0", error))
                     goto cleanup;
                 if (tangents) {
                     if (!read_attribute(tangents,
@@ -1472,6 +1498,16 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
                         goto cleanup;
                     if (convert_to_z_up)
                         convert_vector_to_z_up(destination + 8);
+                    if (!normalize_vertex_vector(destination + 8, document->path.c_str(), mesh_index,
+                                                 primitive_index, vertex_index, "TANGENT", error))
+                        goto cleanup;
+                    if (destination[11] != -1.0f && destination[11] != 1.0f) {
+                        set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                  "%s: mesh[%zu] primitive[%zu] TANGENT has invalid handedness at vertex[%zu]",
+                                  document->path.c_str(), mesh_index,
+                                  static_cast<size_t>(primitive_index), vertex_index);
+                        goto cleanup;
+                    }
                 }
                 if (joints && !read_attribute(joints,
                                                vertex_index,
@@ -1527,21 +1563,41 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
                                                          static_cast<size_t>(i1) * layout.stride);
                     float* v2 = reinterpret_cast<float*>(static_cast<unsigned char*>(builder.vertices) +
                                                          static_cast<size_t>(i2) * layout.stride);
-                    add_cross(v0 + 3, v0, v1, v2);
-                    add_cross(v1 + 3, v0, v1, v2);
-                    add_cross(v2 + 3, v0, v1, v2);
+                    const Vec3f edge_1 = tc_vec3f_sub(load_packed_vector(v1), load_packed_vector(v0));
+                    const Vec3f edge_2 = tc_vec3f_sub(load_packed_vector(v2), load_packed_vector(v0));
+                    const Vec3f face_normal = tc_vec3f_cross(edge_1, edge_2);
+                    if (!tc_vec3f_is_finite(edge_1) || !tc_vec3f_is_finite(edge_2) || !tc_vec3f_is_finite(face_normal)) {
+                        set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                  "%s: mesh[%zu] primitive[%zu] generated NORMAL has non-finite geometry at triangle[%zu]",
+                                  document->path.c_str(), mesh_index, static_cast<size_t>(primitive_index),
+                                  local_index / 3);
+                        goto cleanup;
+                    }
+                    for (float* vertex : {v0, v1, v2}) {
+                        const Vec3f accumulated = tc_vec3f_add(load_packed_vector(vertex + 3), face_normal);
+                        if (!tc_vec3f_is_finite(accumulated)) {
+                            set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                      "%s: mesh[%zu] primitive[%zu] generated NORMAL accumulation is non-finite at triangle[%zu]",
+                                      document->path.c_str(), mesh_index, static_cast<size_t>(primitive_index),
+                                      local_index / 3);
+                            goto cleanup;
+                        }
+                        store_packed_vector(vertex + 3, accumulated);
+                    }
                 }
                 for (size_t vertex_index = 0; vertex_index < vertex_count; ++vertex_index) {
                     float* destination = reinterpret_cast<float*>(
                         static_cast<unsigned char*>(builder.vertices) +
                         (vertex_base + vertex_index) * layout.stride);
-                    normalize3(destination + 3);
+                    if (!normalize_vertex_vector(destination + 3, document->path.c_str(), mesh_index,
+                                                 primitive_index, vertex_index, "generated NORMAL", error))
+                        goto cleanup;
                 }
             }
 
             if (!is_skinned && tangent_layout && !tangents) {
-                std::vector<float> tangent_1(vertex_count * 3, 0.0f);
-                std::vector<float> tangent_2(vertex_count * 3, 0.0f);
+                std::vector<Vec3f> tangent_1(vertex_count, Vec3f{});
+                std::vector<Vec3f> tangent_2(vertex_count, Vec3f{});
                 for (size_t local_index = 0; local_index + 2 < primitive_index_count; local_index += 3) {
                     const size_t i0 = builder.indices[index_base + local_index] - vertex_base;
                     const size_t i1 = builder.indices[index_base + local_index + 1] - vertex_base;
@@ -1552,34 +1608,48 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
                         static_cast<const unsigned char*>(builder.vertices) + (vertex_base + i1) * layout.stride);
                     const float* v2 = reinterpret_cast<const float*>(
                         static_cast<const unsigned char*>(builder.vertices) + (vertex_base + i2) * layout.stride);
-                    const float x1 = v1[0] - v0[0];
-                    const float x2 = v2[0] - v0[0];
-                    const float y1 = v1[1] - v0[1];
-                    const float y2 = v2[1] - v0[1];
-                    const float z1 = v1[2] - v0[2];
-                    const float z2 = v2[2] - v0[2];
+                    const Vec3f edge_1 = tc_vec3f_sub(load_packed_vector(v1), load_packed_vector(v0));
+                    const Vec3f edge_2 = tc_vec3f_sub(load_packed_vector(v2), load_packed_vector(v0));
                     const float s1 = v1[6] - v0[6];
                     const float s2 = v2[6] - v0[6];
                     const float t1 = v1[7] - v0[7];
                     const float t2 = v2[7] - v0[7];
                     const float determinant = s1 * t2 - s2 * t1;
-                    if (std::fabs(determinant) <= 1e-8f)
+                    if (!tc_vec3f_is_finite(edge_1) || !tc_vec3f_is_finite(edge_2) || !std::isfinite(s1) ||
+                        !std::isfinite(s2) || !std::isfinite(t1) || !std::isfinite(t2) ||
+                        !std::isfinite(determinant)) {
+                        set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                  "%s: mesh[%zu] primitive[%zu] generated TANGENT has non-finite geometry/UV determinant at triangle[%zu]",
+                                  document->path.c_str(), mesh_index, static_cast<size_t>(primitive_index),
+                                  local_index / 3);
+                        goto cleanup;
+                    }
+                    // A finite degenerate UV triangle contributes no tangent.
+                    // Other triangles may still provide each vertex's frame;
+                    // vertices without a usable final direction fail below.
+                    if (std::fabs(determinant) <= kVectorEpsilon)
                         continue;
                     const float reciprocal = 1.0f / determinant;
-                    const float sdir[3] = {
-                        (t2 * x1 - t1 * x2) * reciprocal,
-                        (t2 * y1 - t1 * y2) * reciprocal,
-                        (t2 * z1 - t1 * z2) * reciprocal,
-                    };
-                    const float tdir[3] = {
-                        (s1 * x2 - s2 * x1) * reciprocal,
-                        (s1 * y2 - s2 * y1) * reciprocal,
-                        (s1 * z2 - s2 * z1) * reciprocal,
-                    };
+                    const Vec3f sdir = tc_vec3f_scale(
+                        tc_vec3f_sub(tc_vec3f_scale(edge_1, t2), tc_vec3f_scale(edge_2, t1)), reciprocal);
+                    const Vec3f tdir = tc_vec3f_scale(
+                        tc_vec3f_sub(tc_vec3f_scale(edge_2, s1), tc_vec3f_scale(edge_1, s2)), reciprocal);
+                    if (!tc_vec3f_is_finite(sdir) || !tc_vec3f_is_finite(tdir)) {
+                        set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                  "%s: mesh[%zu] primitive[%zu] generated TANGENT directions are non-finite at triangle[%zu]",
+                                  document->path.c_str(), mesh_index, static_cast<size_t>(primitive_index),
+                                  local_index / 3);
+                        goto cleanup;
+                    }
                     for (const size_t index : {i0, i1, i2}) {
-                        for (size_t component = 0; component < 3; ++component) {
-                            tangent_1[index * 3 + component] += sdir[component];
-                            tangent_2[index * 3 + component] += tdir[component];
+                        tangent_1[index] = tc_vec3f_add(tangent_1[index], sdir);
+                        tangent_2[index] = tc_vec3f_add(tangent_2[index], tdir);
+                        if (!tc_vec3f_is_finite(tangent_1[index]) || !tc_vec3f_is_finite(tangent_2[index])) {
+                            set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                      "%s: mesh[%zu] primitive[%zu] generated TANGENT accumulation is non-finite at triangle[%zu] vertex[%zu]",
+                                      document->path.c_str(), mesh_index, static_cast<size_t>(primitive_index),
+                                      local_index / 3, index);
+                            goto cleanup;
                         }
                     }
                 }
@@ -1587,30 +1657,29 @@ bool termin_glb_document_build_mesh(termin_glb_document* document,
                     float* destination = reinterpret_cast<float*>(
                         static_cast<unsigned char*>(builder.vertices) +
                         (vertex_base + vertex_index) * layout.stride);
-                    const float* normal = destination + 3;
-                    const float* accumulated = tangent_1.data() + vertex_index * 3;
-                    const float projection = dot3(normal, accumulated);
-                    float tangent[3] = {
-                        accumulated[0] - normal[0] * projection,
-                        accumulated[1] - normal[1] * projection,
-                        accumulated[2] - normal[2] * projection,
-                    };
-                    normalize3(tangent);
-                    if (dot3(tangent, tangent) <= 1e-8f) {
-                        const float reference[3] = {
-                            0.0f,
-                            std::fabs(normal[2]) > 0.9f ? 1.0f : 0.0f,
-                            std::fabs(normal[2]) > 0.9f ? 0.0f : 1.0f,
-                        };
-                        cross3(reference, normal, tangent);
-                        normalize3(tangent);
+                    const Vec3f normal = load_packed_vector(destination + 3);
+                    const Vec3f accumulated = tangent_1[vertex_index];
+                    const float projection = tc_vec3f_dot(normal, accumulated);
+                    const Vec3f orthogonal = tc_vec3f_sub(accumulated, tc_vec3f_scale(normal, projection));
+                    Vec3f tangent;
+                    if (!std::isfinite(projection) ||
+                        !tc_vec3f_try_normalized(orthogonal, kVectorEpsilon, &tangent)) {
+                        set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                  "%s: mesh[%zu] primitive[%zu] generated TANGENT is degenerate or non-finite after orthogonalization at vertex[%zu]",
+                                  document->path.c_str(), mesh_index, static_cast<size_t>(primitive_index), vertex_index);
+                        goto cleanup;
                     }
-                    destination[8] = tangent[0];
-                    destination[9] = tangent[1];
-                    destination[10] = tangent[2];
-                    float bitangent[3] = {};
-                    cross3(normal, tangent, bitangent);
-                    destination[11] = dot3(bitangent, tangent_2.data() + vertex_index * 3) < 0.0f ? -1.0f : 1.0f;
+                    const Vec3f bitangent = tc_vec3f_cross(normal, tangent);
+                    const float handedness = tc_vec3f_dot(bitangent, tangent_2[vertex_index]);
+                    if (!tc_vec3f_is_finite(bitangent) || !std::isfinite(handedness) ||
+                        std::fabs(handedness) <= kVectorEpsilon) {
+                        set_error(error, TERMIN_GLB_ERROR_INVALID_FORMAT,
+                                  "%s: mesh[%zu] primitive[%zu] generated TANGENT handedness is degenerate or non-finite at vertex[%zu]",
+                                  document->path.c_str(), mesh_index, static_cast<size_t>(primitive_index), vertex_index);
+                        goto cleanup;
+                    }
+                    store_packed_vector(destination + 8, tangent);
+                    destination[11] = handedness < 0.0f ? -1.0f : 1.0f;
                 }
             }
 

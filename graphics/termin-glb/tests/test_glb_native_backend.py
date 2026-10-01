@@ -2,11 +2,14 @@ import gc
 import json
 from pathlib import Path
 import struct
+import uuid
 
 import numpy as np
 import pytest
 
 from termin.geombase import Mat44
+from termin.base import log
+from termin.mesh import tc_mesh_get
 from termin.glb import NativePrimitiveInfo, NativeStaticMeshDocument
 from termin.glb import _glb_native
 from termin.glb.native import NativeGLBSceneData
@@ -278,10 +281,13 @@ def _write_sparse_triangle_glb(path: Path) -> Path:
     )
 
 
-def _write_normalized_tangent_glb(path: Path, *, include_tangent: bool = True) -> Path:
+def _write_normalized_tangent_glb(
+    path: Path, *, include_tangent: bool = True, mirrored_uv: bool = False
+) -> Path:
     positions = struct.pack("<9f", 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
     normals = struct.pack("<9b", 127, 0, -128, 127, 0, -128, 127, 0, -128)
-    uvs = struct.pack("<6H", 0, 0, 65535, 0, 0, 65535)
+    uv_values = (0, 65535, 65535, 65535, 0, 0) if mirrored_uv else (0, 0, 65535, 0, 0, 65535)
+    uvs = struct.pack("<6H", *uv_values)
     tangents = struct.pack("<12b", 127, 0, 0, 127, 127, 0, 0, 127, 127, 0, 0, -128)
     binary = positions + normals + b"\0" * 3 + uvs + tangents
     attributes = {
@@ -339,6 +345,104 @@ def _write_normalized_tangent_glb(path: Path, *, include_tangent: bool = True) -
         },
         binary,
     )
+
+
+def _write_directional_triangle_glb(
+    path: Path,
+    *,
+    positions=((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    normals=((0.0, 0.0, 1.0),) * 3,
+    uvs=((0.0, 0.0), (1.0, 0.0), (0.0, 1.0)),
+    tangents=None,
+    indices=(0, 1, 2),
+    skinned=False,
+) -> Path:
+    binary = bytearray()
+    views = []
+    accessors = []
+    attributes = {}
+
+    def append_accessor(rows, component_type=5126, format_code="f"):
+        components = len(rows[0])
+        values = [value for row in rows for value in row]
+        payload = struct.pack("<" + str(len(values)) + format_code, *values)
+        binary.extend(b"\0" * (-len(binary) % 4))
+        views.append({"buffer": 0, "byteOffset": len(binary), "byteLength": len(payload)})
+        binary.extend(payload)
+        accessors.append(
+            {
+                "bufferView": len(views) - 1,
+                "componentType": component_type,
+                "count": len(rows),
+                "type": "SCALAR" if components == 1 else f"VEC{components}",
+            }
+        )
+        return len(accessors) - 1
+
+    for semantic, rows in (
+        ("POSITION", positions), ("NORMAL", normals),
+        ("TEXCOORD_0", uvs), ("TANGENT", tangents),
+    ):
+        if rows is not None:
+            attributes[semantic] = append_accessor(rows)
+    if skinned:
+        attributes["JOINTS_0"] = append_accessor(((0, 0, 0, 0),) * len(positions), 5123, "H")
+        attributes["WEIGHTS_0"] = append_accessor(((1.0, 0.0, 0.0, 0.0),) * len(positions))
+    index_accessor = append_accessor(tuple((index,) for index in indices), 5123, "H")
+    document = {
+        "asset": {"version": "2.0"},
+        "bufferViews": views,
+        "accessors": accessors,
+        "meshes": [{"name": "Directions", "primitives": [{"attributes": attributes, "indices": index_accessor, "mode": 4}]}],
+    }
+    if skinned:
+        document["nodes"] = [{"mesh": 0, "skin": 0}, {"name": "Joint"}]
+        document["skins"] = [{"joints": [1]}]
+    return _write_glb(path, document, bytes(binary))
+
+
+def _mesh_snapshot(mesh):
+    return (
+        mesh.uuid, mesh.name, mesh.version, mesh.stride,
+        mesh.vertex_count, mesh.index_count, mesh.submesh_count,
+        np.asarray(mesh.mesh.get_vertices_buffer()).tobytes(),
+        np.asarray(mesh.mesh.get_indices_buffer()).tobytes(),
+        tuple((section.name, section.material_slot) for section in mesh.submeshes),
+    )
+
+
+def _assert_direction_build_rejected_without_publication(path: Path, semantic: str, location: str):
+    sentinel_uuid = str(uuid.uuid4())
+    sentinel_path = _write_indexed_triangle_glb(path.parent / "sentinel.glb", 5123)
+    sentinel = NativeStaticMeshDocument(sentinel_path).build_mesh(
+        0, sentinel_uuid, name="unchanged sentinel", convert_to_z_up=False
+    )
+    before = _mesh_snapshot(sentinel)
+    fresh_uuid = str(uuid.uuid4())
+    errors = []
+    log.capture_start(128)
+    try:
+        for target_uuid in (sentinel_uuid, fresh_uuid):
+            with pytest.raises(RuntimeError, match="^invalid_format:") as failure:
+                document = NativeStaticMeshDocument(path)
+                document.build_mesh(0, target_uuid, name="replacement", convert_to_z_up=False)
+            errors.append(str(failure.value))
+        records, dropped = log.capture_drain(128)
+    finally:
+        log.capture_stop()
+    assert dropped == 0
+    for message in errors:
+        assert path.name in message
+        assert "mesh[0]" in message
+        assert "primitive[0]" in message
+        assert semantic in message
+        assert location in message
+    error_records = [message for level, message in records if level == log.Level.ERROR]
+    assert len(error_records) >= 2
+    assert all(any(message.removeprefix("invalid_format: ") in record for record in error_records) for message in errors)
+    assert _mesh_snapshot(sentinel) == before
+    assert _mesh_snapshot(tc_mesh_get(sentinel_uuid)) == before
+    assert tc_mesh_get(fresh_uuid) is None
 
 
 def _write_multi_primitive_glb(path: Path) -> Path:
@@ -524,6 +628,8 @@ def test_native_document_repeated_mapping_lifetime():
 
 @pytest.mark.parametrize("component_type", [5121, 5123, 5125, None])
 def test_native_static_mesh_supports_index_widths_nonindexed_and_stride(tmp_path, component_type):
+    # This position-only fixture is deliberately collinear: no direction
+    # generation is requested, so geometric degeneracy remains accepted.
     path = _write_indexed_triangle_glb(tmp_path / f"triangle-{component_type}.glb", component_type)
     document = NativeStaticMeshDocument(path)
     mesh = document.build_mesh(
@@ -562,16 +668,19 @@ def test_native_static_mesh_decodes_normalized_attributes_and_tangents(tmp_path)
 
     assert mesh.stride == 48
     vertices = np.asarray(mesh.mesh.get_vertices_buffer()).reshape(3, 12)
-    np.testing.assert_allclose(vertices[:, 3:6], [[1.0, 0.0, -1.0]] * 3)
+    half = np.sqrt(0.5)
+    np.testing.assert_allclose(vertices[:, 3:6], [[half, 0.0, -half]] * 3, atol=1e-6)
     np.testing.assert_allclose(vertices[:, 6:8], [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
     np.testing.assert_allclose(vertices[:, 8:11], [[1.0, 0.0, 0.0]] * 3)
     np.testing.assert_allclose(vertices[:, 11], [1.0, 1.0, -1.0])
 
 
-def test_native_static_mesh_generates_pbr_tangents_when_uvs_are_present(tmp_path):
+@pytest.mark.parametrize("mirrored_uv", [False, True])
+def test_native_static_mesh_generates_pbr_tangents_when_uvs_are_present(tmp_path, mirrored_uv):
     path = _write_normalized_tangent_glb(
         tmp_path / "generated-tangent.glb",
         include_tangent=False,
+        mirrored_uv=mirrored_uv,
     )
     mesh = NativeStaticMeshDocument(path).build_mesh(
         0,
@@ -581,8 +690,160 @@ def test_native_static_mesh_generates_pbr_tangents_when_uvs_are_present(tmp_path
 
     assert mesh.stride == 48
     vertices = np.asarray(mesh.mesh.get_vertices_buffer()).reshape(3, 12)
-    np.testing.assert_allclose(vertices[:, 8:11], [[0.0, 0.0, 1.0]] * 3)
-    np.testing.assert_allclose(vertices[:, 11], [-1.0, -1.0, -1.0])
+    half = np.sqrt(0.5)
+    np.testing.assert_allclose(vertices[:, 3:6], [[half, 0.0, -half]] * 3, atol=1e-6)
+    np.testing.assert_allclose(vertices[:, 8:11], [[half, 0.0, half]] * 3, atol=1e-6)
+    np.testing.assert_allclose(np.linalg.norm(vertices[:, 3:6], axis=1), 1.0, atol=1e-6)
+    np.testing.assert_allclose(np.linalg.norm(vertices[:, 8:11], axis=1), 1.0, atol=1e-6)
+    np.testing.assert_allclose(np.sum(vertices[:, 3:6] * vertices[:, 8:11], axis=1), 0.0, atol=1e-6)
+    np.testing.assert_allclose(vertices[:, 11], [1.0 if mirrored_uv else -1.0] * 3)
+
+
+@pytest.mark.parametrize("skinned", [False, True])
+@pytest.mark.parametrize(
+    "normal,tangent",
+    [
+        ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0, -1.0)),
+        ((1.0, 0.0, -1.0), (8.0, 0.0, 0.0, 1.0)),
+        ((1e38, 1e38, -1e38), (1e38, -1e38, 1e38, -1.0)),
+    ],
+    ids=["unit", "nonunit", "large-finite"],
+)
+def test_native_mesh_normalizes_authored_directions_for_static_and_skinned_ingress(
+    tmp_path, skinned, normal, tangent
+):
+    path = _write_directional_triangle_glb(
+        tmp_path / "authored-directions.glb", normals=(normal,) * 3,
+        tangents=(tangent,) * 3, skinned=skinned,
+    )
+    mesh = NativeStaticMeshDocument(path).build_mesh(0, str(uuid.uuid4()), convert_to_z_up=False)
+    assert mesh.stride == (80 if skinned else 48)
+    vertices = np.asarray(mesh.mesh.get_vertices_buffer()).reshape(3, mesh.stride // 4)
+    expected_normal = np.asarray(normal, dtype=np.float64)
+    expected_normal /= np.linalg.norm(expected_normal)
+    expected_tangent = np.asarray(tangent[:3], dtype=np.float64)
+    expected_tangent /= np.linalg.norm(expected_tangent)
+    np.testing.assert_allclose(vertices[:, 3:6], [expected_normal] * 3, atol=1e-6)
+    # Authored directions are normalized, preserving their orientation rather
+    # than applying the generated-tangent Gram-Schmidt policy.
+    np.testing.assert_allclose(vertices[:, 8:11], [expected_tangent] * 3, atol=1e-6)
+    np.testing.assert_allclose(vertices[:, 11], [tangent[3]] * 3)
+
+
+@pytest.mark.parametrize("convert_to_z_up", [False, True])
+def test_native_static_mesh_generates_unit_normals_and_tangents(tmp_path, convert_to_z_up):
+    path = _write_directional_triangle_glb(
+        tmp_path / "generated-directions.glb", normals=None,
+        positions=((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (0.0, 3.0, 0.0)),
+    )
+    mesh = NativeStaticMeshDocument(path).build_mesh(
+        0, str(uuid.uuid4()), convert_to_z_up=convert_to_z_up
+    )
+    vertices = np.asarray(mesh.mesh.get_vertices_buffer()).reshape(3, 12)
+    normal = (0.0, -1.0, 0.0) if convert_to_z_up else (0.0, 0.0, 1.0)
+    np.testing.assert_allclose(vertices[:, 3:6], [normal] * 3, atol=1e-6)
+    np.testing.assert_allclose(vertices[:, 8:11], [[1.0, 0.0, 0.0]] * 3, atol=1e-6)
+    np.testing.assert_allclose(vertices[:, 11], 1.0)
+
+
+def test_native_static_mesh_skips_zero_uv_triangle_when_valid_neighbors_cover_every_vertex(tmp_path):
+    path = _write_directional_triangle_glb(
+        tmp_path / "mixed-uv.glb",
+        positions=((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0)),
+        normals=((0.0, 0.0, 1.0),) * 4,
+        uvs=((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (0.0, 1.0)),
+        indices=(0, 1, 2, 0, 1, 3, 0, 2, 3),
+    )
+    mesh = NativeStaticMeshDocument(path).build_mesh(0, str(uuid.uuid4()), convert_to_z_up=False)
+    vertices = np.asarray(mesh.mesh.get_vertices_buffer()).reshape(4, 12)
+    diagonal = np.sqrt(0.5)
+    combined = (3 / np.sqrt(10), 1 / np.sqrt(10), 0.0)
+    np.testing.assert_allclose(
+        vertices[:, 8:11], [combined, (1.0, 0.0, 0.0), (diagonal, diagonal, 0.0), combined], atol=1e-6
+    )
+    np.testing.assert_allclose(vertices[:, 11], 1.0)
+
+
+def test_native_skinned_mesh_keeps_missing_tangent_generation_policy(tmp_path):
+    path = _write_directional_triangle_glb(tmp_path / "skinned-no-tangent.glb", skinned=True)
+    mesh = NativeStaticMeshDocument(path).build_mesh(0, str(uuid.uuid4()), convert_to_z_up=False)
+    assert mesh.stride == 80
+    vertices = np.asarray(mesh.mesh.get_vertices_buffer()).reshape(3, 20)
+    np.testing.assert_array_equal(vertices[:, 8:12], np.zeros((3, 4)))
+
+
+@pytest.mark.parametrize("skinned", [False, True])
+@pytest.mark.parametrize(
+    "field,semantic,bad_value",
+    [
+        ("positions", "POSITION", (float("nan"), 0.0, 0.0)),
+        ("positions", "POSITION", (float("inf"), 0.0, 0.0)),
+        ("normals", "NORMAL", (0.0, 0.0, 0.0)),
+        ("normals", "NORMAL", (float("nan"), 0.0, 1.0)),
+        ("normals", "NORMAL", (float("inf"), 0.0, 1.0)),
+        ("uvs", "TEXCOORD_0", (float("nan"), 0.0)),
+        ("uvs", "TEXCOORD_0", (0.0, float("inf"))),
+        ("tangents", "TANGENT", (0.0, 0.0, 0.0, 1.0)),
+        ("tangents", "TANGENT", (float("nan"), 0.0, 0.0, 1.0)),
+        ("tangents", "TANGENT", (float("inf"), 0.0, 0.0, 1.0)),
+        ("tangents", "TANGENT", (1.0, 0.0, 0.0, 0.0)),
+        ("tangents", "TANGENT", (1.0, 0.0, 0.0, float("nan"))),
+        ("tangents", "TANGENT", (1.0, 0.0, 0.0, float("inf"))),
+    ],
+)
+def test_native_mesh_rejects_invalid_authored_attributes_without_partial_publication(
+    tmp_path, skinned, field, semantic, bad_value
+):
+    attributes = {
+        "positions": [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+        "normals": [(0.0, 0.0, 1.0)] * 3,
+        "uvs": [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
+        "tangents": [(1.0, 0.0, 0.0, 1.0)] * 3,
+    }
+    attributes[field][2] = bad_value
+    path = _write_directional_triangle_glb(tmp_path / "invalid-authored.glb", skinned=skinned, **attributes)
+    _assert_direction_build_rejected_without_publication(path, semantic, "vertex[2]")
+
+
+@pytest.mark.parametrize("skinned", [False, True])
+@pytest.mark.parametrize(
+    "field,semantic,bad_shape",
+    [
+        ("normals", "NORMAL", (0.0, 0.0, 1.0, 1.0)),
+        ("uvs", "TEXCOORD_0", (0.0, 0.0, 0.0)),
+        ("tangents", "TANGENT", (1.0, 0.0, 0.0)),
+    ],
+)
+def test_native_mesh_rejects_malformed_direction_accessors_with_context(
+    tmp_path, skinned, field, semantic, bad_shape
+):
+    path = _write_directional_triangle_glb(
+        tmp_path / "malformed-direction.glb", skinned=skinned, **{field: (bad_shape,) * 3}
+    )
+    _assert_direction_build_rejected_without_publication(path, semantic, "accessor")
+
+
+@pytest.mark.parametrize(
+    "settings,semantic,location",
+    [
+        ({"normals": None, "positions": ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0))}, "generated NORMAL", "vertex["),
+        ({"normals": None, "positions": ((0.0, 0.0, 0.0), (1e20, 0.0, 0.0), (0.0, 1e20, 0.0))}, "generated NORMAL", "triangle["),
+        ({"positions": ((-3e38, 0.0, 0.0), (3e38, 0.0, 0.0), (0.0, 1.0, 0.0))}, "generated TANGENT", "triangle["),
+        ({"uvs": ((0.0, 0.0), (3e38, 0.0), (0.0, 3e38))}, "generated TANGENT", "triangle["),
+        ({"uvs": ((-3e38, 0.0), (3e38, 0.0), (-3e38, 1.0))}, "generated TANGENT", "triangle["),
+        ({"positions": ((0.0, 0.0, 0.0), (3e38, 0.0, 0.0), (0.0, 1.0, 0.0)), "indices": (0, 1, 2, 0, 1, 2)}, "generated TANGENT", "triangle["),
+        ({"positions": ((0.0, 0.0, 0.0), (3e38, 3e38, 0.0), (0.0, 0.0, 1.0)), "normals": ((1.0, 1.0, 1.0),) * 3}, "generated TANGENT", "vertex["),
+        ({"normals": ((1.0, 0.0, 0.0),) * 3}, "generated TANGENT", "vertex["),
+        ({"normals": ((0.0, 1.0, 0.0),) * 3}, "generated TANGENT", "vertex["),
+        ({"uvs": ((0.0, 0.0),) * 3}, "generated TANGENT", "vertex["),
+    ],
+    ids=["zero-normal", "cross-overflow", "edge-overflow", "uv-determinant-overflow", "uv-edge-overflow", "accumulation-overflow", "projection-overflow", "parallel-tangent", "degenerate-handedness", "unsupported-uv"],
+)
+def test_native_static_mesh_rejects_invalid_generated_directions_transactionally(
+    tmp_path, settings, semantic, location
+):
+    path = _write_directional_triangle_glb(tmp_path / "invalid-generated.glb", **settings)
+    _assert_direction_build_rejected_without_publication(path, semantic, location)
 
 
 def test_native_static_mesh_preserves_primitive_sections_and_material_slots(tmp_path):

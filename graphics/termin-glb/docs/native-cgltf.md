@@ -55,12 +55,17 @@ faces. Other missing fields in a required superset are zero-filled. Coordinate c
 the explicit `(x, y, z) -> (x, -z, y)` option and applies to positions,
 normals, and tangent xyz while preserving tangent handedness.
 
-Unsupported topology and skinned attributes fail with structured contextual
-errors. Skinned primitives use the existing 80-byte Termin layout and preserve
+Unsupported topology and incompatible accessor shapes fail with structured
+contextual errors. Skinned primitives use the existing 80-byte Termin layout and preserve
 `JOINTS_0`/`WEIGHTS_0`; static UV meshes without authored tangents derive the
 PBR tangent field during native unpacking. The native API never falls back to
 the Python loader. JSON `.gltf` remains on the existing Python path until its
 external-buffer and URI contract is migrated intentionally.
+
+Authored normal and tangent directions are checked-normalized in both static
+and skinned paths. Generated static tangents are orthogonalized against unit
+normals. Degenerate or non-finite results fail before resource publication;
+the [normal/tangent contract](index.md) describes the UV contribution policy.
 
 `GLBAsset` uses this path by default for binary `.glb`. The asset maps the
 source GLB instead of
@@ -138,7 +143,11 @@ legacy animation-channel model.
 
 The Arthur reference pins 20 skinned meshes, 118,693 vertices, 573,963
 indices, an 11,791,292-byte mesh payload and geometry hash
-`14695474819576827200`. Its bulk rig snapshot pins 101 nodes, one 80-joint
+`1968936344556097057`. The normal-normalization baseline was verified against
+the real source in both coordinate modes: positions, indices, UVs, tangent
+placeholders, skin weights and image bytes were unchanged; normal components
+changed by at most `1.8e-7` and matched checked normalization. Its bulk rig
+snapshot pins 101 nodes, one 80-joint
 skin, 53 animations, 12,702 samplers/channels, and raw tensor hash
 `11954369855452468884`. Separate semantic assertions retain all 3,792 STEP
 samplers and 683 non-uniform scale values.

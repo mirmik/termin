@@ -32,5 +32,19 @@ skins, and exact animation tensors through compact discovery/bulk boundaries.
 exact animation-track contract, preserving source node indices, interpolation,
 non-uniform vec3 scale, morph weights, and full CUBICSPLINE tuples.
 
+Native normal/tangent calculations use packed `Vec3f` values internally and
+explicit load/store adapters at accessor and interleaved-buffer boundaries.
+Authored normal and tangent directions pass checked normalization, including
+skinned meshes; tangent handedness is retained. Static tangent generation
+projects onto the plane of a normalized normal before checked normalization,
+so finite non-unit source normals produce unit, orthogonal tangents. Missing
+attributes on skinned meshes retain their existing import policy.
+
+Non-finite or degenerate directions and invalid generated results are logged
+with mesh/primitive context and rejected before publishing the prepared mesh.
+Degenerate UV triangles contribute no tangent; a vertex with no usable tangent
+contribution fails import instead of receiving an arbitrary direction. A
+failed import preserves an already published resource under the same UUID.
+
 The pinned dependency revision and fork policy are documented in
 [`native-cgltf.md`](native-cgltf.md).

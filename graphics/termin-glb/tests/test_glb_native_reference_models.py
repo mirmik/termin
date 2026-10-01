@@ -192,13 +192,18 @@ def test_native_arthur_skinned_geometry_and_bulk_rig_reference():
             convert_to_z_up=False,
         )
         assert mesh.stride == 80
+        vertices = np.asarray(mesh.mesh.get_vertices_buffer()).reshape(mesh_info.vertex_count, 20)
+        normals = vertices[:, 3:6].astype(np.float64)
+        assert np.all(np.isfinite(normals))
+        np.testing.assert_allclose(np.linalg.norm(normals, axis=1), 1.0, rtol=0, atol=2e-7)
         payload_bytes += diagnostics.payload_bytes
         geometry_hash = diagnostics.payload_hash ^ (
             geometry_hash * _FNV_PRIME & 0xFFFFFFFFFFFFFFFF
         )
 
     assert payload_bytes == 11_791_292
-    assert geometry_hash == 14_695_474_819_576_827_200
+    # Verified against the real Arthur source after checked normal normalization.
+    assert geometry_hash == 1_968_936_344_556_097_057
 
     rig = document.rig_data()
     assert len(rig["nodes"]) == 101
