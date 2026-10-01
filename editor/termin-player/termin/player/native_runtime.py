@@ -127,15 +127,22 @@ def create_native_player_session(
     bridge: ModuleType,
     explicit_mcp: bool,
     manifest_options_json: str,
+    cli_options_json: str = "{}",
 ) -> NativePlayerSession:
     """Build one native-host facade and optionally start its MCP server."""
     manifest_options = json.loads(manifest_options_json)
     if not isinstance(manifest_options, dict):
         raise TypeError("native player MCP manifest options must be an object")
+    cli_options = json.loads(cli_options_json)
+    if not isinstance(cli_options, dict):
+        raise TypeError("native player MCP CLI options must be an object")
+    # The shared config loader applies environment overrides above these
+    # options, matching the source player's CLI configuration contract.
+    options = manifest_options | cli_options
     return NativePlayerSession(
         NativePlayerRuntime(bridge),
         explicit_mcp=bool(explicit_mcp),
-        manifest_options=manifest_options,
+        manifest_options=options,
     )
 
 

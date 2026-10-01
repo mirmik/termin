@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -57,7 +58,25 @@ def _bridge() -> SimpleNamespace:
     )
 
 
-def test_native_player_session_exposes_live_host_context_and_closes(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("cli_options", "expected_options"),
+    [
+        ({}, {"enabled": False, "port": 0, "host": "manifest-host"}),
+        (
+            {"host": "127.0.0.1", "port": 18821, "token": "cli-token", "session_file": "cli.json"},
+            {
+                "enabled": False,
+                "host": "127.0.0.1",
+                "port": 18821,
+                "token": "cli-token",
+                "session_file": "cli.json",
+            },
+        ),
+    ],
+)
+def test_native_player_session_exposes_live_host_context_and_closes(
+    monkeypatch, cli_options, expected_options,
+) -> None:
     import termin.default_assets.resource_manager as resource_manager_module
 
     bridge = _bridge()
@@ -98,7 +117,8 @@ def test_native_player_session_exposes_live_host_context_and_closes(monkeypatch)
     session = native_runtime.create_native_player_session(
         bridge,
         True,
-        '{"enabled": false, "port": 0}',
+        '{"enabled": false, "port": 0, "host": "manifest-host"}',
+        json.dumps(cli_options),
     )
     runtime = session.runtime
 
@@ -112,7 +132,7 @@ def test_native_player_session_exposes_live_host_context_and_closes(monkeypatch)
     assert runtime.project_path.name == "native-player-bundle"
     assert runtime.scene_name == "Main"
     assert runtime.exit_code == 7
-    assert start_calls == [(runtime, True, {"enabled": False, "port": 0})]
+    assert start_calls == [(runtime, True, expected_options)]
 
     bridge.state.scene_handle = (10, 20)
     bridge.state.viewport_handle = (50, 60)
@@ -138,3 +158,8 @@ def test_native_player_session_exposes_live_host_context_and_closes(monkeypatch)
 def test_native_player_session_rejects_non_object_manifest_options() -> None:
     with pytest.raises(TypeError, match="must be an object"):
         native_runtime.create_native_player_session(_bridge(), False, "[]")
+
+
+def test_native_player_session_rejects_non_object_cli_options() -> None:
+    with pytest.raises(TypeError, match="CLI options must be an object"):
+        native_runtime.create_native_player_session(_bridge(), False, "{}", "[]")

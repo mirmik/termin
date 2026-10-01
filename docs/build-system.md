@@ -1307,6 +1307,33 @@ project- и XDG-cache, ждёт штатного завершения редак
 task test -- --full --no-editor-smoke
 ```
 
+На Linux отдельный manifest process-smoke профиль запускается через тот же
+публичный Task-вход:
+
+```bash
+task test -- --process-smoke-only --process-smoke-profile sdk-installed
+```
+
+`--process-smoke-only` проверяет metadata установленного SDK и запускает
+process suites без CMake configure, pytest и test overlay. Configured
+`TERMIN_BUILD_PYTHON` при этом не меняется. Обычный `--full` сохраняет профиль
+`editor-smoke`; `--no-process-smoke` и его alias `--no-editor-smoke` отключают
+process-фазу. Сочетание `--process-smoke-only` с `--no-python` или отключённой
+process-фазой отклоняется.
+
+`TERMIN_PROCESS_SMOKE_CAPABILITIES` задаёт явный список capabilities через
+запятую, точку с запятой или пробел. По умолчанию `sdk-installed` включает
+`installed-sdk` и `sdk-relocation`, `editor-smoke` — `editor`; доступные Xvfb,
+xauth и Mesa tools добавляют `virtual-display`. `TERMIN_PROCESS_SMOKE_TIMEOUT`
+задаёт timeout одной process suite в секундах (по умолчанию 900).
+
+Installed native-player smoke проверяет relocated bundle с явно переданными
+`--mcp-host`, `--mcp-port`, `--mcp-token`, `--mcp-session-file`, authenticated RPC
+и отказом для неверного bearer token. Native player принимает `--flag value`
+и `--flag=value`; port 0 выбирает свободный порт, session descriptor содержит
+фактический адрес. Порядок конфигурации совпадает с source player:
+environment → CLI → manifest → defaults.
+
 Повторяемая матрица targeted smoke-checks для render/shader/backend/runtime
 изменений описана в [Smoke Checks](smoke-checks.md).
 

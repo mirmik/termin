@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -414,6 +415,7 @@ namespace termin::player {
             int exit_after_frames = 0;
             std::optional<bool> fullscreen;
             bool mcp_enabled = false;
+            nos::trent mcp_options{nos::trent::type::dict};
             std::vector<std::string> python_argv;
         };
 
@@ -428,6 +430,50 @@ namespace termin::player {
             } catch (const std::exception&) {
                 throw std::runtime_error(std::string("termin_player: ") + name + " requires a positive integer");
             }
+        }
+
+        int parse_mcp_port(const std::string& arg) {
+            int port = 0;
+            const auto parsed = std::from_chars(arg.data(), arg.data() + arg.size(), port);
+            if (arg.empty() || arg.front() == '-' || parsed.ec != std::errc{} ||
+                parsed.ptr != arg.data() + arg.size() || port > 65535) {
+                throw std::runtime_error("termin_player: --mcp-port requires an integer in 0..65535");
+            }
+            return port;
+        }
+
+        bool parse_mcp_option(const std::string& arg, int& index, int argc, char** argv, nos::trent& options) {
+            const std::pair<const char*, const char*> flags[] = {
+                {"--mcp-host", "host"},
+                {"--mcp-port", "port"},
+                {"--mcp-token", "token"},
+                {"--mcp-session-file", "session_file"},
+            };
+            for (const auto& [flag, key] : flags) {
+                const std::string prefix = std::string(flag) + "=";
+                if (arg != flag && arg.rfind(prefix, 0) != 0) {
+                    continue;
+                }
+                std::string value;
+                if (arg == flag) {
+                    if (index + 1 >= argc || std::string(argv[index + 1]).rfind("--", 0) == 0) {
+                        throw std::runtime_error(std::string("termin_player: ") + flag + " requires a value");
+                    }
+                    value = argv[++index];
+                } else {
+                    value = arg.substr(prefix.size());
+                }
+                if (value.empty()) {
+                    throw std::runtime_error(std::string("termin_player: ") + flag + " requires a value");
+                }
+                if (std::strcmp(key, "port") == 0) {
+                    options[key] = parse_mcp_port(value);
+                } else {
+                    options[key] = std::move(value);
+                }
+                return true;
+            }
+            return false;
         }
 
         CliOptions parse_cli(int argc, char** argv, const fs::path& default_bundle_root) {
@@ -472,6 +518,9 @@ namespace termin::player {
                 }
                 if (arg == "--mcp") {
                     options.mcp_enabled = true;
+                    continue;
+                }
+                if (parse_mcp_option(arg, i, argc, argv, options.mcp_options)) {
                     continue;
                 }
                 if (arg == "--exit-after-frames") {
@@ -1031,6 +1080,7 @@ print(json.dumps({
                 return;
             }
 
+            const std::string cli_options_json = nos::json::dump(cli.mcp_options);
             PyGILState_STATE gil = PyGILState_Ensure();
             PyObject* module = PyImport_ImportModule("termin.player.native_runtime");
             PyObject* bridge = PyImport_ImportModule("_termin_player_native");
@@ -1038,10 +1088,13 @@ print(json.dumps({
                 module == nullptr ? nullptr : PyObject_GetAttrString(module, "create_native_player_session");
             PyObject* explicit_mcp = PyBool_FromLong(cli.mcp_enabled ? 1 : 0);
             PyObject* options_json = PyUnicode_FromString(manifest.mcp_options_json.c_str());
+            PyObject* cli_options = PyUnicode_FromString(cli_options_json.c_str());
             if (module != nullptr && bridge != nullptr && factory != nullptr && explicit_mcp != nullptr &&
-                options_json != nullptr) {
-                automation_session = PyObject_CallFunctionObjArgs(factory, bridge, explicit_mcp, options_json, nullptr);
+                options_json != nullptr && cli_options != nullptr) {
+                automation_session =
+                    PyObject_CallFunctionObjArgs(factory, bridge, explicit_mcp, options_json, cli_options, nullptr);
             }
+            Py_XDECREF(cli_options);
             Py_XDECREF(options_json);
             Py_XDECREF(explicit_mcp);
             Py_XDECREF(factory);

@@ -7,10 +7,13 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
+from urllib.error import HTTPError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -338,11 +341,14 @@ def _player_command(
     launcher: Path,
     *,
     mcp: bool,
+    mcp_cli_arguments: list[str] | None = None,
     exit_after_frames: int | None = None,
 ) -> list[str]:
     command = [str(launcher), "--backend", "opengl", "--windowed"]
     if mcp:
         command.append("--mcp")
+    if mcp_cli_arguments is not None:
+        command.extend(mcp_cli_arguments)
     if exit_after_frames is not None:
         command.append(f"--exit-after-frames={exit_after_frames}")
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
@@ -433,17 +439,86 @@ def _rewrite_world_controller(
 def _player_environment(
     *,
     event_path: Path,
-    session_file: Path | None = None,
 ) -> dict[str, str]:
     environment = os.environ.copy()
     environment.pop("LD_LIBRARY_PATH", None)
+    for name in tuple(environment):
+        if name in {"TERMIN_PLAYER_MCP", "TERMIN_MCP"} or name.startswith(("TERMIN_PLAYER_MCP_", "TERMIN_MCP_")):
+            environment.pop(name)
     environment["TERMIN_WORLD_CONTROLLER_SMOKE_EVENTS"] = str(event_path)
-    if session_file is not None:
-        environment["TERMIN_PLAYER_MCP_SESSION_FILE"] = str(session_file)
-        environment["TERMIN_PLAYER_MCP_PORT"] = "0"
     if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
         environment["LP_NUM_THREADS"] = "2"
     return environment
+
+
+def _verify_mcp_cli_errors(launcher: Path, bundle_root: Path, temp_root: Path) -> None:
+    cases = []
+    for flag in ("--mcp-host", "--mcp-port", "--mcp-token", "--mcp-session-file"):
+        expected = f"{flag} requires a value"
+        cases.extend([
+            ([flag], expected),
+            ([flag, "--windowed"], expected),
+            ([f"{flag}="], expected),
+        ])
+    for port in ("-1", "65536", "1.5", "invalid", "+123", " 123", "999999999999999999999"):
+        expected = "--mcp-port requires an integer in 0..65535"
+        cases.extend([
+            (["--mcp-port", port], expected),
+            ([f"--mcp-port={port}"], expected),
+        ])
+    environment = _player_environment(event_path=temp_root / "cli-error-events.txt")
+    for arguments, expected in cases:
+        result = run_managed_process(
+            [str(launcher), *arguments],
+            cwd=bundle_root,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=10.0,
+            check=False,
+        )
+        if result.returncode != 1 or expected not in result.stdout:
+            raise SmokeError(
+                f"native player did not reject invalid MCP CLI {arguments!r} with '{expected}' "
+                f"(exit={result.returncode}):\n{result.stdout}"
+            )
+
+
+def _verify_ephemeral_mcp_cli(launcher: Path, bundle_root: Path, temp_root: Path) -> None:
+    session_file = temp_root / "ephemeral-mcp-session.json"
+    token = "native-player-ephemeral-cli-token"
+    log_path = temp_root / "ephemeral-player.log"
+    with log_path.open("w", encoding="utf-8") as log:
+        managed = ManagedProcess.start(
+            _player_command(
+                launcher,
+                mcp=True,
+                mcp_cli_arguments=[
+                    "--mcp-host=127.0.0.1", "--mcp-port", "0",
+                    f"--mcp-token={token}", "--mcp-session-file", str(session_file),
+                ],
+            ),
+            cwd=bundle_root,
+            env=_player_environment(event_path=temp_root / "ephemeral-events.txt"),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        try:
+            session = _wait_for_json(session_file, managed.process, 20.0)
+            endpoint = urlsplit(session["url"])
+            if session["token"] != token or endpoint.hostname != "127.0.0.1" or not endpoint.port:
+                raise SmokeError("ephemeral player MCP CLI options were not applied")
+            _rpc(session, 1, "termin/execute_python", {"script": "request_quit(0)"})
+            _wait_for_cleanup(managed.process, session_file, timeout=15.0)
+        except SmokeError as exc:
+            log.flush()
+            log_text = log_path.read_text(encoding="utf-8", errors="replace")
+            raise SmokeError(f"{exc}\nEphemeral player log tail:\n{log_text[-12000:]}") from exc
+        finally:
+            managed.close()
+    _assert_clean_runtime_log(log_path.read_text(encoding="utf-8", errors="replace"))
 
 
 def _run_non_mcp_case(
@@ -497,11 +572,14 @@ def _assert_clean_runtime_log(log_text: str) -> None:
 
 def main() -> int:
     root = _repo_root()
-    sdk = root / "sdk"
+    sdk = Path(os.environ.get("SDK_PREFIX") or os.environ.get("TERMIN_SDK") or root / "sdk").resolve()
+    print(f"Native player MCP smoke SDK: {sdk}", flush=True)
     sdk_python = sdk / "bin" / "termin_python"
     termin = sdk / "bin" / "termin"
     if not sdk_python.is_file() or not termin.is_file():
-        raise SmokeError("installed SDK is missing; run 'task build'")
+        raise SmokeError(
+            f"selected installed SDK '{sdk}' is missing bin/termin_python or bin/termin; run 'task build'"
+        )
 
     with tempfile.TemporaryDirectory(prefix="termin-native-player-mcp-smoke-") as raw_temp:
         temp_root = Path(raw_temp)
@@ -572,18 +650,30 @@ def main() -> int:
         if invalid_events.exists() and "probe:entry:start" in invalid_events.read_text(encoding="utf-8"):
             raise SmokeError("invalid WorldController selection fell back to a running null session")
 
-        session_file = temp_root / "player-mcp-session.json"
+        _verify_mcp_cli_errors(selected_launcher, selected_root, temp_root)
+        _verify_ephemeral_mcp_cli(selected_launcher, selected_root, temp_root)
+
+        session_file = temp_root / "player mcp session.json"
+        mcp_host = "127.0.0.1"
+        mcp_token = "native-player-cli-token"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_probe:
+            port_probe.bind((mcp_host, 0))
+            mcp_port = port_probe.getsockname()[1]
         screenshot = temp_root / "player.png"
         log_path = temp_root / "player.log"
         selected_events = temp_root / "selected-events.txt"
-        environment = _player_environment(
-            event_path=selected_events,
-            session_file=session_file,
-        )
+        environment = _player_environment(event_path=selected_events)
 
         with log_path.open("w", encoding="utf-8") as log:
             managed = ManagedProcess.start(
-                _player_command(selected_launcher, mcp=True),
+                _player_command(
+                    selected_launcher,
+                    mcp=True,
+                    mcp_cli_arguments=[
+                        "--mcp-host", mcp_host, f"--mcp-port={mcp_port}",
+                        "--mcp-token", mcp_token, f"--mcp-session-file={session_file}",
+                    ],
+                ),
                 cwd=selected_root,
                 env=environment,
                 stdout=log,
@@ -596,6 +686,16 @@ def main() -> int:
                 session = _wait_for_json(session_file, process, 20.0)
                 if os.environ.get(FORCE_MCP_FAILURE_ENV) == "1":
                     raise SmokeError("injected failure after MCP session publication")
+                if session["url"] != f"http://{mcp_host}:{mcp_port}/mcp" or session["token"] != mcp_token:
+                    raise SmokeError("native player did not apply the requested MCP host/port/token")
+                _rpc(session, 0, "ping", {})
+                try:
+                    _rpc({**session, "token": "wrong-cli-token"}, 0, "ping", {})
+                except HTTPError as exc:
+                    if exc.code != 401:
+                        raise SmokeError(f"wrong MCP bearer token returned HTTP {exc.code}, expected 401") from exc
+                else:
+                    raise SmokeError("native player accepted an incorrect MCP bearer token")
                 context = _rpc(
                     session,
                     1,

@@ -121,6 +121,11 @@ def test_player_python_executor_exposes_runtime_context(tmp_path: Path) -> None:
 
 
 def test_player_mcp_config_uses_manifest_and_env(monkeypatch) -> None:
+    for name in (
+        "TERMIN_PLAYER_MCP", "TERMIN_MCP", "TERMIN_PLAYER_MCP_HOST", "TERMIN_PLAYER_MCP_PORT",
+        "TERMIN_PLAYER_MCP_TOKEN", "TERMIN_MCP_TOKEN", "TERMIN_PLAYER_MCP_SESSION_FILE",
+    ):
+        monkeypatch.delenv(name, raising=False)
     assert player_mcp_enabled(manifest_options={"enabled": True})
     assert not player_mcp_enabled(manifest_options={"enabled": False})
 
@@ -139,9 +144,15 @@ def test_player_mcp_config_uses_manifest_and_env(monkeypatch) -> None:
 
     monkeypatch.setenv("TERMIN_PLAYER_MCP_PORT", "9200")
     monkeypatch.setenv("TERMIN_PLAYER_MCP_TOKEN", "env-token")
-    config = load_player_mcp_config(manifest_options={"port": 9100, "token": "manifest-token"})
+    monkeypatch.setenv("TERMIN_PLAYER_MCP_HOST", "localhost")
+    monkeypatch.setenv("TERMIN_PLAYER_MCP_SESSION_FILE", "/tmp/env-player-mcp.json")
+    config = load_player_mcp_config(manifest_options={
+        "host": "127.0.0.1", "port": 9100, "token": "cli-token", "session_file": "/tmp/cli-player-mcp.json",
+    })
+    assert config.host == "localhost"
     assert config.port == 9200
     assert config.token == "env-token"
+    assert config.session_file == Path("/tmp/env-player-mcp.json")
 
     monkeypatch.setenv("TERMIN_PLAYER_MCP_PORT", "0")
     config = load_player_mcp_config(manifest_options={"port": 9100, "token": "manifest-token"})
