@@ -1,6 +1,7 @@
 #include <termin/render/scene_render_execution.hpp>
 
 #include <tcbase/tc_log.hpp>
+#include <tcbase/profiler_scope.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/scene_render_services.hpp>
 
@@ -16,6 +17,7 @@ namespace termin {
                                     const std::string& default_render_target,
                                     const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests,
                                     StaticMeshBatchCache* batches) {
+        const tc::ProfilerScope scope("Scene render execution");
         if (!tc_scene_handle_valid(scene)) {
             tc::Log::error("render_scene_pipeline_offscreen: invalid scene handle");
             return;

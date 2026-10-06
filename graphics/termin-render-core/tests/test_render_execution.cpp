@@ -847,6 +847,108 @@ TEST_CASE("compatible color export is bound directly to the physical target") {
     pipeline.destroy();
 }
 
+TEST_CASE("external composed attachment clears follow each consuming viewport") {
+    class ExternalReadProbe final : public termin::CxxFramePass {
+    public:
+        explicit ExternalReadProbe(const std::string& target) {
+            pass_name_set(target);
+            viewport_name_set(target);
+        }
+        std::set<const char*> compute_reads() const override {
+            return {"external_composed"};
+        }
+        void execute(termin::ExecuteContext&) override {}
+    };
+
+    termin::RenderPipeline pipeline("external-composed-clear-test");
+    REQUIRE(pipeline.is_valid());
+    pipeline.add_pass((new ExternalReadProbe("Left"))->tc_pass_ptr());
+    pipeline.add_pass((new ExternalReadProbe("Right"))->tc_pass_ptr());
+    pipeline.cache().fbo_compositions.emplace("external_composed",
+                                              termin::FboComposition{"OUTPUT", "RT_DEPTH"});
+    termin::ResourceSpec spec{"external_composed", "fbo", std::pair<int, int>{16, 16},
+                              termin::LinearColor{0.2f, 0.4f, 0.6f, 0.8f}, 0.25f};
+    pipeline.add_spec(spec);
+
+    auto device = std::make_unique<ExecutionRecordingDevice>();
+    ExecutionRecordingDevice* recording_device = device.get();
+    termin::RenderTargetContext targets[2];
+    tgfx::TextureDesc desc;
+    desc.width = 16;
+    desc.height = 16;
+    for (int i = 0; i < 2; ++i) {
+        targets[i].name = i == 0 ? "Left" : "Right";
+        targets[i].render_rect = {0, 0, 16, 16};
+        desc.format = tgfx::PixelFormat::RGBA16F;
+        desc.usage = tgfx::TextureUsage::ColorAttachment;
+        targets[i].output_color.texture = device->create_texture(desc);
+        desc.format = tgfx::PixelFormat::D32F;
+        desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
+        targets[i].output_depth_tex = device->create_texture(desc);
+    }
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
+    termin::RenderItemSnapshot snapshot;
+    publish_empty_snapshot(snapshot);
+    termin::RenderExecution execution;
+    execution.pipeline = &pipeline;
+    execution.default_render_target = targets[0].name;
+    for (auto& target : targets)
+        execution.targets.emplace(target.name,
+                                  termin::RenderExecutionTarget{.context = &target, .render_items = &snapshot});
+    termin::RenderEngine engine;
+    engine.set_graphics_host(*host);
+    for (int frame = 0; frame < 3; ++frame) {
+        if (frame == 1) {
+            // A viewport resize replaces caller-owned attachments. The next
+            // frame must clear the new handles, without retaining old bindings.
+            for (int i = 0; i < 2; ++i) {
+                auto& target = targets[i];
+                recording_device->destroy(target.output_color.texture);
+                recording_device->destroy(target.output_depth_tex);
+                desc.width = 32 + 8 * i;
+                desc.height = 24 + 8 * i;
+                target.render_rect = {0, 0, static_cast<int>(desc.width), static_cast<int>(desc.height)};
+                desc.format = tgfx::PixelFormat::RGBA16F;
+                desc.usage = tgfx::TextureUsage::ColorAttachment;
+                target.output_color.texture = recording_device->create_texture(desc);
+                desc.format = tgfx::PixelFormat::D32F;
+                desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
+                target.output_depth_tex = recording_device->create_texture(desc);
+            }
+        }
+        g_error_log.clear();
+        recording_device->state.scopes.clear();
+        tc_log_set_callback(capture_error);
+        engine.execute_pipeline(execution);
+        tc_log_set_callback(nullptr);
+        CHECK(g_error_log.empty());
+        REQUIRE(recording_device->state.scopes.size() == 2u);
+        for (const auto& recorded : recording_device->state.scopes) {
+            const auto& scope = recorded.pass;
+            REQUIRE(scope.colors.size() == 1u);
+            REQUIRE(scope.has_depth);
+            const auto& target = scope.colors[0].texture == targets[0].output_color.texture ? targets[0] : targets[1];
+            CHECK(scope.colors[0].texture == target.output_color.texture);
+            CHECK(scope.depth.texture == target.output_depth_tex);
+            CHECK(scope.colors[0].load == tgfx::LoadOp::Clear);
+            CHECK(scope.colors[0].clear_color.r == guard::Approx(0.2f));
+            CHECK(scope.colors[0].clear_color.a == guard::Approx(0.8f));
+            CHECK(scope.depth.load == tgfx::LoadOp::Clear);
+            CHECK(scope.depth.clear_depth == guard::Approx(0.25f));
+        }
+        CHECK(recording_device->state.created_textures.size() == (frame == 0 ? 4u : 8u));
+    }
+    // An actually missing external attachment must still be diagnosed.
+    for (auto& target : targets)
+        target.output_depth_tex = {};
+    g_error_log.clear();
+    tc_log_set_callback(capture_error);
+    engine.execute_pipeline(execution);
+    tc_log_set_callback(nullptr);
+    CHECK(g_error_log.find("depth clear resource 'external_composed' has no physical attachment") != std::string::npos);
+    pipeline.destroy();
+}
+
 TEST_CASE("explicit color and depth textures clear before their first read every frame") {
     termin::RenderPipeline pipeline("explicit-texture-clear-before-read-test");
     REQUIRE(pipeline.is_valid());

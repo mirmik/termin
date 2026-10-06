@@ -1,6 +1,7 @@
 #include <termin/render/render_item_snapshot.hpp>
 
 #include <tcbase/tc_log.hpp>
+#include <tcbase/profiler_scope.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/render_item_culling.hpp>
 
@@ -32,6 +33,7 @@ namespace termin {
     }
 
     void RenderItemSnapshot::finish_collection(const RenderItemSnapshotCounters& counters) {
+        const tc::ProfilerScope scope("RenderItem bounds and phase index");
         counters_ = counters;
         counters_.emitted_items = storage_.items.size();
         for (RenderItemPhaseBucket& bucket : phase_buckets_) {

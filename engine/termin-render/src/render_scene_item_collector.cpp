@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <tcbase/tc_log.hpp>
+#include <tcbase/profiler_scope.hpp>
 
 namespace termin {
     namespace {
@@ -65,6 +66,7 @@ namespace termin {
 
     bool RenderSceneItemCollector::collect_into(const RenderSceneItemCollectRequest& request,
                                                 RenderItemCollection& output) {
+        const tc::ProfilerScope scope("Drawable collection");
         output.clear();
         last_scene_traversals_ = 0;
         last_drawable_producers_ = 0;
@@ -100,6 +102,7 @@ namespace termin {
     bool TcSceneRenderItemSource::collect_items(const RenderItemSourceRequest& request,
                                                 RenderItemCollection& output,
                                                 RenderItemSnapshotCounters& counters) {
+        const tc::ProfilerScope scope("Scene RenderItem collect");
         RenderSceneItemCollectRequest scene_request{};
         scene_request.scene = scene_;
         scene_request.phase = TC_PHASE_NONE;

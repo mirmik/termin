@@ -335,29 +335,32 @@ namespace termin {
         }
         std::vector<WorkGroup> groups;
         const auto& items = collection.items;
-        for (size_t begin = 0; begin < items.size();) {
-            size_t end = begin + 1;
-            if (items[begin].kind == TC_RENDER_ITEM_KIND_MESH)
-                while (end < items.size() && items[end].kind == TC_RENDER_ITEM_KIND_MESH &&
-                       same_geometry(items[begin], items[end]))
-                    ++end;
-            ++stats.input_geometry;
-            if (items[begin].flags & TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) {
-                Key key;
-                Signature signature;
-                if (eligible(items, begin, end, key, signature)) {
-                    ++stats.eligible_geometry;
-                    auto group = std::find_if(
-                        groups.begin(), groups.end(), [&](const WorkGroup& g) { return key_equal(g.key, key); });
-                    if (group == groups.end()) {
-                        groups.push_back({std::move(key), {}});
-                        group = std::prev(groups.end());
-                    }
-                    group->members.push_back({begin, end, std::move(signature)});
-                } else
-                    ++stats.unsupported_geometry;
+        {
+            const tc::ProfilerScope scope("Static batch grouping");
+            for (size_t begin = 0; begin < items.size();) {
+                size_t end = begin + 1;
+                if (items[begin].kind == TC_RENDER_ITEM_KIND_MESH)
+                    while (end < items.size() && items[end].kind == TC_RENDER_ITEM_KIND_MESH &&
+                           same_geometry(items[begin], items[end]))
+                        ++end;
+                ++stats.input_geometry;
+                if (items[begin].flags & TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) {
+                    Key key;
+                    Signature signature;
+                    if (eligible(items, begin, end, key, signature)) {
+                        ++stats.eligible_geometry;
+                        auto group = std::find_if(
+                            groups.begin(), groups.end(), [&](const WorkGroup& g) { return key_equal(g.key, key); });
+                        if (group == groups.end()) {
+                            groups.push_back({std::move(key), {}});
+                            group = std::prev(groups.end());
+                        }
+                        group->members.push_back({begin, end, std::move(signature)});
+                    } else
+                        ++stats.unsupported_geometry;
+                }
+                begin = end;
             }
-            begin = end;
         }
         if (std::none_of(groups.begin(), groups.end(), [](const WorkGroup& g) { return g.members.size() >= 2; })) {
             found->groups.clear();
@@ -366,53 +369,56 @@ namespace termin {
         std::vector<CachedGroup> next;
         std::vector<tc_render_item> output;
         std::vector<bool> consumed(items.size(), false);
-        for (const auto& group : groups) {
-            if (group.members.size() < 2)
-                continue;
-            auto previous = std::find_if(found->groups.begin(), found->groups.end(), [&](const CachedGroup& c) {
-                if (!key_equal(c.key, group.key) || c.members.size() != group.members.size())
-                    return false;
-                for (size_t i = 0; i < c.members.size(); ++i)
-                    if (!signature_equal(c.members[i], group.members[i].signature))
+        {
+            const tc::ProfilerScope scope("Static batch cache and output");
+            for (const auto& group : groups) {
+                if (group.members.size() < 2)
+                    continue;
+                auto previous = std::find_if(found->groups.begin(), found->groups.end(), [&](const CachedGroup& c) {
+                    if (!key_equal(c.key, group.key) || c.members.size() != group.members.size())
                         return false;
-                return true;
-            });
-            std::shared_ptr<const TcMesh> mesh;
-            if (previous != found->groups.end()) {
-                mesh = previous->mesh;
-                ++stats.reused_batches;
-            } else {
-                mesh = rebuild(group, items);
-                if (!mesh)
-                    return false;
-                ++stats.rebuilt_batches;
+                    for (size_t i = 0; i < c.members.size(); ++i)
+                        if (!signature_equal(c.members[i], group.members[i].signature))
+                            return false;
+                    return true;
+                });
+                std::shared_ptr<const TcMesh> mesh;
+                if (previous != found->groups.end()) {
+                    mesh = previous->mesh;
+                    ++stats.reused_batches;
+                } else {
+                    mesh = rebuild(group, items);
+                    if (!mesh)
+                        return false;
+                    ++stats.rebuilt_batches;
+                }
+                CachedGroup cached{group.key, {}, mesh};
+                for (const auto& m : group.members) {
+                    cached.members.push_back(m.signature);
+                    for (size_t i = m.begin; i < m.end; ++i)
+                        consumed[i] = true;
+                }
+                next.push_back(std::move(cached));
+                collection.retain_adapter_payload(mesh);
+                const auto& representative = group.members.front();
+                for (size_t i = representative.begin; i < representative.end; ++i) {
+                    auto item = items[i];
+                    item.flags =
+                        (item.flags & ~TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) | TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY;
+                    item.payload.mesh.mesh_handle = mesh->handle;
+                    item.payload.mesh.submesh_index = 0;
+                    // Unique negative geometry ids keep adjacent batches distinct while
+                    // all phases of one merged geometry stay grouped in auxiliary passes.
+                    item.geometry_id = -1 - static_cast<int>(stats.output_batches);
+                    std::fill(std::begin(item.model_matrix), std::end(item.model_matrix), 0.0f);
+                    item.model_matrix[0] = item.model_matrix[5] = item.model_matrix[10] = item.model_matrix[15] = 1;
+                    for (size_t a = 0; a < 3; ++a)
+                        item.model_matrix[12 + a] = float(group.key.chunk[a] * chunk_size);
+                    output.push_back(item);
+                }
+                stats.merged_geometry += group.members.size();
+                ++stats.output_batches;
             }
-            CachedGroup cached{group.key, {}, mesh};
-            for (const auto& m : group.members) {
-                cached.members.push_back(m.signature);
-                for (size_t i = m.begin; i < m.end; ++i)
-                    consumed[i] = true;
-            }
-            next.push_back(std::move(cached));
-            collection.retain_adapter_payload(mesh);
-            const auto& representative = group.members.front();
-            for (size_t i = representative.begin; i < representative.end; ++i) {
-                auto item = items[i];
-                item.flags =
-                    (item.flags & ~TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) | TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY;
-                item.payload.mesh.mesh_handle = mesh->handle;
-                item.payload.mesh.submesh_index = 0;
-                // Unique negative geometry ids keep adjacent batches distinct while
-                // all phases of one merged geometry stay grouped in auxiliary passes.
-                item.geometry_id = -1 - static_cast<int>(stats.output_batches);
-                std::fill(std::begin(item.model_matrix), std::end(item.model_matrix), 0.0f);
-                item.model_matrix[0] = item.model_matrix[5] = item.model_matrix[10] = item.model_matrix[15] = 1;
-                for (size_t a = 0; a < 3; ++a)
-                    item.model_matrix[12 + a] = float(group.key.chunk[a] * chunk_size);
-                output.push_back(item);
-            }
-            stats.merged_geometry += group.members.size();
-            ++stats.output_batches;
         }
         for (size_t i = 0; i < items.size(); ++i)
             if (!consumed[i])

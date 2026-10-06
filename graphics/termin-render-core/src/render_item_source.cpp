@@ -1,12 +1,14 @@
 #include <termin/render/render_item_source.hpp>
 
 #include <tcbase/tc_log.hpp>
+#include <tcbase/profiler_scope.hpp>
 
 namespace termin {
 
     RenderItemSource::~RenderItemSource() = default;
 
     bool RenderItemSource::publish(RenderItemSnapshot& snapshot, const RenderItemSourceRequest& request) {
+        const tc::ProfilerScope scope("RenderItem publish");
         const char* source = source_name();
         if (!source || source[0] == '\0') {
             source = "RenderItemSource";

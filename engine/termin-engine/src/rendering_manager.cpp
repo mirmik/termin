@@ -30,6 +30,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <tcbase/profiler_scope.hpp>
 
 namespace termin {
 
@@ -1012,6 +1013,7 @@ namespace termin {
                                 planned->prepared_scenes.end(),
                                 [job](tc_scene_handle scene) { return tc_scene_handle_eq(scene, job.scene); });
                 if (!prepared && tc_scene_handle_valid(job.scene)) {
+                    const tc::ProfilerScope scope("Scene render prepare");
                     RenderPrepareContext context(job.scene);
                     tc_scene_render_mount_prepare(job.scene,
                                                   reinterpret_cast<const tc_render_prepare_context*>(&context));
@@ -1150,6 +1152,7 @@ namespace termin {
         std::unordered_map<std::string, RenderTargetContext>& contexts,
         std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context,
         std::string& default_context_name) {
+        const tc::ProfilerScope scope("Build render target contexts");
         rendering_manager_detail::RenderTargetContextBuildRequest request{*this,
                                                                           render_engine(),
                                                                           rt,
@@ -1421,6 +1424,7 @@ namespace termin {
     // ============================================================================
 
     std::vector<Light> RenderingManager::collect_lights(tc_scene_handle scene) {
+        const tc::ProfilerScope scope("Collect scene lights");
         return rendering_manager_detail::collect_lights(scene);
     }
 

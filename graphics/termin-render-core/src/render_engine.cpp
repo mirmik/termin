@@ -780,6 +780,7 @@ namespace termin {
         // Assemble per-resource tgfx2 texture maps from the pool. Native
         // path: handles are owned by IRenderDevice, persistent across
         // frames without any wrap/destroy churn.
+        tc_profiler_begin_section("Assemble Resource Bindings");
         const auto assemble_resources_begin = RenderTimingClock::now();
         std::unordered_map<std::string, tgfx::TextureHandle> tex2_resources;
         std::unordered_map<std::string, tgfx::TextureHandle> tex2_depth_resources;
@@ -898,6 +899,7 @@ namespace termin {
             }
         }
         assemble_resources_ms = timing_ms(assemble_resources_begin, RenderTimingClock::now());
+        tc_profiler_end_section();
 
         struct PreparedColorOutputBinding {
             PipelineColorExport export_desc;
@@ -1366,6 +1368,7 @@ namespace termin {
             return prepared;
         };
 
+        tc_profiler_begin_section("Prepare Passes");
         std::vector<PreparedPass> prepared_passes;
         prepared_passes.reserve(schedule_count);
         for (size_t i = 0; i < schedule_count; ++i) {
@@ -1374,6 +1377,8 @@ namespace termin {
                 continue;
             prepared_passes.push_back(prepare_pass(i, pass));
         }
+
+        tc_profiler_end_section();
 
         const auto has_resource_capture_boundary = [&](size_t schedule_index) {
             for (size_t boundary : debug_capture_boundaries) {
@@ -1423,11 +1428,13 @@ namespace termin {
             return std::string(canonical ? canonical : resource);
         };
 
+        tc_profiler_begin_section("Plan Resource Clears");
         struct PhysicalTextureClear {
             tgfx::TextureHandle texture;
             std::optional<LinearColor> color;
             std::optional<float> depth;
             std::string source_resource;
+            std::string target_scope;
         };
         std::unordered_map<uint32_t, PhysicalTextureClear> physical_texture_clears;
         const auto find_texture = [&](const Tex2Map& textures, const std::string& resource) {
@@ -1438,7 +1445,7 @@ namespace termin {
             texture = textures.find(canonical);
             return texture != textures.end() ? texture->second : tgfx::TextureHandle{};
         };
-        const auto merge_color_clear = [&](const ResourceSpec& spec, tgfx::TextureHandle texture) {
+        const auto merge_color_clear = [&](const ResourceSpec& spec, tgfx::TextureHandle texture, const std::string& target_scope) {
             if (!spec.clear_color)
                 return;
             if (!texture) {
@@ -1447,7 +1454,7 @@ namespace termin {
                 return;
             }
             auto [it, inserted] = physical_texture_clears.try_emplace(
-                texture.id, PhysicalTextureClear{texture, spec.clear_color, std::nullopt, spec.resource});
+                texture.id, PhysicalTextureClear{texture, spec.clear_color, std::nullopt, spec.resource, target_scope});
             if (!inserted) {
                 const std::optional<LinearColor>& existing = it->second.color;
                 const bool same_clear = existing && existing->r == spec.clear_color->r &&
@@ -1463,7 +1470,7 @@ namespace termin {
                 }
             }
         };
-        const auto merge_depth_clear = [&](const ResourceSpec& spec, tgfx::TextureHandle texture) {
+        const auto merge_depth_clear = [&](const ResourceSpec& spec, tgfx::TextureHandle texture, const std::string& target_scope) {
             if (!spec.clear_depth)
                 return;
             if (!texture) {
@@ -1472,7 +1479,7 @@ namespace termin {
                 return;
             }
             auto [it, inserted] = physical_texture_clears.try_emplace(
-                texture.id, PhysicalTextureClear{texture, std::nullopt, spec.clear_depth, spec.resource});
+                texture.id, PhysicalTextureClear{texture, std::nullopt, spec.clear_depth, spec.resource, target_scope});
             if (!inserted) {
                 if (it->second.depth && it->second.depth != spec.clear_depth) {
                     tc::Log::error("RenderEngine::execute_pipeline: resources '%s' and '%s' request conflicting "
@@ -1491,10 +1498,44 @@ namespace termin {
                                        spec.resource_type == "multiview_depth_texture";
             const bool color_texture = spec.resource_type == "color_texture" ||
                                        spec.resource_type == "multiview_color_texture";
-            if (!depth_texture)
-                merge_color_clear(spec, find_texture(tex2_resources, spec.resource));
-            if (!color_texture)
-                merge_depth_clear(spec, find_texture(tex2_depth_resources, spec.resource));
+            // External attachments, including views/compositions over them, are
+            // viewport-scoped. They are deliberately absent from the global
+            // texture maps; use the same physical bindings as pass execution.
+            const auto plan_attachment_clear = [&](const Tex2Map& global_textures,
+                                                   auto reads_member,
+                                                   auto writes_member,
+                                                   auto merge_clear) {
+                if (tgfx::TextureHandle texture = find_texture(global_textures, spec.resource)) {
+                    merge_clear(spec, texture, "");
+                    return;
+                }
+                const std::string canonical = canonical_resource_name(spec.resource);
+                bool resolved = false;
+                for (const PreparedPass& prepared : prepared_passes) {
+                    const auto merge_bindings = [&](const Tex2Map& bindings) {
+                        for (const auto& [resource, texture] : bindings) {
+                            if (texture && canonical_resource_name(resource) == canonical) {
+                                merge_clear(spec, texture, prepared.context.render_target_name);
+                                resolved = true;
+                            }
+                        }
+                    };
+                    merge_bindings(prepared.context.*reads_member);
+                    merge_bindings(prepared.context.*writes_member);
+                }
+                if (!resolved)
+                    merge_clear(spec, {}, ""); // Preserve missing-attachment diagnostics.
+            };
+            if (!depth_texture && spec.clear_color)
+                plan_attachment_clear(tex2_resources,
+                                      &ExecuteContext::tex2_reads,
+                                      &ExecuteContext::tex2_writes,
+                                      merge_color_clear);
+            if (!color_texture && spec.clear_depth)
+                plan_attachment_clear(tex2_depth_resources,
+                                      &ExecuteContext::tex2_depth_reads,
+                                      &ExecuteContext::tex2_depth_writes,
+                                      merge_depth_clear);
         }
 
         // A resolve contract promises a complete image write, but its target
@@ -1550,6 +1591,8 @@ namespace termin {
                 }
             }
         }
+
+        tc_profiler_end_section();
 
         tc_profiler_begin_section("Clear Render Target Contexts");
         const auto clear_targets_begin = RenderTimingClock::now();
@@ -1621,7 +1664,8 @@ namespace termin {
                     for (const auto& [candidate_id, candidate] : physical_texture_clears) {
                         if (candidate_id == texture_id || deferred_resource_clears.contains(candidate_id) ||
                             cleared_textures.contains(candidate_id) ||
-                            candidate.source_resource != clear.source_resource) {
+                            candidate.source_resource != clear.source_resource ||
+                            candidate.target_scope != clear.target_scope) {
                             continue;
                         }
                         if (!color_clear && candidate.color)
