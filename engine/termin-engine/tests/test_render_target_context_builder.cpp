@@ -100,8 +100,6 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     REQUIRE(tc_render_target_handle_valid(panel));
     REQUIRE(tc_render_target_handle_valid(xr));
     tc_render_target_set_kind(xr, TC_RENDER_TARGET_XR_STEREO);
-    tc_render_target_ensure_textures(panel);
-    REQUIRE(tc_texture_is_valid(tc_render_target_get_color_texture(panel)));
 
     tc_value params = tc_value_dict_new();
     tc_value_dict_set(&params, "PANEL_COLOR", tc_value_string("PanelTexture"));
@@ -110,13 +108,15 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
 
     std::vector<tc_render_target_handle> managed_targets{panel, xr};
     std::unordered_map<int, termin::RenderTargetContextProvider> providers;
+    size_t provider_calls = 0;
     providers.emplace(TC_RENDER_TARGET_XR_STEREO,
-                      [](termin::RenderingManager&,
+                      [&provider_calls](termin::RenderingManager&,
                          tc_render_target_handle,
                          const std::string&,
                          tc_entity_handle,
                          std::unordered_map<std::string, termin::RenderTargetContext>& contexts,
                          std::string& default_context) {
+                          ++provider_calls;
                           termin::RenderTargetContext context;
                           context.name = "Stereo";
                           context.external_textures["XR_MULTIVIEW_TARGET"] = tgfx::TextureHandle{7};
@@ -144,11 +144,21 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
         contexts,
         internal_entities_by_context,
         default_context,
+        false,
     };
     REQUIRE(termin::rendering_manager_detail::build_render_target_contexts(request));
     REQUIRE_EQ(contexts.size(), 1u);
     REQUIRE(contexts.contains("Stereo"));
     const termin::RenderTargetContext& context = contexts.at("Stereo");
+    CHECK(context.external_textures.at("XR_MULTIVIEW_TARGET") == tgfx::TextureHandle{7});
+    CHECK(!context.external_textures.contains("PANEL_COLOR"));
+    CHECK(context.material_texture_sources.empty());
+    // View/provider preparation precedes DFS. Dependency textures become
+    // available later; binding must retain the prepared provider context.
+    tc_render_target_ensure_textures(panel);
+    REQUIRE(tc_texture_is_valid(tc_render_target_get_color_texture(panel)));
+    REQUIRE(termin::rendering_manager_detail::bind_render_target_context_resources(request));
+    CHECK_EQ(provider_calls, 1u);
     CHECK(context.external_textures.at("XR_MULTIVIEW_TARGET") == tgfx::TextureHandle{7});
 
     tc_texture* panel_texture = tc_texture_get(tc_render_target_get_color_texture(panel));

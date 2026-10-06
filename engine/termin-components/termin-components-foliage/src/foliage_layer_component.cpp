@@ -456,12 +456,8 @@ namespace termin {
         return mask;
     }
 
-    bool FoliageLayerComponent::collect_render_items(const tc_render_item_collect_context& context,
-                                                     tc_render_item_sink& sink) {
-        if (!sink.emit) {
-            tc::Log::error("[FoliageLayerComponent] cannot emit render items: sink callback is null");
-            return false;
-        }
+    template <typename Visit>
+    bool FoliageLayerComponent::visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit) {
         if (!enabled || foliage_uuid.empty() || !prototype_mesh.is_valid() || !material.is_valid()) {
             return true;
         }
@@ -475,6 +471,9 @@ namespace termin {
         if (!mesh) {
             tc::Log::error("[FoliageLayerComponent] cannot emit foliage RenderItem: prototype mesh is missing");
             return false;
+        }
+        if (mesh->index_count == 0) {
+            return true;
         }
         tc_mesh_handle mesh_handle = tc_mesh_find(mesh->header.uuid);
         if (tc_mesh_handle_is_invalid(mesh_handle)) {
@@ -505,6 +504,31 @@ namespace termin {
         for (size_t i = 0; i < item_count; ++i) {
             tc_material_phase* phase = emit_without_material_phase ? nullptr : phases[i];
 
+            if (!visit(mesh_handle, phase)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool FoliageLayerComponent::collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) {
+        if (!sink.emit) {
+            tc::Log::error("[FoliageLayerComponent] cannot emit materials: sink callback is null");
+            return false;
+        }
+        return visit_material_phases(context, [&](tc_mesh_handle, tc_material_phase*) {
+            return sink.emit(material.handle, sink.user_data);
+        });
+    }
+
+    bool FoliageLayerComponent::collect_render_items(const tc_render_item_collect_context& context,
+                                                     tc_render_item_sink& sink) {
+        if (!sink.emit) {
+            tc::Log::error("[FoliageLayerComponent] cannot emit render items: sink callback is null");
+            return false;
+        }
+        return visit_material_phases(context, [&](tc_mesh_handle mesh_handle, tc_material_phase* phase) {
+            tc_material* mat = material.get();
             tc_render_item item{};
             item.kind = TC_RENDER_ITEM_KIND_FOLIAGE_BATCH;
             item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
@@ -523,11 +547,8 @@ namespace termin {
             item.payload.foliage_batch.prototype_mesh_handle = mesh_handle;
             item.payload.foliage_batch.foliage_uuid = foliage_uuid.c_str();
 
-            if (!sink.emit(&item, sink.user_data)) {
-                return false;
-            }
-        }
-        return true;
+            return sink.emit(&item, sink.user_data);
+        });
     }
 
     bool FoliageLayerComponent::encode_render_item_tgfx2(tgfx::RenderContext2& ctx2,

@@ -197,6 +197,9 @@ class VoxelizerComponent(DrawableComponent):
         """Битовая маска фаз отладочной визуализации."""
         return self._debug_draw.phase_mask(self)
 
+    def collect_materials(self, context: RenderItemCollectContext) -> list[Material]:
+        return self._debug_draw.collect_materials(self, context.phase)
+
     def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
         """Возвращает RenderItems для отладочного рендеринга."""
         return self._debug_draw.collect_render_items(self, context.phase)

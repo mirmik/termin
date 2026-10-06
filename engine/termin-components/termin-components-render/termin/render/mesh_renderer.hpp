@@ -35,6 +35,8 @@ namespace termin {
         void ensure_override_material_ready();
         void recreate_overridden_material();
         void apply_pending_override_data();
+        template <typename Visit>
+        bool visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit);
 
     protected:
         virtual void populate_mesh_render_item(tc_render_item& item);
@@ -85,6 +87,7 @@ namespace termin {
         void on_scene_active() override;
         void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
         Mat44f get_model_matrix(const Entity& entity) const override;
+        bool collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) override;
         bool collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) override;
         std::vector<tc_material_phase*> get_phases_for_mark(const std::string& phase_mark);
         tc_value get_override_data() const;

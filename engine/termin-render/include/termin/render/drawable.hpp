@@ -37,6 +37,7 @@ namespace termin {
         virtual tc_phase_mask get_phase_mask() const = 0;
 
         virtual bool collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink);
+        virtual bool collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink);
 
         virtual Mat44f get_model_matrix(const Entity& entity) const;
 
@@ -58,6 +59,9 @@ namespace termin {
         static bool _cb_collect_render_items(tc_component* c,
                                              const tc_render_item_collect_context* context,
                                              tc_render_item_sink* sink);
+        static bool _cb_collect_materials(tc_component* c,
+                                         const tc_render_item_collect_context* context,
+                                         tc_material_sink* sink);
     };
 
     RENDER_API bool collect_drawable_render_items(tc_component* component,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "termin/render/render_topology.hpp"
+#include "core/tc_drawable_protocol.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -39,6 +40,8 @@ namespace termin::rendering_manager_detail {
         DuplicateProducer,
         DisabledDependency,
         DependencyCycle,
+        MaterialEnumerationFailure,
+        MissingMaterialTarget,
     };
 
     struct OffscreenRenderDiagnostic {
@@ -50,6 +53,12 @@ namespace termin::rendering_manager_detail {
 
     using OffscreenRenderJobCallback = void (*)(void* user_data, const OffscreenRenderJob* job);
     using OffscreenRenderDiagnosticCallback = void (*)(void* user_data, const OffscreenRenderDiagnostic* diagnostic);
+    // Supplies execution-equivalent producer contexts, preparing material state
+    // once before enumeration. The callback only emits material handles.
+    using OffscreenMaterialDependencyCallback = bool (*)(void* user_data,
+                                                         const OffscreenRenderJob* job,
+                                                         tc_render_target_handle output,
+                                                         tc_material_sink* sink);
 
     class OffscreenRenderPlanner {
     public:
@@ -66,7 +75,9 @@ namespace termin::rendering_manager_detail {
                      OffscreenRenderDiagnosticCallback diagnostic_callback = nullptr,
                      void* diagnostic_user_data = nullptr,
                      const OffscreenRenderDemand* demands = nullptr,
-                     size_t demand_count = 0);
+                     size_t demand_count = 0,
+                     OffscreenMaterialDependencyCallback material_callback = nullptr,
+                     void* material_user_data = nullptr);
 
     private:
         struct Impl;

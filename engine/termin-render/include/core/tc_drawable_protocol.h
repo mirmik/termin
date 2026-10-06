@@ -4,16 +4,27 @@
 #include "core/tc_component.h"
 #include "core/tc_drawable_capability.h"
 #include "core/tc_render_item.h"
+#include <tcbase/tc_log.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Materials actually selected by the producer for this collection context.
+ * Empty success is explicit; a missing callback is a contract error. */
+typedef struct tc_material_sink {
+    bool (*emit)(tc_material_handle material, void* user_data);
+    void* user_data;
+} tc_material_sink;
 
 struct tc_drawable_vtable {
     tc_phase_mask (*phase_mask)(tc_component* self);
     bool (*collect_render_items)(tc_component* self,
                                  const tc_render_item_collect_context* context,
                                  tc_render_item_sink* sink);
+    bool (*collect_materials)(tc_component* self,
+                              const tc_render_item_collect_context* context,
+                              tc_material_sink* sink);
 };
 
 static inline bool tc_component_is_drawable(const tc_component* c) {
@@ -49,6 +60,17 @@ static inline bool tc_component_collect_render_items(tc_component* c,
     if (c && vt && vt->collect_render_items) {
         return vt->collect_render_items(c, context, sink);
     }
+    return false;
+}
+
+static inline bool tc_component_collect_materials(tc_component* c,
+                                                  const tc_render_item_collect_context* context,
+                                                  tc_material_sink* sink) {
+    const tc_drawable_vtable* vt = tc_component_get_drawable_vtable(c);
+    if (c && context && sink && sink->emit && vt && vt->collect_materials)
+        return vt->collect_materials(c, context, sink);
+    tc_log(TC_LOG_ERROR, "[Drawable] component '%s' cannot enumerate materials: missing callback or invalid arguments",
+           c && c->declared_type_name ? c->declared_type_name : "<unknown>");
     return false;
 }
 

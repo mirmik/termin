@@ -2,7 +2,7 @@
 #define TC_COMPONENT_PYTHON_DRAWABLE_H
 
 #include "core/tc_component.h"
-#include "core/tc_render_item.h"
+#include "core/tc_drawable_protocol.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,9 +14,15 @@ typedef bool (*tc_py_drawable_collect_render_items_fn)(void* py_self,
                                                        const tc_render_item_collect_context* context,
                                                        tc_render_item_sink* sink);
 
+typedef bool (*tc_py_drawable_collect_materials_fn)(void* py_self,
+                                                    tc_component* component,
+                                                    const tc_render_item_collect_context* context,
+                                                    tc_material_sink* sink);
+
 typedef struct {
     tc_py_drawable_phase_mask_fn phase_mask;
     tc_py_drawable_collect_render_items_fn collect_render_items;
+    tc_py_drawable_collect_materials_fn collect_materials;
 } tc_python_drawable_callbacks;
 
 TC_API void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbacks* callbacks);

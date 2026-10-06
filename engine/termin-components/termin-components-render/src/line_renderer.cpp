@@ -251,6 +251,77 @@ struct VertexInput {
 
     } // namespace
 
+    namespace {
+
+        template <typename Emit>
+        bool visit_line_batch_material_phases(const tc_render_item_collect_context& context,
+                                               size_t point_count,
+                                               const TcMaterial& material,
+                                               const TcMaterial& shadow_fallback_material,
+                                               bool cast_shadow,
+                                               Emit&& emit) {
+            if (point_count < 2) {
+                return true;
+            }
+            const bool collect_all_phases = context.phase == TC_PHASE_NONE;
+            if (!collect_all_phases && !accepts_phase(context.phase, cast_shadow)) {
+                return true;
+            }
+            tc_material* raw = material.get();
+            if (!raw) {
+                return true;
+            }
+            const bool allow_missing_material_phase =
+                (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u;
+            bool emitted = false;
+            auto emit_phase = [&](tc_material_phase* phase, tc_material_handle owner) {
+                if (!phase && !allow_missing_material_phase) {
+                    return true;
+                }
+                emitted = true;
+                return emit(phase, owner);
+            };
+            bool found_shadow_phase = false;
+            for (size_t i = 0; i < raw->phase_count; ++i) {
+                tc_material_phase* phase = &raw->phases[i];
+                if (!accepts_phase(phase->phase, cast_shadow)) {
+                    continue;
+                }
+                if (phase->phase == TC_PHASE_SHADOW) {
+                    found_shadow_phase = true;
+                }
+                if ((collect_all_phases || context.phase == phase->phase) && !emit_phase(phase, material.handle)) {
+                    return false;
+                }
+            }
+            if (cast_shadow && (collect_all_phases || context.phase == TC_PHASE_SHADOW) && !found_shadow_phase) {
+                if (!emit_phase(find_phase(shadow_fallback_material.get(), TC_PHASE_SHADOW),
+                                shadow_fallback_material.handle)) {
+                    return false;
+                }
+            }
+            if (!emitted && allow_missing_material_phase) {
+                return emit_phase(nullptr, material.handle);
+            }
+            return true;
+        }
+
+    } // namespace
+
+    bool collect_line_batch_materials(const tc_render_item_collect_context& context,
+                                       tc_material_sink& sink,
+                                       size_t point_count,
+                                       const TcMaterial& material,
+                                       const TcMaterial& shadow_fallback_material,
+                                       bool cast_shadow) {
+        if (!sink.emit) {
+            tc::Log::error("[LineBatchRenderItem] cannot emit materials with null sink");
+            return false;
+        }
+        return visit_line_batch_material_phases(context, point_count, material, shadow_fallback_material, cast_shadow,
+            [&](tc_material_phase*, tc_material_handle owner) { return sink.emit(owner, sink.user_data); });
+    }
+
     bool emit_line_batch_render_items(tc_component* component,
                                       const tc_render_item_collect_context& context,
                                       tc_render_item_sink& sink,
@@ -263,29 +334,11 @@ struct VertexInput {
             tc::Log::error("[LineBatchRenderItem] cannot emit with null sink");
             return false;
         }
-        if (!desc.points || desc.point_count < 2) {
+        if (!desc.points) {
             return true;
         }
-
-        const bool collect_all_phases = context.phase == TC_PHASE_NONE;
-        if (!collect_all_phases && !accepts_phase(context.phase, desc.cast_shadow)) {
-            return true;
-        }
-
-        tc_material* raw = desc.material.get();
-        if (!raw) {
-            return true;
-        }
-
-        const bool allow_missing_material_phase =
-            (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u;
-        bool emitted = false;
-
-        auto emit_phase = [&](tc_material_phase* phase, tc_material_handle material_handle) -> bool {
-            if (!phase && !allow_missing_material_phase) {
-                return true;
-            }
-
+        return visit_line_batch_material_phases(context, desc.point_count, desc.material, desc.shadow_fallback_material,
+            desc.cast_shadow, [&](tc_material_phase* phase, tc_material_handle material_handle) {
             tc_render_item item{};
             item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
             item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
@@ -312,36 +365,8 @@ struct VertexInput {
             }
 
             std::memcpy(item.model_matrix, desc.model_matrix.data, sizeof(float) * 16);
-            emitted = true;
             return sink.emit(&item, sink.user_data);
-        };
-
-        bool found_shadow_phase = false;
-        for (size_t i = 0; i < raw->phase_count; ++i) {
-            tc_material_phase* phase = &raw->phases[i];
-            if (!accepts_phase(phase->phase, desc.cast_shadow)) {
-                continue;
-            }
-            if (phase->phase == TC_PHASE_SHADOW) {
-                found_shadow_phase = true;
-            }
-            if ((collect_all_phases || context.phase == phase->phase) && !emit_phase(phase, desc.material.handle)) {
-                return false;
-            }
-        }
-
-        if (desc.cast_shadow && (collect_all_phases || context.phase == TC_PHASE_SHADOW) && !found_shadow_phase) {
-            if (!emit_phase(find_phase(desc.shadow_fallback_material.get(), TC_PHASE_SHADOW),
-                            desc.shadow_fallback_material.handle)) {
-                return false;
-            }
-        }
-
-        if (!emitted && allow_missing_material_phase) {
-            return emit_phase(nullptr, desc.material.handle);
-        }
-
-        return true;
+        });
     }
 
     namespace {
@@ -592,6 +617,17 @@ struct VertexInput {
         if (cast_shadow)
             mask |= TC_PHASE_SHADOW;
         return mask;
+    }
+
+    bool LineRenderer::collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) {
+        if (!sink.emit) {
+            tc::Log::error("[LineRenderer] cannot emit materials: sink callback is null");
+            return false;
+        }
+        if (points_.size() < 2 || (context.phase != TC_PHASE_NONE && !accepts_phase(context.phase, cast_shadow))) {
+            return true;
+        }
+        return collect_line_batch_materials(context, sink, points_.size(), effective_material(), default_material(), cast_shadow);
     }
 
     bool LineRenderer::collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) {

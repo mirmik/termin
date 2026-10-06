@@ -3,8 +3,12 @@
 GUARD_TEST_MAIN();
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/navmesh_keeper_component.hpp>
+#include <termin/navmesh/off_mesh_link_component.hpp>
+#include <termin/navmesh/recast_navmesh_builder_component.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
+#include <termin/tc_scene.hpp>
 #include <termin/render/render_task.hpp>
 #include <termin/render/vertex_transform_contracts.hpp>
 #include <tgfx/resources/tc_material_registry.h>
@@ -12,8 +16,44 @@ GUARD_TEST_MAIN();
 #include <tgfx/resources/tc_shader_registry.h>
 
 #include <cstring>
+#include <vector>
 
 namespace {
+
+    template <typename Producer>
+    std::vector<tc_material_handle> enumerate_materials(Producer& producer,
+                                                       const tc_render_item_collect_context& context) {
+        std::vector<tc_material_handle> materials;
+        tc_material_sink sink{};
+        sink.emit = [](tc_material_handle material, void* user_data) {
+            static_cast<std::vector<tc_material_handle>*>(user_data)->push_back(material);
+            return true;
+        };
+        sink.user_data = &materials;
+        REQUIRE(producer.collect_materials(context, sink));
+        return materials;
+    }
+
+    template <typename Producer>
+    termin::RenderItemCollection check_materials_match_render_items(
+        Producer& producer, const tc_render_item_collect_context& context) {
+        const auto materials = enumerate_materials(producer, context);
+        termin::RenderItemCollection collection;
+        REQUIRE(termin::collect_drawable_render_items(producer.tc_component_ptr(), context, collection));
+        REQUIRE_EQ(materials.size(), collection.items.size());
+        for (size_t i = 0; i < materials.size(); ++i) {
+            CHECK(tc_material_handle_eq(materials[i], collection.items[i].material));
+        }
+        return collection;
+    }
+
+    struct CountingOffMeshLink : termin::OffMeshLinkComponent {
+        mutable size_t model_queries = 0;
+        termin::Mat44f get_model_matrix(const termin::Entity&) const override {
+            ++model_queries;
+            return termin::Mat44f::identity();
+        }
+    };
 
     bool contract_has_required_input(const tc_shader_contract_view& contract, const char* semantic) {
         for (uint32_t i = 0; i < contract.vertex_input_count; ++i) {
@@ -97,6 +137,72 @@ TEST_CASE("navmesh debug shader publishes its authored vertex interface") {
     REQUIRE_EQ(tasks.size(), 1u);
     CHECK(tc_shader_handle_eq(tasks.at(result.task_index).final_shader, phase->shader));
 
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+    tc_shader_shutdown();
+}
+
+TEST_CASE("OffMeshLink material enumeration consumes prepared geometry without refreshing payloads") {
+    tc_shader_init();
+    tc_material_init();
+    tc_mesh_init();
+    {
+        CountingOffMeshLink link;
+        tc_render_item_collect_context context{};
+        context.phase = TC_PHASE_ID;
+        context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        CHECK(enumerate_materials(link, context).empty());
+        link.prepare_render(termin::RenderPrepareContext(TC_SCENE_HANDLE_INVALID));
+        auto materials = enumerate_materials(link, context);
+        REQUIRE_EQ(materials.size(), 1u);
+        CHECK_EQ(link.model_queries, 0u);
+        auto items = check_materials_match_render_items(link, context);
+        REQUIRE_EQ(items.items.size(), 1u);
+        tc_mesh* mesh = tc_mesh_get(items.items[0].payload.mesh.mesh_handle);
+        REQUIRE(mesh != nullptr);
+        const uint32_t version = mesh->header.version;
+        link.end_local = {2.0, 3.0, 4.0};
+        materials = enumerate_materials(link, context);
+        REQUIRE_EQ(materials.size(), 1u);
+        CHECK_EQ(mesh->header.version, version);
+        CHECK_EQ(link.model_queries, 1u);
+        link.prepare_render(termin::RenderPrepareContext(TC_SCENE_HANDLE_INVALID));
+        CHECK(mesh->header.version > version);
+        const uint32_t refreshed_version = mesh->header.version;
+        link.prepare_render(termin::RenderPrepareContext(TC_SCENE_HANDLE_INVALID));
+        CHECK_EQ(mesh->header.version, refreshed_version);
+        link.enabled = false;
+        check_materials_match_render_items(link, context);
+        context.phase = TC_PHASE_OPAQUE;
+        CHECK(enumerate_materials(link, context).empty());
+        check_materials_match_render_items(link, context);
+        context.phase = TC_PHASE_EDITOR_DEBUG;
+        context.render_category_mask = 0;
+        CHECK(enumerate_materials(link, context).empty());
+        check_materials_match_render_items(link, context);
+    }
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+    tc_shader_shutdown();
+}
+
+TEST_CASE("Empty native navmesh producers enumerate no dependencies") {
+    tc_shader_init();
+    tc_material_init();
+    tc_mesh_init();
+    {
+        termin::NavMeshKeeperComponent keeper;
+        termin::RecastNavMeshBuilderComponent builder;
+        tc_render_item_collect_context context{};
+        context.phase = TC_PHASE_EDITOR_DEBUG;
+        context.render_category_mask = TC_RENDER_CATEGORY_NAVMESH;
+        keeper.prepare_render(termin::RenderPrepareContext(TC_SCENE_HANDLE_INVALID));
+        CHECK(enumerate_materials(keeper, context).empty());
+        check_materials_match_render_items(keeper, context);
+        builder.show_input_mesh = true;
+        CHECK(enumerate_materials(builder, context).empty());
+        check_materials_match_render_items(builder, context);
+    }
     tc_mesh_shutdown();
     tc_material_shutdown();
     tc_shader_shutdown();

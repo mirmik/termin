@@ -10,6 +10,20 @@
 #include "core/tc_scene_drawable.h"
 
 static int g_render_item_emit_count = 0;
+static int g_render_item_collect_count = 0;
+
+typedef struct {
+    tc_material_handle materials[2];
+    size_t material_count;
+    int calls;
+    const tc_render_item_collect_context* last_context;
+} material_producer;
+
+typedef struct {
+    tc_material_handle materials[2];
+    size_t count;
+    bool accept;
+} material_recorder;
 
 static tc_phase_mask test_drawable_phase_mask(tc_component* self) {
     (void)self;
@@ -20,6 +34,7 @@ static bool test_drawable_collect_render_items(tc_component* self,
                                                const tc_render_item_collect_context* context,
                                                tc_render_item_sink* sink) {
     (void)self;
+    ++g_render_item_collect_count;
     if (!context || !sink || !sink->emit) {
         return false;
     }
@@ -31,10 +46,32 @@ static bool test_drawable_collect_render_items(tc_component* self,
     return sink->emit(&item, sink->user_data);
 }
 
+static bool test_drawable_collect_materials(tc_component* self,
+                                           const tc_render_item_collect_context* context,
+                                           tc_material_sink* sink) {
+    material_producer* producer = (material_producer*)tc_component_get_drawable_userdata(self);
+    ++producer->calls;
+    producer->last_context = context;
+    for (size_t i = 0; i < producer->material_count; ++i) {
+        if (!sink->emit(producer->materials[i], sink->user_data))
+            return false;
+    }
+    return true;
+}
+
 static const tc_drawable_vtable g_test_drawable_vtable = {
     .phase_mask = test_drawable_phase_mask,
     .collect_render_items = test_drawable_collect_render_items,
+    .collect_materials = test_drawable_collect_materials,
 };
+
+static bool record_material_emit(tc_material_handle material, void* user_data) {
+    material_recorder* recorder = (material_recorder*)user_data;
+    if (recorder->count < 2)
+        recorder->materials[recorder->count] = material;
+    ++recorder->count;
+    return recorder->accept;
+}
 
 static bool count_render_item_emit(const tc_render_item* item, void* user_data) {
     (void)user_data;
@@ -96,8 +133,59 @@ GUARD_C_TEST(test_live_reindex_for_drawable_capability) {
     return 0;
 }
 
+GUARD_C_TEST(test_material_enumeration_dispatch_and_sink_failure) {
+    tc_component component;
+    tc_component_init(&component, NULL);
+    material_producer producer;
+    memset(&producer, 0, sizeof(producer));
+    producer.materials[0] = (tc_material_handle){7, 2};
+    producer.materials[1] = (tc_material_handle){11, 3};
+    producer.material_count = 2;
+    GUARD_C_REQUIRE(tc_drawable_capability_attach(&component, &g_test_drawable_vtable, &producer));
+
+    tc_render_item_collect_context context;
+    memset(&context, 0, sizeof(context));
+    context.phase = TC_PHASE_NONE;
+    context.layer_mask = 4;
+    context.render_category_mask = 8;
+    context.camera = &producer;
+    context.scene = &component;
+    material_recorder recorder;
+    memset(&recorder, 0, sizeof(recorder));
+    recorder.accept = true;
+    tc_material_sink sink = {record_material_emit, &recorder};
+    const int heavy_calls_before = g_render_item_collect_count;
+
+    GUARD_C_CHECK(tc_component_collect_materials(&component, &context, &sink));
+    GUARD_C_CHECK_EQ_INT(1, producer.calls);
+    GUARD_C_CHECK_PTR_EQ(&context, producer.last_context);
+    GUARD_C_CHECK_EQ_SIZE(2, recorder.count);
+    GUARD_C_CHECK(tc_material_handle_eq(producer.materials[0], recorder.materials[0]));
+    GUARD_C_CHECK(tc_material_handle_eq(producer.materials[1], recorder.materials[1]));
+    GUARD_C_CHECK_EQ_INT(heavy_calls_before, g_render_item_collect_count);
+
+    recorder.count = 0;
+    recorder.accept = false;
+    GUARD_C_CHECK(!tc_component_collect_materials(&component, &context, &sink));
+    GUARD_C_CHECK_EQ_INT(2, producer.calls);
+    GUARD_C_CHECK_EQ_SIZE(1, recorder.count);
+    GUARD_C_CHECK_EQ_INT(heavy_calls_before, g_render_item_collect_count);
+
+    // An explicit empty selection succeeds without touching even a sink
+    // which would reject an emitted material.
+    recorder.count = 0;
+    producer.material_count = 0;
+    GUARD_C_CHECK(tc_component_collect_materials(&component, &context, &sink));
+    GUARD_C_CHECK_EQ_SIZE(0, recorder.count);
+    GUARD_C_CHECK_EQ_INT(3, producer.calls);
+    GUARD_C_CHECK_EQ_INT(heavy_calls_before, g_render_item_collect_count);
+    tc_component_detach_capability(&component, tc_drawable_capability_id());
+    return 0;
+}
+
 int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_live_reindex_for_drawable_capability);
+    GUARD_C_RUN(test_material_enumeration_dispatch_and_sink_failure);
     return GUARD_C_END();
 }

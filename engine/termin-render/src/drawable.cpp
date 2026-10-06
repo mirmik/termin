@@ -30,6 +30,13 @@ namespace termin {
         return false;
     }
 
+    bool Drawable::collect_materials(const tc_render_item_collect_context&, tc_material_sink&) {
+        auto* component = dynamic_cast<Component*>(this);
+        const char* name = component ? tc_component_type_name(component->tc_component_ptr()) : "<non-component>";
+        tc::Log::error("[Drawable] component '%s' does not implement collect_materials", name ? name : "<unknown>");
+        return false;
+    }
+
     namespace {
 
         const char* render_item_kind_name(uint32_t kind) {
@@ -316,6 +323,17 @@ namespace termin {
         return drawable->collect_render_items(*context, *sink);
     }
 
+    bool Drawable::_cb_collect_materials(tc_component* c,
+                                         const tc_render_item_collect_context* context,
+                                         tc_material_sink* sink) {
+        Drawable* drawable = c ? static_cast<Drawable*>(tc_component_get_drawable_userdata(c)) : nullptr;
+        if (!drawable || !context || !sink || !sink->emit) {
+            tc::Log::error("[Drawable] invalid C++ material enumeration arguments");
+            return false;
+        }
+        return drawable->collect_materials(*context, *sink);
+    }
+
     Mat44f Drawable::get_model_matrix(const Entity& entity) const {
         double m[16];
         entity.transform().world_matrix(m);
@@ -329,7 +347,8 @@ namespace termin {
     }
 
     const tc_drawable_vtable& Drawable::cxx_drawable_vtable() {
-        static const tc_drawable_vtable vtable = {&Drawable::_cb_phase_mask, &Drawable::_cb_collect_render_items};
+        static const tc_drawable_vtable vtable = {
+            &Drawable::_cb_phase_mask, &Drawable::_cb_collect_render_items, &Drawable::_cb_collect_materials};
         return vtable;
     }
 

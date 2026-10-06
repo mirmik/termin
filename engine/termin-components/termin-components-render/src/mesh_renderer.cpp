@@ -655,9 +655,6 @@ namespace termin {
         return model;
     }
 
-    static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(tc_material* mat,
-                                                                         const tc_phase_mask* requested_phase);
-
     void MeshRenderer::populate_mesh_render_item(tc_render_item& item) {
         // Only this undeformed producer opts in. SkinnedMeshRenderer overrides
         // this hook, including when its bone matrices are not available yet.
@@ -667,33 +664,26 @@ namespace termin {
         }
     }
 
-    bool MeshRenderer::collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) {
-        if (!sink.emit) {
-            tc::Log::error("[MeshRenderer] cannot emit render items: sink callback is null");
-            return false;
-        }
+    template <typename Visit>
+    bool MeshRenderer::visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit) {
         tc_mesh* mesh = current_mesh_ptr();
         if (!mesh) {
             return true;
         }
-
         if (mesh->submesh_count == 0 && !tc_mesh_ensure_default_submesh(mesh)) {
-            tc::Log::error("[MeshRenderer] cannot emit RenderItems: failed to create default submesh for mesh '%s'",
+            tc::Log::error("[MeshRenderer] cannot collect materials: failed to create default submesh for mesh '%s'",
                            mesh->header.name ? mesh->header.name : mesh->header.uuid);
             return false;
         }
-
-        Mat44f model = get_model_matrix(entity());
         for (size_t submesh_index = 0; submesh_index < mesh->submesh_count; ++submesh_index) {
             if (submesh_index > static_cast<size_t>(std::numeric_limits<int>::max())) {
                 tc::Log::error("[MeshRenderer] mesh '%s' has too many submeshes for RenderItem geometry_id",
                                mesh->header.name ? mesh->header.name : mesh->header.uuid);
                 return false;
             }
-
             const tc_submesh* submesh = tc_mesh_get_submesh(mesh, submesh_index);
             if (!submesh) {
-                tc::Log::error("[MeshRenderer] cannot emit RenderItem: mesh '%s' has no submesh %zu (count=%zu)",
+                tc::Log::error("[MeshRenderer] cannot collect materials: mesh '%s' has no submesh %zu (count=%zu)",
                                mesh->header.name ? mesh->header.name : mesh->header.uuid,
                                submesh_index,
                                mesh->submesh_count);
@@ -702,44 +692,76 @@ namespace termin {
             if (submesh->index_count == 0) {
                 continue;
             }
-            uint32_t material_slot = submesh->material_slot;
-            TcMaterial material_ref = get_material_for_slot(material_slot);
+            const TcMaterial material_ref = get_material_for_slot(submesh->material_slot);
             tc_material* mat = material_ref.get();
             if (!mat) {
                 continue;
             }
-
-            const bool collect_all_phases = context.phase == TC_PHASE_NONE;
-            std::vector<tc_material_phase*> phases =
-                mesh_renderer_phases_for_mark(mat, collect_all_phases ? nullptr : &context.phase);
-            const bool emit_without_material_phase =
-                phases.empty() && ((context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u);
-            const size_t item_count = emit_without_material_phase ? 1u : phases.size();
-            for (size_t phase_index = 0; phase_index < item_count; ++phase_index) {
-                tc_material_phase* phase = emit_without_material_phase ? nullptr : phases[phase_index];
-                tc_render_item item{};
-                item.kind = TC_RENDER_ITEM_KIND_MESH;
-                item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-                item.geometry_id = static_cast<int>(submesh_index);
-                item.material_phase = phase;
-                item.material = material_ref.handle;
-                item.material_phase_index = SIZE_MAX;
-                if (phase) {
-                    item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-                    item.material_phase_index = static_cast<size_t>(phase - mat->phases);
+            tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
+            const size_t count = context.phase == TC_PHASE_NONE
+                ? std::min(mat->phase_count, static_cast<size_t>(TC_MATERIAL_MAX_PHASES))
+                : tc_material_get_phases_for_phase(mat, context.phase, phases, TC_MATERIAL_MAX_PHASES);
+            if (context.phase == TC_PHASE_NONE) {
+                for (size_t i = 0; i < count; ++i) {
+                    phases[i] = &mat->phases[i];
                 }
-                std::copy(model.data, model.data + 16, item.model_matrix);
-                item.payload.mesh.mesh_handle = current_mesh_handle();
-                item.payload.mesh.submesh_index = submesh_index;
-
-                populate_mesh_render_item(item);
-                if (!sink.emit(&item, sink.user_data)) {
+            }
+            if (count == 0 && (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u) {
+                if (!visit(submesh_index, material_ref, nullptr)) {
+                    return false;
+                }
+            }
+            for (size_t i = 0; i < count; ++i) {
+                if (!visit(submesh_index, material_ref, phases[i])) {
                     return false;
                 }
             }
         }
-
         return true;
+    }
+
+    bool MeshRenderer::collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) {
+        if (!sink.emit) {
+            tc::Log::error("[MeshRenderer] cannot emit materials: sink callback is null");
+            return false;
+        }
+        return visit_material_phases(context, [&](size_t, const TcMaterial& selected, tc_material_phase*) {
+            return sink.emit(selected.handle, sink.user_data);
+        });
+    }
+
+    bool MeshRenderer::collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) {
+        if (!sink.emit) {
+            tc::Log::error("[MeshRenderer] cannot emit render items: sink callback is null");
+            return false;
+        }
+        // Model and deformation payload preparation belongs exclusively to the full collector.
+        Mat44f model;
+        bool has_model = false;
+        return visit_material_phases(context, [&](size_t submesh_index,
+                                                  const TcMaterial& selected,
+                                                  tc_material_phase* phase) {
+            if (!has_model) {
+                model = get_model_matrix(entity());
+                has_model = true;
+            }
+            tc_render_item item{};
+            item.kind = TC_RENDER_ITEM_KIND_MESH;
+            item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
+            item.geometry_id = static_cast<int>(submesh_index);
+            item.material_phase = phase;
+            item.material = selected.handle;
+            item.material_phase_index = SIZE_MAX;
+            if (phase) {
+                item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+                item.material_phase_index = static_cast<size_t>(phase - selected.get()->phases);
+            }
+            std::copy(model.data, model.data + 16, item.model_matrix);
+            item.payload.mesh.mesh_handle = current_mesh_handle();
+            item.payload.mesh.submesh_index = submesh_index;
+            populate_mesh_render_item(item);
+            return sink.emit(&item, sink.user_data);
+        });
     }
 
     std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {
@@ -755,29 +777,6 @@ namespace termin {
             result.push_back(phases[i]);
         }
         return result;
-    }
-
-    static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(tc_material* mat,
-                                                                         const tc_phase_mask* requested_phase) {
-        std::vector<tc_material_phase*> phases;
-        if (!mat)
-            return phases;
-
-        if (requested_phase) {
-            tc_material_phase* matched[TC_MATERIAL_MAX_PHASES];
-            size_t count = tc_material_get_phases_for_phase(mat, *requested_phase, matched, TC_MATERIAL_MAX_PHASES);
-            phases.reserve(count);
-            for (size_t i = 0; i < count; ++i) {
-                phases.push_back(matched[i]);
-            }
-            return phases;
-        }
-
-        phases.reserve(mat->phase_count);
-        for (size_t i = 0; i < mat->phase_count; i++) {
-            phases.push_back(&mat->phases[i]);
-        }
-        return phases;
     }
 
     void MeshRenderer::on_added() {

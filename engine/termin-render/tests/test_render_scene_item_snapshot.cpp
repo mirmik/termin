@@ -46,9 +46,15 @@ namespace {
         return true;
     }
 
+    bool collect_materials(tc_component*, const tc_render_item_collect_context*, tc_material_sink*) {
+        // These synthetic snapshot items carry geometry only.
+        return true;
+    }
+
     const tc_drawable_vtable kDrawableVtable = {
         &phase_mask,
         &collect_items,
+        &collect_materials,
     };
 
 } // namespace

@@ -14,6 +14,7 @@
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
 #include <termin/render/drawable.hpp>
+#include <termin/render/render_lifecycle.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
@@ -33,7 +34,7 @@ namespace termin {
         Climb = 3,
     };
 
-    class TERMIN_NAVMESH_COMPONENTS_API OffMeshLinkComponent : public CxxComponent, public Drawable {
+    class TERMIN_NAVMESH_COMPONENTS_API OffMeshLinkComponent : public CxxComponent, public Drawable, public RenderLifecycle {
     public:
         bool enabled = true;
         int link_type = static_cast<int>(OffMeshLinkType::JumpDown);
@@ -69,6 +70,7 @@ namespace termin {
         OffMeshLinkComponent()
             : CxxComponent("OffMeshLinkComponent") {
             install_drawable_vtable(&_c);
+            install_render_lifecycle(&_c);
         }
 
         static void register_type();
@@ -102,42 +104,30 @@ namespace termin {
             return TC_PHASE_EDITOR_DEBUG | TC_PHASE_ID;
         }
 
+        // Geometry is refreshed once before dependency planning, never by enumeration.
+        void prepare_render(const RenderPrepareContext&) override {
+            ensure_debug_resources();
+        }
+
+        bool collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) override {
+            if (!sink.emit) {
+                tc_log(TC_LOG_ERROR, "[OffMeshLinkComponent] cannot emit materials: sink callback is null");
+                return false;
+            }
+            return visit_material_phases(context, [&](tc_material_phase*) {
+                return sink.emit(_debug_material.handle, sink.user_data);
+            });
+        }
+
         bool collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) override {
             if (!sink.emit) {
                 tc_log(TC_LOG_ERROR, "[OffMeshLinkComponent] cannot emit render items: sink callback is null");
                 return false;
             }
-            const bool collect_all_phases = context.phase == TC_PHASE_NONE;
-            const tc_phase_mask requested_phase = collect_all_phases ? TC_PHASE_EDITOR_DEBUG : context.phase;
-            const bool is_id = requested_phase == TC_PHASE_ID;
-            if (!collect_all_phases && !is_id && (context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
+            if (!accepts_collect_context(context) || !ensure_debug_resources()) {
                 return true;
             }
-            if (!collect_all_phases && !enabled && !is_id) {
-                return true;
-            }
-            if (is_id) {
-                if (!ensure_debug_mesh() || !_debug_mesh.is_valid()) {
-                    return true;
-                }
-            } else if (requested_phase == TC_PHASE_EDITOR_DEBUG) {
-                if (!ensure_debug_resources()) {
-                    return true;
-                }
-            } else {
-                return true;
-            }
-
-            tc_mesh* mesh = _debug_mesh.get();
-            if (!mesh) {
-                return true;
-            }
-
-            auto emit_phase = [&](tc_material_phase* phase) -> bool {
-                if (!phase && (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) == 0u) {
-                    return true;
-                }
-
+            return visit_material_phases(context, [&](tc_material_phase* phase) {
                 tc_render_item item{};
                 item.kind = TC_RENDER_ITEM_KIND_MESH;
                 item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
@@ -155,28 +145,43 @@ namespace termin {
                 item.payload.mesh.mesh_handle = _debug_mesh.handle;
                 item.payload.mesh.submesh_index = 0;
                 return sink.emit(&item, sink.user_data);
-            };
+            });
+        }
 
-            if (is_id) {
-                return emit_phase(nullptr);
-            }
+    private:
+        static bool accepts_collect_context(const tc_render_item_collect_context& context) {
+            const bool collect_all_phases = context.phase == TC_PHASE_NONE;
+            const bool is_id = context.phase == TC_PHASE_ID;
+            return (collect_all_phases || is_id || context.phase == TC_PHASE_EDITOR_DEBUG) &&
+                   (collect_all_phases || is_id || (context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) != 0);
+        }
 
-            tc_material* material = _debug_material.get();
-            if (!material) {
+        template <typename Visit>
+        bool visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit) {
+            const bool collect_all_phases = context.phase == TC_PHASE_NONE;
+            const bool is_id = context.phase == TC_PHASE_ID;
+            if (!accepts_collect_context(context) || (!collect_all_phases && !enabled && !is_id)) {
                 return true;
+            }
+            const tc_mesh* mesh = _debug_mesh.get();
+            tc_material* material = _debug_material.get();
+            if (!mesh || mesh->index_count == 0 || !material) {
+                return true;
+            }
+            if (is_id) {
+                return (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) == 0u || visit(nullptr);
             }
             tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
             const size_t count =
                 tc_material_get_phases_for_phase(material, TC_PHASE_EDITOR_DEBUG, phases, TC_MATERIAL_MAX_PHASES);
             for (size_t i = 0; i < count; ++i) {
-                if (!emit_phase(phases[i])) {
+                if (!visit(phases[i])) {
                     return false;
                 }
             }
             return true;
         }
 
-    private:
         Vec3 local_to_world(const tc_vec3& value) const {
             Entity ent = entity();
             if (!ent.valid()) {

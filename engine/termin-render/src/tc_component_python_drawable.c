@@ -1,6 +1,7 @@
 #include "tc_component_python_drawable.h"
 #include "core/tc_drawable_capability.h"
 #include "core/tc_drawable_protocol.h"
+#include <tcbase/tc_log.h>
 
 static tc_python_drawable_callbacks g_py_drawable_callbacks = {0};
 
@@ -20,9 +21,20 @@ static bool py_drawable_collect_render_items(tc_component* c,
     return false;
 }
 
+static bool py_drawable_collect_materials(tc_component* c,
+                                          const tc_render_item_collect_context* context,
+                                          tc_material_sink* sink) {
+    if (g_py_drawable_callbacks.collect_materials && c->body) {
+        return g_py_drawable_callbacks.collect_materials(c->body, c, context, sink);
+    }
+    tc_log(TC_LOG_ERROR, "[PythonDrawable] material callback or Python component body is missing");
+    return false;
+}
+
 static const tc_drawable_vtable g_python_drawable_vtable = {
     .phase_mask = py_drawable_phase_mask,
     .collect_render_items = py_drawable_collect_render_items,
+    .collect_materials = py_drawable_collect_materials,
 };
 
 void tc_component_set_python_drawable_callbacks(const tc_python_drawable_callbacks* callbacks) {

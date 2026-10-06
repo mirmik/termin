@@ -172,7 +172,7 @@ namespace termin::rendering_manager_detail {
                     }
                 }
             }
-            if (ok && request.engine) {
+            if (ok && request.engine && request.bind_resources) {
                 request.engine->ensure_tgfx2();
                 tgfx::IRenderDevice* device = request.engine->tgfx2_device();
                 if (!device) {
@@ -226,18 +226,6 @@ namespace termin::rendering_manager_detail {
         const uint64_t camera_layer_mask = camera_snapshot.layer_mask;
         const uint64_t camera_render_category_mask = camera_snapshot.render_category_mask;
 
-        if (request.engine)
-            request.engine->ensure_tgfx2();
-        tgfx::IRenderDevice* device = request.engine ? request.engine->tgfx2_device() : nullptr;
-        if (!device) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable", rt_name ? rt_name : "?");
-            return false;
-        }
-
-        tc_render_target_ensure_textures(rt);
-        tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_color_texture(rt));
-        tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_depth_texture(rt));
-
         const std::string context_name =
             request.base_context_name.empty() ? (rt_name ? rt_name : "") : request.base_context_name;
 
@@ -247,18 +235,38 @@ namespace termin::rendering_manager_detail {
         ctx.render_rect = {0, 0, request.render_width, request.render_height};
         ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
         ctx.render_category_mask = camera_render_category_mask;
-        ctx.output_color.texture = out_color;
-        ctx.output_depth_tex = out_depth;
         ctx.output_depth_format = render_target_format_to_tgfx2(tc_render_target_get_depth_format(rt));
         fill_render_target_clear_settings(ctx, rt);
-        fill_external_textures_from_render_target(ctx, rt, *device, request.managed_render_targets);
-        fill_material_texture_sources(
-            ctx, tc_render_target_get_scene(rt), *device, request.managed_render_targets);
         request.contexts[context_name] = std::move(ctx);
         request.internal_entities_by_context[context_name] = request.internal_entities;
 
         if (request.default_context_name.empty()) {
             request.default_context_name = context_name;
+        }
+        return !request.bind_resources || bind_render_target_context_resources(request);
+    }
+
+    bool bind_render_target_context_resources(const RenderTargetContextBuildRequest& request) {
+        if (request.engine)
+            request.engine->ensure_tgfx2();
+        tgfx::IRenderDevice* device = request.engine ? request.engine->tgfx2_device() : nullptr;
+        if (!device) {
+            tc_log(TC_LOG_ERROR, "[RenderingManager] cannot bind target '%s': tgfx2 device unavailable",
+                   tc_render_target_get_name(request.rt));
+            return false;
+        }
+        const bool texture_target = tc_render_target_get_kind(request.rt) == TC_RENDER_TARGET_TEXTURE_2D;
+        if (texture_target)
+            tc_render_target_ensure_textures(request.rt);
+        for (auto& [name, context] : request.contexts) {
+            if (texture_target) {
+                context.output_color.texture = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_color_texture(request.rt));
+                context.output_depth_tex = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_depth_texture(request.rt));
+            }
+            fill_external_textures_from_render_target(context, request.rt, *device, request.managed_render_targets);
+            context.material_texture_sources.clear();
+            fill_material_texture_sources(context, tc_render_target_get_scene(request.rt), *device,
+                                          request.managed_render_targets);
         }
         return true;
     }

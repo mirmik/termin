@@ -144,9 +144,13 @@ namespace termin {
         // --- Drawable interface ---
 
         tc_phase_mask get_phase_mask() const override;
+        bool collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) override;
         bool collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) override;
 
     private:
+        template <typename Visit>
+        bool visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit);
+
         // Mesh generation from debug data
         void rebuild_debug_meshes();
         void build_input_mesh(const float* verts, int nverts, const int* tris, int ntris);

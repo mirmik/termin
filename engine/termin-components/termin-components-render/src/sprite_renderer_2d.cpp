@@ -253,6 +253,15 @@ namespace termin {
         return visible && !sprite_uuid.empty() ? (TC_PHASE_TRANSPARENT | TC_PHASE_ID) : TC_PHASE_NONE;
     }
 
+    bool SpriteRenderer2D::collect_materials(const tc_render_item_collect_context&, tc_material_sink& sink) {
+        if (!sink.emit) {
+            tc::Log::error("[SpriteRenderer2D] material sink is null");
+            return false;
+        }
+        // WORLD_QUAD items carry a sprite texture directly, with no owner material.
+        return true;
+    }
+
     bool SpriteRenderer2D::collect_render_items(const tc_render_item_collect_context& context,
                                                 tc_render_item_sink& sink) {
         if (!sink.emit) {

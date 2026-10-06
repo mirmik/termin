@@ -11,8 +11,14 @@ Runtime passes collect RenderItems through the native drawable protocol.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from termin.materials import TcMaterial
+    from termin.render._render_native import RenderCamera
+    from termin.scene import TcScene
 
 from termin.render._render_native import (
     RENDER_ITEM_COLLECT_ALLOW_MISSING_MATERIAL_PHASE,
@@ -31,6 +37,8 @@ class RenderItemCollectContext:
     layer_mask: int = (1 << 64) - 1
     render_category_mask: int = (1 << 64) - 1
     debug_pass_name: str = ""
+    camera: RenderCamera | None = None
+    scene: TcScene | None = None
 
     @property
     def allow_missing_material_phase(self) -> bool:
@@ -52,6 +60,14 @@ class Drawable(Protocol):
     """
 
     phase_mask: int
+
+    def collect_materials(self, context: RenderItemCollectContext) -> Iterable[TcMaterial]:
+        """Return only materials selected for rendering in the same context.
+
+        This mandatory lightweight callback must not construct RenderItems or
+        geometry. Return an empty iterable explicitly when no material is used.
+        """
+        ...
 
     def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
         """

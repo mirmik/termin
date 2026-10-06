@@ -26,6 +26,38 @@ extern "C" {
 
 namespace {
 
+    struct CountingFoliageLayer : termin::FoliageLayerComponent {
+        mutable size_t model_queries = 0;
+        termin::Mat44f get_model_matrix(const termin::Entity& owner) const override {
+            ++model_queries;
+            return termin::Mat44f::identity();
+        }
+    };
+
+    std::vector<tc_material_handle> enumerate_materials(termin::FoliageLayerComponent& layer,
+                                                       const tc_render_item_collect_context& context) {
+        std::vector<tc_material_handle> materials;
+        tc_material_sink sink{};
+        sink.emit = [](tc_material_handle material, void* user_data) {
+            static_cast<std::vector<tc_material_handle>*>(user_data)->push_back(material);
+            return true;
+        };
+        sink.user_data = &materials;
+        REQUIRE(layer.collect_materials(context, sink));
+        return materials;
+    }
+
+    void check_materials_match_render_items(termin::FoliageLayerComponent& layer,
+                                             const tc_render_item_collect_context& context) {
+        const auto materials = enumerate_materials(layer, context);
+        termin::RenderItemCollection collection;
+        REQUIRE(termin::collect_drawable_render_items(layer.tc_component_ptr(), context, collection));
+        REQUIRE_EQ(materials.size(), collection.items.size());
+        for (size_t i = 0; i < materials.size(); ++i) {
+            CHECK(tc_material_handle_eq(materials[i], collection.items[i].material));
+        }
+    }
+
     struct ScopedTempFile {
         std::filesystem::path path;
 
@@ -323,6 +355,50 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     REQUIRE(item.payload.foliage_batch.foliage_uuid == collected_uuid);
     CHECK(std::strcmp(item.payload.foliage_batch.foliage_uuid, "foliage-render-item-test-asset") == 0);
 
+    termin::TcFoliageData::clear_registry_for_tests();
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("Foliage material enumeration excludes empty batches without preparing model payloads") {
+    tc_material_init();
+    tc_mesh_init();
+    termin::TcFoliageData::clear_registry_for_tests();
+    {
+        auto foliage = termin::TcFoliageData::declare("enumerated-foliage", "enumerated-foliage");
+        REQUIRE(foliage.is_valid());
+        foliage.get()->loaded = true;
+        REQUIRE(foliage.get()->add_instance(termin::FoliageInstance{}));
+        termin::TcMesh mesh = make_test_mesh();
+        const tc_material_handle material = tc_material_create("enumerated-foliage-material", "enumerated-foliage-material");
+        REQUIRE(tc_material_add_phase(tc_material_get(material), tc_shader_handle_invalid(), "opaque", 0));
+        CountingFoliageLayer layer;
+        layer.foliage_uuid = foliage.uuid();
+        layer.prototype_mesh = mesh;
+        layer.material = termin::TcMaterial(material);
+        tc_render_item_collect_context context{};
+        auto materials = enumerate_materials(layer, context);
+        REQUIRE_EQ(materials.size(), 1u);
+        CHECK(tc_material_handle_eq(materials[0], material));
+        CHECK_EQ(layer.model_queries, 0u);
+        check_materials_match_render_items(layer, context);
+        CHECK_EQ(layer.model_queries, 1u);
+        context.phase = TC_PHASE_ID;
+        CHECK(enumerate_materials(layer, context).empty());
+        context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        check_materials_match_render_items(layer, context);
+        layer.enabled = false;
+        CHECK(enumerate_materials(layer, context).empty());
+        check_materials_match_render_items(layer, context);
+        layer.enabled = true;
+        mesh.get()->index_count = 0;
+        CHECK(enumerate_materials(layer, context).empty());
+        check_materials_match_render_items(layer, context);
+        mesh.get()->index_count = 3;
+        foliage.get()->clear();
+        CHECK(enumerate_materials(layer, context).empty());
+        check_materials_match_render_items(layer, context);
+    }
     termin::TcFoliageData::clear_registry_for_tests();
     tc_mesh_shutdown();
     tc_material_shutdown();

@@ -30,6 +30,10 @@ namespace termin {
         int scene_filter_flags = TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_VISIBLE | TC_SCENE_FILTER_ENTITY_ENABLED;
     };
 
+    // Shares scene filtering and collection context with the RenderItem adapter,
+    // but never constructs RenderItems or copies geometry payloads.
+    RENDER_API bool collect_scene_materials(const RenderSceneItemCollectRequest& request, tc_material_sink& sink);
+
     class RENDER_API RenderSceneItemCollector {
     private:
         RenderItemCollection storage_;

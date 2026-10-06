@@ -16,7 +16,11 @@ namespace {
     tc_phase_mask phases(tc_component*) {
         return TC_PHASE_OPAQUE | TC_PHASE_DEPTH | TC_PHASE_ID;
     }
-    const tc_drawable_vtable drawable{&phases, nullptr};
+    bool collect_materials(tc_component* component, const tc_render_item_collect_context*, tc_material_sink* sink) {
+        auto* material = static_cast<tc_material_handle*>(tc_component_get_drawable_userdata(component));
+        return sink->emit(*material, sink->user_data);
+    }
+    const tc_drawable_vtable drawable{&phases, nullptr, &collect_materials};
     float f(const uint8_t* bytes, size_t offset) {
         float result;
         std::memcpy(&result, bytes + offset, 4);
@@ -54,12 +58,12 @@ int main() {
     tc_component_init(&second, nullptr);
     tc_entity_pool_add_component(pool, first_id, &first);
     tc_entity_pool_add_component(pool, second_id, &second);
-    assert(tc_drawable_capability_attach(&first, &drawable, &first));
-    assert(tc_drawable_capability_attach(&second, &drawable, &second));
     auto material = tc_material_create("static-batch-material", "static-batch-material");
     auto* mat = tc_material_get(material);
     tc_material_add_phase(mat, tc_shader_handle_invalid(), "opaque", 0);
     mat->phases[0].state = tc_render_state_opaque();
+    assert(tc_drawable_capability_attach(&first, &drawable, &material));
+    assert(tc_drawable_capability_attach(&second, &drawable, &material));
     auto layout = tc_vertex_layout_pos_normal_uv_tangent();
     const float n = std::sqrt(0.5f);
     const float vertices[] = {0, 0, 0, n,  n, 0, 0, 0, n, -n, 0, 1, 1, 0, 0, n,  n, 0,

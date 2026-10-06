@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 from termin.geombase import SrgbColor
 
-from termin.render import DrawableComponent
+from termin.render import DrawableComponent, RenderLifecycleComponent
 from termin.materials import TcMaterial as Material
 from termin.mesh import TcMesh
 from termin.navmesh._navmesh_native import TcNavMesh
@@ -38,7 +38,7 @@ def _get_navmesh_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in names]
 
 
-class NavMeshDisplayComponent(DrawableComponent):
+class NavMeshDisplayComponent(DrawableComponent, RenderLifecycleComponent):
     """
     Компонент для отображения NavMesh из ResourceManager.
 
@@ -236,52 +236,38 @@ class NavMeshDisplayComponent(DrawableComponent):
             self._last_navmesh_version = current_version
             self._rebuild_mesh()
 
-    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
-        """Возвращает RenderItems для рендеринга."""
+    def prepare_render(self, context) -> None:
         self._check_hot_reload()
+
+    def _selected_layers(self, context: RenderItemCollectContext):
+        layers = (
+            (True, self._mesh, self._get_or_create_material, self.GEOMETRY_MESH),
+            (self.show_contours, self._contour_mesh,
+             self._get_or_create_contour_material, self.GEOMETRY_CONTOURS),
+        )
+        for enabled, mesh, get_material, geometry_id in layers:
+            if not enabled or mesh is None or not mesh.is_valid:
+                continue
+            material = get_material()
+            phases = [p for p in material.phases if context.phase == 0 or p.phase == context.phase]
+            if phases:
+                yield mesh, material, phases, geometry_id
+
+    def collect_materials(self, context: RenderItemCollectContext) -> list[Material]:
+        return [material for _, material, _, _ in self._selected_layers(context)]
+
+    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
+        """Возвращает RenderItems для подготовленной геометрии."""
         result: list[RenderItem] = []
-
-        # Основной меш
-        mat = self._get_or_create_material()
-
-        if context.phase == 0:
-            phases = list(mat.phases)
-        else:
-            phases = [p for p in mat.phases if p.phase == context.phase]
-
-        # Обновляем цвет
-        for phase in phases:
-            phase.uniforms["u_color"] = self.color
-
-        phases.sort(key=lambda p: p.priority)
-
-        # Добавляем основной меш
-        if self._mesh is not None and self._mesh.is_valid:
-            for phase in phases:
-                result.append(RenderItem.mesh(
-                    mesh=self._mesh,
-                    phase=phase,
-                    geometry_id=self.GEOMETRY_MESH,
-                ))
-
-        # Контуры (если включены и есть контурный mesh)
-        if self.show_contours and self._contour_mesh is not None and self._contour_mesh.is_valid:
-            contour_material = self._get_or_create_contour_material()
-            if context.phase == 0:
-                contour_phases = list(contour_material.phases)
-            else:
-                contour_phases = [
-                    p for p in contour_material.phases if p.phase == context.phase
-                ]
-
-            contour_phases.sort(key=lambda p: p.priority)
-            for phase in contour_phases:
-                result.append(RenderItem.mesh(
-                    mesh=self._contour_mesh,
-                    phase=phase,
-                    geometry_id=self.GEOMETRY_CONTOURS,
-                ))
-
+        for mesh, _, phases, geometry_id in self._selected_layers(context):
+            if geometry_id == self.GEOMETRY_MESH:
+                for phase in phases:
+                    phase.uniforms["u_color"] = self.color
+            phases.sort(key=lambda p: p.priority)
+            result.extend(
+                RenderItem.mesh(mesh=mesh, phase=phase, geometry_id=geometry_id)
+                for phase in phases
+            )
         return result
 
     # --- Построение меша ---

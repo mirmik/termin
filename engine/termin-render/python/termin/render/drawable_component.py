@@ -23,6 +23,11 @@ class DrawableComponent(PythonComponent):
     def phase_mask(self) -> int:
         return 0
 
+    def collect_materials(self, context: RenderItemCollectContext):
+        raise NotImplementedError(
+            f"{type(self).__name__}.collect_materials() must return TcMaterial objects"
+        )
+
     def collect_render_items(self, context: RenderItemCollectContext):
         raise NotImplementedError(
             f"{type(self).__name__}.collect_render_items() must return RenderItem objects"

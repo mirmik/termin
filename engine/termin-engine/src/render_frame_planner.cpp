@@ -82,7 +82,10 @@ namespace termin::rendering_manager_detail {
         std::vector<uint8_t> states;
         std::vector<uint32_t> stack;
         std::vector<const char*> pass_reads;
-        RenderSceneItemCollector material_dependency_collector;
+        // Frame-local edges: retain capacity, index ranges survive nested DFS.
+        std::vector<tc_render_target_handle> dependency_edges;
+        OffscreenMaterialDependencyCallback material_callback = nullptr;
+        void* material_user_data = nullptr;
 
         const RenderTopology* topology = nullptr;
         OffscreenRenderJobCallback job_callback = nullptr;
@@ -242,43 +245,60 @@ namespace termin::rendering_manager_detail {
             return true;
         }
 
-        void visit_material_dependencies(tc_render_target_handle output, uint32_t consumer_index, bool& valid) {
-            RenderSceneItemCollectRequest request;
-            request.scene = tc_render_target_get_scene(output);
-            request.phase = TC_PHASE_NONE;
-            request.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-            request.layer_mask = tc_render_target_get_layer_mask(output);
-            request.debug_pass_name = "MaterialTextureDependencyPlanner";
-            if (!material_dependency_collector.collect(request)) {
-                tc_log(TC_LOG_ERROR,
-                       "[RenderingManager] failed to collect material dependencies for target '%s'",
-                       target_name(output));
-                valid = false;
-                return;
-            }
+        struct MaterialEdgeContext {
+            Impl* planner;
+            tc_scene_handle scene;
+            uint32_t consumer;
+            bool valid = true;
+        };
 
-            for (const tc_render_item& item : material_dependency_collector.items()) {
-                const tc_material* material = tc_material_get(item.material);
-                if (!material && item.material_phase)
-                    material = tc_material_get(item.material_phase->owner_material);
-                if (!material)
+        static bool emit_material_edge(tc_material_handle handle, void* user_data) {
+            auto& context = *static_cast<MaterialEdgeContext*>(user_data);
+            const tc_material* material = tc_material_get(handle);
+            if (!material) {
+                tc_log(TC_LOG_ERROR, "[RenderingManager] drawable enumerated a stale material handle");
+                context.valid = false;
+                return false;
+            }
+            for (size_t i = 0; i < material->texture_source_count; ++i) {
+                const tc_material_texture_source& source = material->texture_sources[i];
+                if (std::strcmp(source.kind, "render_target") != 0)
                     continue;
-                for (size_t source_index = 0; source_index < material->texture_source_count; ++source_index) {
-                    const tc_material_texture_source& source = material->texture_sources[source_index];
-                    if (std::strcmp(source.kind, "render_target") != 0)
-                        continue;
-                    const tc_render_target_handle dependency =
-                        find_scene_render_target(request.scene, source.source_name);
-                    if (!tc_render_target_handle_valid(dependency)) {
-                        tc_log(TC_LOG_ERROR,
-                               "[RenderingManager] material '%s' references missing render target '%s'",
-                               material->header.name ? material->header.name : "<unnamed>",
-                               source.source_name);
-                        valid = false;
-                        continue;
-                    }
-                    visit_render_target_dependency(dependency, consumer_index, valid);
+                const auto dependency = context.planner->find_scene_render_target(context.scene, source.source_name);
+                if (!tc_render_target_handle_valid(dependency)) {
+                    tc_log(TC_LOG_ERROR, "[RenderingManager] material '%s' references missing render target '%s'",
+                           material->header.name ? material->header.name : "<unnamed>", source.source_name);
+                    context.planner->emit({OffscreenRenderDiagnosticKind::MissingMaterialTarget,
+                                          TC_RENDER_TARGET_HANDLE_INVALID, context.consumer});
+                    context.valid = false;
+                    continue;
                 }
+                context.planner->dependency_edges.push_back(dependency);
+            }
+            return true;
+        }
+
+        void collect_material_dependencies(tc_render_target_handle output, uint32_t consumer_index, bool& valid) {
+            MaterialEdgeContext context{this, tc_render_target_get_scene(output), consumer_index};
+            tc_material_sink sink{emit_material_edge, &context};
+            bool collected = false;
+            if (material_callback) {
+                collected = material_callback(material_user_data, &jobs[consumer_index], output, &sink);
+            } else {
+                // Headless planner clients have no target view provider. Runtime
+                // manager always supplies the prepared execution context above.
+                RenderSceneItemCollectRequest request;
+                request.scene = context.scene;
+                request.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+                request.layer_mask = tc_render_target_get_layer_mask(output);
+                request.debug_pass_name = "MaterialTextureDependencyPlanner";
+                collected = collect_scene_materials(request, sink);
+            }
+            if (!collected || !context.valid) {
+                tc_log(TC_LOG_ERROR, "[RenderingManager] failed to enumerate material dependencies for target '%s'",
+                       target_name(output));
+                emit({OffscreenRenderDiagnosticKind::MaterialEnumerationFailure, output, consumer_index});
+                valid = false;
             }
         }
 
@@ -305,6 +325,7 @@ namespace termin::rendering_manager_detail {
             stack.push_back(index);
             bool valid = true;
             const OffscreenRenderJob& consumer = jobs[index];
+            const size_t edge_begin = dependency_edges.size();
             const size_t outputs = output_count(consumer);
             for (size_t output_index = 0; output_index < outputs; ++output_index) {
                 const tc_render_target_handle output = output_at(consumer, output_index);
@@ -326,9 +347,16 @@ namespace termin::rendering_manager_detail {
                                                       topology->managed_render_target_count());
                     if (ref.kind != PipelineTextureRefKind::RenderTarget)
                         continue;
-                    visit_render_target_dependency(ref.render_target, index, valid);
+                    dependency_edges.push_back(ref.render_target);
                 }
-                visit_material_dependencies(output, index, valid);
+                if (tc_render_target_get_enabled(output))
+                    collect_material_dependencies(output, index, valid);
+            }
+            const size_t edge_end = dependency_edges.size();
+            for (size_t edge = edge_begin; edge < edge_end; ++edge) {
+                // Copy before recursion: nested enumeration can grow the vector.
+                const auto dependency = dependency_edges[edge];
+                visit_render_target_dependency(dependency, index, valid);
             }
             stack.pop_back();
 
@@ -349,15 +377,20 @@ namespace termin::rendering_manager_detail {
                      OffscreenRenderDiagnosticCallback diagnostics,
                      void* diagnostics_user_data,
                      const OffscreenRenderDemand* demands,
-                     size_t demand_count) {
+                     size_t demand_count,
+                     OffscreenMaterialDependencyCallback materials,
+                     void* materials_user_data) {
             topology = &source_topology;
             job_callback = callback;
             job_user_data = callback_user_data;
             diagnostic_callback = diagnostics;
             diagnostic_user_data = diagnostics_user_data;
             had_error = false;
+            material_callback = materials;
+            material_user_data = materials_user_data;
             jobs.clear();
             producers.clear();
+            dependency_edges.clear();
 
             for (size_t scene_index = 0; scene_index < topology->attached_scene_count(); ++scene_index) {
                 const tc_scene_handle scene = topology->attached_scene_at(scene_index);
@@ -478,7 +511,9 @@ namespace termin::rendering_manager_detail {
                                          OffscreenRenderDiagnosticCallback diagnostic_callback,
                                          void* diagnostic_user_data,
                                          const OffscreenRenderDemand* demands,
-                                         size_t demand_count) {
+                                         size_t demand_count,
+                                         OffscreenMaterialDependencyCallback material_callback,
+                                         void* material_user_data) {
         if (!impl_)
             return false;
         try {
@@ -489,7 +524,9 @@ namespace termin::rendering_manager_detail {
                                   diagnostic_callback,
                                   diagnostic_user_data,
                                   demands,
-                                  demand_count);
+                                  demand_count,
+                                  material_callback,
+                                  material_user_data);
         } catch (const std::bad_alloc&) {
             tc_log(TC_LOG_ERROR, "[RenderingManager] offscreen planner scratch allocation failed");
             if (diagnostic_callback) {

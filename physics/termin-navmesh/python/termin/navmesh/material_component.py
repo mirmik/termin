@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
-from termin.render import DrawableComponent
+from termin.render import DrawableComponent, RenderLifecycleComponent
 from termin.mesh import TcMesh
 from termin.navmesh._navmesh_native import TcNavMesh
 from termin.materials import TcMaterial
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from termin.materials import TcMaterialPhase
 
 
-class NavMeshMaterialComponent(DrawableComponent):
+class NavMeshMaterialComponent(DrawableComponent, RenderLifecycleComponent):
     """
     Component for rendering NavMesh with a material.
 
@@ -106,25 +106,25 @@ class NavMeshMaterialComponent(DrawableComponent):
             self._last_navmesh_version = current_version
             self._rebuild_mesh()
 
-    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
-        """Return RenderItems for rendering."""
+    def prepare_render(self, context) -> None:
         self._check_hot_reload()
-        if self._mesh is None or not self._mesh.is_valid:
-            return []
 
-        mat = self._material
-        if mat is None:
+    def _selected_phases(self, context: RenderItemCollectContext):
+        if self._mesh is None or not self._mesh.is_valid or self._material is None:
             return []
-
-        # Collect phases from TcMaterial
         phases: list["TcMaterialPhase"] = []
-        for i in range(mat.phase_count):
-            phase = mat.get_phase(i)
-            if phase is None:
-                continue
-            if context.phase == 0 or phase.phase == context.phase:
+        for i in range(self._material.phase_count):
+            phase = self._material.get_phase(i)
+            if phase is not None and (context.phase == 0 or phase.phase == context.phase):
                 phases.append(phase)
+        return phases
 
+    def collect_materials(self, context: RenderItemCollectContext) -> list[TcMaterial]:
+        return [self._material] if self._selected_phases(context) else []
+
+    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
+        """Return RenderItems for prepared geometry."""
+        phases = self._selected_phases(context)
         phases.sort(key=lambda p: p.priority)
         return [RenderItem.mesh(mesh=self._mesh, phase=phase, geometry_id=0) for phase in phases]
 

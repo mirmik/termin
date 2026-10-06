@@ -56,7 +56,7 @@ namespace termin {
         mutable std::string loaded_font_path_;
         mutable std::unique_ptr<tgfx::Text3DRenderer> renderer_;
 
-        TcMaterial effective_material() const;
+        tc_material_phase* select_material_phase(const tc_render_item_collect_context& context) const;
         tc_material_phase* sync_material_phase() const;
         tgfx::FontAtlas* ensure_font(const char* captured_font_path) const;
 
@@ -91,6 +91,7 @@ namespace termin {
         void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
 
         tc_phase_mask get_phase_mask() const override;
+        bool collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) override;
         bool collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) override;
         bool encode_render_item_tgfx2(tgfx::RenderContext2& ctx2,
                                       const tc_render_item& item,

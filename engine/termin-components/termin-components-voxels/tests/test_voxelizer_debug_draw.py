@@ -99,3 +99,67 @@ def test_voxelizer_debug_draw_service_filters_phase_mask(monkeypatch):
         component.GEOMETRY_SIMPLIFIED_CONTOURS,
     ]
     assert component.voxel_phase.params == {}
+
+
+def test_material_collection_selects_only_rendered_layers_without_render_items(monkeypatch):
+    def unexpected_mesh(*args, **kwargs):
+        raise AssertionError("material collection constructed a RenderItem")
+
+    class ForbiddenRenderItem:
+        mesh = staticmethod(unexpected_mesh)
+
+    monkeypatch.setattr(voxelizer_debug_draw, "RenderItem", ForbiddenRenderItem)
+    component = _Component()
+    component.show_sparse_boundary = True
+    component._debug_sparse_boundary_mesh = _Mesh()
+    service = VoxelizerDebugDrawService()
+
+    materials = service.collect_materials(component, 0)
+    assert [material.phases[0] for material in materials] == [
+        component.voxel_phase,
+        component.voxel_phase,
+        component.line_phase,
+    ]
+    # Collection does not configure rendering uniforms or construct geometry.
+    assert component.voxel_phase.params == {}
+    assert component.line_phase.params == {}
+    assert component.transparent_phase.params == {}
+
+
+def test_material_collection_uses_same_phase_and_valid_geometry_selection(monkeypatch):
+    monkeypatch.setattr(voxelizer_debug_draw, "RenderItem", _RenderItem)
+    component = _Component()
+    service = VoxelizerDebugDrawService()
+
+    materials = service.collect_materials(component, 1 << 16)
+    draws = service.collect_render_items(component, 1 << 16)
+    assert [material.phases[0] for material in materials] == [draw.phase for draw in draws]
+
+    component._debug_simplified_contours_mesh = None
+    assert service.collect_materials(component, 1 << 16) == []
+    assert service.collect_render_items(component, 1 << 16) == []
+    assert service.collect_materials(component, 1 << 1) == []
+
+
+def test_voxel_display_material_selection_matches_items(monkeypatch):
+    from termin.render.drawable import RenderItemCollectContext
+    from termin_voxel_components import display_component
+    from termin_voxel_components.display_component import VoxelDisplayComponent
+
+    monkeypatch.setattr(display_component, "RenderItem", _RenderItem)
+    component = VoxelDisplayComponent()
+    component._voxel_mesh = _Mesh()
+    opaque = _Phase("opaque", 1 << 0)
+    transparent = _Phase("transparent", 1 << 1)
+    component._material = _Material(opaque, transparent)
+    context = RenderItemCollectContext(phase=1 << 1)
+
+    assert component.collect_materials(context) == [component._material]
+    assert opaque.params == {}
+    assert transparent.params == {}
+    assert [item.phase for item in component.collect_render_items(context)] == [transparent]
+    assert component.collect_materials(RenderItemCollectContext(phase=1 << 16)) == []
+
+    component._voxel_mesh = None
+    assert component.collect_materials(context) == []
+    assert component.collect_render_items(context) == []

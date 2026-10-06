@@ -1,0 +1,2309 @@
+{
+  "date": "2026-10-07",
+  "task": 2895,
+  "method": {
+    "scene": "CargoTerminal",
+    "backend": "Vulkan",
+    "offscreen_window": [
+      1600,
+      1000
+    ],
+    "viewport": [
+      1052,
+      614
+    ],
+    "frames_per_sample": 120,
+    "state": "Same running scene and camera; Chronosphere paused with time_multiplier=0, controller disabled, step0/time0, Arthur selected; projection controller show_projections=false and disabled. All 46 AnimationControllers and 46 AnimationPlayers frozen at clip time0; SkeletonController remains active. Display0 only; profiler panel hidden; detailed native CPU profiling enabled.",
+    "control": "Same-process LD_PRELOAD benchmark-only interposition of collect_scene_materials: heavy=true calls full RenderSceneItemCollector.collect, then emits item.material or material_phase.owner_material; heavy=false calls production callback with dlsym(RTLD_NEXT). Control library never installed into SDK or production sources.",
+    "output": "Editor screenshots cropped at [184,94,1236,708], excluding editor panels; RGB pixel buffers compared exactly.",
+    "limitations": [
+      "CPU wall timings vary with load; no GPU timing or allocation measurements.",
+      "This isolates collection with current context/producers. It is not a checkout of the historic pre-change SDK.",
+      "Current scene state produces3128 measured Encode mesh draw calls, versus2008 in the prior #2893 capture; historical total-frame timings are not directly comparable.",
+      "Raw screenshots and full logs are temporary under /tmp/termin-2895-editor."
+    ]
+  },
+  "samples": {
+    "heavy": {
+      "frames": 120,
+      "active_ms": 26.551336975271504,
+      "state": {
+        "step": 0,
+        "selected_object": "Arthur",
+        "projection_enabled": false
+      },
+      "sections": {
+        "SceneManager Tick": {
+          "cpu_ms": 0.5081048001535237,
+          "children_ms": 0.5065765417801837,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene": {
+          "cpu_ms": 0.5065765417801837,
+          "children_ms": 0.5056550163775683,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Start": {
+          "cpu_ms": 0.00021549177666505177,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Fixed Update": {
+          "cpu_ms": 0.00013599175338943799,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update": {
+          "cpu_ms": 0.33295367478082577,
+          "children_ms": 0.2992827081121504,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Arthur [629c0304]": {
+          "cpu_ms": 0.005625974976768097,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/HearingIndicatorControll @ ChronosphereControll [28b1568b]": {
+          "cpu_ms": 0.00020074999580780664,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ClickController @ GameController [a463ecd3]": {
+          "cpu_ms": 0.03041344163939357,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ChronoCameraController @ MainCamera [7f17d775]": {
+          "cpu_ms": 0.00156825827434659,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/TimeModifierController @ MainCamera [e1ab68ee]": {
+          "cpu_ms": 0.08210310010860364,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/FovCameraController @ FOVCamera [be545256]": {
+          "cpu_ms": 0.00017816660304864246,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/CharacterPortraitsUICont @ Portraits [c8555019]": {
+          "cpu_ms": 0.06941975842540463,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ SpiderBot [c59bf6a0]": {
+          "cpu_ms": 0.0011191665505369504,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/SwitchController @ Service release [11907493]": {
+          "cpu_ms": 0.002497333319236835,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/SwitchController @ Security vault relea [742d8fe9]": {
+          "cpu_ms": 0.00040479997793833417,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Entry relay [216b79c9]": {
+          "cpu_ms": 0.0003233834480245908,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Entry relay [62085729]": {
+          "cpu_ms": 0.0016182331368327142,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetworkCameraController @ Hall camera [bbc17902]": {
+          "cpu_ms": 0.0003754833402733008,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Hall camera [4f830e10]": {
+          "cpu_ms": 0.00042835846543312075,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Hall speaker [ac976521]": {
+          "cpu_ms": 0.00036784177646040914,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Hall speaker [a1eb3bab]": {
+          "cpu_ms": 0.0003432332227627436,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Control desk [bc052b4f]": {
+          "cpu_ms": 0.00039944996436436974,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Control desk [43749439]": {
+          "cpu_ms": 0.00032801665365695954,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Service relay [1565c917]": {
+          "cpu_ms": 0.00036749181648095447,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Service relay [b47ddb9a]": {
+          "cpu_ms": 0.00026063350960612295,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Intake speaker [f4e3a005]": {
+          "cpu_ms": 0.0003584086584548155,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Intake speaker [42230ea2]": {
+          "cpu_ms": 0.00030238342781861623,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Security relay [4a8932cc]": {
+          "cpu_ms": 0.0003631166492899259,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Security relay [b25e5f04]": {
+          "cpu_ms": 0.00038590837890903156,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/SwitchController @ Retrieve carrier [a9748a60]": {
+          "cpu_ms": 0.0005702914670109749,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetworkCameraController @ Vault camera [9485de61]": {
+          "cpu_ms": 0.0003187918725113074,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Vault camera [c0a1180a]": {
+          "cpu_ms": 0.00038014985620975493,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AutomaticDoorController @ Vault service gate [d4954dfa]": {
+          "cpu_ms": 0.004219875112175942,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AutomaticDoorController @ Vault main gate [36fc26f4]": {
+          "cpu_ms": 0.0011168083486457665,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AutomaticDoorController @ Data cabinet [0dfd6528]": {
+          "cpu_ms": 0.0010514082697530589,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AvatarController @ Avatar [85a01efd]": {
+          "cpu_ms": 0.0007936333927015464,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo Search Dispatc [1bbc7e04]": {
+          "cpu_ms": 0.00033655023823181787,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Yard patrol [b3c20437]": {
+          "cpu_ms": 0.002011358365416527,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading centre [ac2063e7]": {
+          "cpu_ms": 0.0017445833422243596,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading east [137b4fac]": {
+          "cpu_ms": 0.0017157667937378088,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse patrol [bd6cb1ac]": {
+          "cpu_ms": 0.001847491506487131,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north west [2775a2f0]": {
+          "cpu_ms": 0.0017489333947499593,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north east [c257b6df]": {
+          "cpu_ms": 0.0017393833647171657,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ West loading watch [38d22974]": {
+          "cpu_ms": 0.00202211681753397,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse threshold [c65ba06b]": {
+          "cpu_ms": 0.001700191820661227,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Reception clerk [eb6c6706]": {
+          "cpu_ms": 0.0019136083933214347,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Sorting patrol [5abc110c]": {
+          "cpu_ms": 0.001873758559425672,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Service aisle patrol [070fa3cd]": {
+          "cpu_ms": 0.0041795415182908375,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo south west [8320dc4a]": {
+          "cpu_ms": 0.001863383346547683,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Technical guard [b51fb43f]": {
+          "cpu_ms": 0.0019041581389804682,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Service console watc [ddf4b188]": {
+          "cpu_ms": 0.0040117580443620685,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Gallery patrol [c0422f90]": {
+          "cpu_ms": 0.0019373415658871334,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Control operator [d27681ed]": {
+          "cpu_ms": 0.0020645499850312867,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault guard [cde1d73a]": {
+          "cpu_ms": 0.0019478830819328627,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault threshold watc [df3187c9]": {
+          "cpu_ms": 0.004309966446210941,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault service watch [3aecbd24]": {
+          "cpu_ms": 0.001809600181877613,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Post guard [ede280a9]": {
+          "cpu_ms": 0.0018427501432597636,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Security shift [d46be188]": {
+          "cpu_ms": 0.0019390250245730082,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo Yard Team [8fd4d73c]": {
+          "cpu_ms": 0.00031880829483270644,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo Warehouse Team [cfe9d5b2]": {
+          "cpu_ms": 0.00025483323261141775,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Security shift_time_ [d46be188]": {
+          "cpu_ms": 0.002199391710261504,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Post guard_time_spir [ede280a9]": {
+          "cpu_ms": 0.0023437418043613435,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault service watch_ [3aecbd24]": {
+          "cpu_ms": 0.002610674904038509,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault guard_time_spi [cde1d73a]": {
+          "cpu_ms": 0.002101841817299525,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Control operator_tim [d27681ed]": {
+          "cpu_ms": 0.002317216619849205,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Gallery patrol_time_ [c0422f90]": {
+          "cpu_ms": 0.0025562999770045282,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Technical guard_time [b51fb43f]": {
+          "cpu_ms": 0.002319724950939417,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo south west_tim [8320dc4a]": {
+          "cpu_ms": 0.0020969414773086706,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Sorting patrol_time_ [5abc110c]": {
+          "cpu_ms": 0.0022297334236403305,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Reception clerk_time [eb6c6706]": {
+          "cpu_ms": 0.001977374963462353,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse threshold_ [c65ba06b]": {
+          "cpu_ms": 0.001829366416980823,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ West loading watch_t [38d22974]": {
+          "cpu_ms": 0.002074516750872135,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north east_tim [c257b6df]": {
+          "cpu_ms": 0.001987866684794426,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north west_tim [2775a2f0]": {
+          "cpu_ms": 0.002535283037771781,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse patrol_tim [bd6cb1ac]": {
+          "cpu_ms": 0.0021683166113992533,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading east_time_sp [137b4fac]": {
+          "cpu_ms": 0.0021374834701418876,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading centre_time_ [ac2063e7]": {
+          "cpu_ms": 0.0023766165599226952,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Yard patrol_time_spi [b3c20437]": {
+          "cpu_ms": 0.002162666494647662,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ SpiderBot_time_spiri [c59bf6a0]": {
+          "cpu_ms": 0.0013813997308413188,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Arthur_time_spirit [629c0304]": {
+          "cpu_ms": 0.002635258467247089,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Extensions": {
+          "cpu_ms": 0.17213934985920787,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Late Update": {
+          "cpu_ms": 0.00021050820748011272,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render": {
+          "cpu_ms": 24.767343974982698,
+          "children_ms": 24.76671071642389,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen": {
+          "cpu_ms": 24.7460747165295,
+          "children_ms": 24.627191633575908,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render prepare": {
+          "cpu_ms": 0.332211316904674,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Drawable collection": {
+          "cpu_ms": 2.4641632998983067,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Collect scene lights": {
+          "cpu_ms": 0.003139033696303765,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution": {
+          "cpu_ms": 21.827677983076622,
+          "children_ms": 21.727840249581885,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish": {
+          "cpu_ms": 3.9216378164788086,
+          "children_ms": 3.9205228755250574,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect": {
+          "cpu_ms": 3.8303621584549545,
+          "children_ms": 3.82939925044775,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Drawable collection": {
+          "cpu_ms": 2.452011908652882,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Static mesh batching": {
+          "cpu_ms": 1.3773873417948683,
+          "children_ms": 1.1934970918421943,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Static mesh batching/Static batch grouping": {
+          "cpu_ms": 0.8283726420874397,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Static mesh batching/Static batch cache and output": {
+          "cpu_ms": 0.3651244497547547,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/RenderItem bounds and phase index": {
+          "cpu_ms": 0.09016071707010269,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Get Frame Graph": {
+          "cpu_ms": 0.00090679998199145,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Collect Specs": {
+          "cpu_ms": 0.03977840008834998,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Allocate Resources": {
+          "cpu_ms": 0.01612381674349308,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Assemble Resource Bindings": {
+          "cpu_ms": 0.007165150189151367,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Prepare Passes": {
+          "cpu_ms": 0.07565537467598915,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Plan Resource Clears": {
+          "cpu_ms": 0.015132091535876194,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Clear Render Target Contexts": {
+          "cpu_ms": 0.032999624777585265,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Clear Resources": {
+          "cpu_ms": 0.010472858635087809,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes": {
+          "cpu_ms": 15.171982908310989,
+          "children_ms": 15.145166108074287,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/RenderTargetInput#0": {
+          "cpu_ms": 0.00025367491568128265,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth": {
+          "cpu_ms": 2.5614525585435333,
+          "children_ms": 1.3131378875114024,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Shader variant plan": {
+          "cpu_ms": 0.019775733227531116,
+          "children_ms": 0.0,
+          "call_count": 4
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Ensure material shader": {
+          "cpu_ms": 0.10202969660361608,
+          "children_ms": 0.03568896688520908,
+          "call_count": 605
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.03568896688520908,
+          "children_ms": 0.0,
+          "call_count": 605
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Prepare material resources": {
+          "cpu_ms": 0.014224845357239247,
+          "children_ms": 0.0004354416082302729,
+          "call_count": 605
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0004354416082302729,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Upload uniform data": {
+          "cpu_ms": 0.14924638758723935,
+          "children_ms": 0.0,
+          "call_count": 602
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Encode mesh draw": {
+          "cpu_ms": 1.0278612247357766,
+          "children_ms": 0.2883403312104444,
+          "call_count": 602
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.16310637093459565,
+          "children_ms": 0.0,
+          "call_count": 602
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.1252339602758487,
+          "children_ms": 0.0,
+          "call_count": 336
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow": {
+          "cpu_ms": 4.943168875295669,
+          "children_ms": 4.942625633378824,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass": {
+          "cpu_ms": 4.942625633378824,
+          "children_ms": 3.1838923421067498,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Shader variant plan": {
+          "cpu_ms": 0.00953965817267696,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Ensure material shader": {
+          "cpu_ms": 0.21749816564843058,
+          "children_ms": 0.07631147035087148,
+          "call_count": 1467
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.07631147035087148,
+          "children_ms": 0.0,
+          "call_count": 1467
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Prepare material resources": {
+          "cpu_ms": 0.45136181311681867,
+          "children_ms": 0.3036694784338276,
+          "call_count": 2931
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0006784163415431976,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.3029910620922844,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Upload uniform data": {
+          "cpu_ms": 0.16228319223349294,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Encode mesh draw": {
+          "cpu_ms": 2.258976845536381,
+          "children_ms": 0.31918479862312477,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.10677682450041175,
+          "children_ms": 0.0,
+          "call_count": 1008
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.212407974122713,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Build binding plan": {
+          "cpu_ms": 0.08423266739894947,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/RenderTargetInput#1": {
+          "cpu_ms": 0.000125449833770593,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass": {
+          "cpu_ms": 1.0037052581086754,
+          "children_ms": 0.5801105539314448,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Shader variant plan": {
+          "cpu_ms": 0.011461350166549285,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Ensure material shader": {
+          "cpu_ms": 0.03764685184384386,
+          "children_ms": 0.017304731284578642,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.017304731284578642,
+          "children_ms": 0.0,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Upload uniform data": {
+          "cpu_ms": 0.13233137832333644,
+          "children_ms": 0.0,
+          "call_count": 341
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Encode mesh draw": {
+          "cpu_ms": 0.3986709735977153,
+          "children_ms": 0.12972308214132985,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.06872101419915756,
+          "children_ms": 0.0,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.06100206794217229,
+          "children_ms": 0.0,
+          "call_count": 168
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal": {
+          "cpu_ms": 2.0184549836131436,
+          "children_ms": 1.1382774265483022,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Shader variant plan": {
+          "cpu_ms": 0.007965016613403956,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Ensure material shader": {
+          "cpu_ms": 0.07244880590587854,
+          "children_ms": 0.026745691429823637,
+          "call_count": 447
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.026745691429823637,
+          "children_ms": 0.0,
+          "call_count": 447
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Prepare material resources": {
+          "cpu_ms": 0.010694035049527883,
+          "children_ms": 0.000970725001146396,
+          "call_count": 447
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.000970725001146396,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Upload uniform data": {
+          "cpu_ms": 0.1418648686259985,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Encode mesh draw": {
+          "cpu_ms": 0.9053047003534933,
+          "children_ms": 0.2725543076482912,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.12548643350601196,
+          "children_ms": 0.0,
+          "call_count": 336
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.14706787414227923,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Skybox": {
+          "cpu_ms": 0.017268975141147773,
+          "children_ms": 0.0006374332743386428,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Skybox/Build binding plan": {
+          "cpu_ms": 8.13085896273454e-05,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Skybox/Vulkan resource set": {
+          "cpu_ms": 0.0005561246847112974,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color": {
+          "cpu_ms": 4.283898066511998,
+          "children_ms": 4.282606925163418,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color": {
+          "cpu_ms": 4.282606925163418,
+          "children_ms": 2.3312152788974343,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Shader variant plan": {
+          "cpu_ms": 0.025209791958332062,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Ensure material shader": {
+          "cpu_ms": 0.22453287007908027,
+          "children_ms": 0.13415378124142688,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.13415378124142688,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources": {
+          "cpu_ms": 0.5282172685178618,
+          "children_ms": 0.29891197718679907,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.002396116467813651,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.2965158607189854,
+          "children_ms": 0.09736928204074502,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Pack material UBO/Material UBO packing miss": {
+          "cpu_ms": 0.08473264882341028,
+          "children_ms": 0.0,
+          "call_count": 92
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Pack material UBO/Upload uniform data": {
+          "cpu_ms": 0.012636633217334747,
+          "children_ms": 0.0,
+          "call_count": 18
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Upload uniform data": {
+          "cpu_ms": 0.18246265969549616,
+          "children_ms": 0.0,
+          "call_count": 461
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Encode mesh draw": {
+          "cpu_ms": 1.352080837264657,
+          "children_ms": 0.5944523589064677,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.4583512492788335,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.13610110962763428,
+          "children_ms": 0.0,
+          "call_count": 336
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Build binding plan": {
+          "cpu_ms": 0.0011064845447738966,
+          "children_ms": 0.0,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/transient.upload": {
+          "cpu_ms": 0.000875899475067854,
+          "children_ms": 0.0,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/transient.draw": {
+          "cpu_ms": 0.016729467362165452,
+          "children_ms": 0.00516413263976574,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/transient.draw/Vulkan resource set": {
+          "cpu_ms": 0.00516413263976574,
+          "children_ms": 0.0,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Resolve": {
+          "cpu_ms": 2.543320879340172e-05,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection": {
+          "cpu_ms": 0.027830199835201106,
+          "children_ms": 0.016689749403546252,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Ensure material shader": {
+          "cpu_ms": 0.009693374919394652,
+          "children_ms": 0.0002834500124057134,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.0002834500124057134,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Build binding plan": {
+          "cpu_ms": 0.00013291658833622933,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources": {
+          "cpu_ms": 0.005974166498829921,
+          "children_ms": 0.005595050100237131,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.005595050100237131,
+          "children_ms": 0.00408992525190115,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources/Pack material UBO/Material UBO packing miss": {
+          "cpu_ms": 0.0029939917847514154,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources/Pack material UBO/Upload uniform data": {
+          "cpu_ms": 0.0010959334671497346,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Vulkan resource set": {
+          "cpu_ms": 0.0008892913969854514,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar": {
+          "cpu_ms": 0.021566074900329114,
+          "children_ms": 0.005446666696419318,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Ensure material shader": {
+          "cpu_ms": 0.0030744500768681367,
+          "children_ms": 0.0007379583703974883,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.0007379583703974883,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Build binding plan": {
+          "cpu_ms": 0.0003682665837307771,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Prepare material resources": {
+          "cpu_ms": 0.0006945416331291199,
+          "children_ms": 0.0005214334155122439,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0005214334155122439,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Vulkan resource set": {
+          "cpu_ms": 0.0013094084026912848,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost": {
+          "cpu_ms": 0.01593631667395433,
+          "children_ms": 0.009553166261563698,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Ensure material shader": {
+          "cpu_ms": 0.0018648247855405013,
+          "children_ms": 0.00026133336747686067,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.00026133336747686067,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Build binding plan": {
+          "cpu_ms": 0.00013001663610339164,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources": {
+          "cpu_ms": 0.00668799988925457,
+          "children_ms": 0.006570625180999438,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.006570625180999438,
+          "children_ms": 0.0055204750349124275,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources/Pack material UBO/Material UBO packing miss": {
+          "cpu_ms": 0.004953108293314775,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources/Pack material UBO/Upload uniform data": {
+          "cpu_ms": 0.0005673667415976525,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Vulkan resource set": {
+          "cpu_ms": 0.0008703249506652356,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Bloom": {
+          "cpu_ms": 0.058811633257816236,
+          "children_ms": 0.007789575308561325,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Bloom/Build binding plan": {
+          "cpu_ms": 0.0011746925301849842,
+          "children_ms": 0.0,
+          "call_count": 16
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Bloom/Vulkan resource set": {
+          "cpu_ms": 0.006614882778376341,
+          "children_ms": 0.0,
+          "call_count": 16
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/InteractionHints": {
+          "cpu_ms": 0.010307049937546253,
+          "children_ms": 0.009901550194869439,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/InteractionHints/ColorPass:InteractionHints": {
+          "cpu_ms": 0.009901550194869439,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets": {
+          "cpu_ms": 0.18236155829702813,
+          "children_ms": 0.12295446684584022,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI Text Measurer Sync": {
+          "cpu_ms": 6.96166418492794e-05,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI Widget Layout": {
+          "cpu_ms": 0.022971183465172847,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI Widget Paint Commands": {
+          "cpu_ms": 0.006408124944816033,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render": {
+          "cpu_ms": 0.09350554179400206,
+          "children_ms": 0.09110630908980966,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Begin": {
+          "cpu_ms": 0.004114066871503989,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI DrawList Lower": {
+          "cpu_ms": 0.01725484160706401,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI DrawList Freeze": {
+          "cpu_ms": 0.00010461689283450445,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute": {
+          "cpu_ms": 0.0694894501939416,
+          "children_ms": 0.041071289870888,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/Canvas CPU Clipping": {
+          "cpu_ms": 0.001301666380216678,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/Build binding plan": {
+          "cpu_ms": 0.001324765073756377,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/Upload uniform data": {
+          "cpu_ms": 0.008198366003731887,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/transient.upload": {
+          "cpu_ms": 0.003688683609167735,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/transient.draw": {
+          "cpu_ms": 0.02655780880401532,
+          "children_ms": 0.007330182660371065,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/transient.draw/Vulkan resource set": {
+          "cpu_ms": 0.007330182660371065,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas End": {
+          "cpu_ms": 0.00014333352446556092,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderContext2::end_frame": {
+          "cpu_ms": 2.435985408164561,
+          "children_ms": 2.4354855499540764,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderContext2::end_frame/RenderContext2::submit": {
+          "cpu_ms": 0.9395445915870368,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderContext2::end_frame/RenderContext2::destroy_transients": {
+          "cpu_ms": 1.4959409583670398,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Present": {
+          "cpu_ms": 0.020635999894390505,
+          "children_ms": 0.019163091542820136,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display": {
+          "cpu_ms": 0.019163091542820136,
+          "children_ms": 0.018028541654348373,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display/Present Clear": {
+          "cpu_ms": 0.009288224888344606,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display/Present Collect Viewports": {
+          "cpu_ms": 0.0009117584054668744,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display/Present Blit Viewports": {
+          "cpu_ms": 0.007828558360536893,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager After Render": {
+          "cpu_ms": 0.02039271661390861,
+          "children_ms": 0.0,
+          "call_count": 1
+        }
+      },
+      "render_ms": 24.767343974982698,
+      "mesh_encode_calls": 3128
+    },
+    "light": {
+      "frames": 120,
+      "active_ms": 26.229555525351316,
+      "state": {
+        "step": 0,
+        "time": 0.0,
+        "animation_players_frozen": 46,
+        "animation_controllers_frozen": 46,
+        "selected_object": "Arthur",
+        "projection_enabled": false
+      },
+      "sections": {
+        "SceneManager Tick": {
+          "cpu_ms": 0.5470644166072209,
+          "children_ms": 0.5453951083434124,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene": {
+          "cpu_ms": 0.5453951083434124,
+          "children_ms": 0.544425874762237,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Start": {
+          "cpu_ms": 0.0002219751166800658,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Fixed Update": {
+          "cpu_ms": 0.0001350750836233298,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update": {
+          "cpu_ms": 0.3653775249607861,
+          "children_ms": 0.33043336691334846,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Arthur [629c0304]": {
+          "cpu_ms": 0.009596866803864639,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/HearingIndicatorControll @ ChronosphereControll [28b1568b]": {
+          "cpu_ms": 0.000314633393039306,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ClickController @ GameController [a463ecd3]": {
+          "cpu_ms": 0.03944385840247075,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ChronoCameraController @ MainCamera [7f17d775]": {
+          "cpu_ms": 0.0016002001861731212,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/TimeModifierController @ MainCamera [e1ab68ee]": {
+          "cpu_ms": 0.08529944984863201,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/FovCameraController @ FOVCamera [be545256]": {
+          "cpu_ms": 0.00018622496475776036,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/CharacterPortraitsUICont @ Portraits [c8555019]": {
+          "cpu_ms": 0.07175930005808671,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ SpiderBot [c59bf6a0]": {
+          "cpu_ms": 0.0013056665348509947,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/SwitchController @ Service release [11907493]": {
+          "cpu_ms": 0.0025978170024851957,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/SwitchController @ Security vault relea [742d8fe9]": {
+          "cpu_ms": 0.00041112489998340607,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Entry relay [216b79c9]": {
+          "cpu_ms": 0.000346674956381321,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Entry relay [62085729]": {
+          "cpu_ms": 0.0016769830758372943,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetworkCameraController @ Hall camera [bbc17902]": {
+          "cpu_ms": 0.00041702485953768094,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Hall camera [4f830e10]": {
+          "cpu_ms": 0.0005117083899676799,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Hall speaker [ac976521]": {
+          "cpu_ms": 0.00040244994064172107,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Hall speaker [a1eb3bab]": {
+          "cpu_ms": 0.0003623585216701031,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Control desk [bc052b4f]": {
+          "cpu_ms": 0.00045866665119926133,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Control desk [43749439]": {
+          "cpu_ms": 0.00036414992064237595,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Service relay [1565c917]": {
+          "cpu_ms": 0.00040460828070839244,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Service relay [b47ddb9a]": {
+          "cpu_ms": 0.0003223583102226257,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Intake speaker [f4e3a005]": {
+          "cpu_ms": 0.00044234984864791234,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Intake speaker [42230ea2]": {
+          "cpu_ms": 0.00038214148953557013,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Security relay [4a8932cc]": {
+          "cpu_ms": 0.00038070852557818097,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Security relay [b25e5f04]": {
+          "cpu_ms": 0.0004020330185691516,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/SwitchController @ Retrieve carrier [a9748a60]": {
+          "cpu_ms": 0.0006510084494948387,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetworkCameraController @ Vault camera [9485de61]": {
+          "cpu_ms": 0.0003506500894824664,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/NetPointComponent @ Vault camera [c0a1180a]": {
+          "cpu_ms": 0.0004282998852431774,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AutomaticDoorController @ Vault service gate [d4954dfa]": {
+          "cpu_ms": 0.005022108089178801,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AutomaticDoorController @ Vault main gate [36fc26f4]": {
+          "cpu_ms": 0.0012149918513993422,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AutomaticDoorController @ Data cabinet [0dfd6528]": {
+          "cpu_ms": 0.0011533167213201522,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/AvatarController @ Avatar [85a01efd]": {
+          "cpu_ms": 0.000859783310443163,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo Search Dispatc [1bbc7e04]": {
+          "cpu_ms": 0.0003567084049185117,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Yard patrol [b3c20437]": {
+          "cpu_ms": 0.0028661083430051803,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading centre [ac2063e7]": {
+          "cpu_ms": 0.0019373418763279915,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading east [137b4fac]": {
+          "cpu_ms": 0.002038541715592146,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse patrol [bd6cb1ac]": {
+          "cpu_ms": 0.0021177751012146475,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north west [2775a2f0]": {
+          "cpu_ms": 0.002073300040016572,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north east [c257b6df]": {
+          "cpu_ms": 0.002023333217948675,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ West loading watch [38d22974]": {
+          "cpu_ms": 0.0022968833955625692,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse threshold [c65ba06b]": {
+          "cpu_ms": 0.0020308081060647965,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Reception clerk [eb6c6706]": {
+          "cpu_ms": 0.0020277084161837897,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Sorting patrol [5abc110c]": {
+          "cpu_ms": 0.0021289000598092873,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Service aisle patrol [070fa3cd]": {
+          "cpu_ms": 0.00463829959432284,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo south west [8320dc4a]": {
+          "cpu_ms": 0.002086633288611968,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Technical guard [b51fb43f]": {
+          "cpu_ms": 0.002042983410259088,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Service console watc [ddf4b188]": {
+          "cpu_ms": 0.004491416458040476,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Gallery patrol [c0422f90]": {
+          "cpu_ms": 0.002211200073361397,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Control operator [d27681ed]": {
+          "cpu_ms": 0.002380966643492381,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault guard [cde1d73a]": {
+          "cpu_ms": 0.0022513582681616146,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault threshold watc [df3187c9]": {
+          "cpu_ms": 0.004505175072699786,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault service watch [3aecbd24]": {
+          "cpu_ms": 0.001955724849055211,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Post guard [ede280a9]": {
+          "cpu_ms": 0.001987008408953746,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Security shift [d46be188]": {
+          "cpu_ms": 0.0022777583450078963,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo Yard Team [8fd4d73c]": {
+          "cpu_ms": 0.00035250851263602577,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo Warehouse Team [cfe9d5b2]": {
+          "cpu_ms": 0.0002736834188302358,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Security shift_time_ [d46be188]": {
+          "cpu_ms": 0.0025200917075077693,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Post guard_time_spir [ede280a9]": {
+          "cpu_ms": 0.0024139751059313614,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault service watch_ [3aecbd24]": {
+          "cpu_ms": 0.002801483186582724,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Vault guard_time_spi [cde1d73a]": {
+          "cpu_ms": 0.0023212000417212647,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Control operator_tim [d27681ed]": {
+          "cpu_ms": 0.0024110665855308373,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Gallery patrol_time_ [c0422f90]": {
+          "cpu_ms": 0.0029018750103811425,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Technical guard_time [b51fb43f]": {
+          "cpu_ms": 0.0023899667896330355,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo south west_tim [8320dc4a]": {
+          "cpu_ms": 0.0023914503554503122,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Sorting patrol_time_ [5abc110c]": {
+          "cpu_ms": 0.0024354833799103896,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Reception clerk_time [eb6c6706]": {
+          "cpu_ms": 0.0022101000882685184,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse threshold_ [c65ba06b]": {
+          "cpu_ms": 0.002145516686141491,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ West loading watch_t [38d22974]": {
+          "cpu_ms": 0.0024234333696464697,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north east_tim [c257b6df]": {
+          "cpu_ms": 0.00208556680008769,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Cargo north west_tim [2775a2f0]": {
+          "cpu_ms": 0.002584658314784368,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Warehouse patrol_tim [bd6cb1ac]": {
+          "cpu_ms": 0.002416491787880659,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading east_time_sp [137b4fac]": {
+          "cpu_ms": 0.0024074329994618893,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Loading centre_time_ [ac2063e7]": {
+          "cpu_ms": 0.0024412833154201508,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Yard patrol_time_spi [b3c20437]": {
+          "cpu_ms": 0.0024078416327635447,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ SpiderBot_time_spiri [c59bf6a0]": {
+          "cpu_ms": 0.0014022833046813806,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Update/ObjectController @ Arthur_time_spirit [629c0304]": {
+          "cpu_ms": 0.0029005251514414945,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Extensions": {
+          "cpu_ms": 0.17846534984807175,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Tick/Scene Update: Scenes/CargoTerminal.scene/Late Update": {
+          "cpu_ms": 0.0002259497530758381,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render": {
+          "cpu_ms": 24.369584616615125,
+          "children_ms": 24.368876308109613,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen": {
+          "cpu_ms": 24.34649473323176,
+          "children_ms": 24.273540191352367,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render prepare": {
+          "cpu_ms": 0.34862868320196866,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Material dependency enumeration": {
+          "cpu_ms": 0.36532869140307106,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Collect scene lights": {
+          "cpu_ms": 0.0033929166073600452,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution": {
+          "cpu_ms": 23.556189900139966,
+          "children_ms": 23.45270615844056,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish": {
+          "cpu_ms": 4.0501637837228674,
+          "children_ms": 4.048709191568196,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect": {
+          "cpu_ms": 3.9578327749855817,
+          "children_ms": 3.9566407914894324,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Drawable collection": {
+          "cpu_ms": 2.564155925034235,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Static mesh batching": {
+          "cpu_ms": 1.3924848664551974,
+          "children_ms": 1.2055081088406345,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Static mesh batching/Static batch grouping": {
+          "cpu_ms": 0.8330635501692693,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/Scene RenderItem collect/Static mesh batching/Static batch cache and output": {
+          "cpu_ms": 0.37244455867136517,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderItem publish/RenderItem bounds and phase index": {
+          "cpu_ms": 0.09087641658261418,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Get Frame Graph": {
+          "cpu_ms": 0.0009501670176784197,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Collect Specs": {
+          "cpu_ms": 0.039856266633917885,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Allocate Resources": {
+          "cpu_ms": 0.016111133527010678,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Assemble Resource Bindings": {
+          "cpu_ms": 0.007505566502610843,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Prepare Passes": {
+          "cpu_ms": 0.0753703333127002,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Plan Resource Clears": {
+          "cpu_ms": 0.0152343498232464,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Clear Render Target Contexts": {
+          "cpu_ms": 0.033628141538550455,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Clear Resources": {
+          "cpu_ms": 0.010491375097384055,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes": {
+          "cpu_ms": 15.727434891307105,
+          "children_ms": 15.699073401279747,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/RenderTargetInput#0": {
+          "cpu_ms": 0.00025979202861587205,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth": {
+          "cpu_ms": 2.636396358627826,
+          "children_ms": 1.3760729697843392,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Shader variant plan": {
+          "cpu_ms": 0.019217799976468088,
+          "children_ms": 0.0,
+          "call_count": 4
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Ensure material shader": {
+          "cpu_ms": 0.10443916578466693,
+          "children_ms": 0.03660964683319132,
+          "call_count": 605
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.03660964683319132,
+          "children_ms": 0.0,
+          "call_count": 605
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Prepare material resources": {
+          "cpu_ms": 0.014248897538830836,
+          "children_ms": 0.0004485166942079862,
+          "call_count": 605
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0004485166942079862,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Upload uniform data": {
+          "cpu_ms": 0.15723940193032224,
+          "children_ms": 0.0,
+          "call_count": 602
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Encode mesh draw": {
+          "cpu_ms": 1.080927704554051,
+          "children_ms": 0.29363249900440375,
+          "call_count": 602
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.16555815416698655,
+          "children_ms": 0.0,
+          "call_count": 602
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Depth/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.1280743448374172,
+          "children_ms": 0.0,
+          "call_count": 336
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow": {
+          "cpu_ms": 5.115417200140655,
+          "children_ms": 5.1148270164305965,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass": {
+          "cpu_ms": 5.1148270164305965,
+          "children_ms": 3.3420289864142734,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Shader variant plan": {
+          "cpu_ms": 0.010914774828900893,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Ensure material shader": {
+          "cpu_ms": 0.22240916766847174,
+          "children_ms": 0.078894618122528,
+          "call_count": 1467
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.078894618122528,
+          "children_ms": 0.0,
+          "call_count": 1467
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Prepare material resources": {
+          "cpu_ms": 0.45904615403463445,
+          "children_ms": 0.309257845642666,
+          "call_count": 2931
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0006794669975837071,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.3085783786450823,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Upload uniform data": {
+          "cpu_ms": 0.15950109694773953,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Encode mesh draw": {
+          "cpu_ms": 2.404822957329452,
+          "children_ms": 0.3353495569899678,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.10754935291285316,
+          "children_ms": 0.0,
+          "call_count": 1008
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.22780020407711465,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Shadow/ShadowPass/Build binding plan": {
+          "cpu_ms": 0.08533483560507496,
+          "children_ms": 0.0,
+          "call_count": 1464
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/RenderTargetInput#1": {
+          "cpu_ms": 0.00012138343105713526,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass": {
+          "cpu_ms": 1.0666191584120195,
+          "children_ms": 0.6162789219990372,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Shader variant plan": {
+          "cpu_ms": 0.011554183314243953,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Ensure material shader": {
+          "cpu_ms": 0.03770956009005507,
+          "children_ms": 0.017287155768523615,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.017287155768523615,
+          "children_ms": 0.0,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Upload uniform data": {
+          "cpu_ms": 0.13847515120481452,
+          "children_ms": 0.0,
+          "call_count": 341
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Encode mesh draw": {
+          "cpu_ms": 0.42854002738992375,
+          "children_ms": 0.13416210012510418,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.06998066008090972,
+          "children_ms": 0.0,
+          "call_count": 170
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/ActorAttributePass/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.06418144004419446,
+          "children_ms": 0.0,
+          "call_count": 168
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal": {
+          "cpu_ms": 2.0802960500121115,
+          "children_ms": 1.188094451588889,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Shader variant plan": {
+          "cpu_ms": 0.008749383315443993,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Ensure material shader": {
+          "cpu_ms": 0.07374915247783065,
+          "children_ms": 0.02821864476427436,
+          "call_count": 447
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.02821864476427436,
+          "children_ms": 0.0,
+          "call_count": 447
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Prepare material resources": {
+          "cpu_ms": 0.010724682578196127,
+          "children_ms": 0.0008598499931395054,
+          "call_count": 447
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0008598499931395054,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Upload uniform data": {
+          "cpu_ms": 0.1474488466978073,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Encode mesh draw": {
+          "cpu_ms": 0.9474223865196109,
+          "children_ms": 0.27406060906747975,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.12665941631421446,
+          "children_ms": 0.0,
+          "call_count": 336
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Normal/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.1474011927532653,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Skybox": {
+          "cpu_ms": 0.018814916722476482,
+          "children_ms": 0.0006889252302547296,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Skybox/Build binding plan": {
+          "cpu_ms": 8.649177228411038e-05,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Skybox/Vulkan resource set": {
+          "cpu_ms": 0.0006024334579706192,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color": {
+          "cpu_ms": 4.454472117032855,
+          "children_ms": 4.452939925156533,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color": {
+          "cpu_ms": 4.452939925156533,
+          "children_ms": 2.394355344151457,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Shader variant plan": {
+          "cpu_ms": 0.027087333363791308,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Ensure material shader": {
+          "cpu_ms": 0.2290604998668035,
+          "children_ms": 0.13707052040845155,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.13707052040845155,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources": {
+          "cpu_ms": 0.5295674241768817,
+          "children_ms": 0.29955019140616057,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0023112165741622447,
+          "children_ms": 0.0,
+          "call_count": 2
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.29723897483199835,
+          "children_ms": 0.09426139108836651,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Pack material UBO/Material UBO packing miss": {
+          "cpu_ms": 0.08171852494900425,
+          "children_ms": 0.0,
+          "call_count": 92
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Prepare material resources/Pack material UBO/Upload uniform data": {
+          "cpu_ms": 0.012542866139362256,
+          "children_ms": 0.0,
+          "call_count": 18
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Upload uniform data": {
+          "cpu_ms": 0.18266846692810457,
+          "children_ms": 0.0,
+          "call_count": 461
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Encode mesh draw": {
+          "cpu_ms": 1.4069319936446845,
+          "children_ms": 0.5998556528550884,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Encode mesh draw/Vulkan resource set": {
+          "cpu_ms": 0.45948226219043137,
+          "children_ms": 0.0,
+          "call_count": 446
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Encode mesh draw/Upload uniform data": {
+          "cpu_ms": 0.14037339066465696,
+          "children_ms": 0.0,
+          "call_count": 336
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/Build binding plan": {
+          "cpu_ms": 0.0011303422351678213,
+          "children_ms": 0.0,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/transient.upload": {
+          "cpu_ms": 0.0009116085556646188,
+          "children_ms": 0.0,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/transient.draw": {
+          "cpu_ms": 0.01699767538035909,
+          "children_ms": 0.005399174895137549,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Color/ColorPass:Color/transient.draw/Vulkan resource set": {
+          "cpu_ms": 0.005399174895137549,
+          "children_ms": 0.0,
+          "call_count": 15
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Resolve": {
+          "cpu_ms": 2.3716439803441364e-05,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection": {
+          "cpu_ms": 0.028412733413279056,
+          "children_ms": 0.016573383007198572,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Ensure material shader": {
+          "cpu_ms": 0.010104633091638485,
+          "children_ms": 0.00026005829373995464,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.00026005829373995464,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Build binding plan": {
+          "cpu_ms": 0.00013965005055069924,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources": {
+          "cpu_ms": 0.005433983324716489,
+          "children_ms": 0.005086441710591316,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.005086441710591316,
+          "children_ms": 0.0035434162865082422,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources/Pack material UBO/Material UBO packing miss": {
+          "cpu_ms": 0.0028478497949739295,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Prepare material resources/Pack material UBO/Upload uniform data": {
+          "cpu_ms": 0.0006955664915343126,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/TimeSpection/Vulkan resource set": {
+          "cpu_ms": 0.0008951165402928988,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar": {
+          "cpu_ms": 0.022692874943216642,
+          "children_ms": 0.005500367221732934,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Ensure material shader": {
+          "cpu_ms": 0.0030590667389333247,
+          "children_ms": 0.0007489748299121856,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.0007489748299121856,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Build binding plan": {
+          "cpu_ms": 0.00039085842048128445,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Prepare material resources": {
+          "cpu_ms": 0.0006859585642814636,
+          "children_ms": 0.0005097832841177781,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Prepare material resources/Upload uniform data": {
+          "cpu_ms": 0.0005097832841177781,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/FogOfWar/Vulkan resource set": {
+          "cpu_ms": 0.0013644834980368614,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost": {
+          "cpu_ms": 0.017980608281989892,
+          "children_ms": 0.01011863381912311,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Ensure material shader": {
+          "cpu_ms": 0.0019422336791952452,
+          "children_ms": 0.00025250005225340523,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Ensure material shader/Build binding plan": {
+          "cpu_ms": 0.00025250005225340523,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Build binding plan": {
+          "cpu_ms": 0.00012262497718135517,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources": {
+          "cpu_ms": 0.007200358342379332,
+          "children_ms": 0.007082400067398946,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources/Pack material UBO": {
+          "cpu_ms": 0.007082400067398946,
+          "children_ms": 0.0060297831272085505,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources/Pack material UBO/Material UBO packing miss": {
+          "cpu_ms": 0.005140566515425841,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Prepare material resources/Pack material UBO/Upload uniform data": {
+          "cpu_ms": 0.0008892166117827097,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/NavMeshPost/Vulkan resource set": {
+          "cpu_ms": 0.0008534168203671774,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Bloom": {
+          "cpu_ms": 0.05954157480349143,
+          "children_ms": 0.007991758454591037,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Bloom/Build binding plan": {
+          "cpu_ms": 0.0011838835664093495,
+          "children_ms": 0.0,
+          "call_count": 16
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/Bloom/Vulkan resource set": {
+          "cpu_ms": 0.006807874888181686,
+          "children_ms": 0.0,
+          "call_count": 16
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/InteractionHints": {
+          "cpu_ms": 0.010128683503717184,
+          "children_ms": 0.009740616629521052,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/InteractionHints/ColorPass:InteractionHints": {
+          "cpu_ms": 0.009740616629521052,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets": {
+          "cpu_ms": 0.1878962334866325,
+          "children_ms": 0.1261608250439167,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI Text Measurer Sync": {
+          "cpu_ms": 6.917488450805346e-05,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI Widget Layout": {
+          "cpu_ms": 0.024207366661479077,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI Widget Paint Commands": {
+          "cpu_ms": 0.0064876915886998175,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render": {
+          "cpu_ms": 0.09539659190922975,
+          "children_ms": 0.09300008301312725,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Begin": {
+          "cpu_ms": 0.004142566584050655,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI DrawList Lower": {
+          "cpu_ms": 0.01699665837610761,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI DrawList Freeze": {
+          "cpu_ms": 0.00012489169215162594,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute": {
+          "cpu_ms": 0.07159566643337409,
+          "children_ms": 0.041209239854166906,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/Canvas CPU Clipping": {
+          "cpu_ms": 0.001323241057495276,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/Build binding plan": {
+          "cpu_ms": 0.0013344573167463143,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/Upload uniform data": {
+          "cpu_ms": 0.008004258976628383,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/transient.upload": {
+          "cpu_ms": 0.0038174824478725594,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/transient.draw": {
+          "cpu_ms": 0.02672980005542437,
+          "children_ms": 0.007492307790865501,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas Execute/transient.draw/Vulkan resource set": {
+          "cpu_ms": 0.007492307790865501,
+          "children_ms": 0.0,
+          "call_count": 21
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/Execute Passes/UIWidgets/UI DrawList Render/UI Canvas End": {
+          "cpu_ms": 0.0001402999274432659,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderContext2::end_frame": {
+          "cpu_ms": 3.475960149957488,
+          "children_ms": 3.475456957643231,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderContext2::end_frame/RenderContext2::submit": {
+          "cpu_ms": 0.991115324664861,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Offscreen/Scene render execution/RenderContext2::end_frame/RenderContext2::destroy_transients": {
+          "cpu_ms": 2.48434163297837,
+          "children_ms": 0.0,
+          "call_count": 3
+        },
+        "SceneManager Render/RenderAll Present": {
+          "cpu_ms": 0.02238157487784823,
+          "children_ms": 0.0206278583034873,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display": {
+          "cpu_ms": 0.0206278583034873,
+          "children_ms": 0.01938474178314209,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display/Present Clear": {
+          "cpu_ms": 0.009870691721638044,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display/Present Collect Viewports": {
+          "cpu_ms": 0.0009605918079614639,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager Render/RenderAll Present/Present Display/Present Blit Viewports": {
+          "cpu_ms": 0.008553458253542583,
+          "children_ms": 0.0,
+          "call_count": 1
+        },
+        "SceneManager After Render": {
+          "cpu_ms": 0.022108183428645133,
+          "children_ms": 0.0,
+          "call_count": 1
+        }
+      },
+      "render_ms": 24.369584616615125,
+      "mesh_encode_calls": 3128
+    }
+  },
+  "output_comparison": {
+    "identical": true,
+    "differing_pixels": 0,
+    "rgb_sha256": "212bd1caaebae273085585d79cb603e06d1d960b07bb5636865ca9974783c76b"
+  },
+  "verification": {
+    "sdk_build": "TERMIN_PYTHON_RUNTIME_OFFLINE=1 CCACHE_DIR=/tmp/termin-2895-ccache task build; pass",
+    "native": "CCACHE_DIR=/tmp/termin-2895-ccache task test; 268/268 pass (host Vulkan/loopback access required)",
+    "python": "3687 passed; sole failure is existing #2885, test_native_textured_pixal3d_geometry_reference, degenerate generated tangent at vertex0",
+    "chrono": "chrono_controllers rebuilt against SDK;13/13 CTest pass; CargoTerminal Play/render smoke pass"
+  },
+  "control_source": "#include <termin/render/render_scene_item_collector.hpp>\n#include <tgfx/resources/tc_material_registry.h>\n#include <dlfcn.h>\n#include <cstdio>\nstatic bool heavy = true;\nextern \"C\" void set_dependency_control_heavy(bool value) { heavy = value; }\nnamespace termin {\nbool collect_scene_materials(const RenderSceneItemCollectRequest& request, tc_material_sink& sink) {\n    if (!heavy) {\n        using Callback = bool (*)(const RenderSceneItemCollectRequest&, tc_material_sink&);\n        static Callback lightweight = reinterpret_cast<Callback>(dlsym(RTLD_NEXT,\n            \"_ZN6termin23collect_scene_materialsERKNS_29RenderSceneItemCollectRequestER16tc_material_sink\"));\n        if (!lightweight) { std::fprintf(stderr, \"benchmark lightweight symbol: %s\\n\", dlerror()); return false; }\n        return lightweight(request, sink);\n    }\n    static RenderSceneItemCollector collector;\n    if (!collector.collect(request)) return false;\n    for (const auto& item : collector.items()) {\n        tc_material_handle handle = item.material;\n        if (!tc_material_get(handle) && item.material_phase) handle = item.material_phase->owner_material;\n        if (tc_material_get(handle) && !sink.emit(handle, sink.user_data)) return false;\n    }\n    return true;\n}\n}\n"
+}

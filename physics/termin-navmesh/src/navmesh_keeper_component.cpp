@@ -29,6 +29,7 @@ namespace termin {
     NavMeshKeeperComponent::NavMeshKeeperComponent()
         : CxxComponent("NavMeshKeeperComponent") {
         install_drawable_vtable(&_c);
+        install_render_lifecycle(&_c);
     }
 
     void NavMeshKeeperComponent::register_type() {
@@ -94,50 +95,82 @@ namespace termin {
         return TC_PHASE_EDITOR_DEBUG;
     }
 
-    bool NavMeshKeeperComponent::collect_render_items(const tc_render_item_collect_context& context,
-                                                      tc_render_item_sink& sink) {
-        if (!sink.emit) {
-            tc_log_error("[NavMeshKeeperComponent] cannot emit render items: sink callback is null");
-            return false;
+    void NavMeshKeeperComponent::prepare_render(const RenderPrepareContext&) {
+        if (ensure_debug_mesh_loaded()) {
+            get_or_create_navmesh_debug_material(_navmesh_debug_material);
         }
+    }
+
+    template <typename Visit>
+    bool NavMeshKeeperComponent::visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit) {
         if (context.phase != TC_PHASE_NONE && context.phase != TC_PHASE_EDITOR_DEBUG) {
             return true;
         }
         if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
             return true;
         }
-        if (!ensure_debug_mesh_loaded() || !_navmesh_debug_mesh.is_valid()) {
+        if (_loaded_navmesh_uuid != navmesh_uuid || !_navmesh_debug_mesh.is_valid()) {
             return true;
         }
 
-        TcMaterial mat = get_or_create_navmesh_debug_material(_navmesh_debug_material);
+        const TcMaterial mat = _navmesh_debug_material;
         tc_material* material = mat.get();
         tc_mesh* mesh = _navmesh_debug_mesh.get();
-        if (!material || !mesh) {
+        if (!material || !mesh || mesh->index_count == 0) {
             return true;
         }
 
         tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
         const size_t count =
             tc_material_get_phases_for_phase(material, TC_PHASE_EDITOR_DEBUG, phases, TC_MATERIAL_MAX_PHASES);
-        Mat44f model = get_model_matrix(entity());
         for (size_t i = 0; i < count; ++i) {
-            tc_material_phase* phase = phases[i];
+            if (!visit(mat, phases[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool NavMeshKeeperComponent::collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) {
+        if (!sink.emit) {
+            tc_log_error("[NavMeshKeeperComponent] cannot emit materials: sink callback is null");
+            return false;
+        }
+        return visit_material_phases(context, [&](const TcMaterial& mat, tc_material_phase*) {
+            return sink.emit(mat.handle, sink.user_data);
+        });
+    }
+
+    bool NavMeshKeeperComponent::collect_render_items(const tc_render_item_collect_context& context,
+                                                      tc_render_item_sink& sink) {
+        if (!sink.emit) {
+            tc_log_error("[NavMeshKeeperComponent] cannot emit render items: sink callback is null");
+            return false;
+        }
+        // Preserve lazy collection for standalone callers outside the scene lifecycle.
+        if ((context.phase == TC_PHASE_NONE || context.phase == TC_PHASE_EDITOR_DEBUG) &&
+            (context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) != 0 && ensure_debug_mesh_loaded()) {
+            get_or_create_navmesh_debug_material(_navmesh_debug_material);
+        }
+        Mat44f model;
+        bool has_model = false;
+        return visit_material_phases(context, [&](const TcMaterial& mat, tc_material_phase* phase) {
+            if (!has_model) {
+                model = get_model_matrix(entity());
+                has_model = true;
+            }
             tc_render_item item{};
             item.kind = TC_RENDER_ITEM_KIND_MESH;
             item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
             item.geometry_id = 0;
             item.material_phase = phase;
             item.material = mat.handle;
-            item.material_phase_index = static_cast<size_t>(phase - material->phases);
+            item.material_phase_index = static_cast<size_t>(phase - mat.get()->phases);
             std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
             item.payload.mesh.mesh_handle = _navmesh_debug_mesh.handle;
             item.payload.mesh.submesh_index = 0;
-            if (!sink.emit(&item, sink.user_data)) {
-                return false;
-            }
-        }
-        return true;
+            return sink.emit(&item, sink.user_data);
+        });
     }
 
     Mat44f NavMeshKeeperComponent::get_model_matrix(const Entity& entity) const {

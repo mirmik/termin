@@ -10,6 +10,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/skinned_mesh_renderer.hpp>
 #include <termin/render/normal_pass.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
@@ -27,6 +28,62 @@ extern "C" {
 }
 
 namespace {
+
+    template <typename Producer>
+    std::vector<tc_material_handle> enumerate_materials(Producer& producer,
+                                                       const tc_render_item_collect_context& context) {
+        std::vector<tc_material_handle> materials;
+        tc_material_sink sink{};
+        sink.emit = [](tc_material_handle material, void* user_data) {
+            static_cast<std::vector<tc_material_handle>*>(user_data)->push_back(material);
+            return true;
+        };
+        sink.user_data = &materials;
+        REQUIRE(producer.collect_materials(context, sink));
+        return materials;
+    }
+
+    template <typename Producer>
+    void check_materials_match_render_items(Producer& producer,
+                                             const tc_render_item_collect_context& context) {
+        const auto materials = enumerate_materials(producer, context);
+        termin::RenderItemCollection collection;
+        REQUIRE(termin::collect_drawable_render_items(producer.tc_component_ptr(), context, collection));
+        REQUIRE_EQ(materials.size(), collection.items.size());
+        for (size_t i = 0; i < materials.size(); ++i) {
+            CHECK(tc_material_handle_eq(materials[i], collection.items[i].material));
+        }
+    }
+
+    struct CountingSkinnedRenderer : termin::SkinnedMeshRenderer {
+        mutable size_t model_queries = 0;
+        size_t skin_payload_queries = 0;
+
+        termin::Mat44f get_model_matrix(const termin::Entity& owner) const override {
+            ++model_queries;
+            return termin::SkinnedMeshRenderer::get_model_matrix(owner);
+        }
+        void populate_mesh_render_item(tc_render_item& item) override {
+            ++skin_payload_queries;
+            termin::SkinnedMeshRenderer::populate_mesh_render_item(item);
+        }
+    };
+
+    struct CountingLineRenderer : termin::LineRenderer {
+        mutable size_t model_queries = 0;
+        termin::Mat44f get_model_matrix(const termin::Entity& owner) const override {
+            ++model_queries;
+            return termin::Mat44f::identity();
+        }
+    };
+
+    struct CountingWorldText : termin::WorldTextComponent {
+        mutable size_t model_queries = 0;
+        termin::Mat44f get_model_matrix(const termin::Entity& owner) const override {
+            ++model_queries;
+            return termin::Mat44f::identity();
+        }
+    };
 
     constexpr const char* kVertexSource = R"(
 struct VertexOutput { float4 position : SV_Position; };
@@ -761,6 +818,119 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
     CHECK(std::strcmp(item.payload.text_batch.font_path, "font-a.ttf") == 0);
 
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("Skinned material enumeration excludes unused slots and never prepares deformation") {
+    tc_material_init();
+    tc_mesh_init();
+    {
+        const tc_material_handle used = tc_material_create("enumerated-mesh-used", "enumerated-mesh-used");
+        const tc_material_handle unused = tc_material_create("enumerated-mesh-unused", "enumerated-mesh-unused");
+        REQUIRE(tc_material_add_phase(tc_material_get(used), tc_shader_handle_invalid(), "opaque", 0));
+        REQUIRE(tc_material_add_phase(tc_material_get(used), tc_shader_handle_invalid(), "transparent", 0));
+        REQUIRE(tc_material_add_phase(tc_material_get(unused), tc_shader_handle_invalid(), "opaque", 0));
+        termin::TcMesh mesh = make_two_submesh_mesh();
+        REQUIRE(mesh.is_valid());
+        mesh.get()->submeshes[1].index_count = 0;
+
+        termin::TcSceneRef scene = termin::TcSceneRef::create("enumerated-skinned-mesh");
+        termin::Entity owner = scene.create_entity("mesh");
+        auto* mesh_component = new termin::MeshComponent();
+        mesh_component->set_mesh(mesh);
+        owner.add_component(mesh_component);
+        auto* renderer = new CountingSkinnedRenderer();
+        renderer->set_material(termin::TcMaterial(used));
+        renderer->set_material_slot(1, termin::TcMaterial(unused));
+        renderer->set_material_slot(2, termin::TcMaterial(unused));
+        renderer->_bone_count = 7;
+        renderer->_bone_matrices_flat = {123.0f};
+        owner.add_component(renderer);
+
+        tc_render_item_collect_context context{};
+        auto materials = enumerate_materials(*renderer, context);
+        REQUIRE_EQ(materials.size(), 2u);
+        for (const auto material : materials) {
+            CHECK(tc_material_handle_eq(material, used));
+        }
+        CHECK_EQ(renderer->model_queries, 0u);
+        CHECK_EQ(renderer->skin_payload_queries, 0u);
+        CHECK_EQ(renderer->_bone_count, 7);
+        CHECK_EQ(renderer->_bone_matrices_flat.front(), 123.0f);
+        check_materials_match_render_items(*renderer, context);
+        CHECK_EQ(renderer->model_queries, 1u);
+        CHECK_EQ(renderer->skin_payload_queries, 2u);
+
+        context.phase = TC_PHASE_TRANSPARENT;
+        check_materials_match_render_items(*renderer, context);
+        context.phase = TC_PHASE_ID;
+        CHECK(enumerate_materials(*renderer, context).empty());
+        context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        check_materials_match_render_items(*renderer, context);
+        mesh.get()->submeshes[0].index_count = 0;
+        CHECK(enumerate_materials(*renderer, context).empty());
+        check_materials_match_render_items(*renderer, context);
+    }
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("Line material enumeration preserves fallback owners and phase eligibility without model payload") {
+    tc_material_init();
+    tc_shader_init();
+    {
+        const tc_material_handle used = tc_material_create("enumerated-line-used", "enumerated-line-used");
+        REQUIRE(tc_material_add_phase(tc_material_get(used), tc_shader_handle_invalid(), "opaque", 0));
+        CountingLineRenderer renderer;
+        renderer.set_material(termin::TcMaterial(used));
+        renderer.set_segment({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0});
+        renderer.cast_shadow = true;
+        tc_render_item_collect_context context{};
+        auto materials = enumerate_materials(renderer, context);
+        REQUIRE_EQ(materials.size(), 2u);
+        CHECK(tc_material_handle_eq(materials[0], used));
+        CHECK_FALSE(tc_material_handle_eq(materials[1], used));
+        CHECK_EQ(renderer.model_queries, 0u);
+        check_materials_match_render_items(renderer, context);
+        context.phase = TC_PHASE_SHADOW;
+        check_materials_match_render_items(renderer, context);
+        renderer.cast_shadow = false;
+        CHECK(enumerate_materials(renderer, context).empty());
+        check_materials_match_render_items(renderer, context);
+        context.phase = TC_PHASE_ID;
+        context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        check_materials_match_render_items(renderer, context);
+        renderer.clear_points();
+        CHECK(enumerate_materials(renderer, context).empty());
+        check_materials_match_render_items(renderer, context);
+    }
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("World text material enumeration follows text and phase eligibility without font or model payload") {
+    tc_material_init();
+    tc_shader_init();
+    {
+        CountingWorldText text;
+        tc_render_item_collect_context context{};
+        CHECK(enumerate_materials(text, context).empty());
+        text.text = "hello";
+        text.font_path = "/missing/font/that/must/not/be/loaded.ttf";
+        auto materials = enumerate_materials(text, context);
+        REQUIRE_EQ(materials.size(), 1u);
+        CHECK_EQ(text.model_queries, 0u);
+        check_materials_match_render_items(text, context);
+        context.phase = TC_PHASE_ID;
+        check_materials_match_render_items(text, context);
+        context.phase = TC_PHASE_OPAQUE;
+        CHECK(enumerate_materials(text, context).empty());
+        text.phase_mark = "opaque";
+        check_materials_match_render_items(text, context);
+        text.text.clear();
+        CHECK(enumerate_materials(text, context).empty());
+    }
     tc_shader_shutdown();
     tc_material_shutdown();
 }

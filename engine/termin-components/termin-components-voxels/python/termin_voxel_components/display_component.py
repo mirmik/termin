@@ -251,18 +251,25 @@ class VoxelDisplayComponent(DrawableComponent):
             # Defer rebuild to update() - don't rebuild during rendering
             self._needs_rebuild = True
 
-    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
-        """Возвращает RenderItems для рендеринга воксельного меша."""
+    def _selected_material(self, context: RenderItemCollectContext) -> Material | None:
         self._check_hot_reload()
         if self._voxel_mesh is None or not self._voxel_mesh.is_valid:
+            return None
+        material = self._get_or_create_material()
+        if not any(context.phase == 0 or phase.phase == context.phase for phase in material.phases):
+            return None
+        return material
+
+    def collect_materials(self, context: RenderItemCollectContext) -> list[Material]:
+        material = self._selected_material(context)
+        return [] if material is None else [material]
+
+    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
+        """Возвращает RenderItems для рендеринга воксельного меша."""
+        mat = self._selected_material(context)
+        if mat is None:
             return []
-
-        mat = self._get_or_create_material()
-
-        if context.phase == 0:
-            phases = list(mat.phases)
-        else:
-            phases = [p for p in mat.phases if p.phase == context.phase]
+        phases = [p for p in mat.phases if context.phase == 0 or p.phase == context.phase]
 
         # Обновляем uniforms перед возвратом фаз
         # (ColorPass вызовет phase.apply() который загрузит их в GPU)

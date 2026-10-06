@@ -31,6 +31,15 @@ namespace termin {
         LinearColor override_color{1.0f, 1.0f, 1.0f, 1.0f};
     };
 
+    // Uses exactly the phase and owner-material selection of the full line collector,
+    // without preparing geometry, transforms, or per-item payloads.
+    ENTITY_API bool collect_line_batch_materials(const tc_render_item_collect_context& context,
+                                                  tc_material_sink& sink,
+                                                  size_t point_count,
+                                                  const TcMaterial& material,
+                                                  const TcMaterial& shadow_fallback_material,
+                                                  bool cast_shadow);
+
     ENTITY_API bool emit_line_batch_render_items(tc_component* component,
                                                  const tc_render_item_collect_context& context,
                                                  tc_render_item_sink& sink,

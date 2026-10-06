@@ -50,6 +50,15 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
 
     tc_render_item_collect_context context{};
     context.phase = TC_PHASE_NONE;
+    size_t material_count = 0;
+    tc_material_sink material_sink{};
+    material_sink.emit = [](tc_material_handle, void* user_data) {
+        ++*static_cast<size_t*>(user_data);
+        return true;
+    };
+    material_sink.user_data = &material_count;
+    REQUIRE(renderer->collect_materials(context, material_sink));
+    CHECK_EQ(material_count, 0u);
     termin::RenderItemCollection collection;
     REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), context, collection));
     REQUIRE_EQ(collection.items.size(), 1u);

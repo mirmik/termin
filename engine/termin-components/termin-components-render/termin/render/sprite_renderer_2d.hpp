@@ -52,6 +52,7 @@ namespace termin {
         void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
 
         tc_phase_mask get_phase_mask() const override;
+        bool collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) override;
         bool collect_render_items(const tc_render_item_collect_context& context, tc_render_item_sink& sink) override;
 
         AABB world_bounds() const;

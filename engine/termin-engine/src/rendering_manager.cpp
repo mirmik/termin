@@ -10,8 +10,10 @@
 #include "scene_light_collector.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
 #include <termin/entity/entity.hpp>
+#include <termin/tc_scene.hpp>
 #include <termin/render/render_lifecycle.hpp>
 #include <termin/render/scene_render_execution.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 
 extern "C" {
 #include "core/tc_entity_pool.h"
@@ -996,10 +998,18 @@ namespace termin {
         rendering_manager_detail::update_viewport_rects(topology_, only_display, demands.data(), demands.size());
         rendering_manager_detail::sync_viewport_render_target_resolutions(
             topology_, only_display, demands.data(), demands.size());
+        struct PreparedOutput {
+            tc_render_target_handle target;
+            tc_viewport_handle viewport;
+            std::unordered_map<std::string, RenderTargetContext> contexts;
+            SceneInternalEntityMap internal_entities;
+            std::string default_context;
+        };
         struct PlannedRenderContext {
             RenderingManager* manager;
             std::vector<tc_scene_handle> prepared_scenes;
-        } planned_context{this, {}};
+            std::vector<std::unique_ptr<PreparedOutput>> outputs;
+        } planned_context{this, {}, {}};
 
         offscreen_planner_->execute(
             topology_,
@@ -1008,32 +1018,118 @@ namespace termin {
                 PlannedRenderContext* planned = static_cast<PlannedRenderContext*>(user_data);
                 RenderingManager* manager = planned->manager;
                 const rendering_manager_detail::OffscreenRenderJob& job = *planned_job;
-                bool prepared =
-                    std::any_of(planned->prepared_scenes.begin(),
-                                planned->prepared_scenes.end(),
-                                [job](tc_scene_handle scene) { return tc_scene_handle_eq(scene, job.scene); });
-                if (!prepared && tc_scene_handle_valid(job.scene)) {
-                    const tc::ProfilerScope scope("Scene render prepare");
-                    RenderPrepareContext context(job.scene);
-                    tc_scene_render_mount_prepare(job.scene,
-                                                  reinterpret_cast<const tc_render_prepare_context*>(&context));
-                    planned->prepared_scenes.push_back(job.scene);
+                std::unordered_map<std::string, RenderTargetContext> contexts;
+                SceneInternalEntityMap internal_entities;
+                std::string default_context;
+                RenderExecutionInfo execution{.scene = job.scene, .pipeline = job.pipeline, .targets = {}};
+                for (auto& prepared : planned->outputs) {
+                    bool belongs = tc_render_target_handle_eq(prepared->target, job.render_target);
+                    if (job.kind == rendering_manager_detail::OffscreenRenderJobKind::ScenePipeline) {
+                        belongs = false;
+                        for (size_t i = 0; i < manager->topology_.pipeline_target_count(job.scene, job.pipeline); ++i) {
+                            const auto viewport = manager->topology_.pipeline_target_viewport_at(job.scene, job.pipeline, i);
+                            if (tc_viewport_handle_valid(viewport) &&
+                                tc_render_target_handle_eq(tc_viewport_get_render_target(viewport), prepared->target))
+                                belongs = true;
+                        }
+                    }
+                    if (!belongs)
+                        continue;
+                    // Views/providers were prepared before graph traversal. GPU
+                    // bindings are resolved now, after dependency producers ran.
+                    rendering_manager_detail::RenderTargetContextBuildRequest request{
+                        *manager, manager->render_engine(), prepared->target, prepared->default_context,
+                        TC_ENTITY_HANDLE_INVALID, tc_render_target_get_width(prepared->target),
+                        tc_render_target_get_height(prepared->target), manager->topology_.managed_render_targets(),
+                        manager->render_target_context_providers_, manager->missing_render_target_provider_warnings_,
+                        prepared->contexts, prepared->internal_entities, prepared->default_context};
+                    if (!rendering_manager_detail::bind_render_target_context_resources(request))
+                        return;
+                    contexts.merge(prepared->contexts);
+                    internal_entities.merge(prepared->internal_entities);
+                    if (!prepared->contexts.empty()) {
+                        tc_log(TC_LOG_ERROR, "[RenderingManager] duplicate prepared context name in render job");
+                        return;
+                    }
+                    if (default_context.empty())
+                        default_context = prepared->default_context;
+                    execution.targets.push_back({tc_viewport_handle_valid(prepared->viewport)
+                                                     ? RenderExecutionTargetKind::Viewport
+                                                     : RenderExecutionTargetKind::RenderTarget,
+                                                 prepared->viewport, prepared->target});
                 }
-                if (job.kind == rendering_manager_detail::OffscreenRenderJobKind::ScenePipeline) {
-                    manager->render_scene_pipeline_offscreen(job.scene, job.pipeline);
+                if (contexts.empty())
                     return;
-                }
-                if (tc_viewport_handle_valid(job.viewport)) {
-                    manager->render_viewport_offscreen(job.viewport);
-                } else {
-                    manager->render_render_target_offscreen(job.render_target);
-                }
+                const auto lights = manager->collect_lights(job.scene);
+                RenderPipeline pipeline(job.pipeline);
+                const auto captures = manager->prepare_render_execution(execution);
+                termin::render_scene_pipeline_offscreen(*manager->render_engine(), pipeline, job.scene, contexts,
+                    internal_entities, lights, default_context, captures, &manager->static_mesh_batches_);
+                manager->finish_render_execution(execution, captures);
             },
             &planned_context,
             nullptr,
             nullptr,
             demands.data(),
-            demands.size());
+            demands.size(),
+            [](void* user_data, const rendering_manager_detail::OffscreenRenderJob* job,
+               tc_render_target_handle output, tc_material_sink* sink) {
+                auto& planned = *static_cast<PlannedRenderContext*>(user_data);
+                auto& manager = *planned.manager;
+                const bool prepared = std::any_of(planned.prepared_scenes.begin(), planned.prepared_scenes.end(),
+                    [job](tc_scene_handle scene) { return tc_scene_handle_eq(scene, job->scene); });
+                if (!prepared && tc_scene_handle_valid(job->scene)) {
+                    const tc::ProfilerScope scope("Scene render prepare");
+                    RenderPrepareContext context(job->scene);
+                    tc_scene_render_mount_prepare(job->scene,
+                        reinterpret_cast<const tc_render_prepare_context*>(&context));
+                    planned.prepared_scenes.push_back(job->scene);
+                }
+                auto prepared_output = std::make_unique<PreparedOutput>();
+                prepared_output->target = output;
+                prepared_output->viewport = job->viewport;
+                if (job->kind == rendering_manager_detail::OffscreenRenderJobKind::ScenePipeline) {
+                    for (size_t i = 0; i < manager.topology_.pipeline_target_count(job->scene, job->pipeline); ++i) {
+                        const auto viewport = manager.topology_.pipeline_target_viewport_at(job->scene, job->pipeline, i);
+                        if (tc_viewport_handle_valid(viewport) &&
+                            tc_render_target_handle_eq(tc_viewport_get_render_target(viewport), output))
+                            prepared_output->viewport = viewport;
+                    }
+                }
+                const auto viewport = prepared_output->viewport;
+                const char* name = tc_viewport_handle_valid(viewport) ? tc_viewport_get_name(viewport)
+                                                                     : tc_render_target_get_name(output);
+                const std::string base_name = name ? name : "";
+                const auto internal = tc_viewport_handle_valid(viewport) ? tc_viewport_get_internal_entities(viewport)
+                                                                        : TC_ENTITY_HANDLE_INVALID;
+                rendering_manager_detail::RenderTargetContextBuildRequest build_request{
+                    manager, manager.render_engine(), output, base_name, internal,
+                    tc_render_target_get_width(output), tc_render_target_get_height(output),
+                    manager.topology_.managed_render_targets(), manager.render_target_context_providers_,
+                    manager.missing_render_target_provider_warnings_, prepared_output->contexts,
+                    prepared_output->internal_entities, prepared_output->default_context, false};
+                if (!rendering_manager_detail::build_render_target_contexts(build_request)) {
+                    // A target with no usable view has no execution/geometry.
+                    return true;
+                }
+                const TcSceneRef scene(job->scene);
+                bool ok = true;
+                for (const auto& [context_name, target] : prepared_output->contexts) {
+                    RenderSceneItemCollectRequest request;
+                    request.scene = job->scene;
+                    request.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+                    request.layer_mask = target.layer_mask;
+                    request.render_category_mask = target.render_category_mask;
+                    request.camera = target.view.primary_view();
+                    request.scene_context = &scene;
+                    request.debug_pass_name = context_name.c_str();
+                    if (!collect_scene_materials(request, *sink))
+                        ok = false;
+                }
+                planned.outputs.push_back(std::move(prepared_output));
+                return ok;
+            },
+            &planned_context);
     }
 
     void RenderingManager::render_render_target_tree_offscreen(tc_render_target_handle rt) {

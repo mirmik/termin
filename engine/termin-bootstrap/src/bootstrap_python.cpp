@@ -15,6 +15,8 @@
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/python_render_item.hpp>
 #include <termin/render/render_context.hpp>
+#include <termin/render/render_camera.hpp>
+#include <termin/tc_scene.hpp>
 #include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/voxels/tc_voxel_grid_handle.hpp>
 #include <tgfx/resources/tc_material.h>
@@ -129,6 +131,58 @@ namespace termin::bootstrap {
             return result;
         }
 
+        nb::object py_drawable_collect_context(const tc_render_item_collect_context& context) {
+            nb::object camera = context.camera
+                ? nb::cast(*static_cast<const RenderCamera*>(context.camera), nb::rv_policy::copy)
+                : nb::none();
+            nb::object scene = context.scene
+                ? nb::cast(*static_cast<const TcSceneRef*>(context.scene), nb::rv_policy::copy)
+                : nb::none();
+            nb::object context_type =
+                nb::module_::import_("termin.render.drawable").attr("RenderItemCollectContext");
+            return context_type(context.phase,
+                                context.flags,
+                                context.layer_mask,
+                                context.render_category_mask,
+                                context.debug_pass_name ? context.debug_pass_name : "",
+                                camera,
+                                scene);
+        }
+
+        bool py_drawable_cb_collect_materials(void* py_self,
+                                              tc_component* component,
+                                              const tc_render_item_collect_context* context,
+                                              tc_material_sink* sink) {
+            nb::gil_scoped_acquire gil;
+            try {
+                if (!component || !context || !sink || !sink->emit) {
+                    tc::Log::error("Drawable::collect_materials: invalid callback arguments");
+                    return false;
+                }
+                nb::handle self((PyObject*)py_self);
+                nb::object materials = self.attr("collect_materials")(py_drawable_collect_context(*context));
+                if (materials.is_none()) {
+                    tc::Log::error("Drawable::collect_materials must return an iterable of TcMaterial objects");
+                    return false;
+                }
+                for (auto material_obj : materials) {
+                    const TcMaterial& material = nb::cast<const TcMaterial&>(material_obj);
+                    if (!material.is_valid()) {
+                        tc::Log::error("Drawable::collect_materials returned an invalid material");
+                        return false;
+                    }
+                    if (!sink->emit(material.handle, sink->user_data)) {
+                        return false;
+                    }
+                }
+                return true;
+            } catch (const std::exception& e) {
+                tc::Log::error(e, "Drawable::collect_materials");
+                PyErr_Print();
+                return false;
+            }
+        }
+
         bool py_drawable_cb_collect_render_items(void* py_self,
                                                  tc_component* component,
                                                  const tc_render_item_collect_context* context,
@@ -153,13 +207,7 @@ namespace termin::bootstrap {
                 }
 
                 nb::handle self((PyObject*)py_self);
-                nb::object context_type =
-                    nb::module_::import_("termin.render.drawable").attr("RenderItemCollectContext");
-                nb::object py_context = context_type(context->phase,
-                                                     context->flags,
-                                                     context->layer_mask,
-                                                     context->render_category_mask,
-                                                     context->debug_pass_name ? context->debug_pass_name : "");
+                nb::object py_context = py_drawable_collect_context(*context);
                 nb::object py_items = self.attr("collect_render_items")(py_context);
                 if (py_items.is_none()) {
                     result = true;
@@ -384,6 +432,7 @@ namespace termin::bootstrap {
         tc_python_drawable_callbacks drawable_callbacks = {
             .phase_mask = py_drawable_cb_phase_mask,
             .collect_render_items = py_drawable_cb_collect_render_items,
+            .collect_materials = py_drawable_cb_collect_materials,
         };
         tc_component_set_python_drawable_callbacks(&drawable_callbacks);
 

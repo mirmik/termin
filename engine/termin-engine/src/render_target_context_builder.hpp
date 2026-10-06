@@ -18,8 +18,10 @@ namespace termin::rendering_manager_detail {
         std::unordered_map<std::string, RenderTargetContext>& contexts;
         std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context;
         std::string& default_context_name;
+        bool bind_resources = true;
     };
 
     bool build_render_target_contexts(const RenderTargetContextBuildRequest& request);
+    bool bind_render_target_context_resources(const RenderTargetContextBuildRequest& request);
 
 } // namespace termin::rendering_manager_detail

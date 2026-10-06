@@ -15,13 +15,14 @@ namespace termin {
         struct CollectCallbackData {
             RenderItemCollection* output = nullptr;
             const RenderSceneItemCollectRequest* request = nullptr;
+            tc_material_sink* material_sink = nullptr;
             bool ok = true;
             uint64_t producer_count = 0;
         };
 
         bool collect_drawable_items_callback(tc_component* component, void* user_data) {
             auto* data = static_cast<CollectCallbackData*>(user_data);
-            if (!data || !data->output || !data->request) {
+            if (!data || (!data->output && !data->material_sink) || !data->request) {
                 tc::Log::error("[RenderSceneItemCollector] invalid scene callback state");
                 return true;
             }
@@ -47,7 +48,12 @@ namespace termin {
             context.camera = data->request->camera;
             context.user_context = data->request->user_context;
 
-            if (!collect_drawable_render_items(component, context, *data->output)) {
+            const bool ok = data->material_sink
+                ? tc_component_collect_materials(component, &context, data->material_sink)
+                : collect_drawable_render_items(component, context, *data->output);
+            if (!ok) {
+                tc::Log::error("[%s] drawable '%s' collection failed", safe_pass_name(*data->request),
+                               tc_component_type_name(component));
                 data->ok = false;
             }
             data->producer_count += 1;
@@ -55,6 +61,24 @@ namespace termin {
         }
 
     } // namespace
+
+    bool collect_scene_materials(const RenderSceneItemCollectRequest& request, tc_material_sink& sink) {
+        const tc::ProfilerScope scope("Material dependency enumeration");
+        if (!tc_scene_handle_valid(request.scene) || !sink.emit) {
+            tc::Log::error("[%s] invalid scene material enumeration request", safe_pass_name(request));
+            return false;
+        }
+        // A zero mask selects no entities. tc_scene_foreach_drawable historically
+        // uses zero as 'no layer filtering', so handle the empty set here.
+        if (request.layer_mask == 0)
+            return true;
+        CollectCallbackData data;
+        data.request = &request;
+        data.material_sink = &sink;
+        tc_scene_foreach_drawable(request.scene, collect_drawable_items_callback, &data,
+                                 request.scene_filter_flags, request.layer_mask);
+        return data.ok;
+    }
 
     void RenderSceneItemCollector::clear_keep_capacity() {
         storage_.clear();
@@ -75,6 +99,8 @@ namespace termin {
             tc::Log::error("[%s] cannot collect scene RenderItems: scene is invalid", safe_pass_name(request));
             return false;
         }
+        if (request.layer_mask == 0)
+            return true;
         CollectCallbackData data;
         data.output = &output;
         data.request = &request;

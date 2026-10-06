@@ -132,24 +132,28 @@ class VoxelizerDebugDrawService:
                     mask |= phase.phase
         return mask
 
-    def collect_render_items(
-        self,
-        component,
-        phase: int,
-    ) -> list[RenderItem]:
-        result: list[RenderItem] = []
+    def _selected_layers(self, component, phase: int):
         for layer in VOXELIZER_DEBUG_LAYERS:
             if not layer.enabled(component):
                 continue
             mesh = layer.mesh(component)
             if mesh is None or not mesh.is_valid:
                 continue
+            material = layer.material(component)
+            phases = [p for p in material.phases if phase == 0 or p.phase == phase]
+            if phases:
+                yield layer, mesh, material, phases
 
-            mat = layer.material(component)
-            if phase == 0:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase == phase]
+    def collect_materials(self, component, phase: int):
+        return [material for _, _, material, _ in self._selected_layers(component, phase)]
+
+    def collect_render_items(
+        self,
+        component,
+        phase: int,
+    ) -> list[RenderItem]:
+        result: list[RenderItem] = []
+        for layer, mesh, _, phases in self._selected_layers(component, phase):
             if layer.configure_phases is not None:
                 layer.configure_phases(component, phases)
 

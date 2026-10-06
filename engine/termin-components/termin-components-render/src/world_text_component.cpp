@@ -495,11 +495,6 @@ namespace termin {
         loaded_font_path_.clear();
     }
 
-    TcMaterial WorldTextComponent::effective_material() const {
-        sync_material_phase();
-        return material_;
-    }
-
     tc_material_phase* WorldTextComponent::sync_material_phase() const {
         const std::string mark = sanitize_phase_mark(phase_mark);
         if (!material_.is_valid()) {
@@ -541,8 +536,6 @@ namespace termin {
         phase->phase_mark[TC_PHASE_MARK_MAX - 1] = '\0';
         phase->priority = priority;
         phase->state = make_text_render_state(*this);
-        const float numeric_color[4] = {color.r, color.g, color.b, color.a};
-        tc_material_phase_set_uniform(phase, "u_color", TC_UNIFORM_VEC4, numeric_color);
         return phase;
     }
 
@@ -580,34 +573,49 @@ namespace termin {
         return tc_phase_find(sanitize_phase_mark(phase_mark).c_str()) | TC_PHASE_ID;
     }
 
+    tc_material_phase* WorldTextComponent::select_material_phase(
+        const tc_render_item_collect_context& context) const {
+        if (text.empty()) {
+            return nullptr;
+        }
+        const bool is_id_pass = context.phase == TC_PHASE_ID;
+        const std::string mark = sanitize_phase_mark(phase_mark);
+        if (context.phase != TC_PHASE_NONE && !is_id_pass && context.phase != tc_phase_find(mark.c_str())) {
+            return nullptr;
+        }
+        return sync_material_phase();
+    }
+
+    bool WorldTextComponent::collect_materials(const tc_render_item_collect_context& context, tc_material_sink& sink) {
+        if (!sink.emit) {
+            tc::Log::error("[WorldTextComponent] cannot emit materials: sink callback is null");
+            return false;
+        }
+        if (!select_material_phase(context)) {
+            return true;
+        }
+        return sink.emit(material_.handle, sink.user_data);
+    }
+
     bool WorldTextComponent::collect_render_items(const tc_render_item_collect_context& context,
                                                   tc_render_item_sink& sink) {
         if (!sink.emit) {
             tc::Log::error("[WorldTextComponent] cannot emit render items: sink callback is null");
             return false;
         }
-        if (text.empty()) {
-            return true;
-        }
-
-        const bool is_id_pass = context.phase == TC_PHASE_ID;
-        const std::string mark = sanitize_phase_mark(phase_mark);
-        const bool collect_all_phases = context.phase == TC_PHASE_NONE;
-        if (!collect_all_phases && !is_id_pass && context.phase != tc_phase_find(mark.c_str())) {
-            return true;
-        }
-
-        tc_material_phase* phase = sync_material_phase();
+        tc_material_phase* phase = select_material_phase(context);
         if (!phase) {
             return true;
         }
+        const float numeric_color[4] = {color.r, color.g, color.b, color.a};
+        tc_material_phase_set_uniform(phase, "u_color", TC_UNIFORM_VEC4, numeric_color);
 
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_TEXT_BATCH;
         item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
         item.geometry_id = 0;
         item.material_phase = phase;
-        TcMaterial material = effective_material();
+        TcMaterial material = material_;
         tc_material* raw_material = material.get();
         item.material = material.handle;
         item.material_phase_index = raw_material ? static_cast<size_t>(phase - raw_material->phases) : SIZE_MAX;

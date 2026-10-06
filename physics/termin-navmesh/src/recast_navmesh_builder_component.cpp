@@ -537,12 +537,8 @@ namespace termin {
         return TC_PHASE_NONE;
     }
 
-    bool RecastNavMeshBuilderComponent::collect_render_items(const tc_render_item_collect_context& context,
-                                                             tc_render_item_sink& sink) {
-        if (!sink.emit) {
-            tc_log_error("[RecastNavMeshBuilderComponent] cannot emit render items: sink callback is null");
-            return false;
-        }
+    template <typename Visit>
+    bool RecastNavMeshBuilderComponent::visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit) {
         if (context.phase != TC_PHASE_NONE && context.phase != TC_PHASE_EDITOR_DEBUG) {
             return true;
         }
@@ -578,34 +574,61 @@ namespace termin {
             {show_detail_mesh, GEOMETRY_DETAIL_MESH, &_detail_mesh_debug},
         };
 
-        Mat44f model = get_model_matrix(entity());
         for (const Layer& layer : layers) {
             if (!layer.visible || !layer.mesh || !layer.mesh->is_valid()) {
                 continue;
             }
             tc_mesh* mesh = layer.mesh->get();
-            if (!mesh) {
+            if (!mesh || mesh->index_count == 0) {
                 continue;
             }
             for (size_t i = 0; i < count; ++i) {
                 tc_material_phase* phase = phases[i];
-                tc_render_item item{};
-                item.kind = TC_RENDER_ITEM_KIND_MESH;
-                item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-                item.geometry_id = layer.geometry_id;
-                item.material_phase = phase;
-                item.material = mat.handle;
-                item.material_phase_index = static_cast<size_t>(phase - material->phases);
-                std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
-                item.payload.mesh.mesh_handle = layer.mesh->handle;
-                item.payload.mesh.submesh_index = 0;
-                if (!sink.emit(&item, sink.user_data)) {
+                if (!visit(layer.geometry_id, layer.mesh->handle, mat, phase)) {
                     return false;
                 }
             }
         }
-
         return true;
+    }
+
+    bool RecastNavMeshBuilderComponent::collect_materials(const tc_render_item_collect_context& context,
+                                                          tc_material_sink& sink) {
+        if (!sink.emit) {
+            tc_log_error("[RecastNavMeshBuilderComponent] cannot emit materials: sink callback is null");
+            return false;
+        }
+        return visit_material_phases(context, [&](int, tc_mesh_handle, const TcMaterial& mat, tc_material_phase*) {
+            return sink.emit(mat.handle, sink.user_data);
+        });
+    }
+
+    bool RecastNavMeshBuilderComponent::collect_render_items(const tc_render_item_collect_context& context,
+                                                             tc_render_item_sink& sink) {
+        if (!sink.emit) {
+            tc_log_error("[RecastNavMeshBuilderComponent] cannot emit render items: sink callback is null");
+            return false;
+        }
+        Mat44f model;
+        bool has_model = false;
+        return visit_material_phases(context,
+            [&](int geometry_id, tc_mesh_handle mesh_handle, const TcMaterial& mat, tc_material_phase* phase) {
+                if (!has_model) {
+                    model = get_model_matrix(entity());
+                    has_model = true;
+                }
+                tc_render_item item{};
+                item.kind = TC_RENDER_ITEM_KIND_MESH;
+                item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+                item.geometry_id = geometry_id;
+                item.material_phase = phase;
+                item.material = mat.handle;
+                item.material_phase_index = static_cast<size_t>(phase - mat.get()->phases);
+                std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
+                item.payload.mesh.mesh_handle = mesh_handle;
+                item.payload.mesh.submesh_index = 0;
+                return sink.emit(&item, sink.user_data);
+            });
     }
 
     // --- Mesh generation ---

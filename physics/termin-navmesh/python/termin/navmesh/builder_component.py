@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Optional, List
 import numpy as np
 from termin.geombase import SrgbColor
 
-from termin.render import DrawableComponent
+from termin.render import DrawableComponent, RenderLifecycleComponent
 from termin.materials import TcMaterial as Material
 from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
@@ -42,7 +42,7 @@ def _build_navmesh_action(component: "NavMeshBuilderComponent") -> None:
     component.build()
 
 
-class NavMeshBuilderComponent(DrawableComponent):
+class NavMeshBuilderComponent(DrawableComponent, RenderLifecycleComponent):
     """
     Component for building NavMesh from entity mesh.
 
@@ -326,142 +326,58 @@ class NavMeshBuilderComponent(DrawableComponent):
                 mask |= phase.phase
         return mask
 
+    def prepare_render(self, context) -> None:
+        if self.show_distance_field and (
+            self.show_local_maxima != self._cached_show_local_maxima
+            or self.show_peaks != self._cached_show_peaks
+        ):
+            self._rebuild_distance_field_from_cache()
+
+    def _selected_layers(self, context: RenderItemCollectContext):
+        layers = (
+            (self.show_region_voxels, self._debug_region_voxels_mesh,
+             self._get_or_create_debug_material, self.GEOMETRY_REGIONS, True),
+            (self.show_simplified_contours, self._debug_simplified_contours_mesh,
+             self._get_or_create_line_material, self.GEOMETRY_SIMPLIFIED_CONTOURS, False),
+            (self.show_triangulated, self._debug_triangulated_mesh,
+             self._get_or_create_line_material, self.GEOMETRY_TRIANGULATED, False),
+            (self.show_distance_field, self._debug_distance_field_mesh,
+             self._get_or_create_debug_material, self.GEOMETRY_DISTANCE_FIELD, True),
+            (self.show_watershed_regions, self._debug_watershed_mesh,
+             self._get_or_create_debug_material, self.GEOMETRY_WATERSHED, True),
+        )
+        for enabled, mesh, get_material, geometry_id, voxel_params in layers:
+            if not enabled or mesh is None or not mesh.is_valid:
+                continue
+            material = get_material()
+            phases = [p for p in material.phases if context.phase == 0 or p.phase == context.phase]
+            if phases:
+                yield mesh, material, phases, geometry_id, voxel_params
+
+    def collect_materials(self, context: RenderItemCollectContext) -> list[Material]:
+        return [material for _, material, _, _, _ in self._selected_layers(context)]
+
     def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
-        """Return RenderItems for debug rendering."""
+        """Return RenderItems for prepared debug geometry."""
         result: list[RenderItem] = []
-
-        # Region voxels
-        if self.show_region_voxels and self._debug_region_voxels_mesh is not None and self._debug_region_voxels_mesh.is_valid:
-            mat = self._get_or_create_debug_material()
-            if context.phase == 0:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase == context.phase]
-
-            white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-            for phase in phases:
-                phase.set_param("u_color_below", white_color)
-                phase.set_param("u_color_above", white_color)
-                phase.set_param("u_color_surface", white_color)
-                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
-                phase.set_param("u_fill_percent", 1.0)
-                phase.set_param("u_bounds_min", self._debug_bounds_min)
-                phase.set_param("u_bounds_max", self._debug_bounds_max)
-                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
-                phase.set_param("u_ambient_intensity", 0.5)
-
+        for mesh, _, phases, geometry_id, voxel_params in self._selected_layers(context):
+            if voxel_params:
+                white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+                for phase in phases:
+                    phase.set_param("u_color_below", white_color)
+                    phase.set_param("u_color_above", white_color)
+                    phase.set_param("u_color_surface", white_color)
+                    phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
+                    phase.set_param("u_fill_percent", 1.0)
+                    phase.set_param("u_bounds_min", self._debug_bounds_min)
+                    phase.set_param("u_bounds_max", self._debug_bounds_max)
+                    phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
+                    phase.set_param("u_ambient_intensity", 0.5)
             phases.sort(key=lambda p: p.priority)
             result.extend(
-                RenderItem.mesh(
-                    mesh=self._debug_region_voxels_mesh,
-                    phase=p,
-                    geometry_id=self.GEOMETRY_REGIONS,
-                )
-                for p in phases
+                RenderItem.mesh(mesh=mesh, phase=phase, geometry_id=geometry_id)
+                for phase in phases
             )
-
-        # Simplified contours
-        if self.show_simplified_contours and self._debug_simplified_contours_mesh is not None and self._debug_simplified_contours_mesh.is_valid:
-            mat = self._get_or_create_line_material()
-            if context.phase == 0:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase == context.phase]
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(
-                RenderItem.mesh(
-                    mesh=self._debug_simplified_contours_mesh,
-                    phase=p,
-                    geometry_id=self.GEOMETRY_SIMPLIFIED_CONTOURS,
-                )
-                for p in phases
-            )
-
-        # Triangulated mesh
-        if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
-            mat = self._get_or_create_line_material()
-            if context.phase == 0:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase == context.phase]
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(
-                RenderItem.mesh(
-                    mesh=self._debug_triangulated_mesh,
-                    phase=p,
-                    geometry_id=self.GEOMETRY_TRIANGULATED,
-                )
-                for p in phases
-            )
-
-        # Distance field
-        if self.show_distance_field:
-            # Check if checkbox state changed - rebuild mesh from cached data
-            if (self.show_local_maxima != self._cached_show_local_maxima or
-                self.show_peaks != self._cached_show_peaks):
-                self._rebuild_distance_field_from_cache()
-
-        if self.show_distance_field and self._debug_distance_field_mesh is not None and self._debug_distance_field_mesh.is_valid:
-            mat = self._get_or_create_debug_material()
-            if context.phase == 0:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase == context.phase]
-
-            white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-            for phase in phases:
-                phase.set_param("u_color_below", white_color)
-                phase.set_param("u_color_above", white_color)
-                phase.set_param("u_color_surface", white_color)
-                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
-                phase.set_param("u_fill_percent", 1.0)
-                phase.set_param("u_bounds_min", self._debug_bounds_min)
-                phase.set_param("u_bounds_max", self._debug_bounds_max)
-                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
-                phase.set_param("u_ambient_intensity", 0.5)
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(
-                RenderItem.mesh(
-                    mesh=self._debug_distance_field_mesh,
-                    phase=p,
-                    geometry_id=self.GEOMETRY_DISTANCE_FIELD,
-                )
-                for p in phases
-            )
-
-        # Watershed regions
-        if self.show_watershed_regions and self._debug_watershed_mesh is not None and self._debug_watershed_mesh.is_valid:
-            mat = self._get_or_create_debug_material()
-            if context.phase == 0:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase == context.phase]
-
-            white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-            for phase in phases:
-                phase.set_param("u_color_below", white_color)
-                phase.set_param("u_color_above", white_color)
-                phase.set_param("u_color_surface", white_color)
-                phase.set_param("u_slice_axis", np.array([0.0, 0.0, 1.0], dtype=np.float32))
-                phase.set_param("u_fill_percent", 1.0)
-                phase.set_param("u_bounds_min", self._debug_bounds_min)
-                phase.set_param("u_bounds_max", self._debug_bounds_max)
-                phase.set_param("u_ambient_color", np.array([1.0, 1.0, 1.0], dtype=np.float32))
-                phase.set_param("u_ambient_intensity", 0.5)
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(
-                RenderItem.mesh(
-                    mesh=self._debug_watershed_mesh,
-                    phase=p,
-                    geometry_id=self.GEOMETRY_WATERSHED,
-                )
-                for p in phases
-            )
-
         return result
 
     def _get_or_create_debug_material(self) -> Material:

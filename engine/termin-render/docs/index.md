@@ -46,6 +46,29 @@ source получает нейтральные view/mask inputs и наполн�
 отдельный `termin_render_core`, тогда как scene traversal/services остаются в
 `termin_render`.
 
+Планировщик зависимостей материалов использует обязательный лёгкий
+`tc_drawable_vtable::collect_materials` / `Drawable::collect_materials`.
+Producer отправляет выбранные `tc_material_handle` в `tc_material_sink`;
+Python producer возвращает iterable `TcMaterial` из `collect_materials(context)`.
+Успешный пустой результат означает отсутствие материалов. Отсутствующий
+callback, исключение и невалидный material handle дают диагностируемую ошибку;
+fallback к `collect_render_items` отсутствует.
+
+Enumeration и сбор RenderItems используют общую логику выбора материалов,
+phase variants, непустой геометрии и фильтров. Для phase-only item producer
+перечисляет `material_phase->owner_material`. Материалы не перечисляются
+произвольным superset: лишняя render-target ссылка способна создать ложный
+цикл. Enumeration не строит матрицы, skin/uniform или geometry payloads.
+Оба пути получают одинаковые target view, scene и layer/category masks.
+Нулевая layer mask выбирает пустой набор.
+
+В `RenderingManager` scene render preparation выполняется один раз на сцену
+до определения её material dependencies. Target views и provider contexts
+создаются перед enumeration и используются исполнением в том же кадре;
+GPU texture bindings заполняются после исполнения зависимых producers.
+DFS сначала сохраняет список рёбер узла, затем рекурсирует по индексам,
+которые сохраняются при расширении storage. Межкадрового cache материалов нет.
+
 Для adapter-specific CPU data `RenderItemCollection` предоставляет
 type-erased ownership: source сохраняет `shared_ptr<const Payload>`, а
 `tc_render_item::source.adapter_data` указывает на удерживаемое snapshot
