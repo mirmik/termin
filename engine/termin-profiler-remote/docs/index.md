@@ -4,13 +4,29 @@
 target transport layer above `termin-base`.
 
 The public codec in `termin/profiler_remote/wire_codec.hpp` owns protocol
-version 1, its fixed 32-byte big-endian envelope, typed payload schemas and all
+version 2, its fixed 32-byte big-endian envelope, typed payload schemas and all
 hard allocation limits. It deliberately has no socket, editor, Android or
 profiler-singleton dependency. Known message layouts accept newer minor
 versions because minor revisions are additive; a different major version and
 unknown message types are rejected.
 
-See [the architecture decision](../../docs/analysis/2026-07-30-remote-profiler-network-android.md)
+Detailed frames have no independent 256-section limit. Every section occupies
+36 wire bytes; a frame occupies 58 bytes plus eight when a GPU duration is
+present, and a batch starts with a four-byte frame count. The existing 1 MiB
+payload budget therefore determines the advertised section capacity (29,125
+for a single frame), and batches split by bytes as well as by frame count.
+Decoding checks claimed section counts against remaining bytes before reserving
+memory. These transport bounds do not limit the complete native profile retained
+locally. The independent session dictionary bound of 4,096 names is unchanged;
+new names beyond it use the documented overflow entry.
+
+The target honors smaller peer-advertised payload, frame and section limits
+without changing the v2 schema. A complete frame that cannot fit a negotiated
+receiver budget is rejected with an error and a source gap; its section tree is
+never partially truncated. Frames that exceed the local payload budget are
+dropped before enqueueing and included in the next producer drop report.
+
+See [the architecture decision](../../../docs/analysis/2026-07-30-remote-profiler-network-android.md)
 for transport ownership, backpressure and Android connection policy.
 
 `RemoteProfilerTarget` is the bounded target-side service. Its lifecycle and
@@ -48,8 +64,8 @@ Test builds provide a standalone target and client that exercise the complete
 handshake, capture controls, cadence frames and detailed section frames:
 
 ```bash
-build/Release-tests/bin/termin_profiler_remote_smoke_target 46123 smoke-token
-build/Release-tests/bin/termin_profiler_remote_smoke_client 46123 smoke-token
+build/Release/bin/termin_profiler_remote_smoke_target 46123 smoke-token
+build/Release/bin/termin_profiler_remote_smoke_client 46123 smoke-token
 ```
 
 Start the target first. The client starts and pauses a cadence capture, then

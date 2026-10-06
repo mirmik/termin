@@ -29,7 +29,15 @@ namespace termin::profiler_remote {
     struct WireLimits {
         static constexpr std::uint32_t max_payload_bytes = 1024U * 1024U;
         static constexpr std::uint32_t max_frames_per_batch = 256;
-        static constexpr std::uint32_t max_sections_per_frame = 256;
+        // Wire sizes, independent of C++ padding. v2 adds eight bytes to a
+        // frame only when its optional GPU duration is present.
+        static constexpr std::uint32_t frame_batch_count_bytes = 4;
+        static constexpr std::uint32_t min_frame_bytes = 58;
+        static constexpr std::uint32_t section_bytes = 36;
+        // A byte-budget bound, rather than an arbitrary profiler section cap.
+        // This also keeps section counts safely representable by signed links.
+        static constexpr std::uint32_t max_sections_per_frame =
+            (max_payload_bytes - frame_batch_count_bytes - min_frame_bytes) / section_bytes;
         static constexpr std::uint32_t max_dictionary_entries = 4096;
         static constexpr std::uint32_t max_name_bytes = 63;
         static constexpr std::uint32_t max_identity_bytes = 128;

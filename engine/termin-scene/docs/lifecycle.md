@@ -75,8 +75,9 @@ scene extensions и `late_update`. Служебный `tc_scene_editor_update` �
 `TypeName @ EntityName [source]`. Повторные вызовы того же экземпляра в
 `fixed_update` объединяются профайлером и отражаются в `call_count`.
 
-Имена и число секций ограничены native-профайлером
-(`TC_PROFILER_MAX_NAME_LEN`, `TC_PROFILER_MAX_SECTIONS`). При выключенном
+Длина имён ограничена `TC_PROFILER_MAX_NAME_LEN`. Для числа секций на кадр
+заданного потолка нет: рабочий буфер native-профайлера растёт по необходимости
+и переиспользуется между кадрами. При выключенном
 profiling scheduler не строит имена секций и не выделяет для них память.
 
 ## Editor update-цикл

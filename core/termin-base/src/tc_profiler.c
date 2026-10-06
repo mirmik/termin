@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -175,7 +176,9 @@ typedef struct {
     // know they're inside a muted subtree. -1 means "not muted".
     int muted_depth;
     tc_frame_profile current_frame_storage;
-    tc_section_timing current_sections[TC_PROFILER_MAX_SECTIONS];
+    tc_section_timing* current_sections;
+    size_t current_section_capacity;
+    bool section_growth_failed;
     tc_profile_ring history;
     tc_profiler_capture* captures;
 } tc_profiler;
@@ -260,6 +263,7 @@ void tc_profiler_begin_frame_with_info(const tc_profiler_frame_info* info) {
     g_profiler.stack_depth = 0;
     g_profiler.overflow_depth = 0;
     g_profiler.muted_depth = -1;
+    g_profiler.section_growth_failed = false;
     g_profiler.frame_start_time = measured_start_time;
 }
 
@@ -325,6 +329,38 @@ bool tc_profiler_publish_gpu_frame_timing(int frame_number, double gpu_duration_
     return applied;
 }
 
+static bool reserve_current_sections(size_t required) {
+    if (required <= g_profiler.current_section_capacity)
+        return true;
+    if (g_profiler.section_growth_failed)
+        return false;
+
+    // Section indices/counts use int in the public frame ABI. This is only a
+    // representability bound; there is no configured limit on collected nodes.
+    const size_t max_capacity = SIZE_MAX / sizeof(tc_section_timing) < (size_t)INT_MAX
+                                    ? SIZE_MAX / sizeof(tc_section_timing) : (size_t)INT_MAX;
+    if (required > max_capacity) {
+        g_profiler.section_growth_failed = true;
+        tc_log(TC_LOG_ERROR, "tc_profiler: section storage size is not representable (%zu entries)", required);
+        return false;
+    }
+    size_t capacity = g_profiler.current_section_capacity ? g_profiler.current_section_capacity : 64u;
+    while (capacity < required) {
+        capacity = capacity > max_capacity / 2u ? max_capacity : capacity * 2u;
+    }
+    tc_section_timing* sections = (tc_section_timing*)realloc(
+        g_profiler.current_sections, capacity * sizeof(tc_section_timing));
+    if (!sections) {
+        g_profiler.section_growth_failed = true;
+        tc_log(TC_LOG_ERROR, "tc_profiler: failed to grow section storage to %zu entries", capacity);
+        return false;
+    }
+    g_profiler.current_sections = sections;
+    g_profiler.current_section_capacity = capacity;
+    g_profiler.current_frame->sections = sections;
+    return true;
+}
+
 static int find_or_create_section(const char* name, int parent_index) {
     tc_frame_profile* frame = g_profiler.current_frame;
 
@@ -346,17 +382,7 @@ static int find_or_create_section(const char* name, int parent_index) {
         }
     }
 
-    if (frame->section_count >= TC_PROFILER_MAX_SECTIONS) {
-        static int s_overflow_logged = 0;
-        if (!s_overflow_logged) {
-            tc_log(TC_LOG_WARN,
-                   "tc_profiler: frame section count hit TC_PROFILER_MAX_SECTIONS=%d "
-                   "(dropped section: %s). Raise the cap in tc_profiler.h or shorten "
-                   "the pass list. Subsequent overflows are silenced.",
-                   TC_PROFILER_MAX_SECTIONS,
-                   name);
-            s_overflow_logged = 1;
-        }
+    if (!reserve_current_sections((size_t)frame->section_count + 1u)) {
         return -1;
     }
 
@@ -429,7 +455,12 @@ static void begin_section_internal(const char* name, bool muted) {
 
     int section_idx = find_or_create_section(name, parent_index);
 
-    // Push even on overflow (section_idx == -1). end_section checks for
+    // If allocation fails, mute this whole subtree so its children cannot be
+    // accidentally attached to the frame root. Keep begin/end pairs balanced.
+    if (section_idx < 0)
+        g_profiler.muted_depth = g_profiler.stack_depth;
+
+    // Push even on allocation failure (section_idx == -1). end_section checks
     // the sentinel and skips accounting. Without this the begin/end pairs
     // go out of sync and every subsequent end_section closes somebody
     // else's section — cpu_ms values get corrupted silently.
@@ -467,7 +498,7 @@ void tc_profiler_end_section(void) {
     }
 
     int section_idx = g_profiler.section_stack[g_profiler.stack_depth];
-    // Sentinel (-1) means begin_section was muted or overflowed — skip
+    // Sentinel (-1) means begin_section was muted or allocation failed — skip
     // accounting.
     if (section_idx < 0)
         return;

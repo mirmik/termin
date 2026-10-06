@@ -200,8 +200,11 @@ fields with fixed-width integers and IEEE-754 values. Section names should be
 interned per session so a frame carries small name IDs rather than repeating up
 to 64 bytes per section.
 
-With 256 sections, the current in-memory section array is roughly tens of
-kilobytes per worst-case frame. Even a straightforward fixed-field wire format
+As of 2026-10-07 the native section scratch buffer grows on demand and retains
+its capacity across frames; the old 256-node ceiling is removed. Completed
+history/capture frames own compact copies of their actual sections. A frame
+with 256 sections uses roughly tens of kilobytes, while larger trees use
+proportionally more memory. Even a straightforward fixed-field wire format
 is practical over USB/Wi-Fi, and dictionary encoding reduces the common case
 further. Compression should be considered only after measuring real captures;
 it is not required for the first protocol.
@@ -350,4 +353,3 @@ need later trace/event streams and explicit thread/GPU correlation.
 - Direct LAN mode is not enabled without authenticated encryption.
 - Full SDK/tests pass, followed by a physical-device Android smoke with measured
   profiler and transport overhead.
-

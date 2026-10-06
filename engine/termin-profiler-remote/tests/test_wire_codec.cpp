@@ -138,11 +138,13 @@ TEST_CASE("Envelope can be validated before a stream reads its payload") {
 
 TEST_CASE("Version-two golden bytes cover every message type") {
     const std::vector<std::pair<Message, std::string>> cases = {
-        {ClientHello{},
+        // Keep explicit legacy negotiated limits in the golden fixture. New
+        // defaults advertise capacity derived from bytes, without a schema change.
+        {ClientHello{protocol_major, 0, 0, WireLimits::max_payload_bytes, 256, 256, ""},
          "54505246 0002 0000 0001 0000 0000001a 0000000000000001 "
          "0000000000000002 "
          "0002 0000 0000000000000000 00100000 00000100 00000100 0000"},
-        {TargetHello{},
+        {[] { TargetHello value; value.max_sections_per_frame = 256; return value; }(),
          "54505246 0002 0000 0002 0000 0000002e 0000000000000001 "
          "0000000000000002 "
          "0002 0000 0000000000000000 000000003b9aca00 00000000 00100000 00000100 "
@@ -253,6 +255,51 @@ TEST_CASE("Invalid section structure and boolean values are rejected") {
 
     frame.sections[0].parent_index = 5;
     CHECK(encode_message(FrameBatch{{frame}}, 1, 2).error == CodecError::invalid_value);
+}
+
+TEST_CASE("More than 256 hierarchical sections round trip without truncation") {
+    WireFrame frame;
+    frame.frame_number = 99;
+    frame.sections_profiled = true;
+    frame.has_gpu_duration = true;
+    frame.gpu_duration_ms = 2;
+    for (std::int32_t index = 0; index < 1024; ++index) {
+        frame.sections.push_back({std::uint32_t(index + 1), 1, index == 1023 ? 0.0 : 1.0,
+                                  1, index - 1, index == 1023 ? -1 : index + 1, -1});
+    }
+    check_round_trip(FrameBatch{{frame}}, 40);
+    CHECK(ClientHello{}.max_sections_per_frame > 256);
+    CHECK(TargetHello{}.max_sections_per_frame == ClientHello{}.max_sections_per_frame);
+    ClientHello explicit_limit;
+    explicit_limit.max_sections_per_frame = 256;
+    check_round_trip(explicit_limit, 41);
+}
+
+TEST_CASE("Section capacity follows payload bytes and total batch budget") {
+    WireFrame frame;
+    frame.sections_profiled = true;
+    frame.sections.assign(WireLimits::max_sections_per_frame, WireSection{1, 1, 0, 1, -1, -1, -1});
+    const auto largest = encode_message(FrameBatch{{frame}}, 1, 2);
+    REQUIRE(largest);
+    CHECK(largest.value->size() <= envelope_size + WireLimits::max_payload_bytes);
+    CHECK(decode_message(*largest.value));
+    frame.sections.push_back(frame.sections.back());
+    CHECK(encode_message(FrameBatch{{frame}}, 1, 2).error == CodecError::limit_exceeded);
+    frame.sections.resize(WireLimits::max_sections_per_frame / 2 + 1);
+    CHECK(encode_message(FrameBatch{{frame, frame}}, 1, 2).error == CodecError::limit_exceeded);
+}
+
+TEST_CASE("Section counts are validated against available bytes before allocation") {
+    WireFrame frame;
+    frame.sections_profiled = true;
+    frame.sections = {{1, 1, 0, 1, -1, -1, -1}};
+    auto bytes = encoded(FrameBatch{{frame}});
+    // Batch count + v2 minimum frame prefix, ending with the section count.
+    set_u32(bytes, envelope_size + WireLimits::frame_batch_count_bytes + WireLimits::min_frame_bytes - 4, 1024);
+    CHECK(decode_message(bytes).error == CodecError::truncated);
+    set_u32(bytes, envelope_size + WireLimits::frame_batch_count_bytes + WireLimits::min_frame_bytes - 4,
+            WireLimits::max_sections_per_frame + 1);
+    CHECK(decode_message(bytes).error == CodecError::limit_exceeded);
 }
 
 GUARD_TEST_MAIN();

@@ -170,6 +170,19 @@ namespace {
         tc_profiler_end_frame();
     }
 
+    void complete_wide_profiled_frame(double start_ms, int child_count) {
+        const tc_profiler_frame_info info{start_ms, 16.0, 16.0, 0.0, 0};
+        tc_profiler_begin_frame_with_info(&info);
+        tc_profiler_begin_section("Wide Frame");
+        for (int index = 0; index < child_count; ++index) {
+            const std::string name = "Wide child " + std::to_string(index);
+            tc_profiler_begin_section(name.c_str());
+            tc_profiler_end_section();
+        }
+        tc_profiler_end_section();
+        tc_profiler_end_frame();
+    }
+
     struct ProfilerCleanup {
         ~ProfilerCleanup() {
             tc_profiler_set_enabled(false);
@@ -488,6 +501,115 @@ TEST_CASE("Disconnected overflow drops complete batches and reports the next gap
     }
     CHECK(saw_drop);
     CHECK(saw_latest);
+    close_test_socket(client);
+    target.stop();
+}
+
+TEST_CASE("Target streams large native profiles and splits batches by wire bytes") {
+    ProfilerCleanup cleanup;
+    TargetServiceConfig config;
+    config.authentication_token = "wide-profile-token";
+    config.frames_per_batch = 16;
+    config.capture_capacity = 16;
+    RemoteProfilerTarget target(std::move(config));
+    REQUIRE(target.start());
+    const TestSocket client = handshake(target, "wide-profile-token");
+    REQUIRE(client != invalid_test_socket);
+    REQUIRE(send_message(client, Control{100, ControlKind::set_sections, true, 0}, 2));
+    REQUIRE(send_message(client, Control{101, ControlKind::start_capture, false, 0}, 3));
+    REQUIRE(wait_until([&] {
+        target.pump_frame_thread();
+        return target.status().capturing && target.status().profiling_sections;
+    }));
+    // 10 * 3001 section records exceed one 1 MiB packet, while the shared
+    // 3001-name dictionary fits its existing independent session bound.
+    for (int frame = 0; frame < 10; ++frame) {
+        complete_wide_profiled_frame(100 + frame * 16, 3000);
+    }
+    target.pump_frame_thread();
+    std::size_t received_frames = 0;
+    std::size_t received_batches = 0;
+    std::size_t dictionary_entries = 0;
+    for (int message_index = 0; message_index < 16 && received_frames < 10; ++message_index) {
+        const auto message = receive_wire(client);
+        REQUIRE(message.has_value());
+        if (const auto* dictionary = std::get_if<DictionaryAdd>(&message->message)) {
+            dictionary_entries += dictionary->entries.size();
+        } else if (const auto* batch = std::get_if<FrameBatch>(&message->message)) {
+            ++received_batches;
+            for (const auto& frame : batch->frames) {
+                REQUIRE_EQ(frame.sections.size(), 3001);
+                CHECK_EQ(frame.sections[0].parent_index, -1);
+                CHECK_EQ(frame.sections[0].first_child, 1);
+                CHECK_EQ(frame.sections[3000].parent_index, 0);
+                CHECK_EQ(frame.sections[3000].next_sibling, -1);
+                CHECK_EQ(frame.sections[3000].call_count, 1);
+                ++received_frames;
+            }
+        } else {
+            CHECK_FALSE(std::holds_alternative<ErrorEvent>(message->message));
+            CHECK_FALSE(std::holds_alternative<GapEvent>(message->message));
+        }
+    }
+    CHECK_EQ(received_frames, 10);
+    CHECK(received_batches > 1);
+    CHECK_EQ(dictionary_entries, 3001);
+    CHECK_EQ(target.status().dropped_frames, 0);
+    close_test_socket(client);
+    target.stop();
+}
+
+TEST_CASE("Target negotiates smaller peer limits without truncating frames") {
+    ProfilerCleanup cleanup;
+    TargetServiceConfig config;
+    config.authentication_token = "small-peer-token";
+    RemoteProfilerTarget target(std::move(config));
+    REQUIRE(target.start());
+    const TestSocket client = connect_client(target.status().listening_port);
+    REQUIRE(client != invalid_test_socket);
+    ClientHello hello;
+    hello.authentication_token = "small-peer-token";
+    hello.max_payload_bytes = 2048;
+    hello.max_frames_per_batch = 1;
+    hello.max_sections_per_frame = 8;
+    REQUIRE(send_message(client, hello, 1));
+    const auto reply = receive_wire(client);
+    REQUIRE(reply.has_value());
+    REQUIRE(std::holds_alternative<TargetHello>(reply->message));
+    const auto& negotiated = std::get<TargetHello>(reply->message);
+    CHECK_EQ(negotiated.max_payload_bytes, 2048);
+    CHECK_EQ(negotiated.max_frames_per_batch, 1);
+    CHECK_EQ(negotiated.max_sections_per_frame, 8);
+    REQUIRE(send_message(client, Control{110, ControlKind::set_sections, true, 0}, 2));
+    REQUIRE(send_message(client, Control{111, ControlKind::start_capture, false, 0}, 3));
+    REQUIRE(wait_until([&] {
+        target.pump_frame_thread();
+        return target.status().capturing && target.status().profiling_sections;
+    }));
+    complete_wide_profiled_frame(100, 16);
+    complete_profiled_frame(116);
+    complete_profiled_frame(132);
+    target.pump_frame_thread();
+    bool saw_error = false, saw_gap = false;
+    int small_frames = 0;
+    for (int message_index = 0; message_index < 12 && small_frames < 2; ++message_index) {
+        const auto message = receive_wire(client);
+        REQUIRE(message.has_value());
+        CHECK(message->envelope.payload_length <= 2048);
+        if (const auto* error = std::get_if<ErrorEvent>(&message->message)) {
+            saw_error = error->code == 413;
+        } else if (const auto* gap = std::get_if<GapEvent>(&message->message)) {
+            saw_gap = gap->kind == GapKind::source && gap->first_missing_frame == gap->last_missing_frame;
+        } else if (const auto* batch = std::get_if<FrameBatch>(&message->message)) {
+            REQUIRE_EQ(batch->frames.size(), 1);
+            CHECK_EQ(batch->frames[0].sections.size(), 2);
+            ++small_frames;
+        }
+    }
+    CHECK(saw_error);
+    CHECK(saw_gap);
+    CHECK_EQ(small_frames, 2);
+    CHECK_EQ(target.status().dropped_frames, 1);
     close_test_socket(client);
     target.stop();
 }

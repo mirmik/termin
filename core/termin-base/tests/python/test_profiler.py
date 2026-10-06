@@ -1,6 +1,76 @@
+import math
 from types import SimpleNamespace
 
 from termin.base.profiler import Profiler
+
+
+def test_profiler_native_wide_tree_preserves_every_branch_and_aggregated_call():
+    profiler = Profiler.instance()
+    previous_enabled = profiler.enabled
+    profiler.enabled = True
+    profiler.clear_history()
+    branches = 500
+    try:
+        profiler.begin_frame()
+        for _ in range(2):
+            with profiler.section("Wide root"):
+                for branch in range(branches):
+                    with profiler.section(f"branch-{branch}"):
+                        for _ in range(2):
+                            with profiler.section("Shared"):
+                                with profiler.section("Leaf"):
+                                    pass
+                        with profiler.section("Sibling"):
+                            pass
+        native_current = profiler._current_frame
+        assert len(native_current.sections) == 1 + 4 * branches
+        assert profiler.last_complete_frame() is None
+        profiler.end_frame()
+
+        completed = profiler.last_complete_frame()
+        assert completed is not None
+        assert list(completed.sections) == ["Wide root"]
+        root = completed.sections["Wide root"]
+        assert root.call_count == 2
+        assert list(root.children) == [f"branch-{branch}" for branch in range(branches)]
+        for parent in root.children.values():
+            assert parent.call_count == 2
+            assert list(parent.children) == ["Shared", "Sibling"]
+            shared = parent.children["Shared"]
+            sibling = parent.children["Sibling"]
+            assert shared.call_count == 4
+            assert sibling.call_count == 2
+            assert sibling.children == {}
+            assert list(shared.children) == ["Leaf"]
+            leaf = shared.children["Leaf"]
+            assert leaf.call_count == 4
+            assert leaf.children == {}
+            assert math.isclose(parent.children_ms, shared.cpu_ms + sibling.cpu_ms, abs_tol=1e-6)
+            assert math.isclose(shared.children_ms, leaf.cpu_ms, abs_tol=1e-6)
+            for section in (parent, shared, leaf, sibling):
+                assert math.isfinite(section.cpu_ms)
+                assert 0 <= section.children_ms <= section.cpu_ms + 1e-6
+        assert math.isclose(root.children_ms, sum(child.cpu_ms for child in root.children.values()), abs_tol=1e-6)
+
+        # A small frame reuses native scratch storage but must not change either
+        # native history or the already materialized Python tree.
+        profiler.begin_frame()
+        with profiler.section("Small frame"):
+            pass
+        profiler.end_frame()
+        history = profiler.history
+        assert len(history) == 2
+        assert list(history[0].sections["Wide root"].children) == list(root.children)
+        assert history[0].sections["Wide root"].children["branch-499"].children["Shared"].call_count == 4
+        assert list(history[1].sections) == ["Small frame"]
+        profiler.clear_history()
+        assert len(root.children) == branches
+        assert root.children["branch-499"].children["Shared"].children["Leaf"].call_count == 4
+    finally:
+        if profiler._current_frame is not None:
+            profiler.end_frame()
+        profiler.clear_history()
+        profiler.enabled = previous_enabled
 
 
 def test_profiler_build_sections_preserves_order_and_branch_names():

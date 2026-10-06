@@ -410,6 +410,7 @@ namespace termin::profiler_remote {
                 OutboundPacket packet;
                 FrameBatch batch;
                 batch.frames.reserve(count);
+                std::size_t batch_bytes = WireLimits::frame_batch_count_bytes;
                 std::unordered_set<std::uint32_t> packet_names;
                 if (gap_pending) {
                     packet.gap = GapEvent{
@@ -422,15 +423,35 @@ namespace termin::profiler_remote {
                 }
                 for (std::size_t index = 0; index < count; ++index) {
                     const tc_frame_profile* source =
-                        tc_profiler_capture_at(capture, range.first_index + static_cast<int>(offset + index));
+                        tc_profiler_capture_at(capture, range.first_index + static_cast<int>(offset));
                     if (!source) {
                         tc_log_error("remote profiler target: capture returned a null frame");
+                        ++offset;
                         continue;
                     }
+                    const std::uint64_t frame_bytes = WireLimits::min_frame_bytes +
+                        (source->has_gpu_duration ? 8U : 0U) +
+                        static_cast<std::uint64_t>(source->section_count) * WireLimits::section_bytes;
+                    if (frame_bytes > WireLimits::max_payload_bytes - WireLimits::frame_batch_count_bytes) {
+                        tc_log_error("remote profiler target: frame %d exceeds the wire payload byte budget; "
+                                     "dropping the complete frame (%llu bytes)", source->frame_number,
+                                     static_cast<unsigned long long>(frame_bytes));
+                        ++pending_dropped_batches;
+                        ++pending_dropped_frames;
+                        dropped_batches.fetch_add(1, std::memory_order_relaxed);
+                        dropped_frames.fetch_add(1, std::memory_order_relaxed);
+                        last_frame_number = source->frame_number;
+                        ++offset;
+                        continue;
+                    }
+                    if (frame_bytes > WireLimits::max_payload_bytes - batch_bytes) {
+                        break;
+                    }
                     append_wire_frame(packet, batch, packet_names, *source);
+                    batch_bytes += static_cast<std::size_t>(frame_bytes);
                     last_frame_number = source->frame_number;
+                    ++offset;
                 }
-                offset += count;
                 if (batch.frames.empty()) {
                     continue;
                 }
@@ -553,6 +574,14 @@ namespace termin::profiler_remote {
                 if (sent != sent_gpu_durations.end() && sent->second == source->gpu_duration_ms) {
                     continue;
                 }
+                const std::uint64_t frame_bytes = WireLimits::min_frame_bytes + 8U +
+                    static_cast<std::uint64_t>(source->section_count) * WireLimits::section_bytes;
+                if (frame_bytes > WireLimits::max_payload_bytes - WireLimits::frame_batch_count_bytes) {
+                    tc_log_error("remote profiler target: GPU update for frame %d exceeds the wire payload byte "
+                                 "budget; retaining the complete profile locally", source->frame_number);
+                    sent_gpu_durations[source->frame_number] = source->gpu_duration_ms;
+                    continue;
+                }
                 OutboundPacket packet;
                 FrameBatch batch;
                 batch.frames.reserve(1);
@@ -658,6 +687,11 @@ namespace termin::profiler_remote {
                 tc_log_error("remote profiler target: failed to encode outgoing message: %s", encoded.detail.c_str());
                 return false;
             }
+            if (encoded.value->size() - envelope_size > session_payload_limit) {
+                tc_log_error("remote profiler target: outgoing message exceeds negotiated payload byte limit (%u)",
+                             session_payload_limit);
+                return false;
+            }
             const bool sent = send_bytes(socket, *encoded.value, running);
             if (sent)
                 transmitted_bytes.fetch_add(encoded.value->size(), std::memory_order_relaxed);
@@ -665,6 +699,7 @@ namespace termin::profiler_remote {
         }
 
         bool handshake(Socket socket, std::uint64_t& sequence, std::uint64_t session_id) {
+            session_payload_limit = WireLimits::max_payload_bytes;
             auto decoded = receive_message(socket, running);
             if (!decoded || !std::holds_alternative<ClientHello>(decoded.value->message)) {
                 tc_log_error("remote profiler target: client handshake is malformed");
@@ -679,7 +714,22 @@ namespace termin::profiler_remote {
                 tc_log_error("remote profiler target: rejected client: %s", detail.c_str());
                 return false;
             }
+            if (hello.max_frames_per_batch == 0 ||
+                hello.max_payload_bytes < WireLimits::frame_batch_count_bytes + WireLimits::min_frame_bytes) {
+                send_wire(socket, ErrorEvent{400, decoded.value->envelope.sequence,
+                                            "client limits cannot carry a cadence frame"}, sequence, session_id);
+                tc_log_error("remote profiler target: rejected unusable client payload/frame limits");
+                return false;
+            }
+            session_payload_limit = hello.max_payload_bytes;
+            session_frame_limit = hello.max_frames_per_batch;
+            session_section_limit = std::min(hello.max_sections_per_frame,
+                (session_payload_limit - WireLimits::frame_batch_count_bytes - WireLimits::min_frame_bytes) /
+                    WireLimits::section_bytes);
             TargetHello target;
+            target.max_payload_bytes = session_payload_limit;
+            target.max_frames_per_batch = session_frame_limit;
+            target.max_sections_per_frame = session_section_limit;
             target.capabilities = static_cast<std::uint64_t>(Capability::cadence_capture) |
                                   static_cast<std::uint64_t>(Capability::hierarchical_sections) |
                                   static_cast<std::uint64_t>(Capability::clear_capture) |
@@ -700,9 +750,24 @@ namespace termin::profiler_remote {
                          std::uint64_t& sequence,
                          std::uint64_t session_id) {
             DictionaryAdd additions;
+            std::size_t dictionary_bytes = 4;
             for (const DictionaryEntry& entry : packet.required_names) {
                 if (sent_names.insert(entry.id).second) {
+                    const std::size_t entry_bytes = 6 + entry.name.size();
+                    if (entry_bytes > session_payload_limit - 4) {
+                        tc_log_error("remote profiler target: section dictionary entry exceeds negotiated payload "
+                                     "byte limit (%u)", session_payload_limit);
+                        return false;
+                    }
+                    if (entry_bytes > session_payload_limit - dictionary_bytes && !additions.entries.empty()) {
+                        if (!send_wire(socket, additions, sequence, session_id)) {
+                            return false;
+                        }
+                        additions.entries.clear();
+                        dictionary_bytes = 4;
+                    }
                     additions.entries.push_back(entry);
+                    dictionary_bytes += entry_bytes;
                 }
             }
             if (!additions.entries.empty() && !send_wire(socket, additions, sequence, session_id)) {
@@ -717,8 +782,42 @@ namespace termin::profiler_remote {
             if (packet.status && !send_wire(socket, *packet.status, sequence, session_id)) {
                 return false;
             }
-            if (packet.frames && !send_wire(socket, *packet.frames, sequence, session_id)) {
-                return false;
+            if (packet.frames) {
+                FrameBatch batch;
+                std::size_t batch_bytes = WireLimits::frame_batch_count_bytes;
+                for (WireFrame& frame : packet.frames->frames) {
+                    const std::size_t frame_bytes = WireLimits::min_frame_bytes +
+                        (frame.has_gpu_duration ? 8U : 0U) + frame.sections.size() * WireLimits::section_bytes;
+                    const bool too_large = frame.sections.size() > session_section_limit ||
+                        frame_bytes > session_payload_limit - WireLimits::frame_batch_count_bytes;
+                    if (too_large || batch.frames.size() == session_frame_limit ||
+                        frame_bytes > session_payload_limit - batch_bytes) {
+                        if (!batch.frames.empty() && !send_wire(socket, batch, sequence, session_id)) {
+                            return false;
+                        }
+                        batch.frames.clear();
+                        batch_bytes = WireLimits::frame_batch_count_bytes;
+                    }
+                    if (too_large) {
+                        tc_log_error("remote profiler target: frame %lld exceeds negotiated receiver limits; "
+                                     "retaining all %zu sections locally", static_cast<long long>(frame.frame_number),
+                                     frame.sections.size());
+                        dropped_batches.fetch_add(1, std::memory_order_relaxed);
+                        dropped_frames.fetch_add(1, std::memory_order_relaxed);
+                        if (!send_wire(socket, ErrorEvent{413, 0, "frame exceeds negotiated receiver limits"},
+                                       sequence, session_id) ||
+                            !send_wire(socket, GapEvent{GapKind::source, frame.frame_number, frame.frame_number, 0},
+                                       sequence, session_id)) {
+                            return false;
+                        }
+                        continue;
+                    }
+                    batch_bytes += frame_bytes;
+                    batch.frames.push_back(std::move(frame));
+                }
+                if (!batch.frames.empty() && !send_wire(socket, batch, sequence, session_id)) {
+                    return false;
+                }
             }
             return true;
         }
@@ -832,6 +931,10 @@ namespace termin::profiler_remote {
         }
 
         TargetServiceConfig config;
+        // Accessed only by the I/O thread, after each authenticated handshake.
+        std::uint32_t session_payload_limit = WireLimits::max_payload_bytes;
+        std::uint32_t session_frame_limit = WireLimits::max_frames_per_batch;
+        std::uint32_t session_section_limit = WireLimits::max_sections_per_frame;
         BoundedSpscQueue<FrameCommand> command_queue;
         BoundedSpscQueue<OutboundPacket> outbound_queue;
         tc_profiler_capture* capture = nullptr;

@@ -303,7 +303,11 @@ namespace termin::profiler_remote {
                                 !valid_finite_nonnegative(frame.deadline_lateness_ms))
                                 return invalid_value("FrameBatch contains a non-finite or negative timing");
                             if (frame.sections.size() > WireLimits::max_sections_per_frame)
-                                return limit_error("FrameBatch section count exceeds hard limit");
+                                return limit_error("FrameBatch section records exceed the payload byte budget");
+                            const std::size_t frame_bytes = WireLimits::min_frame_bytes +
+                                (frame.has_gpu_duration ? 8U : 0U) + frame.sections.size() * WireLimits::section_bytes;
+                            if (frame_bytes > WireLimits::max_payload_bytes - out.bytes().size())
+                                return limit_error("FrameBatch exceeds the payload byte budget");
                             if (!frame.sections_profiled && !frame.sections.empty())
                                 return invalid_value("FrameBatch cadence-only frame contains sections");
                             out.i64(frame.frame_number);
@@ -473,6 +477,9 @@ namespace termin::profiler_remote {
                          (!frame.sections_profiled && section_count != 0)))
                         return failure<Message>(CodecError::invalid_value,
                                                 "FrameBatch contains invalid timing or cadence-only sections");
+                    if (ok && section_count > in.remaining() / WireLimits::section_bytes)
+                        return failure<Message>(CodecError::truncated,
+                                                "FrameBatch section count exceeds remaining payload bytes");
                     if (ok)
                         frame.sections.reserve(section_count);
                     for (std::uint32_t section_index = 0; section_index < section_count && ok; ++section_index) {

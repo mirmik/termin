@@ -11,7 +11,6 @@ extern "C" {
 #endif
 
 #define TC_PROFILER_MAX_DEPTH 16
-#define TC_PROFILER_MAX_SECTIONS 256
 #define TC_PROFILER_MAX_NAME_LEN 64
 
 typedef struct tc_section_timing {
@@ -44,8 +43,10 @@ typedef struct tc_frame_profile {
     bool sections_profiled;
     // Completed frames own a compact allocation containing exactly
     // section_count entries. The currently open frame points at profiler-owned
-    // scratch storage. Callers must never retain this pointer after the owning
-    // history/capture is cleared or destroyed.
+    // growable scratch storage, reused between frames. Its sections pointer can
+    // move when new sections are recorded: retain indices, not section pointers,
+    // while a frame is open. Completed frame pointers remain valid until their
+    // owning history/capture entry is overwritten, cleared or destroyed.
     tc_section_timing* sections;
     int section_count;
     // Optional GPU duration published after the CPU frame closes. Kept at the
