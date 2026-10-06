@@ -25,7 +25,19 @@ Depth/Id не получают дублирующих draws для каждой 
 является поддерживаемым протоколом изменения меша. При изменении группы
 пересобираются её vertices/indices, неизменённые группы сохраняют TcMesh.
 Удаление/скрытие объектов отражается в следующей публикации. Detach сцены
-очищает её cache variants; разные view filters используют отдельные варианты.
+очищает её cache variants; разные scene/layer/category/filter contexts используют
+отдельные варианты.
+
+Поиск WorkGroup и CachedGroup индексируется хешем существующего semantic key.
+Хеш не заменяет полное сравнение ключей: коллизии проходят проверку всех полей.
+Группы и вывод по-прежнему идут в порядке первого появления во входном snapshot;
+порядок членов каждой группы сохраняется. Индекс, candidate key/signature,
+work groups и output/consumed buffers сохраняют выделенную ёмкость между apply.
+Signatures пересчитываются по текущему состоянию при каждом apply. Cache hit
+переносит прежнюю группу без глубокого копирования signatures; изменённая группа
+получает новые signatures после пересборки. Перенос cached groups выполняется
+только после успешной подготовки всех merged meshes, поэтому неудачная поздняя
+пересборка сохраняет прежний cache для retry.
 
 Нормали преобразуются inverse transpose, тангенты — линейным преобразованием
 с ортогонализацией и корректировкой handedness. Зеркальный transform корректирует
@@ -61,9 +73,16 @@ Pixel test: `termin_render_passes_id_pass_line_pixel_smoke` сравнивает
 `termin_render_passes_picking_test` сверяет shader codec с CPU для 24-битных IDs.
 Общий запуск: `task build`, `task test`.
 
-Profiler sections: `Static mesh batching`, `Static batch rebuild`.
-`StaticMeshBatchCache::stats()` содержит input/eligible/merged/output/rebuilt/
-reused/unsupported counts. В стабильном кадре rebuild должен отсутствовать.
+Profiler sections: `Static mesh batching`, `Static batch grouping`,
+`Static batch cache and output`, `Static batch rebuild`.
+`StaticMeshBatchCache::stats()` сбрасывается каждым apply и содержит
+input/eligible/merged/output/rebuilt/reused/unsupported counts, `work_groups`,
+`cached_groups`, `work_key_comparisons`, `cache_key_comparisons`,
+`signature_comparisons`, `signature_copies`. Key comparisons учитывают полные
+проверки равенства после совпадения хеша; signature copies — количество глубоких
+копирований member signatures в обновлённый cache. В стабильном кадре rebuild
+и signature copies должны отсутствовать. Для нескольких targets статистику
+нужно записывать после каждого apply, поскольку последний вызов заменяет её.
 
 После группировки snapshot вычисляет bounds объединённой геометрии.
 Проходы выполняют отдельное CPU frustum culling для каждой камеры и каскада

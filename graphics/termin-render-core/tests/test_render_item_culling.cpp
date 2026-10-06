@@ -188,6 +188,142 @@ namespace {
         tc_mesh_shutdown();
     }
 
+    void assert_bounds(const tc_render_item& item, tc_vec3 minimum, tc_vec3 maximum) {
+        assert(item.bounds_state == TC_RENDER_ITEM_BOUNDS_VALID);
+        assert(item.world_bounds.min_point.x == minimum.x && item.world_bounds.max_point.x == maximum.x);
+        assert(item.world_bounds.min_point.y == minimum.y && item.world_bounds.max_point.y == maximum.y);
+        assert(item.world_bounds.min_point.z == minimum.z && item.world_bounds.max_point.z == maximum.z);
+    }
+
+    void test_undeformed_skinned_bounds_policy() {
+        tc_mesh_init();
+        const tc_mesh_handle handle = tc_mesh_create("skinned-culling-test");
+        tc_mesh* mesh = tc_mesh_get(handle);
+        const tc_vertex_layout layout = tc_vertex_layout_pos();
+        float vertices[] = {-1, 0, 0, 1, 0, 0, 0, 2, 0,
+                            10, 0, 0, 12, 0, 0, 10, 2, 0};
+        const uint32_t indices[] = {0, 1, 2, 3, 4, 5};
+        const tc_submesh submeshes[] = {
+            {.first_index = 0, .index_count = 3},
+            {.first_index = 3, .index_count = 3},
+        };
+        assert(tc_mesh_set_data(mesh, vertices, 6, &layout, indices, 6, "skinned-culling-test"));
+        assert(tc_mesh_set_submeshes(mesh, submeshes, 2));
+
+        float bone_matrix[16];
+        Mat44f::identity().copy_column_major_to(bone_matrix);
+        BoundsSource source;
+        source.prototype.kind = TC_RENDER_ITEM_KIND_MESH;
+        source.prototype.flags = TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES |
+                                 TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX |
+                                 TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS;
+        source.prototype.payload.mesh.mesh_handle = handle;
+        source.prototype.payload.mesh.skinning_matrices = bone_matrix;
+        source.prototype.payload.mesh.skinning_matrix_count = 1;
+        Mat44f model = Mat44f::identity();
+        model(0, 0) = -2;
+        model(1, 1) = 3;
+        model(2, 2) = 0.5f;
+        model(3, 0) = 20;
+        model(3, 1) = -5;
+        model(3, 2) = 0.5f;
+        model.copy_column_major_to(source.prototype.model_matrix);
+        RenderItemSnapshot snapshot;
+        assert(source.publish(snapshot, {}));
+        assert_bounds(*snapshot.item(0), {18, -5, 0.5}, {22, 1, 0.5});
+        assert((snapshot.item(0)->flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES) != 0u);
+        assert((snapshot.item(0)->flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) == 0u);
+        assert(snapshot.item(0)->payload.mesh.skinning_matrices == bone_matrix);
+        assert(snapshot.item(0)->payload.mesh.skinning_matrix_count == 1);
+
+        // Pose affects rendering, but this explicitly approximate policy never
+        // evaluates bone matrices while computing its culling bounds.
+        bone_matrix[12] = 1000;
+        RenderItemSnapshot moved_pose;
+        assert(source.publish(moved_pose, {}));
+        assert_bounds(*moved_pose.item(0), {18, -5, 0.5}, {22, 1, 0.5});
+        assert(moved_pose.item(0)->payload.mesh.skinning_matrices[12] == 1000);
+
+        const uint32_t geometry_version = mesh->header.version;
+        const RenderItemCullingView main_camera(Mat44f::identity(), Mat44f::identity());
+        const RenderItemCullingView near_cascade(Mat44f::identity().with_translation({-20, 0, 0}), Mat44f::identity());
+        const RenderItemCullingView distant_cascade(Mat44f::identity().with_translation({-50, 0, 0}), Mat44f::identity());
+        RenderItemCullingCounters main_counters, near_counters, distant_counters;
+        assert(!main_camera.visible(*moved_pose.item(0), main_counters));
+        assert(near_cascade.visible(*moved_pose.item(0), near_counters));
+        assert(!distant_cascade.visible(*moved_pose.item(0), distant_counters));
+        assert(main_counters.tested == 1 && main_counters.culled == 1);
+        assert(near_counters.tested == 1 && near_counters.culled == 0);
+        assert(distant_counters.tested == 1 && distant_counters.culled == 1);
+        assert(mesh->header.version == geometry_version);
+        assert_bounds(*moved_pose.item(0), {18, -5, 0.5}, {22, 1, 0.5});
+        RenderItemCullingCounters custom_vertex_counters;
+        assert(main_camera.visible(*moved_pose.item(0), custom_vertex_counters, false));
+        assert(custom_vertex_counters.tested == 0 && custom_vertex_counters.without_bounds == 1);
+
+        // Bounds are selected per submesh; the other geometry never inflates
+        // the first submesh's box. Reflection/nonuniform scaling still apply.
+        source.prototype.payload.mesh.submesh_index = 1;
+        assert(source.publish(snapshot, {}));
+        assert_bounds(*snapshot.item(0), {-4, -5, 0.5}, {0, 1, 0.5});
+        source.prototype.payload.mesh.submesh_index = 0;
+        vertices[0] = -8;
+        assert(tc_mesh_set_vertices(mesh, vertices, 6, &layout));
+        assert_bounds(*moved_pose.item(0), {18, -5, 0.5}, {22, 1, 0.5});
+        assert(source.publish(snapshot, {}));
+        assert_bounds(*snapshot.item(0), {18, -5, 0.5}, {36, 1, 0.5});
+        // The existing cache requires a version bump for direct buffer edits.
+        static_cast<float*>(mesh->vertices)[0] = -9;
+        assert(source.publish(snapshot, {}));
+        assert_bounds(*snapshot.item(0), {18, -5, 0.5}, {36, 1, 0.5});
+        tc_mesh_bump_version(mesh);
+        assert(source.publish(snapshot, {}));
+        assert_bounds(*snapshot.item(0), {18, -5, 0.5}, {38, 1, 0.5});
+        model(3, 0) = 40;
+        model.copy_column_major_to(source.prototype.model_matrix);
+        assert(source.publish(snapshot, {}));
+        assert_bounds(*snapshot.item(0), {38, -5, 0.5}, {58, 1, 0.5});
+
+        // Custom producers retain their previous unsupported policy until
+        // explicitly choosing the undeformed skinned approximation.
+        source.prototype.flags &= ~TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS;
+        source.prototype.flags |= TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
+        assert(source.publish(snapshot, {}));
+        assert(snapshot.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_UNSUPPORTED);
+        source.prototype.flags &= ~TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
+        source.prototype.flags |= TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS;
+        source.prototype.flags &= ~TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES;
+        assert(source.publish(snapshot, {}));
+        assert(snapshot.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_UNSUPPORTED);
+        source.prototype.flags |= TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES;
+
+        model(0, 0) = std::numeric_limits<float>::infinity();
+        model.copy_column_major_to(source.prototype.model_matrix);
+        assert(source.publish(snapshot, {}));
+        assert(snapshot.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_INVALID);
+        RenderItemCullingCounters invalid_counters;
+        assert(main_camera.visible(*snapshot.item(0), invalid_counters));
+        model = Mat44f::identity();
+        model(0, 3) = 0.01f;
+        model.copy_column_major_to(source.prototype.model_matrix);
+        assert(source.publish(snapshot, {}));
+        assert(snapshot.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_INVALID);
+        assert(main_camera.visible(*snapshot.item(0), invalid_counters));
+        Mat44f::identity().copy_column_major_to(source.prototype.model_matrix);
+        static_cast<float*>(mesh->vertices)[0] = std::numeric_limits<float>::quiet_NaN();
+        tc_mesh_bump_version(mesh);
+        assert(source.publish(snapshot, {}));
+        assert(snapshot.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_MISSING);
+        assert(main_camera.visible(*snapshot.item(0), invalid_counters));
+        source.prototype.payload.mesh.mesh_handle = tc_mesh_handle_invalid();
+        assert(source.publish(snapshot, {}));
+        assert(snapshot.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_MISSING);
+        assert(main_camera.visible(*snapshot.item(0), invalid_counters));
+        assert(invalid_counters.without_bounds == 4 && invalid_counters.tested == 0);
+        assert(tc_mesh_destroy(handle));
+        tc_mesh_shutdown();
+    }
+
     void test_diagnostics() {
         clear_render_item_culling_diagnostics();
         RenderItemCullingCounters counters;
@@ -214,5 +350,6 @@ int main() {
     test_stereo_and_safety();
     test_affine_bounds();
     test_snapshot_refresh();
+    test_undeformed_skinned_bounds_policy();
     test_diagnostics();
 }

@@ -109,10 +109,17 @@ namespace termin {
     void SkinnedMeshRenderer::populate_mesh_render_item(tc_render_item& item) {
         update_bone_matrices();
         if (_bone_count <= 0 || _bone_matrices_flat.empty()) {
+            // Without a skeleton payload this draw uses undeformed vertices.
+            item.flags |= TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
             return;
         }
 
-        item.flags |= TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES;
+        // User-approved approximation (#2898): cull against the original
+        // submesh AABB, while retaining the actual skinning payload for drawing.
+        // Animated geometry is not guaranteed to stay inside these bounds.
+        item.flags &= ~TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
+        item.flags |= TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES |
+                      TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS;
         item.payload.mesh.skinning_matrices = _bone_matrices_flat.data();
         item.payload.mesh.skinning_matrix_count = static_cast<uint32_t>(_bone_count);
     }

@@ -1,3 +1,5 @@
+#include "../src/static_mesh_batch_index.hpp"
+
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -11,8 +13,29 @@ extern "C" {
 #include <core/tc_entity_pool.h>
 #include <core/tc_scene.h>
 #include <tgfx/resources/tc_material_registry.h>
+#include <tgfx/resources/tc_shader_registry.h>
 }
 namespace {
+    void check_collision_index() {
+        termin::detail::StaticBatchKeyIndex index;
+        constexpr uint64_t collision_hash = 7;
+        index.reset(256);
+        for (size_t i = 0; i < 256; ++i)
+            index.insert(collision_hash, i);
+        for (size_t i = 0; i < 256; ++i)
+            assert(index.find(collision_hash, [&](size_t candidate) { return candidate == i; }) == i);
+        size_t comparisons = 0;
+        assert(index.find(collision_hash, [&](size_t) { ++comparisons; return false; }) == index.missing);
+        assert(comparisons == 256);
+        // Same bucket but different hashes never bypass hash/equality verification.
+        index.insert(collision_hash + 256, 256);
+        assert(index.find(collision_hash, [](size_t candidate) { return candidate == 256; }) == index.missing);
+        assert(index.find(collision_hash + 256, [](size_t candidate) { return candidate == 256; }) == 256);
+        index.reset(2);
+        assert(index.find(collision_hash, [](size_t) { return true; }) == index.missing);
+        index.insert(collision_hash, 42);
+        assert(index.find(collision_hash, [](size_t candidate) { return candidate == 42; }) == 42);
+    }
     tc_phase_mask phases(tc_component*) {
         return TC_PHASE_OPAQUE | TC_PHASE_DEPTH | TC_PHASE_ID;
     }
@@ -43,8 +66,172 @@ namespace {
         item.model_matrix[12] = x;
         return item;
     }
+    struct SceneProducerData {
+        tc_mesh_handle mesh;
+        tc_material_handle material;
+        float x;
+        uint64_t category = 1;
+        size_t calls = 0;
+    };
+    bool scene_collect_items(tc_component* component,
+                             const tc_render_item_collect_context* context,
+                             tc_render_item_sink* sink) {
+        auto* data = static_cast<SceneProducerData*>(tc_component_get_drawable_userdata(component));
+        ++data->calls;
+        if ((context->render_category_mask & data->category) == 0)
+            return true;
+        auto item = make_item(*component, data->mesh, data->material, 0, data->x);
+        item.source = {}; // The scene adapter supplies actual entity/generation identity.
+        return sink->emit(&item, sink->user_data);
+    }
+    bool scene_collect_materials(tc_component* component,
+                                 const tc_render_item_collect_context* context,
+                                 tc_material_sink* sink) {
+        auto* data = static_cast<SceneProducerData*>(tc_component_get_drawable_userdata(component));
+        return (context->render_category_mask & data->category) == 0 || sink->emit(data->material, sink->user_data);
+    }
+    const tc_drawable_vtable scene_drawable{&phases, &scene_collect_items, &scene_collect_materials};
+
+    void check_scene_snapshot_membership(tc_mesh_handle mesh, tc_material_handle material) {
+        auto scene = tc_scene_new_named("static-batch-snapshot-membership");
+        auto* pool = tc_scene_entity_pool(scene);
+        auto first_id = tc_entity_pool_alloc(pool, "first");
+        auto second_id = tc_entity_pool_alloc(pool, "second");
+        tc_entity_pool_set_layer(pool, first_id, 1);
+        tc_entity_pool_set_layer(pool, second_id, 1);
+        tc_component first{}, second{}, third{};
+        tc_component_init(&first, nullptr);
+        tc_component_init(&second, nullptr);
+        tc_component_init(&third, nullptr);
+        SceneProducerData first_data{mesh, material, 1};
+        SceneProducerData second_data{mesh, material, 3};
+        SceneProducerData third_data{mesh, material, 5, 2};
+        assert(tc_drawable_capability_attach(&first, &scene_drawable, &first_data));
+        assert(tc_drawable_capability_attach(&second, &scene_drawable, &second_data));
+        assert(tc_drawable_capability_attach(&third, &scene_drawable, &third_data));
+        tc_entity_pool_add_component(pool, first_id, &first);
+        tc_entity_pool_add_component(pool, second_id, &second);
+        termin::StaticMeshBatchCache cache;
+        constexpr int filters = TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_VISIBLE | TC_SCENE_FILTER_ENTITY_ENABLED;
+        termin::TcSceneRenderItemSource source(scene, nullptr, filters, &cache);
+        termin::RenderItemSourceRequest request{};
+        auto publish = [&]() {
+            termin::RenderItemSnapshot snapshot;
+            assert(source.publish(snapshot, request));
+            assert(snapshot.valid());
+            assert(snapshot.counters().source_traversals == 1);
+            return snapshot;
+        };
+        auto check_drop = [&]() {
+            const size_t second_calls = second_data.calls;
+            auto snapshot = publish();
+            assert(snapshot.counters().producers == 1 && snapshot.item_count() == 1);
+            assert((snapshot.item(0)->flags & TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY) == 0);
+            assert(cache.stats().input_geometry == 1 && cache.stats().output_batches == 0);
+            assert(cache.stats().rebuilt_batches == 0 && cache.stats().reused_batches == 0);
+            assert(second_data.calls == second_calls); // Excluded before producer invocation.
+        };
+        auto check_restore = [&]() {
+            auto snapshot = publish();
+            assert(snapshot.counters().producers == 2 && snapshot.item_count() == 1);
+            assert(cache.stats().merged_geometry == 2 && cache.stats().rebuilt_batches == 1);
+            assert(cache.stats().cached_groups == 0 && cache.stats().signature_copies == 2);
+            auto warm = publish();
+            assert(cache.stats().rebuilt_batches == 0 && cache.stats().reused_batches == 1);
+            assert(cache.stats().signature_copies == 0);
+        };
+        auto original = publish();
+        assert(original.counters().producers == 2 && original.item_count() == 1);
+        assert(original.item(0)->source.domain_id == TC_RENDER_ITEM_SOURCE_DOMAIN_SCENE);
+        assert(original.item(0)->source.object_id != 0 && original.item(0)->source.namespace_id != 0);
+        assert(cache.stats().rebuilt_batches == 1 && cache.stats().merged_geometry == 2);
+        const auto original_mesh = original.item(0)->payload.mesh.mesh_handle;
+        assert(tc_mesh_get(original_mesh)->index_count == 6);
+        auto warm = publish();
+        assert(cache.stats().reused_batches == 1 && cache.stats().rebuilt_batches == 0);
+        assert(tc_mesh_handle_eq(warm.item(0)->payload.mesh.mesh_handle, original_mesh));
+
+        tc_entity_pool_set_visible(pool, second_id, false);
+        check_drop();
+        tc_entity_pool_set_visible(pool, second_id, true);
+        check_restore();
+        tc_entity_pool_set_enabled(pool, second_id, false);
+        check_drop();
+        tc_entity_pool_set_enabled(pool, second_id, true);
+        check_restore();
+        tc_component_set_enabled(&second, false);
+        check_drop();
+        tc_component_set_enabled(&second, true);
+        check_restore();
+
+        auto third_id = tc_entity_pool_alloc(pool, "third");
+        tc_entity_pool_set_layer(pool, third_id, 1);
+        tc_entity_pool_add_component(pool, third_id, &third);
+        auto added = publish();
+        assert(added.counters().producers == 3 && added.item_count() == 1);
+        assert(cache.stats().merged_geometry == 3 && cache.stats().rebuilt_batches == 1);
+        const auto added_mesh = added.item(0)->payload.mesh.mesh_handle;
+        assert(tc_mesh_get(added_mesh)->index_count == 9);
+        publish();
+        assert(cache.stats().reused_batches == 1 && cache.stats().signature_copies == 0);
+        tc_entity_pool_remove_component(pool, third_id, &third);
+        auto removed = publish();
+        assert(removed.counters().producers == 2 && cache.stats().merged_geometry == 2);
+        assert(cache.stats().rebuilt_batches == 1);
+        tc_entity_pool_add_component(pool, third_id, &third);
+        publish();
+        assert(cache.stats().merged_geometry == 3 && cache.stats().rebuilt_batches == 1);
+
+        // Real source masks feed distinct membership and independent cache variants.
+        request.render_category_mask = 1;
+        auto category_view = publish();
+        assert(category_view.counters().producers == 3 && cache.stats().input_geometry == 2);
+        assert(cache.stats().merged_geometry == 2 && cache.stats().rebuilt_batches == 1);
+        request.render_category_mask = UINT64_MAX;
+        publish();
+        assert(cache.stats().merged_geometry == 3 && cache.stats().reused_batches == 1);
+        tc_entity_pool_set_layer(pool, third_id, 2);
+        request.layer_mask = UINT64_C(1) << 1; // Entity layer is an index; request uses its bit mask.
+        auto layer_view = publish();
+        assert(layer_view.counters().producers == 2 && cache.stats().merged_geometry == 2);
+        assert(cache.stats().rebuilt_batches == 1);
+        request.layer_mask = UINT64_MAX;
+        auto split_layers = publish();
+        assert(split_layers.counters().producers == 3 && split_layers.item_count() == 2);
+        assert(cache.stats().merged_geometry == 2 && cache.stats().rebuilt_batches == 1);
+        tc_entity_pool_set_layer(pool, third_id, 1);
+        publish();
+        assert(cache.stats().merged_geometry == 3 && cache.stats().rebuilt_batches == 1);
+
+        tc_entity_pool_free(pool, third_id);
+        auto deleted = publish();
+        assert(deleted.counters().producers == 2 && cache.stats().merged_geometry == 2);
+        assert(cache.stats().rebuilt_batches == 1);
+        auto replacement_id = tc_entity_pool_alloc(pool, "replacement");
+        tc_entity_pool_set_layer(pool, replacement_id, 1);
+        tc_entity_pool_add_component(pool, replacement_id, &third);
+        publish();
+        assert(cache.stats().merged_geometry == 3 && cache.stats().rebuilt_batches == 1);
+        cache.clear_scene(scene);
+        // Previously published snapshots retain both old memberships' meshes.
+        assert(tc_mesh_is_valid(original_mesh) && tc_mesh_get(original_mesh)->index_count == 6);
+        assert(tc_mesh_is_valid(added_mesh) && tc_mesh_get(added_mesh)->index_count == 9);
+        assert(original.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_VALID);
+        assert(added.item(0)->bounds_state == TC_RENDER_ITEM_BOUNDS_VALID);
+
+        tc_component_detach_capability(&first, tc_drawable_capability_id());
+        tc_component_detach_capability(&second, tc_drawable_capability_id());
+        tc_component_detach_capability(&third, tc_drawable_capability_id());
+        tc_entity_pool_remove_component(pool, first_id, &first);
+        tc_entity_pool_remove_component(pool, second_id, &second);
+        tc_entity_pool_remove_component(pool, replacement_id, &third);
+        tc_scene_free(scene);
+        assert(tc_mesh_is_valid(original_mesh) && tc_mesh_is_valid(added_mesh));
+    }
 } // namespace
 int main() {
+    check_collision_index();
+    tc_shader_init();
     tc_mesh_init();
     tc_material_init();
     auto scene = tc_scene_new_named("static-batch-test");
@@ -181,6 +368,125 @@ int main() {
         assert(removed.items.size() == 1 && cache.stats().output_batches == 0);
         cache.clear_scene(scene);
         assert(tc_mesh_is_valid(merged));
+
+        // Many spatial groups exercise indexed lookup while preserving first-seen
+        // batch order, source member order, and trailing unbatched item order.
+        constexpr size_t group_count = 96;
+        termin::StaticMeshBatchCache indexed_cache;
+        std::vector<tc_render_item> grouped;
+        for (size_t i = 0; i < group_count; ++i) {
+            const size_t chunk = (i * 37) % group_count;
+            grouped.push_back(make_item(first, source.handle, material, 1000 + i * 2, float(chunk * 16 + 1)));
+            grouped.back().geometry_id = static_cast<int>(i * 2);
+            grouped.push_back(make_item(second, source.handle, material, 1001 + i * 2, float(chunk * 16 + 3)));
+            grouped.back().geometry_id = static_cast<int>(i * 2 + 1);
+        }
+        auto standalone = make_item(first, source.handle, material, 9999, -100);
+        standalone.flags &= ~TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE;
+        grouped.push_back(standalone);
+        auto indexed_collect = [&](uint64_t layer, uint64_t category, int filter) {
+            termin::RenderItemCollection result;
+            result.items = grouped;
+            assert(indexed_cache.apply(result, scene, layer, category, filter));
+            return result;
+        };
+        auto many = indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(many.items.size() == group_count + 1);
+        assert(indexed_cache.stats().work_groups == group_count);
+        assert(indexed_cache.stats().work_key_comparisons == group_count);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        assert(indexed_cache.stats().signature_copies == group_count * 2);
+        for (size_t i = 0; i < group_count; ++i) {
+            assert(many.items[i].geometry_id == -1 - static_cast<int>(i));
+            assert(many.items[i].model_matrix[12] == float(((i * 37) % group_count) * 16));
+            assert(many.items[i].source.object_id == grouped[i * 2].source.object_id);
+        }
+        assert(many.items.back().source.object_id == standalone.source.object_id);
+        auto many_warm = indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().cached_groups == group_count);
+        assert(indexed_cache.stats().cache_key_comparisons == group_count);
+        assert(indexed_cache.stats().signature_comparisons == group_count * 2);
+        assert(indexed_cache.stats().signature_copies == 0);
+        assert(indexed_cache.stats().rebuilt_batches == 0 && indexed_cache.stats().reused_batches == group_count);
+        for (size_t i = 0; i < group_count; ++i)
+            assert(tc_mesh_handle_eq(many.items[i].payload.mesh.mesh_handle, many_warm.items[i].payload.mesh.mesh_handle));
+
+        // Masks/filters select independent cache variants, even with identical input.
+        indexed_collect(1, UINT64_MAX, 0);
+        // Identical merged content can share a resource handle across variants.
+        // A fresh variant must still perform its own cache population.
+        assert(indexed_cache.stats().cached_groups == 0);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        assert(indexed_cache.stats().reused_batches == 0);
+        assert(indexed_cache.stats().signature_copies == group_count * 2);
+        indexed_collect(1, UINT64_MAX, 0);
+        assert(indexed_cache.stats().reused_batches == group_count);
+        indexed_collect(1, 2, 0);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        indexed_collect(1, 2, 3);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().reused_batches == group_count);
+
+        // Existing signatures are recomputed: runtime material/shader revisions
+        // and member reorder invalidate meshes even when semantic keys are unchanged.
+        ++mat->header.version;
+        indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        const auto shader_handle = tc_shader_create("static-batch-revision-shader");
+        assert(tc_shader_is_valid(shader_handle));
+        mat->phases[0].shader = shader_handle;
+        indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        ++tc_shader_get(shader_handle)->version;
+        indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        std::swap(grouped[0], grouped[1]);
+        indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().rebuilt_batches == 1 && indexed_cache.stats().reused_batches == group_count - 1);
+        assert(indexed_cache.stats().signature_copies == 2);
+        tc_entity_pool_set_layer(pool, second_id, 2);
+        auto changed_layers = indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(changed_layers.items.size() == grouped.size() && indexed_cache.stats().work_groups == group_count * 2);
+        tc_entity_pool_set_layer(pool, second_id, tc_entity_pool_layer(pool, first_id));
+        indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().rebuilt_batches == group_count);
+        grouped.erase(grouped.begin(), grouped.begin() + 2);
+        indexed_collect(UINT64_MAX, UINT64_MAX, 0);
+        assert(indexed_cache.stats().reused_batches == group_count - 1 && indexed_cache.stats().rebuilt_batches == 0);
+
+        // A later rebuild failure must not consume an earlier cache hit. Retry
+        // with the old sources reuses the entire prior cache and snapshot meshes.
+        termin::StaticMeshBatchCache retry_cache;
+        auto left_a = make_item(first, source.handle, material, 20001, 1);
+        auto left_b = make_item(second, source.handle, material, 20002, 3);
+        auto right_a = make_item(first, source.handle, material, 20003, 17);
+        auto right_b = make_item(second, source.handle, material, 20004, 19);
+        termin::RenderItemCollection retry_initial;
+        retry_initial.items = {left_a, left_b, right_a, right_b};
+        assert(retry_cache.apply(retry_initial, scene, UINT64_MAX, UINT64_MAX));
+        const auto preserved_left = retry_initial.items[0].payload.mesh.mesh_handle;
+        const auto preserved_right = retry_initial.items[1].payload.mesh.mesh_handle;
+        auto bad_source = termin::TcMesh::from_interleaved(info);
+        assert(bad_source.is_valid());
+        bad_source.get()->indices[0] = UINT32_MAX;
+        auto invalid_right = right_b;
+        invalid_right.payload.mesh.mesh_handle = bad_source.handle;
+        termin::RenderItemCollection failed;
+        failed.items = {left_a, left_b, right_a, invalid_right};
+        assert(!retry_cache.apply(failed, scene, UINT64_MAX, UINT64_MAX));
+        assert(failed.items.size() == 4 && failed.adapter_payloads.empty());
+        termin::RenderItemCollection retried;
+        retried.items = {left_a, left_b, right_a, right_b};
+        assert(retry_cache.apply(retried, scene, UINT64_MAX, UINT64_MAX));
+        assert(retry_cache.stats().reused_batches == 2 && retry_cache.stats().rebuilt_batches == 0);
+        assert(retry_cache.stats().signature_copies == 0);
+        assert(tc_mesh_handle_eq(retried.items[0].payload.mesh.mesh_handle, preserved_left));
+        assert(tc_mesh_handle_eq(retried.items[1].payload.mesh.mesh_handle, preserved_right));
+        retry_cache.clear();
+        assert(tc_mesh_is_valid(preserved_left) && tc_mesh_is_valid(preserved_right));
+        check_scene_snapshot_membership(source.handle, material);
+
     }
     tc_component_detach_capability(&first, tc_drawable_capability_id());
     tc_component_detach_capability(&second, tc_drawable_capability_id());
@@ -189,4 +495,5 @@ int main() {
     tc_scene_free(scene);
     tc_material_shutdown();
     tc_mesh_shutdown();
+    tc_shader_shutdown();
 }

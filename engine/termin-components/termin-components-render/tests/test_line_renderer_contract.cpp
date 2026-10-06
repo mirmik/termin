@@ -11,6 +11,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/skinned_mesh_renderer.hpp>
+#include <termin/render/skeleton_controller.hpp>
 #include <termin/render/normal_pass.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
@@ -67,6 +68,10 @@ namespace {
             ++skin_payload_queries;
             termin::SkinnedMeshRenderer::populate_mesh_render_item(item);
         }
+    };
+
+    struct ExposedSkinnedRenderer : termin::SkinnedMeshRenderer {
+        using termin::SkinnedMeshRenderer::populate_mesh_render_item;
     };
 
     struct CountingLineRenderer : termin::LineRenderer {
@@ -874,6 +879,59 @@ TEST_CASE("Skinned material enumeration excludes unused slots and never prepares
     }
     tc_mesh_shutdown();
     tc_material_shutdown();
+}
+
+TEST_CASE("SkinnedMeshRenderer opts into approximate undeformed bounds while retaining bone payload") {
+    tc_skeleton_init();
+    {
+        termin::TcSkeleton skeleton = termin::TcSkeleton::create("culling-policy-skeleton", "culling-policy-skeleton");
+        tc_skeleton_bone_desc bone_desc{};
+        bone_desc.name = "root";
+        bone_desc.parent_index = -1;
+        bone_desc.inverse_bind_matrix = tc_mat44_identity();
+        bone_desc.bind_rotation = tc_quat_identity();
+        bone_desc.bind_scale = tc_vec3_one();
+        REQUIRE(skeleton.replace_bones(&bone_desc, 1));
+
+        termin::TcSceneRef scene = termin::TcSceneRef::create("skinned-bounds-policy");
+        termin::Entity owner = scene.create_entity("mesh");
+        termin::Entity bone = scene.create_entity("root");
+        bone.transform().set_local_position({7, 0, 0});
+        auto* controller = new termin::SkeletonController();
+        controller->set_skeleton(skeleton);
+        controller->set_bone_entities({bone});
+        owner.add_component(controller);
+        auto* renderer = new ExposedSkinnedRenderer();
+        owner.add_component(renderer);
+        renderer->set_skeleton_controller(controller);
+
+        tc_render_item item{};
+        item.kind = TC_RENDER_ITEM_KIND_MESH;
+        item.flags = TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
+        renderer->populate_mesh_render_item(item);
+        CHECK((item.flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) == 0u);
+        CHECK((item.flags & TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS) != 0u);
+        CHECK((item.flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES) != 0u);
+        CHECK((item.flags & TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) == 0u);
+        REQUIRE_EQ(item.payload.mesh.skinning_matrix_count, 1u);
+        REQUIRE(item.payload.mesh.skinning_matrices != nullptr);
+        CHECK_EQ(item.payload.mesh.skinning_matrices[12], 7.0f);
+        bone.transform().set_local_position({12, 0, 0});
+        tc_render_item next_pose{};
+        next_pose.kind = TC_RENDER_ITEM_KIND_MESH;
+        renderer->populate_mesh_render_item(next_pose);
+        CHECK((next_pose.flags & TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS) != 0u);
+        CHECK_EQ(next_pose.payload.mesh.skinning_matrices[12], 12.0f);
+
+        ExposedSkinnedRenderer without_skeleton;
+        tc_render_item undeformed{};
+        undeformed.kind = TC_RENDER_ITEM_KIND_MESH;
+        without_skeleton.populate_mesh_render_item(undeformed);
+        CHECK((undeformed.flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) != 0u);
+        CHECK((undeformed.flags & TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS) == 0u);
+        CHECK((undeformed.flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES) == 0u);
+    }
+    tc_skeleton_shutdown();
 }
 
 TEST_CASE("Line material enumeration preserves fallback owners and phase eligibility without model payload") {

@@ -1,3 +1,5 @@
+#include "static_mesh_batch_index.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -45,6 +47,44 @@ namespace termin {
                    a.component_phases == b.component_phases && a.layer == b.layer && a.flags == b.flags &&
                    a.priority == b.priority && a.pickable == b.pickable && layout_equal(a.layout, b.layout);
         }
+        uint64_t key_hash(const Key& key) {
+            uint64_t hash = UINT64_C(0xcbf29ce484222325);
+            auto add = [&](uint64_t value) {
+                // Mix each semantic field; never hash structure padding.
+                value ^= value >> 30;
+                value *= UINT64_C(0xbf58476d1ce4e5b9);
+                value ^= value >> 27;
+                value *= UINT64_C(0x94d049bb133111eb);
+                value ^= value >> 31;
+                hash = (hash ^ value) * UINT64_C(0x100000001b3);
+            };
+            for (int64_t cell : key.chunk)
+                add(static_cast<uint64_t>(cell));
+            add(key.material.index);
+            add(key.material.generation);
+            add(key.component_phases);
+            add(key.layer);
+            add(key.flags);
+            add(static_cast<uint64_t>(key.priority));
+            add(key.pickable);
+            add(key.phases.size());
+            for (size_t phase : key.phases)
+                add(phase);
+            add(key.layout.stride);
+            add(key.layout.attrib_count);
+            add(key.layout.use_shader_input_locations);
+            for (uint32_t i = 0; i < key.layout.attrib_count; ++i) {
+                const auto& attr = key.layout.attribs[i];
+                for (const char* name = attr.name; *name; ++name)
+                    add(static_cast<unsigned char>(*name));
+                add(0);
+                add(attr.size);
+                add(attr.type);
+                add(attr.location);
+                add(attr.offset);
+            }
+            return hash;
+        }
         struct Signature {
             uint64_t namespace_id = 0, object_id = 0;
             uint32_t generation = 0, component_id = 0;
@@ -67,10 +107,13 @@ namespace termin {
         };
         struct WorkGroup {
             Key key;
+            uint64_t hash = 0;
             std::vector<Member> members;
+            size_t member_count = 0;
         };
         struct CachedGroup {
             Key key;
+            uint64_t hash = 0;
             std::vector<Signature> members;
             std::shared_ptr<const TcMesh> mesh;
         };
@@ -79,6 +122,12 @@ namespace termin {
             uint64_t layer = 0, category = 0;
             int filter = 0;
             std::vector<CachedGroup> groups;
+            std::vector<CachedGroup> next_groups;
+        };
+        struct ResolvedGroup {
+            size_t work_index = 0;
+            size_t previous_index = detail::StaticBatchKeyIndex::missing;
+            std::shared_ptr<const TcMesh> mesh;
         };
         bool same_geometry(const tc_render_item& a, const tc_render_item& b) {
             return a.kind == b.kind && a.geometry_id == b.geometry_id &&
@@ -236,7 +285,8 @@ namespace termin {
             const auto* pos = tc_vertex_layout_find(&layout, "position");
             const auto* normal = tc_vertex_layout_find(&layout, "normal");
             const auto* tangent = tc_vertex_layout_find(&layout, "tangent");
-            for (const auto& member : group.members) {
+            for (size_t member_index = 0; member_index < group.member_count; ++member_index) {
+                const auto& member = group.members[member_index];
                 const auto& item = items[member.begin];
                 const auto* mesh = tc_mesh_get(member.signature.mesh);
                 const auto& sub = mesh->submeshes[item.payload.mesh.submesh_index];
@@ -307,6 +357,14 @@ namespace termin {
     struct StaticMeshBatchCache::Impl {
         std::vector<Variant> variants;
         StaticMeshBatchStats stats;
+        detail::StaticBatchKeyIndex work_index, cache_index;
+        // Slots keep their nested phase/shader/member storage across frames.
+        Key candidate_key;
+        Signature candidate_signature;
+        std::vector<WorkGroup> work_groups;
+        std::vector<ResolvedGroup> resolved;
+        std::vector<tc_render_item> output;
+        std::vector<uint8_t> consumed;
     };
     StaticMeshBatchCache::StaticMeshBatchCache()
         : impl_(std::make_unique<Impl>()) {}
@@ -316,6 +374,8 @@ namespace termin {
     }
     void StaticMeshBatchCache::clear() {
         impl_->variants.clear();
+        impl_->resolved.clear();
+        impl_->output.clear();
     }
     void StaticMeshBatchCache::clear_scene(tc_scene_handle scene) {
         std::erase_if(impl_->variants, [&](const Variant& v) { return tc_scene_handle_eq(v.scene, scene); });
@@ -333,8 +393,11 @@ namespace termin {
             impl_->variants.push_back({scene, layer, category, filter, {}});
             found = std::prev(impl_->variants.end());
         }
-        std::vector<WorkGroup> groups;
+        auto& groups = impl_->work_groups;
+        size_t group_count = 0;
         const auto& items = collection.items;
+        stats.cached_groups = found->groups.size();
+        impl_->work_index.reset(items.size());
         {
             const tc::ProfilerScope scope("Static batch grouping");
             for (size_t begin = 0; begin < items.size();) {
@@ -345,61 +408,97 @@ namespace termin {
                         ++end;
                 ++stats.input_geometry;
                 if (items[begin].flags & TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) {
-                    Key key;
-                    Signature signature;
+                    auto& key = impl_->candidate_key;
+                    auto& signature = impl_->candidate_signature;
+                    key.phases.clear();
+                    signature.shaders.clear();
                     if (eligible(items, begin, end, key, signature)) {
                         ++stats.eligible_geometry;
-                        auto group = std::find_if(
-                            groups.begin(), groups.end(), [&](const WorkGroup& g) { return key_equal(g.key, key); });
-                        if (group == groups.end()) {
-                            groups.push_back({std::move(key), {}});
-                            group = std::prev(groups.end());
+                        const uint64_t hash = key_hash(key);
+                        size_t group_index = impl_->work_index.find(hash, [&](size_t index) {
+                            ++stats.work_key_comparisons;
+                            return key_equal(groups[index].key, key);
+                        });
+                        if (group_index == detail::StaticBatchKeyIndex::missing) {
+                            group_index = group_count++;
+                            if (groups.size() <= group_index)
+                                groups.emplace_back();
+                            auto& group = groups[group_index];
+                            std::swap(group.key, key);
+                            group.hash = hash;
+                            group.member_count = 0;
+                            impl_->work_index.insert(hash, group_index);
                         }
-                        group->members.push_back({begin, end, std::move(signature)});
+                        auto& group = groups[group_index];
+                        if (group.members.size() <= group.member_count)
+                            group.members.emplace_back();
+                        auto& member = group.members[group.member_count++];
+                        member.begin = begin;
+                        member.end = end;
+                        std::swap(member.signature, signature);
                     } else
                         ++stats.unsupported_geometry;
                 }
                 begin = end;
             }
         }
-        if (std::none_of(groups.begin(), groups.end(), [](const WorkGroup& g) { return g.members.size() >= 2; })) {
+        stats.work_groups = group_count;
+        bool has_batches = false;
+        for (size_t i = 0; i < group_count; ++i)
+            has_batches |= groups[i].member_count >= 2;
+        if (!has_batches) {
             found->groups.clear();
+            found->next_groups.clear();
             return true;
         }
-        std::vector<CachedGroup> next;
-        std::vector<tc_render_item> output;
-        std::vector<bool> consumed(items.size(), false);
+        auto& output = impl_->output;
+        output.clear();
+        output.reserve(items.size());
+        auto& consumed = impl_->consumed;
+        consumed.assign(items.size(), 0);
+        auto& resolved = impl_->resolved;
+        resolved.clear();
+        impl_->cache_index.reset(found->groups.size());
+        for (size_t i = 0; i < found->groups.size(); ++i)
+            impl_->cache_index.insert(found->groups[i].hash, i);
         {
             const tc::ProfilerScope scope("Static batch cache and output");
-            for (const auto& group : groups) {
-                if (group.members.size() < 2)
+            for (size_t group_index = 0; group_index < group_count; ++group_index) {
+                const auto& group = groups[group_index];
+                if (group.member_count < 2)
                     continue;
-                auto previous = std::find_if(found->groups.begin(), found->groups.end(), [&](const CachedGroup& c) {
-                    if (!key_equal(c.key, group.key) || c.members.size() != group.members.size())
-                        return false;
-                    for (size_t i = 0; i < c.members.size(); ++i)
-                        if (!signature_equal(c.members[i], group.members[i].signature))
-                            return false;
-                    return true;
+                const size_t previous_index = impl_->cache_index.find(group.hash, [&](size_t index) {
+                    ++stats.cache_key_comparisons;
+                    return key_equal(found->groups[index].key, group.key);
                 });
+                bool reusable = previous_index != detail::StaticBatchKeyIndex::missing;
+                if (reusable) {
+                    const auto& previous = found->groups[previous_index];
+                    reusable = previous.members.size() == group.member_count;
+                    for (size_t i = 0; reusable && i < group.member_count; ++i) {
+                        ++stats.signature_comparisons;
+                        reusable = signature_equal(previous.members[i], group.members[i].signature);
+                    }
+                }
                 std::shared_ptr<const TcMesh> mesh;
-                if (previous != found->groups.end()) {
-                    mesh = previous->mesh;
+                if (reusable) {
+                    mesh = found->groups[previous_index].mesh;
                     ++stats.reused_batches;
                 } else {
                     mesh = rebuild(group, items);
-                    if (!mesh)
+                    if (!mesh) {
+                        resolved.clear();
+                        output.clear();
                         return false;
+                    }
                     ++stats.rebuilt_batches;
                 }
-                CachedGroup cached{group.key, {}, mesh};
-                for (const auto& m : group.members) {
-                    cached.members.push_back(m.signature);
-                    for (size_t i = m.begin; i < m.end; ++i)
-                        consumed[i] = true;
+                resolved.push_back({group_index, reusable ? previous_index : detail::StaticBatchKeyIndex::missing, mesh});
+                for (size_t member_index = 0; member_index < group.member_count; ++member_index) {
+                    const auto& member = group.members[member_index];
+                    for (size_t i = member.begin; i < member.end; ++i)
+                        consumed[i] = 1;
                 }
-                next.push_back(std::move(cached));
-                collection.retain_adapter_payload(mesh);
                 const auto& representative = group.members.front();
                 for (size_t i = representative.begin; i < representative.end; ++i) {
                     auto item = items[i];
@@ -407,8 +506,7 @@ namespace termin {
                         (item.flags & ~TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) | TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY;
                     item.payload.mesh.mesh_handle = mesh->handle;
                     item.payload.mesh.submesh_index = 0;
-                    // Unique negative geometry ids keep adjacent batches distinct while
-                    // all phases of one merged geometry stay grouped in auxiliary passes.
+                    // Output follows the first-seen work groups, never hash bucket order.
                     item.geometry_id = -1 - static_cast<int>(stats.output_batches);
                     std::fill(std::begin(item.model_matrix), std::end(item.model_matrix), 0.0f);
                     item.model_matrix[0] = item.model_matrix[5] = item.model_matrix[10] = item.model_matrix[15] = 1;
@@ -416,15 +514,43 @@ namespace termin {
                         item.model_matrix[12 + a] = float(group.key.chunk[a] * chunk_size);
                     output.push_back(item);
                 }
-                stats.merged_geometry += group.members.size();
+                stats.merged_geometry += group.member_count;
                 ++stats.output_batches;
             }
+            for (size_t i = 0; i < items.size(); ++i)
+                if (!consumed[i])
+                    output.push_back(items[i]);
+
+            // Commit only after every rebuild succeeded. Until here, failed apply
+            // leaves all indexed cached keys/signatures/meshes available for retry.
+            auto& next = found->next_groups;
+            next.clear();
+            next.reserve(resolved.size());
+            for (const auto& result : resolved) {
+                const auto& group = groups[result.work_index];
+                if (result.previous_index != detail::StaticBatchKeyIndex::missing) {
+                    next.push_back(std::move(found->groups[result.previous_index]));
+                } else {
+                    CachedGroup cached;
+                    cached.key = group.key;
+                    cached.hash = group.hash;
+                    cached.mesh = result.mesh;
+                    cached.members.reserve(group.member_count);
+                    for (size_t i = 0; i < group.member_count; ++i) {
+                        cached.members.push_back(group.members[i].signature);
+                        ++stats.signature_copies;
+                    }
+                    next.push_back(std::move(cached));
+                }
+                collection.retain_adapter_payload(result.mesh);
+            }
+            collection.items.swap(output);
+            output.clear();
+            found->groups.swap(next);
+            // Release dropped cache ownership; published snapshots retain meshes.
+            next.clear();
+            resolved.clear();
         }
-        for (size_t i = 0; i < items.size(); ++i)
-            if (!consumed[i])
-                output.push_back(items[i]);
-        collection.items = std::move(output);
-        found->groups = std::move(next);
         if (stats.rebuilt_batches)
             tc::Log::info(
                 "[StaticBatch] inputs=%llu eligible=%llu merged=%llu batches=%llu rebuilt=%llu unsupported=%llu",

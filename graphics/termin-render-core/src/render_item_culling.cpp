@@ -64,9 +64,11 @@ namespace termin {
     void update_render_item_world_bounds(tc_render_item& item) {
         item.world_bounds = tc_aabb_zero();
         item.bounds_state = TC_RENDER_ITEM_BOUNDS_UNSUPPORTED;
-        if (item.kind != TC_RENDER_ITEM_KIND_MESH ||
-            !(item.flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) ||
-            (item.flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES)) {
+        const bool skinned = (item.flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES) != 0u;
+        const bool supported = skinned
+            ? (item.flags & TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS) != 0u
+            : (item.flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) != 0u;
+        if (item.kind != TC_RENDER_ITEM_KIND_MESH || !supported) {
             return;
         }
         item.bounds_state = TC_RENDER_ITEM_BOUNDS_MISSING;

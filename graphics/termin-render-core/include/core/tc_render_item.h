@@ -36,6 +36,10 @@ typedef enum tc_render_item_flags {
     /* Producer guarantees undeformed mesh positions bound this item. Passes
        must also require a vertex transform contract that preserves bounds. */
     TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS = 1u << 7,
+    /* Explicit approximate culling policy for skinned meshes: use undeformed
+       submesh positions and the model matrix, ignoring the bone pose. This
+       does not guarantee containment of the animated geometry. */
+    TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS = 1u << 8,
 } tc_render_item_flags;
 
 typedef enum tc_render_item_bounds_state {

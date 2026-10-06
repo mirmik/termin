@@ -15,6 +15,13 @@ namespace termin {
         uint64_t rebuilt_batches = 0;
         uint64_t reused_batches = 0;
         uint64_t unsupported_geometry = 0;
+        // Reset by each apply; comparisons count full equality checks after hashing.
+        uint64_t work_groups = 0;
+        uint64_t cached_groups = 0;
+        uint64_t work_key_comparisons = 0;
+        uint64_t cache_key_comparisons = 0;
+        uint64_t signature_comparisons = 0;
+        uint64_t signature_copies = 0;
     };
     // Scene-adapter owned cache. Never holds component pointers across publications.
     // Rebuilt meshes are retained by each immutable snapshot that references them.

@@ -1,6 +1,7 @@
 # CPU frustum culling
 
-Undeformed MeshRenderer items and static spatial batches are culled by default.
+Undeformed MeshRenderer items, static spatial batches and standard
+SkinnedMeshRenderer items are culled by default.
 The full immutable RenderItemSnapshot remains available to every pass. Selection
 uses the final camera matrices of each pass, including named overrides. Mono
 Color, Depth, DepthOnly, Normal, Id and StandardGBuffer use their own volume;
@@ -8,8 +9,16 @@ multiview Color accepts the union of the two eyes.
 
 ## Bounds contract
 
-The producer opts in with TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS.
-SkinnedMeshRenderer never opts in, even before its skeleton is available.
+Undeformed producers opt in with TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS.
+Standard SkinnedMeshRenderer items carrying bone matrices explicitly opt in
+with TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS instead. Their bounds
+use the original undeformed geometry of the selected submesh transformed by
+the current model matrix, ignoring the current bone pose. Actual rendering
+retains its skinning matrices and animation. Without an active skeleton payload,
+SkinnedMeshRenderer draws undeformed vertices and uses the conservative policy.
+Custom skinned producers remain unsupported unless they explicitly set the
+undeformed skinned policy flag; the static conservative flag alone does not
+enable their culling.
 Non-mesh producers retain their existing behavior. Snapshot publication computes
 world_bounds and bounds_state after static batching. Missing, unsupported and
 invalid bounds keep the item visible. Geometry errors are logged without
@@ -26,6 +35,16 @@ World bounds use the item's actual affine model matrix, including mesh offset,
 parent transforms, reflection, nonuniform scale and shear. Batches use the
 merged chunk-local vertices and chunk model matrix, so geometry extending beyond
 the chunk pivot remains conservative.
+
+The undeformed skinned policy is a user-approved approximation (#2898,
+2026-10-07), not a guarantee that the box contains the animated pose. Geometry
+and model-transform changes refresh bounds through the existing mesh version
+cache and snapshot publication; changing only the bone pose leaves bounds
+unchanged. Bounds are computed once per snapshot and reused by each view.
+Pose-aware conservative bounds, bone-influence bounds and animation envelopes
+are explicitly deferred until this approximation causes visible geometry or
+shadow loss. A reproduced loss must be recorded and used to revisit that
+decision, rather than hidden by another approximation.
 
 Frustum planes come from projection * view in the engine's clip convention:
 X/Y in [-w,w], Z in [0,w]. Backend OpenGL remapping is irrelevant to this CPU
