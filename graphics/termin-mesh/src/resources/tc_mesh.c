@@ -74,6 +74,137 @@ void tc_mesh_compute_uuid(
 // Mesh queries
 // ============================================================================
 
+typedef struct tc_mesh_bounds_cache_entry {
+    tc_aabb bounds;
+    bool available;
+} tc_mesh_bounds_cache_entry;
+
+void tc_mesh_clear_bounds_cache(tc_mesh* mesh) {
+    if (!mesh) {
+        return;
+    }
+    free(mesh->_bounds_cache);
+    mesh->_bounds_cache = NULL;
+    mesh->_bounds_cache_count = 0;
+    mesh->_bounds_cache_initialized = false;
+}
+
+static bool tc_mesh_compute_section_bounds(const tc_mesh* mesh,
+                                           const tc_submesh* section,
+                                           const tc_vertex_attrib* position,
+                                           tc_aabb* out_bounds) {
+    if ((size_t)section->first_index > mesh->index_count ||
+        (size_t)section->index_count > mesh->index_count - section->first_index) {
+        return false;
+    }
+    tc_aabb bounds = tc_aabb_zero();
+    for (size_t i = 0; i < section->index_count; ++i) {
+        const int64_t vertex_index = (int64_t)mesh->indices[(size_t)section->first_index + i] +
+                                     (int64_t)section->vertex_offset;
+        if (vertex_index < 0 || (uint64_t)vertex_index >= mesh->vertex_count) {
+            return false;
+        }
+        float coordinates[3];
+        memcpy(coordinates,
+               (const uint8_t*)mesh->vertices + (size_t)vertex_index * mesh->layout.stride + position->offset,
+               sizeof(coordinates));
+        const tc_vec3 point = TC_VEC3(coordinates[0], coordinates[1], coordinates[2]);
+        if (!tc_vec3_is_finite(point)) {
+            return false;
+        }
+        if (i == 0) {
+            bounds = tc_aabb_new(point, point);
+        } else {
+            tc_aabb_extend(&bounds, point);
+        }
+    }
+    *out_bounds = bounds;
+    return true;
+}
+
+static const char* tc_mesh_refresh_bounds_cache(tc_mesh* mesh) {
+    tc_mesh_clear_bounds_cache(mesh);
+    mesh->_bounds_cache_version = mesh->header.version;
+    mesh->_bounds_cache_initialized = true;
+
+    if (mesh->submesh_count == 0) {
+        return NULL;
+    }
+    const char* invalid_reason = NULL;
+    const tc_vertex_attrib* position = NULL;
+    if (mesh->layout.attrib_count > TC_VERTEX_ATTRIBS_MAX) {
+        invalid_reason = "vertex attribute count exceeds layout capacity";
+        goto invalid;
+    }
+    for (size_t i = 0; i < mesh->layout.attrib_count; ++i) {
+        if (memcmp(mesh->layout.attribs[i].name, "position", sizeof("position")) == 0) {
+            position = &mesh->layout.attribs[i];
+            break;
+        }
+    }
+    if (!position || position->type != TC_ATTRIB_FLOAT32 || position->size != 3) {
+        return NULL; // A supported layout is a prerequisite, not a geometry error.
+    }
+    if (mesh->layout.stride < sizeof(float) * 3u ||
+        (size_t)position->offset > mesh->layout.stride - sizeof(float) * 3u ||
+        mesh->vertex_count > SIZE_MAX / mesh->layout.stride ||
+        mesh->index_count > SIZE_MAX / sizeof(uint32_t)) {
+        invalid_reason = "invalid vertex stride, position offset or buffer size";
+        goto invalid;
+    }
+    if (!mesh->submeshes || !mesh->vertices || !mesh->indices || mesh->vertex_count == 0) {
+        invalid_reason = "missing CPU geometry or submesh data";
+        goto invalid;
+    }
+    if (mesh->submesh_count > SIZE_MAX / sizeof(tc_mesh_bounds_cache_entry)) {
+        invalid_reason = "bounds cache size overflows size_t";
+        goto invalid;
+    }
+    mesh->_bounds_cache = calloc(mesh->submesh_count, sizeof(tc_mesh_bounds_cache_entry));
+    if (!mesh->_bounds_cache) {
+        invalid_reason = "bounds cache allocation failed";
+        goto invalid;
+    }
+    mesh->_bounds_cache_count = mesh->submesh_count;
+    for (size_t i = 0; i < mesh->submesh_count; ++i) {
+        if (mesh->submeshes[i].index_count == 0) {
+            continue;
+        }
+        tc_mesh_bounds_cache_entry* entry = &mesh->_bounds_cache[i];
+        entry->available = tc_mesh_compute_section_bounds(mesh, &mesh->submeshes[i], position, &entry->bounds);
+        if (!entry->available && !invalid_reason) {
+            invalid_reason = "submesh index range, referenced vertex or position is invalid";
+        }
+    }
+invalid:
+    return invalid_reason;
+}
+
+bool tc_mesh_get_submesh_bounds(tc_mesh* mesh, size_t submesh_index, tc_aabb* out_bounds) {
+    if (!mesh || !out_bounds || !mesh->header.is_loaded || submesh_index >= mesh->submesh_count) {
+        return false;
+    }
+    const char* invalid_reason = NULL;
+    if (!mesh->_bounds_cache_initialized || mesh->_bounds_cache_version != mesh->header.version) {
+        invalid_reason = tc_mesh_refresh_bounds_cache(mesh);
+    }
+    const bool available = submesh_index < mesh->_bounds_cache_count &&
+                           mesh->_bounds_cache[submesh_index].available;
+    if (available) {
+        *out_bounds = mesh->_bounds_cache[submesh_index].bounds;
+    }
+    // Log callbacks can mutate/grow the registry pool, so do not access mesh
+    // after invoking the callback.
+    if (invalid_reason) {
+        tc_log(TC_LOG_ERROR,
+               "tc_mesh_get_submesh_bounds: mesh '%s' version=%u: %s; unavailable bounds disable culling",
+               mesh->header.name ? mesh->header.name : mesh->header.uuid,
+               mesh->header.version,
+               invalid_reason);
+    }
+    return available;
+}
+
 static bool tc_mesh_vec3f_normalize(tc_vec3f* v) {
     return v && tc_vec3f_try_normalized(*v, 1.0e-10f, v);
 }

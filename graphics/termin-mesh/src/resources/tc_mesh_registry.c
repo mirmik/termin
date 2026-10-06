@@ -39,6 +39,7 @@ static bool tc_mesh_checked_size_mul(size_t count, size_t element_size, size_t* 
 static void mesh_free_data(tc_mesh* mesh) {
     if (!mesh)
         return;
+    tc_mesh_clear_bounds_cache(mesh);
     if (mesh->vertices) {
         free(mesh->vertices);
         mesh->vertices = NULL;
@@ -798,6 +799,7 @@ bool tc_mesh_ensure_default_submesh(tc_mesh* mesh) {
         if (mesh->submeshes) {
             free(mesh->submeshes);
             mesh->submeshes = NULL;
+            mesh->header.version++;
         }
         mesh->submesh_count = 0;
         return true;
@@ -823,6 +825,7 @@ bool tc_mesh_ensure_default_submesh(tc_mesh* mesh) {
         free(mesh->submeshes);
     mesh->submeshes = new_submeshes;
     mesh->submesh_count = 1;
+    mesh->header.version++;
     return true;
 }
 

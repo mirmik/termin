@@ -65,5 +65,7 @@ Profiler sections: `Static mesh batching`, `Static batch rebuild`.
 `StaticMeshBatchCache::stats()` содержит input/eligible/merged/output/rebuilt/
 reused/unsupported counts. В стабильном кадре rebuild должен отсутствовать.
 
-Пространственная группировка не добавляет frustum culling: этот отдельный
-scope отслеживается в #2312. Основная задача batching — #2311.
+После группировки snapshot вычисляет bounds объединённой геометрии.
+Проходы выполняют отдельное CPU frustum culling для каждой камеры и каскада
+теней: см. [frustum-culling.md](frustum-culling.md), #2312.
+Основная задача batching — #2311.

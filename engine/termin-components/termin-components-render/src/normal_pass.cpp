@@ -150,7 +150,10 @@ namespace termin {
         if (!snapshot) {
             return;
         }
-        collect_draw_calls(scene, layer_mask, render_category_mask, normal_shader_handle_, *snapshot);
+        const RenderItemCullingView culling(view, projection);
+        RenderItemCullingCounters counters{};
+        collect_draw_calls(scene, layer_mask, render_category_mask, normal_shader_handle_, *snapshot,
+                           &culling, &counters);
         sort_draw_calls_by_shader();
 
         entity_names.clear();
@@ -238,8 +241,10 @@ namespace termin {
             if (!submit_render_item_draw(*ctx.ctx2, item, encode_request)) {
                 continue;
             }
+            if (item.kind == TC_RENDER_ITEM_KIND_MESH) ++counters.mesh_draws;
         }
 
+        publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(), -1, counters);
         ctx.ctx2->end_pass();
         // color_tex2/depth_tex2 are persistent FBOPool wrappers — do not destroy.
     }

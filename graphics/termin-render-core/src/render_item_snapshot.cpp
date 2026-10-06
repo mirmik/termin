@@ -2,6 +2,7 @@
 
 #include <tcbase/tc_log.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render/render_item_culling.hpp>
 
 extern "C" {
 #include <tgfx/resources/tc_material.h>
@@ -38,6 +39,7 @@ namespace termin {
         }
 
         for (size_t item_index = 0; item_index < storage_.items.size(); ++item_index) {
+            update_render_item_world_bounds(storage_.items[item_index]);
             tc_material_phase* phase = resolve_phase(storage_.items[item_index]);
             if (!phase || !tc_phase_is_single(phase->phase)) {
                 continue;

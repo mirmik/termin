@@ -12,6 +12,7 @@
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/material_pipeline_shader_assembler.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/render/render_item_culling.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
 #include "termin/render/resource_spec.hpp"
 #include "termin/render/scene_shader_usage_provider.hpp"
@@ -253,7 +254,9 @@ namespace termin {
                                 const std::string& phase_mark,
                                 const RenderContext& render_context,
                                 uint64_t layer_mask,
-                                const RenderItemSnapshot& snapshot);
+                                const RenderItemSnapshot& snapshot,
+                                const RenderItemCullingView& culling,
+                                RenderItemCullingCounters& counters);
 
         // Compute sort keys for all draw calls (priority + distance)
         void compute_sort_keys(const Vec3& camera_position);

@@ -58,6 +58,7 @@ static void set_vertex(tc_mesh* mesh, size_t idx, tc_primitive_vertex vertex) {
 static void free_temp_mesh(tc_mesh* mesh) {
     if (!mesh)
         return;
+    tc_mesh_clear_bounds_cache(mesh);
     free(mesh->vertices);
     free(mesh->indices);
     free(mesh);

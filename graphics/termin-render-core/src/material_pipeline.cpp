@@ -342,6 +342,15 @@ namespace termin {
         return buffer;
     }
 
+    bool material_shader_preserves_authored_vertex_stage(const TcShader& shader,
+                                                         const MaterialPipelinePassContract& pass) {
+        return pass.allows_authored_vertex_stage && shader.is_valid() && shader.is_executable() &&
+               pass.fragment_source_override.empty() && shader.vertex_source()[0] != '\0' &&
+               (pass.fragment_composition == MaterialFragmentComposition::FinalColor ||
+                (pass.fragment_composition == MaterialFragmentComposition::SurfaceConsumerOrFinalColor &&
+                 !shader.has_surface_producer()));
+    }
+
     TcShader assemble_material_shader_override(const MaterialShaderOverrideRequest& request) {
         const tc::ProfilerScope profile_scope("Shader variant plan");
         const char* context = material_shader_override_context(request);
@@ -392,10 +401,7 @@ namespace termin {
         const bool authored_static_material_shader =
             request.vertex_transform_kind == VertexTransformKind::StaticMesh &&
             !request.vertex_transform_contract.has_value() && shader_variant_op == TC_SHADER_VARIANT_NONE &&
-            pass_contract.allows_authored_vertex_stage &&
-            pass_contract.fragment_composition == MaterialFragmentComposition::FinalColor &&
-            original_shader.is_executable() && pass_contract.fragment_source_override.empty() &&
-            original_shader.vertex_source()[0] != '\0';
+            material_shader_preserves_authored_vertex_stage(original_shader, pass_contract);
         if (authored_static_material_shader) {
             return original_shader;
         }

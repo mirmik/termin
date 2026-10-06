@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "geom/tc_aabb.h"
+
 #include "tgfx/resources/tc_material.h"
 #include "tgfx/resources/tc_mesh_registry.h"
 #include "tgfx/resources/tc_texture.h"
@@ -31,7 +33,17 @@ typedef enum tc_render_item_flags {
     TC_RENDER_ITEM_FLAG_HAS_INLINE_UNIFORM = 1u << 4,
     TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE = 1u << 5,
     TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY = 1u << 6,
+    /* Producer guarantees undeformed mesh positions bound this item. Passes
+       must also require a vertex transform contract that preserves bounds. */
+    TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS = 1u << 7,
 } tc_render_item_flags;
+
+typedef enum tc_render_item_bounds_state {
+    TC_RENDER_ITEM_BOUNDS_MISSING = 0,
+    TC_RENDER_ITEM_BOUNDS_VALID = 1,
+    TC_RENDER_ITEM_BOUNDS_UNSUPPORTED = 2,
+    TC_RENDER_ITEM_BOUNDS_INVALID = 3,
+} tc_render_item_bounds_state;
 
 typedef enum tc_render_item_source_domain {
     TC_RENDER_ITEM_SOURCE_DOMAIN_NONE = 0,
@@ -156,6 +168,8 @@ typedef struct tc_render_item {
     tc_material_handle material;
     size_t material_phase_index;
     float model_matrix[16];
+    tc_aabb world_bounds;
+    uint32_t bounds_state;
     tc_render_item_vec4 override_color;
     tc_render_item_inline_uniform inline_uniform;
     tc_render_item_payload payload;

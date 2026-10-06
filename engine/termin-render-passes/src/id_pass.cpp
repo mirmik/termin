@@ -203,7 +203,10 @@ struct VertexInput {
         if (!snapshot) {
             return;
         }
-        collect_draw_calls(scene, layer_mask, render_category_mask, id_shader_handle_, *snapshot);
+        const RenderItemCullingView culling(view, projection);
+        RenderItemCullingCounters counters{};
+        collect_draw_calls(scene, layer_mask, render_category_mask, id_shader_handle_, *snapshot,
+                           &culling, &counters);
         sort_draw_calls_by_shader();
 
         entity_names.clear();
@@ -335,6 +338,7 @@ struct VertexInput {
             if (!submitted) {
                 return;
             }
+            if (item.kind == TC_RENDER_ITEM_KIND_MESH) ++counters.mesh_draws;
             capture_debug_symbol(name);
             restore_id_raster_state();
         };
@@ -343,6 +347,7 @@ struct VertexInput {
             draw_item(dc);
         }
 
+        publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(), -1, counters);
         ctx.ctx2->end_pass();
         // color_tex2/depth_tex2 are persistent FBOPool wrappers — do not destroy.
     }

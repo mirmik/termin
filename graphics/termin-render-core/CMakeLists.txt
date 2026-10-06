@@ -46,6 +46,7 @@ set(TERMIN_RENDER_CORE_SOURCES
     src/render_engine_timing.cpp
     src/render_execution_capabilities.cpp
     src/render_item_mesh.cpp
+    src/render_item_culling.cpp
     src/render_item_source.cpp
     src/render_item_snapshot.cpp
     src/render_item_submission.cpp
@@ -137,6 +138,7 @@ if(TERMIN_BUILD_TESTS)
     target_include_directories(termin_render_core_render_execution_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/support)
     termin_render_core_add_test(render_item_snapshot test_render_item_snapshot.cpp)
+    termin_render_core_add_test(render_item_culling test_render_item_culling.cpp)
     termin_render_core_add_test(render_item_submission test_render_item_submission.cpp)
     termin_render_core_add_test(render_task test_render_task.cpp)
     termin_render_core_add_test(shader_abi test_shader_abi.cpp)

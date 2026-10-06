@@ -19,6 +19,7 @@
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_graph_capture.hpp>
 #include <termin/render/frame_pass.hpp>
+#include <termin/render/render_item_culling.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/resource_spec.hpp>
@@ -44,6 +45,7 @@ namespace termin {
             tc_material_handle material = tc_material_handle_invalid();
             tc_render_item item{};
             size_t phase_index = SIZE_MAX;
+            size_t item_index = 0;
             int geometry_id = 0;
             int pick_id = 0;
 
@@ -124,7 +126,9 @@ namespace termin {
                                 uint64_t layer_mask,
                                 uint64_t render_category_mask,
                                 tc_shader_handle base_shader,
-                                const RenderItemSnapshot& snapshot) const;
+                                const RenderItemSnapshot& snapshot,
+                                const RenderItemCullingView* culling = nullptr,
+                                RenderItemCullingCounters* counters = nullptr) const;
         void sort_draw_calls_by_shader() const;
         std::vector<ResourceSpec> make_resource_specs() const;
     };

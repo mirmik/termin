@@ -224,10 +224,14 @@ namespace termin {
                                               uint64_t layer_mask,
                                               uint64_t render_category_mask,
                                               tc_shader_handle base_shader,
-                                              const RenderItemSnapshot& snapshot) const {
+                                              const RenderItemSnapshot& snapshot,
+                                              const RenderItemCullingView* culling,
+                                              RenderItemCullingCounters* counters) const {
         (void)layer_mask;
         (void)render_category_mask;
         cached_draw_calls_.clear();
+        RenderItemCullingCounters local_counters{};
+        RenderItemCullingCounters& culling_counters = counters ? *counters : local_counters;
 
         if (!tc_scene_handle_valid(scene)) {
             return;
@@ -287,6 +291,10 @@ namespace termin {
                 }
             }
             const tc_render_item& item = items[selected_index];
+            if (culling && !culling->visible(item, culling_counters)) {
+                group_begin = group_end;
+                continue;
+            }
             tc_material_phase* selected_phase = nullptr;
             const bool use_batch_shader = batch_shader && (item.flags & TC_RENDER_ITEM_FLAG_BATCHED_GEOMETRY);
             tc_shader_handle original_shader = use_batch_shader ? batch_shader->base_shader : base_shader;
@@ -311,6 +319,7 @@ namespace termin {
                 dc.component = component;
                 dc.final_shader = TcShader(planned_shader.at(0).final_shader);
                 dc.item = item;
+                dc.item_index = selected_index;
                 dc.geometry_id = item.geometry_id;
                 dc.pick_id = get_pick_id(ent);
                 if (selected_phase) {
@@ -330,7 +339,11 @@ namespace termin {
         }
 
         std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(), [](const DrawCall& a, const DrawCall& b) {
-            return a.final_shader.handle.index < b.final_shader.handle.index;
+            // Filtering invisible geometry must preserve the relative order of
+            // equal shaders, including the depth winner of coincident surfaces.
+            if (a.final_shader.handle.index != b.final_shader.handle.index)
+                return a.final_shader.handle.index < b.final_shader.handle.index;
+            return a.item_index < b.item_index;
         });
     }
 

@@ -1,4 +1,5 @@
 #include <termin/render/standard_gbuffer_pass.hpp>
+#include <termin/render/render_item_culling.hpp>
 
 #include <algorithm>
 #include <array>
@@ -315,6 +316,8 @@ TerminStandardGBufferOutput termin_standard_gbuffer_fs(FragmentInput input) {
         RenderTaskList tasks;
         const std::span<const size_t> routed_items = snapshot->phase_item_indices(opaque_phase);
         tasks.reserve(routed_items.size());
+        const RenderItemCullingView culling(view, projection);
+        RenderItemCullingCounters culling_counters{};
 
         for (size_t item_index : routed_items) {
             const tc_render_item* item = snapshot->item(item_index);
@@ -324,6 +327,9 @@ TerminStandardGBufferOutput termin_standard_gbuffer_fs(FragmentInput input) {
             }
             tc_material_phase* phase = resolve_material_phase(*item);
             if (!phase || !standard_gbuffer_routes_shader(shader_contract, phase->shader)) {
+                continue;
+            }
+            if (!culling.visible(*item, culling_counters)) {
                 continue;
             }
 
@@ -418,8 +424,11 @@ TerminStandardGBufferOutput termin_standard_gbuffer_fs(FragmentInput input) {
             submit.debug_pass_name = pass_name.c_str();
             submit.debug_entity_name = task.debug_name.c_str();
             submit.resources = &task.resources;
-            (void)submit_render_item_draw(*ctx.ctx2, *task.item, submit);
+            if (submit_render_item_draw(*ctx.ctx2, *task.item, submit) &&
+                task.item->kind == TC_RENDER_ITEM_KIND_MESH) ++culling_counters.mesh_draws;
         }
+        publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(),
+                                            -1, culling_counters);
         ctx.ctx2->end_pass();
     }
 

@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <termin/render/render_item_culling.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/static_mesh_batch.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -26,7 +27,7 @@ namespace {
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_MESH;
         item.flags = TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE | TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX |
-                     TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+                     TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE | TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
         item.source.domain_id = TC_RENDER_ITEM_SOURCE_DOMAIN_SCENE;
         item.source.object_id = id;
         item.source.adapter_data = reinterpret_cast<uintptr_t>(&component);
@@ -78,12 +79,17 @@ int main() {
             termin::RenderItemCollection result;
             result.items = {a, b};
             assert(cache.apply(result, scene, UINT64_MAX, UINT64_MAX));
+            for (auto& item : result.items) termin::update_render_item_world_bounds(item);
             return result;
         };
         auto first_snapshot = collect();
         assert(first_snapshot.items.size() == 1);
         assert(cache.stats().rebuilt_batches == 1);
         assert(cache.stats().merged_geometry == 2);
+        const auto& first_bounds = first_snapshot.items[0].world_bounds;
+        assert(first_snapshot.items[0].bounds_state == TC_RENDER_ITEM_BOUNDS_VALID);
+        assert(first_bounds.min_point.x == -1 && first_bounds.max_point.x == 4);
+        assert(first_bounds.min_point.y == 0 && first_bounds.max_point.y == 1);
         const auto merged = first_snapshot.items[0].payload.mesh.mesh_handle;
         auto* geometry = tc_mesh_get(merged);
         assert(geometry && geometry->vertex_count == 6 && geometry->index_count == 6);
@@ -105,14 +111,48 @@ int main() {
         auto warm = collect();
         assert(cache.stats().rebuilt_batches == 0 && cache.stats().reused_batches == 1);
         assert(tc_mesh_handle_eq(warm.items[0].payload.mesh.mesh_handle, merged));
+        assert(warm.items[0].world_bounds.min_point.x == -1 && warm.items[0].world_bounds.max_point.x == 4);
         b.model_matrix[12] = 4;
         auto moved = collect();
         assert(cache.stats().rebuilt_batches == 1);
         assert(!tc_mesh_handle_eq(moved.items[0].payload.mesh.mesh_handle, merged));
+        assert(moved.items[0].world_bounds.min_point.x == -1 && moved.items[0].world_bounds.max_point.x == 5);
         assert(tc_mesh_is_valid(merged)); // Previous immutable snapshot still owns it.
+        const float changed_x = 2;
+        std::memcpy(static_cast<uint8_t*>(source.get()->vertices) + layout.stride, &changed_x, sizeof(changed_x));
         tc_mesh_bump_version(source.get());
         auto revised = collect();
         assert(cache.stats().rebuilt_batches == 1);
+        assert(revised.items[0].world_bounds.min_point.x == -3 && revised.items[0].world_bounds.max_point.x == 6);
+        // The retained earlier snapshot still describes its original geometry.
+        assert(first_snapshot.items[0].world_bounds.min_point.x == -1 && first_snapshot.items[0].world_bounds.max_point.x == 4);
+
+        // Both entity pivots stay in chunk zero, while the mesh itself extends
+        // beyond the chunk. Culling must use merged geometry, not the chunk cube.
+        float far_vertices[36];
+        std::memcpy(far_vertices, vertices, sizeof(vertices));
+        far_vertices[0] += 20;
+        far_vertices[12] += 20;
+        far_vertices[24] += 20;
+        info.name = "static-batch-offset-triangle";
+        info.data = {far_vertices, 3, indices, 3, &layout};
+        auto replacement = termin::TcMesh::from_interleaved(info);
+        assert(replacement.is_valid());
+        a.payload.mesh.mesh_handle = replacement.handle;
+        b.payload.mesh.mesh_handle = replacement.handle;
+        a.model_matrix[0] = 1;
+        auto replaced = collect();
+        assert(cache.stats().rebuilt_batches == 1 && replaced.items.size() == 1);
+        assert(replaced.items[0].world_bounds.min_point.x == 21 && replaced.items[0].world_bounds.max_point.x == 25);
+        termin::RenderItemCullingCounters offscreen_counters;
+        termin::RenderItemCullingView origin_view(termin::Mat44f::identity(), termin::Mat44f::identity());
+        assert(!origin_view.visible(replaced.items[0], offscreen_counters));
+        auto shifted_view = termin::Mat44f::identity();
+        shifted_view.data[12] = -23;
+        termin::RenderItemCullingCounters shifted_counters;
+        termin::RenderItemCullingView destination_view(shifted_view, termin::Mat44f::identity());
+        assert(destination_view.visible(replaced.items[0], shifted_counters));
+        assert(offscreen_counters.culled == 1 && shifted_counters.culled == 0);
         tc_entity_pool_set_pickable(pool, second_id, false);
         auto split_pickability = collect();
         assert(split_pickability.items.size() == 2 && cache.stats().output_batches == 0);

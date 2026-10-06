@@ -2,6 +2,7 @@
 #pragma once
 
 #include "tgfx/tgfx_api.h"
+#include <geom/tc_aabb.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <tcbase/tc_binding_types.h>
@@ -67,6 +68,10 @@ typedef struct tc_mesh {
     tc_vertex_layout layout;
     uint8_t draw_mode; // tc_draw_mode (TC_DRAW_TRIANGLES or TC_DRAW_LINES)
     uint8_t _pad2[3];
+    struct tc_mesh_bounds_cache_entry* _bounds_cache; // owned, private query state
+    size_t _bounds_cache_count;
+    uint32_t _bounds_cache_version;
+    bool _bounds_cache_initialized;
 } tc_mesh;
 
 // ============================================================================
@@ -174,6 +179,20 @@ TGFX_API void tc_mesh_compute_uuid(
 // standalone meshes. Use the handle queries in tc_mesh_registry.h for lazy loads.
 
 TGFX_API bool tc_mesh_get_position3f(const tc_mesh* mesh, uint32_t vertex_index, tc_vec3f* out_position);
+
+// Conservative mesh-local bounds of the vertices referenced by one submesh,
+// including its signed vertex_offset. Requires resident, loaded CPU data and a
+// float32x3 position attribute. Cached (including unavailable bounds) for the
+// current header.version; callers editing data directly must bump that version.
+// Unsupported layouts, empty sections and malformed geometry return false;
+// malformed geometry is logged once per mesh version. On false, output is left
+// unchanged. Like other mesh mutations, cache creation requires external
+// synchronization when the mesh is shared between threads.
+TGFX_API bool tc_mesh_get_submesh_bounds(tc_mesh* mesh, size_t submesh_index, tc_aabb* out_bounds);
+
+// Release query storage. Registry destruction does this automatically; callers
+// owning standalone meshes must call it before freeing the mesh themselves.
+TGFX_API void tc_mesh_clear_bounds_cache(tc_mesh* mesh);
 
 TGFX_API bool
 tc_mesh_get_triangle3f(const tc_mesh* mesh, uint32_t triangle_index, tc_vec3f* out_a, tc_vec3f* out_b, tc_vec3f* out_c);

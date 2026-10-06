@@ -280,6 +280,26 @@ if(TERMIN_BUILD_TESTS)
         COMMAND termin_render_passes_shadow_camera_validation_test
     )
 
+    add_executable(termin_render_passes_shadow_pass_culling_pixel_smoke
+        tests/test_shadow_pass_culling_pixel_smoke.cpp)
+    target_link_libraries(termin_render_passes_shadow_pass_culling_pixel_smoke PRIVATE
+        termin_render_passes)
+    if(TARGET termin_shaderc)
+        add_dependencies(termin_render_passes_shadow_pass_culling_pixel_smoke termin_shaderc)
+        target_compile_definitions(termin_render_passes_shadow_pass_culling_pixel_smoke PRIVATE
+            TERMIN_SHADOW_CULLING_PIXEL_SMOKE_SHADERC="$<TARGET_FILE:termin_shaderc>")
+    endif()
+    set_target_properties(termin_render_passes_shadow_pass_culling_pixel_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    add_test(NAME termin_render_passes_shadow_pass_culling_pixel_smoke
+        COMMAND termin_render_passes_shadow_pass_culling_pixel_smoke)
+    set_tests_properties(termin_render_passes_shadow_pass_culling_pixel_smoke PROPERTIES
+        TIMEOUT 30
+        SKIP_REGULAR_EXPRESSION
+            "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found")
+    termin_add_test_labels(termin_render_passes_shadow_pass_culling_pixel_smoke
+        "termin:capability:vulkan")
+
     add_executable(termin_render_passes_ui_widget_pass_test
         tests/test_ui_widget_pass.cpp
     )

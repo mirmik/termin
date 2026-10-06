@@ -589,8 +589,9 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
                                        const std::string& phase_mark,
                                        const RenderContext& render_context,
                                        uint64_t layer_mask,
-                                       const RenderItemSnapshot& snapshot) {
-        (void)render_context;
+                                       const RenderItemSnapshot& snapshot,
+                                       const RenderItemCullingView& culling,
+                                       RenderItemCullingCounters& counters) {
         (void)layer_mask;
         // Clear but keep capacity
         cached_draw_calls_.clear();
@@ -605,6 +606,15 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         cached_draw_calls_.reserve(routed_items.size());
         for (size_t item_index : routed_items) {
             const tc_render_item& item = items[item_index];
+            tc_material_phase* phase = resolve_render_item_material_phase(item);
+            if (!phase) {
+                continue;
+            }
+            const bool supported_bounds = !material_shader_preserves_authored_vertex_stage(
+                TcShader(phase->shader), render_context.pass_contract);
+            if (!culling.visible(item, counters, supported_bounds)) {
+                continue;
+            }
             tc_component* tc = render_scene_item_component(item);
             if (!tc) {
                 tc::Log::error("[ColorPass] collect_draw_calls: collected item %zu has null component", item_index);
@@ -615,11 +625,6 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             if (!ent.valid()) {
                 tc::Log::error("[ColorPass] collect_draw_calls: drawable component '%s' has invalid owner",
                                safe_component_type(tc));
-                continue;
-            }
-
-            tc_material_phase* phase = resolve_render_item_material_phase(item);
-            if (!phase) {
                 continue;
             }
 
@@ -719,7 +724,8 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
 
         // Sort indices by sort_keys
         std::sort(sort_indices_.begin(), sort_indices_.end(), [this](size_t a, size_t b) {
-            return sort_keys_[a] < sort_keys_[b];
+            if (sort_keys_[a] != sort_keys_[b]) return sort_keys_[a] < sort_keys_[b];
+            return cached_draw_calls_[a].item_index < cached_draw_calls_[b].item_index;
         });
 
         // Reorder using temp buffer (reuses capacity)
@@ -891,7 +897,12 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         collect_context.viewport_width = data.rect.width;
         collect_context.viewport_height = data.rect.height;
 
-        collect_draw_calls(data.scene, phase_mark, collect_context, data.layer_mask, *scene_items);
+        const RenderItemCullingView culling = multiview_mode_
+            ? RenderItemCullingView(*ctx.view.stereo)
+            : RenderItemCullingView(data.view, data.projection);
+        RenderItemCullingCounters culling_counters{};
+        collect_draw_calls(data.scene, phase_mark, collect_context, data.layer_mask, *scene_items,
+                           culling, culling_counters);
 
         const std::string debug_pass_name = get_pass_name();
         const char* debug_pass_name_c = debug_pass_name.c_str();
@@ -979,7 +990,10 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         } else if (!cached_draw_calls_.empty()) {
             std::sort(cached_draw_calls_.begin(),
                       cached_draw_calls_.end(),
-                      [](const PhaseDrawCall& a, const PhaseDrawCall& b) { return a.priority < b.priority; });
+                      [](const PhaseDrawCall& a, const PhaseDrawCall& b) {
+                          if (a.priority != b.priority) return a.priority < b.priority;
+                          return a.item_index < b.item_index;
+                      });
         }
 
         std::vector<RenderTask*> sorted_render_tasks;
@@ -1165,12 +1179,15 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
             if (!submit_render_item_draw(*ctx2, *task.item, encode_request)) {
                 continue;
             }
+            if (task.item->kind == TC_RENDER_ITEM_KIND_MESH) ++culling_counters.mesh_draws;
             capture_debug_symbol(task.debug_name.c_str());
             if (attachment_barrier_between_draws && sorted_task_index + 1 < sorted_render_tasks.size()) {
                 ctx2->framebuffer_local_barrier();
             }
         }
 
+        publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(),
+                                            -1, culling_counters);
         if (!raster_scope_already_open) {
             ctx2->end_pass();
         }

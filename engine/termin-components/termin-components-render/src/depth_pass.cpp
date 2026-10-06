@@ -256,7 +256,10 @@ namespace termin {
         if (!snapshot) {
             return;
         }
-        collect_draw_calls(data.scene, data.layer_mask, data.render_category_mask, depth_shader_handle_, *snapshot);
+        const RenderItemCullingView culling(data.view, data.projection);
+        RenderItemCullingCounters counters{};
+        collect_draw_calls(data.scene, data.layer_mask, data.render_category_mask, depth_shader_handle_, *snapshot,
+                           &culling, &counters);
         sort_draw_calls_by_shader();
 
         entity_names.clear();
@@ -370,9 +373,11 @@ namespace termin {
             if (!submit_render_item_draw(*ctx.ctx2, item, encode_request)) {
                 continue;
             }
+            if (item.kind == TC_RENDER_ITEM_KIND_MESH) ++counters.mesh_draws;
             capture_debug_symbol(name);
         }
 
+        publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(), -1, counters);
         ctx.ctx2->end_pass();
         // color_tex2/depth_tex2 are persistent FBOPool wrappers — do not destroy.
     }
@@ -469,10 +474,14 @@ namespace termin {
     void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene,
                                            uint64_t layer_mask,
                                            uint64_t render_category_mask,
-                                           const RenderItemSnapshot& snapshot) const {
+                                           const RenderItemSnapshot& snapshot,
+                                           const RenderItemCullingView* culling,
+                                           RenderItemCullingCounters* counters) const {
         (void)layer_mask;
         (void)render_category_mask;
         cached_draw_calls_.clear();
+        RenderItemCullingCounters local_counters{};
+        RenderItemCullingCounters& culling_counters = counters ? *counters : local_counters;
 
         if (!tc_scene_handle_valid(scene)) {
             return;
@@ -522,6 +531,10 @@ namespace termin {
                 }
             }
             const tc_render_item& item = items[selected_index];
+            if (culling && !culling->visible(item, culling_counters)) {
+                group_begin = group_end;
+                continue;
+            }
             tc_material_phase* selected_phase =
                 render_item_matches_phase(item, requested_phase) ? resolve_render_item_material_phase(item) : nullptr;
             tc_shader_handle original_shader = depth_shader_handle_;
@@ -541,6 +554,7 @@ namespace termin {
                 dc.entity = ent;
                 dc.component = component;
                 dc.item = item;
+                dc.item_index = selected_index;
                 dc.final_shader = TcShader(planned_shader.at(0).final_shader);
                 dc.geometry_id = item.geometry_id;
                 if (selected_phase) {
@@ -649,7 +663,9 @@ namespace termin {
         }
 
         std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(), [](const DrawCall& a, const DrawCall& b) {
-            return a.final_shader.handle.index < b.final_shader.handle.index;
+            if (a.final_shader.handle.index != b.final_shader.handle.index)
+                return a.final_shader.handle.index < b.final_shader.handle.index;
+            return a.item_index < b.item_index;
         });
     }
 
@@ -732,7 +748,9 @@ namespace termin {
         if (!snapshot) {
             return;
         }
-        collect_draw_calls(scene, camera_layer_mask, camera_render_category_mask, *snapshot);
+        const RenderItemCullingView culling(view, projection);
+        RenderItemCullingCounters counters{};
+        collect_draw_calls(scene, camera_layer_mask, camera_render_category_mask, *snapshot, &culling, &counters);
         sort_draw_calls_by_shader();
 
         entity_names.clear();
@@ -835,9 +853,11 @@ namespace termin {
             if (!submit_render_item_draw(*ctx.ctx2, item, encode_request)) {
                 continue;
             }
+            if (item.kind == TC_RENDER_ITEM_KIND_MESH) ++counters.mesh_draws;
             capture_debug_symbol(name);
         }
 
+        publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(), -1, counters);
         ctx.ctx2->end_pass();
     }
 

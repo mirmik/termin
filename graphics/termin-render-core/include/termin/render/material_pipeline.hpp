@@ -112,6 +112,11 @@ namespace termin {
     // changing the original shader version refreshes the stale variant in place.
     RENDER_CORE_API TcShader assemble_material_shader_override(const MaterialShaderOverrideRequest& request);
 
+    // Authored vertex stages may deform positions beyond mesh-local bounds.
+    // Consumers can check this before expensive shader/task preparation.
+    RENDER_CORE_API bool material_shader_preserves_authored_vertex_stage(
+        const TcShader& shader, const MaterialPipelinePassContract& pass);
+
     // One pass-planning batch. Contracts and provider registrations must remain
     // unchanged during planning; the batch never survives into another frame.
     class RENDER_CORE_API MaterialShaderVariantBatch {

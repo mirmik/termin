@@ -659,6 +659,9 @@ namespace termin {
                                                                          const tc_phase_mask* requested_phase);
 
     void MeshRenderer::populate_mesh_render_item(tc_render_item& item) {
+        // Only this undeformed producer opts in. SkinnedMeshRenderer overrides
+        // this hook, including when its bone matrices are not available yet.
+        item.flags |= TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
         if (static_batching) {
             item.flags |= TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE;
         }

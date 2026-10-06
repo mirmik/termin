@@ -1,4 +1,5 @@
 #include "termin/render/shadow_pass.hpp"
+#include <termin/render/render_item_culling.hpp>
 #include "termin/camera/camera_component.hpp"
 #include <tcbase/tc_log.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
@@ -529,6 +530,69 @@ struct VertexInput {
         }
         collect_shadow_casters(request.scene, request.layer_mask, request.render_category_mask, *scene_items);
 
+        const float camera_near = request.camera_near;
+        const float camera_far = request.camera_far;
+        if (!std::isfinite(camera_near) || !std::isfinite(camera_far) || camera_near <= 0.0f ||
+            camera_far <= camera_near) {
+            tc::Log::error("ShadowPass/tgfx2: camera range must be finite and satisfy 0 < near < far");
+            return results;
+        }
+
+        struct CascadePlan {
+            int light_index;
+            const Light* light;
+            int cascade_index;
+            float near_plane, far_plane;
+            ShadowCameraParams params;
+            Mat44f view, projection;
+            std::vector<uint8_t> visible_items;
+            RenderItemCullingCounters counters{};
+        };
+        std::vector<CascadePlan> cascade_plans;
+        std::vector<uint8_t> visible_to_any(scene_items->item_count(), 0);
+        for (auto [light_index, light] : shadow_lights) {
+            const int cascade_count = std::clamp(light->shadows.cascade_count, 1, 4);
+            const float max_distance = std::min(light->shadows.max_distance, camera_far);
+            if (!std::isfinite(max_distance) || max_distance <= camera_near) {
+                tc::Log::error("ShadowPass/tgfx2: light %d shadow range must be finite and extend beyond camera near",
+                               light_index);
+                continue;
+            }
+            const auto splits = compute_cascade_splits(camera_near, max_distance, cascade_count,
+                                                       light->shadows.split_lambda);
+            for (int c = 0; c < cascade_count; ++c) {
+                ShadowCascadeFitRequest fit_request;
+                fit_request.view_matrix = request.camera_view;
+                fit_request.projection_matrix = request.camera_projection;
+                fit_request.camera_near = camera_near;
+                fit_request.camera_far = camera_far;
+                fit_request.light_direction = light->direction;
+                fit_request.cascade_near = splits[c];
+                fit_request.cascade_far = splits[c + 1];
+                fit_request.shadow_map_resolution = light->shadows.map_resolution;
+                fit_request.caster_offset = caster_offset;
+                const auto params = try_fit_shadow_frustum_for_cascade(fit_request);
+                if (!params) {
+                    tc::Log::error("ShadowPass/tgfx2: cannot fit shadow camera for cascade %d", c);
+                    continue;
+                }
+                CascadePlan plan{light_index, light, c, splits[c], splits[c + 1], *params,
+                                 build_shadow_view_matrix(*params), build_shadow_projection_matrix(*params),
+                                 std::vector<uint8_t>(scene_items->item_count(), 0)};
+                const RenderItemCullingView culling(plan.view, plan.projection);
+                RenderItemCullingCounters counters{};
+                for (const auto& dc : cached_draw_calls_) {
+                    const auto& item = *scene_items->item(dc.item_index);
+                    if (culling.visible(item, counters)) {
+                        plan.visible_items[dc.item_index] = 1;
+                        visible_to_any[dc.item_index] = 1;
+                    }
+                }
+                plan.counters = counters;
+                cascade_plans.push_back(std::move(plan));
+            }
+        }
+
         const MaterialPipelinePassContract task_shader_contract = shadow_material_pass_contract();
         MaterialShaderVariantBatch shader_variants(task_shader_contract);
         RenderItemTaskPlanningContract task_planning_contract =
@@ -538,6 +602,9 @@ struct VertexInput {
         render_tasks.reserve(cached_draw_calls_.size());
 
         for (const auto& dc : cached_draw_calls_) {
+            if (!visible_to_any[dc.item_index]) {
+                continue;
+            }
             tc_material_phase* phase = dc.resolve_phase();
             if (!phase) {
                 continue;
@@ -593,7 +660,8 @@ struct VertexInput {
             sorted_render_tasks.push_back(&task);
         }
         std::sort(sorted_render_tasks.begin(), sorted_render_tasks.end(), [](const RenderTask* a, const RenderTask* b) {
-            return a->final_shader.index < b->final_shader.index;
+            if (a->final_shader.index != b->final_shader.index) return a->final_shader.index < b->final_shader.index;
+            return a->item_index < b->item_index;
         });
 
         entity_names.clear();
@@ -604,216 +672,189 @@ struct VertexInput {
             }
         }
 
-        const float camera_near = request.camera_near;
-        const float camera_far = request.camera_far;
-        if (!std::isfinite(camera_near) || !std::isfinite(camera_far) || camera_near <= 0.0f ||
-            camera_far <= camera_near) {
-            tc::Log::error("ShadowPass/tgfx2: camera range must be finite and satisfy 0 < near < far");
-            return results;
-        }
-
         int fbo_index = 0;
-        for (auto [light_index, light] : shadow_lights) {
-            int resolution = light->shadows.map_resolution;
-            int cascade_count = std::max(1, std::min(4, light->shadows.cascade_count));
-            const float max_distance = std::min(light->shadows.max_distance, camera_far);
-            if (!std::isfinite(max_distance) || max_distance <= camera_near) {
-                tc::Log::error(
-                    "ShadowPass/tgfx2: light %d shadow range must be finite and extend beyond camera near", light_index);
+        for (CascadePlan& cascade : cascade_plans) {
+            const int light_index = cascade.light_index;
+            const Light* light = cascade.light;
+            const int resolution = light->shadows.map_resolution;
+            const int c = cascade.cascade_index;
+            const float cascade_near = cascade.near_plane;
+            const float cascade_far = cascade.far_plane;
+            const float depth_bias_slope = static_cast<float>(light->shadows.normal_bias);
+            const ShadowCameraParams& params = cascade.params;
+
+            tgfx::TextureHandle depth_tex2 = get_or_create_depth_tex2(ctx.ctx2->device(), resolution, fbo_index);
+            fbo_index++;
+            if (!depth_tex2) {
+                tc::Log::error("ShadowPass/tgfx2: depth tex is null for cascade %d", c);
                 continue;
             }
-            float split_lambda = light->shadows.split_lambda;
-            float depth_bias_slope = static_cast<float>(light->shadows.normal_bias);
 
-            std::vector<float> splits = compute_cascade_splits(camera_near, max_distance, cascade_count, split_lambda);
+            const Mat44f& view_matrix = cascade.view;
+            const Mat44f& proj_matrix = cascade.projection;
+            Mat44f light_space_matrix = compute_light_space_matrix(params);
 
-            for (int c = 0; c < cascade_count; ++c) {
-                float cascade_near = splits[c];
-                float cascade_far = splits[c + 1];
+            ctx.ctx2->begin_pass(tgfx::TextureHandle{}, // depth-only
+                                 depth_tex2,
+                                 nullptr, // no color clear
+                                 1.0f,    // clear depth to 1.0
+                                 true     // clear_depth_enabled
+            );
+            ctx.ctx2->set_viewport(0, 0, resolution, resolution);
+            ctx.ctx2->set_depth_test(true);
+            ctx.ctx2->set_depth_write(true);
+            ctx.ctx2->set_blend(false);
+            // Render back faces into the shadow map. For closed meshes this
+            // avoids front-face self-shadow acne without moving caster geometry
+            // in light space; receiver bias remains a pure compare-depth offset
+            // in the shader shadow helper.
+            ctx.ctx2->set_cull(tgfx::CullMode::Front);
+            ctx.ctx2->set_depth_bias(depth_bias_slope != 0.0f, 0.0f, depth_bias_slope, 0.0f);
 
-                ShadowCascadeFitRequest fit_request;
-                fit_request.view_matrix = request.camera_view;
-                fit_request.projection_matrix = request.camera_projection;
-                fit_request.camera_near = camera_near;
-                fit_request.camera_far = camera_far;
-                fit_request.light_direction = light->direction;
-                fit_request.cascade_near = cascade_near;
-                fit_request.cascade_far = cascade_far;
-                fit_request.shadow_map_resolution = resolution;
-                fit_request.caster_offset = caster_offset;
-                const auto fitted_params = try_fit_shadow_frustum_for_cascade(fit_request);
-                if (!fitted_params.has_value()) {
-                    tc::Log::error("ShadowPass/tgfx2: cannot fit shadow camera for cascade %d", c);
-                    continue;
-                }
-                const ShadowCameraParams& params = *fitted_params;
-
-                tgfx::TextureHandle depth_tex2 = get_or_create_depth_tex2(ctx.ctx2->device(), resolution, fbo_index);
-                fbo_index++;
-                if (!depth_tex2) {
-                    tc::Log::error("ShadowPass/tgfx2: depth tex is null for cascade %d", c);
-                    continue;
-                }
-
-                Mat44f view_matrix = build_shadow_view_matrix(params);
-                Mat44f proj_matrix = build_shadow_projection_matrix(params);
-                Mat44f light_space_matrix = compute_light_space_matrix(params);
-
-                ctx.ctx2->begin_pass(tgfx::TextureHandle{}, // depth-only
-                                     depth_tex2,
-                                     nullptr, // no color clear
-                                     1.0f,    // clear depth to 1.0
-                                     true     // clear_depth_enabled
-                );
-                ctx.ctx2->set_viewport(0, 0, resolution, resolution);
+            auto restore_shadow_raster_state = [&]() {
                 ctx.ctx2->set_depth_test(true);
                 ctx.ctx2->set_depth_write(true);
                 ctx.ctx2->set_blend(false);
-                // Render back faces into the shadow map. For closed meshes this
-                // avoids front-face self-shadow acne without moving caster geometry
-                // in light space; receiver bias remains a pure compare-depth offset
-                // in the shader shadow helper.
                 ctx.ctx2->set_cull(tgfx::CullMode::Front);
                 ctx.ctx2->set_depth_bias(depth_bias_slope != 0.0f, 0.0f, depth_bias_slope, 0.0f);
+            };
 
-                auto restore_shadow_raster_state = [&]() {
-                    ctx.ctx2->set_depth_test(true);
-                    ctx.ctx2->set_depth_write(true);
-                    ctx.ctx2->set_blend(false);
-                    ctx.ctx2->set_cull(tgfx::CullMode::Front);
-                    ctx.ctx2->set_depth_bias(depth_bias_slope != 0.0f, 0.0f, depth_bias_slope, 0.0f);
-                };
+            auto end_shadow_pass = [&]() {
+                ctx.ctx2->end_pass();
+                ctx.ctx2->set_depth_bias(false);
+            };
 
-                auto end_shadow_pass = [&]() {
-                    ctx.ctx2->end_pass();
-                    ctx.ctx2->set_depth_bias(false);
-                };
+            // Fetch cached VkShaderModule handles from the tc_shader slot.
+            // First call on a fresh device compiles via shaderc; every
+            // subsequent ShadowPass lifetime hits the slot cache.
+            MaterialPipelineShaderBinding shadow_shader{};
+            if (!ensure_material_pipeline_shader(
+                    *ctx.ctx2, device, shadow_shader_handle_, "ShadowPass", shadow_shader)) {
+                end_shadow_pass();
+                continue;
+            }
 
-                // Fetch cached VkShaderModule handles from the tc_shader slot.
-                // First call on a fresh device compiles via shaderc; every
-                // subsequent ShadowPass lifetime hits the slot cache.
-                MaterialPipelineShaderBinding shadow_shader{};
-                if (!ensure_material_pipeline_shader(
-                        *ctx.ctx2, device, shadow_shader_handle_, "ShadowPass", shadow_shader)) {
-                    end_shadow_pass();
-                    continue;
-                }
+            // PerFrame UBO through the ring: a fresh offset per cascade,
+            // so the per-cascade matrices survive into draw-execute time
+            // without a slot-per-cascade pool (the shared ring buffer and
+            // dynamic descriptor offsets do what per_frame_ubo_pool_ used
+            // to do on the per-UBO path).
+            ShadowPerFrameStd140 per_frame{};
+            std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
+            std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
+            EnginePerFrameStd140 typed_per_frame = make_engine_per_frame_uniforms(view_matrix,
+                                                                                  proj_matrix,
+                                                                                  shadow_camera_position(params),
+                                                                                  static_cast<float>(resolution),
+                                                                                  static_cast<float>(resolution),
+                                                                                  cascade_near,
+                                                                                  cascade_far);
+            std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
+                {
+                    tc_shader_find_resource_binding(shadow_shader.shader, "per_frame"),
+                    &per_frame,
+                    static_cast<uint32_t>(sizeof(per_frame)),
+                },
+            }};
+            MaterialPipelineResourceView shadow_resources{};
+            shadow_resources.material_texture_sources = ctx.material_texture_sources;
+            shadow_resources.uniforms = per_frame_uniforms.data();
+            shadow_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
+            prepare_material_pipeline_resources(*ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
 
-                // PerFrame UBO through the ring: a fresh offset per cascade,
-                // so the per-cascade matrices survive into draw-execute time
-                // without a slot-per-cascade pool (the shared ring buffer and
-                // dynamic descriptor offsets do what per_frame_ubo_pool_ used
-                // to do on the per-UBO path).
-                ShadowPerFrameStd140 per_frame{};
-                std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
-                std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
-                EnginePerFrameStd140 typed_per_frame = make_engine_per_frame_uniforms(view_matrix,
-                                                                                      proj_matrix,
-                                                                                      shadow_camera_position(params),
-                                                                                      static_cast<float>(resolution),
-                                                                                      static_cast<float>(resolution),
-                                                                                      cascade_near,
-                                                                                      cascade_far);
-                std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
-                    {
-                        tc_shader_find_resource_binding(shadow_shader.shader, "per_frame"),
-                        &per_frame,
-                        static_cast<uint32_t>(sizeof(per_frame)),
-                    },
-                }};
-                MaterialPipelineResourceView shadow_resources{};
-                shadow_resources.material_texture_sources = ctx.material_texture_sources;
-                shadow_resources.uniforms = per_frame_uniforms.data();
-                shadow_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
-                prepare_material_pipeline_resources(*ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
+            if (render_tasks.empty()) {
+                publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(),
+                                                     light_index * 4 + c, cascade.counters);
+                end_shadow_pass();
+                results.emplace_back(depth_tex2,
+                                     resolution,
+                                     resolution,
+                                     light_space_matrix,
+                                     light_index,
+                                     c,
+                                     cascade_near,
+                                     cascade_far);
+                continue;
+            }
 
-                if (render_tasks.empty()) {
-                    end_shadow_pass();
-                    results.emplace_back(depth_tex2,
-                                         resolution,
-                                         resolution,
-                                         light_space_matrix,
-                                         light_index,
-                                         c,
-                                         cascade_near,
-                                         cascade_far);
-                    continue;
-                }
-
-                auto capture_debug_symbol = [&](const char* entity_name) {
-                    if (!ctx.should_capture_internal(entity_name)) {
-                        return;
-                    }
-
-                    end_shadow_pass();
-                    ctx.capture_internal(entity_name, depth_tex2, resolution, resolution, tgfx::PixelFormat::D32F);
-                    ctx.ctx2->begin_pass(tgfx::TextureHandle{}, depth_tex2, nullptr, 1.0f, false);
-                    ctx.ctx2->set_viewport(0, 0, resolution, resolution);
-                    restore_shadow_raster_state();
-                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
-                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
-                    prepare_material_pipeline_resources(
-                        *ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
-                };
-                MaterialPipelineResourceView draw_material_resources{};
-                draw_material_resources.material_texture_sources = ctx.material_texture_sources;
-                for (RenderTask* task_ptr : sorted_render_tasks) {
-                    RenderTask& task = *task_ptr;
-                    task.draw_context.view = view_matrix;
-                    task.draw_context.projection = proj_matrix;
-                    task.draw_context.camera_position = shadow_camera_position(params);
-                    task.draw_context.viewport_width = resolution;
-                    task.draw_context.viewport_height = resolution;
-                    auto& extension = *static_cast<ShadowTaskExtension*>(task.extension);
-                    // Both paths share the same draw-scope model matrix + PerFrame
-                    // UBO layout. Mesh encoder binds payload-specific resources
-                    // such as BoneBlock. Bias is applied receiver-side while
-                    // sampling so the caster's projected XY footprint stays stable.
-                    const std::array<RenderItemNamedUniformBinding, 3> uniforms{{
-                        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame)), "shadow_draw", nullptr},
-                        {"shadow_draw",
-                         &extension.draw_data,
-                         static_cast<uint32_t>(sizeof(extension.draw_data)),
-                         "shadow_draw",
-                         nullptr},
-                        {"per_frame",
-                         &typed_per_frame,
-                         static_cast<uint32_t>(sizeof(typed_per_frame)),
-                         nullptr,
-                         "shadow_draw"},
-                    }};
-                    task.set_resources(&draw_material_resources, uniforms);
-                }
-
-                for (const RenderTask* task_ptr : sorted_render_tasks) {
-                    const RenderTask& task = *task_ptr;
-                    RenderItemDrawSubmitRequest encode_request{};
-                    encode_request.shader = tc_shader_get(task.final_shader);
-                    encode_request.shader_handle = task.final_shader;
-                    encode_request.device = &device;
-                    encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-                    encode_request.draw_context = &task.draw_context;
-                    encode_request.material_phase = task.material_phase;
-                    encode_request.phase = TC_PHASE_SHADOW;
-                    encode_request.debug_pass_name = "ShadowPass";
-                    encode_request.debug_entity_name = task.debug_name.c_str();
-                    encode_request.resources = &task.resources;
-                    if (!submit_render_item_draw(*ctx.ctx2, *task.item, encode_request)) {
-                        continue;
-                    }
-                    capture_debug_symbol(task.debug_name.c_str());
-                    restore_shadow_raster_state();
-                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
-                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
-                    prepare_material_pipeline_resources(
-                        *ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
+            auto capture_debug_symbol = [&](const char* entity_name) {
+                if (!ctx.should_capture_internal(entity_name)) {
+                    return;
                 }
 
                 end_shadow_pass();
-
-                results.emplace_back(
-                    depth_tex2, resolution, resolution, light_space_matrix, light_index, c, cascade_near, cascade_far);
+                ctx.capture_internal(entity_name, depth_tex2, resolution, resolution, tgfx::PixelFormat::D32F);
+                ctx.ctx2->begin_pass(tgfx::TextureHandle{}, depth_tex2, nullptr, 1.0f, false);
+                ctx.ctx2->set_viewport(0, 0, resolution, resolution);
+                restore_shadow_raster_state();
+                ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
+                ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
+                prepare_material_pipeline_resources(
+                    *ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
+            };
+            MaterialPipelineResourceView draw_material_resources{};
+            draw_material_resources.material_texture_sources = ctx.material_texture_sources;
+            for (RenderTask* task_ptr : sorted_render_tasks) {
+                if (!cascade.visible_items[task_ptr->item_index]) continue;
+                RenderTask& task = *task_ptr;
+                task.draw_context.view = view_matrix;
+                task.draw_context.projection = proj_matrix;
+                task.draw_context.camera_position = shadow_camera_position(params);
+                task.draw_context.viewport_width = resolution;
+                task.draw_context.viewport_height = resolution;
+                auto& extension = *static_cast<ShadowTaskExtension*>(task.extension);
+                // Both paths share the same draw-scope model matrix + PerFrame
+                // UBO layout. Mesh encoder binds payload-specific resources
+                // such as BoneBlock. Bias is applied receiver-side while
+                // sampling so the caster's projected XY footprint stays stable.
+                const std::array<RenderItemNamedUniformBinding, 3> uniforms{{
+                    {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame)), "shadow_draw", nullptr},
+                    {"shadow_draw",
+                     &extension.draw_data,
+                     static_cast<uint32_t>(sizeof(extension.draw_data)),
+                     "shadow_draw",
+                     nullptr},
+                    {"per_frame",
+                     &typed_per_frame,
+                     static_cast<uint32_t>(sizeof(typed_per_frame)),
+                     nullptr,
+                     "shadow_draw"},
+                }};
+                task.set_resources(&draw_material_resources, uniforms);
             }
+
+            for (const RenderTask* task_ptr : sorted_render_tasks) {
+                if (!cascade.visible_items[task_ptr->item_index]) continue;
+                const RenderTask& task = *task_ptr;
+                RenderItemDrawSubmitRequest encode_request{};
+                encode_request.shader = tc_shader_get(task.final_shader);
+                encode_request.shader_handle = task.final_shader;
+                encode_request.device = &device;
+                encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+                encode_request.draw_context = &task.draw_context;
+                encode_request.material_phase = task.material_phase;
+                encode_request.phase = TC_PHASE_SHADOW;
+                encode_request.debug_pass_name = "ShadowPass";
+                encode_request.debug_entity_name = task.debug_name.c_str();
+                encode_request.resources = &task.resources;
+                if (!submit_render_item_draw(*ctx.ctx2, *task.item, encode_request)) {
+                    continue;
+                }
+                if (task.item->kind == TC_RENDER_ITEM_KIND_MESH) ++cascade.counters.mesh_draws;
+                capture_debug_symbol(task.debug_name.c_str());
+                restore_shadow_raster_state();
+                ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
+                ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
+                prepare_material_pipeline_resources(
+                    *ctx.ctx2, device, shadow_shader.shader, nullptr, shadow_resources);
+            }
+
+            end_shadow_pass();
+
+            publish_render_item_culling_counters(ctx.render_target_name.c_str(), get_pass_name().c_str(),
+                                                 light_index * 4 + c, cascade.counters);
+            results.emplace_back(
+                depth_tex2, resolution, resolution, light_space_matrix, light_index, c, cascade_near, cascade_far);
         }
 
         return results;

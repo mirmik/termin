@@ -4,6 +4,7 @@
 #include <tcbase/tc_log.hpp>
 #include <termin/render/debug_geometry.hpp>
 #include <termin/render/render_lifecycle.hpp>
+#include <termin/render/render_item_culling.hpp>
 
 extern "C" {
 #include "core/tc_component.h"
@@ -232,6 +233,26 @@ NB_MODULE(_render_native, m) {
         [](tc_render_sync_mode mode) { tc_project_settings_set_render_sync_mode(mode); },
         nb::arg("mode"),
         "Set render sync mode between passes");
+
+    m.def("set_render_item_culling_enabled", &termin::set_render_item_culling_enabled, nb::arg("enabled"));
+    m.def("render_item_culling_enabled", &termin::render_item_culling_enabled);
+    m.def("clear_render_item_culling_diagnostics", &termin::clear_render_item_culling_diagnostics);
+    m.def("get_render_item_culling_diagnostics", []() {
+        nb::list records;
+        for (const auto& record : termin::get_render_item_culling_diagnostics()) {
+            nb::dict row;
+            row["target"] = nb::str(record.target.c_str());
+            row["pass"] = nb::str(record.pass.c_str());
+            row["view_index"] = record.view_index;
+            row["candidates"] = record.counters.candidates;
+            row["tested"] = record.counters.tested;
+            row["culled"] = record.counters.culled;
+            row["without_bounds"] = record.counters.without_bounds;
+            row["mesh_draws"] = record.counters.mesh_draws;
+            records.append(row);
+        }
+        return records;
+    });
 
     m.def(
         "configure_project_render_phases",

@@ -110,6 +110,7 @@ namespace termin {
             tc_material_handle material = tc_material_handle_invalid();
             tc_render_item item{};
             size_t phase_index = SIZE_MAX;
+            size_t item_index = 0;
             int geometry_id = 0;
 
             tc_material_phase* resolve_material_phase() const {
@@ -201,7 +202,9 @@ namespace termin {
         void collect_draw_calls(tc_scene_handle scene,
                                 uint64_t layer_mask,
                                 uint64_t render_category_mask,
-                                const RenderItemSnapshot& snapshot) const;
+                                const RenderItemSnapshot& snapshot,
+                                const RenderItemCullingView* culling = nullptr,
+                                RenderItemCullingCounters* counters = nullptr) const;
         void sort_draw_calls_by_shader() const;
     };
 
