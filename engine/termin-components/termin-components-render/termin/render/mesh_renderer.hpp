@@ -40,6 +40,9 @@ namespace termin {
 
     protected:
         virtual void populate_mesh_render_item(tc_render_item& item);
+        // Called once, immediately before the first item of each collection.
+        // Empty collections and material enumeration do not prepare draw payloads.
+        virtual void prepare_mesh_render_items();
 
     public:
         explicit MeshRenderer(const char* type_name = "MeshRenderer");

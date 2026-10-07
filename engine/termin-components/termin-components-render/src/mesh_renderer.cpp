@@ -664,6 +664,8 @@ namespace termin {
         }
     }
 
+    void MeshRenderer::prepare_mesh_render_items() {}
+
     template <typename Visit>
     bool MeshRenderer::visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit) {
         tc_mesh* mesh = current_mesh_ptr();
@@ -743,6 +745,7 @@ namespace termin {
                                                   tc_material_phase* phase) {
             if (!has_model) {
                 model = get_model_matrix(entity());
+                prepare_mesh_render_items();
                 has_model = true;
             }
             tc_render_item item{};

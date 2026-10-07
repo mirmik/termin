@@ -28,6 +28,16 @@ surface has been removed.
 same entity and keep mesh offsets on that component; `MeshRenderer` is
 responsible for material, shadow participation, and material overrides.
 
+`collect_render_items` lazily prepares the model and invokes
+`prepare_mesh_render_items` once before the first emitted item. The existing
+`populate_mesh_render_item` hook still runs for each submesh/material phase.
+`SkinnedMeshRenderer` prepares its renderer-local bone matrices in the first
+hook and only attaches their payload in the second. A new collection always
+refreshes the pose; material enumeration and empty collections do not prepare
+skinning. Direct collection works without a preceding `prepare_render` call.
+Bone payload remains borrowed from the renderer for synchronous execution;
+this optimization does not extend snapshot payload lifetime across frames.
+
 ## LineRenderer
 
 `LineRenderer` is implemented in C++ and re-exported from `termin.render_components`.

@@ -96,18 +96,20 @@ namespace termin {
         // Resize buffer
         _bone_matrices_flat.resize(_bone_count * 16);
 
-        // Copy matrices (column-major for OpenGL)
-        for (int i = 0; i < _bone_count; ++i) {
-            const Mat44& m = si->get_bone_matrix(i);
-            // Mat44 is column-major, copy directly
-            for (int j = 0; j < 16; ++j) {
-                _bone_matrices_flat[i * 16 + j] = static_cast<float>(m.data[j]);
-            }
+        // Synchronize and convert the complete pose once, rather than resolving
+        // the skeleton resource separately for every bone.
+        if (!si->get_bone_matrices_float(_bone_matrices_flat.data())) {
+            tc::Log::error("[SkinnedMeshRenderer::update_bone_matrices] failed to copy bone matrices");
+            _bone_count = 0;
+            _bone_matrices_flat.clear();
         }
     }
 
-    void SkinnedMeshRenderer::populate_mesh_render_item(tc_render_item& item) {
+    void SkinnedMeshRenderer::prepare_mesh_render_items() {
         update_bone_matrices();
+    }
+
+    void SkinnedMeshRenderer::populate_mesh_render_item(tc_render_item& item) {
         if (_bone_count <= 0 || _bone_matrices_flat.empty()) {
             // Without a skeleton payload this draw uses undeformed vertices.
             item.flags |= TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;

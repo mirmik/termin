@@ -18,3 +18,9 @@ Skeleton component package for attaching skeleton state/controllers to entities.
 This distribution ships both the native Entity adapter and its
 `termin.skeleton_components` Python wrapper. It depends on the portable
 `termin-skeleton` domain package.
+
+`SkeletonController::update_skeleton_instance` fills retained scratch storage
+with current bone world matrices on every call. It then computes skin matrices
+in the requested renderer root space. Retaining capacity removes repeated
+temporary allocation; the matrices themselves are freshly computed, including
+when time moves backwards or one controller serves multiple renderer roots.

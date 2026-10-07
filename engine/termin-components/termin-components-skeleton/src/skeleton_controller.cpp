@@ -293,17 +293,17 @@ namespace termin {
             return false;
         }
 
-        std::vector<Mat44> bone_world_matrices;
-        bone_world_matrices.reserve(bone_entities.size());
+        _bone_world_matrices_scratch.resize(bone_entities.size());
         for (size_t index = 0; index < bone_entities.size(); ++index) {
             const Entity bone = bone_entities[index];
             if (!bone.valid()) {
                 tc::Log::error("[SkeletonController::update_skeleton_instance] bone entity %zu is invalid", index);
                 return false;
             }
-            bone_world_matrices.push_back(entity_world_matrix(bone));
+            _bone_world_matrices_scratch[index] = entity_world_matrix(bone);
         }
-        return _skeleton_instance->update_from_world_matrices(entity_world_matrix(skinning_root), bone_world_matrices);
+        return _skeleton_instance->update_from_world_matrices(entity_world_matrix(skinning_root),
+                                                             _bone_world_matrices_scratch);
     }
 
     void SkeletonController::prepare_render(const RenderPrepareContext& context) {

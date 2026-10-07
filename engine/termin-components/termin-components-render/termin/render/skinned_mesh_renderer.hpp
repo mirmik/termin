@@ -21,15 +21,16 @@ namespace termin {
      *
      * Extends MeshRenderer with:
      * - skeleton_controller: Reference to SkeletonController for bone matrices
-     * - Per-instance std140 UBO (bone_block/BoneBlock) uploaded before drawing
-     * - Skinned shader variant injection via get_skinned_material()
+     * - A renderer-local bone payload refreshed once per nonempty collection
+     * - Skinning shader/UBO selection through common RenderItem planning
      */
     class ENTITY_API SkinnedMeshRenderer : public MeshRenderer {
     public:
         // C++ SkeletonController reference (CmpRef validates entity liveness)
         CmpRef<SkeletonController> _skeleton_controller;
 
-        // Cached bone matrices (column-major, ready for shader)
+        // Prepared bone matrices (column-major, ready for shader). Capacity is
+        // retained, but every nonempty collection rebuilds values for its root.
         std::vector<float> _bone_matrices_flat;
         int _bone_count = 0;
 
@@ -38,6 +39,7 @@ namespace termin {
 
     protected:
         void populate_mesh_render_item(tc_render_item& item) override;
+        void prepare_mesh_render_items() override;
 
     public:
         // Note: material and cast_shadow are inherited from MeshRenderer;

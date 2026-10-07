@@ -45,6 +45,9 @@ namespace termin {
         bool _bone_mapping_requires_republish = false;
         bool _bone_mapping_error_reported = false;
 
+        // Capacity is retained; values are rebuilt for each requested root/pose.
+        std::vector<Mat44> _bone_world_matrices_scratch;
+
         bool ensure_skeleton_ready(const char* operation);
         void synchronize_cached_instance_resource();
         bool try_publish_bone_mapping(const char* operation, bool report_count_mismatch);

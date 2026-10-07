@@ -60,7 +60,7 @@ def test_navmesh_surface_collection_uses_prepared_geometry_and_same_selection(mo
         component._material = _Material(4)
         rebuilds = []
 
-        def rebuild():
+        def rebuild(component=component, rebuilds=rebuilds):
             rebuilds.append(True)
             component._mesh = _Mesh()
 

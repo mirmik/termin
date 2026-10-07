@@ -59,6 +59,7 @@ namespace {
     struct CountingSkinnedRenderer : termin::SkinnedMeshRenderer {
         mutable size_t model_queries = 0;
         size_t skin_payload_queries = 0;
+        size_t skin_preparations = 0;
 
         termin::Mat44f get_model_matrix(const termin::Entity& owner) const override {
             ++model_queries;
@@ -68,10 +69,28 @@ namespace {
             ++skin_payload_queries;
             termin::SkinnedMeshRenderer::populate_mesh_render_item(item);
         }
+        void prepare_mesh_render_items() override {
+            ++skin_preparations;
+            termin::SkinnedMeshRenderer::prepare_mesh_render_items();
+        }
     };
 
     struct ExposedSkinnedRenderer : termin::SkinnedMeshRenderer {
         using termin::SkinnedMeshRenderer::populate_mesh_render_item;
+    };
+
+    struct CountingMeshRenderer : termin::MeshRenderer {
+        size_t preparations = 0;
+        size_t populated_items = 0;
+        void prepare_mesh_render_items() override {
+            ++preparations;
+            termin::MeshRenderer::prepare_mesh_render_items();
+        }
+        void populate_mesh_render_item(tc_render_item& item) override {
+            ++populated_items;
+            termin::MeshRenderer::populate_mesh_render_item(item);
+            item.override_color.x = 0.125f;
+        }
     };
 
     struct CountingLineRenderer : termin::LineRenderer {
@@ -595,7 +614,8 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     mesh_component->set_mesh(mesh);
     entity.add_component(mesh_component);
 
-    auto* renderer = new termin::MeshRenderer();
+    auto* renderer = new CountingMeshRenderer();
+    renderer->static_batching = true;
     renderer->set_material(termin::TcMaterial(material_handle));
     renderer->set_material_slot(1, termin::TcMaterial(material_handle));
     entity.add_component(renderer);
@@ -623,6 +643,23 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     CHECK(items[1].material_phase == phase);
     CHECK(tc_mesh_handle_eq(items[1].payload.mesh.mesh_handle, mesh.handle));
     CHECK(items[1].payload.mesh.submesh_index == 1u);
+    CHECK_EQ(renderer->preparations, 1u);
+    CHECK_EQ(renderer->populated_items, 2u);
+    for (const auto& item : items) {
+        CHECK_EQ(item.override_color.x, 0.125f);
+        CHECK((item.flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) != 0u);
+        CHECK((item.flags & TC_RENDER_ITEM_FLAG_STATIC_BATCH_ELIGIBLE) != 0u);
+    }
+
+    tc_render_item_sink rejecting_sink{};
+    rejecting_sink.emit = [](const tc_render_item*, void*) { return false; };
+    CHECK_FALSE(renderer->collect_render_items(collect_context, rejecting_sink));
+    CHECK_EQ(renderer->preparations, 2u);
+    CHECK_EQ(renderer->populated_items, 3u);
+    termin::RenderItemCollection retry;
+    REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), collect_context, retry));
+    CHECK_EQ(renderer->preparations, 3u);
+    CHECK_EQ(renderer->populated_items, 5u);
 
     tc_mesh_shutdown();
     tc_material_shutdown();
@@ -861,11 +898,13 @@ TEST_CASE("Skinned material enumeration excludes unused slots and never prepares
         }
         CHECK_EQ(renderer->model_queries, 0u);
         CHECK_EQ(renderer->skin_payload_queries, 0u);
+        CHECK_EQ(renderer->skin_preparations, 0u);
         CHECK_EQ(renderer->_bone_count, 7);
         CHECK_EQ(renderer->_bone_matrices_flat.front(), 123.0f);
         check_materials_match_render_items(*renderer, context);
         CHECK_EQ(renderer->model_queries, 1u);
         CHECK_EQ(renderer->skin_payload_queries, 2u);
+        CHECK_EQ(renderer->skin_preparations, 1u);
 
         context.phase = TC_PHASE_TRANSPARENT;
         check_materials_match_render_items(*renderer, context);
@@ -875,8 +914,138 @@ TEST_CASE("Skinned material enumeration excludes unused slots and never prepares
         check_materials_match_render_items(*renderer, context);
         mesh.get()->submeshes[0].index_count = 0;
         CHECK(enumerate_materials(*renderer, context).empty());
+        const size_t preparations = renderer->skin_preparations;
         check_materials_match_render_items(*renderer, context);
+        CHECK_EQ(renderer->skin_preparations, preparations);
     }
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("Skinned collection prepares one fresh pose for all submeshes and phases") {
+    tc_material_init();
+    tc_mesh_init();
+    tc_skeleton_init();
+    {
+        const tc_material_handle material = tc_material_create("skin-collection-material", "skin-collection-material");
+        REQUIRE(tc_material_add_phase(tc_material_get(material), tc_shader_handle_invalid(), "opaque", 0));
+        REQUIRE(tc_material_add_phase(tc_material_get(material), tc_shader_handle_invalid(), "transparent", 0));
+        termin::TcMesh mesh = make_two_submesh_mesh();
+        REQUIRE(mesh.is_valid());
+        termin::TcSkeleton skeleton = termin::TcSkeleton::create("skin-collection-skeleton", "skin-collection-skeleton");
+        tc_skeleton_bone_desc bones[2]{};
+        for (size_t index = 0; index < 2; ++index) {
+            bones[index].name = index == 0 ? "root" : "child";
+            bones[index].parent_index = -1;
+            bones[index].inverse_bind_matrix = tc_mat44_identity();
+            bones[index].bind_rotation = tc_quat_identity();
+            bones[index].bind_scale = tc_vec3_one();
+        }
+        REQUIRE(skeleton.replace_bones(bones, 2));
+
+        termin::TcSceneRef scene = termin::TcSceneRef::create("skin-collection");
+        termin::Entity first = scene.create_entity("first-mesh");
+        termin::Entity second = scene.create_entity("second-mesh");
+        termin::Entity bone = scene.create_entity("root");
+        termin::Entity child = scene.create_entity("child");
+        first.transform().set_local_position({3, 0, 0});
+        second.transform().set_local_position({-2, 0, 0});
+        bone.transform().set_local_position({7, 0, 0});
+        child.transform().set_local_position({11, 0, 0});
+        auto* controller = new termin::SkeletonController();
+        controller->set_skeleton(skeleton);
+        controller->set_bone_entities({bone, child});
+        first.add_component(controller);
+        // Direct collection must refresh even if lifecycle preparation is skipped.
+        controller->set_enabled(false);
+
+        auto make_renderer = [&](termin::Entity owner) {
+            auto* mesh_component = new termin::MeshComponent();
+            mesh_component->set_mesh(mesh);
+            owner.add_component(mesh_component);
+            auto* renderer = new CountingSkinnedRenderer();
+            renderer->set_material(termin::TcMaterial(material));
+            renderer->set_material_slot(1, termin::TcMaterial(material));
+            owner.add_component(renderer);
+            renderer->set_skeleton_controller(controller);
+            return renderer;
+        };
+        auto* renderer = make_renderer(first);
+        auto* other = make_renderer(second);
+        tc_render_item_collect_context context{};
+        auto collect = [&](CountingSkinnedRenderer* producer) {
+            termin::RenderItemCollection result;
+            REQUIRE(termin::collect_drawable_render_items(producer->tc_component_ptr(), context, result));
+            return result;
+        };
+        auto check_pose = [](const termin::RenderItemCollection& result, float root_x, float child_x) {
+            REQUIRE_EQ(result.items.size(), 4u);
+            for (size_t index = 0; index < result.items.size(); ++index) {
+                const auto& item = result.items[index];
+                CHECK_EQ(item.geometry_id, static_cast<int>(index / 2));
+                CHECK_EQ(item.payload.mesh.submesh_index, index / 2);
+                CHECK((item.flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES) != 0u);
+                REQUIRE_EQ(item.payload.mesh.skinning_matrix_count, 2u);
+                REQUIRE(item.payload.mesh.skinning_matrices != nullptr);
+                CHECK_EQ(item.payload.mesh.skinning_matrices[12], root_x);
+                CHECK_EQ(item.payload.mesh.skinning_matrices[28], child_x);
+                CHECK_EQ(item.payload.mesh.skinning_matrices[0], 1.0f);
+                CHECK_EQ(item.payload.mesh.skinning_matrices[31], 1.0f);
+            }
+        };
+        const auto initial = collect(renderer);
+        check_pose(initial, 4.0f, 8.0f);
+        CHECK_EQ(renderer->skin_preparations, 1u);
+        CHECK_EQ(renderer->skin_payload_queries, 4u);
+        const float* retained_pose = renderer->_bone_matrices_flat.data();
+        const auto shared_root = collect(other);
+        check_pose(shared_root, 9.0f, 13.0f);
+        CHECK_EQ(other->skin_preparations, 1u);
+        check_pose(initial, 4.0f, 8.0f);
+
+        bone.transform().set_local_position({15, 0, 0});
+        child.transform().set_local_position({19, 0, 0});
+        check_pose(collect(renderer), 12.0f, 16.0f);
+        CHECK_EQ(renderer->_bone_matrices_flat.data(), retained_pose);
+        // Rewind-like backwards transforms and a changed renderer root are fresh.
+        bone.transform().set_local_position({1, 0, 0});
+        child.transform().set_local_position({5, 0, 0});
+        first.transform().set_local_position({4, 0, 0});
+        check_pose(collect(renderer), -3.0f, 1.0f);
+        CHECK_EQ(renderer->skin_preparations, 3u);
+        CHECK_EQ(renderer->skin_payload_queries, 12u);
+        check_pose(shared_root, 9.0f, 13.0f);
+
+        // A failed refresh cannot attach the previous valid skinning payload.
+        controller->set_bone_entities({bone, termin::Entity()});
+        const auto failed = collect(renderer);
+        REQUIRE_EQ(failed.items.size(), 4u);
+        CHECK_EQ(renderer->_bone_count, 0);
+        CHECK(renderer->_bone_matrices_flat.empty());
+        for (const auto& item : failed.items) {
+            CHECK((item.flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES) == 0u);
+            CHECK((item.flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) != 0u);
+            CHECK_EQ(item.payload.mesh.skinning_matrix_count, 0u);
+            CHECK(item.payload.mesh.skinning_matrices == nullptr);
+        }
+        controller->set_bone_entities({bone, child});
+        check_pose(collect(renderer), -3.0f, 1.0f);
+        CHECK_EQ(renderer->skin_preparations, 5u);
+
+        context.phase = TC_PHASE_ID;
+        const size_t before_empty = renderer->skin_preparations;
+        CHECK(collect(renderer).items.empty());
+        CHECK_EQ(renderer->skin_preparations, before_empty);
+        context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        const auto pick = collect(renderer);
+        REQUIRE_EQ(pick.items.size(), 2u);
+        CHECK_EQ(renderer->skin_preparations, before_empty + 1);
+        for (const auto& item : pick.items) {
+            CHECK(item.material_phase == nullptr);
+            CHECK_EQ(item.payload.mesh.skinning_matrices[12], -3.0f);
+        }
+    }
+    tc_skeleton_shutdown();
     tc_mesh_shutdown();
     tc_material_shutdown();
 }
@@ -908,6 +1077,7 @@ TEST_CASE("SkinnedMeshRenderer opts into approximate undeformed bounds while ret
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_MESH;
         item.flags = TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS;
+        renderer->update_bone_matrices();
         renderer->populate_mesh_render_item(item);
         CHECK((item.flags & TC_RENDER_ITEM_FLAG_CONSERVATIVE_MESH_BOUNDS) == 0u);
         CHECK((item.flags & TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS) != 0u);
@@ -919,6 +1089,7 @@ TEST_CASE("SkinnedMeshRenderer opts into approximate undeformed bounds while ret
         bone.transform().set_local_position({12, 0, 0});
         tc_render_item next_pose{};
         next_pose.kind = TC_RENDER_ITEM_KIND_MESH;
+        renderer->update_bone_matrices();
         renderer->populate_mesh_render_item(next_pose);
         CHECK((next_pose.flags & TC_RENDER_ITEM_FLAG_UNDEFORMED_SKINNED_MESH_BOUNDS) != 0u);
         CHECK_EQ(next_pose.payload.mesh.skinning_matrices[12], 12.0f);
