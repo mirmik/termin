@@ -44,6 +44,10 @@ class NugetPackageExistsError(GraphicsNugetPublishError):
     """The package source rejected a push because the version already exists."""
 
 
+class NugetPushRejectedError(GraphicsNugetPublishError):
+    """The server definitively rejected the package or its credentials."""
+
+
 @dataclass(frozen=True)
 class ArchiveMember:
     path: str
@@ -453,6 +457,7 @@ class NugetV3Client:
                 "Content-Length": str(len(body)),
                 "User-Agent": "termin-graphics-nuget-publisher/0.5",
                 "X-NuGet-ApiKey": api_key,
+                "X-NuGet-Protocol-Version": "4.1.0",
             },
         )
         try:
@@ -467,8 +472,20 @@ class NugetV3Client:
                 raise NugetPackageExistsError(
                     f"NuGet package version already exists: {package.name}"
                 ) from error
-            raise GraphicsNugetPublishError(
+            try:
+                response_detail = error.read().decode("utf-8", errors="replace")
+            except OSError:
+                response_detail = "response body could not be read"
+            response_detail = " ".join(
+                response_detail.replace(api_key, "[redacted]").split()
+            )[:2000]
+            error_type = (
+                NugetPushRejectedError if error.code in {400, 401, 403}
+                else GraphicsNugetPublishError
+            )
+            raise error_type(
                 f"NuGet push failed for {package.name}: HTTP {error.code}"
+                + (f"; {response_detail}" if response_detail else "")
             ) from error
         except (urllib_error.URLError, TimeoutError, OSError) as error:
             raise GraphicsNugetPublishError(
@@ -584,11 +601,13 @@ def publish_release(
                 file=sys.stderr,
                 flush=True,
             )
+        except NugetPushRejectedError:
+            raise
         except GraphicsNugetPublishError as error:
             push_error = error
             print(
                 f"NuGet push result for {package.path.name} was uncertain; "
-                "reconciling remote content before failing.",
+                f"reconciling remote content before failing: {error}",
                 file=sys.stderr,
                 flush=True,
             )

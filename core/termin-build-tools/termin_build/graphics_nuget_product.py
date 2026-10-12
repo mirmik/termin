@@ -459,6 +459,11 @@ def _content_types(names: set[str]) -> bytes:
         f"  <Default Extension={quoteattr(extension)} ContentType=\"application/octet\" />"
         for extension in extensions
     )
+    defaults.extend(
+        f"  <Override PartName={quoteattr('/' + name)} ContentType=\"application/octet\" />"
+        for name in sorted(names)
+        if not PurePosixPath(name).suffix
+    )
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
@@ -545,6 +550,37 @@ def _validate_nuspec(
 ) -> None:
     with zipfile.ZipFile(package) as archive:
         archive_names = set(archive.namelist())
+        try:
+            content_types = ElementTree.fromstring(archive.read("[Content_Types].xml"))
+        except (KeyError, ElementTree.ParseError) as error:
+            raise GraphicsNugetProductError(
+                f"{package.name} has invalid package content types: {error}"
+            ) from error
+        content_namespace = "{http://schemas.openxmlformats.org/package/2006/content-types}"
+        default_extensions = {
+            element.get("Extension", "").casefold()
+            for element in content_types.findall(content_namespace + "Default")
+            if element.get("ContentType")
+        }
+        override_names = {
+            element.get("PartName")
+            for element in content_types.findall(content_namespace + "Override")
+            if element.get("ContentType")
+        }
+        missing_content_types = sorted(
+            name for name in archive_names - {"[Content_Types].xml"}
+            if "/" + name not in override_names
+            and (
+                not PurePosixPath(name).suffix
+                or PurePosixPath(name).suffix.removeprefix(".").casefold()
+                not in default_extensions
+            )
+        )
+        if missing_content_types:
+            raise GraphicsNugetProductError(
+                f"{package.name} has package files without content types: "
+                + ", ".join(missing_content_types)
+            )
         nuspec_name = f"{package_id}.nuspec"
         if nuspec_name not in archive_names:
             raise GraphicsNugetProductError(f"{package.name} has no {nuspec_name}")

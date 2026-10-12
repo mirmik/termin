@@ -13,6 +13,7 @@ import pytest
 from termin_build.graphics_nuget_product import (
     GraphicsNugetProductError,
     PRODUCT_MANIFEST,
+    _validate_nuspec,
     build_product,
     load_lock,
     validate_candidate,
@@ -166,6 +167,41 @@ def test_candidate_bytes_are_deterministic(tmp_path: Path) -> None:
     first_files = {path.name: path.read_bytes() for path in first.iterdir()}
     second_files = {path.name: path.read_bytes() for path in second.iterdir()}
     assert first_files == second_files
+
+
+def test_extensionless_licenses_have_package_content_types(tmp_path: Path) -> None:
+    candidate = _build(tmp_path)
+    manifest = validate_candidate(REPO_ROOT, candidate)
+    for package in manifest["packages"]:
+        with zipfile.ZipFile(candidate / package["filename"]) as archive:
+            content_types = ElementTree.fromstring(archive.read("[Content_Types].xml"))
+            overrides = {
+                element.get("PartName"): element.get("ContentType")
+                for element in content_types.findall(
+                    "{http://schemas.openxmlformats.org/package/2006/content-types}Override"
+                )
+            }
+            for name in archive.namelist():
+                if not Path(name).suffix:
+                    assert overrides["/" + name] == "application/octet"
+
+
+def test_rejects_license_without_package_content_type(tmp_path: Path) -> None:
+    candidate = _build(tmp_path)
+    manifest = validate_candidate(REPO_ROOT, candidate)
+    package = candidate / manifest["packages"][0]["filename"]
+    with zipfile.ZipFile(package) as archive:
+        payloads = {name: archive.read(name) for name in archive.namelist()}
+    content_types = ElementTree.fromstring(payloads["[Content_Types].xml"])
+    for element in list(content_types):
+        if element.get("PartName") == "/licenses/Termin/LICENSE":
+            content_types.remove(element)
+    payloads["[Content_Types].xml"] = ElementTree.tostring(content_types)
+    with zipfile.ZipFile(package, "w") as archive:
+        for name, payload in payloads.items():
+            archive.writestr(name, payload)
+    with pytest.raises(GraphicsNugetProductError, match="without content types: licenses/Termin/LICENSE"):
+        _validate_nuspec(package, package_id="Termin.Graphics", version=VERSION, dependency=None)
 
 
 @pytest.mark.skipif(shutil.which("dotnet") is None, reason="dotnet is not installed")

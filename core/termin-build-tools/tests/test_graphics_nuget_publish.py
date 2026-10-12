@@ -5,6 +5,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 import shutil
+from urllib.error import HTTPError
 import zipfile
 
 import pytest
@@ -15,6 +16,7 @@ from termin_build.graphics_nuget_publish import (
     GraphicsNugetPublishError,
     GraphicsNugetReleaseCandidate,
     NugetV3Client,
+    NugetPushRejectedError,
     publish_release,
     validate_release_candidate,
     verify_remote_package,
@@ -273,7 +275,32 @@ def test_v3_push_uses_discovered_endpoint_and_secret_header(tmp_path: Path) -> N
     assert push_request.full_url == "https://upload.example.test/api/v2/package"
     assert push_request.get_method() == "PUT"
     assert push_request.get_header("X-nuget-apikey") == "scoped-secret"
+    assert push_request.get_header("X-nuget-protocol-version") == "4.1.0"
     assert b"package-bytes" in push_request.data
+
+
+def test_push_error_preserves_server_reason_and_redacts_api_key(tmp_path: Path) -> None:
+    package = tmp_path / "Termin.Graphics.0.5.2.nupkg"
+    package.write_bytes(b"package-bytes")
+
+    def open_url(request, *, timeout: int):
+        if request.full_url.endswith("/v3/index.json"):
+            return FakeHttpResponse(json.dumps({"resources": [{
+                "@id": "https://upload.example.test/api/v2/package",
+                "@type": "PackagePublish/2.0.0",
+            }]}).encode())
+        raise HTTPError(
+            request.full_url, 400, "Bad Request", {},
+            BytesIO(b"Invalid license file; scoped-secret"),
+        )
+
+    client = NugetV3Client("https://api.example.test/v3/index.json", open_url=open_url)
+    with pytest.raises(
+        NugetPushRejectedError, match="HTTP 400; Invalid license file"
+    ) as failure:
+        client.push_package(package, "scoped-secret")
+    assert "scoped-secret" not in str(failure.value)
+    assert "[redacted]" in str(failure.value)
 
 
 def test_dry_run_prints_ordered_plan_without_push(
@@ -309,6 +336,56 @@ def test_publish_uploads_base_then_wpf_and_reconciles(tmp_path: Path) -> None:
     )
 
     assert client.pushes == ["Termin.Graphics", "Termin.Graphics.Wpf"]
+
+
+def test_uncertain_push_logs_original_error_before_reconciliation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    candidate, evidence = _candidate(tmp_path)
+    release = validate_release_candidate(REPO_ROOT, candidate, evidence)
+
+    class RejectedPushClient(FakeNugetClient):
+        def push_package(self, package: Path, api_key: str) -> None:
+            raise GraphicsNugetPublishError("NuGet push failed: HTTP 400")
+
+    with pytest.raises(GraphicsNugetPublishError, match="HTTP 400"):
+        publish_release(
+            release,
+            client=RejectedPushClient(release),
+            upload=True,
+            api_key="secret",
+            visibility_attempts=1,
+            visibility_delay=0,
+            sleep=lambda _seconds: None,
+        )
+
+    assert (
+        "reconciling remote content before failing: NuGet push failed: HTTP 400"
+        in capsys.readouterr().err
+    )
+
+
+def test_rejected_push_stops_without_waiting_or_uploading_wpf(tmp_path: Path) -> None:
+    candidate, evidence = _candidate(tmp_path)
+    release = validate_release_candidate(REPO_ROOT, candidate, evidence)
+
+    class RejectedPushClient(FakeNugetClient):
+        def push_package(self, package: Path, api_key: str) -> None:
+            self.pushes.append(self.by_filename[package.name])
+            raise NugetPushRejectedError("Invalid license file")
+
+    client = RejectedPushClient(release)
+
+    def unexpected_sleep(_seconds: float) -> None:
+        pytest.fail("A definitive rejection must not wait for remote visibility")
+
+    with pytest.raises(NugetPushRejectedError, match="Invalid license file"):
+        publish_release(
+            release, client=client, upload=True, api_key="secret",
+            sleep=unexpected_sleep,
+        )
+    assert client.pushes == ["Termin.Graphics"]
 
 
 def test_partial_publication_resumes_with_only_wpf(tmp_path: Path) -> None:

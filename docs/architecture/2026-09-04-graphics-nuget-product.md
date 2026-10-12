@@ -45,6 +45,12 @@ libraries, required shader artifacts, and release licenses. The product builder
 rejects inputs that violate that contract and emits an exact manifest containing
 the SHA-256 of every archive and archive member.
 
+Every archive part must have a content type in `[Content_Types].xml`, including
+explicit overrides for extensionless release-license files. Candidate validation
+rejects missing declarations before upload. The publisher identifies the NuGet.org
+push protocol with `X-NuGet-Protocol-Version: 4.1.0`, reports server rejection
+details with API keys redacted, and fails immediately on HTTP 400/401/403.
+
 The plot runtime closure is derived from the native binaries rather than only
 the direct C# binding targets. It therefore includes the inspect, materials,
 render-core, and graphics-binding-policy libraries pulled in transitively by
