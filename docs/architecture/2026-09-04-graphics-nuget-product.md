@@ -47,7 +47,10 @@ the SHA-256 of every archive and archive member.
 
 Every archive part must have a content type in `[Content_Types].xml`, including
 explicit overrides for extensionless release-license files. Candidate validation
-rejects missing declarations before upload. The publisher identifies the NuGet.org
+rejects missing declarations before upload. Both packages pair their file license
+with `<licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>` for older NuGet
+clients; candidate validation rejects a missing or different compatibility URL.
+The publisher identifies the NuGet.org
 push protocol with `X-NuGet-Protocol-Version: 4.1.0`, reports server rejection
 details with API keys redacted, and fails immediately on HTTP 400/401/403.
 

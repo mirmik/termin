@@ -133,6 +133,7 @@ def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> Non
         assert "<id>Termin.Graphics</id>" in nuspec
         assert f"<version>{VERSION}</version>" in nuspec
         assert '<license type="file">licenses/Termin/LICENSE</license>' in nuspec
+        assert "<licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>" in nuspec
         assert "<readme>README.md</readme>" in nuspec
         assert f'commit="{SOURCE_REVISION}"' in nuspec
         assert "{{TERMIN_VERSION}}" not in archive.read("README.md").decode("utf-8")
@@ -145,6 +146,7 @@ def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> Non
         nuspec = archive.read("Termin.Graphics.Wpf.nuspec").decode("utf-8")
         assert f'id="Termin.Graphics" version="[{VERSION}]"' in nuspec
         assert 'targetFramework="net8.0-windows7.0"' in nuspec
+        assert "<licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>" in nuspec
 
 
 def test_candidate_bytes_are_deterministic(tmp_path: Path) -> None:
@@ -202,6 +204,35 @@ def test_rejects_license_without_package_content_type(tmp_path: Path) -> None:
             archive.writestr(name, payload)
     with pytest.raises(GraphicsNugetProductError, match="without content types: licenses/Termin/LICENSE"):
         _validate_nuspec(package, package_id="Termin.Graphics", version=VERSION, dependency=None)
+
+
+@pytest.mark.parametrize("license_url", [None, "https://example.test/license"])
+def test_rejects_missing_or_wrong_file_license_compatibility_url(
+    tmp_path: Path, license_url: str | None,
+) -> None:
+    candidate = _build(tmp_path)
+    manifest = validate_candidate(REPO_ROOT, candidate)
+    package = candidate / manifest["packages"][0]["filename"]
+    with zipfile.ZipFile(package) as archive:
+        payloads = {name: archive.read(name) for name in archive.namelist()}
+    root = ElementTree.fromstring(payloads["Termin.Graphics.nuspec"])
+    namespace = "{http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd}"
+    metadata = root.find(namespace + "metadata")
+    assert metadata is not None
+    element = metadata.find(namespace + "licenseUrl")
+    assert element is not None
+    if license_url is None:
+        metadata.remove(element)
+    else:
+        element.text = license_url
+    payloads["Termin.Graphics.nuspec"] = ElementTree.tostring(root)
+    with zipfile.ZipFile(package, "w") as archive:
+        for name, payload in payloads.items():
+            archive.writestr(name, payload)
+    with pytest.raises(GraphicsNugetProductError, match="compatibility licenseUrl"):
+        _validate_nuspec(
+            package, package_id="Termin.Graphics", version=VERSION, dependency=None,
+        )
 
 
 @pytest.mark.skipif(shutil.which("dotnet") is None, reason="dotnet is not installed")

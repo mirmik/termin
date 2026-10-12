@@ -401,6 +401,7 @@ def _nuspec(
         f"    <authors>{escape(PACKAGE_AUTHORS)}</authors>\n"
         "    <requireLicenseAcceptance>false</requireLicenseAcceptance>\n"
         f"    <license type=\"file\">{escape(license_path)}</license>\n"
+        "    <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>\n"
         "    <readme>README.md</readme>\n"
         f"    <projectUrl>{escape(PACKAGE_PROJECT_URL)}</projectUrl>\n"
         f"    <description>{escape(definition.description)}</description>\n"
@@ -604,6 +605,10 @@ def _validate_nuspec(
     license_element = metadata.find("n:license", namespace)
     if license_element is None or license_element.get("type") != "file":
         raise GraphicsNugetProductError(f"{package.name} has no file license")
+    if metadata_text("licenseUrl") != "https://aka.ms/deprecateLicenseUrl":
+        raise GraphicsNugetProductError(
+            f"{package.name} file license requires the NuGet compatibility licenseUrl"
+        )
     if license_element.text not in archive_names or metadata_text("readme") not in archive_names:
         raise GraphicsNugetProductError(
             f"{package.name} public metadata refers to missing package files"
