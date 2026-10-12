@@ -1,6 +1,12 @@
 # Termin Graphics NuGet product contract
 
-Status: accepted for the initial candidate implementation on 2026-09-04.
+Status: version 0.5.2 published to NuGet.org on 2026-10-12; initial contract
+accepted on 2026-09-04.
+
+Published packages: [Termin.Graphics 0.5.2](https://www.nuget.org/packages/Termin.Graphics/0.5.2)
+and [Termin.Graphics.Wpf 0.5.2](https://www.nuget.org/packages/Termin.Graphics.Wpf/0.5.2).
+Both remote archives matched the gated candidate, and a fresh external consumer
+restored only from NuGet.org passed the retained-chart WPF/D3D11 smoke.
 
 ## Decision
 
@@ -112,6 +118,11 @@ Uploads are non-transactional. If the base package succeeds and the WPF upload
 does not, retain the candidate and evidence unchanged and rerun the same
 command. The publisher proves the existing base content and continues with WPF.
 Any remote member mismatch stops publication for manual reconciliation.
+
+The publisher polls for package availability for up to 60 attempts with a
+15-second interval. NuGet.org indexing can exceed five minutes even after a
+successful push. If visibility still times out, retain the candidate and evidence
+unchanged and rerun after indexing completes; do not rebuild a replacement.
 
 After both pushes are visible, restore both packages from NuGet.org in a clean
 external consumer and repeat the WPF/D3D11 smoke before closing the release.

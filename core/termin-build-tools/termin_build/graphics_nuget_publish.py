@@ -32,6 +32,7 @@ from .versioning import public_version
 
 
 DEFAULT_SERVICE_INDEX = "https://api.nuget.org/v3/index.json"
+DEFAULT_VISIBILITY_ATTEMPTS = 60
 REPOSITORY_SIGNATURE_PATH = ".signature.p7s"
 _REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -558,7 +559,7 @@ def publish_release(
     client: NugetClient,
     upload: bool,
     api_key: str | None = None,
-    visibility_attempts: int = 20,
+    visibility_attempts: int = DEFAULT_VISIBILITY_ATTEMPTS,
     visibility_delay: float = 15.0,
     sleep: Callable[[float], None] = time.sleep,
 ) -> None:
@@ -648,7 +649,7 @@ def main() -> int:
         "--confirm-version",
         help="must exactly match the canonical version when --upload is used",
     )
-    parser.add_argument("--visibility-attempts", type=int, default=20)
+    parser.add_argument("--visibility-attempts", type=int, default=DEFAULT_VISIBILITY_ATTEMPTS)
     parser.add_argument("--visibility-delay", type=float, default=15.0)
     args = parser.parse_args()
     repo_root = args.repo_root.resolve()
