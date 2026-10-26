@@ -25,6 +25,12 @@ tasks:
     cmds:
       - task: build:graphics
         vars: {CLI_ARGS: '--no-sdl --no-vulkan --no-opengl'}
+      - task: package:graphics:nuget:installed
+
+  package:graphics:nuget:installed:
+    desc: Package an already built Windows D3D11 Graphics SDK
+    platforms: [windows]
+    cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build/graphics-nuget.ps1
 
   test:graphics:nuget:
@@ -32,6 +38,13 @@ tasks:
     platforms: [windows]
     cmds:
       - task: package:graphics:nuget
+      - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/graphics-nuget.ps1
+
+  test:graphics:nuget:installed:
+    desc: Package and verify an already built Graphics SDK through PackageReference
+    platforms: [windows]
+    cmds:
+      - task: package:graphics:nuget:installed
       - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test/graphics-nuget.ps1
 
   publish:graphics:nuget:

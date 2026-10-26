@@ -13,6 +13,33 @@ $bindingsProject = Join-Path $RepoRoot "termin-csharp\Termin.PlotBindings.Test\T
 & dotnet run --project $bindingsProject -c Release -p:TerminCsharpProfile=plot-d3d11
 if ($LASTEXITCODE -ne 0) { throw "C# plot bindings tests failed with exit code $LASTEXITCODE" }
 
+$graphBindings = Join-Path $RepoRoot "termin-csharp\Termin.NodeGraphBindings.Test\Termin.NodeGraphBindings.Test.csproj"
+& dotnet run --project $graphBindings -c Release "-p:TerminSdkRoot=$SdkRoot"
+if ($LASTEXITCODE -ne 0) { throw "C# native nodegraph bindings tests failed with exit code $LASTEXITCODE" }
+
+$graphSample = Join-Path $SdkRoot "csharp\examples\NativeNodeGraphWpf\NativeNodeGraphWpf.csproj"
+$graphBuildRoot = Join-Path $RepoRoot "build\nodegraph-wpf-installed"
+$graphOutput = Join-Path $graphBuildRoot "bin\"
+$graphIntermediate = Join-Path $graphBuildRoot "obj\"
+& dotnet build $graphSample -c Release "-p:TerminSdkRoot=$SdkRoot" "-p:BaseOutputPath=$graphOutput" "-p:BaseIntermediateOutputPath=$graphIntermediate"
+if ($LASTEXITCODE -ne 0) { throw "Installed native nodegraph WPF sample build failed with exit code $LASTEXITCODE" }
+$graphLogRoot = Join-Path $RepoRoot "build\logs"
+New-Item -ItemType Directory -Force -Path $graphLogRoot | Out-Null
+$env:TERMIN_NODEGRAPH_SMOKE_CAPTURE = Join-Path $graphLogRoot "nodegraph-wpf-smoke.png"
+$graphExecutable = Join-Path $graphOutput "Release\net8.0-windows\NativeNodeGraphWpf.exe"
+$graphProcess = Start-Process -FilePath $graphExecutable -ArgumentList '--smoke' -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput (Join-Path $graphLogRoot "nodegraph-wpf-smoke.stdout.log") `
+    -RedirectStandardError (Join-Path $graphLogRoot "nodegraph-wpf-smoke.stderr.log")
+$graphProcessHandle = $graphProcess.Handle
+if (-not $graphProcess.WaitForExit(60000)) {
+    Stop-Process -Id $graphProcess.Id -Force
+    throw "Native nodegraph WPF smoke timed out. See build/logs/nodegraph-wpf-smoke.*.log"
+}
+$graphProcess.WaitForExit()
+if ($graphProcess.ExitCode -ne 0) {
+    throw "Native nodegraph WPF smoke failed with exit code $($graphProcess.ExitCode). See build/logs/nodegraph-wpf-smoke.*.log"
+}
+
 $exampleRoot = Join-Path $RepoRoot "termin-csharp\examples\RetainedChart3DWpfExample"
 & dotnet build (Join-Path $exampleRoot "RetainedChart3DWpfExample.csproj") -c Release -p:TerminCsharpProfile=plot-d3d11
 if ($LASTEXITCODE -ne 0) { throw "Retained Chart3D WPF example build failed with exit code $LASTEXITCODE" }

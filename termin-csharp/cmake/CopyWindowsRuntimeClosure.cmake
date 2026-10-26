@@ -8,8 +8,17 @@ foreach(_required IN ITEMS ROOT_BINARY RUNTIME_DIR SDK_BIN_DIR)
     endif()
 endforeach()
 
+# A non-list separator survives COMMAND_EXPAND_LISTS in the build rule.
+string(REPLACE "|" ";" _additional_root_binaries "${ADDITIONAL_ROOT_BINARIES}")
+set(_runtime_root_binaries)
+foreach(_root IN LISTS _additional_root_binaries)
+    cmake_path(GET _root FILENAME _root_name)
+    # Scan the copied roots beside termin.dll. Mixing SDK and destination roots
+    # makes CMake report two paths for otherwise identical dependency DLLs.
+    list(APPEND _runtime_root_binaries "${RUNTIME_DIR}/${_root_name}")
+endforeach()
 file(GET_RUNTIME_DEPENDENCIES
-    LIBRARIES "${ROOT_BINARY}"
+    LIBRARIES "${ROOT_BINARY}" ${_runtime_root_binaries}
     DIRECTORIES "${RUNTIME_DIR}" "${SDK_BIN_DIR}"
     RESOLVED_DEPENDENCIES_VAR _resolved_dependencies
     UNRESOLVED_DEPENDENCIES_VAR _unresolved_dependencies

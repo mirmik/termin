@@ -36,6 +36,10 @@ PLOT_D3D11_RUNTIME_LIBRARIES = (
     "termin_mesh.dll",
     "termin_render_core.dll",
     "termin_visual_scene.dll",
+    "termin_nodegraph_core.dll",
+    "termin_nodegraph_ui.dll",
+    "termin_gui_native.dll",
+    "termin_gui_native_document_renderer.dll",
 )
 
 

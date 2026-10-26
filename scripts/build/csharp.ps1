@@ -105,7 +105,10 @@ function Copy-PlotD3D11ShaderPack {
         version = $catalog.version
         shaders = $filteredShaders
     }
-    $outCatalog | ConvertTo-Json -Depth 32 | Set-Content -Encoding UTF8 (Join-Path $destBuiltin "engine-shader-catalog.json")
+    # Windows PowerShell 5's UTF8 writer emits a BOM, which the native catalog
+    # parser rejects. Keep the installed/relocated runtime catalog plain UTF-8.
+    $catalogJson = $outCatalog | ConvertTo-Json -Depth 32
+    [IO.File]::WriteAllText((Join-Path $destBuiltin "engine-shader-catalog.json"), $catalogJson, [Text.UTF8Encoding]::new($false))
 
     $sourceD3D11 = Join-Path (Join-Path $SourceRoot "shaders") "d3d11"
     foreach ($shaderId in $requiredShaderIds) {
@@ -123,6 +126,13 @@ function Copy-PlotD3D11ShaderPack {
             Copy-Item -Force $sourceFile $destD3D11
         }
     }
+    $fontSource = Join-Path $SourceRoot "fonts\DroidSans.ttf"
+    if (-not (Test-Path -LiteralPath $fontSource -PathType Leaf)) {
+        throw "Native UI font missing: $fontSource"
+    }
+    $fontDestination = Join-Path $DestinationRoot "fonts"
+    New-Item -ItemType Directory -Force -Path $fontDestination | Out-Null
+    Copy-Item -LiteralPath $fontSource -Destination $fontDestination -Force
 }
 
 if (-not (Get-Command swig -ErrorAction SilentlyContinue)) {
@@ -230,6 +240,16 @@ function Copy-ManagedAssembly {
 Copy-ManagedAssembly -ProjectName "Termin.Native" -TargetFramework "netstandard2.1" -LegacyFlatCopy
 Copy-ManagedAssembly -ProjectName "Termin.Wpf" -TargetFramework "netcoreapp3.1" -LegacyFlatCopy
 Copy-ManagedAssembly -ProjectName "Termin.Wpf" -TargetFramework "net8.0-windows"
+
+# Ship the binding sample and its neutral fixture as a relocatable SDK consumer.
+$sampleDestination = Join-Path $CsharpSdk "examples\NativeNodeGraphWpf"
+New-Item -ItemType Directory -Force -Path $sampleDestination | Out-Null
+foreach ($sampleFile in @("NativeNodeGraphWpf.csproj", "Program.cs", "README.md")) {
+    Copy-Item -LiteralPath (Join-Path $ScriptDir "termin-csharp\examples\NativeNodeGraphWpf\$sampleFile") -Destination $sampleDestination -Force
+}
+$fixtureDestination = Join-Path $CsharpSdk "fixtures"
+New-Item -ItemType Directory -Force -Path $fixtureDestination | Out-Null
+Copy-Item -LiteralPath (Join-Path $ScriptDir "termin-csharp\fixtures\pws.json") -Destination $fixtureDestination -Force
 
 # Shader sources and backend artifacts used by tgfx2 renderers and tcplot.
 $requiredShareFiles = @(

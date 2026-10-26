@@ -87,6 +87,10 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     termin_csharp_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
     termin_csharp_require_package(termin_visual_scene termin_visual_scene::termin_visual_scene)
     termin_csharp_require_package(tcplot tcplot::tcplot)
+    termin_csharp_require_package(termin_gui_native termin_gui_native::termin_gui_native termin_gui_native::document_renderer)
+    if(NOT TARGET termin_nodegraph::ui)
+        find_package(termin_nodegraph CONFIG REQUIRED COMPONENTS ui)
+    endif()
 
     if(TERMIN_CSHARP_PROFILE STREQUAL "full")
         termin_csharp_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
@@ -151,7 +155,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         SWIG_USE_TARGET_INCLUDE_DIRECTORIES ON
         SWIG_FLAGS "${_termin_csharp_swig_flags}"
         SWIG_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_annotations.i;${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_retained.i"
+            "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_annotations.i;${CMAKE_CURRENT_SOURCE_DIR}/termin_plot_retained.i;${CMAKE_CURRENT_SOURCE_DIR}/termin_document_host.i"
     )
 
     swig_add_library(termin_csharp_native
@@ -261,6 +265,14 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             tcplot::tcplot
         )
     endif()
+    # P/Invoke-only entry points do not appear in termin.dll's import table.
+    # Keep these roots explicit so their full transitive closure is shipped.
+    list(APPEND _termin_csharp_runtime_targets
+        termin_nodegraph::core termin_nodegraph::ui
+        termin_gui_native::termin_gui_native termin_gui_native::document_renderer)
+    target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
+        termin_nodegraph::core termin_nodegraph::ui
+        termin_gui_native::termin_gui_native termin_gui_native::document_renderer)
     foreach(_dep IN LISTS _termin_csharp_runtime_targets)
         if(WIN32)
             add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
@@ -288,6 +300,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
                 "${TERMIN_CSHARP_RUNTIME_DIR}/"
             COMMAND ${CMAKE_COMMAND}
                 "-DROOT_BINARY=$<TARGET_FILE:${SWIG_MODULE_termin_csharp_native_REAL_NAME}>"
+                "-DADDITIONAL_ROOT_BINARIES=$<TARGET_FILE:termin_nodegraph::core>|$<TARGET_FILE:termin_nodegraph::ui>|$<TARGET_FILE:termin_gui_native::document_renderer>"
                 "-DRUNTIME_DIR=${TERMIN_CSHARP_RUNTIME_DIR}"
                 "-DSDK_BIN_DIR=$<TARGET_FILE_DIR:tgfx::termin_graphics>"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CopyWindowsRuntimeClosure.cmake"

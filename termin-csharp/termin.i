@@ -1495,3 +1495,5 @@ public:
         $self->set_graphics_host(host.graphics());
     }
 }
+
+%include "termin_document_host.i"

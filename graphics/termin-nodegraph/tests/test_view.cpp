@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cmath>
 #include <memory>
+#include <limits>
 #include <string>
 
 #include <termin/gui_native/checkbox.hpp>
@@ -74,9 +75,91 @@ namespace {
         }
     };
 
+    void test_exact_numeric_parameters() {
+        const auto document_handle = tc_ui_document_create();
+        ui::TcDocument document(document_handle);
+        ng::Graph graph;
+        auto node = editable_node("numeric");
+        const double original = 1.2345678901234567;
+        node.params["gain"] = original;
+        node.params["large"] = std::numeric_limits<std::int64_t>::max();
+        node.params["small"] = std::numeric_limits<std::int64_t>::min();
+        for (const char* name : {"large", "small"}) {
+            node.data["param_specs"][name]["kind"] = "int";
+            node.data["param_specs"][name]["min"] = -std::ldexp(1.0, 63);
+            node.data["param_specs"][name]["max"] = std::ldexp(1.0, 63);
+            node.data["param_specs"][name]["step"] = 1.0;
+        }
+        const auto created = graph.create_node(node);
+        assert(created);
+        ng::NodeGraphView view(document, &graph);
+        assert(document.add_root(*view.scene_view()));
+        document.layout_roots({0, 0, 900, 650});
+        auto* gain = widget_body<ui::SpinBox>(document, view.parameter_widget(created.value, "gain"));
+        auto* large = widget_body<ui::SpinBox>(document, view.parameter_widget(created.value, "large"));
+        auto* small = widget_body<ui::SpinBox>(document, view.parameter_widget(created.value, "small"));
+        assert(gain && large && small);
+        assert(gain->value() == original);
+        assert(large->integer_mode() && large->integer_value() == std::numeric_limits<std::int64_t>::max());
+        assert(small->integer_mode() && small->integer_value() == std::numeric_limits<std::int64_t>::min());
+
+        // Focusing/submitting with a three-decimal display does not round data.
+        tc_ui_pointer_event pointer{TC_UI_POINTER_DOWN, gain->bounds().x + 4, gain->bounds().y + 4,
+                                    0, 1, 0, 0, 0, TC_UI_POINTER_CANCEL_EXPLICIT};
+        assert(gain->pointer_event(document_handle, &pointer) == TC_UI_EVENT_HANDLED);
+        assert(gain->editing());
+        const auto revision = graph.revision();
+        tc_ui_key_event key{TC_UI_KEY_DOWN, TC_UI_KEY_ENTER, 0, 0, false};
+        assert(gain->key_event(document_handle, &key) == TC_UI_EVENT_HANDLED);
+        assert(graph.revision() == revision && gain->value() == original);
+        const double next = std::nextafter(original, 2.0);
+        gain->set_value(next);
+        assert(graph.node(created.value)->params.view().get("gain").as_numer() == next);
+
+        // Full-width integer stepping saturates instead of overflowing and exact
+        // changes above 2^53 survive both widget storage and graph callbacks.
+        key.key = TC_UI_KEY_UP_ARROW;
+        assert(large->key_event(document_handle, &key) == TC_UI_EVENT_HANDLED);
+        assert(large->integer_value() == std::numeric_limits<std::int64_t>::max());
+        key.key = TC_UI_KEY_DOWN_ARROW;
+        assert(small->key_event(document_handle, &key) == TC_UI_EVENT_HANDLED);
+        assert(small->integer_value() == std::numeric_limits<std::int64_t>::min());
+        large->set_integer_value(9007199254740993LL);
+        assert(graph.node(created.value)->params.view().get("large").as_integer() == 9007199254740993LL);
+        key.key = TC_UI_KEY_UP_ARROW;
+        assert(large->key_event(document_handle, &key) == TC_UI_EVENT_HANDLED);
+        assert(graph.node(created.value)->params.view().get("large").as_integer() == 9007199254740994LL);
+
+        pointer.x = large->bounds().x + 4;
+        pointer.y = large->bounds().y + 4;
+        assert(large->pointer_event(document_handle, &pointer) == TC_UI_EVENT_HANDLED);
+        key.key = TC_UI_KEY_A;
+        key.modifiers = TC_UI_MOD_CTRL;
+        assert(large->key_event(document_handle, &key) == TC_UI_EVENT_HANDLED);
+        tc_ui_text_event text{"9223372036854775807"};
+        assert(large->text_event(document_handle, &text) == TC_UI_EVENT_HANDLED);
+        key.key = TC_UI_KEY_ENTER;
+        key.modifiers = 0;
+        assert(large->key_event(document_handle, &key) == TC_UI_EVENT_HANDLED);
+        assert(graph.node(created.value)->params.view().get("large").as_integer() == std::numeric_limits<std::int64_t>::max());
+        assert(large->pointer_event(document_handle, &pointer) == TC_UI_EVENT_HANDLED);
+        key.key = TC_UI_KEY_A;
+        key.modifiers = TC_UI_MOD_CTRL;
+        large->key_event(document_handle, &key);
+        text.text = "9223372036854775808";
+        large->text_event(document_handle, &text);
+        key.key = TC_UI_KEY_ENTER;
+        key.modifiers = 0;
+        large->key_event(document_handle, &key);
+        assert(graph.node(created.value)->params.view().get("large").as_integer() == std::numeric_limits<std::int64_t>::max());
+        view.close();
+        tc_ui_document_destroy(document_handle);
+    }
+
 } // namespace
 
 int main() {
+    test_exact_numeric_parameters();
     const tc_ui_document_handle document_handle = tc_ui_document_create();
     assert(!tc_ui_document_handle_is_invalid(document_handle));
     ui::TcDocument document{document_handle};

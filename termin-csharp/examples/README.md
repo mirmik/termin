@@ -4,6 +4,9 @@ This directory contains C# sample applications for the `Termin.Native` SDK.
 
 Projects:
 
+- `NativeNodeGraphWpf` - complete native nodegraph document, safe managed graph
+  values/events and native parameter editors through a reusable WPF document host.
+  Includes a neutral PWS-shaped 24-node/31-edge fixture and installed SDK mode.
 - `PlotDemoApp` - WPF/D3D11 D3DImage hosts for 2D, multi-panel 2D, and 3D plot demos.
 - `RetainedChartComposition` - platform-neutral construction and customization
   of native `RetainedChart2D` through its thin C# `Chart2D` facade. It replaces

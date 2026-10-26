@@ -76,6 +76,9 @@ int main(void) {
     assert(tc_nodegraph_replace(clone, &graph_value) == TC_NODEGRAPH_OK);
     assert(tc_nodegraph_node_count(clone) == 2);
     assert(tc_nodegraph_edge_count(clone) == 1);
+    const uint64_t before_repeat_replace = tc_nodegraph_revision(clone);
+    assert(tc_nodegraph_replace(clone, &graph_value) == TC_NODEGRAPH_OK);
+    assert(tc_nodegraph_revision(clone) == before_repeat_replace + 1);
 
     size_t json_size = tc_nodegraph_copy_json(graph, 2, NULL, 0);
     assert(json_size > 1);

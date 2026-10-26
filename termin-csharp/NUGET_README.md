@@ -1,7 +1,7 @@
 # Termin Graphics for .NET
 
 Termin Graphics provides the focused C# bindings and native runtime used by
-Termin's retained 2D/3D charts on Windows.
+Termin's retained 2D/3D charts, native nodegraph and UI documents on Windows.
 
 The initial public product supports .NET 8 applications on Windows x64 and the
 D3D11 backend. It is built from Termin's `plot-d3d11` profile and does not
@@ -28,6 +28,11 @@ same version of the base runtime transitively:
 The package supplies the managed assemblies, the `win-x64` native dependency
 closure, and the precompiled D3D11 shader resources. Applications do not need a
 Termin SDK checkout at runtime.
+
+`NativeNodeGraph` wraps the native authoring graph. `NativeNodeGraphView` embeds
+its typed parameter widgets in `NativeUiDocument`; WPF uses the reusable
+`NativeDocumentHost` with the same D3D11 `GpuHost` as charts. Graph execution and
+application domain rules remain the application's responsibility.
 
 The managed API currently keeps the established `Termin.Native` namespace and
 assembly name. Package naming describes the public product and does not imply

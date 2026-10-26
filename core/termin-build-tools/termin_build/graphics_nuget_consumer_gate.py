@@ -26,6 +26,12 @@ REPORT_NAME = "termin-graphics-nuget-consumer-report.json"
 REPORT_KIND = "termin-graphics-nuget-consumer-gate"
 REPORT_SCHEMA = 1
 SMOKE_MARKER = "TERMIN_GRAPHICS_NUGET_SMOKE="
+NATIVE_DOCUMENT_MODULES = frozenset({
+    "termin_nodegraph_core.dll",
+    "termin_nodegraph_ui.dll",
+    "termin_gui_native.dll",
+    "termin_gui_native_document_renderer.dll",
+})
 
 
 class GraphicsNugetConsumerGateError(RuntimeError):
@@ -61,11 +67,13 @@ def consumer_project_files(lock: GraphicsNugetLock, version: str) -> dict[str, s
 </Project>
 """
     program = f'''using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using Termin.Native;
 using Termin.Wpf;
@@ -90,9 +98,7 @@ internal static class Program
             output, "share", "termin", "shaders", "d3d11",
             "termin-engine-text3d.vs.cso"));
 
-        string font = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.Fonts),
-            "segoeui.ttf");
+        string font = Path.Combine(output, "share", "termin", "fonts", "DroidSans.ttf");
         RequireFile(font);
 
         int exitCode = 1;
@@ -100,12 +106,16 @@ internal static class Program
         GpuHost? gpuHost = null;
         Chart2D? chart = null;
         RetainedScene2DHost? sceneHost = null;
+        NativeNodeGraph? graph = null;
+        NativeUiDocument? document = null;
+        NativeNodeGraphView? graphView = null;
+        NativeDocumentHost? documentHost = null;
         var app = new Application {{ ShutdownMode = ShutdownMode.OnExplicitShutdown }};
         var window = new Window
         {{
             Title = "Termin Graphics NuGet consumer smoke",
-            Width = 640,
-            Height = 400,
+            Width = 960,
+            Height = 640,
             ShowInTaskbar = false,
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
         }};
@@ -128,6 +138,117 @@ internal static class Program
                 throw new InvalidOperationException(
                     "Retained chart series did not reach the native scene.");
 
+            var nativeGraph = graph = new NativeNodeGraph();
+            const double exactNumber = 0.12345678901234568;
+            const long exactInteger = 1152921504606846977;
+            NativeNodeHandle node = nativeGraph.CreateNode(new NativeNodeDescriptor
+            {{
+                Id = "package-node", Kind = "binding-smoke", Title = "Native package graph",
+                X = 20, Y = 20, Width = 250, Height = 150,
+                Parameters = new Dictionary<string, NativeGraphValue>
+                {{
+                    ["gain"] = NativeGraphValue.Number(exactNumber),
+                    ["label"] = NativeGraphValue.Text("Пример"),
+                }},
+                Data = new Dictionary<string, NativeGraphValue>
+                {{
+                    ["exact_integer"] = NativeGraphValue.Integer(exactInteger),
+                }},
+            }});
+            var parameters = nativeGraph.GetNodeSnapshot(node).AsDictionary()["params"].AsDictionary();
+            NativeGraphValue integer = nativeGraph.GetNodeSnapshot(node).AsDictionary()["data"].AsDictionary()["exact_integer"];
+            if (parameters["gain"].Kind != NativeGraphValueKind.Number ||
+                parameters["gain"].AsNumber() != exactNumber ||
+                integer.Kind != NativeGraphValueKind.Integer || integer.AsInteger() != exactInteger)
+                throw new InvalidOperationException("Packaged native graph binding lost numeric precision.");
+            var nativeDocument = document = new NativeUiDocument("NuGet nodegraph consumer");
+            var nativeView = graphView = new NativeNodeGraphView(nativeDocument, nativeGraph, context =>
+                context.ParameterId == "label"
+                    ? new NativeNodeGraphParameterEditor {{ Kind = NativeNodeGraphParameterEditorKind.Text, Label = "Label / подпись" }}
+                    : new NativeNodeGraphParameterEditor {{ Kind = NativeNodeGraphParameterEditorKind.FloatingPoint, Minimum = 0, Maximum = 1, Step = 0.1 }});
+            nativeDocument.AddRoot(nativeView.RootWidget);
+            var nativeHost = documentHost = new NativeDocumentHost {{ ContinuousRendering = false }};
+            nativeView.RequestRender += (_, _) => nativeHost.RequestRender();
+            NativeNodeGraphParameterChangedEventArgs? parameterEvent = null;
+            nativeView.ParameterChanged += (_, e) => parameterEvent = e;
+            bool chartRendered = false;
+            bool documentRendered = false;
+            bool completed = false;
+            double nativeTotalMilliseconds = 0;
+            double presentMilliseconds = 0;
+
+            void CompleteWhenReady()
+            {{
+                if (!chartRendered || !documentRendered || completed || failure is not null)
+                    return;
+                completed = true;
+                string ModulePath(string name) => Process.GetCurrentProcess().Modules
+                    .Cast<ProcessModule>()
+                    .Single(module => string.Equals(module.ModuleName, name, StringComparison.OrdinalIgnoreCase))
+                    .FileName;
+                string[] documentModules = {{ "termin_nodegraph_core.dll", "termin_nodegraph_ui.dll", "termin_gui_native.dll", "termin_gui_native_document_renderer.dll" }};
+                var moduleRoots = documentModules.ToDictionary(name => name, name => Path.GetDirectoryName(ModulePath(name)));
+                Console.WriteLine(Marker + JsonSerializer.Serialize(new
+                {{
+                    status = "passed",
+                    backend = "D3D11",
+                    wpf = true,
+                    retainedSceneId = chart.Scene.Id,
+                    retainedItemCount = checked((ulong)chart.Scene.Count),
+                    pointCount = checked((ulong)line.Item.Snapshot.PointCount),
+                    nativeTotalMilliseconds,
+                    presentMilliseconds,
+                    nativeDocumentRendered = documentRendered,
+                    nativeGraphNodeCount = nativeGraph.NodeCount,
+                    nativeParameterCallback = parameterEvent is not null,
+                    exactNativeNumbers = true,
+                    nativeDocumentModuleRoots = moduleRoots,
+                    appContextBaseDirectory = output,
+                    managedAssemblyRoot = Path.GetDirectoryName(typeof(GpuHost).Assembly.Location),
+                    wpfAssemblyRoot = Path.GetDirectoryName(typeof(RetainedScene2DHost).Assembly.Location),
+                    nativeModuleRoot = Path.GetDirectoryName(ModulePath("termin_graphics2.dll")),
+                    resourceRoot = Path.Combine(output, "share", "termin"),
+                }}));
+                exitCode = 0;
+                app.Dispatcher.BeginInvoke(app.Shutdown);
+            }}
+
+            nativeHost.RenderFailed += (_, e) =>
+            {{
+                failure = "WPF native document render failed: " + e.Error;
+                app.Dispatcher.BeginInvoke(app.Shutdown);
+            }};
+            nativeHost.FrameRendered += (_, _) =>
+            {{
+                if (documentRendered)
+                    return;
+                try
+                {{
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    NativeDocumentRenderer renderer = nativeHost.Renderer
+                        ?? throw new InvalidOperationException("Native document renderer is detached.");
+                    renderer.SetFocus(true);
+                    nativeDocument.Focus(nativeView.GetParameterWidget(node, "label"));
+                    renderer.DispatchKey(new NativeUiKeyEvent {{ Type = NativeUiKeyEventType.Down, Key = 65, Modifiers = NativeUiModifiers.Control }});
+                    renderer.DispatchText("пакет UTF-8");
+                    renderer.DispatchKey(new NativeUiKeyEvent {{ Type = NativeUiKeyEventType.Down, Key = 13 }});
+                    nativeView.ThrowIfCallbackFailed();
+                    if (parameterEvent is null || parameterEvent.NodeId != "package-node" ||
+                        parameterEvent.ParameterId != "label" || parameterEvent.Value.AsText() != "пакет UTF-8")
+                        throw new InvalidOperationException("Packaged native document did not emit its managed UTF-8 parameter callback after GC.");
+                    documentRendered = true;
+                    CompleteWhenReady();
+                }}
+                catch (Exception error)
+                {{
+                    failure = "Native document consumer smoke failed: " + error;
+                    app.Dispatcher.BeginInvoke(app.Shutdown);
+                }}
+            }};
+            nativeHost.Attach(gpuHost, nativeDocument, font);
+
             sceneHost = new RetainedScene2DHost {{ ContinuousRendering = false }};
             sceneHost.FramebufferChanged += (_, e) =>
                 chart.Resize(e.Width, e.Height, e.PixelScale);
@@ -138,39 +259,22 @@ internal static class Program
             }};
             sceneHost.FrameRendered += (_, e) =>
             {{
-                exitCode = 0;
-                string nativeModule = Process.GetCurrentProcess().Modules
-                    .Cast<ProcessModule>()
-                    .Single(module => string.Equals(
-                        module.ModuleName,
-                        "termin_graphics2.dll",
-                        StringComparison.OrdinalIgnoreCase))
-                    .FileName;
-                Console.WriteLine(Marker + JsonSerializer.Serialize(new
-                {{
-                    status = "passed",
-                    backend = "D3D11",
-                    wpf = true,
-                    retainedSceneId = chart.Scene.Id,
-                    retainedItemCount = checked((ulong)chart.Scene.Count),
-                    pointCount = checked((ulong)line.Item.Snapshot.PointCount),
-                    nativeTotalMilliseconds = e.Native.TotalMilliseconds,
-                    presentMilliseconds = e.PresentMilliseconds,
-                    appContextBaseDirectory = output,
-                    managedAssemblyRoot = Path.GetDirectoryName(
-                        typeof(GpuHost).Assembly.Location),
-                    wpfAssemblyRoot = Path.GetDirectoryName(
-                        typeof(RetainedScene2DHost).Assembly.Location),
-                    nativeModuleRoot = Path.GetDirectoryName(nativeModule),
-                    resourceRoot = Path.Combine(output, "share", "termin"),
-                }}));
-                app.Dispatcher.BeginInvoke(app.Shutdown);
+                nativeTotalMilliseconds = e.Native.TotalMilliseconds;
+                presentMilliseconds = e.PresentMilliseconds;
+                chartRendered = true;
+                CompleteWhenReady();
             }};
             sceneHost.Attach(gpuHost, chart.Scene);
-            window.Content = sceneHost;
+            var layout = new Grid();
+            layout.ColumnDefinitions.Add(new ColumnDefinition());
+            layout.ColumnDefinitions.Add(new ColumnDefinition());
+            layout.Children.Add(sceneHost);
+            Grid.SetColumn(nativeHost, 1);
+            layout.Children.Add(nativeHost);
+            window.Content = layout;
             timeout.Tick += (_, _) =>
             {{
-                failure = "Timed out waiting for RetainedScene2DHost.FrameRendered.";
+                failure = "Timed out waiting for RetainedScene2DHost.FrameRendered and NativeDocumentHost.FrameRendered.";
                 app.Shutdown();
             }};
             timeout.Start();
@@ -186,6 +290,10 @@ internal static class Program
             timeout.Stop();
             window.Close();
             sceneHost?.Dispose();
+            documentHost?.Dispose();
+            graphView?.Dispose();
+            document?.Dispose();
+            graph?.Dispose();
             chart?.Dispose();
             if (gpuHost is not null)
                 Tgfx2Host.Release();
@@ -558,6 +666,15 @@ def _parse_smoke_evidence(output: str) -> dict[str, object]:
         raise GraphicsNugetConsumerGateError(
             f"consumer smoke evidence does not report success: {evidence!r}"
         )
+    if (
+        evidence.get("nativeDocumentRendered") is not True
+        or evidence.get("nativeParameterCallback") is not True
+        or evidence.get("exactNativeNumbers") is not True
+        or evidence.get("nativeGraphNodeCount") != 1
+    ):
+        raise GraphicsNugetConsumerGateError(
+            "consumer smoke evidence is missing native document rendering, graph precision, or parameter callback checks"
+        )
     app_root_value = evidence.get("appContextBaseDirectory")
     if not isinstance(app_root_value, str) or not app_root_value:
         raise GraphicsNugetConsumerGateError(
@@ -592,6 +709,22 @@ def _parse_smoke_evidence(output: str) -> dict[str, object]:
     relative_roots["nativeModuleRoot"] = (
         "." if native_root == app_root else native_root.relative_to(app_root).as_posix()
     )
+    document_roots = evidence.get("nativeDocumentModuleRoots")
+    if not isinstance(document_roots, dict) or set(document_roots) != NATIVE_DOCUMENT_MODULES:
+        raise GraphicsNugetConsumerGateError(
+            "consumer smoke evidence is missing native document module roots"
+        )
+    relative_document_roots: dict[str, str] = {}
+    for name, value in document_roots.items():
+        if not isinstance(value, str) or not _is_within(Path(value), app_root):
+            raise GraphicsNugetConsumerGateError(
+                f"consumer loaded native document module {name} outside AppContext output: {value!r}"
+            )
+        root = Path(value).resolve()
+        relative_document_roots[name] = (
+            "." if root == app_root else root.relative_to(app_root).as_posix()
+        )
+    evidence["nativeDocumentModuleRoots"] = relative_document_roots
     for name in ("appContextBaseDirectory", *exact_roots, "nativeModuleRoot"):
         evidence.pop(name, None)
     evidence["runtime_roots"] = relative_roots

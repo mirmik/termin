@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TerminSdkRoot)' == ''">
+    <ProjectReference Include="..\..\Termin.Native\Termin.Native.csproj" />
+    <ProjectReference Include="..\..\Termin.Wpf\Termin.Wpf.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TerminSdkRoot)' != ''">
+    <Reference Include="Termin.Native" HintPath="$(TerminSdkRoot)\csharp\lib\netstandard2.1\Termin.Native.dll" Private="true" />
+    <Reference Include="Termin.Wpf" HintPath="$(TerminSdkRoot)\csharp\lib\net8.0-windows\Termin.Wpf.dll" Private="true" />
+    <None Include="$(TerminSdkRoot)\csharp\runtimes\win-x64\native\*"
+          TargetPath="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(TerminSdkRoot)\csharp\share\**\*"
+          Link="share\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\fixtures\pws.json" Link="pws.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="ValidateInstalledSdk" BeforeTargets="ResolveReferences" Condition="'$(TerminSdkRoot)' != ''">
+    <Error Condition="!Exists('$(TerminSdkRoot)\csharp\lib\netstandard2.1\Termin.Native.dll')"
+           Text="TerminSdkRoot must point to an installed SDK containing Termin.Native.dll." />
+    <Error Condition="!Exists('$(TerminSdkRoot)\csharp\lib\net8.0-windows\Termin.Wpf.dll')"
+           Text="TerminSdkRoot must point to an installed SDK containing Termin.Wpf.dll." />
+  </Target>
+</Project>

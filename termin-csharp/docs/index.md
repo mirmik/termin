@@ -9,6 +9,7 @@ Related documents:
 - [Build system](../../docs/build-system.md)
 - [2D plot customization](tcplot-customization.md)
 - [3D plot customization](tcplot-3d-customization.md)
+- [Native nodegraph and document hosting](native-nodegraph.md)
 
 ## Main Areas
 

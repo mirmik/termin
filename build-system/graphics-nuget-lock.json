@@ -26,7 +26,11 @@
     "termin_materials.dll",
     "termin_mesh.dll",
     "termin_render_core.dll",
-    "termin_visual_scene.dll"
+    "termin_visual_scene.dll",
+    "termin_nodegraph_core.dll",
+    "termin_nodegraph_ui.dll",
+    "termin_gui_native.dll",
+    "termin_gui_native_document_renderer.dll"
   ],
   "forbidden_native_libraries": [
     "termin_animation.dll",
@@ -45,7 +49,8 @@
   "required_resources": [
     "builtin_shaders/engine-shader-catalog.json",
     "shaders/d3d11/termin-engine-tcplot-3d.vs.cso",
-    "shaders/d3d11/termin-engine-text3d.vs.cso"
+    "shaders/d3d11/termin-engine-text3d.vs.cso",
+    "fonts/DroidSans.ttf"
   ],
   "release_licenses": [
     {"name": "Termin", "path": "LICENSE"},

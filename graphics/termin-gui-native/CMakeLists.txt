@@ -149,6 +149,7 @@ target_link_libraries(termin_gui_native
 
 add_library(termin_gui_native_document_renderer SHARED
     src/document_renderer.cpp
+    src/document_renderer_c_api.cpp
     src/native_document_painter.cpp
     src/dynamic_texture_lease.cpp
 )
@@ -322,6 +323,16 @@ if(TERMIN_BUILD_TESTS)
     termin_gui_native_add_test(termin_gui_native_draw_list_test
         tests/test_ui_draw_list.cpp
     )
+    termin_gui_native_add_test(termin_gui_native_document_renderer_c_api_test
+        tests/test_document_renderer_c_api.cpp
+    )
+    target_link_libraries(termin_gui_native_document_renderer_c_api_test
+        PRIVATE termin_gui_native_document_renderer)
+    target_compile_definitions(termin_gui_native_document_renderer_c_api_test PRIVATE
+        TERMIN_GUI_NATIVE_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf"
+        TERMIN_GUI_NATIVE_TEST_ARTIFACT_ROOT="${CMAKE_INSTALL_PREFIX}/share/termin")
+    set_tests_properties(termin_gui_native_document_renderer_c_api_test PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 30)
     termin_gui_native_add_test(termin_gui_native_widgets_test
         tests/test_widgets.cpp
         tests/test_widgets_layout.cpp

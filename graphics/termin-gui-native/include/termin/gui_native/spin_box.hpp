@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
+#include <limits>
 
 #include <termin/gui_native/native_widget.hpp>
 #include <termin/gui_native/signal.hpp>
@@ -8,10 +10,15 @@
 namespace termin::gui_native {
     class SpinBox : public NativeWidget {
     private:
-        float value_ = 0.0f;
-        float min_value_ = -1000000000.0f;
-        float max_value_ = 1000000000.0f;
-        float step_ = 1.0f;
+        double value_ = 0.0;
+        double min_value_ = -1000000000.0;
+        double max_value_ = 1000000000.0;
+        double step_ = 1.0;
+        bool integer_mode_ = false;
+        int64_t integer_value_ = 0;
+        int64_t integer_min_ = std::numeric_limits<int64_t>::min();
+        int64_t integer_max_ = std::numeric_limits<int64_t>::max();
+        int64_t integer_step_ = 1;
         int decimals_ = 2;
         bool editing_ = false;
         std::string edit_text_;
@@ -19,21 +26,22 @@ namespace termin::gui_native {
         size_t selection_anchor_ = SIZE_MAX;
         bool selecting_ = false;
         float button_width_ = 18.0f;
-        Signal<SpinBox&, float> changed_;
+        Signal<SpinBox&, double> changed_;
+        Signal<SpinBox&, int64_t> integer_changed_;
 
     public:
-        explicit SpinBox(float value = 0.0f);
-        float value() const {
-            return value_;
+        explicit SpinBox(double value = 0.0);
+        double value() const {
+            return integer_mode_ ? static_cast<double>(integer_value_) : value_;
         }
-        float min_value() const {
-            return min_value_;
+        double min_value() const {
+            return integer_mode_ ? static_cast<double>(integer_min_) : min_value_;
         }
-        float max_value() const {
-            return max_value_;
+        double max_value() const {
+            return integer_mode_ ? static_cast<double>(integer_max_) : max_value_;
         }
-        float step() const {
-            return step_;
+        double step() const {
+            return integer_mode_ ? static_cast<double>(integer_step_) : step_;
         }
         int decimals() const {
             return decimals_;
@@ -51,14 +59,22 @@ namespace termin::gui_native {
         size_t selection_start() const;
         size_t selection_end() const;
         std::string selected_text() const;
-        void set_value(float value);
-        void set_range(float min_value, float max_value);
-        void set_step(float step);
+        void set_value(double value);
+        void set_range(double min_value, double max_value);
+        void set_step(double step);
+        // Exact signed 64-bit mode. Integer edits use integer_changed() and never
+        // travel through the floating-point signal or parsing/storage path.
+        bool integer_mode() const { return integer_mode_; }
+        int64_t integer_value() const { return integer_value_; }
+        void set_integer_value(int64_t value);
+        void set_integer_range(int64_t minimum, int64_t maximum);
+        void set_integer_step(int64_t step);
+        Signal<SpinBox&, int64_t>& integer_changed() { return integer_changed_; }
         void set_decimals(int decimals);
-        Signal<SpinBox&, float>& changed() {
+        Signal<SpinBox&, double>& changed() {
             return changed_;
         }
-        const Signal<SpinBox&, float>& changed() const {
+        const Signal<SpinBox&, double>& changed() const {
             return changed_;
         }
         tc_ui_size measure(tc_ui_document_handle document, tc_ui_constraints constraints) override;
@@ -70,6 +86,8 @@ namespace termin::gui_native {
 
     private:
         std::string formatted_value() const;
+        std::string editable_value() const;
+        void step_value(bool increase);
         void begin_edit();
         void commit_edit();
         void cancel_edit();

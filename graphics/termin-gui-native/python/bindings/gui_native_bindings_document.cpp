@@ -671,7 +671,7 @@ void bind_gui_native_rendering_and_document(nb::module_& m) {
             nb::arg("scene") = termin::visual::TcVisualScene3D{})
         .def(
             "create_spin_box",
-            [](termin::gui_native::TcDocument& self, float value) {
+            [](termin::gui_native::TcDocument& self, double value) {
                 return SpinBoxRef{document_make_native<termin::gui_native::SpinBox>(self, value)};
             },
             nb::arg("value") = 0.0f)

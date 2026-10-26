@@ -4,6 +4,7 @@
 #include <cmath>
 #include <exception>
 #include <map>
+#include <limits>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -357,17 +358,44 @@ namespace termin::nodegraph {
                         set_parameter(node_handle, name, tc::trent(next));
                     });
                 widget = &control;
-            } else if (kind == ParameterEditorKind::Integer || kind == ParameterEditorKind::FloatingPoint) {
-                auto& control = builder.make<gui_native::SpinBox>(static_cast<float>(value.as_numer()));
-                control.set_range(static_cast<float>(descriptor.minimum), static_cast<float>(descriptor.maximum));
-                control.set_step(static_cast<float>(descriptor.step));
-                control.set_decimals(kind == ParameterEditorKind::Integer ? 0 : descriptor.decimals);
-                control.changed().connect([this, node_handle = node.handle, name = descriptor.name, kind](
-                                              gui_native::SpinBox&, float number) {
-                    if (kind == ParameterEditorKind::Integer)
-                        set_parameter(node_handle, name, tc::trent(static_cast<std::int64_t>(std::llround(number))));
-                    else
-                        set_parameter(node_handle, name, tc::trent(static_cast<double>(number)));
+            } else if (kind == ParameterEditorKind::Integer) {
+                const double limit = std::ldexp(1.0, 63);
+                if (!value.is_integer() || !std::isfinite(descriptor.minimum) || !std::isfinite(descriptor.maximum) ||
+                    descriptor.minimum >= limit || descriptor.maximum < -limit ||
+                    !std::isfinite(descriptor.step) || descriptor.step < 1 || descriptor.step >= limit ||
+                    std::trunc(descriptor.step) != descriptor.step) {
+                    tc::Log::error("[termin-nodegraph/view] invalid signed 64-bit integer parameter descriptor '%s.%s'",
+                                   node.id.c_str(), descriptor.name.c_str());
+                    return nullptr;
+                }
+                const auto minimum = descriptor.minimum <= -limit ? std::numeric_limits<std::int64_t>::min()
+                                                                  : static_cast<std::int64_t>(std::ceil(descriptor.minimum));
+                const auto maximum = descriptor.maximum >= limit ? std::numeric_limits<std::int64_t>::max()
+                                                                 : static_cast<std::int64_t>(std::floor(descriptor.maximum));
+                if (maximum < minimum) {
+                    tc::Log::error("[termin-nodegraph/view] integer parameter range contains no integers: '%s.%s'",
+                                   node.id.c_str(), descriptor.name.c_str());
+                    return nullptr;
+                }
+                auto& control = builder.make<gui_native::SpinBox>();
+                control.set_integer_range(minimum, maximum);
+                control.set_integer_step(static_cast<std::int64_t>(descriptor.step));
+                control.set_integer_value(value.as_integer());
+                control.set_decimals(0);
+                control.integer_changed().connect([this, node_handle = node.handle, name = descriptor.name](
+                                                       gui_native::SpinBox&, std::int64_t number) {
+                    set_parameter(node_handle, name, tc::trent(number));
+                });
+                widget = &control;
+            } else if (kind == ParameterEditorKind::FloatingPoint) {
+                auto& control = builder.make<gui_native::SpinBox>();
+                control.set_range(descriptor.minimum, descriptor.maximum);
+                control.set_step(descriptor.step);
+                control.set_decimals(descriptor.decimals);
+                control.set_value(value.as_numer());
+                control.changed().connect([this, node_handle = node.handle, name = descriptor.name](
+                                              gui_native::SpinBox&, double number) {
+                    set_parameter(node_handle, name, tc::trent(number));
                 });
                 widget = &control;
             } else {

@@ -480,3 +480,5 @@ public:
 };
 
 } // namespace tcplot
+
+%include "termin_document_host.i"

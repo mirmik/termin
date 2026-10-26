@@ -195,6 +195,19 @@ int main() {
     assert(decoded.edges().size() == 1);
     assert(decoded.groups().size() == 1);
 
+    // A replacement is one edit, regardless of how many temporary operations
+    // parse the document. Replacing the same shape must still invalidate views.
+    const auto old_decoded_node = *decoded.find_node("serialized_source");
+    const std::uint64_t before_same_shape_replace = decoded.revision();
+    tc::trent same_shape = decoded.to_value();
+    assert(decoded.replace_from_value(same_shape.get()));
+    assert(decoded.revision() == before_same_shape_replace + 1);
+    assert(!decoded.node(old_decoded_node));
+    assert(decoded.find_node("serialized_source"));
+    const std::uint64_t before_second_replace = decoded.revision();
+    assert(decoded.replace_from_value(same_shape.get()));
+    assert(decoded.revision() == before_second_replace + 1);
+
     const std::string json = serialized_graph.to_json();
     ng::Graph json_decoded;
     assert(json_decoded.replace_from_json(json));

@@ -225,6 +225,9 @@ namespace termin::nodegraph {
         std::shared_ptr<const ConnectionValidator> connection_validator() const;
 
     private:
+        // Commit a validated document as one edit of this graph. Replacement
+        // invalidates entity handles but must preserve the revision timeline.
+        void commit_replacement(Graph&& replacement);
         struct Impl;
         std::unique_ptr<Impl> impl_;
     };

@@ -110,6 +110,9 @@ namespace termin::nodegraph {
         virtual NodePalette node_palette(const Node& node) const = 0;
         virtual ProjectionColor
         socket_color(const Node& node, const Socket& socket, SocketDirection direction) const = 0;
+        // Labels are presentation only; socket.name remains the stable endpoint ID.
+        // Default: node.data["socket_labels"]["inputs"|"outputs"][socket.name].
+        virtual std::string socket_label(const Node& node, const Socket& socket, SocketDirection direction) const;
         // The default implementation infers editor kinds from node.params and
         // honors the generic node.data["param_specs"] migration schema.
         virtual std::vector<ParameterEditorDescriptor> parameter_editors(const Node& node) const;

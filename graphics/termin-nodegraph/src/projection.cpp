@@ -777,8 +777,9 @@ namespace termin::nodegraph {
                         return false;
                     const bool output = direction == SocketDirection::Output;
                     const float label_x = output ? node.width - 8.0f : 8.0f;
+                    const std::string label = impl_->policy->socket_label(node, socket, direction);
                     const tc_visual_text_desc2d socket_desc{
-                        .text = socket.name.c_str(),
+                        .text = label.c_str(),
                         .font_uri = "ui://default-font",
                         .origin = {label_x, y + 4.0f},
                         .size_px = 11.0f,

@@ -33,6 +33,12 @@ namespace termin::nodegraph {
 
     } // namespace
 
+    std::string PresentationPolicy::socket_label(const Node& node, const Socket& socket, SocketDirection direction) const {
+        return node.data.view().get("socket_labels")
+            .get(direction == SocketDirection::Input ? "inputs" : "outputs")
+            .get(socket.name.c_str()).as_string(socket.name);
+    }
+
     std::vector<ParameterEditorDescriptor> PresentationPolicy::parameter_editors(const Node& node) const {
         std::vector<ParameterEditorDescriptor> result;
         const tc::trent_view specs = node.data.view().get("param_specs");

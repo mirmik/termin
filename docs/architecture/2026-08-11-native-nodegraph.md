@@ -141,6 +141,15 @@ widget can therefore run in the editor and in a C# WPF shell.
 
 This host is reusable infrastructure and is kept separate from nodegraph bindings.
 
+The C# integration is implemented in `NativeNodeGraph`, `NativeGraphValue`,
+`NativeUiDocument`, `NativeNodeGraphView` and `NativeDocumentRenderer`.
+`NativeDocumentHost` adapts WPF input and presentation to the renderer's C ABI
+over a borrowed document and GraphicsHost. It shares the chart D3D11 runtime.
+See [the binding contract and installed SDK sample](../../termin-csharp/docs/native-nodegraph.md).
+Automated Windows checks cover typed snapshots, callbacks/lifecycle, the PWS-shaped
+24/31 fixture and isolated NuGet consumption. Physical per-monitor DPI and OS
+clipboard interaction remain part of the manual Windows acceptance pass.
+
 ## Migration order
 
 1. Add native core storage, handles, mutations and contract tests.

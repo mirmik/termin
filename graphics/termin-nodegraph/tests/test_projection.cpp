@@ -55,6 +55,14 @@ int main() {
     auto sink = graph.create_node(ngt::node("sink", "unregistered.consumer", 410.0f, 40.0f, "spectral-field"));
     auto group = graph.create_group({"group", "Generic group", -180.0f, -90.0f, 120.0f, 80.0f});
     assert(source && sink && group);
+    tc::trent labels = tc::trent::dict();
+    labels["socket_labels"]["outputs"]["out"] = "Выход";
+    assert(graph.set_node_data(source.value, *labels.raw()));
+    const auto labeled = graph.node(source.value);
+    assert(labeled);
+    ng::DefaultPresentationPolicy default_policy;
+    assert(default_policy.socket_label(*labeled, labeled->outputs.front(), ng::SocketDirection::Output) == "Выход");
+    assert(labeled->outputs.front().name == "out");
     auto edge = graph.connect(ngt::connect(source.value, sink.value, "edge"));
     assert(edge);
 

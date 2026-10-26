@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include <termin/gui_native/checkbox.hpp>
@@ -154,8 +155,18 @@ int main() {
     assert(!tc_ui_document_is_alive(document, parameter));
     assert(!tc_widget_handle_is_invalid(tc_nodegraph_view_parameter_widget(view, node, "enabled")));
     assert(!tc_nodegraph_view_sync(view));
+    bool changed = true;
+    assert(tc_nodegraph_view_sync_checked(view, &changed));
+    assert(!changed);
+    assert(tc_nodegraph_move_node(state.graph, node, 22.0f, 30.0f) == TC_NODEGRAPH_OK);
+    assert(tc_nodegraph_view_sync_checked(view, &changed));
+    assert(changed);
 
-    assert(tc_nodegraph_view_copy_last_error(view, nullptr, 0) == 1);
+    assert(!tc_nodegraph_view_set_viewport(view, std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f));
+    assert(!tc_nodegraph_view_set_viewport(view, -1.0f, 0.0f, 0.0f));
+    assert(tc_nodegraph_view_set_viewport(view, 0.5f, 20.0f, 30.0f));
+
+    assert(tc_nodegraph_view_copy_last_error(view, nullptr, 0) > 1);
     tc_nodegraph_view_destroy(view);
     assert(!tc_nodegraph_view_is_valid(view));
     assert(!tc_ui_document_is_alive(document, root));

@@ -231,6 +231,13 @@ namespace termin::nodegraph {
         return impl_->revision;
     }
 
+    void Graph::commit_replacement(Graph&& replacement) {
+        const std::uint64_t previous_revision = impl_->revision;
+        impl_ = std::move(replacement.impl_);
+        impl_->revision = previous_revision;
+        impl_->touch();
+    }
+
     Result<NodeHandle> Graph::create_node(NodeDescriptor descriptor) {
         if (descriptor.id.empty())
             descriptor.id = impl_->next_id("node", impl_->node_counter, impl_->node_ids);

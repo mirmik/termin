@@ -166,6 +166,10 @@ mkdir -p "$CSHARP_SHARE_DEST"
 cp -R "$SDK_SHARE_SOURCE"/. "$CSHARP_SHARE_DEST/"
 echo "  Copied Termin shader resources to $CSHARP_SHARE_DEST"
 
+mkdir -p "$CSHARP_SDK/examples/NativeNodeGraphWpf" "$CSHARP_SDK/fixtures"
+cp "$SCRIPT_DIR/termin-csharp/examples/NativeNodeGraphWpf/"{NativeNodeGraphWpf.csproj,Program.cs,README.md} "$CSHARP_SDK/examples/NativeNodeGraphWpf/"
+cp "$SCRIPT_DIR/termin-csharp/fixtures/pws.json" "$CSHARP_SDK/fixtures/"
+
 echo ""
 echo "========================================"
 echo "  termin-csharp build complete"

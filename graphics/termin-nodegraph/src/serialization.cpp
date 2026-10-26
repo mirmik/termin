@@ -283,7 +283,7 @@ namespace termin::nodegraph {
         result = parse_groups(replacement, groups_value);
         if (!result)
             return result;
-        *this = std::move(replacement);
+        commit_replacement(std::move(replacement));
         return Result<void>::success();
     }
 

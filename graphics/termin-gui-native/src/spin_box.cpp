@@ -1,4 +1,6 @@
 #include "widgets_internal.hpp"
+#include <charconv>
+#include <limits>
 
 namespace termin::gui_native {
     using namespace detail;
@@ -15,7 +17,7 @@ namespace termin::gui_native {
         }
     } // namespace
 
-    SpinBox::SpinBox(float value)
+    SpinBox::SpinBox(double value)
         : NativeWidget("SpinBox") {
         set_style_role(TC_UI_STYLE_TEXT_INPUT);
         set_focusable(true);
@@ -40,17 +42,26 @@ namespace termin::gui_native {
                                : std::string{};
     }
 
-    void SpinBox::set_value(float value) {
+    void SpinBox::set_value(double value) {
         if (!std::isfinite(value)) {
             tc_log_error("[termin-gui-native] SpinBox rejected non-finite value");
             return;
         }
-        const float next = clamp_float(value, min_value_, max_value_);
-        if (std::fabs(next - value_) <= 0.000001f)
+        if (integer_mode_) {
+            const double limit = std::ldexp(1.0, 63);
+            if (value < -limit || value >= limit || std::trunc(value) != value) {
+                tc_log_error("[termin-gui-native] SpinBox rejected non-integral or out-of-range integer value");
+                return;
+            }
+            set_integer_value(static_cast<int64_t>(value));
+            return;
+        }
+        const double next = std::clamp(value, min_value_, max_value_);
+        if (next == value_)
             return;
         value_ = next;
         if (editing_) {
-            edit_text_ = formatted_value();
+            edit_text_ = editable_value();
             caret_ = edit_text_.size();
             selection_anchor_ = SIZE_MAX;
         }
@@ -58,7 +69,11 @@ namespace termin::gui_native {
         changed_.emit(*this, value_);
     }
 
-    void SpinBox::set_range(float min_value, float max_value) {
+    void SpinBox::set_range(double min_value, double max_value) {
+        if (integer_mode_) {
+            tc_log_error("[termin-gui-native] SpinBox integer mode requires set_integer_range");
+            return;
+        }
         if (!std::isfinite(min_value) || !std::isfinite(max_value) || max_value < min_value) {
             tc_log_error("[termin-gui-native] SpinBox rejected invalid range");
             return;
@@ -68,12 +83,64 @@ namespace termin::gui_native {
         set_value(value_);
     }
 
-    void SpinBox::set_step(float step) {
+    void SpinBox::set_step(double step) {
+        if (integer_mode_) {
+            tc_log_error("[termin-gui-native] SpinBox integer mode requires set_integer_step");
+            return;
+        }
         if (!std::isfinite(step) || step <= 0.0f) {
             tc_log_error("[termin-gui-native] SpinBox rejected invalid step");
             return;
         }
         step_ = step;
+    }
+
+    void SpinBox::set_integer_value(int64_t value) {
+        const bool was_integer = integer_mode_;
+        integer_mode_ = true;
+        const int64_t next = std::clamp(value, integer_min_, integer_max_);
+        if (was_integer && next == integer_value_)
+            return;
+        integer_value_ = next;
+        if (editing_) {
+            edit_text_ = editable_value();
+            caret_ = edit_text_.size();
+            selection_anchor_ = SIZE_MAX;
+        }
+        mark_dirty(TC_WIDGET_DIRTY_STATE | TC_WIDGET_DIRTY_PAINT);
+        integer_changed_.emit(*this, integer_value_);
+    }
+
+    void SpinBox::set_integer_range(int64_t minimum, int64_t maximum) {
+        if (maximum < minimum) {
+            tc_log_error("[termin-gui-native] SpinBox rejected invalid integer range");
+            return;
+        }
+        integer_min_ = minimum;
+        integer_max_ = maximum;
+        set_integer_value(integer_value_);
+    }
+
+    void SpinBox::set_integer_step(int64_t step) {
+        if (step <= 0) {
+            tc_log_error("[termin-gui-native] SpinBox rejected invalid integer step");
+            return;
+        }
+        integer_step_ = step;
+    }
+
+    void SpinBox::step_value(bool increase) {
+        if (!integer_mode_) {
+            set_value(increase ? value_ + step_ : value_ - step_);
+            return;
+        }
+        // Unsigned distances cover the complete signed range without overflow.
+        const uint64_t distance = increase ? static_cast<uint64_t>(integer_max_) - static_cast<uint64_t>(integer_value_)
+                                           : static_cast<uint64_t>(integer_value_) - static_cast<uint64_t>(integer_min_);
+        if (static_cast<uint64_t>(integer_step_) > distance)
+            set_integer_value(increase ? integer_max_ : integer_min_);
+        else
+            set_integer_value(increase ? integer_value_ + integer_step_ : integer_value_ - integer_step_);
     }
 
     void SpinBox::set_decimals(int decimals) {
@@ -83,15 +150,27 @@ namespace termin::gui_native {
         }
         decimals_ = decimals;
         if (editing_) {
-            edit_text_ = formatted_value();
+            edit_text_ = editable_value();
             caret_ = edit_text_.size();
         }
         mark_dirty(TC_WIDGET_DIRTY_PAINT);
     }
 
     std::string SpinBox::formatted_value() const {
+        if (integer_mode_)
+            return std::to_string(integer_value_);
         std::ostringstream stream;
         stream << std::fixed << std::setprecision(decimals_) << value_;
+        return stream.str();
+    }
+
+    std::string SpinBox::editable_value() const {
+        if (integer_mode_)
+            return std::to_string(integer_value_);
+        // Display decimals are presentation only. Focusing and submitting an
+        // untouched field must preserve the original double exactly.
+        std::ostringstream stream;
+        stream << std::setprecision(std::numeric_limits<double>::max_digits10) << value_;
         return stream.str();
     }
 
@@ -99,7 +178,7 @@ namespace termin::gui_native {
         if (editing_)
             return;
         editing_ = true;
-        edit_text_ = formatted_value();
+        edit_text_ = editable_value();
         caret_ = edit_text_.size();
         selection_anchor_ = SIZE_MAX;
         mark_dirty(TC_WIDGET_DIRTY_STATE | TC_WIDGET_DIRTY_PAINT);
@@ -109,10 +188,26 @@ namespace termin::gui_native {
         if (!editing_)
             return;
         editing_ = false;
+        if (integer_mode_) {
+            int64_t parsed = 0;
+            const char* begin = edit_text_.data();
+            const char* end = begin + edit_text_.size();
+            if (begin != end && *begin == '+')
+                ++begin;
+            const auto result = std::from_chars(begin, end, parsed);
+            if (result.ec != std::errc{} || result.ptr != end) {
+                tc_log_error("[termin-gui-native] SpinBox rejected invalid integer edit '%s'", edit_text_.c_str());
+                mark_dirty(TC_WIDGET_DIRTY_STATE | TC_WIDGET_DIRTY_PAINT);
+                return;
+            }
+            set_integer_value(parsed);
+            mark_dirty(TC_WIDGET_DIRTY_STATE | TC_WIDGET_DIRTY_PAINT);
+            return;
+        }
         errno = 0;
         char* end = nullptr;
-        const float parsed = std::strtof(edit_text_.c_str(), &end);
-        if (errno == ERANGE || end == edit_text_.c_str() || !end || *end != '\0' || !std::isfinite(parsed)) {
+        const double parsed = std::strtod(edit_text_.c_str(), &end);
+        if ((errno == ERANGE && parsed == 0.0) || end == edit_text_.c_str() || !end || *end != '\0' || !std::isfinite(parsed)) {
             tc_log_error("[termin-gui-native] SpinBox rejected invalid numeric edit '%s'", edit_text_.c_str());
             mark_dirty(TC_WIDGET_DIRTY_STATE | TC_WIDGET_DIRTY_PAINT);
             return;
@@ -274,9 +369,9 @@ namespace termin::gui_native {
             rect_contains(bounds(), event->x, event->y)) {
             tc_ui_document_set_focus(document, handle());
             if (rect_contains(up_button_rect(), event->x, event->y)) {
-                set_value(value_ + step_);
+                step_value(true);
             } else if (rect_contains(down_button_rect(), event->x, event->y)) {
-                set_value(value_ - step_);
+                step_value(false);
             } else {
                 begin_edit();
                 const tc_ui_rect clip = text_clip_rect(document);
@@ -313,11 +408,11 @@ namespace termin::gui_native {
         if (!event || event->type != TC_UI_KEY_DOWN)
             return TC_UI_EVENT_IGNORED;
         if (event->key == TC_UI_KEY_UP_ARROW) {
-            set_value(value_ + step_);
+            step_value(true);
             return TC_UI_EVENT_HANDLED;
         }
         if (event->key == TC_UI_KEY_DOWN_ARROW) {
-            set_value(value_ - step_);
+            step_value(false);
             return TC_UI_EVENT_HANDLED;
         }
         if (!editing_)

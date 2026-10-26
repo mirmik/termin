@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import sys
@@ -9,6 +10,9 @@ import pytest
 
 from termin_build.graphics_nuget_consumer_gate import (
     GraphicsNugetConsumerGateError,
+    NATIVE_DOCUMENT_MODULES,
+    SMOKE_MARKER,
+    _parse_smoke_evidence,
     _run_command,
     consumer_project_files,
     isolated_environment,
@@ -110,6 +114,18 @@ def test_consumer_project_is_deterministic_and_package_reference_only() -> None:
     assert "new RetainedScene2DHost" in program
     assert "sceneHost.FrameRendered" in program
     assert "sceneHost.RenderFailed" in program
+    assert "new NativeNodeGraph()" in program
+    assert "new NativeUiDocument(" in program
+    assert "new NativeNodeGraphView(" in program
+    assert "new NativeDocumentHost" in program
+    assert "nativeHost.FrameRendered" in program
+    assert "nativeHost.RenderFailed" in program
+    assert "!chartRendered || !documentRendered" in program
+    assert "parameterEvent.Value.AsText()" in program
+    assert "Environment.SpecialFolder.Fonts" not in program
+    assert '"fonts", "DroidSans.ttf"' in program
+    for module in NATIVE_DOCUMENT_MODULES:
+        assert module in program
     assert "BackendType.D3D11" in program
     assert "Timed out waiting for RetainedScene2DHost.FrameRendered" in program
     assert "retainedSceneId = chart.Scene.Id" in program
@@ -117,6 +133,54 @@ def test_consumer_project_is_deterministic_and_package_reference_only() -> None:
     assert (
         "pointCount = checked((ulong)line.Item.Snapshot.PointCount)" in program
     )
+
+
+def _smoke_evidence(output: Path) -> dict[str, object]:
+    return {
+        "status": "passed",
+        "nativeDocumentRendered": True,
+        "nativeParameterCallback": True,
+        "exactNativeNumbers": True,
+        "nativeGraphNodeCount": 1,
+        "appContextBaseDirectory": str(output),
+        "managedAssemblyRoot": str(output),
+        "wpfAssemblyRoot": str(output),
+        "resourceRoot": str(output / "share" / "termin"),
+        "nativeModuleRoot": str(output),
+        "nativeDocumentModuleRoots": {
+            module: str(output / "runtimes" / "win-x64" / "native")
+            for module in NATIVE_DOCUMENT_MODULES
+        },
+    }
+
+
+def test_smoke_evidence_requires_both_renderers_and_parameter_callback(tmp_path: Path) -> None:
+    evidence = _smoke_evidence(tmp_path)
+    evidence["nativeParameterCallback"] = False
+
+    with pytest.raises(GraphicsNugetConsumerGateError, match="missing native document"):
+        _parse_smoke_evidence(SMOKE_MARKER + json.dumps(evidence))
+
+
+def test_smoke_evidence_rejects_nodegraph_modules_from_outside_consumer(tmp_path: Path) -> None:
+    output = tmp_path / "consumer"
+    evidence = _smoke_evidence(output)
+    evidence["nativeDocumentModuleRoots"] = {
+        module: str(tmp_path / "checkout" / "sdk")
+        for module in NATIVE_DOCUMENT_MODULES
+    }
+
+    with pytest.raises(GraphicsNugetConsumerGateError, match="outside AppContext output"):
+        _parse_smoke_evidence(SMOKE_MARKER + json.dumps(evidence))
+
+
+def test_smoke_evidence_normalizes_document_module_roots(tmp_path: Path) -> None:
+    parsed = _parse_smoke_evidence(SMOKE_MARKER + json.dumps(_smoke_evidence(tmp_path)))
+
+    assert parsed["nativeDocumentModuleRoots"] == {
+        module: "runtimes/win-x64/native" for module in NATIVE_DOCUMENT_MODULES
+    }
+    assert "appContextBaseDirectory" not in parsed
 
 
 def test_output_validation_records_exact_candidate_hashes(tmp_path: Path) -> None:

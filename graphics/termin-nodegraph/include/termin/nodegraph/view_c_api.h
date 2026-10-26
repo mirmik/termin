@@ -71,7 +71,8 @@ typedef struct tc_nodegraph_semantic_ref {
 
 // All pointers passed to callbacks are borrowed for the duration of the call.
 // Descriptor strings, choice arrays and style returned by the presentation
-// callback are copied before the callback returns.
+// callback are copied immediately after the callback returns. Providers must
+// retain that storage until the next presentation callback or view destruction.
 typedef bool (*tc_nodegraph_view_present_parameter_fn)(void* userdata,
                                                        tc_nodegraph_node_handle node,
                                                        const char* name,
@@ -117,6 +118,11 @@ TERMIN_NODEGRAPH_UI_API bool tc_nodegraph_view_is_valid(tc_nodegraph_view_handle
 TERMIN_NODEGRAPH_UI_API tc_widget_handle tc_nodegraph_view_root_widget(tc_nodegraph_view_handle view);
 TERMIN_NODEGRAPH_UI_API bool tc_nodegraph_view_rebuild(tc_nodegraph_view_handle view);
 TERMIN_NODEGRAPH_UI_API bool tc_nodegraph_view_sync(tc_nodegraph_view_handle view);
+// Returns operation success separately from whether the projection changed.
+TERMIN_NODEGRAPH_UI_API bool tc_nodegraph_view_sync_checked(tc_nodegraph_view_handle view, bool* out_changed);
+// Camera offsets are in document logical pixels; zoom must lie in the view's range.
+TERMIN_NODEGRAPH_UI_API bool tc_nodegraph_view_set_viewport(tc_nodegraph_view_handle view,
+                                                            float zoom, float offset_x, float offset_y);
 TERMIN_NODEGRAPH_UI_API tc_widget_handle tc_nodegraph_view_parameter_widget(tc_nodegraph_view_handle view,
                                                                             tc_nodegraph_node_handle node,
                                                                             const char* name);

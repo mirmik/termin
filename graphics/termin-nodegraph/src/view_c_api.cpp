@@ -3,6 +3,7 @@
 #include "c_api_internal.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <exception>
 #include <memory>
@@ -15,6 +16,7 @@
 
 #include <tcbase/tc_log.h>
 #include <termin/nodegraph/view.hpp>
+#include <termin/gui_native/scene_view.hpp>
 
 namespace ng = termin::nodegraph;
 
@@ -373,6 +375,35 @@ bool tc_nodegraph_view_rebuild(tc_nodegraph_view_handle view) {
 
 bool tc_nodegraph_view_sync(tc_nodegraph_view_handle view) {
     return access_view(view, false, [](ViewEntry& entry) { return entry.view->sync(); });
+}
+
+bool tc_nodegraph_view_sync_checked(tc_nodegraph_view_handle view, bool* out_changed) {
+    return access_view(view, false, [&](ViewEntry& entry) {
+        if (out_changed == nullptr)
+            throw std::invalid_argument("sync changed output is null");
+        *out_changed = false;
+        if (!entry.view || entry.view->closed() || !entry.view->graph() || !entry.view->projection())
+            throw std::runtime_error("cannot synchronize a closed nodegraph view");
+        if (entry.view->graph()->revision() != entry.view->projection()->projected_revision()) {
+            if (!entry.view->sync())
+                throw std::runtime_error("failed to synchronize nodegraph projection");
+            *out_changed = true;
+        }
+        entry.last_error.clear();
+        return true;
+    });
+}
+
+bool tc_nodegraph_view_set_viewport(tc_nodegraph_view_handle view, float zoom, float offset_x, float offset_y) {
+    return access_view(view, false, [&](ViewEntry& entry) {
+        auto* scene = entry.view->scene_view();
+        if (scene == nullptr || !std::isfinite(zoom) || !std::isfinite(offset_x) || !std::isfinite(offset_y) ||
+            zoom < scene->min_zoom() || zoom > scene->max_zoom())
+            throw std::invalid_argument("invalid nodegraph viewport");
+        scene->set_zoom(zoom, {0.0f, 0.0f});
+        scene->set_offset({offset_x, offset_y});
+        return true;
+    });
 }
 
 tc_widget_handle

@@ -791,7 +791,7 @@ void bind_gui_native_widgets(nb::module_& m) {
         .def_prop_rw(
             "value",
             [](const SpinBoxRef& self) { return self.get().value(); },
-            [](const SpinBoxRef& self, float value) {
+            [](const SpinBoxRef& self, double value) {
                 self.get().set_value(value);
                 self.widget.throw_pending_exception();
             })
@@ -800,7 +800,7 @@ void bind_gui_native_widgets(nb::module_& m) {
         .def_prop_rw(
             "step",
             [](const SpinBoxRef& self) { return self.get().step(); },
-            [](const SpinBoxRef& self, float value) { self.get().set_step(value); })
+            [](const SpinBoxRef& self, double value) { self.get().set_step(value); })
         .def_prop_rw(
             "decimals",
             [](const SpinBoxRef& self) { return self.get().decimals(); },
@@ -808,7 +808,7 @@ void bind_gui_native_widgets(nb::module_& m) {
         .def_prop_ro("editing", [](const SpinBoxRef& self) { return self.get().editing(); })
         .def(
             "set_range",
-            [](const SpinBoxRef& self, float minimum, float maximum) {
+            [](const SpinBoxRef& self, double minimum, double maximum) {
                 self.get().set_range(minimum, maximum);
                 self.widget.throw_pending_exception();
             },
@@ -819,7 +819,7 @@ void bind_gui_native_widgets(nb::module_& m) {
             [](const SpinBoxRef& self, nb::object callback) {
                 auto state = self.widget.state;
                 return self.get().changed().connect(
-                    [state, callback = std::move(callback)](termin::gui_native::SpinBox&, float value) {
+                    [state, callback = std::move(callback)](termin::gui_native::SpinBox&, double value) {
                         try {
                             nb::gil_scoped_acquire gil;
                             callback(value);
