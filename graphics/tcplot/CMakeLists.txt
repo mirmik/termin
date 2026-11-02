@@ -61,6 +61,7 @@ set(TCPLOT_SOURCES
     src/plot_projection2d.cpp
     src/plot_grid_item2d.cpp
     src/plot_series_item2d.cpp
+    src/plot_heatmap_item2d.cpp
     src/plot_layout2d.cpp
     src/chart_interaction2d.cpp
     src/plot_annotations2d.cpp
@@ -150,6 +151,47 @@ if(TERMIN_BUILD_TESTS)
     termin_set_rpath_test(tcplot_plot_series_item2d_test)
     add_test(NAME tcplot_plot_series_item2d_test
         COMMAND tcplot_plot_series_item2d_test)
+
+    add_executable(tcplot_plot_heatmap_item2d_test
+        tests/test_plot_heatmap_item2d.cpp)
+    target_link_libraries(tcplot_plot_heatmap_item2d_test PRIVATE tcplot)
+    target_compile_definitions(tcplot_plot_heatmap_item2d_test PRIVATE
+        TCPLOT_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")
+    termin_set_rpath_test(tcplot_plot_heatmap_item2d_test)
+    add_test(NAME tcplot_plot_heatmap_item2d_test COMMAND tcplot_plot_heatmap_item2d_test)
+    if(TARGET termin_shaderc)
+        add_dependencies(tcplot_plot_heatmap_item2d_test termin_shaderc)
+        foreach(backend IN ITEMS d3d11 vulkan)
+            if((backend STREQUAL "d3d11" AND TGFX2_ENABLE_D3D11) OR
+               (backend STREQUAL "vulkan" AND TGFX2_ENABLE_VULKAN))
+                add_test(NAME tcplot_plot_heatmap_${backend}_test
+                    COMMAND tcplot_plot_heatmap_item2d_test --${backend})
+                set_tests_properties(tcplot_plot_heatmap_${backend}_test PROPERTIES
+                    SKIP_RETURN_CODE 77 TIMEOUT 30
+                    ENVIRONMENT "TERMIN_SHADERC=$<TARGET_FILE:termin_shaderc>;TERMIN_BUILTIN_SHADER_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/../termin-graphics/resources/builtin_shaders")
+                termin_add_test_labels(tcplot_plot_heatmap_${backend}_test "termin:capability:${backend}")
+                termin_set_test_build_target(tcplot_plot_heatmap_${backend}_test tcplot_plot_heatmap_item2d_test)
+            endif()
+        endforeach()
+    endif()
+
+    add_executable(tcplot_retained_chart2d_layout_test
+        tests/test_retained_chart2d_layout.cpp)
+    target_link_libraries(tcplot_retained_chart2d_layout_test PRIVATE tcplot)
+    target_compile_definitions(tcplot_retained_chart2d_layout_test PRIVATE
+        TCPLOT_TEST_FONT="${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")
+    termin_set_rpath_test(tcplot_retained_chart2d_layout_test)
+    foreach(backend IN ITEMS d3d11 vulkan)
+        if((backend STREQUAL "d3d11" AND TGFX2_ENABLE_D3D11) OR
+           (backend STREQUAL "vulkan" AND TGFX2_ENABLE_VULKAN))
+            add_test(NAME tcplot_retained_chart2d_layout_${backend}_test
+                COMMAND tcplot_retained_chart2d_layout_test --${backend})
+            set_tests_properties(tcplot_retained_chart2d_layout_${backend}_test PROPERTIES
+                SKIP_RETURN_CODE 77 TIMEOUT 30)
+            termin_add_test_labels(tcplot_retained_chart2d_layout_${backend}_test "termin:capability:${backend}")
+            termin_set_test_build_target(tcplot_retained_chart2d_layout_${backend}_test tcplot_retained_chart2d_layout_test)
+        endif()
+    endforeach()
 
     add_executable(tcplot_plot_layout2d_test
         tests/test_plot_layout2d.cpp)

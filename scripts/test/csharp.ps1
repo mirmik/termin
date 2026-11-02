@@ -76,11 +76,13 @@ if ($failedSmokes.Count -gt 0) {
 }
 
 $demoRoot = Join-Path $RepoRoot "termin-csharp\examples\PlotDemoApp"
-& dotnet build (Join-Path $demoRoot "PlotDemoApp.csproj") -c Release -p:TerminCsharpProfile=plot-d3d11
+$demoOutput = Join-Path $RepoRoot "build\plot-demo-smoke\bin\"
+# Keep test binaries separate from a demo the user may have open.
+& dotnet build (Join-Path $demoRoot "PlotDemoApp.csproj") -c Release -p:TerminCsharpProfile=plot-d3d11 "-p:BaseOutputPath=$demoOutput"
 if ($LASTEXITCODE -ne 0) { throw "PlotDemoApp build failed with exit code $LASTEXITCODE" }
 $env:TERMIN_PLOT_DEMO_CAPTURE_DIR = $logRoot
-$demoExecutable = Join-Path $demoRoot "bin\Release\net8.0-windows\PlotDemoApp.exe"
-foreach ($demoMode in @("axis-display", "color-presentation", "2d-hosts-1x1", "2d-hosts-2x2")) {
+$demoExecutable = Join-Path $demoOutput "Release\net8.0-windows\PlotDemoApp.exe"
+foreach ($demoMode in @("axis-display", "color-presentation", "2d-hosts-1x1", "2d-hosts-2x2", "heatmap2d")) {
     $demoProcess = Start-Process -FilePath $demoExecutable -ArgumentList "--smoke-$demoMode" -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") `
         -RedirectStandardError (Join-Path $logRoot "plot-demo-$demoMode.stderr.log")
@@ -96,6 +98,10 @@ foreach ($demoMode in @("axis-display", "color-presentation", "2d-hosts-1x1", "2
     if ($demoMode.StartsWith("2d-hosts") -and
         -not (Select-String -Path (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") -Pattern "PLOT_2D_HOSTS_SMOKE_OK" -Quiet)) {
         throw "PlotDemoApp $demoMode smoke did not render all plots. See build/logs/plot-demo-$demoMode.*.log"
+    }
+    if ($demoMode -eq "heatmap2d" -and
+        -not (Select-String -Path (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") -Pattern "HEATMAP_SMOKE_OK" -Quiet)) {
+        throw "PlotDemoApp heatmap smoke did not complete its pixel checks. See build/logs/plot-demo-heatmap2d.*.log"
     }
     Write-Host "PlotDemoApp $demoMode WPF smoke passed."
 }

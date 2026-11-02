@@ -226,6 +226,15 @@
       }
     },
     {
+      "uuid": "termin-engine-tcplot-2d-heatmap",
+      "name": "Tcplot2DHeatmapVSFS",
+      "language": "slang",
+      "stages": {
+        "vertex": {"path": "termin-engine-tcplot-2d-heatmap.slang", "entry": "vs_main"},
+        "fragment": {"path": "termin-engine-tcplot-2d-heatmap.slang", "entry": "fs_main"}
+      }
+    },
+    {
       "uuid": "termin-engine-canvas2d-solid",
       "name": "Canvas2DSolidVSFS",
       "language": "slang",

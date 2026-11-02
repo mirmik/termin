@@ -1,4 +1,18 @@
 using Termin.Native;
+using System.Runtime.InteropServices;
+
+static void TestVisualTextDescriptorLayout()
+{
+    // Must match tc_visual_text_desc2d, including its optional trailing fields.
+    // A shorter descriptor lets native code read arbitrary coverage gamma.
+    var descriptor = typeof(TextItemRef2D).Assembly.GetType(
+        "Termin.Native.VisualSceneNative+TextDesc", throwOnError: true)!;
+    int gammaFlagOffset = 2 * IntPtr.Size + 48;
+    if (Marshal.OffsetOf(descriptor, "HasCoverageGamma").ToInt32() != gammaFlagOffset ||
+        Marshal.OffsetOf(descriptor, "CoverageGamma").ToInt32() != gammaFlagOffset + 4 ||
+        Marshal.SizeOf(descriptor) != gammaFlagOffset + 8)
+        throw new InvalidOperationException("Visual text descriptor does not match the native ABI.");
+}
 
 static void TestPlotViewsAfterShaderArtifactChange(GpuHost host)
 {
@@ -284,8 +298,130 @@ static void TestRetainedPlotItems()
             "Scene teardown did not stale retained plot handles.");
 }
 
+static void TestRetainedHeatmapItems()
+{
+    var scene = new TcVisualScene2D();
+    using var otherScene = new TcVisualScene2D();
+    var bounds = new PlotRange2D(-2, 4, 10, 14);
+    var descriptor = new PlotProjectionDescriptor2D(
+        new PlotRect2D(0, 0, 200, 100), new PlotRect2D(0, 0, 200, 100),
+        bounds, new PlotRect2D(0, 0, 200, 100));
+    using var projection = PlotProjectionRef2D.Create(scene, descriptor);
+    using var otherProjection = PlotProjectionRef2D.Create(otherScene, descriptor);
+    var values = new[] { 1.0, 2.0, 3.0, 4.0, double.NaN, 6.0 };
+    var heatmap = PlotHeatmapItemRef2D.Create(scene, projection, values, 2, 3, bounds);
+    values[0] = 99;
+    var initial = heatmap.Snapshot;
+    var data = heatmap.CopyData();
+    if (initial.Rows != 2 || initial.Columns != 3 || initial.ScalarMin != 1 ||
+        initial.ScalarMax != 6 || data[0] != 1 || !double.IsNaN(data[4]) ||
+        !heatmap.Style.AutoRange || heatmap.Style.ColorMap != PlotColorMap2D.Viridis ||
+        heatmap.Style.Interpolation != PlotHeatmapInterpolation2D.Nearest)
+        throw new InvalidOperationException("Heatmap grid copy, auto range or style ABI failed.");
+
+    if (!heatmap.TrySample(-1, 11, out var first) || first.Row != 0 || first.Column != 0 ||
+        first.Value != 1 || !heatmap.TrySample(4, 14, out var last) ||
+        last.Row != 1 || last.Column != 2 || last.Value != 6 ||
+        !heatmap.TrySample(1, 13, out var missing) || !double.IsNaN(missing.Value) ||
+        heatmap.TrySample(-3, 11, out _))
+        throw new InvalidOperationException("Heatmap row orientation, edge or missing-cell sampling failed.");
+
+    heatmap.Style = new PlotHeatmapStyle2D(
+        PlotColorMap2D.CoolWarm, colorMapReversed: true, autoRange: false,
+        scalarMin: -10, scalarMax: 10, interpolation: PlotHeatmapInterpolation2D.Bilinear);
+    if (heatmap.Style.AutoRange || !heatmap.Style.ColorMapReversed ||
+        heatmap.Style.ColorMap != PlotColorMap2D.CoolWarm ||
+        heatmap.Snapshot.ScalarMin != -10 || heatmap.Snapshot.ScalarMax != 10 ||
+        heatmap.Style.Interpolation != PlotHeatmapInterpolation2D.Bilinear)
+        throw new InvalidOperationException("Heatmap fixed color range/style ABI failed.");
+    if (!heatmap.TrySample(-0.1, 11.9, out var original) || original.Value != 1 ||
+        !heatmap.TrySample(1, 13, out var originalMissing) || !double.IsNaN(originalMissing.Value))
+        throw new InvalidOperationException("Bilinear rendering changed original cell sampling.");
+    var beforeInvalidInterpolation = heatmap.Snapshot;
+    RequireThrows<InvalidOperationException>(
+        () => heatmap.Style = new PlotHeatmapStyle2D(
+            interpolation: (PlotHeatmapInterpolation2D)2),
+        "Heatmap accepted an unknown interpolation mode.");
+    if (heatmap.Snapshot.Revision != beforeInvalidInterpolation.Revision ||
+        heatmap.Style.Interpolation != PlotHeatmapInterpolation2D.Bilinear ||
+        heatmap.Style.ColorMap != PlotColorMap2D.CoolWarm)
+        throw new InvalidOperationException("Rejected interpolation mutation changed live style.");
+
+    RequireThrows<ArgumentException>(
+        () => heatmap.SetData(new[] { 0.0 }, 2, 3, bounds),
+        "Heatmap accepted a mismatched matrix size.");
+    RequireThrows<InvalidOperationException>(
+        () => heatmap.SetData(new[] { double.PositiveInfinity }, 1, 1, bounds),
+        "Heatmap accepted infinity.");
+    RequireThrows<InvalidOperationException>(
+        () => heatmap.Style = new PlotHeatmapStyle2D(autoRange: false, scalarMin: 2, scalarMax: 1),
+        "Heatmap accepted a reversed scalar range.");
+    if (heatmap.CopyData()[0] != 1 || heatmap.Snapshot.ScalarMin != -10)
+        throw new InvalidOperationException("Rejected heatmap mutations changed live data/style.");
+
+    RequireThrows<InvalidOperationException>(
+        () => heatmap.Projection = otherProjection,
+        "Heatmap accepted a foreign projection.");
+    var rect = RectItemRef2D.Create(scene, new VisualRect2f(0, 0, 1, 1),
+        new VisualFillPaint2D(new VisualSrgbColor(1, 1, 1)));
+    RequireThrows<InvalidCastException>(
+        () => PlotHeatmapItemRef2D.Cast(rect), "Heatmap accepted a wrong-type cast.");
+    if (PlotHeatmapItemRef2D.Cast(heatmap).Handle != heatmap.Handle)
+        throw new InvalidOperationException("Heatmap typed cast changed native identity.");
+
+    heatmap.SetData(new[] { 5.0 }, 1, 1, bounds);
+    heatmap.Style = PlotHeatmapStyle2D.Default;
+    if (heatmap.Snapshot.Revision <= initial.Revision || heatmap.Snapshot.Rows != 1 ||
+        !heatmap.TrySample(0, 12, out var single) || single.Value != 5)
+        throw new InvalidOperationException("Heatmap replacement with a single cell failed.");
+    scene.Dispose();
+    if (heatmap.IsValid)
+        throw new InvalidOperationException("Scene teardown left a heatmap handle alive.");
+    RequireThrows<InvalidOperationException>(
+        () => { _ = heatmap.Snapshot; }, "A stale heatmap returned a snapshot.");
+    Console.WriteLine("RETAINED_HEATMAP_ITEMS_OK");
+}
+
+static void TestManagedHeatmapChartComposition(GpuHost host)
+{
+    using var chart = new Chart2D(host, 800, 500, new PlotRange2D(0, 1, 0, 1));
+    var bounds = new PlotRange2D(-2, 4, 10, 14);
+    var heatmap = chart.AddHeatmapSeries("field", new[] { 1.0, 2.0, 3.0, 4.0 }, 2, 2, bounds);
+    var item = heatmap.Item;
+    if (heatmap.Kind != ChartSeriesKind2D.Heatmap || heatmap.ShowInLegend ||
+        heatmap.Name != "field" || heatmap.DataBounds?.XMin != -2 ||
+        item.Parent?.Handle != chart.PlotArea.Handle ||
+        item.ZOrder >= chart.Grid.Item!.ZOrder)
+        throw new InvalidOperationException("Heatmap chart identity, data bounds or layer order failed.");
+    chart.Fit(0);
+    if (chart.Range.XMin != -2 || chart.Range.XMax != 4 ||
+        chart.Range.YMin != 10 || chart.Range.YMax != 14)
+        throw new InvalidOperationException("Chart Fit ignored heatmap outer cell bounds.");
+    var line = chart.AddLineSeries("overlay", new[] { -2.0, 4.0 }, new[] { 10.0, 14.0 });
+    heatmap.Style = new PlotHeatmapStyle2D(PlotColorMap2D.Plasma, autoRange: false,
+        scalarMin: 0, scalarMax: 10, interpolation: PlotHeatmapInterpolation2D.Bilinear);
+    heatmap.Name = "updated field";
+    heatmap.ShowInLegend = true;
+    chart.Resize(640, 480, 1.25f);
+    chart.PanBy(1, -1);
+    if (heatmap.Style.ColorMap != PlotColorMap2D.Plasma ||
+        heatmap.Style.Interpolation != PlotHeatmapInterpolation2D.Bilinear || heatmap.Name != "updated field" ||
+        !heatmap.ShowInLegend || !heatmap.IsValid || heatmap.Item.Handle != item.Handle ||
+        !heatmap.TrySample(4, 14, out var sample) || sample.Value != 4)
+        throw new InvalidOperationException("Heatmap semantic mutations or compact chart updates failed.");
+    heatmap.SetData(new[] { 5.0 }, 1, 1, new PlotRange2D(20, 22, 30, 32));
+    line.Visible = false;
+    chart.Fit(0);
+    if (chart.Range.XMin != 20 || chart.Range.YMin != 30)
+        throw new InvalidOperationException("Chart Fit ignored replaced heatmap data bounds.");
+    if (!chart.RemoveSeries(heatmap) || heatmap.IsValid || item.IsValid)
+        throw new InvalidOperationException("Heatmap series removal left native state alive.");
+    Console.WriteLine("RETAINED_HEATMAP_CHART_OK");
+}
+
 static void TestManagedChartComposition(GpuHost host)
 {
+    TestManagedHeatmapChartComposition(host);
     using var chart = new Chart2D(
         host,
         800,
@@ -687,8 +823,10 @@ static void TestChart3DBackgroundColor(GpuHost host)
     }
 }
 
+TestVisualTextDescriptorLayout();
 TestRetainedVisualSceneFactories();
 TestRetainedPlotItems();
+TestRetainedHeatmapItems();
 
 // This test is deliberately GPU-independent. It verifies the detached values
 // at runtime and compiles every PlotView2D annotation operation used by a

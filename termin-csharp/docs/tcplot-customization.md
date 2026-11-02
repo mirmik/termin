@@ -13,7 +13,7 @@ using var chart = new Chart2D(
 ChartLineSeries2D signal = chart.AddLineSeries(
     "signal", x, y,
     style: new PlotLineSeriesStyle2D(
-        new PlotColor2D(0.2f, 0.8f, 1.0f), thicknessPx: 1.5f));
+        new PlotSrgbColor2D(0.2f, 0.8f, 1.0f), thicknessPx: 1.5f));
 
 sceneHost.Attach(host, chart.Scene);
 using var interaction = new Chart2DWpfInteraction(sceneHost, chart);
@@ -31,6 +31,58 @@ sceneHost.RequestRender();
 переключает колесо между навигацией и виртуальным скроллом. Оба WPF-хоста
 рендерят on-demand по `RequestRender()` и автоматически реагируют на resize,
 DPI и пользовательскую навигацию.
+
+## Тепловая карта на равномерной сетке
+
+`Chart2D.AddHeatmapSeries` добавляет native retained heatmap под сеткой,
+линиями, точками и аннотациями. Поддерживается равномерная прямоугольная
+сетка, в том числе одна строка, один столбец или одна ячейка.
+
+```csharp
+double[] values = { 1, 2, 3, 4, double.NaN, 6 };
+ChartHeatmapSeries2D heatmap = chart.AddHeatmapSeries(
+    "temperature", values, rows: 2, columns: 3,
+    bounds: new PlotRange2D(0, 30, 0, 20));
+chart.Fit(0);
+
+// Фиксированная шкала позволяет сравнивать несколько кадров/панелей.
+heatmap.Style = new PlotHeatmapStyle2D(
+    PlotColorMap2D.Viridis, autoRange: false, scalarMin: 0, scalarMax: 10,
+    interpolation: PlotHeatmapInterpolation2D.Bilinear);
+if (heatmap.TrySample(5, 5, out PlotHeatmapSample2D cell))
+    Console.WriteLine($"row={cell.Row}, column={cell.Column}, value={cell.Value}");
+sceneHost.RequestRender();
+```
+
+`values[row * columns + column]` хранит значения по строкам. Нулевая строка
+расположена у `YMin`, нулевой столбец — у `XMin`; `bounds` задаёт **внешние
+границы ячеек**, а не центры крайних отсчётов. Максимальные границы при
+`TrySample` относятся к последней ячейке. За пределами карты возвращается
+`false`; у прозрачной ячейки возвращается `true` и `Value = NaN`.
+
+`NaN` рисуется прозрачно и не участвует в автоматическом выборе цветового
+диапазона. Бесконечности отклоняются. По умолчанию ячейки рисуются через
+`PlotHeatmapInterpolation2D.Nearest`. Необязательный `Bilinear` плавно
+интерполирует скалярные значения между центрами ячеек до применения палитры.
+Веса соседей с `NaN` исключаются из расчёта значения; сумма весов существующих
+соседей задаёт покрытие, поэтому границы пропусков становятся полупрозрачными.
+`TrySample` при любом режиме возвращает исходное значение ячейки, а не
+интерполированное значение изображения. Режим можно менять без замены матрицы.
+По умолчанию используется `Viridis` и автоматическая шкала;
+эффективные границы доступны в `heatmap.Item.Snapshot.ScalarMin/ScalarMax`.
+`ColorMapReversed` разворачивает палитру. `SetData(values, rows, columns,
+bounds)` заменяет матрицу и пространственные границы; данные копируются в
+native item. `Fit()` учитывает актуальные границы видимых heatmap-серий.
+
+`PlotHeatmapItemRef2D.Create` позволяет использовать тот же item напрямую
+в `TcVisualScene2D` с общей `PlotProjectionRef2D`. Pan/zoom/resize меняют
+компактную проекцию; повторная передача матрицы не нужна. Доступны обычные
+операции retained item: `Visible`, `Opacity`, `ZOrder`, clipping и lifetime
+сцены. `chart.RemoveSeries(heatmap)` уничтожает native item.
+
+Интерактивный пример находится в `examples/PlotDemoApp/Heatmap2DWindow`:
+карта, линия поверх неё, смена палитры, диапазона, интерполяции и данных, чтение ячейки
+под курсором и отдельная цветовая шкала, нарисованная тем же heatmap item.
 
 ## Legacy facade
 

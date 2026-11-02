@@ -833,6 +833,9 @@ internal static unsafe class VisualSceneNative
         internal VisualSrgbColor Color;
         internal VisualTextAnchor2D Anchor;
         internal VisualBounds2f LayoutBounds;
+        [MarshalAs(UnmanagedType.I1)]
+        internal bool HasCoverageGamma;
+        internal float CoverageGamma;
 
         internal TextDesc(
             string text,
@@ -850,6 +853,8 @@ internal static unsafe class VisualSceneNative
             Color = color;
             Anchor = anchor;
             LayoutBounds = layoutBounds;
+            HasCoverageGamma = false;
+            CoverageGamma = 0;
         }
     }
 

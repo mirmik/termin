@@ -22,6 +22,7 @@
 #include "tcplot/gpu_host.hpp"
 #include "tcplot/plot_frame2d.hpp"
 #include "tcplot/plot_layout2d.hpp"
+#include "tcplot/plot_heatmap_item2d.hpp"
 #include "tcplot/plot_series_item2d.hpp"
 
 namespace {
@@ -33,6 +34,7 @@ namespace {
     constexpr const char* kGridType = "tcplot.PlotGridItem2D";
     constexpr const char* kLineType = "tcplot.PlotLineSeriesItem2D";
     constexpr const char* kScatterType = "tcplot.PlotScatterSeriesItem2D";
+    constexpr const char* kHeatmapType = "tcplot.PlotHeatmapItem2D";
 
     std::atomic<uint64_t> next_chart_id{1};
 
@@ -436,6 +438,49 @@ namespace {
             return resolve_series(series) != nullptr;
         }
 
+        tc_chart_series_handle2d add_named_heatmap(std::string name,
+                                                 bool show_in_legend,
+                                                 const double* values,
+                                                 size_t count,
+                                                 uint32_t rows,
+                                                 uint32_t columns,
+                                                 tc_plot_range2d bounds,
+                                                 tc_plot_heatmap_style2d style) {
+            const auto item = tc_plot_heatmap_item2d_create(
+                scene_, projection_, values, count, rows, columns, bounds, style);
+            require(item, "failed to create chart heatmap series");
+            SeriesSlot* allocated = nullptr;
+            try {
+                // A field is below the grid and all line/scatter overlays, regardless
+                // of creation order. It still shares plot-area clipping/projection.
+                set_parent(item, plot_area_root_);
+                if (!tc_visual_scene_item_set_z_order(scene_, item, 5))
+                    throw std::runtime_error("failed to set heatmap layer order");
+                SeriesSlot& slot = allocate_series(TC_CHART_SERIES_HEATMAP_2D);
+                allocated = &slot;
+                slot.item = item;
+                slot.name = std::move(name);
+                slot.show_in_legend = show_in_legend;
+                create_legend_items(slot);
+                update_legend();
+                return series_handle(slot);
+            } catch (...) {
+                if (allocated)
+                    rollback_series_allocation(*allocated);
+                tc_visual_scene_destroy_item(scene_, item);
+                throw;
+            }
+        }
+
+        bool set_heatmap_series_style(tc_chart_series_handle2d series, tc_plot_heatmap_style2d style) {
+            SeriesSlot* slot = resolve_series(series);
+            if (!slot || slot->kind != TC_CHART_SERIES_HEATMAP_2D ||
+                !tc_plot_heatmap_item2d_set_style(scene_, slot->item, style))
+                return false;
+            update_legend();
+            return true;
+        }
+
         bool series_snapshot(tc_chart_series_handle2d series, tc_chart_series_snapshot2d& snapshot) const {
             const SeriesSlot* slot = resolve_series(series);
             if (!slot)
@@ -613,6 +658,7 @@ namespace {
                 return nullptr;
             const char* expected = slot->kind == TC_CHART_SERIES_LINE_2D      ? kLineType
                                    : slot->kind == TC_CHART_SERIES_SCATTER_2D ? kScatterType
+                                   : slot->kind == TC_CHART_SERIES_HEATMAP_2D ? kHeatmapType
                                                                               : nullptr;
             return expected && tc_visual_scene_item_is_type(scene_, slot->item, expected) ? slot : nullptr;
         }
@@ -692,6 +738,13 @@ namespace {
                     color = {style.color.r, style.color.g, style.color.b, style.color.a};
                     width = std::max(2.0f, style.diameter_px);
                 }
+            } else if (slot.kind == TC_CHART_SERIES_HEATMAP_2D) {
+                termin::visual::TcVisualScene scene{scene_};
+                if (const auto* heatmap = tcplot::resolve_plot_heatmap_item2d(scene, slot.item)) {
+                    const auto style = heatmap->style();
+                    const auto swatch = tcplot::styles::colormap(static_cast<tcplot::SurfaceColorMap>(style.colormap), 0.5f);
+                    color = {swatch.r, swatch.g, swatch.b, swatch.a};
+                }
             }
             bool visible = true;
             tc_visual_scene_item_get_visible(scene_, slot.item, &visible);
@@ -756,11 +809,12 @@ namespace {
                 tc_visual_stroke_paint2d paint = legend_stroke(slot);
                 if (!tc_visual_path_item2d_set(scene_, slot.legend_swatch, path_view(verbs, points), nullptr, &paint))
                     throw std::runtime_error("failed to update legend swatch");
-                set_text(slot.legend_label,
-                         slot.name,
-                         {left + padding + swatch_width + gap, center_y + metrics->ascent * 0.5f},
-                         font_size,
-                         TC_VISUAL_TEXT_ANCHOR_LEFT);
+                set_text_line_center(slot.legend_label,
+                                     slot.name,
+                                     {left + padding + swatch_width + gap, center_y},
+                                     metrics->line_height,
+                                     font_size,
+                                     TC_VISUAL_TEXT_ANCHOR_LEFT);
                 ++row;
             }
         }
@@ -831,7 +885,6 @@ namespace {
                 tcplot::measure_plot_text2d(host_->font(), "Mg", theme_.font_size_logical_px, scale);
             if (!ticks || !tick_metrics)
                 throw std::runtime_error("failed to measure chart layout");
-            tick_metrics_ = *tick_metrics;
 
             float widest_y = 0.0f;
             for (const std::string& label : ticks->y.labels) {
@@ -900,21 +953,23 @@ namespace {
             }
             set_axes(*exact_ticks, tick_length, exact_frame);
             update_tick_labels(*exact_ticks, *tick_metrics, exact_frame);
-            set_text(title_item_,
-                     title_,
-                     {viewport_.x + viewport_.width * 0.5f, viewport_.y + padding + title_font_px},
-                     title_font_px,
-                     TC_VISUAL_TEXT_ANCHOR_CENTER);
-            set_text(x_axis_label_item_,
-                     x_label_,
-                     {plot_area_.x + plot_area_.width * 0.5f, viewport_.y + viewport_.height - padding},
-                     tick_font_px,
-                     TC_VISUAL_TEXT_ANCHOR_CENTER);
-            set_text(y_axis_label_item_,
-                     y_label_,
-                     {viewport_.x + padding, plot_area_.y + plot_area_.height * 0.5f},
-                     tick_font_px,
-                     TC_VISUAL_TEXT_ANCHOR_LEFT);
+            set_text_line_top(title_item_,
+                              title_,
+                              {viewport_.x + viewport_.width * 0.5f, viewport_.y + padding},
+                              title_font_px,
+                              TC_VISUAL_TEXT_ANCHOR_CENTER);
+            set_text_line_top(x_axis_label_item_,
+                              x_label_,
+                              {plot_area_.x + plot_area_.width * 0.5f,
+                               viewport_.y + viewport_.height - padding - tick_metrics->line_height},
+                              tick_font_px,
+                              TC_VISUAL_TEXT_ANCHOR_CENTER);
+            set_text_line_center(y_axis_label_item_,
+                                 y_label_,
+                                 {viewport_.x + padding, plot_area_.y + plot_area_.height * 0.5f},
+                                 tick_metrics->line_height,
+                                 tick_font_px,
+                                 TC_VISUAL_TEXT_ANCHOR_LEFT);
             update_legend();
             ++layout_revision_;
         }
@@ -949,7 +1004,7 @@ namespace {
 
             const float tick_length = theme_.tick_length_logical_px * pixel_scale_;
             set_x_axis(*x_ticks, tick_length, frame);
-            update_x_tick_labels(*x_ticks, tick_metrics_.ascent, frame);
+            update_x_tick_labels(*x_ticks, frame);
             ++layout_revision_;
         }
 
@@ -978,6 +1033,30 @@ namespace {
             if (!tc_visual_text_item2d_set(scene_, item, &desc) ||
                 !tc_visual_scene_item_set_visible(scene_, item, visible))
                 throw std::runtime_error("failed to update chart text");
+        }
+
+        // Left/Right anchors use the top of the font's line cell. Center
+        // additionally subtracts half the requested font size in the renderer.
+        // Keep that anchor convention at this boundary; chart layout uses
+        // measured line boxes rather than treating origins as baselines.
+        void set_text_line_top(tc_graphic_item_handle item,
+                               const std::string& text,
+                               tc_vec2f origin,
+                               float size,
+                               tc_visual_text_anchor2d anchor) {
+            if (anchor == TC_VISUAL_TEXT_ANCHOR_CENTER)
+                origin.y += size * 0.5f;
+            set_text(item, text, origin, size, anchor);
+        }
+
+        void set_text_line_center(tc_graphic_item_handle item,
+                                  const std::string& text,
+                                  tc_vec2f origin,
+                                  float line_height,
+                                  float size,
+                                  tc_visual_text_anchor2d anchor) {
+            origin.y -= line_height * 0.5f;
+            set_text_line_top(item, text, origin, size, anchor);
         }
 
         void set_axes(const tcplot::PlotTicks2D& ticks, float tick_length, const tcplot::PlotFrame2D& frame) {
@@ -1039,12 +1118,11 @@ namespace {
         void update_tick_labels(const tcplot::PlotTicks2D& ticks,
                                 const tcplot::PlotTextMetrics2D& metrics,
                                 const tcplot::PlotFrame2D& frame) {
-            update_x_tick_labels(ticks.x, metrics.ascent, frame);
-            update_y_tick_labels(ticks.y, metrics.ascent, frame);
+            update_x_tick_labels(ticks.x, frame);
+            update_y_tick_labels(ticks.y, metrics.line_height, frame);
         }
 
         void update_x_tick_labels(const tcplot::PlotAxisTicks2D& ticks,
-                                  float text_ascent,
                                   const tcplot::PlotFrame2D& frame) {
             ensure_tick_pool(x_tick_labels_, ticks.values.size(), x_tick_labels_root_, TC_VISUAL_TEXT_ANCHOR_CENTER);
             const float gap = theme_.gap_logical_px * pixel_scale_;
@@ -1052,16 +1130,16 @@ namespace {
             const float font_size = theme_.font_size_logical_px * pixel_scale_;
             for (size_t index = 0; index < ticks.values.size(); ++index) {
                 const auto p = frame.data_to_pixel(ticks.values[index], range_.y_min);
-                set_text(x_tick_labels_[index],
-                         ticks.labels[index],
-                         {p.x, plot_area_.y + plot_area_.height + tick_length + gap + text_ascent},
-                         font_size,
-                         TC_VISUAL_TEXT_ANCHOR_CENTER);
+                set_text_line_top(x_tick_labels_[index],
+                                  ticks.labels[index],
+                                  {p.x, plot_area_.y + plot_area_.height + tick_length + gap},
+                                  font_size,
+                                  TC_VISUAL_TEXT_ANCHOR_CENTER);
             }
         }
 
         void update_y_tick_labels(const tcplot::PlotAxisTicks2D& ticks,
-                                  float text_ascent,
+                                  float line_height,
                                   const tcplot::PlotFrame2D& frame) {
             ensure_tick_pool(y_tick_labels_, ticks.values.size(), y_tick_labels_root_, TC_VISUAL_TEXT_ANCHOR_RIGHT);
             const float gap = theme_.gap_logical_px * pixel_scale_;
@@ -1069,11 +1147,12 @@ namespace {
             const float font_size = theme_.font_size_logical_px * pixel_scale_;
             for (size_t index = 0; index < ticks.values.size(); ++index) {
                 const auto p = frame.data_to_pixel(range_.x_min, ticks.values[index]);
-                set_text(y_tick_labels_[index],
-                         ticks.labels[index],
-                         {plot_area_.x - tick_length - gap, p.y + text_ascent * 0.5f},
-                         font_size,
-                         TC_VISUAL_TEXT_ANCHOR_RIGHT);
+                set_text_line_center(y_tick_labels_[index],
+                                     ticks.labels[index],
+                                     {plot_area_.x - tick_length - gap, p.y},
+                                     line_height,
+                                     font_size,
+                                     TC_VISUAL_TEXT_ANCHOR_RIGHT);
             }
         }
 
@@ -1112,6 +1191,9 @@ namespace {
         }
 
         std::optional<tcplot::PlotRange2D> series_item_bounds(tc_graphic_item_handle handle) const {
+            termin::visual::TcVisualScene owner{scene_};
+            if (const auto* heatmap = tcplot::resolve_plot_heatmap_item2d(owner, handle))
+                return heatmap->bounds();
             double x_min = std::numeric_limits<double>::infinity();
             double x_max = -std::numeric_limits<double>::infinity();
             double y_min = std::numeric_limits<double>::infinity();
@@ -1191,7 +1273,6 @@ namespace {
         std::string font_uri_;
         float pixel_scale_ = 1.0f;
         tc_chart2d_theme theme_{};
-        tcplot::PlotTextMetrics2D tick_metrics_{};
         tcplot::PlotAxisTicks2D y_ticks_{};
         std::string title_;
         std::string x_label_;
@@ -1521,6 +1602,30 @@ tc_chart_series_handle2d tc_retained_chart2d_add_named_scatter(tc_retained_chart
 
 bool tc_retained_chart2d_series_is_valid(const tc_retained_chart2d* chart, tc_chart_series_handle2d series) {
     return chart && chart->value.series_valid(series);
+}
+
+tc_chart_series_handle2d tc_retained_chart2d_add_named_heatmap(tc_retained_chart2d* chart,
+                                                           const char* name_utf8,
+                                                           bool show_in_legend,
+                                                           const double* values,
+                                                           size_t value_count,
+                                                           uint32_t rows,
+                                                           uint32_t columns,
+                                                           tc_plot_range2d bounds,
+                                                           tc_plot_heatmap_style2d style) {
+    return chart ? logged("add_named_heatmap", invalid_series(), [&] {
+               return chart->value.add_named_heatmap(name_utf8 ? name_utf8 : "", show_in_legend,
+                                                     values, value_count, rows, columns, bounds, style);
+           })
+                 : invalid_series();
+}
+
+bool tc_retained_chart2d_heatmap_series_set_style(tc_retained_chart2d* chart,
+                                               tc_chart_series_handle2d series,
+                                               tc_plot_heatmap_style2d style) {
+    return chart && logged("heatmap_series_set_style", false, [&] {
+               return chart->value.set_heatmap_series_style(series, style);
+           });
 }
 
 bool tc_retained_chart2d_series_snapshot(const tc_retained_chart2d* chart,

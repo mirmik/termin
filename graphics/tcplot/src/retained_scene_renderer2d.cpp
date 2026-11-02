@@ -167,7 +167,10 @@ namespace {
             tgfx::TextureDesc desc;
             desc.width = static_cast<uint32_t>(width);
             desc.height = static_cast<uint32_t>(height);
-            desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+            // Keep linear-light precision through composition and MSAA resolve.
+            // Quantizing linear RGB to 8 bits here collapses dark palette shades
+            // before the presentation sink performs its final sRGB encoding.
+            desc.format = tgfx::PixelFormat::RGBA16F;
             desc.usage =
                 tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
             desc.sample_count = static_cast<uint32_t>(msaa_samples_);

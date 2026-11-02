@@ -9,6 +9,18 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Contains("--heatmap2d", StringComparer.OrdinalIgnoreCase) ||
+            e.Args.Contains("--smoke-heatmap2d", StringComparer.OrdinalIgnoreCase))
+        {
+            var heatmap = new Heatmap2DWindow();
+            MainWindow = heatmap;
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            heatmap.Show();
+            if (e.Args.Contains("--smoke-heatmap2d", StringComparer.OrdinalIgnoreCase))
+                heatmap.StartHeatmapSmoke();
+            return;
+        }
+
         if (e.Args.Contains("--smoke-2d-hosts", StringComparer.OrdinalIgnoreCase) ||
             e.Args.Contains("--smoke-2d-hosts-1x1", StringComparer.OrdinalIgnoreCase) ||
             e.Args.Contains("--smoke-2d-hosts-2x2", StringComparer.OrdinalIgnoreCase))

@@ -151,6 +151,7 @@ public enum ChartSeriesKind2D
     Invalid,
     Line,
     Scatter,
+    Heatmap,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -290,6 +291,26 @@ public sealed class ChartScatterSeries2D : ChartSeries2D
         float maxDistancePx,
         out PlotNearestPoint2D point) =>
         Item.TryNearest(pixelX, pixelY, maxDistancePx, out point);
+}
+
+public sealed class ChartHeatmapSeries2D : ChartSeries2D
+{
+    internal ChartHeatmapSeries2D(Chart2D chart, ChartSeriesHandle2D handle)
+        : base(chart, handle) {}
+
+    public new PlotHeatmapItemRef2D Item => PlotHeatmapItemRef2D.Cast(base.Item);
+
+    public PlotHeatmapStyle2D Style
+    {
+        get => Item.Style;
+        set => Chart.SetHeatmapSeriesStyle(Handle, value);
+    }
+
+    public void SetData(double[] values, uint rows, uint columns, PlotRange2D bounds) =>
+        Item.SetData(values, rows, columns, bounds);
+
+    public bool TrySample(double dataX, double dataY, out PlotHeatmapSample2D sample) =>
+        Item.TrySample(dataX, dataY, out sample);
 }
 
 /// <summary>
@@ -616,6 +637,29 @@ public sealed class Chart2D : IDisposable
         return series;
     }
 
+    /// <summary>
+    /// Adds a uniform rectangular grid beneath the grid lines and other series.
+    /// Bounds are outer cell edges. Values are row-major, starting at XMin/YMin.
+    /// </summary>
+    public ChartHeatmapSeries2D AddHeatmapSeries(
+        string name,
+        double[] values,
+        uint rows,
+        uint columns,
+        PlotRange2D bounds,
+        PlotHeatmapStyle2D? style = null,
+        bool showInLegend = false)
+    {
+        PlotHeatmapItemRef2D.ValidateData(values, rows, columns);
+        ThrowIfDisposed();
+        var handle = Chart2DNative.AddNamedHeatmap(
+            _native, name ?? string.Empty, showInLegend, values, (nuint)values.Length,
+            rows, columns, bounds, style ?? PlotHeatmapStyle2D.Default);
+        var series = new ChartHeatmapSeries2D(this, RequireSeriesHandle(handle));
+        _semanticSeries.Add(series);
+        return series;
+    }
+
     public bool RemoveSeries(GraphicItemRef2D item)
     {
         if (item is null)
@@ -888,6 +932,14 @@ public sealed class Chart2D : IDisposable
     {
         ThrowIfDisposed();
         Require(Chart2DNative.ScatterSeriesSetStyle(_native, series, style));
+    }
+
+    internal void SetHeatmapSeriesStyle(
+        ChartSeriesHandle2D series,
+        PlotHeatmapStyle2D style)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.HeatmapSeriesSetStyle(_native, series, style));
     }
 
     internal void AdoptTheme(Chart2DTheme theme)
@@ -1171,6 +1223,25 @@ internal static class Chart2DNative
         double[] y,
         nuint count,
         PlotScatterSeriesStyle2D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_named_heatmap")]
+    internal static extern ChartSeriesHandle2D AddNamedHeatmap(
+        IntPtr chart,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        [MarshalAs(UnmanagedType.I1)] bool showInLegend,
+        double[] values,
+        nuint count,
+        uint rows,
+        uint columns,
+        PlotRange2D bounds,
+        PlotHeatmapStyle2D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_heatmap_series_set_style")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool HeatmapSeriesSetStyle(
+        IntPtr chart,
+        ChartSeriesHandle2D series,
+        PlotHeatmapStyle2D style);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart2d_series_is_valid")]
     [return: MarshalAs(UnmanagedType.I1)]

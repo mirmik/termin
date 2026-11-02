@@ -7,6 +7,7 @@
 #include <termin_visual_scene/tc_builtin_items2d.h>
 
 #include "tcplot/tc_plot_grid_item2d.h"
+#include "tcplot/tc_plot_heatmap_item2d.h"
 #include "tcplot/tc_plot_series_item2d.h"
 #include "tcplot/tcplot_api.h"
 
@@ -26,6 +27,7 @@ typedef enum tc_chart_series_kind2d {
     TC_CHART_SERIES_INVALID_2D = 0,
     TC_CHART_SERIES_LINE_2D = 1,
     TC_CHART_SERIES_SCATTER_2D = 2,
+    TC_CHART_SERIES_HEATMAP_2D = 3,
 } tc_chart_series_kind2d;
 
 typedef struct tc_chart_series_snapshot2d {
@@ -183,6 +185,18 @@ TCPLOT_API tc_chart_series_handle2d tc_retained_chart2d_add_named_scatter(tc_ret
                                                                           const double* y,
                                                                           size_t point_count,
                                                                           tc_plot_scatter_style_state2d style);
+TCPLOT_API tc_chart_series_handle2d tc_retained_chart2d_add_named_heatmap(tc_retained_chart2d* chart,
+                                                                      const char* name_utf8,
+                                                                      bool show_in_legend,
+                                                                      const double* values,
+                                                                      size_t value_count,
+                                                                      uint32_t rows,
+                                                                      uint32_t columns,
+                                                                      tc_plot_range2d bounds,
+                                                                      tc_plot_heatmap_style2d style);
+TCPLOT_API bool tc_retained_chart2d_heatmap_series_set_style(tc_retained_chart2d* chart,
+                                                         tc_chart_series_handle2d series,
+                                                         tc_plot_heatmap_style2d style);
 TCPLOT_API bool tc_retained_chart2d_series_is_valid(const tc_retained_chart2d* chart, tc_chart_series_handle2d series);
 TCPLOT_API bool tc_retained_chart2d_series_snapshot(const tc_retained_chart2d* chart,
                                                     tc_chart_series_handle2d series,

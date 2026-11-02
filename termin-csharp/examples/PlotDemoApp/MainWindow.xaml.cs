@@ -43,4 +43,9 @@ public partial class MainWindow : Window
     {
         new ScrollableMultiPlot2DWindow().Show();
     }
+
+    private void OnOpenHeatmap2D(object sender, RoutedEventArgs e)
+    {
+        new Heatmap2DWindow().Show();
+    }
 }
