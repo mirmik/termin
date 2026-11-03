@@ -28,7 +28,20 @@ def test_builtin_shader_manifest_is_complete_and_resolves_every_source() -> None
     catalog = json.loads((source_root / "engine-shader-catalog.json").read_text())
 
     assert _catalog_module().validate_catalog(catalog, source_root) == []
-    assert len(catalog["shaders"]) == 61
+    registered_sources = {
+        stage["path"]
+        for shader in catalog["shaders"]
+        for field in ("stages", "artifact_stages")
+        for stage in shader.get(field, {}).values()
+    }
+    registered_sources.update(
+        shader["program"]["path"] for shader in catalog["shaders"] if "program" in shader
+    )
+    engine_sources = {
+        path.name for path in source_root.glob("termin-engine-*") if path.suffix in {".slang", ".shader"}
+    }
+    assert engine_sources
+    assert engine_sources <= registered_sources, engine_sources - registered_sources
     assert any(shader["uuid"] == "termin-engine-id-batched" for shader in catalog["shaders"])
     assert any(shader["uuid"] == "termin-engine-multiview-output-transform" for shader in catalog["shaders"])
     assert all(shader["uuid"] != "termin-engine-foliage-shadow" for shader in catalog["shaders"])

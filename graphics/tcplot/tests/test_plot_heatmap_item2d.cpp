@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <termin_visual_scene/scene_render2d.hpp>
 #include <tgfx2/device_factory.hpp>
+#include <tgfx2/i_command_list.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 #include <variant>
@@ -62,8 +63,35 @@ namespace {
                         desc.sample_count == static_cast<uint32_t>(tc_retained_scene_renderer2d_msaa_samples(renderer)),
                     "retained scene output must match the requested dimensions and MSAA count");
             host.device().wait_idle();
+            struct ResolveTarget {
+                tgfx::IRenderDevice& device;
+                tgfx::TextureHandle texture{};
+                ~ResolveTarget() {
+                    if (texture)
+                        device.destroy(texture);
+                }
+            } resolved{host.device()};
+            tgfx::TextureHandle read_source{id};
+            if (desc.sample_count > 1) {
+                // Vulkan readback requires a single-sample source. Resolve at
+                // the original size and format to preserve the linear HDR data.
+                auto resolve_desc = desc;
+                resolve_desc.sample_count = 1;
+                resolve_desc.usage = tgfx::TextureUsage::CopyDst | tgfx::TextureUsage::CopySrc;
+                resolved.texture = host.device().create_texture(resolve_desc);
+                require(resolved.texture.id != 0, "heatmap resolve target creation failed");
+                const termin::Bounds2i rect{0, 0, width, height};
+                host.device().blit_to_texture(resolved.texture, read_source, rect, rect);
+                // Device blits execute as a submission prelude on Vulkan;
+                // synchronous readback only waits for submitted work.
+                auto flush = host.device().create_command_list();
+                flush->begin();
+                flush->end();
+                host.device().submit(*flush);
+                read_source = resolved.texture;
+            }
             std::vector<float> result(static_cast<size_t>(width) * height * 4);
-            require(host.device().read_texture_rgba_float(tgfx::TextureHandle{id}, result.data()),
+            require(host.device().read_texture_rgba_float(read_source, result.data()),
                     "heatmap readback failed");
             return result;
         };
