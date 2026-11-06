@@ -671,21 +671,12 @@ namespace tcplot {
             return;
         }
         data.grid_back_high = detail::cartesian_grid_back_high(frame);
-        data.grid_axis_edge_key = detail::cartesian_grid_axis_edge_key(frame);
-        const float axis_colors[3][3] = {
-            {style.x_axis_r, style.x_axis_g, style.x_axis_b},
-            {style.y_axis_r, style.y_axis_g, style.y_axis_b},
-            {style.z_axis_r, style.z_axis_g, style.z_axis_b},
-        };
         detail::for_each_cartesian_grid_line(frame, [&](const std::array<double, 3>& start,
-                                                       const std::array<double, 3>& end, int axis) {
-            const float r = axis < 0 ? style.grid_r : axis_colors[axis][0];
-            const float g = axis < 0 ? style.grid_g : axis_colors[axis][1];
-            const float b = axis < 0 ? style.grid_b : axis_colors[axis][2];
-            const float alpha = axis < 0 ? style.grid_a : 1.0f;
+                                                       const std::array<double, 3>& end) {
             for (const auto& point : {start, end}) {
                 append_line_vertex(data.draw_vertices, static_cast<float>(point[0]),
-                                   static_cast<float>(point[1]), static_cast<float>(point[2]), r, g, b, alpha);
+                                   static_cast<float>(point[1]), static_cast<float>(point[2]),
+                                   style.grid_r, style.grid_g, style.grid_b, style.grid_a);
             }
         });
         data.draw_vertex_count = static_cast<uint32_t>(data.draw_vertices.size() / kPlot3DFloatsPerVertex);

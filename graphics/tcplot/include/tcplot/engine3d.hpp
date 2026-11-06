@@ -62,7 +62,6 @@ namespace tcplot {
         std::unique_ptr<tgfx::Text3DRenderer> text3d_;
         std::unique_ptr<PlotScene3DChartChromeRenderer> chrome_;
         std::array<bool, 3> grid_back_high_{};
-        std::array<int, 3> grid_axis_edge_key_{-1, -1, -1};
         bool dirty_ = true, dragging_ = false;
         tcbase::MouseButton drag_button_{tcbase::MouseButton::LEFT};
         float drag_start_x_ = 0.0f, drag_start_y_ = 0.0f;
@@ -81,11 +80,6 @@ namespace tcplot {
         bool show_series = true;
         bool show_labels = true;
         SrgbColor grid_color{0.55f, 0.55f, 0.55f, 1.0f};
-        std::array<SrgbColor, 3> axis_colors{
-            SrgbColor{1, 0, 0, 1},
-            SrgbColor{0, 1, 0, 1},
-            SrgbColor{0, 0, 1, 1},
-        };
         float x_scale = 1.0f;
         float y_scale = 1.0f;
         float z_scale = 1.0f;
@@ -132,7 +126,7 @@ namespace tcplot {
                               uint32_t cols);
         bool set_scatter_data(size_t idx, std::vector<double> x, std::vector<double> y, std::vector<double> z);
         bool set_scatter_style(size_t idx, SrgbColor color, double size);
-        void set_grid_style(SrgbColor color, const std::array<SrgbColor, 3>& axis_colors);
+        void set_grid_style(SrgbColor color);
 
         void toggle_wireframe() {
             show_wireframe = !show_wireframe;

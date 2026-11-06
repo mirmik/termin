@@ -1272,8 +1272,7 @@ namespace {
             item.source.subobject_id = 0;
             const bool grid_faces_changed = slot.kind == TC_PLOT_ITEM3D_GRID && !frame.spherical_coordinates &&
                 slot.published_render_data &&
-                (slot.published_render_data->grid_back_high != tcplot::detail::cartesian_grid_back_high(frame) ||
-                 slot.published_render_data->grid_axis_edge_key != tcplot::detail::cartesian_grid_axis_edge_key(frame));
+                slot.published_render_data->grid_back_high != tcplot::detail::cartesian_grid_back_high(frame);
             if (!slot.published_render_data || slot.published_geometry_revision != slot.geometry_revision ||
                 slot.published_style_revision != slot.style_revision || grid_faces_changed) {
                 auto data = std::make_shared<tcplot::PlotScene3DItemRenderData>();

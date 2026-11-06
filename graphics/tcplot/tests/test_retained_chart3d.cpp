@@ -10,6 +10,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -362,8 +363,9 @@ namespace {
         for (uint32_t row = 0; row < rows; ++row) {
             for (uint32_t column = 0; column < columns; ++column) {
                 const size_t index = row * columns + column;
-                x[index] = -2.0 + 4.0 * column / (columns - 1);
-                y[index] = -2.0 + 4.0 * row / (rows - 1);
+                // Non-tick-aligned bounds show the grid without a forced outer frame.
+                x[index] = -2.17 + 4.35 * column / (columns - 1);
+                y[index] = -2.09 + 4.22 * row / (rows - 1);
                 z[index] = -1.0 + 1.4 * std::exp(-(x[index] * x[index] + y[index] * y[index]));
             }
         }
@@ -372,7 +374,7 @@ namespace {
             const double fraction = static_cast<double>(index) / (hx.size() - 1);
             hx[index] = 0.8 * std::cos(10 * pi * fraction);
             hy[index] = 0.8 * std::sin(10 * pi * fraction);
-            hz[index] = 0.6 + 3.4 * fraction;
+            hz[index] = 0.6 + 3.27 * fraction;
             if (index % 20 == 0) {
                 sx.push_back(hx[index] + 0.12 * std::sin(index));
                 sy.push_back(hy[index] + 0.12 * std::cos(index));
@@ -736,10 +738,9 @@ namespace {
                             require(payload->item->grid_back_high[axis] == (eye[axis] < 0),
                                     "Cartesian grid must select the far face on each axis");
                         }
-                        require((previous_grid->grid_back_high == payload->item->grid_back_high &&
-                                 previous_grid->grid_axis_edge_key == payload->item->grid_axis_edge_key) ==
+                        require((previous_grid->grid_back_high == payload->item->grid_back_high) ==
                                     (previous_grid == payload->item),
-                                "grid draw data must change exactly when selected faces or axis edges change");
+                                "grid draw data must change exactly when the selected rear faces change");
                         previous_grid = payload->item;
                         std::array<size_t, 3> face_lines{};
                         const auto& vertices = payload->item->draw_vertices;
@@ -784,9 +785,8 @@ namespace {
         termin::RenderItemSnapshot inside;
         require(source.publish(inside, {}), "failed to publish inside camera grid");
         const auto inside_grid = find_plot_payload(inside, grid)->item;
-        require(inside_grid->grid_back_high == outside_grid->grid_back_high &&
-                    inside_grid->grid_axis_edge_key != outside_grid->grid_axis_edge_key && inside_grid != outside_grid,
-                "grid cache must refresh disappearing contour axes even if the far faces stay unchanged");
+        require(inside_grid->grid_back_high == outside_grid->grid_back_high && inside_grid == outside_grid,
+                "label contour changes must reuse grid geometry while the rear faces stay unchanged");
 
         camera.distance = 100;
         camera.target_x = -1000;
@@ -799,6 +799,113 @@ namespace {
         termin::RenderItemSnapshot parallel;
         require(source.publish(parallel, {}) && !find_plot_payload(parallel, grid)->item->grid_back_high[0],
                 "orthographic rear-face choice must use the parallel view direction regardless of panning");
+    }
+
+    void test_cartesian_grid_tick_lines_cpu() {
+        constexpr double pi = 3.14159265358979323846;
+        constexpr size_t stride = 19;
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        using Point = std::array<float, 3>;
+        using Segment = std::array<float, 6>;
+        const auto segment_key = [](Point start, Point end) {
+            if (end < start)
+                std::swap(start, end);
+            return Segment{start[0], start[1], start[2], end[0], end[1], end[2]};
+        };
+        const std::array<std::array<double, 3>, 2> lower_bounds{{{-2, -1, -3}, {-2.37, -1.14, -3.26}}};
+        const std::array<std::array<double, 3>, 2> upper_bounds{{{2, 1, 3}, {2.18, 1.63, 3.41}}};
+        for (size_t fixture = 0; fixture < lower_bounds.size(); ++fixture) {
+            const auto& lo = lower_bounds[fixture];
+            const auto& hi = upper_bounds[fixture];
+            ChartOwner chart(tc_retained_chart3d_create(nullptr), tc_retained_chart3d_destroy);
+            require(chart != nullptr, "failed to create Cartesian perimeter chart");
+            const double x[] = {lo[0], hi[0]}, y[] = {lo[1], hi[1]}, z[] = {lo[2], hi[2]};
+            const auto line = tc_retained_chart3d_add_line(chart.get(), x, y, z, 2, nullptr);
+            require(tc_retained_chart3d_item_is_valid(chart.get(), line), "failed to set perimeter fixture bounds");
+            const auto grid = tc_retained_chart3d_grid_part(chart.get());
+            tc_grid_item3d_style style{};
+            require(tc_retained_chart3d_grid_get_style(chart.get(), grid, &style),
+                    "failed to read Cartesian perimeter grid style");
+            style.grid_r = style.grid_g = style.grid_b = 0.47f;
+            style.grid_a = 0.35f;
+            style.x_axis_r = style.y_axis_g = style.z_axis_b = 1.0f;
+            style.x_axis_g = style.x_axis_b = style.y_axis_r = style.y_axis_b =
+                style.z_axis_r = style.z_axis_g = 0.0f;
+            require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &style),
+                    "failed to set translucent gray perimeter style");
+            const auto expected_color = termin::srgb_to_linear(
+                termin::SrgbColor{style.grid_r, style.grid_g, style.grid_b, style.grid_a});
+            const float expected_channels[] = {expected_color.r, expected_color.g, expected_color.b, expected_color.a};
+            auto& source = tcplot::plot_scene3d_render_item_source(*chart);
+            tc_orbit_camera3d_state camera{};
+            require(tc_retained_chart3d_get_camera(chart.get(), &camera), "failed to read perimeter camera");
+            camera.target_x = camera.target_y = camera.target_z = 0;
+            camera.distance = 100;
+            camera.ortho_size = 10;
+            for (auto projection : {TC_CAMERA_PROJECTION3D_PERSPECTIVE, TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC}) {
+                camera.projection_type = projection;
+                for (double elevation : {-0.5, 0.5}) {
+                    camera.elevation = elevation;
+                    for (int quadrant = 0; quadrant < 4; ++quadrant) {
+                        camera.azimuth = 0.4 + quadrant * pi * 0.5;
+                        require(tc_retained_chart3d_set_camera(chart.get(), &camera),
+                                "failed to rotate perimeter camera");
+                        termin::RenderItemSnapshot published;
+                        require(source.publish(published, {}), "failed to publish perimeter grid");
+                        const auto* payload = find_plot_payload(published, grid);
+                        require(payload && payload->frame.bounds_min == lo && payload->frame.bounds_max == hi,
+                                "perimeter regression must exercise the exact non-rounded data bounds");
+                        const auto& data = *payload->item;
+                        require(data.draw_vertex_count > 0 && data.draw_vertex_count % 2 == 0 &&
+                                    data.draw_vertices.size() == data.draw_vertex_count * stride,
+                                "perimeter grid requires a complete line stream");
+                        std::set<Segment> segments;
+                        for (size_t vertex = 0; vertex < data.draw_vertex_count; vertex += 2) {
+                            Point start{}, end{};
+                            for (size_t axis = 0; axis < 3; ++axis) {
+                                start[axis] = data.draw_vertices[vertex * stride + axis];
+                                end[axis] = data.draw_vertices[(vertex + 1) * stride + axis];
+                            }
+                            require(start != end, "Cartesian grid must not emit zero-length segments");
+                            require(segments.insert(segment_key(start, end)).second,
+                                    "shared face borders and boundary ticks must be emitted exactly once");
+                            for (size_t endpoint = 0; endpoint < 2; ++endpoint)
+                                for (size_t channel = 0; channel < 4; ++channel)
+                                    require(std::abs(data.draw_vertices[(vertex + endpoint) * stride + 3 + channel] -
+                                                     expected_channels[channel]) < 1e-6f,
+                                            "every Cartesian grid line must use the same grid RGBA without RGB axes");
+                        }
+                        // A box edge belongs to the rear-face perimeter if either
+                        // of its two fixed coordinates lies on a selected rear face.
+                        size_t perimeter_edges = 0;
+                        for (size_t along = 0; along < 3; ++along) {
+                            size_t fixed[2]{}, next = 0;
+                            for (size_t axis = 0; axis < 3; ++axis)
+                                if (axis != along)
+                                    fixed[next++] = axis;
+                            for (unsigned sides = 0; sides < 4; ++sides) {
+                                bool on_rear_face = false;
+                                Point start{}, end{};
+                                start[along] = static_cast<float>(lo[along]);
+                                end[along] = static_cast<float>(hi[along]);
+                                for (size_t index = 0; index < 2; ++index) {
+                                    const size_t axis = fixed[index];
+                                    const bool high = (sides & (1u << index)) != 0;
+                                    start[axis] = end[axis] = static_cast<float>(high ? hi[axis] : lo[axis]);
+                                    on_rear_face |= high == data.grid_back_high[axis];
+                                }
+                                if (on_rear_face) {
+                                    require(segments.count(segment_key(start, end)) == (fixture == 0 ? 1u : 0u),
+                                            "grid borders must exist only where numeric ticks coincide with bounds");
+                                    ++perimeter_edges;
+                                }
+                            }
+                        }
+                        require(perimeter_edges == 9, "three rear faces must have nine distinct perimeter edges");
+                    }
+                }
+            }
+        }
     }
 
     void test_cartesian_grid_labels_cpu() {
@@ -1368,6 +1475,7 @@ int main(int argc, char** argv) {
                 "usage: tcplot_retained_chart3d_test [--cpu-only|--spherical-d3d11|--cartesian-capture]");
         test_termin_clip_canvas_projection();
         test_cartesian_grid_faces_cpu();
+        test_cartesian_grid_tick_lines_cpu();
         test_cartesian_grid_labels_cpu();
         test_orthographic_camera_cpu();
         test_spherical_chart_cpu();

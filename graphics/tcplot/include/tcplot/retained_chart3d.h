@@ -85,6 +85,8 @@ typedef struct tc_grid_item3d_style {
     float grid_g;
     float grid_b;
     float grid_a;
+    /* Angular/radial scale colors for spherical coordinates.
+       Cartesian grids use grid RGBA throughout. */
     float x_axis_r;
     float x_axis_g;
     float x_axis_b;

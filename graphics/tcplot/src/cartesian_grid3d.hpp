@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -99,23 +100,18 @@ namespace tcplot::detail {
         return result;
     }
 
-    inline std::array<int, 3> cartesian_grid_axis_edge_key(const PlotScene3DFrameRenderState& frame) {
-        const auto edges = cartesian_axis_edges(frame);
-        std::array<int, 3> key{-1, -1, -1};
-        for (size_t axis = 0; axis < 3; ++axis) {
-            if (!edges[axis].visible)
-                continue;
-            key[axis] = 0;
-            for (size_t coordinate = 0; coordinate < 3; ++coordinate)
-                if (edges[axis].start[coordinate] == frame.bounds_max[coordinate])
-                    key[axis] |= 1 << coordinate;
-        }
-        return key;
-    }
-
     template<class Emit>
     void for_each_cartesian_grid_line(const PlotScene3DFrameRenderState& frame, Emit emit) {
         const auto back = cartesian_grid_back_high(frame);
+        std::set<std::array<GridPoint3D, 2>> segments;
+        const auto line = [&](GridPoint3D a, GridPoint3D b) {
+            if (a == b)
+                return;
+            if (b < a)
+                std::swap(a, b);
+            if (segments.insert({a, b}).second)
+                emit(a, b);
+        };
         for (size_t face = 0; face < 3; ++face) {
             for (size_t axis = 0; axis < 3; ++axis) {
                 if (axis == face)
@@ -127,14 +123,9 @@ namespace tcplot::detail {
                     a[axis] = tick;
                     auto b = a;
                     b[along] = frame.bounds_max[along];
-                    emit(a, b, -1);
+                    line(a, b);
                 }
             }
-        }
-        const auto edges = cartesian_axis_edges(frame);
-        for (size_t axis = 0; axis < 3; ++axis) {
-            if (edges[axis].visible)
-                emit(edges[axis].start, edges[axis].end, static_cast<int>(axis));
         }
     }
 

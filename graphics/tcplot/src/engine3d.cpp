@@ -422,9 +422,8 @@ namespace tcplot {
         return true;
     }
 
-    void PlotEngine3D::set_grid_style(SrgbColor color, const std::array<SrgbColor, 3>& colors) {
+    void PlotEngine3D::set_grid_style(SrgbColor color) {
         grid_color = color;
-        axis_colors = colors;
         dirty_ = true;
     }
 
@@ -611,10 +610,9 @@ namespace tcplot {
         std::vector<uint32_t> indices;
         uint32_t idx = 0;
         const auto frame = cartesian_frame(*this, bounds_min, bounds_max);
-        detail::for_each_cartesian_grid_line(frame, [&](const auto& start, const auto& end, int axis) {
-            const auto color = axis < 0 ? grid_color : axis_colors[axis];
-            push_vertex(verts, start[0], start[1], start[2], color);
-            push_vertex(verts, end[0], end[1], end[2], color);
+        detail::for_each_cartesian_grid_line(frame, [&](const auto& start, const auto& end) {
+            push_vertex(verts, start[0], start[1], start[2], grid_color);
+            push_vertex(verts, end[0], end[1], end[2], grid_color);
             indices.push_back(idx++);
             indices.push_back(idx++);
         });
@@ -629,7 +627,6 @@ namespace tcplot {
             grid_mesh_ = make_mesh_(device, verts, indices, tgfx::PrimitiveTopology::LineList);
         }
         grid_back_high_ = detail::cartesian_grid_back_high(frame);
-        grid_axis_edge_key_ = detail::cartesian_grid_axis_edge_key(frame);
     }
 
     void PlotEngine3D::build_surface_mesh_(tgfx::IRenderDevice& device, const SurfaceSeries& surf) {
@@ -783,8 +780,7 @@ namespace tcplot {
         const float z_max = static_cast<float>(hi[2]);
 
         const auto frame = cartesian_frame(*this, lo, hi);
-        if (show_grid && (!grid_mesh_ || grid_back_high_ != detail::cartesian_grid_back_high(frame) ||
-                          grid_axis_edge_key_ != detail::cartesian_grid_axis_edge_key(frame)))
+        if (show_grid && (!grid_mesh_ || grid_back_high_ != detail::cartesian_grid_back_high(frame)))
             build_grid_mesh_(ctx->device(), lo, hi);
 
         // Grid (no jet).
