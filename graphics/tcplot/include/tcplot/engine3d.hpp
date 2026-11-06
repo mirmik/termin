@@ -97,6 +97,7 @@ namespace tcplot {
 
         // --- Viewport (host-supplied pixel rect) ---
         void set_viewport(float x, float y, float width, float height);
+        void fit_camera();
 
         // --- Public add-series API ---
         void plot(std::vector<double> x, std::vector<double> y, std::vector<double> z, LinePlotOptions options = {});

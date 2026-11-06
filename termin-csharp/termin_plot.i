@@ -66,6 +66,11 @@ enum class BackendType {
 }
 
 namespace termin {
+enum class CameraProjection {
+    Perspective,
+    Orthographic
+};
+
 struct Vec2 {
     double x, y;
 
@@ -107,6 +112,8 @@ enum class LineStyle {
 
 class OrbitCamera {
 public:
+    termin::CameraProjection projection_type;
+    double ortho_size;
     double distance;
     double azimuth;
     double elevation;
@@ -122,6 +129,7 @@ public:
 
     void orbit(double d_azimuth, double d_elevation);
     void zoom(double factor);
+    void set_isometric();
     bool pan(const termin::Vec2& from_position,
              const termin::Vec2& to_position,
              const termin::Rect2& viewport);

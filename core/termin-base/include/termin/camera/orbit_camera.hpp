@@ -3,6 +3,7 @@
 #include <optional>
 
 #include <tcbase/tcbase_api.h>
+#include <termin/camera/camera_projection.hpp>
 #include <termin/camera/screen_ray.hpp>
 #include <termin/geom/aabb.hpp>
 #include <termin/geom/mat44.hpp>
@@ -65,6 +66,9 @@ namespace termin {
 
     class TCBASE_API OrbitCamera {
     public:
+        // All cameras use local +X right, +Y forward and +Z up.
+        CameraProjection projection_type = CameraProjection::Perspective;
+        double ortho_size = 5.0; // Half of the orthographic viewport height.
         Vec3 target{0.0, 0.0, 0.0};
         double distance = 5.0;
         double azimuth;
@@ -94,10 +98,11 @@ namespace termin {
 
         void orbit(double d_azimuth, double d_elevation);
         void zoom(double factor);
+        void set_isometric();
         std::optional<OrbitCameraPan> begin_pan(const Vec2& screen_position, const Rect2& viewport) const;
         bool pan(const OrbitCameraPan& gesture, const Vec2& screen_position);
         bool pan(const Vec2& from, const Vec2& to, const Rect2& viewport);
-        void fit_bounds(const AABB& bounds);
+        void fit_bounds(const AABB& bounds, double aspect = 1.0);
 
         std::optional<Ray3>
         try_screen_ray(const Vec2& screen_position, const Rect2& viewport, ScreenRayError* error = nullptr) const;

@@ -263,6 +263,11 @@ namespace tcplot::gui_native {
         invalidate();
     }
 
+    void Plot3D::set_isometric_camera() {
+        tc_retained_chart3d_set_isometric_camera(chart());
+        invalidate();
+    }
+
     bool Plot3D::camera(tc_orbit_camera3d_state& state) const {
         return tc_retained_chart3d_get_camera(chart(), &state) != 0;
     }

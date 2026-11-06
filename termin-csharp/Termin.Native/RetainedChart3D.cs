@@ -320,6 +320,9 @@ public readonly struct OrbitCameraState3D
     public readonly double FieldOfViewY;
     public readonly double NearClip;
     public readonly double FarClip;
+    public readonly CameraProjection ProjectionType;
+    /// <summary>Half the visible vertical extent in orthographic projection.</summary>
+    public readonly double OrthoSize;
 
     public OrbitCameraState3D(
         double targetX,
@@ -330,7 +333,9 @@ public readonly struct OrbitCameraState3D
         double elevation,
         double fieldOfViewY,
         double nearClip,
-        double farClip)
+        double farClip,
+        CameraProjection projectionType = CameraProjection.Perspective,
+        double orthoSize = 5)
     {
         TargetX = targetX;
         TargetY = targetY;
@@ -341,7 +346,16 @@ public readonly struct OrbitCameraState3D
         FieldOfViewY = fieldOfViewY;
         NearClip = nearClip;
         FarClip = farClip;
+        ProjectionType = projectionType;
+        OrthoSize = orthoSize;
     }
+
+    /// <summary>Changes the projection while preserving the camera pose and clip planes.</summary>
+    public OrbitCameraState3D WithProjection(
+        CameraProjection projectionType,
+        double? orthoSize = null) => new(
+            TargetX, TargetY, TargetZ, Distance, Azimuth, Elevation,
+            FieldOfViewY, NearClip, FarClip, projectionType, orthoSize ?? OrthoSize);
 }
 
 public abstract class PlotItemRef3D
@@ -777,6 +791,7 @@ public sealed class Chart3DCamera
                     _chart.NativeHandle, ref value) == 0)
                 throw new InvalidOperationException(
                     "Failed to update Chart3D camera. See native log.");
+            _chart.InvalidateRender();
         }
     }
 
@@ -784,12 +799,22 @@ public sealed class Chart3DCamera
     {
         _chart.ThrowIfDisposed();
         RetainedChart3DNative.ResetCamera(_chart.NativeHandle);
+        _chart.InvalidateRender();
     }
 
     public void Fit()
     {
         _chart.ThrowIfDisposed();
         RetainedChart3DNative.FitCamera(_chart.NativeHandle);
+        _chart.InvalidateRender();
+    }
+
+    /// <summary>Uses orthographic projection at 45° azimuth and asin(1/sqrt(3)) elevation, then fits the data.</summary>
+    public void SetIsometric()
+    {
+        _chart.ThrowIfDisposed();
+        RetainedChart3DNative.SetIsometricCamera(_chart.NativeHandle);
+        _chart.InvalidateRender();
     }
 }
 
@@ -846,11 +871,13 @@ public sealed class RetainedChart3D : IDisposable
     public PlotCoordinateSystem3D Coordinates { get; }
 
     /// <summary>
-    /// Raised synchronously after a successful background color, axis display offset or tick-label mutation.
+    /// Raised synchronously after a successful camera, background color, axis display offset or tick-label mutation.
     /// Other chart mutations still require an explicit render request from the consumer.
     /// When attached to a WPF host, mutate the chart on the host's UI thread.
     /// </summary>
     public event EventHandler? RenderInvalidated;
+
+    internal void InvalidateRender() => RenderInvalidated?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
     /// Background clear color in sRGB, with finite RGBA components in [0, 1].
@@ -1314,6 +1341,9 @@ internal static class RetainedChart3DNative
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_fit_camera")]
     internal static extern void FitCamera(IntPtr chart);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_set_isometric_camera")]
+    internal static extern void SetIsometricCamera(IntPtr chart);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_pointer_down")]
     internal static extern int PointerDown(

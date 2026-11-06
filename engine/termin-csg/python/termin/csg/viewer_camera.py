@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 from termin.geombase import OrbitCamera as _NativeOrbitCamera
-from termin.geombase import Ray3, Rect2, Vec2, Vec3
+from termin.geombase import Mat44, Ray3, Rect2, Vec2, Vec3
 
 
 def _vec3(value) -> Vec3:
@@ -26,29 +26,12 @@ def normalize(v):
 
 
 def look_at(eye, target, up):
-    f = normalize(target - eye)
-    r = normalize(np.cross(f, up))
-    u = np.cross(r, f)
-    m = np.identity(4, dtype=np.float32)
-    m[0, 0:3] = r
-    m[1, 0:3] = u
-    m[2, 0:3] = -f
-    m[0, 3] = -float(np.dot(r, eye))
-    m[1, 3] = -float(np.dot(u, eye))
-    m[2, 3] = float(np.dot(f, eye))
-    return m
+    """Use the engine's +Y-forward, +Z-up camera convention."""
+    return np.asarray(Mat44.look_at(_vec3(eye), _vec3(target), _vec3(up)).to_rows(), dtype=np.float32)
 
 
 def perspective(fovy, aspect, near, far):
-    f = 1.0 / math.tan(fovy * 0.5)
-    fn = far - near
-    m = np.zeros((4, 4), dtype=np.float32)
-    m[0, 0] = f / aspect
-    m[1, 1] = -f
-    m[2, 2] = -far / fn
-    m[2, 3] = -(far * near) / fn
-    m[3, 2] = -1.0
-    return m
+    return np.asarray(Mat44.perspective(fovy, aspect, near, far).to_rows(), dtype=np.float32)
 
 
 class OrbitCamera:

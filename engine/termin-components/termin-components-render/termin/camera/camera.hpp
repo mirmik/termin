@@ -1,5 +1,6 @@
 #pragma once
 
+#include <termin/camera/camera_projection.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/quat.hpp>
 #include <termin/geom/vec3.hpp>
@@ -12,11 +13,6 @@
 #endif
 
 namespace termin {
-
-    enum class CameraProjection {
-        Perspective,
-        Orthographic
-    };
 
     struct Camera {
     public:

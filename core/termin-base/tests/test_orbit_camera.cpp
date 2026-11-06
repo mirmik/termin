@@ -32,7 +32,7 @@ namespace {
 
 } // namespace
 
-TEST_CASE("OrbitCamera default eye matches tcplot convention") {
+TEST_CASE("OrbitCamera default eye matches shared orbit angles") {
     termin::OrbitCamera camera;
     double eye[3];
     camera.compute_eye(eye);
@@ -91,7 +91,8 @@ TEST_CASE("OrbitCamera projects world points through the checked semantic contra
     CHECK(std::abs(projected->screen.y - (viewport.y + viewport.height * 0.5)) <= 0.5);
     CHECK(projected->depth > 0.0);
     CHECK(projected->depth < 1.0);
-    CHECK_EQ(projected->view_point.z, guard::Approx(-camera.distance).epsilon(1.0e-3));
+    CHECK_EQ(projected->view_point.y, guard::Approx(camera.distance).epsilon(1.0e-3));
+    CHECK(std::abs(projected->view_point.z) < 1.0e-3);
 
     CHECK_FALSE(camera.try_project_world_point({std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0}, viewport, &error)
                     .has_value());
@@ -120,6 +121,186 @@ TEST_CASE("OrbitCamera perspective pan keeps the grabbed target under the cursor
     const termin::Vec2 projected = project_to_screen(camera.mvp(800.0 / 600.0), grabbed, viewport);
     CHECK_EQ(projected.x, guard::Approx(525.0).epsilon(1.0e-4));
     CHECK_EQ(projected.y, guard::Approx(360.0).epsilon(1.0e-4));
+}
+
+TEST_CASE("OrbitCamera uses local X right Y forward Z up for both projections") {
+    termin::OrbitCamera camera;
+    camera.azimuth = 0.0;
+    camera.elevation = 0.0;
+    const termin::Vec3 view_target = camera.view_matrix().transform_point(camera.target);
+    CHECK(near(view_target.x, 0.0));
+    CHECK(near(view_target.y, camera.distance));
+    CHECK(near(view_target.z, 0.0));
+
+    const termin::Rect2 viewport{0.0, 0.0, 800.0, 600.0};
+    for (const auto projection : {termin::CameraProjection::Perspective, termin::CameraProjection::Orthographic}) {
+        camera.projection_type = projection;
+        const auto center = camera.try_project_world_point(camera.target, viewport);
+        const auto right = camera.try_project_world_point(camera.target + termin::Vec3::unit_x(), viewport);
+        const auto up = camera.try_project_world_point(camera.target + termin::Vec3::unit_z(), viewport);
+        const auto forward = camera.try_project_world_point(camera.target + termin::Vec3::unit_y(), viewport);
+        REQUIRE(center.has_value());
+        REQUIRE(right.has_value());
+        REQUIRE(up.has_value());
+        REQUIRE(forward.has_value());
+        CHECK(right->screen.x > center->screen.x);
+        CHECK(near(right->screen.y, center->screen.y));
+        CHECK(up->screen.y < center->screen.y);
+        CHECK(near(up->screen.x, center->screen.x));
+        CHECK(forward->depth > center->depth);
+    }
+}
+
+TEST_CASE("OrbitCamera isometric preset projects all unit axes with equal lengths") {
+    termin::OrbitCamera camera;
+    camera.set_isometric();
+    CHECK(camera.projection_type == termin::CameraProjection::Orthographic);
+    const termin::Rect2 viewport{0.0, 0.0, 1200.0, 600.0};
+    const auto center = camera.try_project_world_point(camera.target, viewport);
+    const auto x = camera.try_project_world_point(camera.target + termin::Vec3::unit_x(), viewport);
+    const auto y = camera.try_project_world_point(camera.target + termin::Vec3::unit_y(), viewport);
+    const auto z = camera.try_project_world_point(camera.target + termin::Vec3::unit_z(), viewport);
+    REQUIRE(center.has_value());
+    REQUIRE(x.has_value());
+    REQUIRE(y.has_value());
+    REQUIRE(z.has_value());
+    const double x_length = (x->screen - center->screen).norm();
+    CHECK(x_length > 0.0);
+    CHECK(near(x_length, (y->screen - center->screen).norm()));
+    CHECK(near(x_length, (z->screen - center->screen).norm()));
+}
+
+TEST_CASE("OrbitCamera orthographic size is independent of depth and zoom preserves pose") {
+    termin::OrbitCamera camera;
+    camera.projection_type = termin::CameraProjection::Orthographic;
+    camera.azimuth = 0.0;
+    camera.elevation = 0.0;
+    const termin::Rect2 viewport{0.0, 0.0, 800.0, 600.0};
+    const auto near_point = camera.try_project_world_point({1.0, 0.0, 1.0}, viewport);
+    const auto far_point = camera.try_project_world_point({1.0, 20.0, 1.0}, viewport);
+    REQUIRE(near_point.has_value());
+    REQUIRE(far_point.has_value());
+    CHECK(near(near_point->screen.x, far_point->screen.x));
+    CHECK(near(near_point->screen.y, far_point->screen.y));
+    CHECK(far_point->depth > near_point->depth);
+
+    const auto left_ray = camera.try_screen_ray({100.0, 200.0}, viewport);
+    const auto right_ray = camera.try_screen_ray({700.0, 400.0}, viewport);
+    REQUIRE(left_ray.has_value());
+    REQUIRE(right_ray.has_value());
+    CHECK((left_ray->direction - right_ray->direction).norm() < 1.0e-9);
+    CHECK((left_ray->origin - right_ray->origin).norm() > 1.0);
+
+    const double distance = camera.distance;
+    const double size = camera.ortho_size;
+    camera.zoom(0.5);
+    CHECK(near(camera.distance, distance));
+    CHECK(near(camera.ortho_size, size * 0.5));
+    const auto zoomed = camera.try_project_world_point({1.0, 0.0, 1.0}, viewport);
+    REQUIRE(zoomed.has_value());
+    CHECK(near(zoomed->screen.x - 400.0, 2.0 * (near_point->screen.x - 400.0)));
+}
+
+TEST_CASE("OrbitCamera fit frames all corners in both projections and portrait viewports") {
+    const termin::AABB bounds{{-12.0, -2.0, -5.0}, {9.0, 4.0, 7.0}};
+    termin::Vec3 corners[8];
+    bounds.get_corners(corners);
+    for (const auto projection : {termin::CameraProjection::Perspective, termin::CameraProjection::Orthographic}) {
+        for (const double aspect : {0.2, 1.0, 4.0}) {
+            termin::OrbitCamera camera;
+            camera.projection_type = projection;
+            const double azimuth = camera.azimuth;
+            const double elevation = camera.elevation;
+            camera.fit_bounds(bounds, aspect);
+            CHECK(camera.projection_type == projection);
+            CHECK(near(camera.azimuth, azimuth));
+            CHECK(near(camera.elevation, elevation));
+            const termin::Mat44 mvp = camera.mvp(aspect);
+            for (const auto& corner : corners) {
+                const termin::Vec3 ndc = mvp.transform_point(corner);
+                CHECK(std::abs(ndc.x) < 1.0);
+                CHECK(std::abs(ndc.y) < 1.0);
+                CHECK(ndc.z > 0.0);
+                CHECK(ndc.z < 1.0);
+            }
+        }
+    }
+}
+
+TEST_CASE("OrbitCamera orthographic pan keeps the grabbed target under the cursor") {
+    termin::OrbitCamera camera;
+    camera.set_isometric();
+    const termin::Rect2 viewport{25.0, 50.0, 800.0, 600.0};
+    const termin::Vec3 grabbed = camera.target;
+    const auto gesture = camera.begin_pan({425.0, 350.0}, viewport);
+    REQUIRE(gesture.has_value());
+    REQUIRE(camera.pan(*gesture, {530.0, 415.0}));
+    const auto projected = camera.try_project_world_point(grabbed, viewport);
+    REQUIRE(projected.has_value());
+    CHECK(near(projected->screen.x, 530.0));
+    CHECK(near(projected->screen.y, 415.0));
+}
+
+TEST_CASE("OrbitCamera fit frames sub-unit bounds without a one-unit radius floor") {
+    const termin::AABB bounds{{-0.001, -0.001, -0.001}, {0.001, 0.001, 0.001}};
+    const termin::Rect2 viewport{0.0, 0.0, 800.0, 600.0};
+    termin::Vec3 corners[8];
+    bounds.get_corners(corners);
+    for (const auto projection : {termin::CameraProjection::Perspective, termin::CameraProjection::Orthographic}) {
+        termin::OrbitCamera camera;
+        camera.projection_type = projection;
+        camera.fit_bounds(bounds, viewport.width / viewport.height);
+        CHECK(camera.distance < 0.01);
+        CHECK(camera.near_clip < 0.001);
+        CHECK(camera.far_clip < 0.1);
+        const auto first = camera.try_project_world_point(corners[0], viewport);
+        const auto opposite = camera.try_project_world_point(corners[7], viewport);
+        REQUIRE(first.has_value());
+        REQUIRE(opposite.has_value());
+        CHECK((first->screen - opposite->screen).norm() > 100.0);
+        for (const auto& corner : corners) {
+            const termin::Vec3 ndc = camera.mvp(viewport.width / viewport.height).transform_point(corner);
+            CHECK(std::abs(ndc.x) < 1.0);
+            CHECK(std::abs(ndc.y) < 1.0);
+            CHECK(ndc.z > 0.0);
+            CHECK(ndc.z < 1.0);
+        }
+        const auto ray = camera.try_screen_ray({400.0, 300.0}, viewport);
+        REQUIRE(ray.has_value());
+        CHECK(point_to_ray_distance(camera.target, *ray) < 1.0e-9);
+    }
+}
+
+TEST_CASE("OrbitCamera orthographic zoom is independent of perspective distance limits") {
+    termin::OrbitCamera camera;
+    camera.projection_type = termin::CameraProjection::Orthographic;
+    camera.ortho_size = 0.001;
+    camera.zoom(0.9);
+    CHECK(near(camera.ortho_size, 0.0009));
+    camera.ortho_size = camera.max_distance * 2.0;
+    camera.zoom(1.1);
+    CHECK(near(camera.ortho_size, camera.max_distance * 2.2));
+    const double previous_size = camera.ortho_size;
+    camera.zoom(std::numeric_limits<double>::max());
+    CHECK(camera.ortho_size == previous_size);
+    camera.zoom(-1.0);
+    CHECK(camera.ortho_size == previous_size);
+}
+
+TEST_CASE("OrbitCamera fit keeps a single point projectable at the origin and far away") {
+    for (const auto projection : {termin::CameraProjection::Perspective, termin::CameraProjection::Orthographic}) {
+        for (const auto target : {termin::Vec3::zero(), termin::Vec3{1e12, -1e12, 1e12}}) {
+            termin::OrbitCamera camera;
+            camera.projection_type = projection;
+            camera.fit_bounds(termin::AABB{target, target});
+            const auto point = camera.try_project_world_point(target, {0.0, 0.0, 800.0, 600.0});
+            REQUIRE(point.has_value());
+            CHECK(std::abs(point->screen.x - 400.0) < 0.1);
+            CHECK(std::abs(point->screen.y - 300.0) < 0.1);
+            CHECK(point->depth > 0.0);
+            CHECK(point->depth < 1.0);
+        }
+    }
 }
 
 TEST_CASE("OrbitCamera pan gesture supports orthographic projection") {

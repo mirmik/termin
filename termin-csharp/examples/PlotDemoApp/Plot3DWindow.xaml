@@ -2,11 +2,19 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:PlotDemoApp"
-        Title="tcplot — 3D demo (left-drag: orbit, middle-drag: pan, wheel: zoom, right-click: pick)"
+        Title="tcplot — isometric 3D demo (left-drag: orbit, middle-drag: pan, wheel: zoom, right-click: pick)"
         Width="900" Height="700"
         Background="#202024"
         WindowStartupLocation="CenterScreen">
-    <Grid>
+    <DockPanel>
+        <StackPanel x:Name="CameraControls" DockPanel.Dock="Top"
+                    Orientation="Horizontal" Background="#28282E" IsEnabled="False">
+            <Button Content="Isometric" Click="OnIsometric" Padding="14,6" Margin="8,8,4,8"/>
+            <Button Content="Perspective" Click="OnPerspective" Padding="14,6" Margin="4,8"/>
+            <Button Content="Fit" Click="OnFit" Padding="14,6" Margin="4,8"/>
+            <TextBlock x:Name="ProjectionLabel" Foreground="#D0D0D8"
+                       VerticalAlignment="Center" Margin="12,0"/>
+        </StackPanel>
         <local:Plot3DControl x:Name="Plot"/>
-    </Grid>
+    </DockPanel>
 </Window>

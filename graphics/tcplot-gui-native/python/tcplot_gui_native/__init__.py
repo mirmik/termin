@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from termin.plot import SrgbColor, SurfaceColorMap, default_colors
+from termin.plot import OrbitCameraState3D, SrgbColor, SurfaceColorMap, default_colors
 from termin.plot.gui_native._plot_gui_native import Plot2DAccess, Plot3DAccess
 
 
@@ -259,6 +259,18 @@ class Plot3D:
 
     def reset_camera(self) -> None:
         self._native.reset_camera()
+
+    def set_isometric_camera(self) -> None:
+        self._native.set_isometric_camera()
+
+    @property
+    def camera(self) -> OrbitCameraState3D:
+        """Return a snapshot; assign the changed snapshot to apply camera edits."""
+        return self._native.camera
+
+    @camera.setter
+    def camera(self, state: OrbitCameraState3D) -> None:
+        self._native.camera = state
 
 
 __all__ = ["Plot2D", "Plot3D", "Plot3DItem"]

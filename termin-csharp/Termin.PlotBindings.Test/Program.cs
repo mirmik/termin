@@ -823,6 +823,82 @@ static void TestChart3DBackgroundColor(GpuHost host)
     }
 }
 
+static void TestChart3DCamera(GpuHost host)
+{
+    if (Marshal.OffsetOf<OrbitCameraState3D>(nameof(OrbitCameraState3D.ProjectionType)).ToInt32() != 72 ||
+        Marshal.OffsetOf<OrbitCameraState3D>(nameof(OrbitCameraState3D.OrthoSize)).ToInt32() != 80 ||
+        Marshal.SizeOf<OrbitCameraState3D>() != 88)
+        throw new InvalidOperationException("OrbitCameraState3D does not match the native camera ABI.");
+
+    foreach (bool spherical in new[] { false, true })
+    {
+        using var chart = spherical ? RetainedChart3D.CreateSpherical(host) : new RetainedChart3D(host);
+        chart.Scene.AddScatter(new[] { -1.0, 1.0 }, new[] { -2.0, 2.0 }, new[] { -3.0, 3.0 });
+        chart.Camera.Fit();
+        var initial = chart.Camera.State;
+        if (initial.ProjectionType != CameraProjection.Perspective || initial.OrthoSize <= 0)
+            throw new InvalidOperationException("Chart3D default camera projection is invalid.");
+        int invalidations = 0;
+        chart.RenderInvalidated += (_, _) => ++invalidations;
+
+        var requested = initial.WithProjection(CameraProjection.Orthographic, 7.25);
+        chart.Camera.State = requested;
+        if (!chart.Camera.State.Equals(requested) || invalidations != 1)
+            throw new InvalidOperationException("Orthographic camera state must round trip and request rendering.");
+        _ = chart.RenderToTextureHandleId(480, 360);
+        if (!chart.Wheel(240, 180, 1))
+            throw new InvalidOperationException("Orthographic camera rejected the zoom gesture.");
+        var zoomed = chart.Camera.State;
+        if (zoomed.OrthoSize >= requested.OrthoSize || zoomed.Distance != requested.Distance)
+            throw new InvalidOperationException("Orthographic zoom must change frame size while preserving distance.");
+
+        int beforeRejected = invalidations;
+        foreach (double size in new[] { 0.0, -1.0, double.NaN, double.PositiveInfinity })
+            RequireThrows<InvalidOperationException>(
+                () => chart.Camera.State = zoomed.WithProjection(CameraProjection.Orthographic, size),
+                "An invalid orthographic size was accepted.");
+        RequireThrows<InvalidOperationException>(
+            () => chart.Camera.State = zoomed.WithProjection((CameraProjection)999),
+            "An unknown camera projection was accepted.");
+        if (!chart.Camera.State.Equals(zoomed) || invalidations != beforeRejected)
+            throw new InvalidOperationException("A rejected camera state changed the camera or requested rendering.");
+
+        chart.Camera.SetIsometric();
+        var isometric = chart.Camera.State;
+        if (isometric.ProjectionType != CameraProjection.Orthographic ||
+            Math.Abs(isometric.Azimuth - Math.PI / 4) > 1e-12 ||
+            Math.Abs(isometric.Elevation - Math.Asin(1 / Math.Sqrt(3))) > 1e-12 ||
+            invalidations != beforeRejected + 1)
+            throw new InvalidOperationException("The isometric camera preset is incorrect.");
+        chart.Camera.Fit();
+        if (chart.Camera.State.ProjectionType != CameraProjection.Orthographic ||
+            chart.Camera.State.Azimuth != isometric.Azimuth ||
+            chart.Camera.State.Elevation != isometric.Elevation || invalidations != beforeRejected + 2)
+            throw new InvalidOperationException("Fit must preserve projection and viewing direction and request rendering.");
+        _ = chart.RenderToTextureHandleId(360, 480);
+        chart.Camera.Reset();
+        if (chart.Camera.State.ProjectionType != CameraProjection.Perspective ||
+            invalidations != beforeRejected + 3)
+            throw new InvalidOperationException("Reset must restore perspective and request rendering.");
+    }
+
+    using var legacy = new PlotView3D(host);
+    legacy.scatter(new[] { -1.0, 1.0 }, new[] { -2.0, 2.0 }, new[] { -3.0, 3.0 }, 2,
+        1, 0.5f, 0.2f, 1, 5, "camera bindings");
+    using var camera = legacy.camera();
+    camera.projection_type = CameraProjection.Orthographic;
+    camera.ortho_size = 8;
+    if (camera.projection_type != CameraProjection.Orthographic || camera.ortho_size != 8)
+        throw new InvalidOperationException("Legacy orthographic camera fields did not round trip.");
+    camera.set_isometric();
+    legacy.fit_camera();
+    if (camera.projection_type != CameraProjection.Orthographic ||
+        Math.Abs(camera.elevation - Math.Asin(1 / Math.Sqrt(3))) > 1e-12 ||
+        legacy.render_to_texture_handle_id(480, 360) == 0)
+        throw new InvalidOperationException("Legacy isometric camera binding failed.");
+    Console.WriteLine("CHART3D_CAMERA_OK ABI, round-trip, isometric preset, zoom, fit, reset and render invalidation");
+}
+
 TestVisualTextDescriptorLayout();
 TestRetainedVisualSceneFactories();
 TestRetainedPlotItems();
@@ -859,6 +935,7 @@ if (!OperatingSystem.IsWindows())
     TestSphericalChart(host);
     TestAxisDisplaySettings(host);
     TestChart3DBackgroundColor(host);
+    TestChart3DCamera(host);
 }
 else
 {
@@ -868,6 +945,7 @@ else
     TestSphericalChart(host);
     TestAxisDisplaySettings(host);
     TestChart3DBackgroundColor(host);
+    TestChart3DCamera(host);
     using (var firstFrameView = new PlotView2D(host))
     using (var secondFrameView = new PlotView2D(host))
     using (var thirdFrameView = new PlotView2D(host))

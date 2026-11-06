@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from termin.nodegraph import (
     DictSchemaProvider,
@@ -11,6 +12,35 @@ from termin.nodegraph import (
 )
 from termin.plot.gui_native import Plot3D
 from termin.gui_native import OffscreenGuiComposition
+
+
+def test_plot3d_widget_exposes_shared_orthographic_camera_state():
+    from termin.geombase import CameraProjection
+    from termin.plot import OrbitCameraState3D
+
+    application = OffscreenGuiComposition(width=320, height=240, continuous_rendering=False)
+    plot = Plot3D(application.document)
+    try:
+        plot.set_isometric_camera()
+        state = plot.camera
+        assert isinstance(state, OrbitCameraState3D)
+        assert state.projection_type == CameraProjection.Orthographic
+        assert state.azimuth == pytest.approx(np.pi / 4)
+        assert state.elevation == pytest.approx(np.arcsin(1 / np.sqrt(3)))
+        state.ortho_size = 0.125
+        plot.camera = state
+        assert plot.camera.ortho_size == 0.125
+        state.ortho_size = 0
+        with pytest.raises(RuntimeError):
+            plot.camera = state
+        assert plot.camera.ortho_size == 0.125
+        plot.fit_camera()
+        assert plot.camera.projection_type == CameraProjection.Orthographic
+        plot.reset_camera()
+        assert plot.camera.projection_type == CameraProjection.Perspective
+    finally:
+        application.document.destroy_widget_recursive(plot.handle)
+        application.close()
 
 
 def test_plot3d_widget_renders_inside_native_nodegraph_body():

@@ -73,6 +73,27 @@ public partial class Plot3DWindow : Window
                             0.05f, 0.05f, 0.05f, 0.85f,
                             widthPx: 1.5f);
 
-        Plot.View.fit_camera();
+        SetIsometricView();
+        CameraControls.IsEnabled = true;
     }
+
+    private void SetIsometricView()
+    {
+        using var camera = Plot.View.camera();
+        camera.set_isometric();
+        Plot.View.fit_camera();
+        ProjectionLabel.Text = "Orthographic";
+    }
+
+    private void OnIsometric(object sender, RoutedEventArgs e) => SetIsometricView();
+
+    private void OnPerspective(object sender, RoutedEventArgs e)
+    {
+        using var camera = Plot.View.camera();
+        camera.projection_type = CameraProjection.Perspective;
+        Plot.View.fit_camera();
+        ProjectionLabel.Text = "Perspective";
+    }
+
+    private void OnFit(object sender, RoutedEventArgs e) => Plot.View.fit_camera();
 }

@@ -29,6 +29,8 @@ public partial class MainWindow : Window
     private readonly Button _wireframeButton;
     private readonly Button _shadingButton;
     private readonly Button _resetCameraButton;
+    private readonly Button _projectionButton;
+    private readonly Button _isometricButton;
     private bool _wireframe;
     private bool _shading = true;
     private bool _closed;
@@ -130,10 +132,14 @@ public partial class MainWindow : Window
             _wireframeButton = CreateButton("Wireframe");
             _shadingButton = CreateButton("Shading: on");
             _resetCameraButton = CreateButton("Reset camera");
+            _projectionButton = CreateButton("Projection: perspective");
+            _isometricButton = CreateButton("Isometric");
             _dataButton.Click += OnDataClick;
             _wireframeButton.Click += OnWireframeClick;
             _shadingButton.Click += OnShadingClick;
             _resetCameraButton.Click += OnResetCameraClick;
+            _projectionButton.Click += OnProjectionClick;
+            _isometricButton.Click += OnIsometricClick;
 
             ChartHost.Attach(_chart);
             ChartHost.ContinuousRendering = false;
@@ -142,6 +148,8 @@ public partial class MainWindow : Window
             ChartHost.AddPortal(_wireframeButton, new Rect(620, 10, 116, 34));
             ChartHost.AddPortal(_shadingButton, new Rect(744, 10, 116, 34));
             ChartHost.AddPortal(_resetCameraButton, new Rect(868, 10, 128, 34));
+            ChartHost.AddPortal(_projectionButton, new Rect(12, 52, 180, 34));
+            ChartHost.AddPortal(_isometricButton, new Rect(200, 52, 116, 34));
             ChartHost.FramebufferChanged += OnFramebufferChanged;
             ChartHost.RenderFailed += OnRenderFailed;
         }
@@ -238,9 +246,31 @@ public partial class MainWindow : Window
     private void OnResetCameraClick(object sender, RoutedEventArgs e)
     {
         _chart.Camera.Reset();
-        ChartHost.RequestRender();
+        UpdateProjectionButton();
         ReportCallback("Camera reset in C#");
     }
+
+    private void OnProjectionClick(object sender, RoutedEventArgs e)
+    {
+        var state = _chart.Camera.State;
+        CameraProjection projection = state.ProjectionType == CameraProjection.Perspective
+            ? CameraProjection.Orthographic : CameraProjection.Perspective;
+        _chart.Camera.State = state.WithProjection(projection);
+        _chart.Camera.Fit();
+        UpdateProjectionButton();
+        ReportCallback($"Camera projection: {projection}");
+    }
+
+    private void OnIsometricClick(object sender, RoutedEventArgs e)
+    {
+        _chart.Camera.SetIsometric();
+        UpdateProjectionButton();
+        ReportCallback("Isometric camera: 45° azimuth, 35.2644° elevation");
+    }
+
+    private void UpdateProjectionButton() => _projectionButton.Content =
+        _chart.Camera.State.ProjectionType == CameraProjection.Orthographic
+            ? "Projection: orthographic" : "Projection: perspective";
 
     private void ReportCallback(string action)
     {
@@ -279,9 +309,56 @@ public partial class MainWindow : Window
             if (ChartHost.RenderHost.FramebufferWidth < 2 || ChartHost.RenderHost.FramebufferHeight < 2)
                 return;
             ChartHost.RenderFrame();
-            if (++_smokeFrames == 1)
+            ++_smokeFrames;
+            if (_smokeFrames == 1)
             {
                 OnDataClick(this, new RoutedEventArgs());
+                return;
+            }
+            if (_smokeFrames == 2)
+            {
+                OnProjectionClick(this, new RoutedEventArgs());
+                if (_chart.Camera.State.ProjectionType != CameraProjection.Orthographic)
+                    throw new InvalidOperationException("Projection control did not enable orthographic rendering.");
+                return;
+            }
+            if (_smokeFrames == 3)
+            {
+                var before = _chart.Camera.State;
+                if (!_chart.Wheel(240, 180, 1) ||
+                    _chart.Camera.State.OrthoSize >= before.OrthoSize ||
+                    _chart.Camera.State.Distance != before.Distance)
+                    throw new InvalidOperationException("Orthographic wheel must zoom the frame without moving the eye.");
+                if (!_chart.PointerDown(240, 180, 2))
+                    throw new InvalidOperationException("Orthographic pan did not begin.");
+                _chart.PointerMove(275, 205);
+                _chart.PointerUp(275, 205, 2);
+                var after = _chart.Camera.State;
+                if (after.TargetX == before.TargetX && after.TargetY == before.TargetY && after.TargetZ == before.TargetZ)
+                    throw new InvalidOperationException("Orthographic pan did not move the target.");
+                ChartHost.RequestRender();
+                return;
+            }
+            if (_smokeFrames == 4)
+            {
+                OnProjectionClick(this, new RoutedEventArgs());
+                if (_chart.Camera.State.ProjectionType != CameraProjection.Perspective)
+                    throw new InvalidOperationException("Projection control did not restore perspective rendering.");
+                return;
+            }
+            if (_smokeFrames == 5)
+            {
+                OnResetCameraClick(this, new RoutedEventArgs());
+                if (_chart.Camera.State.ProjectionType != CameraProjection.Perspective)
+                    throw new InvalidOperationException("Reset did not restore the default perspective projection.");
+                OnIsometricClick(this, new RoutedEventArgs());
+                var camera = _chart.Camera.State;
+                if (camera.ProjectionType != CameraProjection.Orthographic ||
+                    Math.Abs(camera.Azimuth - Math.PI / 4) > 1e-12 ||
+                    Math.Abs(camera.Elevation - Math.Asin(1 / Math.Sqrt(3))) > 1e-12)
+                    throw new InvalidOperationException("Isometric control did not select the canonical orientation.");
+                Width -= 100;
+                Height -= 60;
                 return;
             }
             string? capturePath = Environment.GetEnvironmentVariable("TERMIN_CHART3D_SMOKE_CAPTURE");
@@ -298,7 +375,7 @@ public partial class MainWindow : Window
                 using var stream = File.Create(capturePath);
                 encoder.Save(stream);
             }
-            Console.WriteLine($"RETAINED_CHART3D_SMOKE_OK coordinates={_chart.Coordinates} frames={_smokeFrames}");
+            Console.WriteLine($"RETAINED_CHART3D_SMOKE_OK coordinates={_chart.Coordinates} frames={_smokeFrames} projection={_chart.Camera.State.ProjectionType} camera=zoom,pan,perspective,reset,isometric,resize");
             Close();
         }
         catch (Exception error)
@@ -324,6 +401,8 @@ public partial class MainWindow : Window
         _wireframeButton.Click -= OnWireframeClick;
         _shadingButton.Click -= OnShadingClick;
         _resetCameraButton.Click -= OnResetCameraClick;
+        _projectionButton.Click -= OnProjectionClick;
+        _isometricButton.Click -= OnIsometricClick;
         ChartHost.FramebufferChanged -= OnFramebufferChanged;
         ChartHost.RenderFailed -= OnRenderFailed;
         try

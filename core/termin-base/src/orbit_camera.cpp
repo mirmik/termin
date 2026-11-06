@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include <tcbase/tc_log.h>
 
@@ -10,38 +11,8 @@ namespace termin {
         constexpr double kPi = 3.14159265358979323846;
         constexpr double kDegToRad = kPi / 180.0;
         constexpr double kEpsilon = 1.0e-12;
-
-        Mat44 look_at_negative_z(const Vec3& eye, const Vec3& target, const Vec3& up) {
-            const Vec3 forward = (target - eye).normalized();
-            const Vec3 right = forward.cross(up).normalized();
-            const Vec3 camera_up = right.cross(forward);
-            Mat44 matrix = Mat44::identity();
-            matrix(0, 0) = right.x;
-            matrix(1, 0) = right.y;
-            matrix(2, 0) = right.z;
-            matrix(0, 1) = camera_up.x;
-            matrix(1, 1) = camera_up.y;
-            matrix(2, 1) = camera_up.z;
-            matrix(0, 2) = -forward.x;
-            matrix(1, 2) = -forward.y;
-            matrix(2, 2) = -forward.z;
-            matrix(3, 0) = -right.dot(eye);
-            matrix(3, 1) = -camera_up.dot(eye);
-            matrix(3, 2) = forward.dot(eye);
-            return matrix;
-        }
-
-        Mat44 perspective_negative_z(double fov_y, double aspect, double near_clip, double far_clip) {
-            Mat44 matrix;
-            const double scale = 1.0 / std::tan(fov_y * 0.5);
-            const double depth = far_clip - near_clip;
-            matrix(0, 0) = scale / aspect;
-            matrix(1, 1) = -scale;
-            matrix(2, 2) = -far_clip / depth;
-            matrix(3, 2) = -(far_clip * near_clip) / depth;
-            matrix(2, 3) = -1.0;
-            return matrix;
-        }
+        // Mat44::look_at normalizes its eye-to-target direction at 1e-10.
+        constexpr double kMinFittedRadius = 1.0e-8;
 
     } // namespace
 
@@ -161,11 +132,15 @@ namespace termin {
     }
 
     Mat44 OrbitCamera::view_matrix() const {
-        return look_at_negative_z(eye(), target, Vec3::unit_z());
+        return Mat44::look_at(eye(), target, Vec3::unit_z());
     }
 
     Mat44 OrbitCamera::projection_matrix(double aspect) const {
-        return perspective_negative_z(fov_y, aspect, near_clip, far_clip);
+        if (projection_type == CameraProjection::Orthographic) {
+            return Mat44::orthographic(-ortho_size * aspect, ortho_size * aspect,
+                                      -ortho_size, ortho_size, near_clip, far_clip);
+        }
+        return Mat44::perspective(fov_y, aspect, near_clip, far_clip);
     }
 
     Mat44 OrbitCamera::mvp(double aspect) const {
@@ -189,8 +164,27 @@ namespace termin {
     }
 
     void OrbitCamera::zoom(double factor) {
+        if (!std::isfinite(factor) || factor <= 0.0) {
+            tc_log_error("[termin-base] OrbitCamera zoom factor must be finite and positive");
+            return;
+        }
+        if (projection_type == CameraProjection::Orthographic) {
+            const double next_size = ortho_size * factor;
+            if (!std::isfinite(next_size) || next_size <= 0.0) {
+                tc_log_error("[termin-base] OrbitCamera orthographic zoom size must remain finite and positive");
+                return;
+            }
+            ortho_size = next_size;
+            return;
+        }
         distance = std::clamp(distance * factor, min_distance, max_distance);
         update_clip_planes();
+    }
+
+    void OrbitCamera::set_isometric() {
+        projection_type = CameraProjection::Orthographic;
+        azimuth = kPi * 0.25;
+        elevation = std::asin(1.0 / std::sqrt(3.0));
     }
 
     std::optional<OrbitCameraPan> OrbitCamera::begin_pan(const Vec2& screen_position, const Rect2& viewport) const {
@@ -219,12 +213,29 @@ namespace termin {
         return gesture && pan(*gesture, to);
     }
 
-    void OrbitCamera::fit_bounds(const AABB& bounds) {
+    void OrbitCamera::fit_bounds(const AABB& bounds, double aspect) {
+        if (!bounds.is_valid() || !std::isfinite(aspect) || aspect <= 0.0 ||
+            !std::isfinite(fov_y) || fov_y <= 0.0 || fov_y >= kPi) {
+            tc_log_error("[termin-base] OrbitCamera fit requires finite bounds, positive aspect and valid FOV");
+            return;
+        }
         target = bounds.center();
         const double size = bounds.size().norm();
-        fitted_radius = std::max(size * 0.5, 1.0);
-        distance = std::max(size * 1.2, min_distance);
-        min_distance = std::max(fitted_radius * 0.001, 0.01);
+        // A single point has no intrinsic scale. Give it a usable frame, and
+        // keep the eye offset representable when the target is far from zero.
+        const double coordinate_scale = std::max({std::abs(target.x), std::abs(target.y), std::abs(target.z)});
+        const double precision_radius = coordinate_scale * std::numeric_limits<double>::epsilon() * 16.0;
+        fitted_radius = std::max({size > 0.0 ? size * 0.5 : 1.0, kMinFittedRadius, precision_radius});
+        min_distance = std::max(fitted_radius * 0.001, std::min(0.01, fitted_radius * 0.01));
+        // Fit the enclosing sphere to both dimensions. The same radius also
+        // keeps the entire bounds inside the depth range in either projection.
+        if (projection_type == CameraProjection::Orthographic) {
+            ortho_size = 1.05 * fitted_radius / std::min(aspect, 1.0);
+            distance = std::max(fitted_radius * 2.5, min_distance);
+        } else {
+            const double half_fov = std::min(fov_y * 0.5, std::atan(std::tan(fov_y * 0.5) * aspect));
+            distance = std::max(1.05 * fitted_radius / std::sin(half_fov), min_distance);
+        }
         max_distance = std::max(max_distance, distance + fitted_radius * 20.0);
         update_clip_planes();
     }
@@ -296,9 +307,10 @@ namespace termin {
     }
 
     void OrbitCamera::update_clip_planes() {
-        const double radius = std::max(fitted_radius, 1.0);
+        const double radius = std::max(fitted_radius, kMinFittedRadius);
         const double margin = radius * 2.5;
-        near_clip = std::max(0.01, distance - margin);
-        far_clip = std::max(near_clip + 1.0, distance + margin);
+        const double min_near = std::min(0.01, radius * 0.01);
+        near_clip = std::max(min_near, distance - margin);
+        far_clip = std::max(near_clip + std::min(1.0, radius), distance + margin);
     }
 } // namespace termin

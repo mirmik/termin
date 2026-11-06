@@ -30,8 +30,8 @@ SurfaceItemRef3D surface = chart.Scene.AddSurface(
 
 // Меняет geometry revision, но сохраняет handle и style.
 surface.SetData(nextX, nextY, nextZ, rows, columns);
-chart.Camera.Fit();   // сохраняет текущий azimuth/elevation
-chart.Camera.Reset(); // также возвращает каноническую ориентацию
+chart.Camera.Fit();   // сохраняет текущий azimuth/elevation и тип проекции
+chart.Camera.Reset(); // возвращает каноническую ориентацию и перспективу
 
 // A colorbar is tied to the live surface item and follows its colormap.
 chart.ShowColorBar(surface, "amplitude", new ColorBarStyle3D(
@@ -47,8 +47,9 @@ chart.ShowColorBar(surface, "amplitude", new ColorBarStyle3D(
 
 `RetainedChart3DHost` работает on-demand по умолчанию. Первый attach,
 resize/DPI, возврат из `Collapsed` и camera input сами запрашивают кадр. После
-изменения данных, стиля, камеры или остальных настроек chart из C# кадр
-запрашивает consumer. `BackgroundColor`, `SetAxisDisplayOffset`, `SetAxisTickLabel`
+изменения данных, стиля или остальных настроек chart из C# кадр
+запрашивает consumer. Изменения `Camera.State`, `Camera.Fit()`, `Camera.Reset()`,
+`Camera.SetIsometric()`, `BackgroundColor`, `SetAxisDisplayOffset`, `SetAxisTickLabel`
 и `ClearAxisTickLabels` сами вызывают `RenderInvalidated`, на который подписан
 host; для них дополнительный `RequestRender()` не нужен. Уведомление синхронное,
 поэтому прикреплённый к WPF график следует изменять на UI-потоке host:
@@ -58,13 +59,55 @@ ChartHost.Attach(chart);
 
 surface.SetData(nextX, nextY, nextZ, rows, columns);
 chart.Camera.Fit();
-ChartHost.RequestRender();
+// Fit уже запросил кадр; после отдельного SetData вызовите ChartHost.RequestRender().
 ```
 
 Для настоящей непрерывной анимации можно установить
 `ChartHost.ContinuousRendering = true`. Статические surface-графики не должны
 включать этот режим: без mutation host сохраняет последний `D3DImage` и не
 выполняет native render/present на каждом WPF composition frame.
+
+## Проекция камеры и изометрия
+
+У камер графиков и игрового сегмента единое соглашение: `+X` — вправо,
+`+Y` — вперёд, `+Z` — вверх. Матрицы проекции и view используют общую математику
+движка. По умолчанию график показывает перспективу.
+
+```csharp
+// Ортографическая проекция сохраняет размер объектов независимо от глубины.
+var camera = chart.Camera.State;
+chart.Camera.State = camera.WithProjection(CameraProjection.Orthographic, orthoSize: 4);
+
+// Точный изометрический ракурс и вписывание текущих данных:
+chart.Camera.SetIsometric();
+
+// Вернуться к перспективе, сохранив положение и направление камеры:
+chart.Camera.State = chart.Camera.State.WithProjection(CameraProjection.Perspective);
+chart.Camera.Fit();
+```
+
+`OrthoSize` — половина высоты видимой области в мировых единицах после
+визуального масштабирования осей. Полная ширина равна `2 * OrthoSize * aspect`.
+Размер должен быть конечным и положительным. Колесо в ортографии меняет
+`OrthoSize`, сохраняя `Distance`; в перспективе меняет расстояние до target.
+Pan работает в обеих проекциях. `Fit()` сохраняет выбранную проекцию и углы,
+учитывает масштаб осей и пропорции последнего render viewport. До первого
+рендера используется квадратный viewport.
+
+`SetIsometric()` выбирает ортографию, азимут `π/4` и elevation
+`asin(1/√3)` (примерно `35.2643897°`), затем вписывает данные. Для равных
+проекций единичных осей их визуальные масштабы также должны быть одинаковыми.
+Обычное вращение мышью остаётся доступным после выбора preset.
+`Reset()` возвращает перспективу, азимут `45°` и elevation `30°`, затем
+вписывает данные. Углы в `OrbitCameraState3D` задаются в радианах.
+
+Изменения состояния камеры сами вызывают `RenderInvalidated`, поэтому
+прикреплённый `RetainedChart3DHost` перерисует кадр без отдельного
+`RequestRender()`. В WPF-примере есть кнопки переключения проекции и изометрии;
+его `--smoke` проверяет обе проекции, zoom, pan, reset и resize.
+
+Состояние native камеры расширено полями проекции: C#-сборку и native
+библиотеки нужно обновлять вместе.
 
 ## Цвет фона
 
@@ -478,6 +521,19 @@ View.set_msaa_samples(8);
 
 View.fit_camera();
 ```
+
+В legacy facade доступны те же настройки камеры:
+
+```csharp
+using var camera = View.camera();
+camera.projection_type = CameraProjection.Orthographic;
+camera.ortho_size = 4; // половина высоты кадра
+camera.set_isometric();
+View.fit_camera();
+```
+
+`set_isometric()` меняет проекцию и углы; `fit_camera()` отдельно вписывает
+данные. Legacy host сам управляет запросами кадров.
 
 `set_axis_scale` меняет только визуальный масштаб осей. Исходные X/Y/Z данные
 не меняются, picking возвращает исходные координаты. Это удобно, когда одна

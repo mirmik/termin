@@ -1,4 +1,5 @@
 #include "plot_scene3d_chart_chrome.hpp"
+#include "orbit_camera_state.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -12,22 +13,6 @@
 #include "tcplot/styles.hpp"
 
 namespace tcplot {
-
-    namespace {
-
-        termin::OrbitCamera make_camera(const tc_orbit_camera3d_state& state) {
-            termin::OrbitCamera camera;
-            camera.target = {state.target_x, state.target_y, state.target_z};
-            camera.distance = state.distance;
-            camera.azimuth = state.azimuth;
-            camera.elevation = state.elevation;
-            camera.fov_y = state.fov_y;
-            camera.near_clip = state.near_clip;
-            camera.far_clip = state.far_clip;
-            return camera;
-        }
-
-    } // namespace
 
     PlotScene3DChartChromeRenderer::PlotScene3DChartChromeRenderer()
         : canvas_(std::make_unique<tgfx::Canvas2DRenderer>()) {}
@@ -44,7 +29,7 @@ namespace tcplot {
             return;
         }
 
-        const termin::OrbitCamera camera = make_camera(frame.camera);
+        const termin::OrbitCamera camera = detail::camera_from_state(frame.camera);
         const float aspect = static_cast<float>(viewport_width) / static_cast<float>(viewport_height);
         const termin::Mat44f mvp = (camera.projection_matrix(aspect) * camera.view_matrix()).to_float();
 

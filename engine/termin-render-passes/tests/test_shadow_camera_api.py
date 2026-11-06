@@ -46,6 +46,24 @@ def test_shadow_camera_helpers_are_exported_from_render_passes():
     assert params.ortho_bounds == Bounds2f(-4.0, -3.0, 4.0, 3.0)
 
 
+def test_shadow_camera_uses_engine_view_axes_and_depth_range():
+    params = ShadowCameraParams(
+        Vec3(0.0, 1.0, 0.0),
+        ortho_bounds=Bounds2f(-2.0, -3.0, 6.0, 5.0),
+        near=1.0,
+        far=21.0,
+        center=Vec3(4.0, 5.0, 6.0),
+    )
+    view = build_shadow_view_matrix(params)
+    np.testing.assert_allclose(view[:3, :3], np.eye(3))
+    # The camera sits 11 units upstream of the center, looking along +Y.
+    np.testing.assert_allclose(view @ [4.0, -6.0, 6.0, 1.0], [0.0, 0.0, 0.0, 1.0])
+    np.testing.assert_allclose(view @ [5.0, -5.0, 7.0, 1.0], [1.0, 1.0, 1.0, 1.0])
+    projection = build_shadow_projection_matrix(params)
+    np.testing.assert_allclose(projection @ [-2.0, 1.0, -3.0, 1.0], [-1.0, 1.0, 0.0, 1.0], atol=1e-7)
+    np.testing.assert_allclose(projection @ [6.0, 21.0, 5.0, 1.0], [1.0, -1.0, 1.0, 1.0], atol=1e-7)
+
+
 def test_shadow_camera_frustum_helpers_accept_buffer_compatible_matrices():
     values = np.eye(4, dtype=np.float64)
     corners_from_numpy = compute_frustum_corners(values, values)

@@ -48,6 +48,7 @@ from ._geom_native import (
     AABB,
     AABBf,
     ProjectedScreenPoint,
+    CameraProjection,
     OrbitCamera,
     OrbitCameraPan,
 )
@@ -94,6 +95,7 @@ __all__ = [
     'AABB',
     'AABBf',
     'ProjectedScreenPoint',
+    'CameraProjection',
     'OrbitCamera',
     'OrbitCameraPan',
     'TransformAABB',

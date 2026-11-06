@@ -124,6 +124,12 @@ typedef struct tc_plot_item3d_snapshot {
     uint64_t gpu_revision;
 } tc_plot_item3d_snapshot;
 
+typedef enum tc_camera_projection3d {
+    TC_CAMERA_PROJECTION3D_PERSPECTIVE = 0,
+    TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC = 1
+} tc_camera_projection3d;
+
+// Camera-local axes follow Termin: +X right, +Y forward, +Z up.
 typedef struct tc_orbit_camera3d_state {
     double target_x;
     double target_y;
@@ -134,6 +140,8 @@ typedef struct tc_orbit_camera3d_state {
     double fov_y;
     double near_clip;
     double far_clip;
+    tc_camera_projection3d projection_type;
+    double ortho_size; // Half the visible height in world units.
 } tc_orbit_camera3d_state;
 
 // Orientation of a spherical chart's angular coordinate system. The polar axis
@@ -299,6 +307,8 @@ TCPLOT_API int tc_retained_chart3d_get_camera(const tc_retained_chart3d* chart, 
 TCPLOT_API int tc_retained_chart3d_set_camera(tc_retained_chart3d* chart, const tc_orbit_camera3d_state* state);
 TCPLOT_API void tc_retained_chart3d_fit_camera(tc_retained_chart3d* chart);
 TCPLOT_API void tc_retained_chart3d_reset_camera(tc_retained_chart3d* chart);
+// Select orthographic projection and canonical isometric angles, then fit data.
+TCPLOT_API void tc_retained_chart3d_set_isometric_camera(tc_retained_chart3d* chart);
 
 TCPLOT_API int tc_retained_chart3d_pointer_down(tc_retained_chart3d* chart, float x, float y, int button);
 TCPLOT_API void tc_retained_chart3d_pointer_move(tc_retained_chart3d* chart, float x, float y);

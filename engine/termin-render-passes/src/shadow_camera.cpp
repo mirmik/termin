@@ -27,17 +27,7 @@ namespace termin {
         }
 
         Mat44f rotation_matrix(const LightBasis& basis) {
-            Mat44f view = Mat44f::identity();
-            view(0, 0) = static_cast<float>(basis.right.x);
-            view(1, 0) = static_cast<float>(basis.right.y);
-            view(2, 0) = static_cast<float>(basis.right.z);
-            view(0, 1) = static_cast<float>(basis.up.x);
-            view(1, 1) = static_cast<float>(basis.up.y);
-            view(2, 1) = static_cast<float>(basis.up.z);
-            view(0, 2) = static_cast<float>(-basis.direction.x);
-            view(1, 2) = static_cast<float>(-basis.direction.y);
-            view(2, 2) = static_cast<float>(-basis.direction.z);
-            return view;
+            return Mat44f::look_at(Vec3::zero(), basis.direction, basis.up);
         }
 
         bool validate_fit_domain(const Vec3& light_direction,
@@ -160,8 +150,8 @@ namespace termin {
 
             float left = light_bounds.min_point.x - padding;
             float right = light_bounds.max_point.x + padding;
-            float bottom = light_bounds.min_point.y - padding;
-            float top = light_bounds.max_point.y + padding;
+            float bottom = light_bounds.min_point.z - padding;
+            float top = light_bounds.max_point.z + padding;
             Bounds2f ortho_bounds{left, bottom, right, top};
             if (!has_finite_area(ortho_bounds)) {
                 tc::Log::error("[ShadowCamera] cannot fit shadow corners: orthographic bounds are invalid or empty");
@@ -189,7 +179,7 @@ namespace termin {
                     return std::nullopt;
                 }
                 center_light.x = std::floor(center_light.x / world_units_per_texel_x) * world_units_per_texel_x;
-                center_light.y = std::floor(center_light.y / world_units_per_texel_y) * world_units_per_texel_y;
+                center_light.z = std::floor(center_light.z / world_units_per_texel_y) * world_units_per_texel_y;
                 center = light_rotation.transposed().transform_direction(center_light).to_double();
                 if (!center.is_finite()) {
                     tc::Log::error("[ShadowCamera] cannot fit shadow corners: stabilized center is non-finite");
@@ -203,10 +193,9 @@ namespace termin {
                 }
             }
 
-            const float z_near = light_bounds.min_point.z - caster_offset;
-            const float z_far = light_bounds.max_point.z + padding;
-            const float near = std::max(-z_far, 0.1f);
-            const float far = -z_near;
+            // Light-space depth is +Y; the image plane spans X/Z.
+            const float near = std::max(light_bounds.min_point.y - padding, 0.1f);
+            const float far = light_bounds.max_point.y + caster_offset;
             if (!std::isfinite(near) || !std::isfinite(far) || far <= near) {
                 tc::Log::error("[ShadowCamera] cannot fit shadow corners: depth range is invalid or empty");
                 return std::nullopt;
@@ -229,8 +218,8 @@ namespace termin {
 
         // Translation (column 3)
         view(3, 0) = static_cast<float>(-basis.right.dot(eye));
-        view(3, 1) = static_cast<float>(-basis.up.dot(eye));
-        view(3, 2) = static_cast<float>(basis.direction.dot(eye));
+        view(3, 1) = static_cast<float>(-basis.direction.dot(eye));
+        view(3, 2) = static_cast<float>(-basis.up.dot(eye));
 
         return view;
     }
@@ -261,22 +250,7 @@ namespace termin {
             top = size;
         }
 
-        Mat44f proj = Mat44f::zero();
-
-        // Vulkan-native NDC: Y+ down, Z ∈ [0, 1]. Shadow camera looks along
-        // its own -Z (standard graphics convention in build_shadow_view_matrix).
-        // See termin-base/include/termin/geom/mat44.hpp for the matching scene
-        // projection.
-        proj(0, 0) = 2.0f / (right_bound - left);
-        proj(1, 1) = -2.0f / (top - bottom); // Y flipped
-        proj(2, 2) = -1.0f / (far - near);   // Z ∈ [0, 1]
-
-        proj(3, 0) = -(right_bound + left) / (right_bound - left);
-        proj(3, 1) = (top + bottom) / (top - bottom); // sign flipped
-        proj(3, 2) = -near / (far - near);
-        proj(3, 3) = 1.0f;
-
-        return proj;
+        return Mat44f::orthographic(left, right_bound, bottom, top, near, far);
     }
 
     Mat44f compute_light_space_matrix(const ShadowCameraParams& params) {

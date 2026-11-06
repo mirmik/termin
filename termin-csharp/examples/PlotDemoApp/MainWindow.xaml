@@ -13,7 +13,7 @@
                    Foreground="White"
                    Margin="0,0,0,16"/>
         <Button x:Name="Btn3D"
-                Content="Open 3D demo (helix + scatter + surface)"
+                Content="Open isometric 3D demo (helix + scatter + surface)"
                 Padding="12,8"
                 Margin="0,0,0,8"
                 Click="OnOpen3D"/>

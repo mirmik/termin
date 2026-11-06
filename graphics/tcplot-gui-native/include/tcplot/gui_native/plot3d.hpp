@@ -46,6 +46,7 @@ namespace tcplot::gui_native {
         void clear_colorbar();
         void fit_camera();
         void reset_camera();
+        void set_isometric_camera();
         bool camera(tc_orbit_camera3d_state& state) const;
         bool set_camera(const tc_orbit_camera3d_state& state);
 

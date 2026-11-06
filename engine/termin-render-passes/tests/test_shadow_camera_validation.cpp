@@ -40,6 +40,39 @@ namespace {
 
 } // namespace
 
+TEST_CASE("shadow cameras use right X forward Y and up Z") {
+    using namespace termin;
+    for (const Vec3 direction : {Vec3::unit_y(), Vec3::unit_x(), Vec3::unit_z(), Vec3{0.3, -0.7, -0.5}}) {
+        const Vec3 forward = direction.normalized();
+        const Vec3 reference_up = std::abs(forward.dot(Vec3::unit_z())) > 0.99 ? Vec3::unit_y() : Vec3::unit_z();
+        const Vec3 right = forward.cross(reference_up).normalized();
+        const Vec3 up = right.cross(forward);
+        const ShadowCameraParams params{direction, Bounds2f{-2, -3, 6, 5}, 20, 1, 21, {4, 5, 6}};
+        const Vec3 eye = shadow_camera_position(params);
+        const Mat44f view = build_shadow_view_matrix(params);
+        const Mat44f rotation = build_light_rotation_matrix(direction);
+        const Vec3f mapped_eye = view.transform_point(eye.to_float());
+        CHECK(mapped_eye.norm() < 3e-6f);
+        const Vec3f mapped_forward = rotation.transform_direction(forward.to_float());
+        const Vec3f mapped_right = rotation.transform_direction(right.to_float());
+        const Vec3f mapped_up = rotation.transform_direction(up.to_float());
+        CHECK((mapped_forward - Vec3f{0, 1, 0}).norm() < 3e-6f);
+        CHECK((mapped_right - Vec3f{1, 0, 0}).norm() < 3e-6f);
+        CHECK((mapped_up - Vec3f{0, 0, 1}).norm() < 3e-6f);
+
+        const Mat44f projection = build_shadow_projection_matrix(params);
+        const Mat44f canonical = Mat44f::orthographic(-2, 6, -3, 5, 1, 21);
+        for (int index = 0; index < 16; ++index) {
+            CHECK(projection.data[index] == canonical.data[index]);
+        }
+        const Mat44f clip = compute_light_space_matrix(params);
+        const Vec3f near_corner = clip.transform_point((eye - right * 2 - up * 3 + forward).to_float());
+        const Vec3f far_corner = clip.transform_point((eye + right * 6 + up * 5 + forward * 21).to_float());
+        CHECK((near_corner - Vec3f{-1, 1, 0}).norm() < 3e-6f);
+        CHECK((far_corner - Vec3f{1, -1, 1}).norm() < 3e-6f);
+    }
+}
+
 TEST_CASE("shadow cascade fitting accepts a finite contained depth range") {
     CHECK(termin::try_fit_shadow_frustum_for_cascade(valid_request()).has_value());
 }

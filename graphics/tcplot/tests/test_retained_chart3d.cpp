@@ -30,12 +30,14 @@
 #include <termin/render/render_task.hpp>
 
 #include "tcplot/gpu_host.hpp"
+#include "tcplot/engine3d.hpp"
 #include "tcplot/plot_scene3d_render_item_source.hpp"
 #include "tcplot/retained_chart3d.h"
 #include "tcplot/retained_chart2d.h"
 #include "tcplot/retained_scene_renderer2d.h"
 
 #include "../src/plot_scene3d_chart_chrome.hpp"
+#include "../src/orbit_camera_state.hpp"
 
 extern "C" {
 #include <render/tc_pass.h>
@@ -131,14 +133,7 @@ namespace {
                                       const termin::Vec3& point,
                                       double width,
                                       double height) {
-        termin::OrbitCamera camera;
-        camera.target = {state.target_x, state.target_y, state.target_z};
-        camera.distance = state.distance;
-        camera.azimuth = state.azimuth;
-        camera.elevation = state.elevation;
-        camera.fov_y = state.fov_y;
-        camera.near_clip = state.near_clip;
-        camera.far_clip = state.far_clip;
+        const termin::OrbitCamera camera = tcplot::detail::camera_from_state(state);
         const termin::Mat44 projection_view = camera.mvp(width / height);
         const double clip_x = projection_view(0, 0) * point.x + projection_view(1, 0) * point.y +
                              projection_view(2, 0) * point.z + projection_view(3, 0);
@@ -424,6 +419,26 @@ namespace {
         require(count_changed_pixels(first, updated) > 100,
                 "updated radii must change the D3D11 surface image without resetting the camera");
 
+        tc_retained_chart3d_set_isometric_camera(chart.get());
+        const auto orthographic = render();
+        require(count_changed_pixels(updated, orthographic) > 100,
+                "orthographic isometric projection must change the D3D11 surface image");
+        grid_style.labels_visible = 0;
+        require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &grid_style),
+                "failed to hide orthographic labels");
+        require(count_changed_pixels(orthographic, render()) > 10,
+                "orthographic grid labels must render alongside the geometry");
+        grid_style.labels_visible = 1;
+        require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &grid_style),
+                "failed to restore orthographic labels");
+        require(tc_retained_chart3d_pointer_down(chart.get(), 400, 300, 2),
+                "orthographic D3D11 pan must begin");
+        tc_retained_chart3d_pointer_move(chart.get(), 450, 340);
+        tc_retained_chart3d_pointer_up(chart.get(), 450, 340, 2);
+        require(count_changed_pixels(orthographic, render()) > 100,
+                "orthographic D3D11 pan must move the chart");
+        tc_retained_chart3d_reset_camera(chart.get());
+
         // A 0.002 m^2 RCS sample is -26.99 dBsm: offset -40 leaves a
         // positive radius 13.01. Render the constant sphere independently of
         // grid geometry so a visible reference frame cannot mask a missing surface.
@@ -469,6 +484,72 @@ namespace {
                                                                   tc_plot_item3d_handle handle) {
         const tc_render_item* item = find_render_item(snapshot, handle);
         return item ? tcplot::plot_scene3d_render_item_payload(*item) : nullptr;
+    }
+
+    void test_orthographic_camera_cpu() {
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        ChartOwner chart(tc_retained_chart3d_create(nullptr), tc_retained_chart3d_destroy);
+        require(chart != nullptr, "failed to create camera test chart");
+        const double x[] = {-1.0, 1.0}, y[] = {-1.0, 1.0}, z[] = {-1.0, 1.0};
+        const auto line = tc_retained_chart3d_add_line(chart.get(), x, y, z, 2, nullptr);
+        tc_retained_chart3d_set_isometric_camera(chart.get());
+        tc_orbit_camera3d_state state{};
+        require(tc_retained_chart3d_get_camera(chart.get(), &state), "failed to read isometric camera");
+        require(state.projection_type == TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC && state.ortho_size > 0.0,
+                "isometric preset must select a valid orthographic frame");
+        const auto center = project_camera_point(state, {0, 0, 0}, 800, 600);
+        const auto length = [&](const termin::Vec3& point) {
+            const auto screen = project_camera_point(state, point, 800, 600);
+            return std::hypot(screen.x - center.x, screen.y - center.y);
+        };
+        require(std::abs(length({1, 0, 0}) - length({0, 1, 0})) < 1.0e-9 &&
+                    std::abs(length({1, 0, 0}) - length({0, 0, 1})) < 1.0e-9,
+                "isometric preset must project equal unit lengths for X/Y/Z");
+        state.ortho_size = 7.25;
+        require(tc_retained_chart3d_set_camera(chart.get(), &state), "failed to set orthographic camera");
+        auto& source = tcplot::plot_scene3d_render_item_source(*chart);
+        termin::RenderItemSnapshot published;
+        require(source.publish(published, {}), "failed to publish orthographic frame");
+        const auto* payload = find_plot_payload(published, line);
+        require(payload && payload->frame.camera.projection_type == state.projection_type &&
+                    payload->frame.camera.ortho_size == state.ortho_size,
+                "retained snapshot must preserve projection mode and size for geometry and labels");
+        const double distance = state.distance;
+        require(tc_retained_chart3d_wheel(chart.get(), 0, 0, 1), "orthographic zoom was not consumed");
+        tc_orbit_camera3d_state zoomed{};
+        require(tc_retained_chart3d_get_camera(chart.get(), &zoomed) && zoomed.distance == distance &&
+                    zoomed.ortho_size < state.ortho_size,
+                "orthographic zoom must change size while preserving camera distance");
+        state.ortho_size = 0;
+        require(!tc_retained_chart3d_set_camera(chart.get(), &state), "zero orthographic size must be rejected");
+        state.ortho_size = 7.25;
+        state.projection_type = static_cast<tc_camera_projection3d>(99);
+        require(!tc_retained_chart3d_set_camera(chart.get(), &state), "unknown projection must be rejected");
+        tc_retained_chart3d_reset_camera(chart.get());
+        require(tc_retained_chart3d_get_camera(chart.get(), &state) &&
+                    state.projection_type == TC_CAMERA_PROJECTION3D_PERSPECTIVE,
+                "reset must restore perspective projection");
+
+        tcplot::PlotEngine3D engine;
+        engine.set_viewport(0, 0, 800, 600);
+        engine.plot({0, 0}, {-6, 0}, {0, 0});
+        engine.camera.target = {0, 0, 0};
+        engine.camera.azimuth = engine.camera.elevation = 0;
+        engine.camera.distance = 5;
+        engine.camera.near_clip = 0.1;
+        engine.camera.far_clip = 10;
+        engine.camera.projection_type = termin::CameraProjection::Orthographic;
+        engine.camera.ortho_size = 2;
+        const auto picked = engine.pick(400, 300);
+        require(picked && picked->y == 0, "orthographic picking must ignore points behind the camera");
+        const auto grabbed = engine.camera.target;
+        require(engine.on_mouse_down(400, 300, tcbase::MouseButton::MIDDLE), "orthographic pan must begin");
+        engine.on_mouse_move(510, 365);
+        engine.on_mouse_up(510, 365, tcbase::MouseButton::MIDDLE);
+        const auto screen = engine.camera.try_project_world_point(grabbed, {0, 0, 800, 600});
+        require(screen && std::abs(screen->screen.x - 510) < 1.0e-8 &&
+                    std::abs(screen->screen.y - 365) < 1.0e-8,
+                "orthographic pan must keep the grabbed world point beneath the pointer");
     }
 
     void test_axis_display_cpu() {
@@ -883,6 +964,7 @@ int main(int argc, char** argv) {
         require(argc == 1 || cpu_only || spherical_d3d11,
                 "usage: tcplot_retained_chart3d_test [--cpu-only|--spherical-d3d11]");
         test_termin_clip_canvas_projection();
+        test_orthographic_camera_cpu();
         test_spherical_chart_cpu();
         test_oriented_spherical_chart_cpu();
         test_axis_display_cpu();

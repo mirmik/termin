@@ -276,6 +276,7 @@ namespace tcplot_bindings {
 
             .def_rw("data", &tcplot::PlotEngine3D::data)
             .def_rw("camera", &tcplot::PlotEngine3D::camera)
+            .def("fit_camera", &tcplot::PlotEngine3D::fit_camera)
             .def_rw("show_grid", &tcplot::PlotEngine3D::show_grid)
             .def_rw("show_wireframe", &tcplot::PlotEngine3D::show_wireframe)
             .def_rw("x_scale", &tcplot::PlotEngine3D::x_scale)

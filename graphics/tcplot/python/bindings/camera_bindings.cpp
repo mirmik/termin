@@ -30,6 +30,7 @@ namespace tcplot_bindings {
     }
 
     void bind_camera(nb::module_& m) {
+        m.attr("CameraProjection") = nb::module_::import_("termin.geombase").attr("CameraProjection");
         nb::class_<tcplot::OrbitCamera>(m, "OrbitCamera")
             .def(nb::init<>())
 
@@ -42,6 +43,8 @@ namespace tcplot_bindings {
             .def_rw("azimuth", &tcplot::OrbitCamera::azimuth)
             .def_rw("elevation", &tcplot::OrbitCamera::elevation)
             .def_rw("fov_y", &tcplot::OrbitCamera::fov_y)
+            .def_rw("projection_type", &tcplot::OrbitCamera::projection_type)
+            .def_rw("ortho_size", &tcplot::OrbitCamera::ortho_size)
             .def_rw("near", &tcplot::OrbitCamera::near_clip)
             .def_rw("far", &tcplot::OrbitCamera::far_clip)
             .def_rw("min_distance", &tcplot::OrbitCamera::min_distance)
@@ -81,6 +84,7 @@ namespace tcplot_bindings {
 
             .def("orbit", &tcplot::OrbitCamera::orbit, nb::arg("d_azimuth"), nb::arg("d_elevation"))
             .def("zoom", &tcplot::OrbitCamera::zoom, nb::arg("factor"))
+            .def("set_isometric", &tcplot::OrbitCamera::set_isometric)
             .def(
                 "pan",
                 nb::overload_cast<const termin::Vec2&, const termin::Vec2&, const termin::Rect2&>(
@@ -92,7 +96,7 @@ namespace tcplot_bindings {
             .def(
                 "fit_bounds",
                 &tcplot::OrbitCamera::fit_bounds,
-                nb::arg("bounds"));
+                nb::arg("bounds"), nb::arg("aspect") = 1.0);
     }
 
 } // namespace tcplot_bindings

@@ -4,6 +4,31 @@ import pytest
 from termin.plot import PlotAxis3D, RetainedChart3D, SrgbColor
 
 
+def test_orthographic_camera_roundtrip_and_isometric_preset_without_gpu():
+    from termin.geombase import CameraProjection
+
+    plot = RetainedChart3D()
+    plot.set_isometric_camera()
+    state = plot.camera
+    assert state.projection_type == CameraProjection.Orthographic
+    assert state.azimuth == pytest.approx(np.pi / 4)
+    assert state.elevation == pytest.approx(np.arcsin(1 / np.sqrt(3)))
+    state.ortho_size = 7.25
+    plot.camera = state
+    assert plot.camera.ortho_size == 7.25
+    distance = plot.camera.distance
+    assert plot.wheel(0, 0, 1)
+    assert plot.camera.distance == distance
+    assert plot.camera.ortho_size < 7.25
+    state.ortho_size = 0
+    with pytest.raises(RuntimeError):
+        plot.camera = state
+    plot.fit_camera()
+    assert plot.camera.projection_type == CameraProjection.Orthographic
+    plot.reset_camera()
+    assert plot.camera.projection_type == CameraProjection.Perspective
+
+
 def test_background_color_before_gpu_attachment():
     plot = RetainedChart3D()
 

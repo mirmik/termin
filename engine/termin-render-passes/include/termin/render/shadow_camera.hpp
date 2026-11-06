@@ -18,7 +18,7 @@ namespace termin {
      */
     struct TERMIN_RENDER_PASSES_API ShadowCameraParams {
         Vec3 light_direction{0.0, 1.0, 0.0};  // Normalized direction from light into scene
-        std::optional<Bounds2f> ortho_bounds; // x0=left, y0=bottom, x1=right, y1=top
+        std::optional<Bounds2f> ortho_bounds; // Image-plane X/Z: x0=left, y0=bottom, x1=right, y1=top
         float ortho_size = 20.0f;             // Half-size of symmetric ortho box (fallback)
         float near = 0.1f;
         float far = 100.0f;
@@ -59,6 +59,7 @@ namespace termin {
      * Build view matrix for shadow camera.
      *
      * Camera is placed at distance from center, looking along light direction.
+     * View-space +X is right, +Y is forward, and +Z is up.
      *
      * @param params Shadow camera parameters
      * @return 4x4 view matrix
@@ -78,6 +79,7 @@ namespace termin {
      *
      * If ortho_bounds is set, uses asymmetric bounds.
      * Otherwise uses symmetric ortho_size.
+     * Uses the shared +Y-forward, +Z-up Mat44f orthographic projection.
      *
      * @param params Shadow camera parameters
      * @return 4x4 projection matrix

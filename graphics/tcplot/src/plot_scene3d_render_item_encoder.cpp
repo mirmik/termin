@@ -1,4 +1,5 @@
 #include "plot_scene3d_render_item_encoder.hpp"
+#include "orbit_camera_state.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -165,19 +166,7 @@ namespace tcplot {
                 return false;
             }
 
-            termin::OrbitCamera camera;
-            const tc_orbit_camera3d_state& camera_state = payload.frame.camera;
-            camera.target = {
-                camera_state.target_x,
-                camera_state.target_y,
-                camera_state.target_z,
-            };
-            camera.distance = camera_state.distance;
-            camera.azimuth = camera_state.azimuth;
-            camera.elevation = camera_state.elevation;
-            camera.fov_y = camera_state.fov_y;
-            camera.near_clip = camera_state.near_clip;
-            camera.far_clip = camera_state.far_clip;
+            const termin::OrbitCamera camera = detail::camera_from_state(payload.frame.camera);
             const float aspect = static_cast<float>(request.draw_context->viewport_width) /
                                  static_cast<float>(request.draw_context->viewport_height);
             const termin::Mat44f mvp = (camera.projection_matrix(aspect) * camera.view_matrix()).to_float();

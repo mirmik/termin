@@ -6,11 +6,17 @@
 
 namespace termin {
     void bind_orbit_camera(nb::module_& m) {
+        nb::enum_<CameraProjection>(m, "CameraProjection")
+            .value("Perspective", CameraProjection::Perspective)
+            .value("Orthographic", CameraProjection::Orthographic);
+
         nb::class_<OrbitCameraPan>(m, "OrbitCameraPan")
             .def_prop_ro("grabbed_point", &OrbitCameraPan::grabbed_point);
 
         nb::class_<OrbitCamera>(m, "OrbitCamera")
             .def(nb::init<>())
+            .def_rw("projection_type", &OrbitCamera::projection_type)
+            .def_rw("ortho_size", &OrbitCamera::ortho_size)
             .def_rw("target", &OrbitCamera::target)
             .def_rw("distance", &OrbitCamera::distance)
             .def_rw("azimuth", &OrbitCamera::azimuth)
@@ -35,6 +41,7 @@ namespace termin {
                 "mvp", [](const OrbitCamera& camera, double aspect) { return camera.mvp(aspect); }, nb::arg("aspect"))
             .def("orbit", &OrbitCamera::orbit, nb::arg("d_azimuth"), nb::arg("d_elevation"))
             .def("zoom", &OrbitCamera::zoom, nb::arg("factor"))
+            .def("set_isometric", &OrbitCamera::set_isometric)
             .def("begin_pan", &OrbitCamera::begin_pan, nb::arg("screen_position"), nb::arg("viewport"))
             .def("pan",
                  nb::overload_cast<const OrbitCameraPan&, const Vec2&>(&OrbitCamera::pan),
@@ -45,7 +52,7 @@ namespace termin {
                  nb::arg("from_position"),
                  nb::arg("to_position"),
                  nb::arg("viewport"))
-            .def("fit_bounds", &OrbitCamera::fit_bounds, nb::arg("bounds"))
+            .def("fit_bounds", &OrbitCamera::fit_bounds, nb::arg("bounds"), nb::arg("aspect") = 1.0)
             .def(
                 "try_screen_ray",
                 [](const OrbitCamera& camera, const Vec2& screen_position, const Rect2& viewport) {

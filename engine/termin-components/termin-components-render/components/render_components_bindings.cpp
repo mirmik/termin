@@ -247,9 +247,7 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_ro("name", [](const TcSpriteAsset& self) { return std::string(self.name()); })
         .def_prop_ro("version", &TcSpriteAsset::version);
 
-    nb::enum_<CameraProjection>(m, "CameraProjection")
-        .value("Perspective", CameraProjection::Perspective)
-        .value("Orthographic", CameraProjection::Orthographic);
+    m.attr("CameraProjection") = nb::module_::import_("termin.base._geom_native").attr("CameraProjection");
 
     nb::class_<Camera>(m, "Camera")
         .def(nb::init<>())

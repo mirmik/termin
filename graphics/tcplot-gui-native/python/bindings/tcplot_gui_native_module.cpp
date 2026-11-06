@@ -158,6 +158,18 @@ namespace {
             return get().destroy_item({scene_id, index, generation});
         }
 
+        tc_orbit_camera3d_state camera() const {
+            tc_orbit_camera3d_state state{};
+            if (!get().camera(state))
+                throw std::runtime_error("tcplot Plot3D failed to read camera");
+            return state;
+        }
+
+        void set_camera(const tc_orbit_camera3d_state& state) const {
+            if (!get().set_camera(state))
+                throw std::runtime_error("tcplot Plot3D rejected camera state; see native log");
+        }
+
     private:
         static std::span<const double> array_span(const Array& value) {
             return {value.data(), value.size()};
@@ -175,6 +187,8 @@ namespace {
 
 NB_MODULE(_plot_gui_native, module) {
     nb::module_::import_("termin.gui_native._gui_native");
+    // Reuse the retained camera state and core projection enum registered by tcplot.
+    nb::module_::import_("termin.plot._plot_native");
     if (!tcplot::gui_native::register_plot_widget_types()) {
         throw std::runtime_error("failed to register tcplot native widget types");
     }
@@ -204,6 +218,7 @@ NB_MODULE(_plot_gui_native, module) {
 
     nb::class_<Plot3DAccess>(module, "Plot3DAccess")
         .def(nb::init<termin::gui_native::TcDocument, uint32_t, uint32_t>())
+        .def_prop_rw("camera", &Plot3DAccess::camera, &Plot3DAccess::set_camera)
         .def("add_line", &Plot3DAccess::add_line)
         .def("add_scatter", &Plot3DAccess::add_scatter)
         .def("add_surface", &Plot3DAccess::add_surface)
@@ -237,6 +252,7 @@ NB_MODULE(_plot_gui_native, module) {
         .def("clear_colorbar", [](const Plot3DAccess& self) { self.get().clear_colorbar(); })
         .def("fit_camera", [](const Plot3DAccess& self) { self.get().fit_camera(); })
         .def("reset_camera", [](const Plot3DAccess& self) { self.get().reset_camera(); })
+        .def("set_isometric_camera", [](const Plot3DAccess& self) { self.get().set_isometric_camera(); })
         .def_prop_ro("scene_id", [](const Plot3DAccess& self) { return self.get().scene_id(); })
         .def_prop_ro("item_count", [](const Plot3DAccess& self) { return self.get().item_count(); })
         .def_prop_ro("texture_id", [](const Plot3DAccess& self) { return self.get().texture_id(); });

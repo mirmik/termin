@@ -252,6 +252,16 @@ namespace tcplot {
         vh_ = height;
     }
 
+    void PlotEngine3D::fit_camera() {
+        double lo[3], hi[3];
+        data.data_bounds_3d(lo, hi);
+        const termin::Vec3 a{lo[0] * x_scale, lo[1] * y_scale, lo[2] * z_scale};
+        const termin::Vec3 b{hi[0] * x_scale, hi[1] * y_scale, hi[2] * z_scale};
+        camera.fit_bounds(termin::AABB{{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)},
+                                       {std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}},
+                          vw_ > 0.0f && vh_ > 0.0f ? static_cast<double>(vw_) / vh_ : 1.0);
+    }
+
     // ---------------------------------------------------------------------------
     // Public add-series
     // ---------------------------------------------------------------------------
@@ -262,9 +272,7 @@ namespace tcplot {
             std::move(x), std::move(y), std::move(z), options.color, options.thickness, std::move(options.label));
         dirty_ = true;
 
-        double lo[3], hi[3];
-        data.data_bounds_3d(lo, hi);
-        camera.fit_bounds(termin::AABB{{lo[0], lo[1], lo[2]}, {hi[0], hi[1], hi[2]}});
+        fit_camera();
     }
 
     void PlotEngine3D::scatter(std::vector<double> x,
@@ -275,9 +283,7 @@ namespace tcplot {
             std::move(x), std::move(y), std::move(z), options.color, options.size, std::move(options.label));
         dirty_ = true;
 
-        double lo[3], hi[3];
-        data.data_bounds_3d(lo, hi);
-        camera.fit_bounds(termin::AABB{{lo[0], lo[1], lo[2]}, {hi[0], hi[1], hi[2]}});
+        fit_camera();
     }
 
     void PlotEngine3D::surface(std::vector<double> X,
@@ -305,9 +311,7 @@ namespace tcplot {
         data.surfaces.push_back(std::move(s));
         dirty_ = true;
 
-        double lo[3], hi[3];
-        data.data_bounds_3d(lo, hi);
-        camera.fit_bounds(termin::AABB{{lo[0], lo[1], lo[2]}, {hi[0], hi[1], hi[2]}});
+        fit_camera();
     }
 
     void PlotEngine3D::clear() {
@@ -886,9 +890,9 @@ namespace tcplot {
         if (font && show_labels) {
             const termin::Mat44f view = camera.view_matrix().to_float();
             // view is column-major 4x4. Row 0: world-space camera-right;
-            // Row 1: world-space camera-up. Same extraction as in Python.
+            // Row 2: world-space camera-up (+Z). Row 1 is forward (+Y).
             const termin::Vec3f cr{view.data[0 * 4 + 0], view.data[1 * 4 + 0], view.data[2 * 4 + 0]};
-            const termin::Vec3f cu{view.data[0 * 4 + 1], view.data[1 * 4 + 1], view.data[2 * 4 + 1]};
+            const termin::Vec3f cu{view.data[0 * 4 + 2], view.data[1 * 4 + 2], view.data[2 * 4 + 2]};
 
             // For Text3D we pass the UNSCALED camera MVP: label positions
             // already have z_scale baked into their world-Z (see pos[2]
@@ -1081,6 +1085,8 @@ namespace tcplot {
             const double ndc_x = clip_x / clip_w;
             const double ndc_y = clip_y / clip_w;
             const double ndc_z = clip_z / clip_w;
+            if (ndc_z < 0.0 || ndc_z > 1.0)
+                continue;
 
             // NDC → viewport pixel. Clip-space Y points down (Vulkan-native;
             // OpenGL matches via glClipControl(GL_UPPER_LEFT)), so pixel_y

@@ -19,6 +19,7 @@
 #include <tgfx2/i_render_device.hpp>
 
 #include "plot_scene3d_render_item_encoder.hpp"
+#include "orbit_camera_state.hpp"
 #include "plot_scene3d_render_pipeline.hpp"
 #include "tcplot/gpu_host.hpp"
 #include "tcplot/orbit_camera.hpp"
@@ -765,34 +766,23 @@ namespace {
         }
 
         tc_orbit_camera3d_state camera_state() const {
-            return {
-                camera_.target.x,
-                camera_.target.y,
-                camera_.target.z,
-                camera_.distance,
-                camera_.azimuth,
-                camera_.elevation,
-                camera_.fov_y,
-                camera_.near_clip,
-                camera_.far_clip,
-            };
+            return tcplot::detail::camera_state(camera_);
         }
 
         void set_camera(const tc_orbit_camera3d_state& state) {
             if (!std::isfinite(state.target_x) || !std::isfinite(state.target_y) || !std::isfinite(state.target_z) ||
                 !std::isfinite(state.distance) || state.distance <= 0 || !std::isfinite(state.azimuth) ||
                 !std::isfinite(state.elevation) || !std::isfinite(state.fov_y) || state.fov_y <= 0 ||
+                state.fov_y >= 3.14159265358979323846 ||
                 !std::isfinite(state.near_clip) || state.near_clip <= 0 || !std::isfinite(state.far_clip) ||
-                state.far_clip <= state.near_clip) {
+                state.far_clip <= state.near_clip || !std::isfinite(state.ortho_size) || state.ortho_size <= 0 ||
+                (state.projection_type != TC_CAMERA_PROJECTION3D_PERSPECTIVE &&
+                 state.projection_type != TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC)) {
                 throw std::invalid_argument("invalid orbit camera state");
             }
-            camera_.target = {state.target_x, state.target_y, state.target_z};
-            camera_.distance = state.distance;
-            camera_.azimuth = state.azimuth;
-            camera_.elevation = state.elevation;
-            camera_.fov_y = state.fov_y;
-            camera_.near_clip = state.near_clip;
-            camera_.far_clip = state.far_clip;
+            tcplot::detail::apply_camera_state(camera_, state);
+            pan_gesture_.reset();
+            dragging_ = false;
         }
 
         void fit_camera() {
@@ -805,7 +795,15 @@ namespace {
                                               std::min(scaled_lo.z, scaled_hi.z)},
                                              {std::max(scaled_lo.x, scaled_hi.x),
                                               std::max(scaled_lo.y, scaled_hi.y),
-                                              std::max(scaled_lo.z, scaled_hi.z)}});
+                                              std::max(scaled_lo.z, scaled_hi.z)}},
+                               width_ > 0 && height_ > 0 ? static_cast<double>(width_) / height_ : 1.0);
+        }
+
+        void set_isometric_camera() {
+            camera_.set_isometric();
+            dragging_ = false;
+            pan_gesture_.reset();
+            fit_camera();
         }
 
         void reset_camera() {
@@ -1783,6 +1781,11 @@ void tc_retained_chart3d_fit_camera(tc_retained_chart3d* chart) {
 void tc_retained_chart3d_reset_camera(tc_retained_chart3d* chart) {
     if (chart)
         chart->value.reset_camera();
+}
+
+void tc_retained_chart3d_set_isometric_camera(tc_retained_chart3d* chart) {
+    if (chart)
+        chart->value.set_isometric_camera();
 }
 
 int tc_retained_chart3d_pointer_down(tc_retained_chart3d* chart, float x, float y, int button) {

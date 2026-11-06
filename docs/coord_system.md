@@ -207,9 +207,17 @@ Net effect: Vulkan, Direct3D 11 и constrained GL используют прям�
   vertex output. CPU-side projection/view-projection adapters для 3D/scene
   paths считаются legacy и не должны возвращаться.
 
-Shadow-камера (`shadow_camera.cpp`) — отдельная конвенция (camera looks
-along `-Z`, стандарт graphics), но projection в clip приводит к тем же
-`-Y = top`, `Z ∈ [0, 1]`.
+Это соглашение обязательно для всех камер, включая `OrbitCamera` графиков,
+CAD и shadow-камеры: отдельных view-space конвенций нет. View-матрицы и
+перспективная/ортографическая проекции используют общую математику `Mat44`/`Mat44f`.
+Направление вверх в view-матрице находится в строке 2, вперёд — в строке 1.
+
+`OrbitCamera` поддерживает общий `CameraProjection` и `ortho_size` — половину
+высоты ортографического кадра. В ортографии zoom меняет `ortho_size`, а не
+расстояние до цели. `fit_bounds(bounds, aspect)` учитывает обе стороны кадра.
+Канонический изометрический вид задаётся ортографией, азимутом `π/4` и углом
+возвышения `asin(1/√3)` (≈35,2643897°); равные масштабы осей дают равную длину
+их экранных проекций. NDC и преобразования на границе backend не меняются.
 
 ## 6. Пан / zoom в pixel space (tcplot, viewports)
 

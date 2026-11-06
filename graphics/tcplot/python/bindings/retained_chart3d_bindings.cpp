@@ -12,6 +12,7 @@
 #include <tgfx2/handles.hpp>
 
 #include "conversion_helpers.hpp"
+#include <termin/camera/camera_projection.hpp>
 #include "tcplot/gpu_host.hpp"
 #include "tcplot/retained_chart3d.h"
 #include "tcplot/styles.hpp"
@@ -169,6 +170,28 @@ namespace tcplot_bindings {
                 require_success(tc_retained_chart3d_set_axis_scale(chart_, x, y, z), "set_axis_scale");
             }
 
+            tc_orbit_camera3d_state camera() const {
+                tc_orbit_camera3d_state state{};
+                require_success(tc_retained_chart3d_get_camera(chart_, &state), "get_camera");
+                return state;
+            }
+
+            void set_camera(const tc_orbit_camera3d_state& state) {
+                require_success(tc_retained_chart3d_set_camera(chart_, &state), "set_camera");
+            }
+
+            void fit_camera() {
+                tc_retained_chart3d_fit_camera(chart_);
+            }
+
+            void reset_camera() {
+                tc_retained_chart3d_reset_camera(chart_);
+            }
+
+            void set_isometric_camera() {
+                tc_retained_chart3d_set_isometric_camera(chart_);
+            }
+
             tcplot::SrgbColor background_color() const {
                 tc_visual_color4f color{};
                 require_success(tc_retained_chart3d_get_background_color(chart_, &color),
@@ -293,6 +316,26 @@ namespace tcplot_bindings {
     } // namespace
 
     void bind_retained_chart3d(nb::module_& m) {
+        nb::class_<tc_orbit_camera3d_state>(m, "OrbitCameraState3D")
+            .def(nb::init<>())
+            .def_rw("target_x", &tc_orbit_camera3d_state::target_x)
+            .def_rw("target_y", &tc_orbit_camera3d_state::target_y)
+            .def_rw("target_z", &tc_orbit_camera3d_state::target_z)
+            .def_rw("distance", &tc_orbit_camera3d_state::distance)
+            .def_rw("azimuth", &tc_orbit_camera3d_state::azimuth)
+            .def_rw("elevation", &tc_orbit_camera3d_state::elevation)
+            .def_rw("fov_y", &tc_orbit_camera3d_state::fov_y)
+            .def_rw("near_clip", &tc_orbit_camera3d_state::near_clip)
+            .def_rw("far_clip", &tc_orbit_camera3d_state::far_clip)
+            .def_rw("ortho_size", &tc_orbit_camera3d_state::ortho_size)
+            .def_prop_rw("projection_type",
+                         [](const tc_orbit_camera3d_state& state) {
+                             return static_cast<termin::CameraProjection>(state.projection_type);
+                         },
+                         [](tc_orbit_camera3d_state& state, termin::CameraProjection projection) {
+                             state.projection_type = static_cast<tc_camera_projection3d>(projection);
+                         });
+
         nb::enum_<tc_plot_axis3d>(m, "PlotAxis3D")
             .value("X", TC_PLOT_AXIS3D_X)
             .value("Y", TC_PLOT_AXIS3D_Y)
@@ -306,6 +349,10 @@ namespace tcplot_bindings {
 
         nb::class_<PythonRetainedChart3D>(m, "RetainedChart3D")
             .def(nb::init<>())
+            .def_prop_rw("camera", &PythonRetainedChart3D::camera, &PythonRetainedChart3D::set_camera)
+            .def("fit_camera", &PythonRetainedChart3D::fit_camera)
+            .def("reset_camera", &PythonRetainedChart3D::reset_camera)
+            .def("set_isometric_camera", &PythonRetainedChart3D::set_isometric_camera)
             .def_prop_rw("background_color", &PythonRetainedChart3D::background_color,
                          &PythonRetainedChart3D::set_background_color)
             .def("add_line",

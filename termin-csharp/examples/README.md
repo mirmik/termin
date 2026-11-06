@@ -8,6 +8,8 @@ Projects:
   values/events and native parameter editors through a reusable WPF document host.
   Includes a neutral PWS-shaped 24-node/31-edge fixture and installed SDK mode.
 - `PlotDemoApp` - WPF/D3D11 D3DImage hosts for 2D, multi-panel 2D, and 3D plot demos.
+  The helix/scatter/surface 3D demo opens in isometric orthographic projection;
+  its toolbar restores isometry, switches to perspective, or fits the current view.
   Its retained heatmap example combines a 180×240 uniform scalar grid, transparent
   missing cells, a line overlay, palette/reversal/range/interpolation controls, a GPU-rendered
   color scale, and cell-value inspection under the pointer.
@@ -33,7 +35,8 @@ Projects:
   than a GPU timestamp.
 - `RetainedChart3DWpfExample` - retained surface/scatter items with stable
   handles, transactional data mutation, an independently replaceable grid,
-  axis-scale-aware camera fit, on-demand rendering, MSAA, and WPF portals
+  axis-scale-aware camera fit, perspective/orthographic switching, an isometric
+  view, on-demand rendering, MSAA, and WPF portals
   whose callbacks stay in C#.
 - `SceneApp` - WPF scene editor/viewer using a display-owned D3D11 offscreen
   texture and the shared D3D11-to-D3DImage presenter. It has no SDL, Vulkan,

@@ -178,14 +178,14 @@ if(TERMIN_BUILD_TESTS AND NOT TERMIN_RUNTIME_MINIMAL_ONLY)
     add_executable(termin_runtime_package_loader_test
         tests/test_runtime_package_loader.cpp
     )
-    find_program(TERMIN_RUNTIME_TEST_PYTHON NAMES python3 python REQUIRED)
+    find_package(Python REQUIRED COMPONENTS Interpreter)
     set(TERMIN_RUNTIME_READER_FIXTURE_ROOT
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/reader-package")
     set(TERMIN_RUNTIME_READER_FIXTURE_BLOB
         "${CMAKE_CURRENT_BINARY_DIR}/reader-package.trpkg")
     add_custom_command(
         OUTPUT "${TERMIN_RUNTIME_READER_FIXTURE_BLOB}"
-        COMMAND "${TERMIN_RUNTIME_TEST_PYTHON}"
+        COMMAND "${Python_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/../../editor/termin-project-build/python/termin/project_build/runtime_package_blob.py"
             "${TERMIN_RUNTIME_READER_FIXTURE_ROOT}"
             "${TERMIN_RUNTIME_READER_FIXTURE_BLOB}"
