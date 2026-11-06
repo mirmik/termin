@@ -35,6 +35,8 @@
 #include <termin/geom/color.hpp>
 
 #include "tcplot/axes.hpp"
+#include "cartesian_grid3d.hpp"
+#include "plot_scene3d_chart_chrome.hpp"
 
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
@@ -45,6 +47,19 @@ extern "C" {
 namespace tcplot {
 
     namespace {
+
+        PlotScene3DFrameRenderState cartesian_frame(const PlotEngine3D& engine,
+                                                   const double bounds_min[3], const double bounds_max[3]) {
+            PlotScene3DFrameRenderState frame;
+            frame.camera = detail::camera_state(engine.camera);
+            frame.axis_scale = {engine.x_scale, engine.y_scale, engine.z_scale};
+            std::copy_n(bounds_min, 3, frame.bounds_min.begin());
+            std::copy_n(bounds_max, 3, frame.bounds_max.begin());
+            frame.x_label = engine.data.x_label;
+            frame.y_label = engine.data.y_label;
+            frame.z_label = engine.data.z_label;
+            return frame;
+        }
 
         struct Plot3DPushData {
             float mvp[16];
@@ -239,7 +254,8 @@ namespace tcplot {
     // ---------------------------------------------------------------------------
 
     PlotEngine3D::PlotEngine3D()
-        : text3d_(std::make_unique<tgfx::Text3DRenderer>()) {}
+        : text3d_(std::make_unique<tgfx::Text3DRenderer>()),
+          chrome_(std::make_unique<PlotScene3DChartChromeRenderer>()) {}
 
     PlotEngine3D::~PlotEngine3D() {
         release_gpu_resources();
@@ -477,6 +493,7 @@ namespace tcplot {
         shader_fs_id_ = 0;
         if (text3d_)
             text3d_->release_gpu();
+        chrome_->release_gpu();
     }
 
     void PlotEngine3D::ensure_shader_(tgfx::IRenderDevice& device) {
@@ -593,61 +610,26 @@ namespace tcplot {
         std::vector<float> verts;
         std::vector<uint32_t> indices;
         uint32_t idx = 0;
-        // Brighter 3D grid than the 2D default. 1-pixel GL lines under MSAA
-        // get very dim if sampled with low coverage; full alpha + mid-gray
-        // keeps the grid legible without drowning the data series.
-        // styles::grid_color() = (0.3, 0.3, 0.3, 0.5) stays the 2D choice.
-        const SrgbColor gc = grid_color;
+        const auto frame = cartesian_frame(*this, bounds_min, bounds_max);
+        detail::for_each_cartesian_grid_line(frame, [&](const auto& start, const auto& end, int axis) {
+            const auto color = axis < 0 ? grid_color : axis_colors[axis];
+            push_vertex(verts, start[0], start[1], start[2], color);
+            push_vertex(verts, end[0], end[1], end[2], color);
+            indices.push_back(idx++);
+            indices.push_back(idx++);
+        });
 
-        // For each axis, draw ticks as line segments running along the
-        // bounding box's "floor" on one of the other two axes. Matches
-        // Python's `_build_grid_mesh` 1:1.
-        for (int axis = 0; axis < 3; ++axis) {
-            const std::vector<double> ticks = axes::nice_ticks(bounds_min[axis], bounds_max[axis], 8);
-            const int a1 = (axis == 0) ? 1 : 0;
-            const int a2 = (axis == 2) ? 1 : 2;
-            // Python picks other_axes = [a for a in 0..2 if a != axis],
-            // then a1, a2 = other_axes. Explicitly replicate.
-            int oa[2] = {-1, -1};
-            int k = 0;
-            for (int a = 0; a < 3; ++a)
-                if (a != axis)
-                    oa[k++] = a;
-            (void)a1;
-            (void)a2; // suppress unused above
-
-            for (double t : ticks) {
-                double p0[3] = {0, 0, 0};
-                double p1[3] = {0, 0, 0};
-                p0[axis] = t;
-                p1[axis] = t;
-                p0[oa[0]] = bounds_min[oa[0]];
-                p1[oa[0]] = bounds_max[oa[0]];
-                p0[oa[1]] = bounds_min[oa[1]];
-                p1[oa[1]] = bounds_min[oa[1]]; // along a1, locked at min of a2
-                push_vertex(verts, (float)p0[0], (float)p0[1], (float)p0[2], gc);
-                push_vertex(verts, (float)p1[0], (float)p1[1], (float)p1[2], gc);
-                indices.push_back(idx);
-                indices.push_back(idx + 1);
-                idx += 2;
-            }
-        }
-
-        // Axis lines through bounds_min: x=red, y=green, z=blue.
-        for (int axis = 0; axis < 3; ++axis) {
-            double p0[3] = {bounds_min[0], bounds_min[1], bounds_min[2]};
-            double p1[3] = {p0[0], p0[1], p0[2]};
-            p1[axis] = bounds_max[axis];
-            push_vertex(verts, (float)p0[0], (float)p0[1], (float)p0[2], axis_colors[axis]);
-            push_vertex(verts, (float)p1[0], (float)p1[1], (float)p1[2], axis_colors[axis]);
-            indices.push_back(idx);
-            indices.push_back(idx + 1);
-            idx += 2;
+        if (grid_mesh_) {
+            device.destroy(grid_mesh_->vbo);
+            device.destroy(grid_mesh_->ibo);
+            grid_mesh_.reset();
         }
 
         if (!verts.empty()) {
             grid_mesh_ = make_mesh_(device, verts, indices, tgfx::PrimitiveTopology::LineList);
         }
+        grid_back_high_ = detail::cartesian_grid_back_high(frame);
+        grid_axis_edge_key_ = detail::cartesian_grid_axis_edge_key(frame);
     }
 
     void PlotEngine3D::build_surface_mesh_(tgfx::IRenderDevice& device, const SurfaceSeries& surf) {
@@ -800,9 +782,14 @@ namespace tcplot {
         const float z_min = static_cast<float>(lo[2]);
         const float z_max = static_cast<float>(hi[2]);
 
+        const auto frame = cartesian_frame(*this, lo, hi);
+        if (show_grid && (!grid_mesh_ || grid_back_high_ != detail::cartesian_grid_back_high(frame) ||
+                          grid_axis_edge_key_ != detail::cartesian_grid_axis_edge_key(frame)))
+            build_grid_mesh_(ctx->device(), lo, hi);
+
         // Grid (no jet).
         bind_plot3d_draw_data(*ctx, *this, {mvp, z_min, z_max, false});
-        if (grid_mesh_)
+        if (show_grid && grid_mesh_)
             draw_mesh_(*ctx, *grid_mesh_);
 
         // Opaque surfaces. Color mapping is shader-driven to avoid baking
@@ -886,8 +873,12 @@ namespace tcplot {
                 ctx->set_depth_test(true);
             }
         }
-        // Tick labels + marker value label via Text3D.
+        // Shared screen-space axis labels, followed by the world-anchored marker.
         if (font && show_labels) {
+            tc_grid_item3d_style label_style{};
+            label_style.labels_visible = 1;
+            chrome_->draw_grid_labels(*ctx, *font, frame, label_style,
+                static_cast<int>(vw_), static_cast<int>(vh_), static_cast<int>(vx_), static_cast<int>(vy_));
             const termin::Mat44f view = camera.view_matrix().to_float();
             // view is column-major 4x4. Row 0: world-space camera-right;
             // Row 2: world-space camera-up (+Z). Row 1 is forward (+Y).
@@ -903,92 +894,11 @@ namespace tcplot {
             float label_mvp[16];
             compute_mvp_(aspect, label_mvp, false);
 
-            // Tick/axis labels are an annotation layer, not plot geometry.
-            // Keep them readable even when surfaces have already populated depth.
-            text3d_->set_expansion_mode(tgfx::Text3DRenderer::ExpansionMode::ScreenAligned);
-            ctx->set_depth_test(false);
-            ctx->set_blend(true);
-            text3d_->begin(ctx, label_mvp, cr, cu, font);
-
-            const termin::LinearColor label_color =
-                termin::srgb_to_linear(termin::SrgbColor{0.8f, 0.8f, 0.8f, 1.0f});
             const double dx = (hi[0] - lo[0]) * x_scale;
             const double dy = (hi[1] - lo[1]) * y_scale;
             const double dz = (hi[2] - lo[2]) * z_scale;
             const double data_size = std::sqrt(dx * dx + dy * dy + dz * dz);
-            const float tick_text_size_px = 14.0f;
-            const float axis_label_size_px = 16.0f;
             const float marker_text_size_px = 14.0f;
-            const double offset = data_size * 0.03;
-
-            for (int axis = 0; axis < 3; ++axis) {
-                const double axis_lo = lo[axis];
-                const double axis_hi = hi[axis];
-                const std::vector<double> ticks = axes::nice_ticks(axis_lo, axis_hi, 6);
-                for (double t : ticks) {
-                    termin::Vec3f pos{
-                        (float)(lo[0] * x_scale),
-                        (float)(lo[1] * y_scale),
-                        (float)(lo[2] * z_scale),
-                    };
-                    if (axis == 2) {
-                        pos[axis] = (float)(t * z_scale);
-                    } else if (axis == 1) {
-                        pos[axis] = (float)(t * y_scale);
-                    } else {
-                        pos[axis] = (float)(t * x_scale);
-                    }
-                    // Offset label away from plot volume.
-                    if (axis == 0)
-                        pos[1] -= (float)offset; // X axis: offset in -Y
-                    else if (axis == 1)
-                        pos[0] -= (float)offset; // Y axis: offset in -X
-                    else
-                        pos[0] -= (float)offset; // Z axis: offset in -X
-
-                    text3d_->draw(axes::format_tick(t),
-                                  tgfx::Text3DRenderer::DrawOptions{
-                                      pos,
-                                      label_color,
-                                      tick_text_size_px,
-                                      tgfx::Text3DRenderer::Anchor::Center});
-                }
-            }
-
-            const std::string* axis_labels[3] = {
-                &data.x_label,
-                &data.y_label,
-                &data.z_label,
-            };
-            const float label_size = axis_label_size_px;
-            for (int axis = 0; axis < 3; ++axis) {
-                if (axis_labels[axis]->empty())
-                    continue;
-
-                termin::Vec3f pos{
-                    (float)(lo[0] * x_scale),
-                    (float)(lo[1] * y_scale),
-                    (float)(lo[2] * z_scale),
-                };
-                if (axis == 0) {
-                    pos[0] = (float)(hi[0] * x_scale);
-                    pos[1] -= (float)(offset * 1.9);
-                } else if (axis == 1) {
-                    pos[1] = (float)(hi[1] * y_scale);
-                    pos[0] -= (float)(offset * 1.9);
-                } else {
-                    pos[2] = (float)(hi[2] * z_scale);
-                    pos[0] -= (float)(offset * 1.9);
-                }
-
-                text3d_->draw(*axis_labels[axis],
-                              tgfx::Text3DRenderer::DrawOptions{
-                                  pos,
-                                  label_color,
-                                  label_size,
-                                  tgfx::Text3DRenderer::Anchor::Center});
-            }
-            text3d_->end();
 
             // Marker value label (always on top).
             if (has_marker_ && marker_mode) {

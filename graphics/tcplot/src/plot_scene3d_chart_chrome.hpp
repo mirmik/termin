@@ -45,7 +45,9 @@ namespace tcplot {
                               const PlotScene3DFrameRenderState& frame,
                               const tc_grid_item3d_style& style,
                               int viewport_width,
-                              int viewport_height);
+                              int viewport_height,
+                              int viewport_x = 0,
+                              int viewport_y = 0);
 
         void draw_colorbar(tgfx::RenderContext2& context,
                            tgfx::FontAtlas& font,

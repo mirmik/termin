@@ -20,6 +20,7 @@
 
 #include "plot_scene3d_render_item_encoder.hpp"
 #include "orbit_camera_state.hpp"
+#include "cartesian_grid3d.hpp"
 #include "plot_scene3d_render_pipeline.hpp"
 #include "tcplot/gpu_host.hpp"
 #include "tcplot/orbit_camera.hpp"
@@ -1269,8 +1270,12 @@ namespace {
             item.source.object_id = slot.index;
             item.source.generation = slot.generation;
             item.source.subobject_id = 0;
+            const bool grid_faces_changed = slot.kind == TC_PLOT_ITEM3D_GRID && !frame.spherical_coordinates &&
+                slot.published_render_data &&
+                (slot.published_render_data->grid_back_high != tcplot::detail::cartesian_grid_back_high(frame) ||
+                 slot.published_render_data->grid_axis_edge_key != tcplot::detail::cartesian_grid_axis_edge_key(frame));
             if (!slot.published_render_data || slot.published_geometry_revision != slot.geometry_revision ||
-                slot.published_style_revision != slot.style_revision) {
+                slot.published_style_revision != slot.style_revision || grid_faces_changed) {
                 auto data = std::make_shared<tcplot::PlotScene3DItemRenderData>();
                 data->kind = slot.kind;
                 data->x = slot.x;

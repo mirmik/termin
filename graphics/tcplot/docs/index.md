@@ -123,7 +123,9 @@ immutable shared value до смены revision, а camera/axis/light/bounds/lab
 остаётся читаемым после последующих mutations, slot reuse и уничтожения chart.
 Surface, scatter и grid payloads дополнительно кэшируют encoder-ready vertex
 stream по geometry и style revisions; grid stream также обновляется при смене
-chart bounds. Tcplot-owned planners выбирают builtin tcplot3d shader, а
+chart bounds и выбранных по камере граней/контурных рёбер. Вращение внутри
+того же набора граней переиспользует stream; геометрия серий от камеры не зависит.
+Tcplot-owned planners выбирают builtin tcplot3d shader, а
 encoders загружают stream через общий transient vertex ring и рисуют его через
 `submit_render_item_draw()`. `RetainedChart3D::render()` публикует snapshot и
 передаёт его tcplot-owned geometry/chrome pipeline, исполняемому общим
@@ -132,6 +134,17 @@ encoders загружают stream через общий transient vertex ring �
 frame snapshot. Color/depth/MSAA attachments приходят через
 `RenderTargetContext`; ручного begin/end frame/pass lifecycle и per-item
 `PlotEngine3D` в retained chart больше нет.
+
+Декартовы `RetainedChart3D` и legacy `PlotEngine3D` используют общий расчёт
+координатной сетки: три дальние грани образуют открытый со стороны камеры
+координатный объём. При вращении или панорамировании грани выбираются заново;
+поддерживаются перспективная и ортографическая камеры и масштабы осей.
+Числа размещаются горизонтально за проекцией внешних рёбер с отступом в
+пикселях. Названия осей находятся во втором внешнем ряду. Шаг числовых подписей
+зависит от длины ребра на экране; пересекающиеся и выходящие за viewport подписи
+пропускаются. Явные tick overrides сохраняют исходные значения привязки и также
+участвуют в проверке пересечений. Сферическая сетка сохраняет угловую/радиальную
+раскладку.
 
 `fit_plot_range2d()`, `make_plot_ticks2d()` и `measure_plot_text2d()` образуют
 value-only layout boundary. Tick spacing и font size задаются в logical pixels

@@ -1,5 +1,6 @@
 #include "plot_scene3d_chart_chrome.hpp"
 #include "orbit_camera_state.hpp"
+#include "cartesian_grid3d.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -24,7 +25,9 @@ namespace tcplot {
                                                           const PlotScene3DFrameRenderState& frame,
                                                           const tc_grid_item3d_style& style,
                                                           int viewport_width,
-                                                          int viewport_height) {
+                                                          int viewport_height,
+                                                          int viewport_x,
+                                                          int viewport_y) {
         if (style.labels_visible == 0 || viewport_width <= 0 || viewport_height <= 0) {
             return;
         }
@@ -33,13 +36,7 @@ namespace tcplot {
         const float aspect = static_cast<float>(viewport_width) / static_cast<float>(viewport_height);
         const termin::Mat44f mvp = (camera.projection_matrix(aspect) * camera.view_matrix()).to_float();
 
-        const double dx = (frame.bounds_max[0] - frame.bounds_min[0]) * frame.axis_scale[0];
-        const double dy = (frame.bounds_max[1] - frame.bounds_min[1]) * frame.axis_scale[1];
-        const double dz = (frame.bounds_max[2] - frame.bounds_min[2]) * frame.axis_scale[2];
-        const double data_size = std::sqrt(dx * dx + dy * dy + dz * dz);
-        const double offset = data_size * 0.03;
         constexpr float kTickTextSizePx = 14.0f;
-        constexpr float kAxisLabelSizePx = 16.0f;
         const termin::SrgbColor label_color{0.8f, 0.8f, 0.8f, 1.0f};
         const auto project = [&](const termin::Vec3f& world) {
             const termin::Vec3f clip = mvp.transform_point(world);
@@ -52,7 +49,8 @@ namespace tcplot {
         context.set_depth_write(false);
         context.set_blend(true);
         canvas_->set_default_font(&font);
-        canvas_->begin(context, viewport_width, viewport_height);
+        canvas_->begin(context, viewport_x, viewport_y, viewport_width, viewport_height);
+        context.set_scissor(viewport_x, viewport_y, viewport_width, viewport_height);
 
         if (frame.spherical_coordinates) {
             constexpr double pi = 3.14159265358979323846;
@@ -64,7 +62,7 @@ namespace tcplot {
                                     static_cast<float>(point[1] * frame.axis_scale[1]),
                                     static_cast<float>(point[2] * frame.axis_scale[2])};
                 const auto screen = project(world);
-                canvas_->draw_text(label, screen.x, screen.y - kTickTextSizePx * 0.5f,
+                canvas_->draw_text(label, screen.x + viewport_x, screen.y + viewport_y - kTickTextSizePx * 0.5f,
                                    kTickTextSizePx, color, &font, tgfx::Text2DRenderer::Anchor::Center);
             };
             const termin::SrgbColor azimuth_color{style.x_axis_r, style.x_axis_g, style.x_axis_b, 1.0f};
@@ -100,60 +98,15 @@ namespace tcplot {
             return;
         }
 
-        for (size_t axis = 0; axis < 3; ++axis) {
-            for (const auto& tick : plot_axis3d_display_ticks(
-                     frame.axis_display[axis], frame.bounds_min[axis], frame.bounds_max[axis], 6)) {
-                termin::Vec3f position{
-                    static_cast<float>(frame.bounds_min[0] * frame.axis_scale[0]),
-                    static_cast<float>(frame.bounds_min[1] * frame.axis_scale[1]),
-                    static_cast<float>(frame.bounds_min[2] * frame.axis_scale[2]),
-                };
-                position[axis] = static_cast<float>(tick.value * frame.axis_scale[axis]);
-                if (axis == 0) {
-                    position[1] -= static_cast<float>(offset);
-                } else {
-                    position[0] -= static_cast<float>(offset);
-                }
-                const tgfx::CanvasVec2 screen = project(position);
-                canvas_->draw_text(tick.label,
-                                   screen.x,
-                                   screen.y - kTickTextSizePx * 0.5f,
-                                   kTickTextSizePx,
-                                   label_color,
-                                   &font,
-                                   tgfx::Text2DRenderer::Anchor::Center);
-            }
-        }
-
-        const std::string* labels[3] = {
-            &frame.x_label,
-            &frame.y_label,
-            &frame.z_label,
-        };
-        for (size_t axis = 0; axis < 3; ++axis) {
-            if (labels[axis]->empty()) {
-                continue;
-            }
-            termin::Vec3f position{
-                static_cast<float>(frame.bounds_min[0] * frame.axis_scale[0]),
-                static_cast<float>(frame.bounds_min[1] * frame.axis_scale[1]),
-                static_cast<float>(frame.bounds_min[2] * frame.axis_scale[2]),
-            };
-            position[axis] = static_cast<float>(frame.bounds_max[axis] * frame.axis_scale[axis]);
-            if (axis == 0) {
-                position[1] -= static_cast<float>(offset * 1.9);
-            } else {
-                position[0] -= static_cast<float>(offset * 1.9);
-            }
-            const tgfx::CanvasVec2 screen = project(position);
-            canvas_->draw_text(*labels[axis],
-                               screen.x,
-                               screen.y - kAxisLabelSizePx * 0.5f,
-                               kAxisLabelSizePx,
-                               label_color,
-                               &font,
-                               tgfx::Text2DRenderer::Anchor::Center);
-        }
+        const auto labels = detail::cartesian_grid_labels(frame, viewport_width, viewport_height,
+            [&](const std::string& text, float size) {
+                const auto extent = canvas_->measure_text(text, size, &font);
+                return detail::GridScreenPoint{extent.width, extent.height};
+            });
+        for (const auto& label : labels)
+            canvas_->draw_text(label.text, static_cast<float>(label.x) + viewport_x,
+                               static_cast<float>(label.y) + viewport_y,
+                               label.size, label_color, &font, tgfx::Text2DRenderer::Anchor::Left);
         canvas_->end();
         context.set_depth_test(true);
         context.set_depth_write(true);

@@ -33,6 +33,8 @@ namespace tgfx {
 
 namespace tcplot {
 
+    class PlotScene3DChartChromeRenderer;
+
     // Result of a 3D pick query. `x/y/z` are the data-space coordinates
     // of the nearest series point; `screen_dist_px` is the screen-space
     // distance from the cursor to that point (useful to show "no match"
@@ -58,6 +60,9 @@ namespace tcplot {
         std::vector<SurfaceSeries> surface_mesh_styles_;
         std::vector<MeshGpu> wireframe_meshes_;
         std::unique_ptr<tgfx::Text3DRenderer> text3d_;
+        std::unique_ptr<PlotScene3DChartChromeRenderer> chrome_;
+        std::array<bool, 3> grid_back_high_{};
+        std::array<int, 3> grid_axis_edge_key_{-1, -1, -1};
         bool dirty_ = true, dragging_ = false;
         tcbase::MouseButton drag_button_{tcbase::MouseButton::LEFT};
         float drag_start_x_ = 0.0f, drag_start_y_ = 0.0f;

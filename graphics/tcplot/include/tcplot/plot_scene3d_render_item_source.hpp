@@ -31,7 +31,8 @@ namespace tcplot {
 
     // Immutable CPU draw data shared by snapshots until its retained inputs
     // change. Surface/scatter inputs are item-local; grid geometry also depends on
-    // chart bounds and receives a geometry revision when those bounds may change.
+    // chart bounds, selected rear faces and contour edges. Camera motion within
+    // the same selection reuses the stream; changing it installs a new immutable value.
     // A mutation installs a new value instead of modifying published data.
     struct PlotScene3DItemRenderData {
         tc_plot_item3d_kind kind = TC_PLOT_ITEM3D_INVALID;
@@ -47,6 +48,8 @@ namespace tcplot {
         tc_scatter_item3d_style scatter_style{};
         tc_line_item3d_style line_style{};
         tc_grid_item3d_style grid_style{};
+        std::array<bool, 3> grid_back_high{};
+        std::array<int, 3> grid_axis_edge_key{-1, -1, -1};
 
         // Encoder-ready immutable stream. The layout is the builtin tcplot3d
         // vertex ABI (19 floats per vertex); vertices are already expanded in draw

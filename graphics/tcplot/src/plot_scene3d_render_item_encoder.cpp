@@ -1,5 +1,6 @@
 #include "plot_scene3d_render_item_encoder.hpp"
 #include "orbit_camera_state.hpp"
+#include "cartesian_grid3d.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -669,74 +670,24 @@ namespace tcplot {
             data.draw_vertex_count = static_cast<uint32_t>(data.draw_vertices.size() / kPlot3DFloatsPerVertex);
             return;
         }
-        constexpr size_t kAxisCount = 3;
-        constexpr size_t kVerticesPerLine = 2;
-        constexpr size_t kMaximumTickCount = 8;
-        data.draw_vertices.reserve((kAxisCount * kMaximumTickCount + kAxisCount) * kVerticesPerLine *
-                                   kPlot3DFloatsPerVertex);
-
-        for (size_t axis = 0; axis < kAxisCount; ++axis) {
-            size_t other_axes[2]{};
-            size_t other_index = 0;
-            for (size_t candidate = 0; candidate < kAxisCount; ++candidate) {
-                if (candidate != axis) {
-                    other_axes[other_index++] = candidate;
-                }
-            }
-            for (double tick : axes::nice_ticks(frame.bounds_min[axis], frame.bounds_max[axis], 8)) {
-                std::array<double, 3> start{};
-                std::array<double, 3> end{};
-                start[axis] = tick;
-                end[axis] = tick;
-                start[other_axes[0]] = frame.bounds_min[other_axes[0]];
-                end[other_axes[0]] = frame.bounds_max[other_axes[0]];
-                start[other_axes[1]] = frame.bounds_min[other_axes[1]];
-                end[other_axes[1]] = frame.bounds_min[other_axes[1]];
-                append_line_vertex(data.draw_vertices,
-                                   static_cast<float>(start[0]),
-                                   static_cast<float>(start[1]),
-                                   static_cast<float>(start[2]),
-                                   style.grid_r,
-                                   style.grid_g,
-                                   style.grid_b,
-                                   style.grid_a);
-                append_line_vertex(data.draw_vertices,
-                                   static_cast<float>(end[0]),
-                                   static_cast<float>(end[1]),
-                                   static_cast<float>(end[2]),
-                                   style.grid_r,
-                                   style.grid_g,
-                                   style.grid_b,
-                                   style.grid_a);
-            }
-        }
-
+        data.grid_back_high = detail::cartesian_grid_back_high(frame);
+        data.grid_axis_edge_key = detail::cartesian_grid_axis_edge_key(frame);
         const float axis_colors[3][3] = {
             {style.x_axis_r, style.x_axis_g, style.x_axis_b},
             {style.y_axis_r, style.y_axis_g, style.y_axis_b},
             {style.z_axis_r, style.z_axis_g, style.z_axis_b},
         };
-        for (size_t axis = 0; axis < kAxisCount; ++axis) {
-            std::array<double, 3> start = frame.bounds_min;
-            std::array<double, 3> end = start;
-            end[axis] = frame.bounds_max[axis];
-            append_line_vertex(data.draw_vertices,
-                               static_cast<float>(start[0]),
-                               static_cast<float>(start[1]),
-                               static_cast<float>(start[2]),
-                               axis_colors[axis][0],
-                               axis_colors[axis][1],
-                               axis_colors[axis][2],
-                               1.0f);
-            append_line_vertex(data.draw_vertices,
-                               static_cast<float>(end[0]),
-                               static_cast<float>(end[1]),
-                               static_cast<float>(end[2]),
-                               axis_colors[axis][0],
-                               axis_colors[axis][1],
-                               axis_colors[axis][2],
-                               1.0f);
-        }
+        detail::for_each_cartesian_grid_line(frame, [&](const std::array<double, 3>& start,
+                                                       const std::array<double, 3>& end, int axis) {
+            const float r = axis < 0 ? style.grid_r : axis_colors[axis][0];
+            const float g = axis < 0 ? style.grid_g : axis_colors[axis][1];
+            const float b = axis < 0 ? style.grid_b : axis_colors[axis][2];
+            const float alpha = axis < 0 ? style.grid_a : 1.0f;
+            for (const auto& point : {start, end}) {
+                append_line_vertex(data.draw_vertices, static_cast<float>(point[0]),
+                                   static_cast<float>(point[1]), static_cast<float>(point[2]), r, g, b, alpha);
+            }
+        });
         data.draw_vertex_count = static_cast<uint32_t>(data.draw_vertices.size() / kPlot3DFloatsPerVertex);
     }
 

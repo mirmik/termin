@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -15,6 +16,9 @@
 
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/device_factory.hpp>
+#include <tgfx2/descriptors.hpp>
+#include <tgfx2/i_render_device.hpp>
+#include <tgfx2/render_context.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
 #include <tgfx2/vulkan/vulkan_render_device.hpp>
 
@@ -38,6 +42,7 @@
 
 #include "../src/plot_scene3d_chart_chrome.hpp"
 #include "../src/orbit_camera_state.hpp"
+#include "../src/cartesian_grid3d.hpp"
 
 extern "C" {
 #include <render/tc_pass.h>
@@ -326,12 +331,10 @@ namespace {
         }
     }
 
-    void capture_spherical_image(const std::vector<float>& pixels, uint32_t width, uint32_t height) {
-        const char* path = std::getenv("TERMIN_SPHERICAL_CAPTURE");
-        if (!path || !*path)
-            return;
+    void write_capture_image(const std::filesystem::path& path,
+                             const std::vector<float>& pixels, uint32_t width, uint32_t height) {
         std::ofstream output(path, std::ios::binary);
-        require(output.is_open(), "failed to open spherical capture output");
+        require(output.is_open(), "failed to open chart capture output");
         output << "P6\n" << width << ' ' << height << "\n255\n";
         for (size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
             for (size_t channel = 0; channel < 3; ++channel) {
@@ -342,8 +345,205 @@ namespace {
             }
         }
         output.close();
-        require(output.good(), "failed to write spherical capture output");
-        std::printf("spherical Chart3D capture written to %s\n", path);
+        require(output.good(), "failed to write chart capture output");
+        std::printf("Chart3D capture written to %s\n", path.string().c_str());
+    }
+
+    void capture_spherical_image(const std::vector<float>& pixels, uint32_t width, uint32_t height) {
+        const char* path = std::getenv("TERMIN_SPHERICAL_CAPTURE");
+        if (path && *path)
+            write_capture_image(path, pixels, width, height);
+    }
+
+    void test_cartesian_grid_pixels(tcplot::GpuHost& host) {
+        constexpr uint32_t width = 900, height = 700, rows = 25, columns = 25;
+        constexpr double pi = 3.14159265358979323846;
+        std::vector<double> x(rows * columns), y(x.size()), z(x.size());
+        for (uint32_t row = 0; row < rows; ++row) {
+            for (uint32_t column = 0; column < columns; ++column) {
+                const size_t index = row * columns + column;
+                x[index] = -2.0 + 4.0 * column / (columns - 1);
+                y[index] = -2.0 + 4.0 * row / (rows - 1);
+                z[index] = -1.0 + 1.4 * std::exp(-(x[index] * x[index] + y[index] * y[index]));
+            }
+        }
+        std::vector<double> hx(401), hy(hx.size()), hz(hx.size()), sx, sy, sz;
+        for (size_t index = 0; index < hx.size(); ++index) {
+            const double fraction = static_cast<double>(index) / (hx.size() - 1);
+            hx[index] = 0.8 * std::cos(10 * pi * fraction);
+            hy[index] = 0.8 * std::sin(10 * pi * fraction);
+            hz[index] = 0.6 + 3.4 * fraction;
+            if (index % 20 == 0) {
+                sx.push_back(hx[index] + 0.12 * std::sin(index));
+                sy.push_back(hy[index] + 0.12 * std::cos(index));
+                sz.push_back(hz[index]);
+            }
+        }
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        ChartOwner chart(tc_retained_chart3d_create(&host), tc_retained_chart3d_destroy);
+        require(chart && tc_retained_chart3d_set_msaa_samples(chart.get(), 1),
+                "failed to create Cartesian pixel fixture");
+        tc_surface_item3d_style surface_style{};
+        surface_style.color_r = surface_style.color_g = surface_style.color_b = surface_style.color_a = 1;
+        surface_style.colormap = TC_PLOT_COLORMAP3D_VIRIDIS;
+        surface_style.surface_grid_visible = 1;
+        surface_style.surface_grid_row_step = surface_style.surface_grid_col_step = 2;
+        surface_style.surface_grid_width_px = 1;
+        surface_style.surface_grid_r = surface_style.surface_grid_g = surface_style.surface_grid_b = 0.1f;
+        surface_style.surface_grid_a = 1;
+        const auto surface = tc_retained_chart3d_add_surface(chart.get(), x.data(), y.data(), z.data(),
+                                                            rows, columns, &surface_style);
+        const tc_line_item3d_style line_style{0.1f, 0.65f, 1, 1, 1.5f};
+        const tc_scatter_item3d_style scatter_style{1, 0.9f, 0.1f, 1, 5};
+        const auto line = tc_retained_chart3d_add_line(chart.get(), hx.data(), hy.data(), hz.data(), hx.size(), &line_style);
+        const auto scatter = tc_retained_chart3d_add_scatter(chart.get(), sx.data(), sy.data(), sz.data(), sx.size(),
+                                                           &scatter_style);
+        require(tc_retained_chart3d_item_is_valid(chart.get(), surface) &&
+                    tc_retained_chart3d_item_is_valid(chart.get(), line) &&
+                    tc_retained_chart3d_item_is_valid(chart.get(), scatter),
+                "failed to add Cartesian surface, helix and scatter fixture");
+        tc_retained_chart3d_set_axis_labels(chart.get(), "X Axis", "Y Axis", "Z Axis");
+        const auto grid = tc_retained_chart3d_grid_part(chart.get());
+        tc_grid_item3d_style grid_style{};
+        require(tc_retained_chart3d_grid_get_style(chart.get(), grid, &grid_style),
+                "failed to read Cartesian pixel fixture grid style");
+        const char* capture_dir = std::getenv("TERMIN_CARTESIAN_CAPTURE_DIR");
+        if (capture_dir && *capture_dir)
+            require(std::filesystem::is_directory(capture_dir), "Cartesian capture directory must already exist");
+        const auto capture = [&](const std::string& name, const std::vector<float>& pixels,
+                                 uint32_t image_width, uint32_t image_height) {
+            if (capture_dir && *capture_dir)
+                write_capture_image(std::filesystem::path(capture_dir) / (name + ".ppm"),
+                                    pixels, image_width, image_height);
+        };
+
+        // A nonzero legacy viewport checks that the shared canvas honors its host's origin.
+        constexpr uint32_t origin_x = 48, origin_y = 32;
+        constexpr uint32_t target_width = width + 2 * origin_x, target_height = height + 2 * origin_y;
+        struct LegacyTarget {
+            tcplot::GpuHost& host;
+            tgfx::TextureHandle color{}, depth{};
+            ~LegacyTarget() {
+                host.device().destroy(color);
+                host.device().destroy(depth);
+            }
+        } target{host};
+        tgfx::TextureDesc desc;
+        desc.width = target_width;
+        desc.height = target_height;
+        desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+        desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+        target.color = host.device().create_texture(desc);
+        desc.format = tgfx::PixelFormat::D32F;
+        desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
+        target.depth = host.device().create_texture(desc);
+        require(target.color.id && target.depth.id, "failed to allocate legacy Cartesian offscreen target");
+        tcplot::PlotEngine3D legacy;
+        legacy.set_viewport(origin_x, origin_y, width, height);
+        legacy.data.x_label = "X Axis";
+        legacy.data.y_label = "Y Axis";
+        legacy.data.z_label = "Z Axis";
+        legacy.surface(x, y, z, rows, columns, {{}, tcplot::SurfaceColorMap::Viridis});
+        require(legacy.set_surface_grid(0, {true, 2, 2, {0.1f, 0.1f, 0.1f, 1}, 1}),
+                "failed to configure legacy surface grid");
+        legacy.plot(hx, hy, hz, {{tcplot::SrgbColor{0.1f, 0.65f, 1, 1}}, 1.5});
+        legacy.scatter(sx, sy, sz, {{tcplot::SrgbColor{1, 0.9f, 0.1f, 1}}, 5});
+        const auto render_legacy = [&](uint32_t viewport_x, uint32_t viewport_y) {
+            auto& context = host.ctx();
+            const auto clear = termin::srgb_to_linear(termin::SrgbColor{0.08f, 0.09f, 0.11f, 1});
+            context.begin_frame();
+            context.begin_pass(target.color, target.depth, &clear, 1.0f, true);
+            context.set_viewport(viewport_x, viewport_y, width, height);
+            legacy.set_viewport(viewport_x, viewport_y, width, height);
+            const bool rendered = legacy.render(&context, &host.font());
+            context.end_pass();
+            context.end_frame();
+            require(rendered, "legacy Cartesian offscreen render failed");
+            return read_pixels(host, target.color.id, target_width, target_height);
+        };
+        tc_orbit_camera3d_state camera{};
+        require(tc_retained_chart3d_get_camera(chart.get(), &camera), "failed to read Cartesian pixel camera");
+        camera.target_x = camera.target_y = 0;
+        camera.target_z = 1.5;
+        camera.distance = 12;
+        camera.ortho_size = 4.2;
+        const char* modes[] = {"perspective", "isometric", "rotated", "below"};
+        for (int mode = 0; mode < 4; ++mode) {
+            camera.projection_type = mode == 1 ? TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC
+                                              : TC_CAMERA_PROJECTION3D_PERSPECTIVE;
+            camera.azimuth = mode == 2 ? 0.75 + pi : 0.75;
+            camera.elevation = mode == 3 ? -0.5 : 0.5;
+            if (mode == 1) {
+                camera.azimuth = pi / 4;
+                camera.elevation = std::atan(1 / std::sqrt(2.0));
+            }
+            require(tc_retained_chart3d_set_camera(chart.get(), &camera), "failed to set Cartesian pixel camera");
+            const auto texture = tc_retained_chart3d_render(chart.get(), width, height);
+            require(texture && count_non_clear_pixels(host, texture, width, height) > 4000,
+                    "Cartesian demo must visibly render its surface, helix and rear grid");
+            const auto labeled = read_pixels(host, texture, width, height);
+            capture(std::string("retained-") + modes[mode], labeled, width, height);
+            grid_style.labels_visible = 0;
+            require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &grid_style), "failed to hide Cartesian labels");
+            const auto hidden_texture = tc_retained_chart3d_render(chart.get(), width, height);
+            require(hidden_texture && count_changed_pixels(labeled, read_pixels(host, hidden_texture, width, height)) > 20,
+                    "Cartesian axis labels must contribute visible pixels in every tested camera view");
+            grid_style.labels_visible = 1;
+            require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &grid_style), "failed to restore Cartesian labels");
+            if (mode >= 2)
+                continue;
+            tcplot::detail::apply_camera_state(legacy.camera, camera);
+            legacy.show_labels = true;
+            const auto legacy_labeled = render_legacy(origin_x, origin_y);
+            capture(std::string("legacy-") + modes[mode], legacy_labeled, target_width, target_height);
+            legacy.show_labels = false;
+            const auto legacy_hidden = render_legacy(origin_x, origin_y);
+            require(count_changed_pixels(legacy_labeled, legacy_hidden) > 20,
+                    "legacy Cartesian plot must render shared screen-space labels");
+            for (uint32_t py = 0; py < target_height; ++py) {
+                for (uint32_t px = 0; px < target_width; ++px) {
+                    if (px >= origin_x && px < origin_x + width && py >= origin_y && py < origin_y + height)
+                        continue;
+                    const size_t index = (static_cast<size_t>(py) * target_width + px) * 4;
+                    for (size_t channel = 0; channel < 3; ++channel)
+                        require(legacy_labeled[index + channel] == legacy_hidden[index + channel],
+                                "legacy labels must stay inside the nonzero viewport rectangle");
+                }
+            }
+            legacy.show_labels = true;
+            const auto zero_labeled = render_legacy(0, 0);
+            legacy.show_labels = false;
+            const auto zero_hidden = render_legacy(0, 0);
+            size_t zero_count = 0, translated_count = 0, mismatches = 0;
+            const auto text_pixel = [](const std::vector<float>& labeled,
+                                       const std::vector<float>& hidden, size_t index) {
+                return std::abs(labeled[index] - hidden[index]) > 0.01f ||
+                    std::abs(labeled[index + 1] - hidden[index + 1]) > 0.01f ||
+                    std::abs(labeled[index + 2] - hidden[index + 2]) > 0.01f;
+            };
+            for (uint32_t py = 0; py < height; ++py) {
+                for (uint32_t px = 0; px < width; ++px) {
+                    const size_t zero_index = (static_cast<size_t>(py) * target_width + px) * 4;
+                    const size_t translated_index =
+                        (static_cast<size_t>(py + origin_y) * target_width + px + origin_x) * 4;
+                    const bool zero = text_pixel(zero_labeled, zero_hidden, zero_index);
+                    const bool translated = text_pixel(legacy_labeled, legacy_hidden, translated_index);
+                    zero_count += zero;
+                    translated_count += translated;
+                    mismatches += zero != translated;
+                }
+            }
+            // Integer viewport translation should preserve glyph coverage. Allow
+            // a few antialiased edge pixels to cross the comparison threshold.
+            const size_t tolerance = std::max<size_t>(12, zero_count / 200);
+            if (mismatches > tolerance) {
+                std::fprintf(stderr, "legacy label translation (%s): zero=%zu translated=%zu mismatches=%zu\n",
+                             modes[mode], zero_count, translated_count, mismatches);
+            }
+            require(zero_count > 20 && mismatches <= tolerance,
+                    "viewport translation must preserve the complete legacy label pixel mask");
+            legacy.set_viewport(origin_x, origin_y, width, height);
+        }
     }
 
     void test_spherical_chart_d3d11(tcplot::GpuHost& host) {
@@ -484,6 +684,208 @@ namespace {
                                                                   tc_plot_item3d_handle handle) {
         const tc_render_item* item = find_render_item(snapshot, handle);
         return item ? tcplot::plot_scene3d_render_item_payload(*item) : nullptr;
+    }
+
+    void test_cartesian_grid_faces_cpu() {
+        constexpr double pi = 3.14159265358979323846;
+        constexpr size_t stride = 19;
+        using ChartOwner = std::unique_ptr<tc_retained_chart3d, decltype(&tc_retained_chart3d_destroy)>;
+        ChartOwner chart(tc_retained_chart3d_create(nullptr), tc_retained_chart3d_destroy);
+        require(chart != nullptr, "failed to create Cartesian grid test chart");
+        const double x[] = {-2, 2, -2, 2}, y[] = {-1, -1, 1, 1}, z[] = {-3, 0, 0, 3};
+        const auto surface = tc_retained_chart3d_add_surface(chart.get(), x, y, z, 2, 2, nullptr);
+        const auto grid = tc_retained_chart3d_grid_part(chart.get());
+        auto& source = tcplot::plot_scene3d_render_item_source(*chart);
+        termin::RenderItemSnapshot original;
+        require(source.publish(original, {}), "failed to publish original Cartesian grid");
+        const auto* original_grid = find_plot_payload(original, grid);
+        const auto* original_surface = find_plot_payload(original, surface);
+        require(original_grid && original_surface, "Cartesian grid test requires a surface and grid");
+        const auto original_vertices = original_grid->item->draw_vertices;
+        const auto original_grid_state = snapshot(chart.get(), grid);
+        const auto original_surface_state = snapshot(chart.get(), surface);
+        auto previous_grid = original_grid->item;
+        tc_orbit_camera3d_state camera{};
+        require(tc_retained_chart3d_get_camera(chart.get(), &camera), "failed to read Cartesian grid camera");
+        camera.target_x = camera.target_y = camera.target_z = 0;
+        camera.distance = 100;
+        camera.ortho_size = 30;
+
+        for (const auto scale : {std::array<float, 3>{1, 1, 1}, std::array<float, 3>{0.25f, 3, 8}}) {
+            require(tc_retained_chart3d_set_axis_scale(chart.get(), scale[0], scale[1], scale[2]),
+                    "failed to set Cartesian grid anisotropic scale");
+            for (auto projection : {TC_CAMERA_PROJECTION3D_PERSPECTIVE, TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC}) {
+                camera.projection_type = projection;
+                for (double elevation : {-0.45, 0.45}) {
+                    camera.elevation = elevation;
+                    for (int quadrant = 0; quadrant < 4; ++quadrant) {
+                        camera.azimuth = 0.4 + quadrant * pi * 0.5;
+                        require(tc_retained_chart3d_set_camera(chart.get(), &camera),
+                                "failed to rotate Cartesian grid camera");
+                        termin::RenderItemSnapshot published;
+                        require(source.publish(published, {}), "failed to publish rotated Cartesian grid");
+                        const auto* payload = find_plot_payload(published, grid);
+                        const auto* surface_payload = find_plot_payload(published, surface);
+                        require(payload && surface_payload && surface_payload->item == original_surface->item,
+                                "camera and scale changes must reuse immutable surface draw data");
+                        const auto eye = tcplot::detail::camera_from_state(camera).eye();
+                        std::array<double, 3> back{};
+                        for (size_t axis = 0; axis < 3; ++axis) {
+                            back[axis] = eye[axis] >= 0 ? payload->frame.bounds_min[axis]
+                                                      : payload->frame.bounds_max[axis];
+                            require(payload->item->grid_back_high[axis] == (eye[axis] < 0),
+                                    "Cartesian grid must select the far face on each axis");
+                        }
+                        require((previous_grid->grid_back_high == payload->item->grid_back_high &&
+                                 previous_grid->grid_axis_edge_key == payload->item->grid_axis_edge_key) ==
+                                    (previous_grid == payload->item),
+                                "grid draw data must change exactly when selected faces or axis edges change");
+                        previous_grid = payload->item;
+                        std::array<size_t, 3> face_lines{};
+                        const auto& vertices = payload->item->draw_vertices;
+                        for (size_t vertex = 0; vertex < payload->item->draw_vertex_count; vertex += 2) {
+                            bool on_back_face = false;
+                            for (size_t axis = 0; axis < 3; ++axis) {
+                                if (vertices[vertex * stride + axis] == back[axis] &&
+                                    vertices[(vertex + 1) * stride + axis] == back[axis]) {
+                                    on_back_face = true;
+                                    ++face_lines[axis];
+                                }
+                            }
+                            require(on_back_face, "every Cartesian grid segment must lie on a far face");
+                        }
+                        for (size_t count : face_lines)
+                            require(count > 4, "all three far faces must contain a coordinate grid");
+
+                        camera.azimuth += 0.01;
+                        require(tc_retained_chart3d_set_camera(chart.get(), &camera),
+                                "failed to nudge Cartesian grid camera");
+                        termin::RenderItemSnapshot nudged;
+                        require(source.publish(nudged, {}) && find_plot_payload(nudged, grid)->item == payload->item,
+                                "camera motion within a quadrant must reuse the grid draw stream");
+                    }
+                }
+            }
+        }
+        require(original_grid->item->draw_vertices == original_vertices &&
+                    same_snapshot(original_grid_state, snapshot(chart.get(), grid)) &&
+                    same_snapshot(original_surface_state, snapshot(chart.get(), surface)),
+                "camera-selected grid streams must preserve old snapshots and retained item revisions");
+
+        camera.projection_type = TC_CAMERA_PROJECTION3D_PERSPECTIVE;
+        camera.azimuth = 0.4;
+        camera.elevation = 0.45;
+        require(tc_retained_chart3d_set_camera(chart.get(), &camera), "failed to reset grid camera");
+        termin::RenderItemSnapshot outside;
+        require(source.publish(outside, {}), "failed to publish outside camera grid");
+        const auto outside_grid = find_plot_payload(outside, grid)->item;
+        camera.distance = 0.1;
+        require(tc_retained_chart3d_set_camera(chart.get(), &camera), "failed to move grid camera inside the box");
+        termin::RenderItemSnapshot inside;
+        require(source.publish(inside, {}), "failed to publish inside camera grid");
+        const auto inside_grid = find_plot_payload(inside, grid)->item;
+        require(inside_grid->grid_back_high == outside_grid->grid_back_high &&
+                    inside_grid->grid_axis_edge_key != outside_grid->grid_axis_edge_key && inside_grid != outside_grid,
+                "grid cache must refresh disappearing contour axes even if the far faces stay unchanged");
+
+        camera.distance = 100;
+        camera.target_x = -1000;
+        require(tc_retained_chart3d_set_camera(chart.get(), &camera), "failed to pan perspective grid camera");
+        termin::RenderItemSnapshot panned;
+        require(source.publish(panned, {}) && find_plot_payload(panned, grid)->item->grid_back_high[0],
+                "perspective rear-face choice must use the eye relative to the data box after panning");
+        camera.projection_type = TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC;
+        require(tc_retained_chart3d_set_camera(chart.get(), &camera), "failed to select panned orthographic camera");
+        termin::RenderItemSnapshot parallel;
+        require(source.publish(parallel, {}) && !find_plot_payload(parallel, grid)->item->grid_back_high[0],
+                "orthographic rear-face choice must use the parallel view direction regardless of panning");
+    }
+
+    void test_cartesian_grid_labels_cpu() {
+        constexpr double pi = 3.14159265358979323846;
+        tcplot::PlotScene3DFrameRenderState frame;
+        frame.bounds_min = {-2, -1, -3};
+        frame.bounds_max = {2, 1, 3};
+        termin::OrbitCamera camera;
+        camera.target = {0, 0, 0};
+        camera.distance = 20;
+        camera.ortho_size = 6;
+        frame.camera = tcplot::detail::camera_state(camera);
+        const auto measure = [](const std::string& text, float size) {
+            return tcplot::detail::GridScreenPoint{static_cast<double>(text.size()) * size * 0.5, size};
+        };
+        const auto validate = [&](int width, int height) {
+            const auto labels = tcplot::detail::cartesian_grid_labels(frame, width, height, measure);
+            const auto edges = tcplot::detail::cartesian_axis_edges(frame);
+            const auto projected_camera = tcplot::detail::camera_from_state(frame.camera);
+            const termin::Rect2 viewport{0, 0, static_cast<double>(width), static_cast<double>(height)};
+            for (size_t index = 0; index < labels.size(); ++index) {
+                const auto& label = labels[index];
+                require(std::isfinite(label.x) && std::isfinite(label.y) &&
+                            label.x >= 3 && label.y >= 3 &&
+                            label.x + label.width <= width - 3 && label.y + label.height <= height - 3,
+                        "Cartesian grid labels must remain finite and inside the viewport");
+                for (size_t previous = 0; previous < index; ++previous) {
+                    const auto& other = labels[previous];
+                    require(label.x >= other.x + other.width || label.x + label.width <= other.x ||
+                                label.y >= other.y + other.height || label.y + label.height <= other.y,
+                            "Cartesian axis titles and tick labels must not overlap");
+                }
+                bool outside_volume = false;
+                for (const auto& edge : edges) {
+                    if (!edge.visible)
+                        continue;
+                    const auto a = projected_camera.try_project_world_point(
+                        tcplot::detail::grid_world_point(frame, edge.start), viewport);
+                    const auto b = projected_camera.try_project_world_point(
+                        tcplot::detail::grid_world_point(frame, edge.end), viewport);
+                    if (!a || !b)
+                        continue;
+                    const double length = (b->screen - a->screen).norm();
+                    tcplot::detail::GridScreenPoint normal{
+                        -(b->screen.y - a->screen.y) / length, (b->screen.x - a->screen.x) / length};
+                    if (normal.x * edge.outward.x + normal.y * edge.outward.y < 0) {
+                        normal.x = -normal.x;
+                        normal.y = -normal.y;
+                    }
+                    const double nearest = normal.x * (label.x + label.width * 0.5 - a->screen.x) +
+                        normal.y * (label.y + label.height * 0.5 - a->screen.y) -
+                        (std::abs(normal.x) * label.width + std::abs(normal.y) * label.height) * 0.5;
+                    outside_volume |= nearest > 0;
+                }
+                require(outside_volume, "complete tick-label rectangles must lie outside the projected data box");
+            }
+            return labels;
+        };
+        for (const auto scale : {std::array<float, 3>{1, 1, 1}, std::array<float, 3>{0.5f, 2, 0.25f}}) {
+            frame.axis_scale = scale;
+            for (auto projection : {TC_CAMERA_PROJECTION3D_PERSPECTIVE, TC_CAMERA_PROJECTION3D_ORTHOGRAPHIC}) {
+                frame.camera.projection_type = projection;
+                for (double elevation : {-0.6, 0.0, 0.6}) {
+                    frame.camera.elevation = elevation;
+                    for (int quadrant = 0; quadrant < 4; ++quadrant) {
+                        frame.camera.azimuth = 0.4 + quadrant * pi * 0.5;
+                        require(!validate(800, 600).empty(), "fitted Cartesian views must display axis labels");
+                    }
+                }
+            }
+        }
+        frame.axis_scale = {1, 1, 1};
+        frame.camera.azimuth = 0.7;
+        frame.camera.elevation = 0.5;
+        const auto large = validate(800, 600);
+        const auto small = validate(160, 120);
+        require(small.size() < large.size(), "small viewports must thin or omit labels instead of crowding them");
+        frame.axis_display[0].tick_labels[0] = "custom 0 boundary";
+        const auto custom = validate(1200, 900);
+        require(std::any_of(custom.begin(), custom.end(), [](const auto& label) {
+                    return label.text == "custom 0 boundary";
+                }), "Cartesian label layout must preserve explicit tick text");
+        frame.camera.distance = 0.1;
+        frame.camera.near_clip = 0.2;
+        (void)validate(800, 600);
+        require(tcplot::detail::cartesian_grid_labels(frame, 0, 0, measure).empty(),
+                "empty viewports must have no Cartesian labels");
     }
 
     void test_orthographic_camera_cpu() {
@@ -961,9 +1363,12 @@ int main(int argc, char** argv) {
     try {
         const bool cpu_only = argc == 2 && std::string(argv[1]) == "--cpu-only";
         const bool spherical_d3d11 = argc == 2 && std::string(argv[1]) == "--spherical-d3d11";
-        require(argc == 1 || cpu_only || spherical_d3d11,
-                "usage: tcplot_retained_chart3d_test [--cpu-only|--spherical-d3d11]");
+        const bool cartesian_capture = argc == 2 && std::string(argv[1]) == "--cartesian-capture";
+        require(argc == 1 || cpu_only || spherical_d3d11 || cartesian_capture,
+                "usage: tcplot_retained_chart3d_test [--cpu-only|--spherical-d3d11|--cartesian-capture]");
         test_termin_clip_canvas_projection();
+        test_cartesian_grid_faces_cpu();
+        test_cartesian_grid_labels_cpu();
         test_orthographic_camera_cpu();
         test_spherical_chart_cpu();
         test_oriented_spherical_chart_cpu();
@@ -999,6 +1404,11 @@ int main(int argc, char** argv) {
         }
 
         tcplot::GpuHost host(TCPLOT_TEST_FONT, tgfx::BackendType::Vulkan);
+        test_cartesian_grid_pixels(host);
+        if (cartesian_capture) {
+            std::printf("Cartesian Chart3D offscreen labels and viewport test passed\n");
+            return 0;
+        }
         const uint32_t supported_msaa_samples = test_texture_sample_support(host);
         tc_retained_chart3d* detached = tc_retained_chart3d_create(nullptr);
         require(detached != nullptr, "failed to create detached chart");
