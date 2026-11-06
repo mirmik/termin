@@ -56,7 +56,7 @@ public sealed class NativeUiDocument : IDisposable
     private readonly int _thread = Thread.CurrentThread.ManagedThreadId;
     private NativeUiHandle _handle;
     private int _borrowers;
-    private readonly List<Action> _callbackChecks = new();
+    private readonly List<System.Action> _callbackChecks = new();
     private bool _disposed;
 
     public NativeUiDocument(string debugName = "C# native document")
@@ -194,19 +194,19 @@ public sealed class NativeUiDocument : IDisposable
         VerifyAccess();
         --_borrowers;
     }
-    internal void RegisterCallbackCheck(Action check)
+    internal void RegisterCallbackCheck(System.Action check)
     {
         VerifyAccess();
         _callbackChecks.Add(check);
     }
-    internal void UnregisterCallbackCheck(Action check)
+    internal void UnregisterCallbackCheck(System.Action check)
     {
         VerifyAccess();
         _callbackChecks.Remove(check);
     }
     internal void ThrowPendingCallbackExceptions()
     {
-        foreach (Action check in _callbackChecks)
+        foreach (System.Action check in _callbackChecks)
             check();
     }
 

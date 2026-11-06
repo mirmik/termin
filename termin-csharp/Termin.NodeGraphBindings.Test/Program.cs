@@ -7,7 +7,7 @@ static void Require(bool condition, string message)
     if (!condition)
         throw new InvalidOperationException(message);
 }
-static T Throws<T>(Action action) where T : Exception
+static T Throws<T>(System.Action action) where T : Exception
 {
     try
     {

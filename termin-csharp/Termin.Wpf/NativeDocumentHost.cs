@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Termin.Native;
+using MouseButton = System.Windows.Input.MouseButton;
 
 namespace Termin.Wpf;
 
@@ -207,7 +208,7 @@ public sealed class NativeDocumentHost : Grid, IDisposable, INativeDocumentPlatf
         UnsubscribeRendering();
         RenderFailed?.Invoke(this, new NativeDocumentRenderFailedEventArgs(error));
     }
-    private void HandleInput(Action input)
+    private void HandleInput(System.Action input)
     {
         if (_renderer is null)
             return;

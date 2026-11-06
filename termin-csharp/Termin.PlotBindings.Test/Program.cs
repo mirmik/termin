@@ -489,7 +489,7 @@ static void TestManagedChartComposition(GpuHost host)
             "Managed series removal did not destroy its native item.");
 }
 
-static void RequireThrows<TException>(Action action, string message)
+static void RequireThrows<TException>(System.Action action, string message)
     where TException : Exception
 {
     try

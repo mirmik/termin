@@ -317,7 +317,7 @@ public sealed class NativeNodeGraphView : IDisposable
             memory.Dispose();
         _descriptorMemory.Clear();
     }
-    private void RunCallback(Action action)
+    private void RunCallback(System.Action action)
     {
         ++_callbackDepth;
         try

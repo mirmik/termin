@@ -137,7 +137,7 @@ internal sealed class GraphWindow : Window
     {
         FitGraph();
         if (_smoke)
-            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () => await RunSmoke()));
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new System.Action(async () => await RunSmoke()));
     }
 
     private NativeNodeGraphParameterEditor? PresentParameter(NativeNodeGraphParameterContext context)
