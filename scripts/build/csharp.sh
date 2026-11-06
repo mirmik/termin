@@ -113,9 +113,12 @@ generated_dir="$SCRIPT_DIR/termin-csharp/Termin.Native/Generated"
 mkdir -p "$generated_dir"
 find "$generated_dir" -maxdepth 1 -type f -delete
 
+# Cached package *_DIR entries override CMAKE_PREFIX_PATH. Resolve them again
+# because this build directory is shared across SDK prefixes/profiles.
 cmake_args=(
     -S .
     -B "$build_dir"
+    -U '*_DIR'
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     -DCMAKE_PREFIX_PATH="$SDK_PREFIX"
     -DTERMIN_CSHARP_BUILD_NATIVE=ON

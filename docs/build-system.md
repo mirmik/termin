@@ -309,6 +309,12 @@ Windows оркестратор автоматически выбирает су�
 профиль `plot-d3d11`, который генерирует API только для
 `tcplot`/`Termin.Wpf` и копирует требуемые D3D11 shader artifacts.
 
+C#-стадия перед конфигурацией сбрасывает закэшированные CMake package paths
+(`*_DIR`), чтобы пакеты заново выбирались из текущего `SDK_PREFIX`.
+При переключении между полным SDK и Graphics SDK общий каталог
+`termin-csharp/build/<configuration>` не требует ручной очистки: обёртки SWIG,
+заголовки и native-библиотеки берутся из согласованного набора входов.
+
 Standalone native stages принимают тот же профиль в форме
 `--profile=graphics`:
 

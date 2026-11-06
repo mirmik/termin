@@ -171,9 +171,13 @@ try {
     }
 
     $buildTests = if ($Profile -eq "plot-d3d11") { "OFF" } else { "ON" }
+    # The build directory is shared across SDK prefixes/profiles. Cached package
+    # *_DIR entries override CMAKE_PREFIX_PATH, so resolve packages again against
+    # the SDK just built instead of mixing its wrappers with another SDK's ABI.
     $cmakeArgs = @(
         "-S", ".",
         "-B", $buildDir,
+        "-U", "*_DIR",
         "-DCMAKE_BUILD_TYPE=$BuildType",
         "-DCMAKE_PREFIX_PATH=$SdkPrefix",
         "-DTERMIN_CSHARP_BUILD_NATIVE=ON",
