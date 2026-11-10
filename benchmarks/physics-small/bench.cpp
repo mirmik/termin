@@ -1,6 +1,9 @@
 #include <termin/physics_qopt/physics_qopt.hpp>
 #include <termin/robotics/robotics.hpp>
 
+#include "benchmark_common.hpp"
+#include "solver_replay.hpp"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -17,71 +20,17 @@
 using namespace termin;
 using namespace termin::physics_qopt;
 using namespace termin::robotics;
-using Clock = std::chrono::steady_clock;
-constexpr double dt = 0.001;
-
-void require(bool condition, const char* message) {
-    if (!condition)
-        throw std::runtime_error(message);
-}
-
-std::vector<ArticulationUnit3D> units(int n) {
-    std::vector<ArticulationUnit3D> result;
-    for (int i = 0; i < n; ++i) {
-        result.push_back({
-            .parent_unit = i ? std::size_t(i - 1) : articulation_root_frame,
-            .parent_to_unit_zero = Pose3::translation(i ? 0.3 : 0.0, 0, 0),
-            .motion_twist_at_unit = {i % 2 ? Vec3::unit_z() : Vec3::unit_y(), Vec3::zero()},
-            .inertia = SpatialInertia3{1.0, {0.02, 0.025, 0.03}, Pose3::translation(0.15, 0, 0)},
-            .diagnostic_name = "link",
-        });
-    }
-    return result;
-}
-
-Articulation3DState initial(int n) {
-    Articulation3DState state{std::vector<double>(n), std::vector<double>(n)};
-    for (int i = 0; i < n; ++i)
-        state.coordinates[i] = i % 2 ? -0.15 : 0.2;
-    return state;
-}
-
-void vector_json(const std::vector<double>& values) {
-    std::cout << '[';
-    for (std::size_t i = 0; i < values.size(); ++i) {
-        require(std::isfinite(values[i]), "non-finite benchmark output");
-        if (i)
-            std::cout << ',';
-        std::cout << values[i];
-    }
-    std::cout << ']';
-}
-
-void timings_json(const char* name, const std::vector<double>& samples) {
-    auto sorted = samples;
-    std::sort(sorted.begin(), sorted.end());
-    const auto half = sorted.size() / 2;
-    const double median = sorted.size() % 2 ? sorted[half] : 0.5 * (sorted[half - 1] + sorted[half]);
-    std::cout << '"' << name << "\":{\"median_us\":" << median << ",\"min_us\":" << sorted.front()
-              << ",\"max_us\":" << sorted.back() << ",\"samples_us\":";
-    vector_json(samples);
-    std::cout << '}';
-}
-
-template <class Function> double timed(int count, Function function) {
-    const auto start = Clock::now();
-    for (int i = 0; i < count; ++i)
-        function();
-    return std::chrono::duration<double, std::micro>(Clock::now() - start).count() / count;
-}
 
 // Composition keeps instrumentation outside production code and throughput runs.
 // This fixture has no limits/contacts: all articulation overrides are forwarded.
 class ProfiledArticulation final : public DynamicsContribution {
 public:
-    explicit ProfiledArticulation(Articulation3D& arm)
-        : inner(arm, {0, 0, -9.81}, "profile") {}
+    explicit ProfiledArticulation(Articulation3D& arm, SolverTrace* recorder = nullptr)
+        : inner(arm, {0, 0, -9.81}, "profile"),
+          trace(recorder) {}
     Articulation3DDynamicsContribution inner;
+    SolverTrace* trace;
+    bool trace_ok = true;
     double mass_assembly_us = 0, cached_assembly_us = 0, velocity_us = 0, configuration_us = 0;
     std::size_t velocity_calls = 0;
     AssemblyDiagnostic register_topology(DynamicsTopology& topology) noexcept override {
@@ -92,6 +41,8 @@ public:
         return inner.register_unilateral_constraints(topology, dt);
     }
     AssemblyDiagnostic begin_step() noexcept override {
+        if (trace != nullptr && !trace->begin_step())
+            return AssemblyDiagnostic::InternalFailure;
         return inner.begin_step();
     }
     void commit_step() noexcept override {
@@ -109,6 +60,9 @@ public:
             mass_assembly_us += us;
         else
             cached_assembly_us += us;
+        if (trace != nullptr && phase == DynamicsAssemblyPhase::Acceleration && result == AssemblyDiagnostic::None &&
+            !trace->record(assembly.system()))
+            return AssemblyDiagnostic::InternalFailure;
         return result;
     }
     void apply_solution(DynamicsAssemblyPhase phase,
@@ -116,6 +70,8 @@ public:
                         ConstDenseVectorView values,
                         ConstDenseVectorView reactions) noexcept override {
         inner.apply_solution(phase, topology, values, reactions);
+        if (trace != nullptr && phase == DynamicsAssemblyPhase::Acceleration)
+            trace_ok = trace->record_solution(values) && trace_ok;
     }
     void apply_unilateral_solution(const DynamicsTopology& topology,
                                    const DynamicsUnilateralTopology& unilateral,
@@ -150,6 +106,31 @@ public:
         return inner.write_corrected_midpoint_velocity(topology, midpoint, correction, dt, destination);
     }
 };
+
+void solver_profile(
+    int n, int steps, int repeats, const std::vector<double>& final_q, const std::vector<double>& final_v) {
+    SolverTrace trace;
+    Articulation3D arm(units(n), initial(n), "solver trace");
+    DynamicsSystem system;
+    auto contribution = std::make_unique<ProfiledArticulation>(arm, &trace);
+    auto* recorder = contribution.get();
+    require(system.add_contribution(std::move(contribution)) == DynamicsSystemDiagnostic::None,
+            "solver trace add failed");
+    require(system.finalize() == DynamicsSystemDiagnostic::None, "solver trace finalize failed");
+    for (int step = 0; step < steps; ++step) {
+        const auto before = recorder->inner.assembly_counters();
+        const auto result = system.step({.time_step = dt});
+        require(result.ok() && recorder->trace_ok, "solver trace step failed");
+        const auto calls = recorder->inner.assembly_counters().bias_evaluations - before.bias_evaluations;
+        require(result.endpoint_equality_factorizations == 1 &&
+                    result.endpoint_equality_factorization_reuses == calls - 2,
+                "solver trace no longer matches endpoint cache lifetime");
+    }
+    require(arm.state().coordinates == final_q && arm.state().velocities == final_v,
+            "solver recording changed trajectory");
+    std::cout << ",\"solver_replay\":";
+    trace.report(1, repeats);
+}
 
 void profile(int n, int steps, const std::vector<double>& final_q, const std::vector<double>& final_v) {
     Articulation3D arm(units(n), initial(n), "profile");
@@ -237,6 +218,7 @@ void chain(int n, int steps, int warmups, int repeats) {
     std::cout << ",\"initial_bias_nonzero_velocity\":";
     vector_json(bias);
     profile(n, steps, final_q, final_v);
+    solver_profile(n, steps, repeats, final_q, final_v);
     std::cout << '}';
 }
 
@@ -290,6 +272,16 @@ int main(int argc, char** argv) {
         }
         std::cout << "],\"contact\":";
         contact(steps, warmups, repeats);
+        std::cout << ",\"controllers\":[";
+        first = true;
+        for (const int n : {2, 6, 12, 24}) {
+            if (!first)
+                std::cout << ',';
+            first = false;
+            controller(n, steps, warmups, repeats);
+        }
+        std::cout << "],\"contact_pipeline\":";
+        contact_pipeline(steps, warmups, repeats);
         std::cout << "}\n";
     } catch (const std::exception& error) {
         std::cerr << "[physics-small-benchmark] " << error.what() << '\n';

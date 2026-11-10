@@ -13,6 +13,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+PACKAGES = ("termin_base", "termin_qopt", "termin_robotics", "termin_physics_qopt",
+            "termin_collision", "termin_inspect", "termin_scene")
 
 
 def run(command: list[str], *, capture: bool = False, env: dict[str, str] | None = None) -> str:
@@ -38,7 +40,7 @@ def cpu_name() -> str:
 
 def sdk_hashes(sdk: Path, library_dir: Path) -> dict[str, str]:
     hashes = {}
-    for name in ("termin_base", "termin_qopt", "termin_robotics", "termin_physics_qopt"):
+    for name in PACKAGES:
         found = False
         for library in sorted(library_dir.glob(f"*{name}*")):
             if library.is_file() and not library.is_symlink():
@@ -69,7 +71,7 @@ def main() -> None:
     # Package directory arguments prevent stale CMake cache entries selecting a
     # different SDK after --sdk changes on a subsequent invocation.
     package_dirs = [f"-D{name}_DIR={sdk / 'lib/cmake' / name}"
-                    for name in ("termin_base", "termin_qopt", "termin_robotics", "termin_physics_qopt")]
+                    for name in PACKAGES]
     run(["cmake", "-S", str(ROOT / "benchmarks/physics-small"), "-B", str(build),
          f"-DCMAKE_PREFIX_PATH={sdk}", "-DCMAKE_BUILD_TYPE=Release", *package_dirs])
     run(["cmake", "--build", str(build), "--config", "Release", "--parallel", "2"])
@@ -87,6 +89,9 @@ def main() -> None:
     else:
         env["LD_LIBRARY_PATH"] = str(library_dir) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
     hashes = sdk_hashes(sdk, library_dir)
+    sources = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+               for path in sorted((ROOT / "benchmarks/physics-small").iterdir())
+               if path.suffix in (".cpp", ".hpp") or path.name == "CMakeLists.txt"}
     metadata = {
         "utc": datetime.now(timezone.utc).isoformat(),
         "source_commit": run(["git", "rev-parse", "HEAD"], capture=True),
@@ -101,11 +106,21 @@ def main() -> None:
         "loader_environment": {key: env.get(key) for key in
                                ("PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "LD_PRELOAD")},
         "cmake_cache": (build / "CMakeCache.txt").read_text(),
-        "benchmark_source_sha256": hashlib.sha256((ROOT / "benchmarks/physics-small/bench.cpp").read_bytes()).hexdigest(),
-        "note": "Kernel timings use fixed initial q and nonzero qdot; they are not additive step stage timings. Contact measures solve only; no collision query or controller is included.",
+        "benchmark_sources_sha256": sources,
+        "benchmark_source_sha256": hashlib.sha256(json.dumps(sources, sort_keys=True).encode()).hexdigest(),
+        "note": "Kernel and controller timings use fixed states. Solver replay records evolving unconstrained equations; cold/reused timings include checks and copies. Contact includes both isolated friction solve and full collision/contact/dynamics pipeline. Allocation counts are a separate Linux C++ new probe, excluding Eigen malloc.",
     }
     measurements = json.loads(run([str(executable), str(args.steps), str(args.warmups), str(args.repeats)],
                                   capture=True, env=env))
+    if sys.platform.startswith("linux"):
+        allocations = json.loads(run([str(build / "physics_small_allocations"), str(args.steps)],
+                                     capture=True, env=env))
+        for chain, probe in zip(measurements["chains"], allocations["chains"], strict=True):
+            if any(chain[key] != probe[key] for key in ("dof", "final_q", "final_v")):
+                raise ValueError("allocation probe changed the dynamics trajectory")
+        measurements["cpp_allocations"] = allocations
+    else:
+        measurements["cpp_allocations"] = {"available": False, "reason": "requires Linux ELF symbol interposition"}
     if hashes != sdk_hashes(sdk, library_dir):
         raise ValueError("SDK libraries changed during measurement; rerun after the SDK build finishes")
     output = args.output.resolve()
@@ -119,6 +134,11 @@ def main() -> None:
               f'    {case["mass_matrix"]["median_us"]:8.3f} {case["bias"]["median_us"]:8.3f}'
               f'    {counts["mass_evaluations"]:6.2f} {counts["bias_evaluations"]:9.2f}')
     print(f'Contact solve median: {measurements["contact"]["solve"]["median_us"]:.3f} us')
+    for case in measurements["controllers"]:
+        print(f'Controller {case["dof"]} DOF: {case["solve"]["median_us"]:.3f} us')
+    contact = measurements["contact_pipeline"]
+    print(f'Collision query: {contact["collision_query_fixed_penetration"]["median_us"]:.3f} us; '
+          f'full contact pipeline: {contact["pipeline"]["median_us"]:.3f} us')
     print(f"Results: {output}")
 
 
