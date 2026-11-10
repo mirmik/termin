@@ -28,6 +28,17 @@ The tree has no solver handles, contacts, motor commands, time-integration
 policy or scene ownership. `termin-physics-qopt` borrows it through
 `Articulation3DDynamicsContribution`.
 
+RNEA and CRBA have overloads accepting a caller-owned `Articulation3DWorkspace`
+as the final argument. `workspace.reserve(model.unit_count())` prepares both
+algorithms' scratch buffers; outputs remain caller-owned and need their own
+capacity. Without explicit reserve, each algorithm grows its buffers as needed.
+Workspace storage can be reused sequentially across states and different trees;
+all active entries are overwritten on each call. Concurrent callers use separate
+workspaces. The convenience overloads delegate to the same algorithms with a
+local workspace. The dynamics adapter owns and reserves its workspace once,
+reusing it for mass and velocity/gravity bias assembly without putting mutable
+scratch in the model.
+
 The dynamics adapter updates velocity kinematics from the current configuration
 caches during endpoint iterations and velocity projections. Joint-coordinate or
 floating-base pose changes, and rollback, rebuild configuration and velocity

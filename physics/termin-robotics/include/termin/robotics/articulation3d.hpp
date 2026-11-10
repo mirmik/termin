@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include <termin/geom/mat66.hpp>
 #include <termin/geom/pose3.hpp>
 #include <termin/geom/screw3.hpp>
 #include <termin/geom/spatial_inertia3.hpp>
@@ -124,6 +125,23 @@ namespace termin::robotics {
         [[nodiscard]] bool ok() const noexcept;
     };
 
+    // Caller-owned scratch for RNEA and CRBA. Stores no model/state cache:
+    // it may be reused sequentially across different articulations. Concurrent
+    // calls require separate workspaces. Each algorithm grows its own buffers
+    // as needed; reserve prepares both without allocating during later calls
+    // for trees up to the requested number of units (excluding output storage).
+    class TERMIN_ROBOTICS_API Articulation3DWorkspace {
+    public:
+        void reserve(std::size_t unit_count);
+
+    private:
+        friend class Articulation3D;
+        std::vector<termin::Screw3> velocities_local_;
+        std::vector<termin::Screw3> accelerations_local_;
+        std::vector<termin::Screw3> forces_local_;
+        std::vector<termin::Mat66> composite_inertias_;
+    };
+
     // Solver-neutral reduced-coordinate tree. Each unit is both a moving
     // output frame and one generalized coordinate; its spatial inertia is
     // expressed directly in that frame. There is no parallel joint/link
@@ -171,9 +189,15 @@ namespace termin::robotics {
                                             const std::vector<double>& accelerations,
                                             termin::Vec3 gravity_world,
                                             std::vector<double>& effort) const;
+        [[nodiscard]] bool inverse_dynamics(const std::vector<double>& velocities,
+                                            const std::vector<double>& accelerations,
+                                            termin::Vec3 gravity_world,
+                                            std::vector<double>& effort,
+                                            Articulation3DWorkspace& workspace) const;
         // Composite rigid-body mass matrix, row-major in generalized vw order.
         // Inverse dynamics remains an independent RNEA implementation.
         [[nodiscard]] bool mass_matrix(std::vector<double>& mass) const;
+        [[nodiscard]] bool mass_matrix(std::vector<double>& mass, Articulation3DWorkspace& workspace) const;
         [[nodiscard]] double total_energy(termin::Vec3 gravity_world) const noexcept;
 
     private:

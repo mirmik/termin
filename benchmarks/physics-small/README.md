@@ -4,6 +4,7 @@ Recorded experiment: [CRBA before/after, 2026-11-10](results/2026-11-10-crba.md)
 Follow-up: [velocity-only kinematics, 2026-11-10](results/2026-11-10-velocity-kinematics.md).
 Complete profile: [controller, collision/contact, solver replay and allocations](results/2026-11-10-expanded-profile.md).
 Follow-up: [unconstrained equality QP, 2026-11-10](results/2026-11-10-unconstrained-qp.md).
+Follow-up: [caller-owned RNEA/CRBA workspace, 2026-11-10](results/2026-11-10-workspace.md).
 
 Build the SDK with `task build`, then run from the repository root:
 
@@ -90,13 +91,17 @@ On Linux, the runner also builds and executes `physics_small_allocations` with
 ELF symbol interposition. It counts successful C++ `new` requests and requested
 bytes only around `DynamicsSystem::step`. Model setup is excluded. The probe is
 a separate executable, so its global allocation hooks never affect throughput
-timings. It verifies SDK interposition with the current RNEA temporary buffers,
+timings. It verifies SDK interposition with the allocating RNEA convenience overload,
 and its final states must match an uncounted run and the throughput executable.
+It also requires zero C++ new requests for 100 RNEA/CRBA call pairs with a
+caller-owned workspace reserved to the tree size and preallocated outputs,
+including the first call after reserve, and checks the resulting values against
+the convenience overloads.
 
 Counts **exclude direct malloc calls, including Eigen's matrix buffers**. They
 are neither total heap traffic nor live/peak memory and provide no allocation
-timings. If RNEA acquires a workspace, replace the explicit interposition
-self-check rather than silently accepting a zero count. Other platforms report
+timings. Keep the positive interposition self-check when changing the allocating
+convenience overload rather than silently accepting a zero count. Other platforms report
 the probe unavailable; native timing cases remain usable there, but have only
 been verified on Linux.
 

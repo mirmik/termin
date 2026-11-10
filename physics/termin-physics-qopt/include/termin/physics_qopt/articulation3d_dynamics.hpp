@@ -109,6 +109,7 @@ namespace termin::physics_qopt {
         std::vector<ArticulationUnitLimitState3D> unit_limit_states_;
         double unilateral_time_step_ = 0.0;
 
+        robotics::Articulation3DWorkspace articulation_workspace_;
         std::vector<double> mass_matrix_cache_;
         std::vector<double> bias_work_;
         std::vector<double> load_work_;

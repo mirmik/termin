@@ -605,15 +605,41 @@ namespace termin::robotics {
         return true;
     }
 
+    void Articulation3DWorkspace::reserve(std::size_t unit_count) {
+        velocities_local_.reserve(unit_count);
+        accelerations_local_.reserve(unit_count);
+        forces_local_.reserve(unit_count);
+        composite_inertias_.reserve(unit_count);
+    }
+
     bool Articulation3D::inverse_dynamics(const std::vector<double>& velocities,
                                           const std::vector<double>& accelerations,
                                           termin::Vec3 gravity_world,
                                           std::vector<double>& effort) const {
+        Articulation3DWorkspace workspace;
+        return inverse_dynamics(velocities, accelerations, gravity_world, effort, workspace);
+    }
+
+    bool Articulation3D::inverse_dynamics(const std::vector<double>& velocities,
+                                          const std::vector<double>& accelerations,
+                                          termin::Vec3 gravity_world,
+                                          std::vector<double>& effort,
+                                          Articulation3DWorkspace& workspace) const {
+        if (diagnostic_ != Articulation3DDiagnostic::None) {
+            std::fprintf(stderr,
+                         "[termin-robotics] articulation '%s' inverse dynamics requires a valid model\n",
+                         diagnostic_name_.c_str());
+            return false;
+        }
         const std::size_t unit_count = units_.size();
         const std::size_t count = dof_count();
         const std::size_t unit_offset = floating_base_.has_value() ? 6 : 0;
         if (velocities.size() != count || accelerations.size() != count || !finite(velocities) ||
             !finite(accelerations) || !gravity_world.is_finite()) {
+            std::fprintf(
+                stderr,
+                "[termin-robotics] articulation '%s' inverse dynamics input has invalid size or non-finite values\n",
+                diagnostic_name_.c_str());
             return false;
         }
 
@@ -629,9 +655,12 @@ namespace termin::robotics {
             base_force = floating_base_->inertia.momentum(base_acceleration) + base_velocity.cross_force(momentum);
         }
 
-        std::vector<termin::Screw3> velocities_local(unit_count);
-        std::vector<termin::Screw3> accelerations_local(unit_count);
-        std::vector<termin::Screw3> forces_local(unit_count);
+        auto& velocities_local = workspace.velocities_local_;
+        auto& accelerations_local = workspace.accelerations_local_;
+        auto& forces_local = workspace.forces_local_;
+        velocities_local.resize(unit_count);
+        accelerations_local.resize(unit_count);
+        forces_local.resize(unit_count);
         for (std::size_t index = 0; index < unit_count; ++index) {
             const ArticulationUnit3D& unit = units_[index];
             const termin::Screw3 parent_velocity =
@@ -662,10 +691,21 @@ namespace termin::robotics {
         if (floating_base_.has_value()) {
             write_screw_vw(base_force, effort);
         }
-        return finite(effort);
+        if (!finite(effort)) {
+            std::fprintf(stderr,
+                         "[termin-robotics] articulation '%s' inverse dynamics effort is non-finite\n",
+                         diagnostic_name_.c_str());
+            return false;
+        }
+        return true;
     }
 
     bool Articulation3D::mass_matrix(std::vector<double>& mass) const {
+        Articulation3DWorkspace workspace;
+        return mass_matrix(mass, workspace);
+    }
+
+    bool Articulation3D::mass_matrix(std::vector<double>& mass, Articulation3DWorkspace& workspace) const {
         if (diagnostic_ != Articulation3DDiagnostic::None) {
             std::fprintf(stderr,
                          "[termin-robotics] articulation '%s' mass matrix requires a valid model\n",
@@ -679,7 +719,8 @@ namespace termin::robotics {
         // Composite rigid-body algorithm. Each subtree inertia is accumulated
         // once; a joint's momentum then propagates only through its ancestors.
         // All spatial matrices use vw order, matching the floating-base DOFs.
-        std::vector<termin::Mat66> composite(units_.size());
+        auto& composite = workspace.composite_inertias_;
+        composite.resize(units_.size());
         for (std::size_t index = 0; index < units_.size(); ++index) {
             composite[index] = units_[index].inertia.matrix_vw();
         }

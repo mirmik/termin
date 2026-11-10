@@ -97,9 +97,9 @@ void probe(int n, int steps) {
     DynamicsSystem system;
     setup(system, arm);
 
-    // The current SDK RNEA allocates three temporary vector<Screw3> buffers.
-    // Prewarm output storage, then require those DSO allocations to reach our
-    // replacements. Update this check if RNEA acquires a reusable workspace.
+    // The convenience RNEA overload owns a fresh local workspace and allocates
+    // three vector<Screw3> buffers. Keep it as a positive DSO interposition
+    // control before checking the caller-owned workspace's zero allocations.
     const std::vector<double> zero(n, 0.0);
     std::vector<double> effort;
     require(arm.inverse_dynamics(zero, zero, {}, effort), "allocation oracle prewarm failed");
@@ -108,6 +108,30 @@ void probe(int n, int steps) {
     enabled.store(false, std::memory_order_relaxed);
     const std::size_t dso_requests = requests.load(std::memory_order_relaxed);
     require(oracle_ok && dso_requests >= 3, "SDK C++ new interposition self-check failed");
+
+    Articulation3DWorkspace workspace;
+    workspace.reserve(arm.unit_count());
+    std::vector<double> mass(n * n), velocity(n), acceleration(n);
+    const termin::Vec3 gravity{0.2, -0.3, -9.81};
+    // Output storage and both algorithms' scratch capacity are prepared before
+    // counting. Include the first call after reserve as well as repeated calls.
+    start_counting();
+    bool workspace_ok = true;
+    for (int sample = 0; sample < 100; ++sample) {
+        for (int index = 0; index < n; ++index) {
+            velocity[index] = 0.01 * (sample + 1) * (index + 1);
+            acceleration[index] = -0.02 * (sample + 1) / (index + 1);
+        }
+        workspace_ok = arm.inverse_dynamics(velocity, acceleration, gravity, effort, workspace) && workspace_ok;
+        workspace_ok = arm.mass_matrix(mass, workspace) && workspace_ok;
+    }
+    enabled.store(false, std::memory_order_relaxed);
+    const std::size_t workspace_requests = requests.load(std::memory_order_relaxed);
+    require(workspace_ok && workspace_requests == 0, "prepared RNEA/CRBA workspace allocated or failed");
+    std::vector<double> reference_effort, reference_mass;
+    require(arm.inverse_dynamics(velocity, acceleration, gravity, reference_effort) &&
+                arm.mass_matrix(reference_mass) && effort == reference_effort && mass == reference_mass,
+            "workspace and convenience algorithms differ");
 
     requests.store(0, std::memory_order_relaxed);
     requested_bytes.store(0, std::memory_order_relaxed);
@@ -129,6 +153,7 @@ void probe(int n, int steps) {
                 arm.state().velocities == reference.state().velocities,
             "allocation counting changed trajectory");
     std::cout << "{\"dof\":" << n << ",\"dso_self_check_requests\":" << dso_requests
+              << ",\"workspace_cpp_new_requests\":" << workspace_requests
               << ",\"cpp_new_requests_per_step\":" << static_cast<double>(calls) / steps
               << ",\"cpp_new_requested_bytes_per_step\":" << static_cast<double>(bytes) / steps << ",\"final_q\":";
     vector_json(arm.state().coordinates);

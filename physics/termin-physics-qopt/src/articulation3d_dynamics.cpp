@@ -92,6 +92,7 @@ namespace termin::physics_qopt {
         acceleration_snapshot_.assign(dof_count(), 0.0);
         unit_limit_state_snapshot_.resize(unit_count());
         const std::size_t generalized_count = dof_count();
+        articulation_workspace_.reserve(unit_count());
         mass_matrix_cache_.assign(generalized_count * generalized_count, 0.0);
         bias_work_.assign(generalized_count, 0.0);
         load_work_.assign(generalized_count, 0.0);
@@ -227,7 +228,7 @@ namespace termin::physics_qopt {
 
     bool Articulation3DDynamicsContribution::prepare_mass_matrix() {
         if (!mass_matrix_cache_valid_) {
-            if (!articulation_.mass_matrix(mass_matrix_cache_)) {
+            if (!articulation_.mass_matrix(mass_matrix_cache_, articulation_workspace_)) {
                 return false;
             }
             mass_matrix_cache_valid_ = true;
@@ -246,8 +247,11 @@ namespace termin::physics_qopt {
         std::copy(ArticulationAccess::state(articulation_).velocities.begin(),
                   ArticulationAccess::state(articulation_).velocities.end(),
                   generalized_velocity_work_.begin() + unit_offset);
-        if (!articulation_.inverse_dynamics(
-                generalized_velocity_work_, zero_acceleration_work_, gravity_world_, bias_work_)) {
+        if (!articulation_.inverse_dynamics(generalized_velocity_work_,
+                                            zero_acceleration_work_,
+                                            gravity_world_,
+                                            bias_work_,
+                                            articulation_workspace_)) {
             std::fprintf(stderr,
                          "[termin-qopt] articulation '%s' inverse dynamics "
                          "failed for velocity/gravity bias\n",

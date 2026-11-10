@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 using namespace termin;
@@ -49,6 +50,25 @@ namespace {
         TERMIN_ROBOTICS_CHECK(!invalid.mass_matrix(mass));
         TERMIN_ROBOTICS_CHECK(mass == std::vector<double>{42.0});
         TERMIN_ROBOTICS_CHECK(!empty.mass_matrix(mass));
+        Articulation3DWorkspace workspace;
+        TERMIN_ROBOTICS_CHECK(!invalid.mass_matrix(mass, workspace));
+        TERMIN_ROBOTICS_CHECK(!empty.mass_matrix(mass, workspace));
+        TERMIN_ROBOTICS_CHECK(mass == std::vector<double>{42.0});
+        // Inverse dynamics must reject invalid models before reading parent
+        // scratch entries, including stale entries in a reused workspace.
+        Articulation3D valid(units(), {{0.1, -0.2}, {0.3, 0.4}});
+        std::vector<double> effort;
+        TERMIN_ROBOTICS_CHECK(valid.inverse_dynamics({0.3, 0.4}, {0.5, -0.6}, {}, effort, workspace));
+        effort = {42.0};
+        TERMIN_ROBOTICS_CHECK(!invalid.inverse_dynamics({0.0, 0.0}, {0.0, 0.0}, {}, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(!invalid.inverse_dynamics({0.0, 0.0}, {0.0, 0.0}, {}, effort));
+        TERMIN_ROBOTICS_CHECK(!empty.inverse_dynamics({}, {}, {}, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(!empty.inverse_dynamics({}, {}, {}, effort));
+        auto out_of_range_units = units();
+        out_of_range_units[0].parent_unit = 100;
+        Articulation3D out_of_range(std::move(out_of_range_units), {{0.0, 0.0}, {0.0, 0.0}});
+        TERMIN_ROBOTICS_CHECK(!out_of_range.inverse_dynamics({0.0, 0.0}, {0.0, 0.0}, {}, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(effort == std::vector<double>{42.0});
     }
 
     void test_kinematics_and_inertial_model() {
@@ -204,7 +224,7 @@ namespace {
         return result;
     }
 
-    void check_mass_against_inverse_dynamics(const Articulation3D& model) {
+    void check_mass_against_inverse_dynamics(const Articulation3D& model, Articulation3DWorkspace& workspace) {
         const std::size_t count = model.dof_count();
         std::vector<double> velocities(count);
         const std::size_t offset = model.has_floating_base() ? 6 : 0;
@@ -221,12 +241,18 @@ namespace {
         std::copy(model.state().velocities.begin(), model.state().velocities.end(), velocities.begin() + offset);
 
         std::vector<double> mass;
-        TERMIN_ROBOTICS_CHECK(model.mass_matrix(mass));
+        std::vector<double> wrapper_mass;
+        TERMIN_ROBOTICS_CHECK(model.mass_matrix(mass, workspace));
+        TERMIN_ROBOTICS_CHECK(model.mass_matrix(wrapper_mass));
+        TERMIN_ROBOTICS_CHECK(mass == wrapper_mass);
         TERMIN_ROBOTICS_CHECK(mass.size() == count * count);
         const Vec3 gravity{0.7, -1.1, -9.81};
         const std::vector<double> zero(count, 0.0);
         std::vector<double> bias;
-        TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, zero, gravity, bias));
+        std::vector<double> wrapper_bias;
+        TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, zero, gravity, bias, workspace));
+        TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, zero, gravity, wrapper_bias));
+        TERMIN_ROBOTICS_CHECK(bias == wrapper_bias);
         for (std::size_t sample = 0; sample <= count; ++sample) {
             std::vector<double> acceleration(count, 0.0);
             if (sample < count) {
@@ -237,7 +263,10 @@ namespace {
                 }
             }
             std::vector<double> effort;
-            TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, acceleration, gravity, effort));
+            std::vector<double> wrapper_effort;
+            TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, acceleration, gravity, effort, workspace));
+            TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, acceleration, gravity, wrapper_effort));
+            TERMIN_ROBOTICS_CHECK(effort == wrapper_effort);
             for (std::size_t row = 0; row < count; ++row) {
                 double mass_acceleration = 0.0;
                 for (std::size_t column = 0; column < count; ++column) {
@@ -269,9 +298,20 @@ namespace {
         };
         Articulation3D floating(base, branched_mass_units(), initial, "floating-mass-oracle");
         Articulation3D base_only(base, {}, {}, "base-only-mass-oracle");
+        Articulation3D small(units(), {{0.2, -0.4}, {0.3, 0.7}}, "small-workspace-oracle");
+        auto alternate_units = branched_mass_units();
+        alternate_units[2].parent_unit = 1;
+        alternate_units[3].inertia.mass *= 1.7;
+        Articulation3D alternate(std::move(alternate_units), initial, "alternate-workspace-oracle");
         TERMIN_ROBOTICS_CHECK(fixed.diagnostic() == Articulation3DDiagnostic::None);
         TERMIN_ROBOTICS_CHECK(floating.diagnostic() == Articulation3DDiagnostic::None);
         TERMIN_ROBOTICS_CHECK(base_only.diagnostic() == Articulation3DDiagnostic::None);
+        TERMIN_ROBOTICS_CHECK(small.diagnostic() == Articulation3DDiagnostic::None);
+        TERMIN_ROBOTICS_CHECK(alternate.diagnostic() == Articulation3DDiagnostic::None);
+        Articulation3DWorkspace workspace;
+        Articulation3DWorkspace independent_workspace;
+        workspace.reserve(small.unit_count());
+        independent_workspace.reserve(floating.unit_count());
         for (std::size_t sample = 0; sample < 4; ++sample) {
             const double phase = 0.37 * static_cast<double>(sample + 1);
             Articulation3DState state = initial;
@@ -282,14 +322,51 @@ namespace {
             }
             TERMIN_ROBOTICS_CHECK(fixed.set_state(state) == Articulation3DDiagnostic::None);
             TERMIN_ROBOTICS_CHECK(floating.set_state(state) == Articulation3DDiagnostic::None);
+            state.coordinates[2] += 0.13;
+            state.velocities[3] -= 0.27;
+            TERMIN_ROBOTICS_CHECK(alternate.set_state(state) == Articulation3DDiagnostic::None);
             const Pose3 pose = se3_exp({{0.2 * phase, -0.3, 0.1}, {0.4, -0.2 * phase, 0.3}});
             const Screw3 velocity{{0.4, -0.3 * phase, 0.2}, {0.7 * phase, 0.1, -0.2}};
             TERMIN_ROBOTICS_CHECK(floating.set_floating_base_state(pose, velocity) == Articulation3DDiagnostic::None);
             TERMIN_ROBOTICS_CHECK(base_only.set_floating_base_state(pose, velocity) == Articulation3DDiagnostic::None);
-            check_mass_against_inverse_dynamics(fixed);
-            check_mass_against_inverse_dynamics(floating);
-            check_mass_against_inverse_dynamics(base_only);
+            // A workspace carries only scratch capacity: change tree size,
+            // base mode, topology, inertias and state without resetting it.
+            check_mass_against_inverse_dynamics(small, workspace);
+            check_mass_against_inverse_dynamics(fixed, workspace);
+            check_mass_against_inverse_dynamics(floating, independent_workspace);
+            check_mass_against_inverse_dynamics(alternate, workspace);
+            check_mass_against_inverse_dynamics(floating, workspace);
+            check_mass_against_inverse_dynamics(base_only, workspace);
+            check_mass_against_inverse_dynamics(small, independent_workspace);
+            check_mass_against_inverse_dynamics(fixed, workspace);
+            // Reserving less than the previously used size must be harmless.
+            workspace.reserve(small.unit_count());
         }
+    }
+
+    void test_workspace_invalid_inputs_preserve_output() {
+        Articulation3D model(units(), {{0.2, -0.4}, {0.3, 0.7}}, "workspace-invalid-input");
+        Articulation3DWorkspace workspace;
+        const std::vector<double> velocity{0.3, 0.7}, acceleration{-0.2, 0.4};
+        const Vec3 gravity{0.7, -1.1, -9.81};
+        std::vector<double> reference;
+        TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocity, acceleration, gravity, reference, workspace));
+        const std::vector<double> sentinel{17.0, -23.0, 41.0};
+        std::vector<double> effort = sentinel;
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        const double infinity = std::numeric_limits<double>::infinity();
+        TERMIN_ROBOTICS_CHECK(!model.inverse_dynamics({0.3}, acceleration, gravity, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(effort == sentinel);
+        TERMIN_ROBOTICS_CHECK(!model.inverse_dynamics(velocity, {0.4}, gravity, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(effort == sentinel);
+        TERMIN_ROBOTICS_CHECK(!model.inverse_dynamics({nan, 0.7}, acceleration, gravity, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(effort == sentinel);
+        TERMIN_ROBOTICS_CHECK(!model.inverse_dynamics(velocity, {-0.2, infinity}, gravity, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(effort == sentinel);
+        TERMIN_ROBOTICS_CHECK(!model.inverse_dynamics(velocity, acceleration, {0, nan, 0}, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(effort == sentinel);
+        TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocity, acceleration, gravity, effort, workspace));
+        TERMIN_ROBOTICS_CHECK(effort == reference);
     }
 } // namespace
 
@@ -299,5 +376,6 @@ int main() {
     test_unit_frame_collapse_equivalence();
     test_bias_acceleration_against_finite_difference();
     test_mass_matrix_oracles();
+    test_workspace_invalid_inputs_preserve_output();
     return 0;
 }
