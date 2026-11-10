@@ -107,6 +107,7 @@ namespace termin::qopt {
 
             const Eigen::Index variable_count = static_cast<Eigen::Index>(variables);
             const Eigen::Index constraint_count = static_cast<Eigen::Index>(constraints);
+            const bool unconstrained = constraint_count == 0;
             Matrix equalities = input_equalities;
             Vector equality_targets = input_equality_targets;
             Vector equality_row_scales = Vector::Ones(constraint_count);
@@ -203,8 +204,10 @@ namespace termin::qopt {
                 factor.curvature_tolerance = 0.0;
                 factor.reduced_valid = false;
 
-                if (constraint_count == 0) {
-                    factor.nullspace = Matrix::Identity(variable_count, variable_count);
+                if (unconstrained) {
+                    // The whole variable space is free. Represent its identity
+                    // basis implicitly, including after a constrained cache use.
+                    factor.nullspace.resize(0, 0);
                     factor.left_range.resize(0, 0);
                     factor.right_range.resize(variable_count, 0);
                     factor.inverse_singular_values.resize(0);
@@ -243,29 +246,41 @@ namespace termin::qopt {
                 factor.valid = true;
             }
 
-            Vector feasible = Vector::Zero(variable_count);
-            const Eigen::Index rank = static_cast<Eigen::Index>(factor.constraint_rank);
-            if (rank > 0) {
-                feasible = factor.right_range * factor.inverse_singular_values.asDiagonal() *
-                           factor.left_range.transpose() * equality_targets;
+            Vector feasible;
+            double feasibility_tolerance = scaled_tolerance(tolerance, 0.0);
+            if (!unconstrained) {
+                feasible = Vector::Zero(variable_count);
+                if (factor.constraint_rank > 0) {
+                    feasible = factor.right_range * factor.inverse_singular_values.asDiagonal() *
+                               factor.left_range.transpose() * equality_targets;
+                }
+
+                const Vector feasibility_error = input_equalities * feasible - input_equality_targets;
+                const double feasibility_scale =
+                    std::max(linf(input_equalities * feasible), linf(input_equality_targets));
+                feasibility_tolerance = scaled_tolerance(tolerance, feasibility_scale);
+                if (linf(feasibility_error) > feasibility_tolerance) {
+                    QpSolveResult result = failure(QpStatus::Infeasible, QpDiagnostic::InconsistentEqualities);
+                    result.equality_linf = linf(feasibility_error);
+                    result.constraint_rank = factor.constraint_rank;
+                    return result;
+                }
             }
 
-            const Vector feasibility_error = input_equalities * feasible - input_equality_targets;
-            const double feasibility_scale = std::max(linf(input_equalities * feasible), linf(input_equality_targets));
-            const double feasibility_tolerance = scaled_tolerance(tolerance, feasibility_scale);
-            if (linf(feasibility_error) > feasibility_tolerance) {
-                QpSolveResult result = failure(QpStatus::Infeasible, QpDiagnostic::InconsistentEqualities);
-                result.equality_linf = linf(feasibility_error);
-                result.constraint_rank = factor.constraint_rank;
-                return result;
-            }
-
+            const Eigen::Index reduced_variables = unconstrained ? variable_count : factor.nullspace.cols();
             if (!factor.reduced_valid) {
-                const Eigen::Index reduced_variables = factor.nullspace.cols();
                 factor.reduced_rank = 0;
                 if (reduced_variables > 0) {
-                    const Matrix raw_reduced_hessian = factor.nullspace.transpose() * factor.hessian * factor.nullspace;
-                    const Matrix reduced_hessian = 0.5 * (raw_reduced_hessian + raw_reduced_hessian.transpose());
+                    Matrix reduced_hessian;
+                    if (unconstrained) {
+                        // Already symmetrized during input validation. Keep the
+                        // same spectral decomposition and rank/curvature tests.
+                        reduced_hessian = factor.hessian;
+                    } else {
+                        const Matrix raw_reduced_hessian =
+                            factor.nullspace.transpose() * factor.hessian * factor.nullspace;
+                        reduced_hessian = 0.5 * (raw_reduced_hessian + raw_reduced_hessian.transpose());
+                    }
                     Eigen::SelfAdjointEigenSolver<Matrix> eigensolver(reduced_hessian);
                     if (eigensolver.info() != Eigen::Success) {
                         std::fprintf(stderr,
@@ -295,10 +310,15 @@ namespace termin::qopt {
                 factor.reduced_valid = true;
             }
 
-            Vector primal = feasible;
-            const Eigen::Index reduced_variables = factor.nullspace.cols();
+            Vector primal;
+            if (!unconstrained)
+                primal = feasible;
             if (reduced_variables > 0) {
-                const Vector reduced_gradient = factor.nullspace.transpose() * (factor.hessian * feasible + gradient);
+                Vector reduced_gradient;
+                if (unconstrained)
+                    reduced_gradient = gradient;
+                else
+                    reduced_gradient = factor.nullspace.transpose() * (factor.hessian * feasible + gradient);
                 const Vector spectral_gradient = factor.eigenvectors.transpose() * reduced_gradient;
                 const double gradient_tolerance = scaled_tolerance(tolerance, linf(reduced_gradient));
                 Vector spectral_solution = Vector::Zero(reduced_variables);
@@ -320,31 +340,38 @@ namespace termin::qopt {
                     }
                 }
 
-                primal += factor.nullspace * factor.eigenvectors * spectral_solution;
+                if (unconstrained)
+                    primal = factor.eigenvectors * spectral_solution;
+                else
+                    primal += factor.nullspace * factor.eigenvectors * spectral_solution;
             }
 
             const Vector objective_gradient = factor.hessian * primal + gradient;
-            Vector equality_dual = Vector::Zero(constraint_count);
-            if (factor.constraint_rank > 0) {
-                equality_dual = -factor.left_range * factor.inverse_singular_values.asDiagonal() *
-                                factor.right_range.transpose() * objective_gradient;
-                equality_dual.array() /= factor.equality_row_scales.array();
-            }
-
-            const Vector stationarity_error = objective_gradient + input_equalities.transpose() * equality_dual;
-            const Vector equality_error = input_equalities * primal - input_equality_targets;
-            const double stationarity_scale = std::max({
+            Vector equality_dual;
+            double stationarity_linf = linf(objective_gradient);
+            double equality_linf = 0.0;
+            double stationarity_scale = std::max({
                 1.0,
                 linf(factor.hessian * primal),
                 linf(gradient),
-                linf(input_equalities.transpose() * equality_dual),
             });
+            if (!unconstrained) {
+                equality_dual = Vector::Zero(constraint_count);
+                if (factor.constraint_rank > 0) {
+                    equality_dual = -factor.left_range * factor.inverse_singular_values.asDiagonal() *
+                                    factor.right_range.transpose() * objective_gradient;
+                    equality_dual.array() /= factor.equality_row_scales.array();
+                }
+                stationarity_linf = linf(objective_gradient + input_equalities.transpose() * equality_dual);
+                equality_linf = linf(input_equalities * primal - input_equality_targets);
+                stationarity_scale = std::max(stationarity_scale, linf(input_equalities.transpose() * equality_dual));
+            }
 
             QpSolveResult result;
             result.status = QpStatus::Optimal;
             result.diagnostic = QpDiagnostic::None;
-            result.stationarity_linf = linf(stationarity_error);
-            result.equality_linf = linf(equality_error);
+            result.stationarity_linf = stationarity_linf;
+            result.equality_linf = equality_linf;
             result.constraint_rank = factor.constraint_rank;
             result.reduced_hessian_rank = factor.reduced_rank;
 

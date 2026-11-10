@@ -358,6 +358,153 @@ namespace {
         TERMIN_QOPT_CHECK(counters.reuse_hits == 1);
     }
 
+    void test_unconstrained_spectral_classification_matches_general_path() {
+        struct Case {
+            std::vector<double> hessian;
+            std::vector<double> gradient;
+            QpStatus status;
+            QpDiagnostic diagnostic;
+            std::size_t rank;
+            std::vector<double> expected;
+        };
+        constexpr double cutoff = 1e-8;
+        const QpTolerance tolerance{.absolute = cutoff, .relative = 0.0};
+        const std::vector<Case> cases{
+            {{4, 1, 1, 3}, {-1, 2}, QpStatus::Optimal, QpDiagnostic::None, 2, {5.0 / 11, -9.0 / 11}},
+            {{2, 0, 0, 0}, {-4, 0}, QpStatus::Optimal, QpDiagnostic::None, 1, {2, 0}},
+            {{2, 0, 0, 0}, {-4, 1}, QpStatus::Unbounded, QpDiagnostic::LinearDescentInNullspace, 1, {}},
+            {{-1, 0, 0, 2}, {0, 0}, QpStatus::NonConvex, QpDiagnostic::NegativeCurvature, 0, {}},
+            {{0.5 * cutoff, 0, 0, 1}, {0.5 * cutoff, 0}, QpStatus::Optimal, QpDiagnostic::None, 1, {0, 0}},
+            {{0.5 * cutoff, 0, 0, 1},
+             {1.5 * cutoff, 0},
+             QpStatus::Unbounded,
+             QpDiagnostic::LinearDescentInNullspace,
+             1,
+             {}},
+            {{1.5 * cutoff, 0, 0, 1}, {-3 * cutoff, -2}, QpStatus::Optimal, QpDiagnostic::None, 2, {2, 2}},
+            {{-0.5 * cutoff, 0, 0, 1}, {0, 0}, QpStatus::Optimal, QpDiagnostic::None, 1, {0, 0}},
+            {{-1.5 * cutoff, 0, 0, 1}, {0, 0}, QpStatus::NonConvex, QpDiagnostic::NegativeCurvature, 0, {}},
+        };
+        const std::vector<double> empty, zero_row{0, 0}, zero_target{0};
+        for (const Case& test : cases) {
+            EqualityQpFactorizationCache cache;
+            const EqualityQpProblemView unconstrained{row_major(test.hessian, 2, 2),
+                                                      const_vector(test.gradient),
+                                                      row_major(empty, 0, 2),
+                                                      const_vector(empty)};
+            // One zero equality is redundant. It still exercises the general
+            // SVD/nullspace path instead of the zero-row specialization.
+            const EqualityQpProblemView general{row_major(test.hessian, 2, 2),
+                                                const_vector(test.gradient),
+                                                row_major(zero_row, 1, 2),
+                                                const_vector(zero_target)};
+            std::vector<double> reference(2, 123), dual(1, 456);
+            const auto oracle = solve_equality_qp(general, {vector(reference), vector(dual)}, tolerance);
+            TERMIN_QOPT_CHECK(oracle.status == test.status && oracle.diagnostic == test.diagnostic);
+            for (int mode = 0; mode < 3; ++mode) {
+                std::vector<double> actual(2, 123);
+                const EqualityQpSolutionView output{vector(actual), {nullptr, 0, 1}};
+                const auto result = mode == 0 ? solve_equality_qp(unconstrained, output, tolerance)
+                                              : cache.solve(unconstrained, output, tolerance);
+                TERMIN_QOPT_CHECK(result.status == test.status && result.diagnostic == test.diagnostic);
+                TERMIN_QOPT_CHECK(result.constraint_rank == 0);
+                TERMIN_QOPT_CHECK(result.reduced_hessian_rank == test.rank);
+                if (result.status == QpStatus::Optimal) {
+                    TERMIN_QOPT_CHECK(linf_difference(actual, test.expected) <= 1e-10);
+                    TERMIN_QOPT_CHECK(linf_difference(actual, reference) <= 1e-10);
+                    TERMIN_QOPT_CHECK(result.stationarity_linf <= cutoff);
+                    TERMIN_QOPT_CHECK(result.equality_linf == 0.0);
+                    TERMIN_QOPT_CHECK(dual[0] == 0.0);
+                } else {
+                    TERMIN_QOPT_CHECK(actual == std::vector<double>({123, 123}));
+                    TERMIN_QOPT_CHECK(reference == actual && dual[0] == 456);
+                }
+            }
+            TERMIN_QOPT_CHECK(cache.counters().factorizations == 1);
+            TERMIN_QOPT_CHECK(cache.counters().reuse_hits == 1);
+        }
+
+        const EqualityQpProblemView empty_problem{
+            row_major(empty, 0, 0), const_vector(empty), row_major(empty, 0, 0), const_vector(empty)};
+        const EqualityQpSolutionView empty_output{{nullptr, 0, 1}, {nullptr, 0, 1}};
+        EqualityQpFactorizationCache empty_cache;
+        for (const auto result :
+             {solve_equality_qp(empty_problem, empty_output), empty_cache.solve(empty_problem, empty_output)}) {
+            TERMIN_QOPT_CHECK(result.status == QpStatus::InvalidInput);
+            TERMIN_QOPT_CHECK(result.diagnostic == QpDiagnostic::DimensionMismatch);
+        }
+        TERMIN_QOPT_CHECK(empty_cache.counters().factorizations == 0);
+    }
+
+    void test_unconstrained_strided_aliasing() {
+        for (bool cached : {false, true}) {
+            for (bool alias_hessian : {false, true}) {
+                EqualityQpFactorizationCache cache;
+                for (int pass = 0; pass < 2; ++pass) {
+                    std::vector<double> hessian{4, 1, 77, 1, 3, 77};
+                    std::vector<double> gradient{-1, 77, 2, 77};
+                    const EqualityQpProblemView problem{{hessian.data(), 2, 2, 3, 1},
+                                                        {gradient.data(), 2, 2},
+                                                        ConstDenseMatrixView::row_major(nullptr, 0, 2),
+                                                        {nullptr, 0, 1}};
+                    const DenseVectorView primal = alias_hessian ? DenseVectorView{hessian.data() + 1, 2, 3}
+                                                                 : DenseVectorView{gradient.data(), 2, 2};
+                    const EqualityQpSolutionView output{primal, {nullptr, 0, 1}};
+                    const auto result = cached ? cache.solve(problem, output) : solve_equality_qp(problem, output);
+                    TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+                    TERMIN_QOPT_CHECK(std::abs(primal[0] - 5.0 / 11) <= 1e-12);
+                    TERMIN_QOPT_CHECK(std::abs(primal[1] + 9.0 / 11) <= 1e-12);
+                    TERMIN_QOPT_CHECK(hessian[2] == 77 && hessian[5] == 77);
+                    TERMIN_QOPT_CHECK(gradient[1] == 77 && gradient[3] == 77);
+                }
+                if (cached) {
+                    TERMIN_QOPT_CHECK(cache.counters().factorizations == 1);
+                    TERMIN_QOPT_CHECK(cache.counters().reuse_hits == 1);
+                }
+            }
+        }
+    }
+
+    void test_cache_switches_constraint_modes_and_spectral_tolerance() {
+        std::vector<double> hessian{0.5e-8, 0, 0, 1};
+        const std::vector<double> gradient{-1e-9, -2}, empty, equalities{1, 0}, targets{0.75};
+        QpTolerance tolerance{.absolute = 1e-8, .relative = 0.0};
+        EqualityQpFactorizationCache cache;
+        const auto solve = [&](bool constrained,
+                               std::size_t factorizations,
+                               std::size_t reuses,
+                               std::size_t reduced_rank,
+                               double expected_first) {
+            const EqualityQpProblemView problem{row_major(hessian, 2, 2),
+                                                const_vector(gradient),
+                                                row_major(constrained ? equalities : empty, constrained ? 1 : 0, 2),
+                                                const_vector(constrained ? targets : empty)};
+            std::vector<double> primal(2, 123), reference(2, 123), dual(constrained ? 1 : 0),
+                reference_dual(dual.size());
+            const auto result = cache.solve(problem, {vector(primal), vector(dual)}, tolerance);
+            const auto oracle = solve_equality_qp(problem, {vector(reference), vector(reference_dual)}, tolerance);
+            TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal && oracle.status == result.status);
+            TERMIN_QOPT_CHECK(result.diagnostic == oracle.diagnostic);
+            TERMIN_QOPT_CHECK(result.constraint_rank == (constrained ? 1 : 0));
+            TERMIN_QOPT_CHECK(result.reduced_hessian_rank == reduced_rank);
+            TERMIN_QOPT_CHECK(std::abs(primal[0] - expected_first) <= 1e-12);
+            TERMIN_QOPT_CHECK(std::abs(primal[1] - 2) <= 1e-12);
+            TERMIN_QOPT_CHECK(linf_difference(primal, reference) <= 1e-12);
+            TERMIN_QOPT_CHECK(linf_difference(dual, reference_dual) <= 1e-12);
+            TERMIN_QOPT_CHECK(cache.counters().factorizations == factorizations);
+            TERMIN_QOPT_CHECK(cache.counters().reuse_hits == reuses);
+        };
+        solve(true, 1, 0, 1, 0.75);
+        solve(false, 2, 0, 1, 0.0);
+        solve(false, 2, 1, 1, 0.0);
+        tolerance.absolute = 1e-10;
+        solve(false, 3, 1, 2, 0.2);
+        hessian[0] = 2e-8;
+        solve(false, 4, 1, 2, 0.05);
+        solve(true, 5, 1, 1, 0.75);
+        solve(false, 6, 1, 2, 0.05);
+    }
+
 } // namespace
 
 int main() {
@@ -370,5 +517,8 @@ int main() {
     test_nonconvex_and_overlapping_outputs();
     test_factorization_cache_reuses_only_exact_coefficients();
     test_factorization_cache_preserves_rhs_diagnostics();
+    test_unconstrained_spectral_classification_matches_general_path();
+    test_unconstrained_strided_aliasing();
+    test_cache_switches_constraint_modes_and_spectral_tolerance();
     return 0;
 }

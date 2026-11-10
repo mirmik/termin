@@ -4,6 +4,13 @@
 foundation. Its public C++ API contains no Eigen types; Eigen remains a private
 backend dependency.
 
+Equality QPs with no equality rows use the full variable space directly rather
+than materializing an identity nullspace. They retain the same spectral
+decomposition, rank/curvature thresholds and residual validation as the general
+rank-revealing path, including singular, unbounded and nonconvex diagnostics.
+Factorization caches can switch between constrained and unconstrained inputs;
+the exact coefficient/tolerance comparison still controls invalidation.
+
 The native library exports:
 
 - caller-owned dense vector and matrix views;

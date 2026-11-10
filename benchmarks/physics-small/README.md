@@ -3,6 +3,7 @@
 Recorded experiment: [CRBA before/after, 2026-11-10](results/2026-11-10-crba.md).
 Follow-up: [velocity-only kinematics, 2026-11-10](results/2026-11-10-velocity-kinematics.md).
 Complete profile: [controller, collision/contact, solver replay and allocations](results/2026-11-10-expanded-profile.md).
+Follow-up: [unconstrained equality QP, 2026-11-10](results/2026-11-10-unconstrained-qp.md).
 
 Build the SDK with `task build`, then run from the repository root:
 
