@@ -2,6 +2,7 @@
 
 import json
 import queue
+import runpy
 import subprocess
 import sys
 import threading
@@ -16,8 +17,9 @@ HELPER = REPOSITORY_ROOT / "scripts" / "termin-editor-mcp"
 
 
 class _EditorEndpoint:
-    def __init__(self, token: str) -> None:
+    def __init__(self, token: str, *, tool_result: dict[str, object] | None = None) -> None:
         self.token = token
+        self.tool_result = tool_result
         self.requests: list[dict[str, object]] = []
         self._server = self._create_server()
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
@@ -51,7 +53,7 @@ class _EditorEndpoint:
 
                 method = request["method"]
                 if method == "tools/call":
-                    result = {
+                    result = endpoint.tool_result if endpoint.tool_result is not None else {
                         "content": [{"type": "text", "text": "editor result\n"}],
                         "isError": False,
                     }
@@ -687,3 +689,53 @@ def test_stdio_broker_reports_unavailable_and_reconnects(tmp_path: Path):
         replacement_endpoint.stop()
         if broker.process.poll() is None:
             broker.process.terminate()
+
+
+def test_cli_reports_structured_tool_error_without_text_output(tmp_path: Path) -> None:
+    endpoint = _EditorEndpoint("test-token", tool_result={
+        "content": [{"type": "text", "text": ""}],
+        "structuredContent": {"ok": False, "output": "", "error": "Timed out waiting for main thread"},
+        "isError": True,
+    })
+    endpoint.start()
+    session_file = tmp_path / "session.json"
+    _write_session(session_file, endpoint)
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(HELPER), "--session", str(session_file), "exec", "pass"],
+            capture_output=True, text=True, encoding="utf-8", timeout=10.0,
+        )
+        assert completed.returncode == 1
+        assert completed.stdout == ""
+        assert completed.stderr == "Timed out waiting for main thread\n"
+    finally:
+        endpoint.stop()
+
+
+@pytest.mark.parametrize(
+    ("response", "exit_code", "stdout", "stderr"),
+    [
+        ({"result": {"content": [], "isError": True,
+                     "structuredContent": {"error": "Cannot execute script"}}},
+         1, "", "Cannot execute script\n"),
+        ({"result": {"content": [{"type": "text", "text": "traceback\n"}], "isError": True}},
+         1, "traceback\n", ""),
+        ({"result": {"content": [{"type": "text", "text": "hello\n"}], "isError": False}},
+         0, "hello\n", ""),
+        ({"error": {"code": -32050, "message": "Editor unavailable"}},
+         1, "", '{\n  "code": -32050,\n  "message": "Editor unavailable"\n}\n'),
+        ({"result": {"ok": False, "output": "partial\n", "error": "Execution failed"}},
+         1, "partial\n", "Execution failed\n"),
+        ({"result": {"ok": True, "output": "success\n", "error": None}},
+         0, "success\n", ""),
+    ],
+)
+def test_cli_response_output_channels(response, exit_code, stdout, stderr, capsys, monkeypatch) -> None:
+    # run_path loads the CLI without executing main; keep its import-path setup
+    # local to this test process so unrelated suites retain their original path.
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    namespace = runpy.run_path(str(HELPER))
+    assert namespace["_print_response"](response) == exit_code
+    captured = capsys.readouterr()
+    assert captured.out == stdout
+    assert captured.err == stderr

@@ -31,8 +31,40 @@ The run's detailed report is `/tmp/termin-editor-idle-yrnlydpp/report.json`
 `task test -- --window-tests` passed under Xvfb/lavapipe (292 C/C++ tests and
 the working Python suites). Native tests cover hidden/restored and zero-size
 windows; socket-backed tests cover SpaceMouse readiness and disconnect.
-Physical GPU/window-manager minimize/restore, a real SpaceMouse, and Windows
-verification remain outstanding.
+Physical GPU, a real SpaceMouse, and Windows verification remain outstanding.
+The actual window-manager minimize/restore check was subsequently performed as
+described below.
+
+## Verified window-manager run (2026-11-10)
+
+Private Xvfb with xfwm4 (compositing disabled), private D-Bus session, Vulkan
+lavapipe, the same SDK native build `b2164e838d8e35597bf0`, and checkout
+`99c727639`. Command:
+
+```sh
+task smoke:editor-idle -- --xvfb --software-vulkan --window-manager --matrix --warmup 2 --duration 15
+```
+
+All four FPS/VSync cases passed for **both main and secondary windows**: WM
+state changed to Iconic; a new repaint remained requested but was not runnable;
+15 seconds of minimized idle did not render; an external X11 restore caused a
+successful natural render before any subsequent MCP request. The retained
+repaint was then consumed, and orderly SIGINT shutdown returned zero.
+
+| FPS limit | VSync | Main minimized CPU (%) | Secondary minimized CPU (%) |
+| --- | --- | ---: | ---: |
+| 60 | On | 0.067 | 0.000 |
+| 60 | Off | 0.000 | 0.000 |
+| Unlimited | On | 0.000 | 0.000 |
+| Unlimited | Off | 0.000 | 0.000 |
+
+External restore to completed render took 10–19 ms in this run. Main-thread
+samples were blocked in `poll_schedule_timeout.constprop.0`. Detailed evidence
+is `/tmp/termin-editor-idle-60qouauj/report.json`, with before/restored PNGs,
+WM properties and successful-render receipts in each case's `IdleSmokeMain`
+and `IdleSmokeSecondary` directories. These temporary files supplement the
+durable reproduction command and table. This closes the virtual-display **real
+window-manager** check, not the outstanding physical-GPU check.
 
 ## Reproduction procedure
 
@@ -52,6 +84,9 @@ task smoke:editor-idle -- --xvfb --software-vulkan --matrix
 
 # Include producer wakes, camera, PLAY/STOP and open diagnostic windows.
 task smoke:editor-idle -- --xvfb --software-vulkan --functional
+
+# Exercise actual WM minimize/restore of dirty main and secondary windows.
+task smoke:editor-idle -- --xvfb --software-vulkan --window-manager --matrix
 
 # Repeat on the real desktop/GPU with the normal display environment.
 task smoke:editor-idle -- --matrix
@@ -87,6 +122,26 @@ CPU sampling with local Frame Profiler and Framegraph Debugger windows open.
 These assertions do not replace checking animation smoothness, simulation
 correctness, or physical window minimize/restore behavior. Functional checks run
 for each matrix case when both flags are supplied.
+
+`--window-manager` requires `--xvfb`, `xfwm4`, `dbus-run-session`, `xprop`, and
+`libX11`. It starts xfwm4 without compositing on the newly allocated private
+display and a private D-Bus session with isolated configuration. It never replaces
+or controls the user's desktop window manager. The harness identifies only X11
+clients whose `_NET_WM_PID` matches the editor process it launched.
+
+For both the main window and a Frame Profiler secondary window, it requests
+minimization externally through X11, verifies the WM's `Iconic` state, marks the
+window dirty, and asserts `render_requested=True` but `render_ready=False`.
+It then samples idle CPU while the window remains minimized. A temporary wrapper
+around that content's `render()` writes an external receipt only after successful
+rendering; there must be no receipt while minimized. Restoration is another X11
+request. The harness waits for the successful-render receipt **without MCP**,
+then checks that the retained repaint was consumed. This proves that restore
+itself wakes and renders the window; a later screenshot cannot mask missing
+repaint or wake behavior. The wrapper is restored before screenshot capture.
+`before.png`, `restored.png`, WM properties and render receipts remain in each
+window's evidence directory under the case. These are real WM lifecycle checks
+on a virtual display with software rendering, not a physical-GPU verification.
 
 `--probe-script /absolute/path/probe.py` runs additional Python against the
 isolated editor after the first idle measurement, then repeats warmup and idle.

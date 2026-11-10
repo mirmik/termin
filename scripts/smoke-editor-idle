@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import argparse
 from contextlib import ExitStack
+import ctypes
+import ctypes.util
 import json
 import os
 from pathlib import Path
+import re
 import select
 import shutil
 import signal
@@ -111,6 +114,181 @@ def start_xvfb(stack: ExitStack, root: Path, env: dict) -> None:
         os.close(read_fd)
         if write_fd >= 0:
             os.close(write_fd)
+
+
+def xprop(env: dict, *arguments: str) -> str:
+    result = subprocess.run(["xprop", *arguments], env=env, capture_output=True,
+                            text=True, timeout=5, check=False)
+    if result.returncode:
+        raise SmokeError(f"xprop failed: {result.stderr.strip()}")
+    return result.stdout
+
+
+def start_window_manager(stack: ExitStack, root: Path, env: dict) -> None:
+    for executable in ("xfwm4", "dbus-run-session", "xprop"):
+        if shutil.which(executable) is None:
+            raise SmokeError(f"--window-manager requires {executable}")
+    wm_env = env.copy()
+    wm_config = root / "wm-config"
+    wm_config.mkdir()
+    wm_env["XDG_CONFIG_HOME"] = str(wm_config)
+    wm_env["XDG_CACHE_HOME"] = str(root / "wm-cache")
+    wm_env["GIO_USE_VFS"] = "local"
+    wm_env["NO_AT_BRIDGE"] = "1"
+    # A private session bus prevents xfconf from attaching to the user's daemon.
+    wm_env.pop("DBUS_SESSION_BUS_ADDRESS", None)
+    stream = stack.enter_context((root / "window-manager.log").open("w"))
+    managed = ManagedProcess.start(
+        ["dbus-run-session", "--", "xfwm4", "--compositor=off", "--vblank=off"],
+        env=wm_env, stdout=stream, stderr=stream)
+    stack.callback(managed.close)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if managed.process.poll() is not None:
+            raise SmokeError("xfwm4 exited; see window-manager.log")
+        if re.search(r"0x[1-9a-fA-F][0-9a-fA-F]*", xprop(env, "-root", "_NET_SUPPORTING_WM_CHECK")):
+            return
+        time.sleep(0.1)
+    raise SmokeError("xfwm4 did not publish its WM identity; see window-manager.log")
+
+
+class X11WindowActions:
+    """External minimize/restore on a private display; no input injection."""
+
+    def __init__(self, display: str):
+        library = ctypes.util.find_library("X11")
+        if library is None:
+            raise SmokeError("--window-manager requires libX11")
+        self._lib = ctypes.CDLL(library)
+        self._lib.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        self._lib.XOpenDisplay.restype = ctypes.c_void_p
+        self._lib.XDefaultScreen.argtypes = [ctypes.c_void_p]
+        self._lib.XDefaultScreen.restype = ctypes.c_int
+        self._lib.XIconifyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int]
+        self._lib.XIconifyWindow.restype = ctypes.c_int
+        self._lib.XMapRaised.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        self._lib.XMapRaised.restype = ctypes.c_int
+        self._lib.XFlush.argtypes = [ctypes.c_void_p]
+        self._lib.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        self._display = self._lib.XOpenDisplay(display.encode())
+        if not self._display:
+            raise SmokeError(f"cannot connect to private display {display}")
+
+    def minimize(self, window: int) -> None:
+        if not self._lib.XIconifyWindow(self._display, window, self._lib.XDefaultScreen(self._display)):
+            raise SmokeError("XIconifyWindow failed")
+        self._lib.XFlush(self._display)
+
+    def restore(self, window: int) -> None:
+        self._lib.XMapRaised(self._display, window)
+        self._lib.XFlush(self._display)
+
+    def close(self) -> None:
+        if self._display:
+            self._lib.XCloseDisplay(self._display)
+            self._display = None
+
+
+def wait_window_state(process: subprocess.Popen, env: dict, window: int, state: str, timeout: float) -> str:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ensure_running(process)
+        properties = xprop(env, "-id", hex(window), "WM_STATE", "_NET_WM_STATE")
+        if f"window state: {state}" in properties:
+            return properties
+        time.sleep(0.05)
+    raise SmokeError(f"window {hex(window)} did not enter WM state {state}")
+
+
+def owned_window_ids(env: dict, pid: int) -> dict[str, int]:
+    result = {}
+    for xid in re.findall(r"0x[0-9a-fA-F]+", xprop(env, "-root", "_NET_CLIENT_LIST")):
+        props = xprop(env, "-id", xid, "_NET_WM_PID", "_NET_WM_NAME", "WM_NAME")
+        if not re.search(rf"_NET_WM_PID\(CARDINAL\) = {pid}\b", props):
+            continue
+        for name in ("IdleSmokeMain", "IdleSmokeSecondary"):
+            if f'"{name}"' in props:
+                result[name] = int(xid, 16)
+    return result
+
+
+def wm_checks(args: argparse.Namespace, process: subprocess.Popen, session: Path,
+              case_root: Path, env: dict, result: dict) -> None:
+    mcp_exec(args.sdk, session, """
+editor.window.set_title('IdleSmokeMain')
+frame_profiler.show()
+frame_profiler.window.content.window.set_title('IdleSmokeSecondary')
+""", args.wake_timeout)
+    delay(process, max(1, args.warmup))
+    windows = owned_window_ids(env, process.pid)
+    if set(windows) != {"IdleSmokeMain", "IdleSmokeSecondary"}:
+        raise SmokeError(f"could not identify both owned editor windows: {windows}")
+    with ExitStack() as stack:
+        actions = X11WindowActions(env["DISPLAY"])
+        stack.callback(actions.close)
+        for name, expression in (("IdleSmokeMain", "editor"),
+                                 ("IdleSmokeSecondary", "frame_profiler.window.content")):
+            window = windows[name]
+            evidence = case_root / name
+            evidence.mkdir()
+            item = result[name] = {"x11_window": hex(window)}
+            mcp_exec(args.sdk, session,
+                     f"{expression}.capture_screenshot(output_path={str(evidence / 'before.png')!r})",
+                     args.wake_timeout)
+            actions.minimize(window)
+            properties = wait_window_state(process, env, window, "Iconic", args.wake_timeout)
+            (evidence / "minimized-xprops.txt").write_text(properties)
+            delay(process, 0.5)
+            receipt = evidence / "restored-render.json"
+            # The receipt is armed only after WM minimization. It must not run
+            # while dirty-but-unpresentable, and must run after external restore
+            # before another MCP request can accidentally wake the editor.
+            output = mcp_exec(args.sdk, session, f"""
+import json
+import time
+from pathlib import Path
+wm_probe_content = {expression}
+assert not wm_probe_content.render_ready, 'minimized content remains render-ready'
+wm_probe_original_render = wm_probe_content.render
+def wm_probe_render():
+    rendered = wm_probe_original_render()
+    if rendered:
+        receipt = Path({str(receipt)!r})
+        temporary = receipt.with_suffix('.tmp')
+        temporary.write_text(json.dumps({{'render_completed_at': time.monotonic()}}))
+        temporary.replace(receipt)
+    return rendered
+wm_probe_content.render = wm_probe_render
+wm_probe_content.request_render_update()
+assert wm_probe_content.render_requested, 'minimized repaint was not retained'
+assert not wm_probe_content.render_ready, 'dirty minimized window became runnable'
+print('WM_DIRTY_RETAINED_NOT_READY')
+""", args.wake_timeout)
+            if "WM_DIRTY_RETAINED_NOT_READY" not in output:
+                raise SmokeError("missing minimized dirty-state assertion")
+            item["dirty_retained_not_ready"] = True
+            delay(process, 0.5)
+            item["minimized_idle"] = measure_idle(process, args.duration, args.interval)
+            if receipt.exists():
+                raise SmokeError(f"{name} rendered while minimized")
+            if item["minimized_idle"]["cpu_percent_one_core"] > args.max_cpu:
+                raise SmokeError(f"{name} minimized dirty window exceeded {args.max_cpu}% CPU")
+            restored = time.monotonic()
+            actions.restore(window)
+            properties = wait_window_state(process, env, window, "Normal", args.wake_timeout)
+            (evidence / "restored-xprops.txt").write_text(properties)
+            received = wait_receipt(process, receipt, args.wake_timeout)
+            item["external_restore_to_render_s"] = received["render_completed_at"] - restored
+            delay(process, 0.5)
+            mcp_exec(args.sdk, session, f"""
+assert not wm_probe_content.render_requested, 'restored repaint was not consumed'
+wm_probe_content.render = wm_probe_original_render
+wm_probe_content.capture_screenshot(output_path={str(evidence / 'restored.png')!r})
+""", args.wake_timeout)
+            item["restored_repaint_consumed"] = True
+            print(f"  {name}: minimized dirty idle OK; external restore rendered in "
+                  f"{item['external_restore_to_render_s']:.3f}s", flush=True)
+    mcp_exec(args.sdk, session, "frame_profiler.dismiss()", args.wake_timeout)
 
 
 def wait_receipt(process: subprocess.Popen, receipt: Path, timeout: float) -> dict:
@@ -272,6 +450,9 @@ def run_case(args: argparse.Namespace, root: Path, fps: int, vsync: bool, base_e
             result["mcp_round_trip_s"] = time.monotonic() - sent
             if args.functional:
                 result["functional"] = functional_checks(args, process, session, case_root)
+            if args.window_manager:
+                result["window_manager"] = {}
+                wm_checks(args, process, session, case_root, env, result["window_manager"])
             if args.probe_script:
                 output = mcp_exec(args.sdk, session, args.probe_script.read_text(), args.wake_timeout)
                 (case_root / "probe.log").write_text(output)
@@ -310,6 +491,8 @@ def parse_args() -> argparse.Namespace:
                         default=REPO_ROOT / "tests/fixtures/windows-d3d11-scene")
     parser.add_argument("--output", type=Path, help="New artifact directory (must not already exist)")
     parser.add_argument("--xvfb", action="store_true", help="Create a private virtual X11 display")
+    parser.add_argument("--window-manager", action="store_true",
+                        help="Run private xfwm4 and verify dirty-window minimize/restore (requires --xvfb)")
     parser.add_argument("--software-vulkan", action="store_true", help="Use Mesa lavapipe explicitly")
     parser.add_argument("--matrix", action="store_true", help="Run 60/Unlimited x VSync on/off")
     parser.add_argument("--functional", action="store_true",
@@ -327,6 +510,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if sys.platform != "linux":
         parser.error("CPU/wait sampling currently requires Linux; see docs/editor-idle-smoke.md for Windows")
+    if args.window_manager and not args.xvfb:
+        parser.error("--window-manager requires --xvfb; never attaches to the user's window manager")
     if args.fps < 0 or args.warmup < 0 or args.max_cpu < 0:
         parser.error("FPS, warmup, and max-cpu must be nonnegative")
     if any(value <= 0 for value in (args.duration, args.interval, args.startup_timeout,
@@ -361,6 +546,7 @@ def main() -> int:
     report = {"checkout_revision": revision, "sdk_native_build_id": manifest["native_build_id"],
               "sdk": str(args.sdk), "platform": sys.platform,
               "display": "private Xvfb" if args.xvfb else "existing desktop session",
+              "window_manager": "private xfwm4, compositing disabled" if args.window_manager else "not started by harness",
               "renderer_selection": "lavapipe" if args.software_vulkan else "environment/default",
               "note": "CPU: 100% = one core. MCP latency includes CLI startup and transport. "
                       "wchan is diagnostic, not proof of absence of all polling. See editor.log for actual backend.",
@@ -368,6 +554,8 @@ def main() -> int:
     with ExitStack() as stack:
         if args.xvfb:
             start_xvfb(stack, root, env)
+        if args.window_manager:
+            start_window_manager(stack, root, env)
         for fps, vsync in cases:
             report["cases"].append(run_case(args, root, fps, vsync, env))
             (root / "report.json").write_text(json.dumps(report, indent=2))
