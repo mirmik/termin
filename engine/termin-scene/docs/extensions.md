@@ -82,3 +82,20 @@ Extensions подходят для систем, которые:
 - Должны обновляться каждый кадр.
 
 Примеры: физический мир, навигационная сетка, аудио-менеджер, система частиц.
+
+## Scheduling update hooks
+
+An attached `on_scene_update` callback is a continuous update consumer by
+default. This preserves existing extension lifecycle semantics in event-driven
+hosts. An extension which only synchronizes state on requested updates may set
+`requires_continuous_update` in its vtable. Returning false lets the editor
+sleep; the update callback still runs whenever the scene is updated. Collision
+transform synchronization uses this contract because it has no independent
+clock.
+
+If this predicate changes while the scene is otherwise idle, call
+`tc_scene_notify_work_changed(scene)` on the owner thread. Attach/detach and
+component lifecycle changes notify the owner automatically. Reading
+`tc_scene_get_work_state` does not consume a render request. Temporary owners
+can pair `tc_scene_acquire_update_request` and `tc_scene_release_update_request`
+to keep updates active; use the C++ `SceneUpdateRequest` RAII owner when possible.

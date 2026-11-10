@@ -7,6 +7,7 @@
 - [Module Map](../../docs/modules.md#termin-engine)
 - [Engine Managers](managers.md)
 - [EngineCore](engine-core.md)
+- [Event-driven host loop](event-loop.md)
 - [SceneManager](scene-manager.md)
 - [RenderingManager](rendering-manager.md)
 - [ViewportRenderState](viewport-render-state.md)

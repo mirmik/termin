@@ -38,6 +38,8 @@ namespace termin::gui_native {
         bool render_and_present();
         void request_repaint();
         bool repaint_requested() const;
+        bool render_ready() const;
+        void set_repaint_wake(std::shared_ptr<WindowEventWake> wake);
         bool should_close() const;
         void wait_idle();
         void close();

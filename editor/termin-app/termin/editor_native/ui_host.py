@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 from typing import Callable, Protocol
 
 from termin.display.window import WindowHandle, WindowManager
@@ -119,6 +120,7 @@ class NativeWidgetContent:
                 tc_ui_document_destroy(self.document)
             raise
         self.window = self.adapter.window
+        self.adapter.set_repaint_wake(window_manager.wake_handle())
         try:
             if always_on_top:
                 self.window.set_always_on_top(True)
@@ -321,6 +323,10 @@ class NativeWidgetContent:
     def render_requested(self) -> bool:
         return self.adapter.repaint_requested
 
+    @property
+    def render_ready(self) -> bool:
+        return self.adapter.render_ready
+
     def capture_screenshot(
         self,
         *,
@@ -377,6 +383,7 @@ class WindowContent(Protocol):
 
     window: object
     render_requested: bool
+    render_ready: bool
 
     def poll_events(self) -> tuple[bool, int]: ...
     def render(self) -> bool: ...
@@ -420,8 +427,26 @@ class EditorWindowRegistry:
             raise ValueError("main window handle is not owned by the window manager")
         self.window_manager = window_manager
         self.main = EditorWindowSlot(self, main_handle, main_content)
+        self._wake_handle = window_manager.wake_handle()
         self._windows: list[EditorWindowSlot] = []
         self._closed = False
+
+    def wake(self) -> None:
+        self._wake_handle.wake()
+
+    def wait_until(self, deadline: float | None) -> None:
+        timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
+        self.window_manager.wait_events(timeout)
+
+    @property
+    def has_pending_events(self) -> bool:
+        return self.window_manager.has_pending_events
+
+    @property
+    def render_ready(self) -> bool:
+        return self.main.content.render_ready or any(
+            window.content.render_ready for window in self._windows if not window.closed
+        )
 
     @property
     def windows(self) -> tuple[EditorWindowSlot, ...]:
@@ -525,7 +550,7 @@ class EditorWindowRegistry:
             window.content for window in self._windows if not window.closed
         )
         for content in contents:
-            if content.render_requested and content.render():
+            if content.render_ready and content.render():
                 rendered += 1
         return rendered
 

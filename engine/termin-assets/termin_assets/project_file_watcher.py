@@ -290,6 +290,26 @@ class ProjectFileWatcher:
         self._lock = threading.Lock()
         self._pending_changes: Dict[str, str] = {}  # path -> "created"/"modified"/"deleted"
         self._debounce_deadline: float | None = None
+        self._wakeup: Callable[[], None] | None = None
+
+    def set_wakeup(self, callback: Callable[[], None] | None) -> None:
+        """Notify the owner when its work plan changes; callback must be lifetime-safe."""
+        with self._lock:
+            self._wakeup = callback
+            notify = callback if self._pending_changes else None
+        if notify is not None:
+            notify()
+
+    @property
+    def has_pending(self) -> bool:
+        with self._lock:
+            return bool(self._pending_changes)
+
+    @property
+    def next_deadline(self) -> float | None:
+        """Absolute monotonic debounce deadline, not immediate reload readiness."""
+        with self._lock:
+            return self._debounce_deadline
 
     def register_processor(self, processor: FilePreLoader) -> None:
         for ext in processor.extensions:
@@ -460,6 +480,13 @@ class ProjectFileWatcher:
         with self._lock:
             self._pending_changes[path] = kind
             self._debounce_deadline = time.monotonic() + DEBOUNCE_DELAY_S
+            notify = self._wakeup
+        if notify is not None:
+            try:
+                notify()
+            except Exception:
+                log.error("[ProjectFileWatcher] failed to wake owner loop", exc_info=True)
+                raise
 
     def poll(self) -> None:
         """Process pending file changes. Call from main loop each frame."""

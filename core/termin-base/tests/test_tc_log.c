@@ -9,6 +9,14 @@
 static int g_callback_count = 0;
 static tc_log_level g_callback_level = TC_LOG_DEBUG;
 static char g_callback_message[TC_LOG_MESSAGE_CAPACITY];
+static size_t g_wake_pending = 0;
+static int g_wake_count = 0;
+
+static void wake_capture(void* user_data) {
+    int* count = (int*)user_data;
+    ++*count;
+    g_wake_pending = tc_log_capture_pending();
+}
 
 static void capture_callback(tc_log_level level, const char* message) {
     g_callback_count += 1;
@@ -74,9 +82,35 @@ GUARD_C_TEST(test_stop_disables_capture_only) {
     return 0;
 }
 
+GUARD_C_TEST(test_capture_wakeup_tracks_empty_to_nonempty_and_backlog) {
+    reset_logging();
+    g_wake_count = 0;
+    GUARD_C_CHECK(tc_log_capture_start(4));
+    tc_log_info("before subscribe");
+    tc_log_capture_set_wakeup(wake_capture, &g_wake_count);
+    GUARD_C_CHECK(g_wake_count == 1);
+    GUARD_C_CHECK(g_wake_pending == 1);
+    tc_log_info("second");
+    GUARD_C_CHECK(g_wake_count == 1);
+    tc_log_record record;
+    GUARD_C_CHECK(tc_log_capture_drain(&record, 1, NULL) == 1);
+    GUARD_C_CHECK(tc_log_capture_pending() == 1);
+    GUARD_C_CHECK(tc_log_capture_drain(&record, 1, NULL) == 1);
+    GUARD_C_CHECK(tc_log_capture_pending() == 0);
+    tc_log_info("another burst");
+    GUARD_C_CHECK(g_wake_count == 2);
+    tc_log_capture_stop();
+    GUARD_C_CHECK(tc_log_capture_start(1));
+    tc_log_info("stopped callback is not retained");
+    GUARD_C_CHECK(g_wake_count == 2);
+    reset_logging();
+    return 0;
+}
+
 int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_capture_preserves_callback_and_drops_oldest);
     GUARD_C_RUN(test_stop_disables_capture_only);
+    GUARD_C_RUN(test_capture_wakeup_tracks_empty_to_nonempty_and_backlog);
     return GUARD_C_END();
 }

@@ -188,7 +188,8 @@ namespace termin::gui_native {
         impl_->require_open("consume_events");
         impl_->renderer->sync_presentation_metrics();
         for (const WindowEvent& event : events) {
-            if (event.type == WindowEventType::Resized || event.type == WindowEventType::DisplayScaleChanged) {
+            if (event.type == WindowEventType::Resized || event.type == WindowEventType::DisplayScaleChanged ||
+                event.type == WindowEventType::PresentationChanged) {
                 impl_->renderer->request_repaint();
                 continue;
             }
@@ -205,6 +206,8 @@ namespace termin::gui_native {
 
     bool GuiWindowAdapter::render_and_present() {
         impl_->require_open("render_and_present");
+        if (!window().presentable())
+            return false;
         return impl_->renderer->render_frame();
     }
 
@@ -214,6 +217,15 @@ namespace termin::gui_native {
 
     bool GuiWindowAdapter::repaint_requested() const {
         return renderer().repaint_requested();
+    }
+
+    bool GuiWindowAdapter::render_ready() const {
+        return repaint_requested() && window().presentable();
+    }
+
+    void GuiWindowAdapter::set_repaint_wake(std::shared_ptr<WindowEventWake> wake) {
+        renderer().set_repaint_wakeup(wake ? std::function<void()>([wake = std::move(wake)] { wake->wake(); })
+                                          : std::function<void()>{});
     }
 
     bool GuiWindowAdapter::should_close() const {

@@ -142,6 +142,7 @@ bool tc_scene_ext_attach(tc_scene_handle scene, tc_scene_ext_type_id type_id) {
         return false;
     }
 
+    tc_scene_notify_work_changed(scene);
     return true;
 }
 
@@ -161,6 +162,7 @@ void tc_scene_ext_detach(tc_scene_handle scene, tc_scene_ext_type_id type_id) {
     }
 
     tc_scene_ext_slot_clear(scene, type_id);
+    tc_scene_notify_work_changed(scene);
 }
 
 void tc_scene_ext_detach_all(tc_scene_handle scene) {
@@ -283,6 +285,18 @@ void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value* exten
             tc_log_warn("[tc_scene_ext_deserialize_scene] deserialize failed: type_id=%llu", (unsigned long long)i);
         }
     }
+}
+
+bool tc_scene_ext_requires_continuous_update(tc_scene_handle scene) {
+    if (!tc_scene_alive(scene) || !g_registry) return false;
+    for (size_t i = 0; i < g_registry->type_capacity; ++i) {
+        tc_scene_ext_type_entry* entry = &g_registry->types[i];
+        if (!entry->registered || !entry->vtable.on_scene_update) continue;
+        void* instance = tc_scene_ext_slot_get(scene, (tc_scene_ext_type_id)i);
+        if (instance && (!entry->vtable.requires_continuous_update ||
+                         entry->vtable.requires_continuous_update(instance, entry->type_userdata))) return true;
+    }
+    return false;
 }
 
 void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt) {

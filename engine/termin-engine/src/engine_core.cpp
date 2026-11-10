@@ -130,6 +130,15 @@ namespace termin {
             std::thread::id polling_thread;
         };
 
+        static void wake_loop(const std::shared_ptr<EngineLoopState>& state) {
+            std::function<void()> wake;
+            {
+                std::lock_guard lock(state->mutex);
+                if (state->client) wake = state->client->wake;
+            }
+            if (wake) wake();
+        }
+
         class EngineLoopPollScope {
         public:
             explicit EngineLoopPollScope(EngineLoopState& state) noexcept
@@ -169,6 +178,8 @@ namespace termin {
                 : _engine(engine),
                   _controller(std::move(controller)),
                   _context(create_world_context(_controller.native_handle())) {}
+
+            tc_world_context* context() const noexcept { return _context; }
 
             ~RuntimeSession() {
                 if (_active && !end()) {
@@ -298,6 +309,8 @@ namespace termin {
                 }
                 _bound_scenes.erase(existing);
             }
+
+            bool has_pending_work() const { return world_context_has_pending_request(_context); }
 
             void process_primary_scene_request() {
                 const WorldContextSceneRequest request = take_world_context_primary_request(_context);
@@ -550,10 +563,18 @@ namespace termin {
             return;
         }
         if (const auto state = _state.lock()) {
-            std::lock_guard lock(state->mutex);
-            if (state->client && state->generation == _generation) {
-                state->running.store(false);
-                state->client.reset();
+            std::function<void()> wake;
+            {
+                std::lock_guard lock(state->mutex);
+                if (state->client && state->generation == _generation) {
+                    state->running.store(false);
+                    wake = state->client->wake;
+                    state->client.reset();
+                }
+            }
+            if (wake) {
+                try { wake(); }
+                catch (...) { tc_log(TC_LOG_ERROR, "[EngineCore] Failed to wake detached loop"); }
             }
         }
         _state.reset();
@@ -625,6 +646,9 @@ namespace termin {
         : rendering_manager(render_topology),
           _loop_state(std::make_shared<engine_detail::EngineLoopState>()),
           _frame_completion_state(std::make_shared<engine_detail::EngineFrameCompletionState>()) {
+        scene_manager.set_work_callback([weak = std::weak_ptr(_loop_state)]() {
+            if (auto state = weak.lock()) engine_detail::wake_loop(state);
+        });
         if (!tc_world_controller_registry_init()) {
             tc_log(TC_LOG_ERROR, "[EngineCore] Failed to initialize the WorldController registry root");
         }
@@ -735,6 +759,9 @@ namespace termin {
         try {
             auto candidate =
                 std::make_unique<engine_detail::RuntimeSession>(*this, std::move(controller));
+            engine_detail::set_world_context_work_callback(candidate->context(), [weak = std::weak_ptr(_loop_state)]() {
+                if (auto state = weak.lock()) engine_detail::wake_loop(state);
+            });
             if (!candidate->start()) {
                 _session_operation = SessionOperation::Idle;
                 return false;
@@ -835,6 +862,12 @@ namespace termin {
             tc_log(TC_LOG_ERROR, "[EngineCore] Refusing incomplete loop client; all callbacks are required");
             throw std::invalid_argument("EngineLoopClient requires all callbacks");
         }
+        const bool planned = bool(client.plan_work) || bool(client.wait_until) || bool(client.wake) ||
+                             bool(client.before_frame) || bool(client.after_frame) || bool(client.monotonic_time);
+        if (planned && (!client.plan_work || !client.wait_until || !client.wake)) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Incomplete planned loop contract");
+            throw std::invalid_argument("planned loop requires plan_work, wait_until and wake");
+        }
 
         std::lock_guard lock(_loop_state->mutex);
         if (_loop_state->running.load()) {
@@ -877,6 +910,7 @@ namespace termin {
 
     void EngineCore::stop() {
         _loop_state->running.store(false);
+        engine_detail::wake_loop(_loop_state);
     }
 
     bool EngineCore::is_running() const {
@@ -891,6 +925,7 @@ namespace termin {
             throw std::invalid_argument("target FPS must be zero (unlimited) or a positive finite value");
         }
         _target_fps.store(fps);
+        engine_detail::wake_loop(_loop_state);
     }
 
     bool EngineCore::tick(double dt) {
@@ -956,6 +991,85 @@ namespace termin {
         return should_render;
     }
 
+    void EngineCore::run_planned(const EngineLoopClient& client,
+                                 const std::shared_ptr<std::function<void()>>& frame_completion) {
+        const auto now_seconds = [&client]() {
+            return client.monotonic_time ? client.monotonic_time() :
+                std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        };
+        EngineHostFrameCadenceTracker cadence;
+        double last_frame = now_seconds();
+        double last_scene_update = last_frame;
+        double next_frame = last_frame;
+        double target_fps = _target_fps.load();
+        bool frame_clock_active = false;
+        bool scene_clock_active = false;
+        tc_log(TC_LOG_INFO, "[EngineCore] Starting event-driven main loop (FPS limit %.1f)", target_fps);
+
+        while (_loop_state->running.load()) {
+            {
+                engine_detail::EngineLoopPollScope poll_scope(*_loop_state);
+                client.poll_events();
+            }
+            if (!_loop_state->running.load() || !client.should_continue()) break;
+
+            const double now = now_seconds();
+            const auto plan = client.plan_work(now);
+            if (plan.next_deadline && !std::isfinite(*plan.next_deadline)) {
+                tc_log(TC_LOG_ERROR, "[EngineCore] Non-finite host work deadline");
+                throw std::invalid_argument("host work deadline must be finite or absent");
+            }
+            auto scene_work = scene_manager.work_state();
+            const bool runtime_pending = _runtime_session && _runtime_session->has_pending_work();
+            const bool scene_demand = scene_work.continuous_update || scene_work.pending_update ||
+                                      scene_work.render_requested || runtime_pending;
+            const bool frame_demand = plan.frame_requested || plan.continuous_update || scene_demand;
+            if (!scene_work.continuous_update) scene_clock_active = false;
+            const double configured_fps = _target_fps.load();
+            if (configured_fps != target_fps) {
+                target_fps = configured_fps;
+                next_frame = frame_clock_active && target_fps > 0.0 ? last_frame + 1.0 / target_fps : now;
+            }
+
+            if (frame_demand && (target_fps == 0.0 || now >= next_frame)) {
+                const double dt = frame_clock_active ? std::max(0.0, now - last_frame) : 0.0;
+                if (!frame_clock_active) cadence.reset();
+                {
+                    EngineHostFrameScope frame(cadence.observe(now * 1000.0, target_fps > 0.0 ? 1000.0 / target_fps : 0.0));
+                    if (client.before_frame) client.before_frame(dt);
+                    // Frontend camera/input can invalidate the scene during
+                    // before_frame. UI-only composition must not tick scenes.
+                    scene_work = scene_manager.work_state();
+                    _last_frame_rendered = false;
+                    if (scene_work.continuous_update || scene_work.pending_update || scene_work.render_requested ||
+                        (_runtime_session && _runtime_session->has_pending_work())) {
+                        const double scene_dt = scene_clock_active ? std::max(0.0, now - last_scene_update) : 0.0;
+                        _last_frame_rendered = tick_and_render(scene_dt);
+                        last_scene_update = now;
+                        scene_clock_active = scene_work.continuous_update;
+                    }
+                    if (client.after_frame) client.after_frame();
+                }
+                if (frame_completion) (*frame_completion)();
+                frame_clock_active = true;
+                last_frame = now;
+                next_frame = target_fps > 0.0 ? now + 1.0 / target_fps : now;
+                continue;
+            }
+
+            if (!frame_demand) {
+                frame_clock_active = false;
+                cadence.reset();
+            }
+            if (plan.immediate_work) continue;
+            auto deadline = plan.next_deadline;
+            if (frame_demand && (!deadline || next_frame < *deadline)) deadline = next_frame;
+            if (_loop_state->running.load()) client.wait_until(deadline);
+        }
+        _loop_state->running.store(false);
+        tc_log(TC_LOG_INFO, "[EngineCore] Event-driven main loop stopped");
+    }
+
     void EngineCore::run() {
         if (_shutdown) {
             tc_log(TC_LOG_ERROR, "[EngineCore] Cannot run after shutdown");
@@ -979,6 +1093,19 @@ namespace termin {
         {
             std::lock_guard lock(_frame_completion_state->mutex);
             frame_completion_callback = _frame_completion_state->callback;
+        }
+
+        if (loop_client.plan_work) {
+            try {
+                run_planned(loop_client, frame_completion_callback);
+            } catch (...) {
+                _loop_state->running.store(false);
+                tc_log(TC_LOG_ERROR, "[EngineCore] Event-driven loop failed");
+                loop_client.on_shutdown();
+                throw;
+            }
+            loop_client.on_shutdown();
+            return;
         }
 
         using clock = std::chrono::steady_clock;

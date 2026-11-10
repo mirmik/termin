@@ -183,3 +183,79 @@ def test_owner_close_releases_context_after_off_owner_close() -> None:
 
     assert value_ref() is None
     assert executor._console.locals == {}
+
+
+def test_wakeup_observes_published_requests_and_bounded_backlog() -> None:
+    executor = PythonScriptExecutor(lambda: {})
+    ready = threading.Condition()
+    notifications: list[bool] = []
+
+    def wake() -> None:
+        # This also proves notification does not hold the pending queue lock.
+        pending = executor.has_pending
+        with ready:
+            notifications.append(pending)
+            ready.notify_all()
+
+    executor.set_wakeup(wake)
+    results = []
+    workers = [threading.Thread(target=lambda: results.append(
+        executor.execute_script_from_any_thread("print('done')", timeout=5.0)
+    )) for _ in range(10)]
+    try:
+        for worker in workers:
+            worker.start()
+        with ready:
+            assert ready.wait_for(lambda: len(notifications) == 10, timeout=2.0)
+        assert all(notifications)
+        assert executor.process_pending() == 8
+        assert executor.has_pending
+        assert executor.process_pending() == 2
+        assert not executor.has_pending
+    finally:
+        executor.close()
+        for worker in workers:
+            worker.join(timeout=2.0)
+    assert all(not worker.is_alive() for worker in workers)
+    assert len(results) == 10
+    assert all(result.ok for result in results)
+
+
+def test_wakeup_failure_cancels_request_instead_of_hanging() -> None:
+    executor = PythonScriptExecutor(lambda: {})
+
+    def fail() -> None:
+        raise RuntimeError("notification unavailable")
+
+    executor.set_wakeup(fail)
+    results = []
+    worker = threading.Thread(target=lambda: results.append(
+        executor.execute_script_from_any_thread("print('never')", timeout=None)
+    ))
+    worker.start()
+    worker.join(timeout=2.0)
+    try:
+        assert not worker.is_alive()
+        assert results[0].error == "Failed to wake owner loop"
+        assert not executor.has_pending
+    finally:
+        executor.close()
+
+
+def test_install_wakeup_notifies_existing_work_and_close_detaches() -> None:
+    executor = PythonScriptExecutor(lambda: {})
+    queued = threading.Event()
+    executor.set_wakeup(queued.set)
+    worker = threading.Thread(target=lambda: executor.execute_script_from_any_thread(
+        "print('cancelled')", timeout=None
+    ))
+    worker.start()
+    assert queued.wait(timeout=2.0)
+    observed = []
+    executor.set_wakeup(lambda: observed.append(executor.has_pending))
+    assert observed == [True]
+    executor.close()
+    worker.join(timeout=2.0)
+    executor.set_wakeup(lambda: observed.append(False))
+    assert observed == [True]
+    assert not executor.has_pending

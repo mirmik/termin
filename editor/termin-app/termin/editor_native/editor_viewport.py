@@ -198,6 +198,13 @@ class NativeEditorViewport:
     def camera(self):
         return self.attachment.camera
 
+    @property
+    def needs_update(self) -> bool:
+        camera = self.camera
+        return bool(not self._closed and camera is not None and camera.enabled
+                    and camera.active_in_editor and camera.entity is not None
+                    and camera.entity.enabled and camera.transitioning)
+
     def update(self, dt: float) -> None:
         """Advance the editor-owned camera even when no frame is pending."""
         if self._closed:

@@ -72,7 +72,9 @@ namespace termin {
             _before_scene_destroy_guard(handle);
         }
         _scenes.erase(it);
+        tc_scene_set_work_callback(handle, nullptr, nullptr);
         tc_scene_free(handle);
+        notify_work_changed();
         return true;
     }
 
@@ -127,15 +129,23 @@ namespace termin {
             return false;
         }
         _scenes.emplace(key, SceneRecord{scene, {}});
+        tc_scene_set_work_callback(scene, [](void* owner) {
+            static_cast<SceneManager*>(owner)->notify_work_changed();
+        }, this);
+        notify_work_changed();
         return true;
     }
 
     bool SceneManager::unregister_scene(const SceneKey& key) {
-        if (_scenes.erase(key) == 0) {
+        const auto it = _scenes.find(key);
+        if (it == _scenes.end()) {
             tc_log(TC_LOG_ERROR, "[SceneManager] unregister_scene: scene '%s' (%s) not found",
                    key.identity.c_str(), role_name(key.role));
             return false;
         }
+        tc_scene_set_work_callback(it->second.handle, nullptr, nullptr);
+        _scenes.erase(it);
+        notify_work_changed();
         return true;
     }
 
@@ -349,6 +359,21 @@ namespace termin {
         return false;
     }
 
+    tc_scene_work_state SceneManager::work_state() const {
+        tc_scene_work_state result{};
+        result.render_requested = _render_requested;
+        for (const auto& [key, record] : _scenes) {
+            const auto state = tc_scene_get_work_state(record.handle);
+            result.pending_update |= state.pending_update;
+            result.continuous_update |= state.continuous_update;
+            result.render_requested |= state.render_requested;
+        }
+        return result;
+    }
+
+    void SceneManager::set_work_callback(std::function<void()> callback) { _work_changed = std::move(callback); }
+    void SceneManager::notify_work_changed() { if (_work_changed) _work_changed(); }
+
     bool SceneManager::tick(double dt) {
         const bool profile = tc_profiler_enabled();
         for (const auto& [key, record] : _scenes) {
@@ -371,7 +396,7 @@ namespace termin {
         return should_render;
     }
 
-    void SceneManager::request_render() { _render_requested = true; }
+    void SceneManager::request_render() { _render_requested = true; notify_work_changed(); }
     bool SceneManager::consume_render_request() {
         const bool requested = _render_requested;
         _render_requested = false;

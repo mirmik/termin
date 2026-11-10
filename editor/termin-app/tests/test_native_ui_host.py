@@ -52,6 +52,10 @@ class _WindowManagerTestDocument:
 
 
 class _WindowManagerTestContent:
+    @property
+    def render_ready(self):
+        return self.render_requested
+
     _next_window_id = 1
 
     def __init__(self, document=None, *, graphics=None, **options):
@@ -86,6 +90,12 @@ class _WindowManagerTestContent:
 
 
 class _NativeWindowManagerProbe:
+    def wake_handle(self):
+        return self
+
+    def wake(self):
+        pass
+
     def __init__(self):
         self._handles = {1}
         self._next_handle = 2

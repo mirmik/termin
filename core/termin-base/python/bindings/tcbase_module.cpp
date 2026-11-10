@@ -2,6 +2,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <stdexcept>
+#include <cstdio>
 #include <tcbase/input_enums.hpp>
 #include <tcbase/settings.h>
 #include <tcbase/tc_log.hpp>
@@ -16,6 +17,27 @@ void bind_profiler(nb::module_& m);
 
 static nb::callable g_py_callback;
 static nb::callable g_resource_loader_callback;
+static nb::callable g_capture_wakeup;
+
+static void py_capture_wakeup(void*) {
+    nb::gil_scoped_acquire acquire;
+    try {
+        g_capture_wakeup();
+    } catch (const std::exception& error) {
+        // The notification path cannot log through the queue it is waking.
+        fprintf(stderr, "[ERROR] Log capture wakeup failed: %s\n", error.what());
+        fflush(stderr);
+    }
+}
+
+static void clear_capture_wakeup() {
+    {
+        // An in-flight native producer may be waiting to acquire the GIL.
+        nb::gil_scoped_release release;
+        tc_log_capture_set_wakeup(nullptr, nullptr);
+    }
+    g_capture_wakeup = nb::callable();
+}
 
 static bool py_resource_loader_wrapper(const char* uuid, void* user_data) {
     (void)user_data;
@@ -120,7 +142,23 @@ static void bind_log(nb::module_& m) {
         nb::arg("capacity") = 2048,
         "Start or reset the bounded native log capture queue");
 
-    m.def("capture_stop", &tc_log_capture_stop, "Stop native log capture and discard queued records");
+    m.def("capture_stop", []() {
+        clear_capture_wakeup();
+        tc_log_capture_stop();
+    }, "Stop native log capture and discard queued records");
+
+    m.def("capture_pending", &tc_log_capture_pending,
+          "Return the number of queued capture records without consuming them");
+
+    m.def("capture_set_wakeup", [](nb::object callback) {
+        clear_capture_wakeup();
+        if (!callback.is_none()) {
+            g_capture_wakeup = nb::cast<nb::callable>(callback);
+            nb::gil_scoped_release release;
+            tc_log_capture_set_wakeup(py_capture_wakeup, nullptr);
+        }
+    }, nb::arg("callback").none(),
+       "Owner-thread install/remove of a capture wake notification; do not drain or log inside it");
 
     m.def(
         "capture_drain",

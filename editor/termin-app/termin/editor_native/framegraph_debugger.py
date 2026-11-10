@@ -28,6 +28,7 @@ class NativeFramegraphDebugger:
     request_scene_render: Callable[[], None]
     window: EditorWindowSlot | None = None
     _closed: bool = False
+    _presenting_snapshot: bool = False
 
     def show(self) -> bool:
         if self._closed:
@@ -48,14 +49,32 @@ class NativeFramegraphDebugger:
             self.view.deactivate()
             raise
         self.window = window
-        window.content.add_pre_render_callback(self.view.render_previews)
+        window.content.add_pre_render_callback(self.render_previews)
         self.request_render()
         return True
 
-    def update(self) -> bool:
+    @property
+    def needs_polling(self) -> bool:
+        """Remote transport has its own clock; local capture follows scene frames."""
+        return (not self._closed and self.window is not None and not self.window.closed
+                and self.view.using_remote)
+
+    def update(self, *, frame_completed: bool = True) -> bool:
         if self.window is None or self.window.closed:
             return False
-        return self.view.update()
+        self._presenting_snapshot = True
+        try:
+            return self.view.update(frame_completed)
+        finally:
+            self._presenting_snapshot = False
+
+    def render_previews(self, context) -> bool:
+        """Present a captured image without scheduling another scene capture."""
+        self._presenting_snapshot = True
+        try:
+            return self.view.render_previews(context)
+        finally:
+            self._presenting_snapshot = False
 
     def show_resource(self, resource_name: str) -> bool:
         if self.window is None or self.window.closed:
@@ -78,14 +97,17 @@ class NativeFramegraphDebugger:
         tc_ui_document_destroy(self.document)
 
     def request_render(self) -> None:
-        self.request_scene_render()
+        # Explicit controls may require a fresh scene capture. Projecting an
+        # existing capture into the debugger window must not feed back into it.
+        if not self._presenting_snapshot:
+            self.request_scene_render()
         if self.window is not None and not self.window.closed:
             self.window.request_render_update()
 
     def _on_window_closed(self) -> None:
         window = self.window
         if window is not None:
-            window.content.remove_pre_render_callback(self.view.render_previews)
+            window.content.remove_pre_render_callback(self.render_previews)
         self.window = None
         self.view.deactivate()
 

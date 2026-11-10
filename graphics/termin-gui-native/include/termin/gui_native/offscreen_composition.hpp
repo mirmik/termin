@@ -85,6 +85,8 @@ namespace termin::gui_native {
         std::vector<float> read_frame_rgba_float();
 
         void request_repaint();
+        void set_repaint_wakeup(std::function<void()> callback);
+        bool has_pending_input() const;
         bool repaint_requested() const;
         void request_close();
         bool should_close() const;

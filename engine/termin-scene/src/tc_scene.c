@@ -124,6 +124,9 @@ typedef struct tc_scene_slot {
     double time_scale;
     double accumulated_time;
     bool render_requested;
+    size_t update_requests;
+    tc_scene_work_callback work_callback;
+    void* work_userdata;
     tc_resource_map* type_heads;
     tc_value metadata; // Extensible metadata storage (dict per scene)
     const char* name;
@@ -631,6 +634,7 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
             tc_resource_map_add(g_pool->slots[idx].type_heads, type_name, c);
         }
     }
+    tc_scene_notify_work_changed(h);
 }
 
 void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
@@ -682,6 +686,7 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     }
 
     tc_component_on_removed(c);
+    tc_scene_notify_work_changed(h);
 }
 
 void tc_component_set_lifecycle_capabilities(tc_component* c,
@@ -705,6 +710,7 @@ void tc_component_set_lifecycle_capabilities(tc_component* c,
         &g_pool->slots[idx].fixed_update_list, c, has_fixed_update, TC_COMPONENT_LIFECYCLE_FIXED_UPDATE);
     list_set_lifecycle_membership(
         &g_pool->slots[idx].late_update_list, c, has_late_update, TC_COMPONENT_LIFECYCLE_LATE_UPDATE);
+    tc_scene_notify_work_changed(scene);
 }
 
 int tc_component_get_lifecycle_priority(const tc_component* c, tc_component_lifecycle_stage stage) {
@@ -1071,10 +1077,63 @@ void tc_scene_editor_update(tc_scene_handle h, double dt) {
         tc_profiler_end_section();
 }
 
+void tc_scene_set_work_callback(tc_scene_handle h, tc_scene_work_callback callback, void* userdata) {
+    if (!handle_alive(h)) return;
+    g_pool->slots[h.index].work_callback = callback;
+    g_pool->slots[h.index].work_userdata = userdata;
+}
+
+void tc_scene_notify_work_changed(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    tc_scene_slot* slot = &g_pool->slots[h.index];
+    if (slot->work_callback) slot->work_callback(slot->work_userdata);
+}
+
+void tc_scene_acquire_update_request(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    g_pool->slots[h.index].update_requests++;
+    tc_scene_notify_work_changed(h);
+}
+
+void tc_scene_release_update_request(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    if (g_pool->slots[h.index].update_requests == 0) {
+        tc_log_error("[tc_scene] unbalanced update request release");
+        return;
+    }
+    g_pool->slots[h.index].update_requests--;
+    tc_scene_notify_work_changed(h);
+}
+
+tc_scene_work_state tc_scene_get_work_state(tc_scene_handle h) {
+    tc_scene_work_state result = {0};
+    if (!handle_alive(h)) return result;
+    tc_scene_slot* slot = &g_pool->slots[h.index];
+    result.render_requested = slot->render_requested;
+    if (slot->mode == TC_SCENE_MODE_INACTIVE) return result;
+    const bool editor = slot->mode == TC_SCENE_MODE_STOP;
+    const size_t mode_index = editor ? 1 : 0;
+    result.pending_update = slot->pending_start_revision != slot->pending_start_processed_revision[mode_index];
+    result.continuous_update = slot->mode == TC_SCENE_MODE_PLAY || slot->update_requests != 0;
+    ComponentList* lists[] = {&slot->update_list, &slot->fixed_update_list, &slot->late_update_list};
+    for (size_t j = 0; j < 3 && !result.continuous_update; ++j) {
+        for (size_t i = 0; i < lists[j]->count; ++i) {
+            tc_component* c = lists[j]->items[i];
+            if (c->enabled && (!editor || c->active_in_editor) && component_entity_enabled(c)) {
+                result.continuous_update = true;
+                break;
+            }
+        }
+    }
+    result.continuous_update = result.continuous_update || tc_scene_ext_requires_continuous_update(h);
+    return result;
+}
+
 void tc_scene_request_render(tc_scene_handle h) {
     if (!handle_alive(h))
         return;
     g_pool->slots[h.index].render_requested = true;
+    tc_scene_notify_work_changed(h);
 }
 
 bool tc_scene_consume_render_request(tc_scene_handle h) {
@@ -1445,6 +1504,7 @@ void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode) {
 
     tc_scene_mode old_mode = g_pool->slots[h.index].mode;
     g_pool->slots[h.index].mode = mode;
+    tc_scene_notify_work_changed(h);
 
     if (mode == TC_SCENE_MODE_INACTIVE && old_mode != TC_SCENE_MODE_INACTIVE) {
         tc_scene_notify_scene_inactive(h);
@@ -1458,6 +1518,7 @@ void tc_scene_mark_component_startability_changed(tc_scene_handle h) {
         return;
     tc_scene_slot* slot = &g_pool->slots[h.index];
     slot->pending_start_revision++;
+    tc_scene_notify_work_changed(h);
     if (slot->pending_start_revision == 0) {
         slot->pending_start_revision = 1;
         slot->pending_start_processed_revision[0] = 0;

@@ -52,7 +52,7 @@ namespace termin {
 
         bool activate();
         void deactivate();
-        bool update();
+        bool update(bool frame_completed = true);
         bool show_resource(const std::string& resource);
         bool connect_remote(std::uint16_t port, std::string authentication_token);
         void disconnect_remote();
@@ -180,6 +180,7 @@ namespace termin {
         Preview main_preview_;
         Preview depth_preview_;
         std::vector<size_t> pass_indices_;
+        std::uint64_t presented_revision_ = 0;
         bool updating_ = false;
         bool active_ = false;
         bool closed_ = false;

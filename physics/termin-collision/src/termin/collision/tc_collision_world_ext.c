@@ -63,6 +63,14 @@ static void collision_world_ext_on_scene_update(void* ext, double dt, void* type
     tc_collision_world_update_all(inst->world);
 }
 
+static bool collision_world_requires_continuous_update(void* ext, void* type_userdata) {
+    (void)ext;
+    (void)type_userdata;
+    // Transform synchronization has no clock of its own. It runs on every
+    // requested scene update, but does not keep an unchanged editor scene awake.
+    return false;
+}
+
 void tc_collision_world_extension_init(void) {
     if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD))
         return;
@@ -71,6 +79,7 @@ void tc_collision_world_extension_init(void) {
         .create = collision_world_ext_create,
         .destroy = collision_world_ext_destroy,
         .on_scene_update = collision_world_ext_on_scene_update,
+        .requires_continuous_update = collision_world_requires_continuous_update,
     };
 
     if (!tc_scene_ext_register(

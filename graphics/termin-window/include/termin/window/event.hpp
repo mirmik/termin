@@ -24,6 +24,7 @@ namespace termin {
         KeyReleased,
         TextInput,
         FileDropped,
+        PresentationChanged,
     };
 
     enum class WindowKey : uint16_t {

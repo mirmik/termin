@@ -14,6 +14,7 @@
 #include <termin/window/window_manager.hpp>
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx2/render_context.hpp>
+#include <nanobind/stl/shared_ptr.h>
 
 namespace {
 
@@ -185,6 +186,8 @@ void bind_gui_native_window_adapter(nb::module_& m) {
              })
         .def("render_frame", &GuiWindowAdapter::render_and_present)
         .def("request_repaint", &GuiWindowAdapter::request_repaint)
+        .def("set_repaint_wake", &GuiWindowAdapter::set_repaint_wake, nb::arg("wake").none())
+        .def_prop_ro("render_ready", &GuiWindowAdapter::render_ready)
         .def_prop_ro("repaint_requested", &GuiWindowAdapter::repaint_requested)
         .def_prop_ro("should_close", &GuiWindowAdapter::should_close)
         .def("wait_idle", &GuiWindowAdapter::wait_idle)

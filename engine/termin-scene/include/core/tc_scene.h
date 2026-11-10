@@ -100,6 +100,21 @@ TC_API void tc_scene_update(tc_scene_handle h, double dt);
 // Editor update - only updates components with active_in_editor=true
 TC_API void tc_scene_editor_update(tc_scene_handle h, double dt);
 
+// Non-consuming scheduler state. Scene mutation and these queries are confined
+// to the scene owner thread; the callback may only notify the host event loop.
+typedef struct tc_scene_work_state {
+    bool pending_update;
+    bool continuous_update;
+    bool render_requested;
+} tc_scene_work_state;
+typedef void (*tc_scene_work_callback)(void* userdata);
+TC_API tc_scene_work_state tc_scene_get_work_state(tc_scene_handle h);
+TC_API void tc_scene_set_work_callback(tc_scene_handle h, tc_scene_work_callback callback, void* userdata);
+TC_API void tc_scene_notify_work_changed(tc_scene_handle h);
+// Explicit continuous activity, paired by an owner (including C++ RAII owners).
+TC_API void tc_scene_acquire_update_request(tc_scene_handle h);
+TC_API void tc_scene_release_update_request(tc_scene_handle h);
+
 // Scene-local render invalidation. Mutations request a frame on their owning
 // scene; a host SceneManager consumes the flag when scheduling that scene.
 TC_API void tc_scene_request_render(tc_scene_handle h);

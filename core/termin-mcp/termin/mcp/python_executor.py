@@ -54,6 +54,21 @@ class PythonScriptExecutor:
         self._pending_lock = threading.Lock()
         self._closed = False
         self._context_released = False
+        self._wakeup: Callable[[], None] | None = None
+
+    def set_wakeup(self, callback: Callable[[], None] | None) -> None:
+        """Install a lifetime-safe notification; it must not execute queued work."""
+        with self._pending_lock:
+            self._wakeup = None if self._closed else callback
+            notify = self._wakeup if self._pending else None
+        if notify is not None:
+            notify()
+
+    @property
+    def has_pending(self) -> bool:
+        """Non-consuming readiness, including backlog left by a bounded drain."""
+        with self._pending_lock:
+            return bool(self._pending)
 
     def execute_repl_line(self, text: str) -> PythonExecutionResult:
         with self._pending_lock:
@@ -134,6 +149,21 @@ class PythonScriptExecutor:
                     error="Python executor is closed",
                 )
             self._pending.append(request)
+            notify = self._wakeup
+
+        if notify is not None:
+            try:
+                notify()
+            except Exception:
+                log.error(f"[{self._log_prefix}] failed to wake owner loop", exc_info=True)
+                with self._pending_lock:
+                    if request.state == "queued":
+                        self._pending.remove(request)
+                        request.state = "cancelled"
+                        request.result = PythonExecutionResult(
+                            ok=False, output="", error="Failed to wake owner loop"
+                        )
+                        request.done.set()
 
         if request.done.wait(timeout=timeout):
             return self._request_result(request)
@@ -193,6 +223,7 @@ class PythonScriptExecutor:
         with self._pending_lock:
             if not self._closed:
                 self._closed = True
+                self._wakeup = None
                 while self._pending:
                     request = self._pending.popleft()
                     if request.state != "queued":

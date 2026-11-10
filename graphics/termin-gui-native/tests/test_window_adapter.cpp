@@ -125,6 +125,12 @@ namespace {
         bool should_close_ = false;
     };
 
+    class CountingWake final : public termin::WindowEventWake {
+    public:
+        int count = 0;
+        void wake() override { ++count; }
+    };
+
 } // namespace
 
 int main() {
@@ -303,6 +309,32 @@ int main() {
                     non_background_pixels,
                     text_pixels);
 
+        const auto repaint_wake = std::make_shared<CountingWake>();
+        adapter.set_repaint_wake(repaint_wake);
+        const int initial_wakes = repaint_wake->count;
+        adapter.request_repaint();
+        adapter.request_repaint();
+        if (repaint_wake->count != initial_wakes + 1 || !adapter.render_ready()) {
+            std::fprintf(stderr, "repaint did not coalesce/wake the host\n");
+            return 1;
+        }
+        window.set_presentation({0, 0}, 1.0f);
+        if (adapter.render_ready() || adapter.render_and_present() || !adapter.repaint_requested()) {
+            std::fprintf(stderr, "unpresentable dirty window must remain dirty without runnable render work\n");
+            return 1;
+        }
+        window.set_presentation({640, 400}, 1.0f);
+        adapter.renderer().set_before_frame_callback([&](tgfx::RenderContext2&) { adapter.request_repaint(); });
+        if (!adapter.render_and_present() || !adapter.repaint_requested()) {
+            std::fprintf(stderr, "repaint during render was lost\n");
+            return 1;
+        }
+        adapter.renderer().set_before_frame_callback({});
+        if (!adapter.render_and_present() || adapter.render_ready()) {
+            std::fprintf(stderr, "restored window did not consume its final repaint\n");
+            return 1;
+        }
+        adapter.set_repaint_wake({});
         const uint64_t initial_revision = document.presentation_revision();
         window.set_presentation({480, 300}, 1.5f);
         termin::WindowEvent scale_changed;

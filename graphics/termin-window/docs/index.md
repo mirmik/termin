@@ -40,6 +40,28 @@ SDL's process-global queue is routed through per-window pending queues, so
 polling one `BackendWindow` does not consume events addressed to another and a
 global quit request reaches every registered window.
 
+`WindowManager.wait_events(timeout=None)` waits on the video/owner thread until
+an event, a wake notification, or a relative timeout in seconds. It never
+dispatches application callbacks: the first event returned by SDL's wait is
+routed and retained for `pump_events()` / `take_events()`. Already queued
+portable events prevent sleeping. Native callers can use the same operation
+on `WindowedGraphicsSession` before or without creating a manager.
+
+Background producers retain `manager.wake_handle()` and call its `wake()` after
+publishing work. The handle coalesces notifications and survives session
+teardown (subsequent notifications are no-ops). The pending notification and
+queued SDL event close the check-to-wait race; application code must not clear
+notifications independently. Sending a rejected wake event logs and raises an
+error. Python waits release the GIL. The caller must still drain all ready work
+or report remaining backlog before waiting again.
+
+Presentation readiness is separate from repaint demand. `BackendWindow.presentable`
+is false for closed, minimized, hidden, or zero-size native windows. SDL exposes
+restore/minimize/show/hide/expose as `PresentationChanged`. GUI window adapters
+offer `render_ready` (dirty and presentable) and `set_repaint_wake(handle)`;
+their dirty state survives unavailable presentation. Repaint invalidation during
+composition schedules another frame instead of being cleared at frame end.
+
 On Linux with SDL 2.0.22 or newer, a nonempty `WAYLAND_DISPLAY` makes native
 Wayland the preferred video driver, followed by X11 if Wayland cannot
 initialize. This avoids routing Wayland sessions through XWayland by SDL2's

@@ -82,12 +82,14 @@ namespace termin::gui_native {
         int target_height = 0;
         size_t rendered_frames = 0;
         std::atomic<bool> repaint_requested{true};
+        std::mutex repaint_wakeup_mutex;
+        std::function<void()> repaint_wakeup;
         UnhandledKeyHandler unhandled_key_handler;
         std::function<void(tgfx::RenderContext2&)> before_frame;
         std::vector<tc_widget_handle> color_pickers;
         std::shared_ptr<DocumentRendererLeaseState> texture_leases;
         std::string clipboard_buffer;
-        bool closed = false;
+        std::atomic<bool> closed{false};
 
         Impl(DocumentRenderer& renderer_facade,
              tgfx::GraphicsHost& graphics_ref,
@@ -212,6 +214,10 @@ namespace termin::gui_native {
                 renderer_error("GraphicsHost must outlive DocumentRenderer");
             }
             unhandled_key_handler = {};
+            {
+                std::lock_guard lock(repaint_wakeup_mutex);
+                repaint_wakeup = {};
+            }
             before_frame = {};
             color_pickers.clear();
             try {
@@ -483,8 +489,27 @@ namespace termin::gui_native {
 
     void DocumentRenderer::request_repaint() {
         if (impl_ && !impl_->closed) {
-            impl_->repaint_requested.store(true, std::memory_order_release);
+            if (!impl_->repaint_requested.exchange(true, std::memory_order_acq_rel)) {
+                std::function<void()> wake;
+                {
+                    std::lock_guard lock(impl_->repaint_wakeup_mutex);
+                    wake = impl_->repaint_wakeup;
+                }
+                if (wake)
+                    wake();
+            }
         }
+    }
+
+    void DocumentRenderer::set_repaint_wakeup(std::function<void()> callback) {
+        impl_->require_open("set_repaint_wakeup");
+        const auto wake = callback;
+        {
+            std::lock_guard lock(impl_->repaint_wakeup_mutex);
+            impl_->repaint_wakeup = std::move(callback);
+        }
+        if (wake && repaint_requested())
+            wake();
     }
 
     bool DocumentRenderer::repaint_requested() const {

@@ -359,6 +359,7 @@ namespace termin::gui_native {
         std::unique_ptr<DocumentRenderer> renderer;
         std::mutex input_mutex;
         std::deque<QueuedInput> input_queue;
+        std::function<void()> work_wakeup;
         std::atomic<bool> accepting_input{true};
         std::atomic<bool> close_requested{false};
         bool closed = false;
@@ -398,6 +399,19 @@ namespace termin::gui_native {
             }
         }
 
+        void enqueue(QueuedInput input) {
+            std::function<void()> wake;
+            {
+                const std::lock_guard<std::mutex> lock(input_mutex);
+                if (!accepting_input.load(std::memory_order_acquire))
+                    offscreen_error("input enqueue called after close");
+                input_queue.push_back(std::move(input));
+                wake = work_wakeup;
+            }
+            if (wake)
+                wake();
+        }
+
         void close() {
             if (closed)
                 return;
@@ -405,6 +419,7 @@ namespace termin::gui_native {
             {
                 const std::lock_guard<std::mutex> lock(input_mutex);
                 input_queue.clear();
+                work_wakeup = {};
             }
             if (renderer) {
                 renderer->close();
@@ -472,33 +487,21 @@ namespace termin::gui_native {
         if (!impl_ || !impl_->accepting_input.load(std::memory_order_acquire)) {
             offscreen_error("push_pointer called after close");
         }
-        const std::lock_guard<std::mutex> lock(impl_->input_mutex);
-        if (!impl_->accepting_input.load(std::memory_order_relaxed)) {
-            offscreen_error("push_pointer raced with close");
-        }
-        impl_->input_queue.push_back(PointerInput{event});
+        impl_->enqueue(PointerInput{event});
     }
 
     void OffscreenGuiComposition::push_key(tc_ui_key_event event) {
         if (!impl_ || !impl_->accepting_input.load(std::memory_order_acquire)) {
             offscreen_error("push_key called after close");
         }
-        const std::lock_guard<std::mutex> lock(impl_->input_mutex);
-        if (!impl_->accepting_input.load(std::memory_order_relaxed)) {
-            offscreen_error("push_key raced with close");
-        }
-        impl_->input_queue.push_back(KeyInput{event});
+        impl_->enqueue(KeyInput{event});
     }
 
     void OffscreenGuiComposition::push_text(std::string utf8) {
         if (!impl_ || !impl_->accepting_input.load(std::memory_order_acquire)) {
             offscreen_error("push_text called after close");
         }
-        const std::lock_guard<std::mutex> lock(impl_->input_mutex);
-        if (!impl_->accepting_input.load(std::memory_order_relaxed)) {
-            offscreen_error("push_text raced with close");
-        }
-        impl_->input_queue.push_back(TextInput{std::move(utf8)});
+        impl_->enqueue(TextInput{std::move(utf8)});
     }
 
     size_t OffscreenGuiComposition::pump_input() {
@@ -585,12 +588,35 @@ namespace termin::gui_native {
     void OffscreenGuiComposition::request_repaint() {
         renderer().request_repaint();
     }
+    void OffscreenGuiComposition::set_repaint_wakeup(std::function<void()> callback) {
+        impl_->require_open("set_repaint_wakeup");
+        {
+            const std::lock_guard<std::mutex> lock(impl_->input_mutex);
+            impl_->work_wakeup = callback;
+        }
+        renderer().set_repaint_wakeup(callback);
+        if (callback && has_pending_input())
+            callback();
+    }
+    bool OffscreenGuiComposition::has_pending_input() const {
+        impl_->require_open("has_pending_input");
+        const std::lock_guard<std::mutex> lock(impl_->input_mutex);
+        return !impl_->input_queue.empty();
+    }
     bool OffscreenGuiComposition::repaint_requested() const {
         return is_open() && impl_->renderer->repaint_requested();
     }
     void OffscreenGuiComposition::request_close() {
-        if (impl_)
+        if (impl_) {
             impl_->close_requested.store(true, std::memory_order_release);
+            std::function<void()> wake;
+            {
+                const std::lock_guard<std::mutex> lock(impl_->input_mutex);
+                wake = impl_->work_wakeup;
+            }
+            if (wake)
+                wake();
+        }
     }
     bool OffscreenGuiComposition::should_close() const {
         return !is_open() || impl_->close_requested.load(std::memory_order_acquire);

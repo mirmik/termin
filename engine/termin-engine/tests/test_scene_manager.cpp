@@ -12,6 +12,31 @@ namespace {
     }
 }
 
+TEST_CASE("SceneManager aggregates non-consuming work and scopes explicit update requests") {
+    termin::SceneManager manager;
+    const auto scene = manager.create_scene(termin::SceneKey("work", termin::SceneRole::Authoring));
+    tc_scene_set_mode(scene, TC_SCENE_MODE_STOP);
+    int wakes = 0;
+    manager.set_work_callback([&]() { ++wakes; });
+    CHECK_FALSE(manager.work_state().continuous_update);
+    {
+        termin::SceneUpdateRequest request(scene);
+        CHECK(manager.work_state().continuous_update);
+        termin::SceneUpdateRequest transferred(std::move(request));
+        CHECK(manager.work_state().continuous_update);
+    }
+    CHECK_FALSE(manager.work_state().continuous_update);
+    manager.request_render();
+    CHECK(manager.work_state().render_requested);
+    CHECK(manager.work_state().render_requested);
+    CHECK(manager.consume_render_request());
+    CHECK_FALSE(manager.work_state().render_requested);
+    CHECK(wakes >= 3);
+    termin::SceneUpdateRequest request(scene);
+    manager.close_all_scenes();
+    request.reset(); // owner may outlive the scene
+}
+
 TEST_CASE("SceneManager owns an atomic normalized entity classification registry") {
     termin::SceneManager manager;
     auto layers = empty_classification_names();

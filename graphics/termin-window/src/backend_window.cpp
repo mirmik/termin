@@ -14,6 +14,16 @@ extern "C" {
 
 namespace termin {
 
+    void BackendWindowSystem::wait_events(std::optional<double>) {
+        tc_log_error("[BackendWindowSystem] event waiting is not implemented by this host");
+        throw std::logic_error("BackendWindowSystem does not support event waiting");
+    }
+
+    std::shared_ptr<WindowEventWake> BackendWindowSystem::wake_handle() {
+        tc_log_error("[BackendWindowSystem] event wake is not implemented by this host");
+        throw std::logic_error("BackendWindowSystem does not support event wake");
+    }
+
     void BackendWindow::poll_events() {
         WindowEvent event;
         while (poll_event(event)) {
@@ -87,6 +97,18 @@ namespace termin {
             throw std::logic_error("WindowedGraphicsSession already has an active WindowManager");
         }
         ++active_window_managers_;
+    }
+
+    void WindowedGraphicsSession::wait_events(std::optional<double> timeout) {
+        if (closed_)
+            throw std::logic_error("WindowedGraphicsSession::wait_events called after close");
+        windows_->wait_events(timeout);
+    }
+
+    std::shared_ptr<WindowEventWake> WindowedGraphicsSession::wake_handle() {
+        if (closed_)
+            throw std::logic_error("WindowedGraphicsSession::wake_handle called after close");
+        return windows_->wake_handle();
     }
 
     void WindowedGraphicsSession::detach_window_manager() noexcept {

@@ -22,6 +22,23 @@ extern "C" {
 
 namespace termin {
 
+    // Owner-scoped continuous activity. Safe to release after scene destruction.
+    class TERMIN_ENGINE_API SceneUpdateRequest {
+    public:
+        explicit SceneUpdateRequest(tc_scene_handle scene) : _scene(scene) { tc_scene_acquire_update_request(_scene); }
+        ~SceneUpdateRequest() { reset(); }
+        SceneUpdateRequest(const SceneUpdateRequest&) = delete;
+        SceneUpdateRequest& operator=(const SceneUpdateRequest&) = delete;
+        SceneUpdateRequest(SceneUpdateRequest&& other) noexcept
+            : _scene(std::exchange(other._scene, TC_SCENE_HANDLE_INVALID)) {}
+        void reset() noexcept {
+            if (tc_scene_alive(_scene)) tc_scene_release_update_request(_scene);
+            _scene = TC_SCENE_HANDLE_INVALID;
+        }
+    private:
+        tc_scene_handle _scene;
+    };
+
     enum class SceneRole : std::uint8_t { Authoring, Runtime };
 
     struct TERMIN_ENGINE_API SceneKey {
@@ -68,6 +85,7 @@ namespace termin {
         SceneElevationCallback _scene_elevator;
         std::unordered_set<SceneKey, SceneKeyHash> _elevating_scenes;
         EntityClassificationRegistry _entity_classification;
+        std::function<void()> _work_changed;
 
     public:
         SceneManager();
@@ -113,6 +131,9 @@ namespace termin {
         bool set_mode(const SceneKey& key, tc_scene_mode mode);
         bool set_mode(tc_scene_handle scene, tc_scene_mode mode);
         bool has_play_scenes() const;
+        tc_scene_work_state work_state() const;
+        void set_work_callback(std::function<void()> callback);
+        void notify_work_changed();
 
         virtual bool tick(double dt);
         void request_render();

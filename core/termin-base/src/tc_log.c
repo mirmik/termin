@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <tcbase/tc_log.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sched.h>
+#endif
 
 static tc_log_callback g_callback = NULL;
 // NEVER change this value. If you need to silence logs, remove the tc_log_* calls.
@@ -19,6 +24,9 @@ typedef struct {
 
 static tc_log_capture_queue g_capture = {0};
 static atomic_flag g_capture_lock = ATOMIC_FLAG_INIT;
+static tc_log_capture_wakeup g_capture_wakeup = NULL;
+static void* g_capture_wakeup_data = NULL;
+static atomic_uint g_capture_notifying = 0;
 
 static const char* const level_names[] = {"DEBUG", "INFO", "WARN", "ERROR"};
 
@@ -42,6 +50,7 @@ static void capture_record(tc_log_level level, const char* message) {
         return;
     }
 
+    const int was_empty = g_capture.count == 0;
     size_t write_index;
     if (g_capture.count == g_capture.capacity) {
         write_index = g_capture.head;
@@ -55,7 +64,51 @@ static void capture_record(tc_log_level level, const char* message) {
     tc_log_record* record = &g_capture.records[write_index];
     record->level = level;
     snprintf(record->message, sizeof(record->message), "%s", message ? message : "");
+    tc_log_capture_wakeup notify = was_empty ? g_capture_wakeup : NULL;
+    void* notify_data = g_capture_wakeup_data;
+    if (notify != NULL) {
+        atomic_fetch_add_explicit(&g_capture_notifying, 1, memory_order_relaxed);
+    }
     capture_unlock();
+    if (notify != NULL) {
+        notify(notify_data);
+        atomic_fetch_sub_explicit(&g_capture_notifying, 1, memory_order_release);
+    }
+}
+
+void tc_log_capture_set_wakeup(tc_log_capture_wakeup callback, void* user_data) {
+    capture_lock();
+    g_capture_wakeup = NULL;
+    g_capture_wakeup_data = NULL;
+    capture_unlock();
+    // No new callback can start after unsubscription. Yield rather than hold
+    // the queue lock while a producer finishes its short wake notification.
+    while (atomic_load_explicit(&g_capture_notifying, memory_order_acquire) != 0) {
+#ifdef _WIN32
+        Sleep(0);
+#else
+        sched_yield();
+#endif
+    }
+    capture_lock();
+    g_capture_wakeup = callback;
+    g_capture_wakeup_data = user_data;
+    const int pending = callback != NULL && g_capture.count != 0;
+    if (pending) {
+        atomic_fetch_add_explicit(&g_capture_notifying, 1, memory_order_relaxed);
+    }
+    capture_unlock();
+    if (pending) {
+        callback(user_data);
+        atomic_fetch_sub_explicit(&g_capture_notifying, 1, memory_order_release);
+    }
+}
+
+size_t tc_log_capture_pending(void) {
+    capture_lock();
+    const size_t count = g_capture.count;
+    capture_unlock();
+    return count;
 }
 
 void tc_log_set_callback(tc_log_callback callback) {
@@ -90,6 +143,7 @@ int tc_log_capture_start(size_t capacity) {
 }
 
 void tc_log_capture_stop(void) {
+    tc_log_capture_set_wakeup(NULL, NULL);
     capture_lock();
     tc_log_record* previous_records = g_capture.records;
     g_capture.records = NULL;

@@ -50,6 +50,11 @@ class NativeProfilerPanel:
     known_node_ids: set[str] = field(default_factory=set)
     last_presentation_time: float | None = None
 
+    @property
+    def needs_polling(self) -> bool:
+        """Local samples are projected after real frames, never by an idle timer."""
+        return False
+
     def set_visible(self, visible: bool) -> None:
         visible = bool(visible)
         if visible and not self.root.visible:

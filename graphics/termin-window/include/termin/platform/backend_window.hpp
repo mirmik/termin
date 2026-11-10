@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -23,6 +24,14 @@ namespace termin {
     class BackendWindow;
     class WindowManager;
     using BackendWindowPtr = std::unique_ptr<BackendWindow>;
+
+    // A notification endpoint may outlive its window system. wake() is safe
+    // from producer threads; it never accesses a window or application state.
+    class TERMIN_WINDOW_API WindowEventWake {
+    public:
+        virtual ~WindowEventWake() = default;
+        virtual void wake() = 0;
+    };
 
     enum class WindowCursor {
         Default,
@@ -78,6 +87,10 @@ namespace termin {
         // presentation-local state and may change when the window moves between
         // displays. Hosts without a platform scale source return 1.0 explicitly.
         virtual float content_scale() const = 0;
+        virtual bool presentable() const {
+            const auto [width, height] = framebuffer_size();
+            return width > 0 && height > 0 && !should_close();
+        }
         // Presents display-referred linear color. The physical window sink
         // owns transfer encoding and final target-precision quantization.
         virtual void present(tgfx::TextureHandle color_tex) = 0;
@@ -109,6 +122,10 @@ namespace termin {
         virtual std::unique_ptr<tgfx::GraphicsHost> create_graphics_host() = 0;
         virtual BackendWindowPtr create_window(tgfx::GraphicsHost& graphics, const WindowConfig& config) = 0;
         virtual size_t live_window_count() const = 0;
+        // Owner/video thread only. Null timeout waits indefinitely. Events are
+        // retained for normal polling; timeout uses seconds, not clock epochs.
+        virtual void wait_events(std::optional<double> timeout);
+        virtual std::shared_ptr<WindowEventWake> wake_handle();
         // Closes the canonical host first, then platform state. This ordering is
         // mandatory for OpenGL, whose device teardown needs the SDL GL context.
         virtual void close(tgfx::GraphicsHost& graphics) = 0;
@@ -144,6 +161,8 @@ namespace termin {
         tgfx::GraphicsHost& graphics();
         const tgfx::GraphicsHost& graphics() const;
         BackendWindowPtr create_window(const WindowConfig& config);
+        void wait_events(std::optional<double> timeout = std::nullopt);
+        std::shared_ptr<WindowEventWake> wake_handle();
         bool is_closed() const noexcept {
             return closed_;
         }

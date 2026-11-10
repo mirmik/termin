@@ -222,6 +222,14 @@ if(TERMIN_BUILD_TESTS)
     )
     target_link_libraries(termin_base_log_test PRIVATE termin_base)
     add_test(NAME termin_base_log_test COMMAND termin_base_log_test)
+
+    add_executable(termin_base_log_wakeup_test tests/test_log_wakeup.cpp)
+    target_include_directories(termin_base_log_wakeup_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    find_package(Threads REQUIRED)
+    target_link_libraries(termin_base_log_wakeup_test PRIVATE termin_base Threads::Threads)
+    add_test(NAME termin_base_log_wakeup_test COMMAND termin_base_log_wakeup_test)
 endif()
 
 # Install

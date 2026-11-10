@@ -37,6 +37,7 @@ class FakeNativeController:
         self.section_selections = []
         self.remote_connections = []
         self.remote_disconnects = 0
+        self.using_remote_source = False
 
     def start_capture(self) -> None:
         self.capturing = True
@@ -160,6 +161,21 @@ def test_native_frame_profiler_window_lifecycle_controls_native_capture():
     assert not controller.capturing
     profiler.close()
     assert controller.closed
+
+
+def test_only_open_remote_frame_profiler_requests_polling():
+    controller = FakeNativeController()
+    profiler = build_native_frame_profiler(FakeWindowManager(), controller)
+    try:
+        assert not profiler.needs_polling
+        profiler.show()
+        assert not profiler.needs_polling
+        controller.using_remote_source = True
+        assert profiler.needs_polling
+        profiler.dismiss()
+        assert not profiler.needs_polling
+    finally:
+        profiler.close()
 
 
 def test_native_frame_profiler_clear_only_delegates_to_native_controller():

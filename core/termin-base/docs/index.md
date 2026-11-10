@@ -184,3 +184,20 @@ stderr и platform callback остаются независимыми sinks. П�
 История ограничена кольцевым буфером. Для последовательного потребления следует
 использовать `tc_profiler_history_after` / `Profiler.history_after`: API исключает
 открытый кадр и явно возвращает `dropped_count`, если cursor отстал от буфера.
+## Capture notifications
+
+Native log capture exposes `tc_log_capture_pending()` for non-consuming queue
+readiness and `tc_log_capture_set_wakeup(callback, user_data)` for an optional
+empty-to-nonempty notification. Python exposes the same operations as
+`log.capture_pending()` and `log.capture_set_wakeup(callback_or_none)`.
+
+Notifications run on the producer thread after publishing the record, outside
+the queue lock. The callback must only signal a lifetime-safe wake handle; it
+must not render, drain records, log, or change the subscription. Installing a
+callback while records are queued also notifies. A bounded drain can leave
+work behind, so schedulers must inspect pending records before waiting.
+
+Install/remove on the capture owner's thread. Unsubscription waits for active
+callbacks to finish before returning; the Python binding releases the GIL
+while waiting. `capture_stop()` unsubscribes before discarding records. This
+notification is separate from the existing log interception callback.

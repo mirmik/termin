@@ -3,7 +3,33 @@ import weakref
 
 import pytest
 
-from termin.engine import EngineCore, EngineLoopClient
+from termin.engine import EngineCore, EngineLoopClient, EngineLoopPlan
+
+
+def test_planned_python_loop_services_idle_without_frames() -> None:
+    engine = EngineCore()
+    events = []
+
+    def wait(deadline):
+        events.append(("wait", deadline))
+        engine.stop()
+
+    client = EngineLoopClient(
+        poll_events=lambda: events.append(("poll", None)),
+        should_continue=lambda: True,
+        on_shutdown=lambda: events.append(("shutdown", None)),
+        plan_work=lambda now: EngineLoopPlan(),
+        wait_until=wait,
+        wake=lambda: events.append(("wake", None)),
+        before_frame=lambda dt: events.append(("frame", dt)),
+        after_frame=lambda: events.append(("present", None)),
+        monotonic_time=lambda: 10.0,
+    )
+    connection = engine.attach_loop_client(client)
+    engine.run()
+    assert events == [("poll", None), ("wait", None), ("wake", None), ("shutdown", None)]
+    assert not engine.last_frame_rendered
+    connection.detach()
 
 
 def test_python_engine_requires_an_attached_loop_client() -> None:

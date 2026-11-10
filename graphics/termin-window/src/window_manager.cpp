@@ -231,6 +231,26 @@ namespace termin {
         impl_->open = false;
     }
 
+    bool WindowManager::has_pending_events() const {
+        impl_->require_open("has_pending_events");
+        for (const auto& slot : impl_->slots) {
+            if (!slot.pending_events.empty())
+                return true;
+        }
+        return false;
+    }
+
+    void WindowManager::wait_events(std::optional<double> timeout) {
+        impl_->require_open("wait_events");
+        if (!has_pending_events())
+            impl_->session->wait_events(timeout);
+    }
+
+    std::shared_ptr<WindowEventWake> WindowManager::wake_handle() {
+        impl_->require_open("wake_handle");
+        return impl_->session->wake_handle();
+    }
+
     bool WindowManager::is_open() const noexcept {
         return impl_ && impl_->open;
     }

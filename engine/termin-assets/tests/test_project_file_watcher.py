@@ -1,4 +1,5 @@
 from pathlib import Path
+import threading
 from typing import Set
 
 from termin_assets import (
@@ -402,3 +403,48 @@ def test_initial_scan_logs_progress_and_per_asset_duration(
     assert messages[-1].startswith(
         "[AssetScan] complete candidates=2 processed=2 duration_ms="
     )
+
+
+def test_wakeup_publishes_debounce_deadline_and_extends_it(tmp_path, monkeypatch) -> None:
+    watcher = ProjectFileWatcher()
+    processor = RecordingRemovalPreLoader()
+    watcher.register_processor(processor)
+    path = str(tmp_path / "removed.asset")
+    now = [10.0]
+    monkeypatch.setattr(watcher_module.time, "monotonic", lambda: now[0])
+    notifications = []
+    watcher.set_wakeup(lambda: notifications.append((watcher.has_pending, watcher.next_deadline)))
+
+    worker = threading.Thread(target=lambda: watcher._enqueue_change(path, "deleted"))
+    worker.start()
+    worker.join(timeout=2.0)
+    assert not worker.is_alive()
+    assert notifications == [(True, 10.0 + watcher_module.DEBOUNCE_DELAY_S)]
+    watcher.poll()
+    assert processor.removed == []
+
+    now[0] += watcher_module.DEBOUNCE_DELAY_S / 2
+    watcher._enqueue_change(path, "deleted")
+    assert watcher.next_deadline == now[0] + watcher_module.DEBOUNCE_DELAY_S
+    now[0] = watcher.next_deadline
+    watcher.poll()
+    assert processor.removed == [path]
+    assert not watcher.has_pending
+    assert watcher.next_deadline is None
+
+
+def test_watcher_notification_install_and_detach_preserve_work(tmp_path) -> None:
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(RecordingRemovalPreLoader())
+    path = str(tmp_path / "removed.asset")
+    watcher._enqueue_change(path, "deleted")
+    notifications = []
+    watcher.set_wakeup(lambda: notifications.append(watcher.next_deadline))
+    assert len(notifications) == 1
+    watcher.set_wakeup(None)
+    watcher._enqueue_change(path, "deleted")
+    assert len(notifications) == 1
+    assert watcher.has_pending
+    watcher.disable()
+    assert not watcher.has_pending
+    assert watcher.next_deadline is None

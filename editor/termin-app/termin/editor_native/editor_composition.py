@@ -7,6 +7,8 @@ import logging
 import math
 from pathlib import Path
 import tempfile
+import threading
+import time
 from typing import Callable
 
 from termin.graphics import Tgfx2Context
@@ -119,6 +121,10 @@ class OffscreenEditorContent:
     @property
     def render_requested(self) -> bool:
         return bool(self.composition.repaint_requested)
+
+    @property
+    def render_ready(self) -> bool:
+        return not self._closed and self.render_requested
 
     def request_render_update(self) -> None:
         self.composition.request_repaint()
@@ -271,6 +277,28 @@ class OffscreenEditorWindowRegistry:
     def __init__(self, content: OffscreenEditorContent) -> None:
         self.main = _HeadlessMainSlot(content)
         self._closed = False
+        self._condition = threading.Condition()
+        self._notified = False
+        content.composition.set_repaint_wakeup(self.wake)
+
+    def wake(self) -> None:
+        with self._condition:
+            self._notified = True
+            self._condition.notify()
+
+    def wait_until(self, deadline: float | None) -> None:
+        timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
+        with self._condition:
+            self._condition.wait_for(lambda: self._notified or self._closed, timeout)
+            self._notified = False
+
+    @property
+    def has_pending_events(self) -> bool:
+        return bool(self.main.content.composition.has_pending_input)
+
+    @property
+    def render_ready(self) -> bool:
+        return not self._closed and self.main.content.render_ready
 
     @property
     def windows(self) -> tuple[object, ...]:
@@ -296,6 +324,8 @@ class OffscreenEditorWindowRegistry:
         if self._closed:
             return
         self._closed = True
+        self.main.content.composition.set_repaint_wakeup(None)
+        self.wake()
         self.main.content.close()
 
 

@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from termin.base import log
 
@@ -75,3 +76,60 @@ def test_editor_log_capture_suppresses_watchdog_debug_noise() -> None:
     finally:
         watchdog_logger.setLevel(previous_watchdog_level)
         capture.close()
+
+
+def test_log_wakeup_from_worker_and_backlog_after_bounded_drain() -> None:
+    capture = EditorLogCapture(EditorLogModel(), capacity=16, drain_batch_size=2,
+                               python_logger=logging.Logger("capture-worker"))
+    wakes = []
+    capture.set_wakeup(lambda: wakes.append(capture.has_pending))
+    try:
+        worker = threading.Thread(target=lambda: [log.info(f"worker {i}") for i in range(5)])
+        worker.start()
+        worker.join(timeout=2.0)
+        assert not worker.is_alive()
+        assert wakes == [True]
+        assert capture.drain()
+        assert capture.has_pending
+        assert capture.drain()
+        assert capture.has_pending
+        assert capture.drain()
+        assert not capture.has_pending
+        log.info("next burst")
+        assert wakes == [True, True]
+    finally:
+        capture.close()
+    log.info("after close")
+    assert wakes == [True, True]
+    assert not capture.has_pending
+
+
+def test_log_wakeup_unsubscribe_waits_for_inflight_producer() -> None:
+    capture = EditorLogCapture(EditorLogModel(), python_logger=logging.Logger("capture-close"))
+    started = threading.Event()
+    release = threading.Event()
+    detached = threading.Event()
+
+    def notify() -> None:
+        started.set()
+        assert release.wait(timeout=2.0)
+
+    capture.set_wakeup(notify)
+    producer = threading.Thread(target=lambda: log.info("queued before close"))
+    producer.start()
+    assert started.wait(timeout=2.0)
+
+    def release_notification() -> None:
+        # Owner must wait for this callback before releasing its Python object.
+        assert not detached.is_set()
+        release.set()
+
+    releaser = threading.Thread(target=release_notification)
+    releaser.start()
+    capture.set_wakeup(None)
+    detached.set()
+    producer.join(timeout=2.0)
+    releaser.join(timeout=2.0)
+    assert not producer.is_alive()
+    assert capture.has_pending
+    capture.close()

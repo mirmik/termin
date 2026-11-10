@@ -3,6 +3,8 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unique_ptr.h>
 #include <nanobind/stl/vector.h>
@@ -45,6 +47,7 @@ NB_MODULE(_window_native, m) {
         .value("IMMEDIATE", tgfx::PresentationMode::Immediate);
 
     nb::class_<BackendWindow>(m, "BackendWindow")
+        .def_prop_ro("presentable", &BackendWindow::presentable)
         .def_prop_ro("backend", &backend_name)
         .def_prop_ro("requested_presentation_mode", &BackendWindow::requested_presentation_mode)
         .def_prop_ro("presentation_mode", &BackendWindow::presentation_mode)
@@ -64,6 +67,8 @@ NB_MODULE(_window_native, m) {
         .def_prop_ro("content_scale", &BackendWindow::content_scale)
         .def("present", &BackendWindow::present, nb::arg("color_tex"));
     nb::class_<BackendWindowSystem>(m, "BackendWindowSystem");
+    nb::class_<termin::WindowEventWake>(m, "WindowEventWake")
+        .def("wake", &termin::WindowEventWake::wake, nb::call_guard<nb::gil_scoped_release>());
 
     nb::class_<SDLBackendWindow, BackendWindow>(m, "SDLBackendWindow")
         .def("set_icon_bmp", &SDLBackendWindow::set_icon_bmp, nb::arg("path"))
@@ -77,6 +82,9 @@ NB_MODULE(_window_native, m) {
 
     nb::class_<WindowedGraphicsSession>(m, "WindowedGraphicsSession")
         .def_static("create_native", &termin::create_native_windowed_graphics)
+        .def("wake_handle", &WindowedGraphicsSession::wake_handle)
+        .def("wait_events", &WindowedGraphicsSession::wait_events,
+             nb::arg("timeout").none() = nb::none(), nb::call_guard<nb::gil_scoped_release>())
         .def(
             "create_window",
             [](WindowedGraphicsSession& self,
@@ -139,6 +147,10 @@ NB_MODULE(_window_native, m) {
             nb::arg("handle"),
             nb::rv_policy::reference_internal)
         .def("pump_events", &WindowManager::pump_events)
+        .def("wake_handle", &WindowManager::wake_handle)
+        .def("wait_events", &WindowManager::wait_events,
+             nb::arg("timeout").none() = nb::none(), nb::call_guard<nb::gil_scoped_release>())
+        .def_prop_ro("has_pending_events", &WindowManager::has_pending_events)
         .def("pending_event_count", &WindowManager::pending_event_count, nb::arg("handle"))
         .def("close", &WindowManager::close)
         .def_prop_ro("is_open", &WindowManager::is_open);

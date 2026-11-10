@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import select
+import socket
+import threading
 from typing import Callable
 
 from termin.base import log
@@ -106,6 +109,14 @@ class SpaceMouseController:
         self._is_open: bool = False
         self._editor_attachment = None
         self._request_update: Callable[[], None] | None = None
+        self._wakeup: Callable[[], None] | None = None
+        self._wake_thread: threading.Thread | None = None
+        self._wake_stop: socket.socket | None = None
+        self._wake_reader: socket.socket | None = None
+        self._wake_ack = threading.Event()
+        self._wake_closing = threading.Event()
+        self._wake_disconnected = threading.Event()
+        self._device_socket: socket.socket | None = None
 
         # Mode
         self.fly_mode: bool = True
@@ -155,7 +166,14 @@ class SpaceMouseController:
 
         self._editor_attachment = editor_attachment
         self._request_update = request_update
+        self._wake_disconnected.clear()
         self._is_open = True
+        try:
+            self._start_wakeup()
+        except Exception:
+            self.close()
+            log.error("[SpaceMouse] failed to start input wake relay", exc_info=True)
+            raise
 
         return True
 
@@ -164,6 +182,8 @@ class SpaceMouseController:
         if not self._is_open:
             return
 
+        self._stop_wakeup()
+
         libspnav = _get_libspnav()
         if libspnav is not None:
             libspnav.spnav_close()
@@ -171,6 +191,94 @@ class SpaceMouseController:
         self._is_open = False
         self._editor_attachment = None
         self._request_update = None
+
+    def set_wakeup(self, callback: Callable[[], None] | None) -> None:
+        self._stop_wakeup()
+        self._wakeup = callback
+        try:
+            self._start_wakeup()
+        except Exception:
+            self.close()
+            log.error("[SpaceMouse] failed to attach input wake relay", exc_info=True)
+            raise
+
+    def _start_wakeup(self) -> None:
+        if not self._is_open or self._wakeup is None:
+            return
+        lib = _get_libspnav()
+        fd = lib.spnav_fd()
+        if fd < 0:
+            log.error("[SpaceMouse] connected device has no readable descriptor")
+            raise RuntimeError("SpaceMouse has no readable descriptor")
+        try:
+            # libspnav exposes its Unix-domain socket. Keep our own descriptor
+            # for readiness/EOF inspection, without consuming protocol bytes or
+            # changing the library's socket blocking flags.
+            self._device_socket = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+            self._wake_reader, self._wake_stop = socket.socketpair()
+            self._wake_closing.clear()
+            self._wake_disconnected.clear()
+            self._wake_ack.clear()
+            relay = threading.Thread(
+                target=self._watch_readiness, name="spacemouse-wake", daemon=True,
+            )
+            relay.start()
+            self._wake_thread = relay
+        except Exception:
+            if self._device_socket is not None:
+                self._device_socket.close()
+                self._device_socket = None
+            if self._wake_reader is not None:
+                self._wake_reader.close()
+                self._wake_reader = None
+            if self._wake_stop is not None:
+                self._wake_stop.close()
+                self._wake_stop = None
+            raise
+
+    def _watch_readiness(self) -> None:
+        device_socket = self._device_socket
+        assert device_socket is not None
+        try:
+            while not self._wake_closing.is_set():
+                ready, _, _ = select.select([device_socket, self._wake_reader], [], [])
+                if self._wake_reader in ready:
+                    return
+                try:
+                    data = device_socket.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT)
+                except BlockingIOError:
+                    # Owner poll may have drained the socket since select.
+                    continue
+                if not data:
+                    self._wake_disconnected.set()
+                    self._wakeup()
+                    return
+                # Only the owner thread consumes spnav events. One notification
+                # remains outstanding until poll acknowledges the drained input.
+                self._wake_ack.clear()
+                self._wakeup()
+                if self._wake_closing.is_set():
+                    return
+                self._wake_ack.wait()
+        except Exception:
+            log.error("[SpaceMouse] input wake relay failed", exc_info=True)
+            self._wake_disconnected.set()
+            if not self._wake_closing.is_set():
+                self._wakeup()
+
+    def _stop_wakeup(self) -> None:
+        if self._wake_thread is None:
+            return
+        self._wake_closing.set()
+        self._wake_ack.set()
+        self._wake_stop.shutdown(socket.SHUT_WR)
+        self._wake_thread.join()
+        self._wake_reader.close()
+        self._wake_stop.close()
+        self._device_socket.close()
+        self._wake_thread = None
+        self._wake_reader = self._wake_stop = None
+        self._device_socket = None
 
     @property
     def is_open(self) -> bool:
@@ -192,6 +300,11 @@ class SpaceMouseController:
         if not self._is_open:
             return
 
+        if self._wake_disconnected.is_set():
+            log.warning("[SpaceMouse] daemon disconnected; closing input connection")
+            self.close()
+            return
+
         libspnav = _get_libspnav()
         if libspnav is None:
             return
@@ -199,12 +312,21 @@ class SpaceMouseController:
         event = _SpnavEvent()
         moved = False
 
-        while libspnav.spnav_poll_event(ctypes.byref(event)) != 0:
+        while True:
+            result = libspnav.spnav_poll_event(ctypes.byref(event))
+            if result < 0:
+                log.error("[SpaceMouse] input polling failed; closing connection")
+                self.close()
+                return
+            if result == 0:
+                break
             if event.type == SPNAV_EVENT_MOTION:
                 if self._handle_motion(event.motion):
                     moved = True
             elif event.type == SPNAV_EVENT_BUTTON:
                 self._handle_button(event.button)
+
+        self._wake_ack.set()
 
         if moved and self._request_update is not None:
             self._request_update()

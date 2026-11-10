@@ -63,6 +63,9 @@ namespace termin {
         size_t pump_events();
         std::vector<WindowEvent> take_events(WindowHandle handle);
         size_t pending_event_count(WindowHandle handle) const;
+        bool has_pending_events() const;
+        void wait_events(std::optional<double> timeout = std::nullopt);
+        std::shared_ptr<WindowEventWake> wake_handle();
 
         // Closes all windows in reverse creation order and detaches from the
         // borrowed session. Idempotent.

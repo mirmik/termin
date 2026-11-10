@@ -73,6 +73,7 @@ class _NativeView:
         self.update_count = 0
         self.resources = []
         self.preview_contexts = []
+        self.using_remote = False
 
     def activate(self):
         if self.active:
@@ -87,8 +88,9 @@ class _NativeView:
             self.active = False
             self.deactivate_count += 1
 
-    def update(self):
+    def update(self, frame_completed=True):
         self.update_count += 1
+        self.request_render()
         return self.active
 
     def show_resource(self, resource):
@@ -97,6 +99,7 @@ class _NativeView:
 
     def render_previews(self, context):
         self.preview_contexts.append(context)
+        self.request_render()
         return True
 
     def refresh_depth(self, _device):
@@ -132,7 +135,7 @@ def test_framegraph_debugger_python_layer_is_window_bootstrap(monkeypatch):
     assert debugger.view.activate_count == 1
     assert manager.create_options[-1]["always_on_top"] is True
     first_window = debugger.window
-    assert debugger.view.render_previews in first_window.content.callbacks
+    assert debugger.render_previews in first_window.content.callbacks
     assert debugger.update()
     assert debugger.view.update_count == 1
     assert debugger.show_resource("RT_COLOR")
@@ -154,6 +157,51 @@ def test_framegraph_debugger_python_layer_is_window_bootstrap(monkeypatch):
     assert not debugger.document.valid
     assert scene_renders
     manager.close()
+
+
+def test_framegraph_snapshot_and_preview_updates_do_not_request_scene_frames(monkeypatch):
+    monkeypatch.setattr(framegraph_module, "FrameGraphDebuggerView", _NativeView)
+    manager = _WindowManager()
+    scene_renders = []
+    debugger = build_native_framegraph_debugger(
+        manager, object(), request_render=lambda: scene_renders.append(True),
+    )
+    try:
+        assert not debugger.needs_polling
+        debugger.show()
+        scene_renders.clear()
+        previous_repaints = debugger.window.content.render_requests
+        assert not debugger.needs_polling
+        debugger.update(frame_completed=True)
+        debugger.render_previews("render-context")
+        assert not scene_renders
+        assert debugger.window.content.render_requests == previous_repaints + 2
+        debugger.view.using_remote = True
+        assert debugger.needs_polling
+        debugger.dismiss()
+        assert not debugger.needs_polling
+    finally:
+        debugger.close()
+        manager.close()
+
+
+def test_local_framegraph_view_does_not_refresh_for_service_only_wake():
+    engine = EngineCore()
+    model = FrameGraphDebugger(engine.rendering_manager)
+    document = tc_ui_document_create()
+    repaints = []
+    view = FrameGraphDebuggerView(document, model, lambda: repaints.append(True))
+    try:
+        view.activate()
+        repaints.clear()
+        assert not view.update(frame_completed=False)
+        assert not repaints
+    finally:
+        view.close()
+        tc_ui_document_destroy(document)
+        del view
+        del model
+        engine.shutdown()
 
 
 def test_framegraph_debugger_command_opens_native_view(monkeypatch):

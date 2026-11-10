@@ -46,6 +46,7 @@ class NativeEditorEventLoop:
         window,
         frame_limit: int,
         editor_viewport,
+        engine,
     ) -> None:
         self._terminal_interrupt = terminal_interrupt
         self._capture_profiler = capture_profiler
@@ -65,7 +66,45 @@ class NativeEditorEventLoop:
         self._frame_limit = frame_limit
         self._frame_count = 0
         self._editor_viewport = editor_viewport
-        self._last_update_time = time.monotonic()
+        self._engine = engine
+        self._diagnostics_due = False
+        self._next_debug_poll: float | None = None
+
+    def connect_wakeups(self) -> None:
+        wake = self._window_manager.wake
+        self._executor.set_wakeup(wake)
+        self._project_file_watcher.set_wakeup(wake)
+        self._editor_log_capture.set_wakeup(wake)
+        self._spacemouse.set_wakeup(wake)
+
+    def close(self) -> None:
+        self._spacemouse.set_wakeup(None)
+        self._executor.set_wakeup(None)
+        self._project_file_watcher.set_wakeup(None)
+        self._editor_log_capture.set_wakeup(None)
+
+    def plan_work(self, now: float):
+        from termin.engine import EngineLoopPlan
+
+        remote_debug = self._frame_profiler.needs_polling or self._framegraph_debugger.needs_polling
+        if remote_debug and self._next_debug_poll is None:
+            self._next_debug_poll = now
+        elif not remote_debug:
+            self._next_debug_poll = None
+        deadlines = [deadline for deadline in (
+            self._project_file_watcher.next_deadline, self._next_debug_poll,
+        ) if deadline is not None]
+        return EngineLoopPlan(
+            immediate_work=bool(self._window_manager.has_pending_events
+                                or self._executor.has_pending
+                                or self._editor_log_capture.has_pending
+                                or self._scene_structure_observer.pending
+                                or self._diagnostics_due),
+            frame_requested=bool(self._window_manager.render_ready or self._frame_limit > 0),
+            continuous_update=bool(self._editor_viewport is not None
+                                   and self._editor_viewport.needs_update),
+            next_deadline=min(deadlines) if deadlines else None,
+        )
 
     def poll_events(self) -> None:
         if self._terminal_interrupt.consume():
@@ -76,11 +115,12 @@ class NativeEditorEventLoop:
             if self._game_mode_controller is not None:
                 self._game_mode_controller.model.refresh_primary_scene()
         with self._capture_profiler.section("Events"):
-            keep_running, _routed = self._window_manager.poll_events()
+            keep_running, routed = self._window_manager.poll_events()
         if not keep_running:
             return
         with self._capture_profiler.section("Queued Work"):
-            if self._executor.process_pending() > 0:
+            executed = self._executor.process_pending()
+            if executed > 0:
                 self._host.request_render_update()
         with self._capture_profiler.section("Project Watch"):
             self._project_file_watcher.poll()
@@ -88,24 +128,34 @@ class NativeEditorEventLoop:
             self._scene_structure_observer.poll()
             self._spacemouse.poll()
         now = time.monotonic()
-        dt = now - self._last_update_time
-        self._last_update_time = now
-        with self._capture_profiler.section("Editor Camera"):
-            if self._editor_viewport is not None:
-                self._editor_viewport.update(dt)
+        debug_deadline_due = self._next_debug_poll is not None and now >= self._next_debug_poll
         with self._capture_profiler.section("Debug Tools"):
-            self._framegraph_debugger.update()
-            self._frame_profiler.update()
-            if self._profiler_panel.root.visible and self._profiler_panel.update():
-                self._host.request_render_update()
+            if self._diagnostics_due or routed or executed or debug_deadline_due:
+                self._framegraph_debugger.update(frame_completed=self._diagnostics_due)
+                self._diagnostics_due = False
+                self._frame_profiler.update()
+                if self._profiler_panel.root.visible and self._profiler_panel.update():
+                    self._host.request_render_update()
+            if debug_deadline_due:
+                self._next_debug_poll = now + 0.1
         with self._capture_profiler.section("Editor Log"):
             if self._editor_log_capture.drain():
                 self._host.request_render_update()
+
+    def before_frame(self, dt: float) -> None:
+        with self._capture_profiler.section("Editor Camera"):
+            if self._editor_viewport is not None:
+                self._editor_viewport.update(dt)
         with self._capture_profiler.section("UI Schedule"):
             if _game_mode_requires_continuous_render(self._game_mode_controller):
-                # Present the frame produced at the end of the previous loop and
-                # keep the playing scene render scheduler active for the next one.
                 self._request_editor_render()
+
+    def after_frame(self) -> None:
+        if self._engine.last_frame_rendered:
+            self._host.request_render_update()
+            # A profiler UI repaint must not produce its own perpetual stream
+            # of presentation work. Refresh diagnostics only for scene work.
+            self._diagnostics_due = True
         with self._capture_profiler.section("UI Compose"):
             self._window_manager.render_requested()
         self._frame_count += 1
@@ -143,7 +193,7 @@ def attach_native_editor_event_loop(
     event_loop_stage = session.begin_stage("event loop")
     terminal_interrupt = event_loop_stage.own(
         "terminal interrupt",
-        TerminalInterruptController(),
+        TerminalInterruptController(window_manager.wake),
         cleanup=lambda: terminal_interrupt.close(),
     )
     event_loop = event_loop_stage.own(
@@ -166,12 +216,21 @@ def attach_native_editor_event_loop(
             window=window,
             editor_viewport=editor_viewport,
             frame_limit=_smoke_frame_limit() if frame_limit is None else frame_limit,
+            engine=engine,
         ),
+        cleanup=lambda: event_loop.close(),
     )
+    event_loop.connect_wakeups()
     loop_client = EngineLoopClient(
         poll_events=event_loop.poll_events,
         should_continue=event_loop.should_continue,
         on_shutdown=lambda: None,
+        plan_work=event_loop.plan_work,
+        wait_until=window_manager.wait_until,
+        wake=window_manager.wake,
+        before_frame=event_loop.before_frame,
+        after_frame=event_loop.after_frame,
+        monotonic_time=time.monotonic,
     )
     loop_connection = event_loop_stage.own(
         "engine loop connection",

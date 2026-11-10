@@ -35,6 +35,7 @@ struct tc_world_context {
     bool has_pending_primary_scene = false;
     std::uint64_t pending_primary_scene = kNoSceneToken;
     std::string pending_primary_identity;
+    std::function<void()> work_callback;
 
     tc_world_context(std::uint64_t generation_value,
                      tc_world_controller_instance* controller_value) noexcept
@@ -191,7 +192,7 @@ extern "C" {
             return false;
         }
 
-        std::lock_guard lock(context->scenes_mutex);
+        std::unique_lock lock(context->scenes_mutex);
         const auto catalog_entry = context->scenes.find(scene_identity);
         const tc_scene_handle scene = catalog_entry == context->scenes.end()
                                           ? TC_SCENE_HANDLE_INVALID
@@ -235,6 +236,9 @@ extern "C" {
             tc_log(TC_LOG_ERROR, "[WorldContext] RuntimeSession ended while queuing a primary scene request");
             return false;
         }
+        const auto wake = context->work_callback;
+        lock.unlock();
+        if (wake) wake();
         return true;
     }
 
@@ -426,6 +430,7 @@ namespace termin {
                 context->pending_primary_scene = kNoSceneToken;
                 context->pending_primary_identity.clear();
                 context->scenes.clear();
+                context->work_callback = {};
             }
             context->primary_scene.store(kNoSceneToken, std::memory_order_release);
             context->controller.store(nullptr, std::memory_order_release);
@@ -545,6 +550,18 @@ namespace termin {
             }
             std::sort(identities.begin(), identities.end());
             return identities;
+        }
+
+        bool world_context_has_pending_request(const tc_world_context* context) noexcept {
+            if (!context) return false;
+            std::lock_guard lock(context->scenes_mutex);
+            return context->has_pending_primary_scene;
+        }
+
+        void set_world_context_work_callback(tc_world_context* context, std::function<void()> callback) {
+            if (!context) return;
+            std::lock_guard lock(context->scenes_mutex);
+            context->work_callback = std::move(callback);
         }
 
         WorldContextSceneRequest take_world_context_primary_request(tc_world_context* context) noexcept {

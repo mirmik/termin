@@ -5,6 +5,7 @@ preload_sdk_libs("termin_engine")
 from termin.engine._engine_native import (
     EngineCore,
     EngineLoopClient,
+    EngineLoopPlan,
     EngineLoopClientConnection,
     WorldContext,
     WorldControllerRef,
@@ -56,6 +57,7 @@ ViewportRenderState = render.ViewportRenderState
 __all__ = [
     "EngineCore",
     "EngineLoopClient",
+    "EngineLoopPlan",
     "EngineLoopClientConnection",
     "FrameGraphDebugger",
     "FrameGraphDebuggerMode",

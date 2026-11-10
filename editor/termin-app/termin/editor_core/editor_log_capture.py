@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from termin.base import log
 
@@ -75,6 +76,15 @@ class EditorLogCapture:
         self._python_logger.setLevel(logging.DEBUG)
         self._python_logger.addHandler(self._handler)
 
+    def set_wakeup(self, callback: Callable[[], None] | None) -> None:
+        """Notify the owner on native or Python producer threads, without UI work."""
+        if not self._closed:
+            log.capture_set_wakeup(callback)
+
+    @property
+    def has_pending(self) -> bool:
+        return not self._closed and log.capture_pending() > 0
+
     def drain(self) -> bool:
         if self._closed:
             return False
@@ -95,6 +105,7 @@ class EditorLogCapture:
     def close(self) -> None:
         if self._closed:
             return
+        log.capture_set_wakeup(None)
         self._python_logger.removeHandler(self._handler)
         self._python_logger.setLevel(self._previous_python_level)
         self.drain()

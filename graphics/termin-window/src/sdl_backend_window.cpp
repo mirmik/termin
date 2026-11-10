@@ -8,6 +8,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <limits>
+#include <mutex>
+#include <thread>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -108,6 +111,8 @@ namespace termin {
                 return ev.key.windowID;
             case SDL_TEXTINPUT:
                 return ev.text.windowID;
+            case SDL_DROPFILE:
+                return ev.drop.windowID;
             default:
                 return 0;
             }
@@ -118,6 +123,62 @@ namespace termin {
         std::unordered_map<uint32_t, SDLWindowEventQueue*>& window_event_queues() {
             static std::unordered_map<uint32_t, SDLWindowEventQueue*> queues;
             return queues;
+        }
+
+        class SDLWake final : public WindowEventWake {
+            std::mutex mutex_;
+            bool active_ = true;
+            bool pending_ = false;
+            Uint32 event_type_;
+        public:
+            explicit SDLWake(Uint32 event_type) : event_type_(event_type) {}
+            void wake() override {
+                std::unique_lock lock(mutex_);
+                if (!active_ || pending_)
+                    return;
+                pending_ = true;
+                SDL_Event event{};
+                event.type = event_type_;
+                // Private control traffic must not enter application filters or
+                // event watchers (which may themselves log or wake). SDL's add
+                // path also signals its platform wait primitive.
+                if (SDL_PeepEvents(&event, 1, SDL_ADDEVENT, event_type_, event_type_) != 1) {
+                    const std::string error = SDL_GetError();
+                    // Logging can itself notify the host's log queue. Never
+                    // invoke application notification while holding this lock.
+                    // Keep pending true: a full event queue is already runnable.
+                    lock.unlock();
+                    tc_log_error("[SDLWindowSystem] cannot enqueue wake event: %s", error.c_str());
+                    throw std::runtime_error("SDLWindowSystem wake event was rejected");
+                }
+            }
+            bool consume() {
+                std::lock_guard lock(mutex_);
+                return std::exchange(pending_, false);
+            }
+            void close() {
+                std::lock_guard lock(mutex_);
+                active_ = false;
+                pending_ = false;
+                SDL_FlushEvent(event_type_);
+            }
+        };
+
+        void route_window_event(const SDL_Event& event) {
+            if (event.type == SDL_QUIT) {
+                for (const auto& [window_id, queue] : window_event_queues()) {
+                    (void)window_id;
+                    queue->push_back(event);
+                }
+                return;
+            }
+            const auto target = window_event_queues().find(event_window_id(event));
+            if (target != window_event_queues().end()) {
+                target->second->push_back(event);
+            } else if (event.type == SDL_DROPFILE) {
+                SDL_free(event.drop.file);
+            }
+            // Untargeted platform/private wake events only wake the application.
         }
 
         size_t& text_input_user_count() {
@@ -155,39 +216,15 @@ namespace termin {
         }
 
         bool next_window_event(SDL_Window* window, SDLWindowEventQueue& own_queue, SDL_Event& out_event) {
-            if (!own_queue.empty()) {
-                out_event = own_queue.front();
-                own_queue.pop_front();
-                return true;
-            }
-
-            const uint32_t own_window_id = window ? SDL_GetWindowID(window) : 0;
+            (void)window;
             SDL_Event event;
-            while (SDL_PollEvent(&event)) {
-                if (event.type == SDL_QUIT) {
-                    for (const auto& [window_id, queue] : window_event_queues()) {
-                        if (window_id != own_window_id && queue) {
-                            queue->push_back(event);
-                        }
-                    }
-                    out_event = event;
-                    return true;
-                }
-
-                const uint32_t target_window_id = event_window_id(event);
-                if (target_window_id == 0 || target_window_id == own_window_id) {
-                    out_event = event;
-                    return true;
-                }
-
-                const auto target = window_event_queues().find(target_window_id);
-                if (target != window_event_queues().end() && target->second) {
-                    target->second->push_back(event);
-                }
-                // Keep pumping: an event for another registered window must not make
-                // the current window appear idle before its own queued events arrive.
-            }
-            return false;
+            while (own_queue.empty() && SDL_PollEvent(&event))
+                route_window_event(event);
+            if (own_queue.empty())
+                return false;
+            out_event = own_queue.front();
+            own_queue.pop_front();
+            return true;
         }
 
         uint32_t translate_modifiers(SDL_Keymod modifiers) {
@@ -339,8 +376,12 @@ namespace termin {
         SDL_GLContext gl_context = nullptr;
         size_t live_windows = 0;
         bool closed = false;
+        std::shared_ptr<SDLWake> wake;
+        std::thread::id owner_thread = std::this_thread::get_id();
 
         ~Impl() {
+            if (wake)
+                wake->close();
             release_bootstrap_resources();
         }
 
@@ -470,6 +511,12 @@ namespace termin {
             throw std::runtime_error(std::string("SDL_InitSubSystem failed: ") + SDL_GetError());
         }
         tc_log_info("[SDLWindowSystem] video driver: %s", SDL_GetCurrentVideoDriver());
+        const Uint32 wake_type = SDL_RegisterEvents(1);
+        if (wake_type == static_cast<Uint32>(-1)) {
+            tc_log_error("[SDLWindowSystem] cannot reserve wake event");
+            throw std::runtime_error("SDL_RegisterEvents failed for window wake");
+        }
+        impl_->wake = std::make_shared<SDLWake>(wake_type);
         impl_->backend = tgfx::default_backend_from_env();
 
         if (impl_->backend == tgfx::BackendType::OpenGL) {
@@ -604,6 +651,39 @@ namespace termin {
         return impl_->live_windows;
     }
 
+    std::shared_ptr<WindowEventWake> SDLWindowSystem::wake_handle() {
+        return impl_->wake;
+    }
+
+    void SDLWindowSystem::wait_events(std::optional<double> timeout) {
+        if (impl_->closed || std::this_thread::get_id() != impl_->owner_thread) {
+            tc_log_error("[SDLWindowSystem] wait requires an open system on its owner thread");
+            throw std::logic_error("invalid SDL event wait owner/lifetime");
+        }
+        if (timeout && (!std::isfinite(*timeout) || *timeout < 0.0)) {
+            tc_log_error("[SDLWindowSystem] invalid event wait timeout");
+            throw std::invalid_argument("event wait timeout must be finite and nonnegative");
+        }
+        if (impl_->wake->consume())
+            return;
+        for (const auto& [id, queue] : window_event_queues()) {
+            (void)id;
+            if (!queue->empty())
+                return;
+        }
+        SDL_Event event{};
+        SDL_ClearError();
+        const int milliseconds = timeout
+            ? static_cast<int>(std::min(std::ceil(*timeout * 1000.0),
+                                        static_cast<double>(std::numeric_limits<int>::max()))) : -1;
+        if (SDL_WaitEventTimeout(&event, milliseconds)) {
+            route_window_event(event);
+        } else if (*SDL_GetError()) {
+            tc_log_error("[SDLWindowSystem] event wait failed: %s", SDL_GetError());
+            throw std::runtime_error(std::string("SDL event wait failed: ") + SDL_GetError());
+        }
+    }
+
     void SDLWindowSystem::close(tgfx::GraphicsHost& graphics) {
         if (impl_->closed)
             return;
@@ -614,6 +694,7 @@ namespace termin {
             throw std::invalid_argument("SDLWindowSystem::close received a different GraphicsHost");
         }
         graphics.close();
+        impl_->wake->close();
         impl_->graphics_host = nullptr;
         impl_->release_bootstrap_resources();
         impl_->closed = true;
@@ -1029,6 +1110,14 @@ namespace termin {
             out_event = {};
             switch (ev.type) {
             case SDL_WINDOWEVENT:
+                if (ev.window.event == SDL_WINDOWEVENT_EXPOSED ||
+                    ev.window.event == SDL_WINDOWEVENT_MINIMIZED ||
+                    ev.window.event == SDL_WINDOWEVENT_RESTORED ||
+                    ev.window.event == SDL_WINDOWEVENT_SHOWN ||
+                    ev.window.event == SDL_WINDOWEVENT_HIDDEN) {
+                    out_event.type = WindowEventType::PresentationChanged;
+                    return true;
+                }
                 if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
                     out_event.type = WindowEventType::FocusLost;
                     return true;
@@ -1141,6 +1230,11 @@ namespace termin {
     // ---------------------------------------------------------------------------
     // Present
     // ---------------------------------------------------------------------------
+
+    bool SDLBackendWindow::presentable() const {
+        return window_ && !(SDL_GetWindowFlags(window_) & (SDL_WINDOW_MINIMIZED | SDL_WINDOW_HIDDEN)) &&
+               BackendWindow::presentable();
+    }
 
     void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
         if (!impl_->device_ref || !window_)

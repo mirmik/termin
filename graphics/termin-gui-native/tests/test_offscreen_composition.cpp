@@ -192,7 +192,26 @@ int main() {
             return 1;
         }
 
+        int work_wakes = 0;
+        composition.set_repaint_wakeup([&] { ++work_wakes; });
+        const int before_input_wakes = work_wakes;
+        composition.push_text(" wake");
+        if (work_wakes <= before_input_wakes || !composition.has_pending_input()) {
+            std::fprintf(stderr, "offscreen input did not wake the waiting host\n");
+            return 1;
+        }
+        composition.pump_input();
+        if (composition.has_pending_input()) {
+            std::fprintf(stderr, "offscreen input remained pending after drain\n");
+            return 1;
+        }
+        const int before_close_wakes = work_wakes;
         composition.request_close();
+        if (work_wakes <= before_close_wakes) {
+            std::fprintf(stderr, "offscreen close did not wake the host\n");
+            return 1;
+        }
+        composition.set_repaint_wakeup({});
         if (!composition.should_close()) {
             std::fprintf(stderr, "composition close request was not observable\n");
             return 1;

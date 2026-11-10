@@ -72,6 +72,21 @@ input and explicitly renders/presents when asked. Adapter teardown releases
 only UI resources and cannot close the window, manager or graphics session.
 Window roles, scheduling and process-exit policy stay in the application.
 
+Event-driven hosts attach `GuiWindowAdapter.set_repaint_wake()` to their native
+window manager's wake handle and schedule only adapters reporting `render_ready`.
+The latter means both dirty and presentable: minimized/hidden/zero-size windows
+retain their repaint request until restored without keeping the loop runnable.
+`DocumentRenderer.set_repaint_wakeup()` is the window-neutral callback contract;
+it coalesces clean-to-dirty transitions and preserves invalidation during draw.
+The callback is notification-only, not permission to mutate widgets off-thread.
+
+`OffscreenGuiComposition.set_repaint_wakeup(callback)` connects the same host
+notification to repaint, synthetic input enqueue and close requests. Hosts check
+`has_pending_input` before waiting, drain input on the owner thread, and clear
+the callback when detaching their loop. Closing either composition releases the
+callback. The application's wake endpoint must remain safe for an in-flight
+notification during teardown.
+
 For application-owned global commands, both composition roots expose
 `set_unhandled_key_handler`. The handler is called synchronously only after a
 non-repeating key-down was ignored by the focused-widget route and document

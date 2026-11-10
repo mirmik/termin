@@ -32,7 +32,7 @@ namespace termin {
                  nb::keep_alive<1, 3>())
             .def("activate", &FrameGraphDebuggerView::activate)
             .def("deactivate", &FrameGraphDebuggerView::deactivate)
-            .def("update", &FrameGraphDebuggerView::update)
+            .def("update", &FrameGraphDebuggerView::update, nb::arg("frame_completed") = true)
             .def("show_resource", &FrameGraphDebuggerView::show_resource, nb::arg("resource"))
             .def("connect_remote",
                  &FrameGraphDebuggerView::connect_remote,

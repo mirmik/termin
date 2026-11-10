@@ -80,6 +80,16 @@ class NativeFrameProfiler:
             self.request_render()
         return changed
 
+    @property
+    def needs_polling(self) -> bool:
+        """Only a visible remote source needs a host-side polling deadline.
+
+        Local capture is serviced after actual host frames. Polling it on a
+        timer would turn the profiler's own repaint into a source of new frames.
+        """
+        return (not self._closed and self.window is not None and not self.window.closed
+                and self.controller.using_remote_source)
+
     def _sync_timeline_from_controller(self) -> None:
         """Project controller state without treating it as user input."""
         self._syncing_selection = True

@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace termin {
 
@@ -22,6 +23,15 @@ namespace termin {
         class RuntimeSession;
     } // namespace engine_detail
 
+    // All deadlines use the host monotonic clock in seconds. A service deadline
+    // wakes polling, but does not request a simulation update or a frame.
+    struct TERMIN_ENGINE_API EngineLoopPlan {
+        bool immediate_work = false;
+        bool frame_requested = false;
+        bool continuous_update = false;
+        std::optional<double> next_deadline;
+    };
+
     // Complete external integration required by EngineCore::run(). Keeping these
     // callbacks in one value prevents frontends from exposing a partially attached
     // loop client.
@@ -29,6 +39,16 @@ namespace termin {
         std::function<void()> poll_events;
         std::function<bool()> should_continue;
         std::function<void()> on_shutdown;
+        // Either all three planning callbacks are provided, or the host uses
+        // the explicit frame-driven contract (player and legacy external hosts).
+        std::function<EngineLoopPlan(double)> plan_work;
+        std::function<void(std::optional<double>)> wait_until;
+        std::function<void()> wake;
+        std::function<void(double)> before_frame;
+        std::function<void()> after_frame;
+        // Injectable monotonic clock for deterministic scheduling tests. When
+        // empty the native steady clock is used, matching platform wait_until.
+        std::function<double()> monotonic_time;
     };
 
     // Cadence observed by a frontend that owns the application frame loop.
@@ -158,6 +178,7 @@ namespace termin {
         std::atomic<double> _target_fps{60.0};
         bool _profile_ui = false;
         bool _shutdown = false;
+        bool _last_frame_rendered = false;
         enum class SessionOperation {
             Idle,
             Beginning,
@@ -168,6 +189,8 @@ namespace termin {
 
         bool begin_session_owned(WorldControllerInstance&& controller);
         bool session_mutation_is_safe() const noexcept;
+        void run_planned(const EngineLoopClient& client,
+                         const std::shared_ptr<std::function<void()>>& frame_completion);
 
     public:
         EngineCore();
@@ -214,6 +237,7 @@ namespace termin {
         // Run one frame: scene tick, RenderingManager render, after_render callback.
         // Returns true if rendering happened.
         bool tick_and_render(double dt);
+        bool last_frame_rendered() const noexcept { return _last_frame_rendered; }
 
         // Run blocking main loop. Calls poll_events and tick_and_render, applying
         // target_fps as a software limit when it is greater than zero.

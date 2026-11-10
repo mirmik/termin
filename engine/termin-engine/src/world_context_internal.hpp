@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <functional>
 #include <vector>
 
 #include <termin/engine/world_context.h>
@@ -21,6 +22,8 @@ namespace termin {
         bool unbind_world_context_scene(tc_world_context* context, tc_scene_handle scene) noexcept;
         std::vector<std::string> world_context_scene_identities(const tc_world_context* context);
         WorldContextSceneRequest take_world_context_primary_request(tc_world_context* context) noexcept;
+        bool world_context_has_pending_request(const tc_world_context* context) noexcept;
+        void set_world_context_work_callback(tc_world_context* context, std::function<void()> callback);
         bool publish_world_context_primary_scene(tc_world_context* context,
                                                  tc_scene_handle scene) noexcept;
         void clear_world_context_scene_references(tc_world_context* context,

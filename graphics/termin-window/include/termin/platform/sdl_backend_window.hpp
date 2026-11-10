@@ -67,6 +67,7 @@ namespace termin {
         std::pair<int, int> window_size() const override;
         std::pair<int, int> framebuffer_size() const override;
         float content_scale() const override;
+        bool presentable() const override;
         void present(tgfx::TextureHandle color_tex) override;
     };
 
@@ -89,6 +90,8 @@ namespace termin {
         std::unique_ptr<tgfx::GraphicsHost> create_graphics_host() override;
         BackendWindowPtr create_window(tgfx::GraphicsHost& graphics, const WindowConfig& config) override;
         size_t live_window_count() const override;
+        void wait_events(std::optional<double> timeout) override;
+        std::shared_ptr<WindowEventWake> wake_handle() override;
         void close(tgfx::GraphicsHost& graphics) override;
     };
 

@@ -439,3 +439,28 @@ def test_camera_update_respects_editor_lifecycle_flags():
     runtime._closed = True
     runtime.update(.1)
     camera.update.assert_not_called()
+
+
+def test_camera_continuous_demand_exists_only_during_enabled_transition():
+    runtime = object.__new__(NativeEditorViewport)
+    camera = SimpleNamespace(enabled=True, active_in_editor=True,
+                             entity=SimpleNamespace(enabled=True), transitioning=False)
+    runtime.attachment = SimpleNamespace(camera=camera)
+    runtime._closed = False
+    assert not runtime.needs_update
+    camera.transitioning = True
+    assert runtime.needs_update
+    camera.active_in_editor = False
+    assert not runtime.needs_update
+    camera.active_in_editor = True
+    camera.enabled = False
+    assert not runtime.needs_update
+    camera.enabled = True
+    camera.entity.enabled = False
+    assert not runtime.needs_update
+    camera.entity.enabled = True
+    camera.transitioning = False
+    assert not runtime.needs_update
+    camera.transitioning = True
+    runtime._closed = True
+    assert not runtime.needs_update

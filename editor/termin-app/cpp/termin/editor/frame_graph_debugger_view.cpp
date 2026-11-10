@@ -544,16 +544,27 @@ namespace termin {
         release_previews();
     }
 
-    bool FrameGraphDebuggerView::update() {
+    bool FrameGraphDebuggerView::update(bool frame_completed) {
         require_open();
         if (!active_)
             return false;
-        source_->finish_frame();
+        // Local capture changes with scene execution, not UI presentation.
+        // Servicing a remote timer must not invent another completed local frame.
+        if (!using_remote() && !frame_completed)
+            return false;
+        if (frame_completed && !using_remote())
+            source_->finish_frame();
         source_->refresh();
+        const auto revision = source_->snapshot()->revision;
+        if (using_remote() && revision == presented_revision_)
+            return false;
         select_initial_values();
         refresh_lists();
         refresh_selection();
         refresh_info();
+        // Remote publication may race projection. Remember the revision we
+        // started with, so a newer publication is serviced on the next poll.
+        presented_revision_ = revision;
         return true;
     }
 
@@ -643,6 +654,7 @@ namespace termin {
         source_->disconnect();
         release_previews();
         source_ = std::move(source);
+        presented_revision_ = 0;
         if (active_ && connect_source)
             source_->connect();
         source_->refresh();

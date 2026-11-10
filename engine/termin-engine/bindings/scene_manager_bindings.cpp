@@ -1,5 +1,6 @@
 // scene_manager_bindings.cpp - Python bindings for SceneManager
 #include <memory>
+#include <stdexcept>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
@@ -36,6 +37,12 @@ namespace termin {
     };
 
     void bind_scene_manager(nb::module_& m) {
+        nb::class_<tc_scene_work_state>(m, "SceneWorkState")
+            .def_ro("pending_update", &tc_scene_work_state::pending_update)
+            .def_ro("continuous_update", &tc_scene_work_state::continuous_update)
+            .def_ro("render_requested", &tc_scene_work_state::render_requested);
+        nb::class_<SceneUpdateRequest>(m, "SceneUpdateRequest")
+            .def("close", &SceneUpdateRequest::reset);
         nb::enum_<tc_scene_mode>(m, "SceneMode")
             .value("INACTIVE", TC_SCENE_MODE_INACTIVE, "Loaded but not updated")
             .value("STOP", TC_SCENE_MODE_STOP, "Editor update (gizmos, selection)")
@@ -288,6 +295,11 @@ namespace termin {
                     return self.set_mode(scene.handle(), mode);
                  }, nb::arg("scene"), nb::arg("mode"), "Set exact scene instance mode.")
             .def("has_play_scenes", &SceneManager::has_play_scenes, "Check if any scene is in PLAY mode.")
+            .def("work_state", &SceneManager::work_state, "Inspect scene work without consuming requests.")
+            .def("request_updates", [](SceneManager& self, const TcSceneRef& scene) {
+                if (!self.is_registered(scene.handle())) throw std::invalid_argument("scene is not registered");
+                return SceneUpdateRequest(scene.handle());
+            }, nb::arg("scene"), "Keep scene updates active until the returned owner is closed or destroyed.")
             .def("tick",
                  &SceneManager::tick,
                  nb::arg("dt"),

@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""Measure an isolated SDK editor's idle CPU and wake latency on Linux."""
+
+from __future__ import annotations
+
+import argparse
+from contextlib import ExitStack
+import json
+import os
+from pathlib import Path
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
+from termin_build.managed_process import ManagedProcess  # noqa: E402
+
+
+class SmokeError(RuntimeError):
+    pass
+
+
+def ensure_running(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        raise SmokeError(f"editor exited unexpectedly, code={process.returncode}")
+
+
+def delay(process: subprocess.Popen, seconds: float) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        ensure_running(process)
+        time.sleep(min(0.1, max(0, deadline - time.monotonic())))
+
+
+def cpu_seconds(pid: int) -> float:
+    # Fields after comm (which may itself contain spaces/parentheses) start at 3.
+    fields = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()
+    return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+
+
+def measure_idle(process: subprocess.Popen, duration: float, interval: float) -> dict:
+    start_time, start_cpu = time.monotonic(), cpu_seconds(process.pid)
+    previous_time, previous_cpu = start_time, start_cpu
+    samples = []
+    while time.monotonic() - start_time < duration:
+        delay(process, min(interval, duration - (time.monotonic() - start_time)))
+        now, cpu = time.monotonic(), cpu_seconds(process.pid)
+        sample = {
+            "elapsed_s": now - start_time,
+            "cpu_percent_one_core": 100 * (cpu - previous_cpu) / (now - previous_time),
+            "main_thread_wait_channel": Path(f"/proc/{process.pid}/wchan").read_text().strip(),
+        }
+        samples.append(sample)
+        print(f"  idle {sample['elapsed_s']:.1f}s: CPU {sample['cpu_percent_one_core']:.2f}% "
+              f"wait={sample['main_thread_wait_channel']}", flush=True)
+        previous_time, previous_cpu = now, cpu
+    return {"duration_s": previous_time - start_time,
+            "cpu_percent_one_core": 100 * (previous_cpu - start_cpu) / (previous_time - start_time),
+            "samples": samples}
+
+
+def mcp_exec(sdk: Path, session: Path, script: str, timeout: float) -> str:
+    command = [str(sdk / "bin" / "termin_python"), str(REPO_ROOT / "scripts" / "termin-editor-mcp"),
+               "--session", str(session), "exec", script, "--timeout", str(timeout)]
+    result = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True,
+                            timeout=timeout + 10, check=False)
+    if result.returncode:
+        detail = " ".join(part.strip() for part in (result.stderr, result.stdout) if part.strip())
+        if not detail:
+            detail = "tool returned no text; inspect the case's editor.log for the executor error"
+        raise SmokeError(f"MCP script failed (code {result.returncode}): {detail}")
+    return result.stdout
+
+
+def wait_ready(process: subprocess.Popen, session: Path, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while not session.exists():
+        ensure_running(process)
+        if time.monotonic() >= deadline:
+            raise SmokeError("editor did not publish its private MCP session before startup timeout")
+        time.sleep(0.1)
+
+
+def start_xvfb(stack: ExitStack, root: Path, env: dict) -> None:
+    executable = shutil.which("Xvfb")
+    if executable is None:
+        raise SmokeError("--xvfb requires Xvfb")
+    read_fd, write_fd = os.pipe()
+    try:
+        stream = stack.enter_context((root / "xvfb.log").open("w"))
+        managed = ManagedProcess.start(
+            [executable, "-displayfd", str(write_fd), "-screen", "0", "1280x800x24", "-nolisten", "tcp"],
+            stdout=stream, stderr=stream, pass_fds=(write_fd,))
+        stack.callback(managed.close)
+        os.close(write_fd)
+        write_fd = -1
+        if not select.select([read_fd], [], [], 15)[0]:
+            raise SmokeError("Xvfb did not publish a display number; see xvfb.log")
+        display_number = os.read(read_fd, 64).decode().strip()
+        if not display_number.isdecimal():
+            raise SmokeError("Xvfb failed to allocate a display; see xvfb.log")
+        env["DISPLAY"] = f":{display_number}"
+        env["SDL_VIDEODRIVER"] = "x11"
+        env.pop("WAYLAND_DISPLAY", None)
+    finally:
+        os.close(read_fd)
+        if write_fd >= 0:
+            os.close(write_fd)
+
+
+def wait_receipt(process: subprocess.Popen, receipt: Path, timeout: float) -> dict:
+    """Wait externally: an MCP poll here would conceal a missing producer wake."""
+    deadline = time.monotonic() + timeout
+    while not receipt.exists():
+        ensure_running(process)
+        if time.monotonic() >= deadline:
+            raise SmokeError(f"producer did not produce receipt {receipt.name} without MCP input")
+        time.sleep(0.02)
+    return json.loads(receipt.read_text())
+
+
+def functional_checks(args: argparse.Namespace, process: subprocess.Popen,
+                      session: Path, case_root: Path) -> dict:
+    result = {}
+    watcher_receipt = case_root / "watcher-receipt.json"
+    mcp_exec(args.sdk, session, f"""
+import json
+import time
+from pathlib import Path
+from termin_assets.project_file_watcher import FilePreLoader
+class IdleSmokeProcessor(FilePreLoader):
+    @property
+    def extensions(self):
+        return {{'.idleprobe'}}
+    @property
+    def resource_type(self):
+        return 'idle-smoke'
+    def on_file_added(self, path):
+        receipt = Path({str(watcher_receipt)!r})
+        temporary = receipt.with_suffix('.tmp')
+        temporary.write_text(json.dumps({{'owner_received_at': time.monotonic()}}))
+        temporary.replace(receipt)
+    def on_file_changed(self, path):
+        self.on_file_added(path)
+    def on_file_removed(self, path):
+        pass
+project_file_watcher.register_processor(IdleSmokeProcessor(rm))
+""", args.wake_timeout)
+    delay(process, 1)
+    sent = time.monotonic()
+    (case_root / "project" / "external.idleprobe").write_text("wake from filesystem\n")
+    receipt = wait_receipt(process, watcher_receipt, args.wake_timeout)
+    result["watcher_external_to_owner_s"] = receipt["owner_received_at"] - sent
+
+    log_receipt = case_root / "worker-log-receipt.json"
+    # The delayed worker calls the native logging binding. Receipt is written
+    # only after the editor has drained capture, without any later MCP request.
+    mcp_exec(args.sdk, session, f"""
+import threading
+from termin.base import log
+def idle_smoke_log_worker():
+    time.sleep(1)
+    emitted = time.monotonic()
+    log.info('IDLE_SMOKE_WORKER_LOG')
+    deadline = emitted + {args.wake_timeout!r}
+    while log.capture_pending() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    receipt = Path({str(log_receipt)!r})
+    temporary = receipt.with_suffix('.tmp')
+    temporary.write_text(json.dumps({{
+        'emitted_at': emitted, 'capture_drained_at': time.monotonic(),
+        'pending': log.capture_pending(),
+    }}))
+    temporary.replace(receipt)
+idle_smoke_thread = threading.Thread(target=idle_smoke_log_worker, daemon=True)
+idle_smoke_thread.start()
+""", args.wake_timeout)
+    receipt = wait_receipt(process, log_receipt, args.wake_timeout + 2)
+    if receipt["pending"]:
+        raise SmokeError("worker's native log capture was not drained without MCP input")
+    result["worker_log_to_capture_drain_s"] = receipt["capture_drained_at"] - receipt["emitted_at"]
+
+    mcp_exec(args.sdk, session, """
+camera = display_workspace.editor_viewport.camera
+camera.enter_axis_view(5.0)
+assert camera.transitioning
+""", args.wake_timeout)
+    delay(process, 1)
+    mcp_exec(args.sdk, session, "assert not camera.transitioning, 'camera transition did not finish from idle'",
+             args.wake_timeout)
+    result["camera_transition_completed"] = True
+
+    mcp_exec(args.sdk, session, """
+assert not game_mode_controller.model.is_game_mode
+game_mode_controller.model.toggle_game_mode()
+""", args.wake_timeout)
+    delay(process, 1)
+    mcp_exec(args.sdk, session, """
+assert game_mode_controller.model.is_game_mode, 'PLAY did not start'
+game_mode_controller.model.toggle_game_mode()
+assert not game_mode_controller.model.is_game_mode, 'STOP did not finish'
+""", args.wake_timeout)
+    result["play_stop_completed"] = True
+
+    mcp_exec(args.sdk, session, "frame_profiler.show()\nframegraph_debugger_view.show()", args.wake_timeout)
+    delay(process, args.warmup)
+    result["diagnostic_windows_idle"] = measure_idle(process, args.duration, args.interval)
+    mcp_exec(args.sdk, session, "frame_profiler.dismiss()\nframegraph_debugger_view.dismiss()", args.wake_timeout)
+    if result["diagnostic_windows_idle"]["cpu_percent_one_core"] > args.max_cpu:
+        raise SmokeError(f"open local diagnostic windows exceeded {args.max_cpu}% idle CPU")
+    return result
+
+
+def run_case(args: argparse.Namespace, root: Path, fps: int, vsync: bool, base_env: dict) -> dict:
+    case_root = root / f"fps-{fps}-vsync-{int(vsync)}"
+    case_root.mkdir()
+    project = case_root / "project"
+    shutil.copytree(args.project, project)
+    projects = list(project.glob("*.terminproj"))
+    if len(projects) != 1:
+        raise SmokeError("fixture must contain exactly one .terminproj")
+    config = case_root / "config" / "termin"
+    config.mkdir(parents=True)
+    (config / "settings.json").write_text(json.dumps({
+        "Migration": {"terminEditorSettingsV1": True},
+        "Editor": {"fpsLimit": fps, "vsyncEnabled": vsync},
+    }))
+    session = case_root / "session.json"
+    env = base_env.copy()
+    # Keep host HOME: only the per-case settings/cache and MCP instance are isolated.
+    env.update(XDG_CONFIG_HOME=str(config.parent), XDG_CACHE_HOME=str(root / "cache"),
+               TERMIN_EDITOR_MCP="1", TERMIN_EDITOR_MCP_PORT="0",
+               TERMIN_EDITOR_MCP_SESSION_FILE=str(session))
+    for key in ("TERMIN_EDITOR_NATIVE_SMOKE_FRAMES", "TERMIN_EDITOR_MCP_TOKEN"):
+        env.pop(key, None)
+    result = {"fps_limit": fps, "vsync": vsync, "case_dir": str(case_root), "passed": False}
+    print(f"Case FPS={fps or 'Unlimited'}, VSync={vsync}", flush=True)
+    try:
+        with ExitStack() as stack:
+            log = stack.enter_context((case_root / "editor.log").open("w"))
+            managed = ManagedProcess.start([str(args.sdk / "bin" / "termin_editor"), str(projects[0])],
+                                           cwd=REPO_ROOT, env=env, stdout=log, stderr=log)
+            stack.callback(managed.close)
+            process = managed.process
+            started = time.monotonic()
+            wait_ready(process, session, args.startup_timeout)
+            # A descriptor is published before final shader/render initialization.
+            # Use the remaining startup budget for the first owner-thread execution,
+            # keeping the shorter steady-state wake timeout for the actual idle probe.
+            startup_remaining = args.startup_timeout - (time.monotonic() - started)
+            if startup_remaining <= 0:
+                raise SmokeError("startup budget expired before the owner-thread handshake")
+            output = mcp_exec(args.sdk, session, "print('IDLE_SMOKE_READY')", startup_remaining)
+            if "IDLE_SMOKE_READY" not in output:
+                raise SmokeError("MCP readiness response is missing its marker")
+            result["startup_s"] = time.monotonic() - started
+            print(f"  startup {result['startup_s']:.2f}s; warmup {args.warmup}s", flush=True)
+            delay(process, args.warmup)
+            result["idle"] = measure_idle(process, args.duration, args.interval)
+            # Both processes use the same host monotonic clock. This includes CLI
+            # startup and transport, deliberately not labelled executor-only latency.
+            sent = time.monotonic()
+            output = mcp_exec(args.sdk, session,
+                              "import time\nprint('IDLE_SMOKE_OWNER', time.monotonic())", args.wake_timeout)
+            marker = next(line for line in output.splitlines() if line.startswith("IDLE_SMOKE_OWNER "))
+            result["mcp_dispatch_to_owner_s"] = float(marker.split()[1]) - sent
+            result["mcp_round_trip_s"] = time.monotonic() - sent
+            if args.functional:
+                result["functional"] = functional_checks(args, process, session, case_root)
+            if args.probe_script:
+                output = mcp_exec(args.sdk, session, args.probe_script.read_text(), args.wake_timeout)
+                (case_root / "probe.log").write_text(output)
+                delay(process, args.warmup)
+                result["post_probe_idle"] = measure_idle(process, args.duration, args.interval)
+            # Shutdown must wake a sleeping editor, without a final MCP request.
+            delay(process, 1)
+            shutdown_started = time.monotonic()
+            process.send_signal(signal.SIGINT)
+            try:
+                result["exit_code"] = process.wait(timeout=args.shutdown_timeout)
+            except subprocess.TimeoutExpired as exc:
+                raise SmokeError("SIGINT did not shut down the idle editor in time") from exc
+            result["shutdown_s"] = time.monotonic() - shutdown_started
+            if result["exit_code"] != 0:
+                raise SmokeError(f"editor shutdown failed with code {result['exit_code']}")
+            if result["idle"]["cpu_percent_one_core"] > args.max_cpu:
+                raise SmokeError(f"idle CPU exceeded {args.max_cpu}% of one core")
+            if "post_probe_idle" in result and result["post_probe_idle"]["cpu_percent_one_core"] > args.max_cpu:
+                raise SmokeError(f"post-probe idle CPU exceeded {args.max_cpu}% of one core")
+            result["passed"] = True
+    except Exception as exc:
+        result["error"] = str(exc)
+        print(f"  FAIL: {exc}", file=sys.stderr, flush=True)
+    finally:
+        # Never retain bearer tokens in the exported diagnostic artifacts.
+        session.unlink(missing_ok=True)
+        (case_root / "result.json").write_text(json.dumps(result, indent=2))
+    return result
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--sdk", type=Path, default=REPO_ROOT / "sdk")
+    parser.add_argument("--project", type=Path,
+                        default=REPO_ROOT / "tests/fixtures/windows-d3d11-scene")
+    parser.add_argument("--output", type=Path, help="New artifact directory (must not already exist)")
+    parser.add_argument("--xvfb", action="store_true", help="Create a private virtual X11 display")
+    parser.add_argument("--software-vulkan", action="store_true", help="Use Mesa lavapipe explicitly")
+    parser.add_argument("--matrix", action="store_true", help="Run 60/Unlimited x VSync on/off")
+    parser.add_argument("--functional", action="store_true",
+                        help="Also verify watcher/log wakes, camera, PLAY/STOP and idle diagnostic windows")
+    parser.add_argument("--fps", type=int, default=0, help="0 is Unlimited (default)")
+    parser.add_argument("--vsync", choices=("on", "off"), default="on")
+    parser.add_argument("--warmup", type=float, default=15)
+    parser.add_argument("--duration", type=float, default=15)
+    parser.add_argument("--interval", type=float, default=3)
+    parser.add_argument("--max-cpu", type=float, default=5, help="Percent of one core; startup excluded")
+    parser.add_argument("--startup-timeout", type=float, default=60)
+    parser.add_argument("--wake-timeout", type=float, default=5)
+    parser.add_argument("--shutdown-timeout", type=float, default=10)
+    parser.add_argument("--probe-script", type=Path, help="Optional editor Python activity/assertions after idle")
+    args = parser.parse_args()
+    if sys.platform != "linux":
+        parser.error("CPU/wait sampling currently requires Linux; see docs/editor-idle-smoke.md for Windows")
+    if args.fps < 0 or args.warmup < 0 or args.max_cpu < 0:
+        parser.error("FPS, warmup, and max-cpu must be nonnegative")
+    if any(value <= 0 for value in (args.duration, args.interval, args.startup_timeout,
+                                     args.wake_timeout, args.shutdown_timeout)):
+        parser.error("durations and timeouts must be positive")
+    args.sdk, args.project = args.sdk.resolve(), args.project.resolve()
+    if not (args.sdk / "bin" / "termin_editor").is_file():
+        parser.error("SDK editor is missing; run task build first")
+    return args
+
+
+def main() -> int:
+    args = parse_args()
+    if args.output:
+        root = args.output.resolve()
+        root.mkdir(parents=True, exist_ok=False)
+    else:
+        root = Path(tempfile.mkdtemp(prefix="termin-editor-idle-"))
+    print(f"Artifacts: {root}", flush=True)
+    env = os.environ.copy()
+    if args.software_vulkan:
+        candidates = sorted(Path("/usr/share/vulkan/icd.d").glob("lvp_icd*.json"))
+        if len(candidates) != 1:
+            raise SmokeError("Expected one installed lavapipe ICD in /usr/share/vulkan/icd.d")
+        env["VK_ICD_FILENAMES"] = str(candidates[0])
+        env["VK_DRIVER_FILES"] = str(candidates[0])
+    cases = [(fps, vsync) for fps in (60, 0) for vsync in (True, False)] if args.matrix else [
+        (args.fps, args.vsync == "on")]
+    manifest = json.loads((args.sdk / "python-runtime-manifest.json").read_text())
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True,
+                              text=True, check=True).stdout.strip()
+    report = {"checkout_revision": revision, "sdk_native_build_id": manifest["native_build_id"],
+              "sdk": str(args.sdk), "platform": sys.platform,
+              "display": "private Xvfb" if args.xvfb else "existing desktop session",
+              "renderer_selection": "lavapipe" if args.software_vulkan else "environment/default",
+              "note": "CPU: 100% = one core. MCP latency includes CLI startup and transport. "
+                      "wchan is diagnostic, not proof of absence of all polling. See editor.log for actual backend.",
+              "cases": []}
+    with ExitStack() as stack:
+        if args.xvfb:
+            start_xvfb(stack, root, env)
+        for fps, vsync in cases:
+            report["cases"].append(run_case(args, root, fps, vsync, env))
+            (root / "report.json").write_text(json.dumps(report, indent=2))
+    passed = all(case["passed"] for case in report["cases"])
+    print(f"{'PASS' if passed else 'FAIL'}: {root / 'report.json'}", flush=True)
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (SmokeError, OSError, subprocess.SubprocessError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        raise SystemExit(1) from error

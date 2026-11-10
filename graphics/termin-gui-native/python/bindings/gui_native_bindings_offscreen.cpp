@@ -13,6 +13,7 @@
 
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/function.h>
 
 #include <tcbase/tc_log.h>
 #include <termin/gui_native/dynamic_texture_lease.hpp>
@@ -280,6 +281,12 @@ void bind_gui_native_offscreen(nb::module_& m) {
         .def("push_text",
              [](PythonOffscreenGuiComposition& self, const std::string& text) { self.get().push_text(text); })
         .def("request_repaint", [](PythonOffscreenGuiComposition& self) { self.get().request_repaint(); })
+        .def("set_repaint_wakeup", [](PythonOffscreenGuiComposition& self, std::function<void()> callback) {
+            self.get().set_repaint_wakeup(std::move(callback));
+        }, nb::arg("callback").none())
+        .def_prop_ro("has_pending_input", [](PythonOffscreenGuiComposition& self) {
+            return self.get().has_pending_input();
+        })
         .def_prop_ro("repaint_requested",
                      [](PythonOffscreenGuiComposition& self) { return self.get().repaint_requested(); })
         .def_prop_ro("should_close", [](PythonOffscreenGuiComposition& self) { return self.get().should_close(); })

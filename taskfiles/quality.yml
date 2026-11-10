@@ -55,6 +55,12 @@ tasks:
     cmds:
       - ./sdk/bin/termin_python -I scripts/smoke-present-order {{.CLI_ARGS}}
 
+  smoke:editor-idle:
+    desc: Measure isolated SDK editor idle CPU, MCP wake latency and shutdown
+    platforms: [linux]
+    cmds:
+      - ./sdk/bin/termin_python -I scripts/smoke-editor-idle {{.CLI_ARGS}}
+
   lint:cpp:
     desc: Run repository C/C++ lint checks
     platforms: [linux]

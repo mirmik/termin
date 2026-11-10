@@ -97,6 +97,9 @@ namespace termin::gui_native {
         void register_color_picker(ColorPicker& picker);
         void unregister_color_picker(ColorPicker& picker);
         void request_repaint();
+        // Notification only: callback must not mutate UI. Clear before releasing
+        // the host's event infrastructure. The renderer does not own a loop.
+        void set_repaint_wakeup(std::function<void()> callback);
         bool repaint_requested() const;
         size_t rendered_frame_count() const;
         tgfx::TextureHandle color_target() const;
