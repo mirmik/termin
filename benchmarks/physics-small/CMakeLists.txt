@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(termin_small_physics_benchmark LANGUAGES CXX)
+find_package(termin_physics_qopt CONFIG REQUIRED)
+add_executable(physics_small_benchmark bench.cpp)
+target_compile_features(physics_small_benchmark PRIVATE cxx_std_20)
+target_link_libraries(physics_small_benchmark PRIVATE termin_physics_qopt::termin_physics_qopt)

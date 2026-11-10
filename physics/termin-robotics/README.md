@@ -20,13 +20,19 @@ The current API provides:
 - unit-frame world twists and spatial generalized Jacobians in `vw` order;
 - material-point world positions, velocities and linear generalized Jacobians;
 - exact frame/point bias acceleration `Jdot(q,qdot) qdot` in world coordinates;
-- recursive inverse dynamics;
-- dense reduced mass matrix construction;
+- recursive Newton–Euler inverse dynamics (RNEA);
+- dense reduced mass matrix construction with the composite rigid-body algorithm (CRBA);
 - mechanical energy evaluation.
 
 The tree has no solver handles, contacts, motor commands, time-integration
 policy or scene ownership. `termin-physics-qopt` borrows it through
 `Articulation3DDynamicsContribution`.
+
+Mass-matrix regression tests use the independent inverse-dynamics path and
+kinetic energy as numerical oracles, including branching and floating-base
+models. The [native small-system benchmark](../../benchmarks/physics-small/README.md)
+measures mass/bias kernels and complete dynamics steps through
+`task benchmark:physics-small`.
 
 ## Task contracts
 

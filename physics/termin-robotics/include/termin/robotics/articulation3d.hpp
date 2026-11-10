@@ -171,6 +171,8 @@ namespace termin::robotics {
                                             const std::vector<double>& accelerations,
                                             termin::Vec3 gravity_world,
                                             std::vector<double>& effort) const;
+        // Composite rigid-body mass matrix, row-major in generalized vw order.
+        // Inverse dynamics remains an independent RNEA implementation.
         [[nodiscard]] bool mass_matrix(std::vector<double>& mass) const;
         [[nodiscard]] double total_energy(termin::Vec3 gravity_world) const noexcept;
 

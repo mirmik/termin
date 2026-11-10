@@ -3,6 +3,7 @@
 
 #include "test_check.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -43,6 +44,11 @@ namespace {
         invalid_units[0].parent_unit = 0;
         Articulation3D invalid(std::move(invalid_units), {{0.0, 0.0}, {0.0, 0.0}});
         TERMIN_ROBOTICS_CHECK(invalid.diagnostic() == Articulation3DDiagnostic::InvalidParent);
+        // An invalid topology must not enter the ancestor traversal (self-cycle).
+        std::vector<double> mass{42.0};
+        TERMIN_ROBOTICS_CHECK(!invalid.mass_matrix(mass));
+        TERMIN_ROBOTICS_CHECK(mass == std::vector<double>{42.0});
+        TERMIN_ROBOTICS_CHECK(!empty.mass_matrix(mass));
     }
 
     void test_kinematics_and_inertial_model() {
@@ -167,6 +173,124 @@ namespace {
                        base_point_before.value.bias_acceleration_world,
                        2.0e-6);
     }
+
+    void check_scalar_near(double actual, double expected) {
+        const double scale = std::max(std::abs(actual), std::abs(expected));
+        TERMIN_ROBOTICS_CHECK(std::abs(actual - expected) <= 2.0e-11 * (1.0 + scale));
+    }
+
+    std::vector<ArticulationUnit3D> branched_mass_units() {
+        std::vector<ArticulationUnit3D> result;
+        const std::size_t parents[] = {articulation_root_frame, 0, 0, 1, articulation_root_frame};
+        for (std::size_t index = 0; index < 5; ++index) {
+            const double scale = static_cast<double>(index + 1);
+            // Include multiple roots, a branch and a grandchild, with mixed
+            // revolute/prismatic units and displaced, rotated inertia frames.
+            const Screw3 joint_twist =
+                index % 2 == 0 ? Screw3{Vec3::unit_y(), Vec3::zero()} : Screw3{Vec3::zero(), Vec3::unit_z()};
+            result.push_back({
+                .parent_unit = parents[index],
+                .parent_to_unit_zero =
+                    Pose3::translation(0.17 * scale, -0.09, 0.13) * Pose3::rotation(Vec3::unit_z(), 0.19 * scale),
+                .motion_twist_at_unit = joint_twist.adjoint_inv(Pose3::translation(0.08, -0.11, 0.06) *
+                                                                Pose3::rotation(Vec3::unit_x(), 0.23)),
+                .inertia = SpatialInertia3{0.7 + 0.2 * scale,
+                                           {0.12 + 0.01 * scale, 0.16 + 0.02 * scale, 0.19 + 0.015 * scale},
+                                           Pose3::translation(-0.05, 0.04 * scale, 0.07) *
+                                               Pose3::rotation(Vec3::unit_x(), -0.21 * scale)},
+                .diagnostic_name = "mass-oracle-unit",
+            });
+        }
+        return result;
+    }
+
+    void check_mass_against_inverse_dynamics(const Articulation3D& model) {
+        const std::size_t count = model.dof_count();
+        std::vector<double> velocities(count);
+        const std::size_t offset = model.has_floating_base() ? 6 : 0;
+        if (model.has_floating_base()) {
+            const Screw3 base_velocity = model.floating_base()->velocity_local;
+            velocities = {base_velocity.lin.x,
+                          base_velocity.lin.y,
+                          base_velocity.lin.z,
+                          base_velocity.ang.x,
+                          base_velocity.ang.y,
+                          base_velocity.ang.z};
+            velocities.resize(count);
+        }
+        std::copy(model.state().velocities.begin(), model.state().velocities.end(), velocities.begin() + offset);
+
+        std::vector<double> mass;
+        TERMIN_ROBOTICS_CHECK(model.mass_matrix(mass));
+        TERMIN_ROBOTICS_CHECK(mass.size() == count * count);
+        const Vec3 gravity{0.7, -1.1, -9.81};
+        const std::vector<double> zero(count, 0.0);
+        std::vector<double> bias;
+        TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, zero, gravity, bias));
+        for (std::size_t sample = 0; sample <= count; ++sample) {
+            std::vector<double> acceleration(count, 0.0);
+            if (sample < count) {
+                acceleration[sample] = 1.0;
+            } else {
+                for (std::size_t index = 0; index < count; ++index) {
+                    acceleration[index] = std::sin(0.7 * static_cast<double>(index + 1));
+                }
+            }
+            std::vector<double> effort;
+            TERMIN_ROBOTICS_CHECK(model.inverse_dynamics(velocities, acceleration, gravity, effort));
+            for (std::size_t row = 0; row < count; ++row) {
+                double mass_acceleration = 0.0;
+                for (std::size_t column = 0; column < count; ++column) {
+                    check_scalar_near(mass[row * count + column], mass[column * count + row]);
+                    mass_acceleration += mass[row * count + column] * acceleration[column];
+                }
+                // The full velocity/gravity bias cancels, giving an oracle
+                // independent of the algorithm used to construct M.
+                check_scalar_near(mass_acceleration, effort[row] - bias[row]);
+            }
+        }
+
+        double kinetic_energy = 0.0;
+        for (std::size_t row = 0; row < count; ++row) {
+            for (std::size_t column = 0; column < count; ++column) {
+                kinetic_energy += 0.5 * velocities[row] * mass[row * count + column] * velocities[column];
+            }
+        }
+        TERMIN_ROBOTICS_CHECK(kinetic_energy > 0.0);
+        check_scalar_near(kinetic_energy, model.total_energy(Vec3::zero()));
+    }
+
+    void test_mass_matrix_oracles() {
+        const Articulation3DState initial{std::vector<double>(5), std::vector<double>(5)};
+        Articulation3D fixed(branched_mass_units(), initial, "fixed-mass-oracle");
+        ArticulationFloatingBase3D base{
+            .inertia = SpatialInertia3{2.1, {0.4, 0.5, 0.6}, Pose3::translation(0.12, -0.07, 0.19)},
+            .diagnostic_name = "mass-oracle-base",
+        };
+        Articulation3D floating(base, branched_mass_units(), initial, "floating-mass-oracle");
+        Articulation3D base_only(base, {}, {}, "base-only-mass-oracle");
+        TERMIN_ROBOTICS_CHECK(fixed.diagnostic() == Articulation3DDiagnostic::None);
+        TERMIN_ROBOTICS_CHECK(floating.diagnostic() == Articulation3DDiagnostic::None);
+        TERMIN_ROBOTICS_CHECK(base_only.diagnostic() == Articulation3DDiagnostic::None);
+        for (std::size_t sample = 0; sample < 4; ++sample) {
+            const double phase = 0.37 * static_cast<double>(sample + 1);
+            Articulation3DState state = initial;
+            for (std::size_t index = 0; index < state.coordinates.size(); ++index) {
+                const double scale = static_cast<double>(index + 1);
+                state.coordinates[index] = 0.4 * std::sin(phase * scale);
+                state.velocities[index] = 0.8 * std::cos(phase * scale);
+            }
+            TERMIN_ROBOTICS_CHECK(fixed.set_state(state) == Articulation3DDiagnostic::None);
+            TERMIN_ROBOTICS_CHECK(floating.set_state(state) == Articulation3DDiagnostic::None);
+            const Pose3 pose = se3_exp({{0.2 * phase, -0.3, 0.1}, {0.4, -0.2 * phase, 0.3}});
+            const Screw3 velocity{{0.4, -0.3 * phase, 0.2}, {0.7 * phase, 0.1, -0.2}};
+            TERMIN_ROBOTICS_CHECK(floating.set_floating_base_state(pose, velocity) == Articulation3DDiagnostic::None);
+            TERMIN_ROBOTICS_CHECK(base_only.set_floating_base_state(pose, velocity) == Articulation3DDiagnostic::None);
+            check_mass_against_inverse_dynamics(fixed);
+            check_mass_against_inverse_dynamics(floating);
+            check_mass_against_inverse_dynamics(base_only);
+        }
+    }
 } // namespace
 
 int main() {
@@ -174,5 +298,6 @@ int main() {
     test_kinematics_and_inertial_model();
     test_unit_frame_collapse_equivalence();
     test_bias_acceleration_against_finite_difference();
+    test_mass_matrix_oracles();
     return 0;
 }

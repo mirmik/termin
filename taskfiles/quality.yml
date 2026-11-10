@@ -1,6 +1,11 @@
 version: '3'
 
 tasks:
+  benchmark:physics-small:
+    desc: Measure native small-system dynamics and kernels against the installed SDK
+    cmds:
+      - '{{if eq OS "windows"}}python{{else}}python3{{end}} ./scripts/benchmark-physics-small.py {{.CLI_ARGS}}'
+
   test:
     desc: Run the complete editor SDK test entry point
     cmds:

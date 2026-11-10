@@ -628,29 +628,80 @@ namespace termin::robotics {
     }
 
     bool Articulation3D::mass_matrix(std::vector<double>& mass) const {
+        if (diagnostic_ != Articulation3DDiagnostic::None) {
+            std::fprintf(stderr,
+                         "[termin-robotics] articulation '%s' mass matrix requires a valid model\n",
+                         diagnostic_name_.c_str());
+            return false;
+        }
         const std::size_t count = dof_count();
-        const std::vector<double> zero(count, 0.0);
+        const std::size_t unit_offset = floating_base_.has_value() ? 6 : 0;
         mass.assign(count * count, 0.0);
-        std::vector<double> unit_acceleration(count, 0.0);
-        std::vector<double> column;
-        for (std::size_t column_index = 0; column_index < count; ++column_index) {
-            unit_acceleration[column_index] = 1.0;
-            if (!inverse_dynamics(zero, unit_acceleration, termin::Vec3::zero(), column)) {
-                std::fprintf(stderr,
-                             "[termin-robotics] articulation '%s' inverse dynamics "
-                             "failed for mass column %zu\n",
-                             diagnostic_name_.c_str(),
-                             column_index);
-                return false;
+
+        // Composite rigid-body algorithm. Each subtree inertia is accumulated
+        // once; a joint's momentum then propagates only through its ancestors.
+        // All spatial matrices use vw order, matching the floating-base DOFs.
+        std::vector<termin::Mat66> composite(units_.size());
+        for (std::size_t index = 0; index < units_.size(); ++index) {
+            composite[index] = units_[index].inertia.matrix_vw();
+        }
+        termin::Mat66 base_composite;
+        if (floating_base_.has_value()) {
+            base_composite = floating_base_->inertia.matrix_vw();
+        }
+        for (std::size_t index = units_.size(); index-- > 0;) {
+            const std::size_t column = unit_offset + index;
+            termin::Screw3 force = termin::screw3_from_vec6_vw(
+                composite[index].transform(termin::screw3_to_vec6_vw(motion_twists_at_unit_[index])));
+            mass[column * count + column] = motion_twists_at_unit_[index].dot(force);
+
+            std::size_t current = index;
+            while (true) {
+                force = force.coadjoint(parent_to_unit_[current]);
+                current = units_[current].parent_unit;
+                if (current == articulation_root_frame) {
+                    if (floating_base_.has_value()) {
+                        const termin::Vec6 base_force = termin::screw3_to_vec6_vw(force);
+                        for (std::size_t row = 0; row < 6; ++row) {
+                            mass[row * count + column] = base_force[row];
+                            mass[column * count + row] = base_force[row];
+                        }
+                    }
+                    break;
+                }
+                const std::size_t row = unit_offset + current;
+                const double entry = motion_twists_at_unit_[current].dot(force);
+                mass[row * count + column] = entry;
+                mass[column * count + row] = entry;
             }
-            for (std::size_t row = 0; row < count; ++row) {
-                mass[row * count + column_index] = column[row];
+
+            const std::size_t parent = units_[index].parent_unit;
+            if (parent != articulation_root_frame || floating_base_.has_value()) {
+                termin::Mat66& destination = parent == articulation_root_frame ? base_composite : composite[parent];
+                // I_parent += X^T I_child X, where X maps a parent-frame
+                // motion to the child frame. Transform forces dually.
+                for (int axis = 0; axis < 6; ++axis) {
+                    const termin::Screw3 motion = basis_screw_vw(axis).adjoint_inv(parent_to_unit_[index]);
+                    const termin::Screw3 response =
+                        termin::screw3_from_vec6_vw(composite[index].transform(termin::screw3_to_vec6_vw(motion)));
+                    const termin::Vec6 transformed =
+                        termin::screw3_to_vec6_vw(response.coadjoint(parent_to_unit_[index]));
+                    for (int row = 0; row < 6; ++row) {
+                        destination(axis, row) += transformed[row];
+                    }
+                }
             }
-            unit_acceleration[column_index] = 0.0;
+        }
+        if (floating_base_.has_value()) {
+            for (int row = 0; row < 6; ++row) {
+                for (int column = 0; column < 6; ++column) {
+                    mass[row * count + column] = base_composite(column, row);
+                }
+            }
         }
 
-        // RNEA columns are symmetric analytically. Average only the final
-        // round-off so dense QP backends receive an exactly symmetric H.
+        // Average final round-off in the floating-base block so dense QP
+        // backends receive an exactly symmetric H.
         for (std::size_t row = 0; row < count; ++row) {
             for (std::size_t column_index = row + 1; column_index < count; ++column_index) {
                 const double value = 0.5 * (mass[row * count + column_index] + mass[column_index * count + row]);
@@ -658,7 +709,12 @@ namespace termin::robotics {
                 mass[column_index * count + row] = value;
             }
         }
-        return finite(mass);
+        if (!finite(mass)) {
+            std::fprintf(
+                stderr, "[termin-robotics] articulation '%s' mass matrix is non-finite\n", diagnostic_name_.c_str());
+            return false;
+        }
+        return true;
     }
 
     double Articulation3D::total_energy(termin::Vec3 gravity_world) const noexcept {
