@@ -192,6 +192,9 @@ namespace termin::robotics {
 
         [[nodiscard]] Articulation3DDiagnostic validate_model() const noexcept;
         [[nodiscard]] bool update_kinematics() noexcept;
+        [[nodiscard]] bool update_configuration_kinematics() noexcept;
+        // Requires configuration caches from the current q and floating pose.
+        [[nodiscard]] bool update_velocity_kinematics() noexcept;
         [[nodiscard]] bool bias_accelerations_local(std::vector<termin::Screw3>& accelerations) const;
     };
 

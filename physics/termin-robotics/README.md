@@ -28,6 +28,12 @@ The tree has no solver handles, contacts, motor commands, time-integration
 policy or scene ownership. `termin-physics-qopt` borrows it through
 `Articulation3DDynamicsContribution`.
 
+The dynamics adapter updates velocity kinematics from the current configuration
+caches during endpoint iterations and velocity projections. Joint-coordinate or
+floating-base pose changes, and rollback, rebuild configuration and velocity
+kinematics together. This distinction stays behind the internal mutable-access
+bridge; public state setters always perform a full update.
+
 Mass-matrix regression tests use the independent inverse-dynamics path and
 kinetic energy as numerical oracles, including branching and floating-base
 models. The [native small-system benchmark](../../benchmarks/physics-small/README.md)

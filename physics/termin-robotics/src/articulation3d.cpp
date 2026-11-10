@@ -515,9 +515,16 @@ namespace termin::robotics {
     }
 
     bool Articulation3D::update_kinematics() noexcept {
+        return update_configuration_kinematics() && update_velocity_kinematics();
+    }
+
+    bool Articulation3D::update_configuration_kinematics() noexcept {
         const std::size_t count = units_.size();
         if (parent_to_unit_.size() != count || unit_poses_world_.size() != count ||
-            motion_twists_at_unit_.size() != count || unit_velocities_local_.size() != count) {
+            motion_twists_at_unit_.size() != count || state_.coordinates.size() != count) {
+            std::fprintf(stderr,
+                         "[termin-robotics] articulation '%s' configuration cache size mismatch\n",
+                         diagnostic_name_.c_str());
             return false;
         }
 
@@ -532,6 +539,34 @@ namespace termin::robotics {
             unit_poses_world_[index] = (parent_pose * parent_to_unit_[index]).normalized();
             motion_twists_at_unit_[index] = unit.motion_twist_at_unit;
 
+            if (!parent_to_unit_[index].is_finite() || !unit_poses_world_[index].is_finite() ||
+                !motion_twists_at_unit_[index].is_finite()) {
+                std::fprintf(stderr,
+                             "[termin-robotics] articulation '%s' configuration is non-finite\n",
+                             diagnostic_name_.c_str());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool Articulation3D::update_velocity_kinematics() noexcept {
+        const std::size_t count = units_.size();
+        if (parent_to_unit_.size() != count || unit_poses_world_.size() != count ||
+            motion_twists_at_unit_.size() != count || unit_velocities_local_.size() != count ||
+            state_.velocities.size() != count) {
+            std::fprintf(
+                stderr, "[termin-robotics] articulation '%s' velocity cache size mismatch\n", diagnostic_name_.c_str());
+            return false;
+        }
+        if (floating_base_.has_value() && !floating_base_->velocity_local.is_finite()) {
+            std::fprintf(
+                stderr, "[termin-robotics] articulation '%s' base velocity is non-finite\n", diagnostic_name_.c_str());
+            return false;
+        }
+        for (std::size_t index = 0; index < count; ++index) {
+            const ArticulationUnit3D& unit = units_[index];
+
             const termin::Screw3 parent_velocity =
                 unit.parent_unit == articulation_root_frame
                     ? (floating_base_.has_value() ? floating_base_->velocity_local : termin::Screw3::zero())
@@ -541,6 +576,9 @@ namespace termin::robotics {
 
             if (!parent_to_unit_[index].is_finite() || !unit_poses_world_[index].is_finite() ||
                 !motion_twists_at_unit_[index].is_finite() || !unit_velocities_local_[index].is_finite()) {
+                std::fprintf(stderr,
+                             "[termin-robotics] articulation '%s' velocity kinematics is non-finite\n",
+                             diagnostic_name_.c_str());
                 return false;
             }
         }

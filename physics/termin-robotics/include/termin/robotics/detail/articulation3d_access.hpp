@@ -22,5 +22,11 @@ namespace termin::robotics::detail {
         [[nodiscard]] static bool update_kinematics(Articulation3D& articulation) noexcept {
             return articulation.update_kinematics();
         }
+
+        // Only generalized velocities may have changed since the last full
+        // update. Configuration changes and rollback require update_kinematics.
+        [[nodiscard]] static bool update_velocity_kinematics(Articulation3D& articulation) noexcept {
+            return articulation.update_velocity_kinematics();
+        }
     };
 } // namespace termin::robotics::detail

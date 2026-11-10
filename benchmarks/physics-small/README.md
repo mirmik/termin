@@ -1,6 +1,7 @@
 # Small-system native physics benchmark
 
 Recorded experiment: [CRBA before/after, 2026-11-10](results/2026-11-10-crba.md).
+Follow-up: [velocity-only kinematics, 2026-11-10](results/2026-11-10-velocity-kinematics.md).
 
 Build the SDK with `task build`, then run from the repository root:
 

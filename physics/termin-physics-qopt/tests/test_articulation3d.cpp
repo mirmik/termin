@@ -7,8 +7,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <numbers>
+#include <utility>
 #include <vector>
 
 using namespace termin;
@@ -551,6 +553,180 @@ namespace {
         }
     }
 
+    void check_pose_near(const Pose3& actual, const Pose3& expected) {
+        check_near((actual.lin - expected.lin).norm(), 0.0, 1e-12);
+        check_near(rotation_error(actual.ang, expected.ang), 0.0, 1e-12);
+    }
+
+    void check_screw_near(const Screw3& actual, const Screw3& expected) {
+        check_near((actual.lin - expected.lin).norm(), 0.0, 1e-12);
+        check_near((actual.ang - expected.ang).norm(), 0.0, 1e-12);
+    }
+
+    void check_values_near(const std::vector<double>& actual, const std::vector<double>& expected) {
+        TERMIN_QOPT_CHECK(actual.size() == expected.size());
+        for (std::size_t index = 0; index < actual.size(); ++index) {
+            check_near(actual[index], expected[index], 1e-12);
+        }
+    }
+
+    void check_point_near(const ArticulationPointKinematics3DResult& actual,
+                          const ArticulationPointKinematics3DResult& expected) {
+        TERMIN_QOPT_CHECK(actual.ok() && expected.ok());
+        check_near((actual.value.position_world - expected.value.position_world).norm(), 0.0, 1e-12);
+        check_near((actual.value.velocity_world - expected.value.velocity_world).norm(), 0.0, 1e-12);
+        check_near((actual.value.bias_acceleration_world - expected.value.bias_acceleration_world).norm(), 0.0, 1e-12);
+        check_values_near(actual.value.linear_jacobian_world_storage, expected.value.linear_jacobian_world_storage);
+    }
+
+    void check_frame_near(const ArticulationFrameKinematics3DResult& actual,
+                          const ArticulationFrameKinematics3DResult& expected) {
+        TERMIN_QOPT_CHECK(actual.ok() && expected.ok());
+        check_pose_near(actual.value.pose_world, expected.value.pose_world);
+        check_screw_near(actual.value.velocity_world, expected.value.velocity_world);
+        check_screw_near(actual.value.bias_acceleration_world, expected.value.bias_acceleration_world);
+        check_values_near(actual.value.spatial_jacobian_world_storage, expected.value.spatial_jacobian_world_storage);
+    }
+
+    void check_kinematics_near(const Articulation3D& actual, const Articulation3D& expected) {
+        check_values_near(actual.state().coordinates, expected.state().coordinates);
+        check_values_near(actual.state().velocities, expected.state().velocities);
+        const Vec3 point{0.17, -0.23, 0.31};
+        for (std::size_t unit = 0; unit < actual.unit_count(); ++unit) {
+            check_pose_near(actual.unit_poses_world()[unit], expected.unit_poses_world()[unit]);
+            check_screw_near(actual.unit_velocities_local()[unit], expected.unit_velocities_local()[unit]);
+            check_point_near(actual.point_kinematics(unit, point), expected.point_kinematics(unit, point));
+            check_frame_near(actual.frame_kinematics(unit), expected.frame_kinematics(unit));
+        }
+        if (actual.has_floating_base()) {
+            check_pose_near(actual.floating_base()->pose_world, expected.floating_base()->pose_world);
+            check_screw_near(actual.floating_base()->velocity_local, expected.floating_base()->velocity_local);
+            check_point_near(actual.floating_base_point_kinematics(point),
+                             expected.floating_base_point_kinematics(point));
+            check_frame_near(actual.floating_base_frame_kinematics(), expected.floating_base_frame_kinematics());
+        }
+    }
+
+    std::unique_ptr<Articulation3D> velocity_test_model(bool floating, bool base_only) {
+        std::vector<ArticulationUnit3D> units;
+        const std::array<std::size_t, 4> parents{articulation_root_frame, 0, 0, 1};
+        if (!base_only) {
+            for (std::size_t index = 0; index < parents.size(); ++index) {
+                const double scale = static_cast<double>(index + 1);
+                units.push_back({
+                    .parent_unit = parents[index],
+                    .parent_to_unit_zero =
+                        Pose3::translation(0.3 * scale, -0.2, 0.1) * Pose3::rotation(Vec3::unit_x(), 0.13 * scale),
+                    .motion_twist_at_unit = index % 2 == 0 ? Screw3{Vec3::unit_z(), Vec3::zero()}.adjoint_inv(
+                                                                 Pose3::translation(0.1, 0.2, -0.1))
+                                                           : Screw3{Vec3::zero(), Vec3::unit_y()},
+                    .inertia = rod_inertia(),
+                    .diagnostic_name = "velocity-unit",
+                });
+            }
+        }
+        Articulation3DState state{std::vector<double>(units.size(), 0.2), std::vector<double>(units.size(), -0.1)};
+        if (floating) {
+            return std::make_unique<Articulation3D>(ArticulationFloatingBase3D{rod_inertia(),
+                                                                               Pose3::translation(0.1, -0.3, 0.8),
+                                                                               {{0.2, -0.1, 0.3}, {0.4, 0.2, -0.1}},
+                                                                               "velocity-base"},
+                                                    std::move(units),
+                                                    std::move(state));
+        }
+        return std::make_unique<Articulation3D>(std::move(units), std::move(state));
+    }
+
+    void test_velocity_updates_match_full_kinematics() {
+        for (const auto [floating, base_only] : {std::pair{false, false}, {true, false}, {true, true}}) {
+            auto model = velocity_test_model(floating, base_only);
+            auto oracle = velocity_test_model(floating, base_only);
+            Articulation3DDynamicsContribution contribution(*model, {0, 0, -kGravity});
+            DynamicsTopology topology;
+            TERMIN_QOPT_CHECK(contribution.register_topology(topology) == AssemblyDiagnostic::None);
+            TERMIN_QOPT_CHECK(topology.finalize() == AssemblyDiagnostic::None);
+            const std::size_t offset = floating ? 6 : 0;
+            const auto rebuild_oracle = [&] {
+                TERMIN_QOPT_CHECK(oracle->set_state(model->state()) == Articulation3DDiagnostic::None);
+                if (floating) {
+                    TERMIN_QOPT_CHECK(oracle->set_floating_base_state(model->floating_base()->pose_world,
+                                                                      model->floating_base()->velocity_local) ==
+                                      Articulation3DDiagnostic::None);
+                }
+            };
+            for (std::size_t configuration = 0; configuration < 3; ++configuration) {
+                Articulation3DState state = model->state();
+                for (std::size_t index = 0; index < state.coordinates.size(); ++index) {
+                    state.coordinates[index] = 0.19 * static_cast<double>((configuration + 1) * (index + 1));
+                }
+                TERMIN_QOPT_CHECK(contribution.set_state(state) == Articulation3DDiagnostic::None);
+                if (floating) {
+                    const Pose3 pose = Pose3::translation(0.2 * configuration, -0.3, 0.7) *
+                                       Pose3::rotation(Vec3::unit_y(), 0.21 * configuration);
+                    TERMIN_QOPT_CHECK(
+                        contribution.set_floating_base_state(pose, model->floating_base()->velocity_local) ==
+                        Articulation3DDiagnostic::None);
+                }
+                const auto poses = model->unit_poses_world();
+                for (std::size_t update = 0; update < 3; ++update) {
+                    std::vector<double> velocity(model->dof_count());
+                    for (std::size_t index = 0; index < velocity.size(); ++index) {
+                        velocity[index] = std::sin(0.43 * static_cast<double>((update + 1) * (index + 1)));
+                    }
+                    state = model->state();
+                    std::copy(velocity.begin() + offset, velocity.end(), state.velocities.begin());
+                    TERMIN_QOPT_CHECK(oracle->set_state(state) == Articulation3DDiagnostic::None);
+                    if (floating) {
+                        TERMIN_QOPT_CHECK(oracle->set_floating_base_state(model->floating_base()->pose_world,
+                                                                          {{velocity[3], velocity[4], velocity[5]},
+                                                                           {velocity[0], velocity[1], velocity[2]}}) ==
+                                          Articulation3DDiagnostic::None);
+                    }
+                    const ConstDenseVectorView view{velocity.data(), velocity.size(), 1};
+                    if (update == 1) {
+                        contribution.apply_solution(DynamicsAssemblyPhase::VelocityProjection, topology, view, {});
+                    } else {
+                        TERMIN_QOPT_CHECK(contribution.set_velocity(topology, view) == AssemblyDiagnostic::None);
+                    }
+                    check_kinematics_near(*model, *oracle);
+                    for (std::size_t unit = 0; unit < poses.size(); ++unit) {
+                        check_pose_near(model->unit_poses_world()[unit], poses[unit]);
+                    }
+                }
+                // A configuration change followed by a velocity update must use
+                // the new transforms; rollback must restore both sets of caches.
+                const auto snapshot = model->state();
+                const auto base_snapshot = model->floating_base();
+                TERMIN_QOPT_CHECK(contribution.begin_step() == AssemblyDiagnostic::None);
+                std::vector<double> trial(model->dof_count(), 0.6);
+                TERMIN_QOPT_CHECK(contribution.set_trial_configuration(
+                                      topology, {trial.data(), trial.size(), 1}, 0.02) == AssemblyDiagnostic::None);
+                std::fill(trial.begin(), trial.end(), -0.4);
+                TERMIN_QOPT_CHECK(contribution.set_velocity(topology, {trial.data(), trial.size(), 1}) ==
+                                  AssemblyDiagnostic::None);
+                rebuild_oracle();
+                check_kinematics_near(*model, *oracle);
+                contribution.rollback_step();
+                TERMIN_QOPT_CHECK(oracle->set_state(snapshot) == Articulation3DDiagnostic::None);
+                if (floating) {
+                    TERMIN_QOPT_CHECK(
+                        oracle->set_floating_base_state(base_snapshot->pose_world, base_snapshot->velocity_local) ==
+                        Articulation3DDiagnostic::None);
+                }
+                check_kinematics_near(*model, *oracle);
+                for (double invalid :
+                     {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
+                    TERMIN_QOPT_CHECK(contribution.begin_step() == AssemblyDiagnostic::None);
+                    trial[0] = invalid; // Joint velocity, or base velocity including base-only models.
+                    TERMIN_QOPT_CHECK(contribution.set_velocity(topology, {trial.data(), trial.size(), 1}) ==
+                                      AssemblyDiagnostic::NonFiniteContribution);
+                    contribution.rollback_step();
+                    check_kinematics_near(*model, *oracle);
+                }
+            }
+        }
+    }
+
     void test_reduced_matches_maximal_double_pendulum() {
         constexpr double upper_angle = 0.65;
         constexpr double relative_angle = -0.35;
@@ -635,6 +811,7 @@ int main() {
     test_prismatic_joint_equations();
     test_joint_limits();
     test_branching_forward_kinematics();
+    test_velocity_updates_match_full_kinematics();
     test_reduced_matches_maximal_double_pendulum();
     return 0;
 }

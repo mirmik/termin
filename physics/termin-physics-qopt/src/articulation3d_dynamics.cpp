@@ -507,7 +507,6 @@ namespace termin::physics_qopt {
                                                             ConstDenseVectorView) noexcept {
         const DenseBlockInfo info = topology.dof_topology().block_info(dofs_.block);
         const std::size_t generalized_count = dof_count();
-        const std::size_t unit_offset = ArticulationAccess::floating_base(articulation_).has_value() ? 6 : 0;
         if (!info.ok() || info.size != generalized_count) {
             return;
         }
@@ -516,13 +515,7 @@ namespace termin::physics_qopt {
                 accelerations_[index] = values[info.offset + index];
             }
         } else if (phase == DynamicsAssemblyPhase::VelocityProjection) {
-            if (ArticulationAccess::floating_base(articulation_).has_value()) {
-                ArticulationAccess::floating_base(articulation_)->velocity_local = read_screw_vw(values, info.offset);
-            }
-            for (std::size_t index = 0; index < articulation_.units().size(); ++index) {
-                ArticulationAccess::state(articulation_).velocities[index] = values[info.offset + unit_offset + index];
-            }
-            (void)ArticulationAccess::update_kinematics(articulation_);
+            (void)set_velocity(topology, values);
         }
     }
 
@@ -555,12 +548,14 @@ namespace termin::physics_qopt {
         for (std::size_t index = 0; index < articulation_.units().size(); ++index) {
             ArticulationAccess::state(articulation_).velocities[index] = source[info.offset + unit_offset + index];
         }
-        return finite(ArticulationAccess::state(articulation_).velocities) &&
-                       (!ArticulationAccess::floating_base(articulation_).has_value() ||
-                        ArticulationAccess::floating_base(articulation_)->velocity_local.is_finite()) &&
-                       ArticulationAccess::update_kinematics(articulation_)
-                   ? AssemblyDiagnostic::None
-                   : AssemblyDiagnostic::NonFiniteContribution;
+        if (!finite(ArticulationAccess::state(articulation_).velocities) ||
+            (ArticulationAccess::floating_base(articulation_).has_value() &&
+             !ArticulationAccess::floating_base(articulation_)->velocity_local.is_finite()) ||
+            !ArticulationAccess::update_velocity_kinematics(articulation_)) {
+            std::fprintf(stderr, "[termin-qopt] articulation '%s' velocity update failed\n", diagnostic_name_.c_str());
+            return AssemblyDiagnostic::NonFiniteContribution;
+        }
+        return AssemblyDiagnostic::None;
     }
 
     AssemblyDiagnostic Articulation3DDynamicsContribution::set_trial_configuration(
