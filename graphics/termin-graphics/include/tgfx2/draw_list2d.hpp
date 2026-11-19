@@ -33,6 +33,14 @@ namespace tgfx {
         Right,
     };
 
+    enum class TextVerticalAnchor2D : std::uint8_t {
+        // Historic placement: top for Left/Right, half the font size above the origin for Center.
+        Default,
+        Top,
+        // The origin is the center of the font's line box.
+        Center,
+    };
+
     struct PushTransform2D {
         termin::Affine2f transform = termin::Affine2f::identity();
     };
@@ -90,6 +98,7 @@ namespace tgfx {
         FontHandle font{};
         TextAnchor2D anchor = TextAnchor2D::Left;
         std::optional<float> coverage_gamma = std::nullopt;
+        TextVerticalAnchor2D vertical_anchor = TextVerticalAnchor2D::Default;
     };
 
     struct DrawImage2D {
@@ -214,7 +223,8 @@ namespace tgfx {
                   termin::LinearColor color,
                   FontHandle font,
                   TextAnchor2D anchor = TextAnchor2D::Left,
-                  std::optional<float> coverage_gamma = std::nullopt);
+                  std::optional<float> coverage_gamma = std::nullopt,
+                  TextVerticalAnchor2D vertical_anchor = TextVerticalAnchor2D::Default);
         bool image(TextureHandle texture,
                    termin::Rect2f rect,
                    termin::Rect2f uv = {0.0f, 0.0f, 1.0f, 1.0f},

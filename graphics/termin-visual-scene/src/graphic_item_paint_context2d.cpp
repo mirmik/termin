@@ -50,7 +50,8 @@ namespace termin::visual {
                                          float size_px,
                                          termin::SrgbColor color,
                                          tgfx::TextAnchor2D anchor,
-                                         std::optional<float> coverage_gamma) {
+                                         std::optional<float> coverage_gamma,
+                                         tgfx::TextVerticalAnchor2D vertical_anchor) {
         if (sink_ == nullptr || sink_->builder == nullptr || sink_->resolver == nullptr) {
             return false;
         }
@@ -60,7 +61,7 @@ namespace termin::visual {
             return false;
         }
         return sink_->builder->text(
-            std::move(text), origin, size_px, to_gpu_color(color), *font, anchor, coverage_gamma);
+            std::move(text), origin, size_px, to_gpu_color(color), *font, anchor, coverage_gamma, vertical_anchor);
     }
 
     bool GraphicItemPaintContext2D::image(std::string image_uri,

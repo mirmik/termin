@@ -58,7 +58,8 @@ namespace termin::visual {
                            termin::SrgbColor color,
                            tgfx::TextAnchor2D anchor,
                            termin::Bounds2f layout_bounds,
-                           std::optional<float> coverage_gamma)
+                           std::optional<float> coverage_gamma,
+                           tgfx::TextVerticalAnchor2D vertical_anchor)
         : TextItem2D() {
         validate(text, font_uri, origin, size_px, color, layout_bounds, coverage_gamma);
         text_ = std::move(text);
@@ -67,6 +68,7 @@ namespace termin::visual {
         size_px_ = size_px;
         color_ = color;
         anchor_ = anchor;
+        vertical_anchor_ = vertical_anchor;
         layout_bounds_ = layout_bounds;
         coverage_gamma_ = coverage_gamma;
     }
@@ -119,7 +121,7 @@ namespace termin::visual {
     }
 
     bool TextItem2D::paint(GraphicItemPaintContext2D& context) const {
-        return context.text(text_, font_uri_, origin_, size_px_, color_, anchor_, coverage_gamma_);
+        return context.text(text_, font_uri_, origin_, size_px_, color_, anchor_, coverage_gamma_, vertical_anchor_);
     }
 
 } // namespace termin::visual

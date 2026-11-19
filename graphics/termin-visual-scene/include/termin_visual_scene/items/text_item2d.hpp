@@ -20,7 +20,8 @@ namespace termin::visual {
                    termin::SrgbColor color,
                    tgfx::TextAnchor2D anchor,
                    termin::Bounds2f layout_bounds,
-                   std::optional<float> coverage_gamma = std::nullopt);
+                   std::optional<float> coverage_gamma = std::nullopt,
+                   tgfx::TextVerticalAnchor2D vertical_anchor = tgfx::TextVerticalAnchor2D::Default);
 
         void set_text(std::string text);
         void set_font_uri(std::string font_uri);
@@ -46,6 +47,7 @@ namespace termin::visual {
         float size_px_ = 14.0f;
         termin::SrgbColor color_{};
         tgfx::TextAnchor2D anchor_ = tgfx::TextAnchor2D::Left;
+        tgfx::TextVerticalAnchor2D vertical_anchor_ = tgfx::TextVerticalAnchor2D::Default;
         termin::Bounds2f layout_bounds_{};
         std::optional<float> coverage_gamma_ = std::nullopt;
     };

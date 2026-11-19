@@ -722,22 +722,25 @@ namespace tgfx {
                             return false;
                         }
                         font->ensure_glyphs(value.text, display_size_px, ctx_);
-                        const auto measured_px = font->measure_text(value.text, display_size_px);
-                        const FontAtlas::Size2f measured{measured_px.width / raster_scale,
-                                                         measured_px.height / raster_scale};
+                        const float text_width = font->measure_text(value.text, display_size_px).width / raster_scale;
                         float start_x = value.origin.x;
-                        float start_y = value.origin.y;
                         if (value.anchor == TextAnchor2D::Center) {
-                            start_x -= measured.width * 0.5f;
-                            start_y -= display_size_px * 0.5f / raster_scale;
+                            start_x -= text_width * 0.5f;
                         } else if (value.anchor == TextAnchor2D::Right) {
-                            start_x -= measured.width;
+                            start_x -= text_width;
                         }
                         const bool sdf = font->is_sdf_size(display_size_px);
-                        const float spread_px = sdf ? static_cast<float>(font->sdf_spread()) * display_size_px /
-                                                          static_cast<float>(font->sdf_reference_px())
-                                                    : 0.0f;
-                        const float spread = spread_px / raster_scale;
+                        const float atlas_size_px = sdf ? static_cast<float>(font->sdf_reference_px()) : display_size_px;
+                        const float atlas_scale = display_size_px / atlas_size_px;
+                        float start_y = value.origin.y;
+                        if (value.vertical_anchor == TextVerticalAnchor2D::Center) {
+                            const float line_height = font->line_height_px(atlas_size_px) * atlas_scale / raster_scale;
+                            start_y -= line_height * 0.5f;
+                        } else if (value.vertical_anchor == TextVerticalAnchor2D::Default &&
+                                   value.anchor == TextAnchor2D::Center) {
+                            start_y -= display_size_px * 0.5f / raster_scale;
+                        }
+                        const float spread = sdf ? font->sdf_spread() * atlas_scale / raster_scale : 0.0f;
                         ClipMesh2D triangles;
                         float cursor_x = start_x;
                         std::size_t byte_index = 0;

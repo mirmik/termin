@@ -236,15 +236,13 @@ class NativeNodeGraphView:
             )
             item.position = (group.x, group.y)
             item.z_order = -20
-            label = self.scene.create_text(
-                group.title,
-                (8.0, 18.0),
-                12.0,
-                _color(_TEXT),
-                _rect(Rect(8.0, 4.0, max(1.0, group.width - 16.0), 18.0)),
+            self._append_label(
                 item,
+                group.title,
+                Rect(8.0, 4.0, max(1.0, group.width - 16.0), 14.0),
+                12.0,
+                _TEXT,
             )
-            del label
             self.group_items[group.id] = item
             self._register_semantic(item, f"group:{group.id}")
         for node in self.graph.nodes.values():
@@ -266,15 +264,13 @@ class NativeNodeGraphView:
                 item,
             )
             del title_item
-            title_text = self.scene.create_text(
-                node.title,
-                (8.0, 18.0),
-                13.0,
-                _color(_TEXT),
-                _rect(Rect(8.0, 3.0, max(1.0, node.width - 16.0), 20.0)),
+            self._append_label(
                 item,
+                node.title,
+                Rect(8.0, 0.0, max(1.0, node.width - 16.0), _TITLE_HEIGHT),
+                13.0,
+                _TEXT,
             )
-            del title_text
             self._append_socket_visuals(item, node)
             self._append_param_labels(item, node)
             self._append_param_widgets(item, node)
@@ -315,6 +311,19 @@ class NativeNodeGraphView:
         self.edge_items[edge.id] = item
         self._register_semantic(item, f"edge:{edge.id}")
 
+    def _append_label(
+        self, parent: GraphicItemRef2D, text: str, bounds: Rect, font_size: float, color: SrgbColor
+    ) -> None:
+        self.scene.create_text(
+            text,
+            (bounds.x, bounds.y + bounds.height * 0.5),
+            font_size,
+            color,
+            _rect(bounds),
+            parent,
+            vertical_anchor="center",
+        )
+
     def _append_socket_visuals(self, parent: GraphicItemRef2D, node: Node) -> None:
         for output, sockets in ((False, node.inputs), (True, node.outputs)):
             for index, socket in enumerate(sockets):
@@ -331,15 +340,13 @@ class NativeNodeGraphView:
                 )
                 del marker
                 label_x = local.x + 8.0 if not output else local.x - node.width * 0.45
-                label = self.scene.create_text(
-                    socket.name,
-                    (label_x, local.y + 4.0),
-                    11.0,
-                    _color(_TEXT),
-                    _rect(Rect(label_x, local.y - 8.0, node.width * 0.4, 16.0)),
+                self._append_label(
                     parent,
+                    socket.name,
+                    Rect(label_x, local.y - 8.0, node.width * 0.4, 16.0),
+                    11.0,
+                    _TEXT,
                 )
-                del label
 
     def _append_param_labels(self, parent: GraphicItemRef2D, node: Node) -> None:
         row_y = self._param_section_y(node)
@@ -349,15 +356,13 @@ class NativeNodeGraphView:
         for name, _value in node.params.items():
             spec = specs.get(name, {})
             label = str(spec.get("label", name)) if isinstance(spec, dict) else name
-            item = self.scene.create_text(
-                label,
-                (8.0, row_y + 19.0),
-                11.0,
-                _color(_PARAM_TEXT),
-                _rect(Rect(8.0, row_y, node.width * _PARAM_LABEL_FRACTION - 8.0, _PARAM_ROW_HEIGHT)),
+            self._append_label(
                 parent,
+                label,
+                Rect(8.0, row_y, node.width * _PARAM_LABEL_FRACTION - 8.0, _PARAM_ROW_HEIGHT),
+                11.0,
+                _PARAM_TEXT,
             )
-            del item
             row_y += _PARAM_ROW_HEIGHT
 
     def _append_param_widgets(self, parent: GraphicItemRef2D, node: Node) -> None:

@@ -47,6 +47,12 @@ typedef enum tc_visual_text_anchor2d {
     TC_VISUAL_TEXT_ANCHOR_RIGHT = 2,
 } tc_visual_text_anchor2d;
 
+typedef enum tc_visual_text_vertical_anchor2d {
+    TC_VISUAL_TEXT_VERTICAL_ANCHOR_DEFAULT = 0,
+    TC_VISUAL_TEXT_VERTICAL_ANCHOR_TOP = 1,
+    TC_VISUAL_TEXT_VERTICAL_ANCHOR_CENTER = 2,
+} tc_visual_text_vertical_anchor2d;
+
 typedef enum tc_visual_texture_sampling2d {
     TC_VISUAL_TEXTURE_SAMPLING_LINEAR = 0,
     TC_VISUAL_TEXTURE_SAMPLING_NEAREST = 1,
@@ -100,6 +106,12 @@ TERMIN_VISUAL_SCENE_API bool tc_visual_path_item2d_set(tc_visual_scene_handle sc
 TERMIN_VISUAL_SCENE_API tc_graphic_item_handle tc_visual_text_item2d_create(tc_visual_scene_handle scene,
                                                                             tc_graphic_item_handle parent,
                                                                             const tc_visual_text_desc2d* desc);
+// For CENTER the descriptor's origin.y names the center of the font's line box.
+TERMIN_VISUAL_SCENE_API tc_graphic_item_handle
+tc_visual_text_item2d_create_aligned(tc_visual_scene_handle scene,
+                                     tc_graphic_item_handle parent,
+                                     const tc_visual_text_desc2d* desc,
+                                     tc_visual_text_vertical_anchor2d vertical_anchor);
 TERMIN_VISUAL_SCENE_API bool
 tc_visual_text_item2d_set(tc_visual_scene_handle scene, tc_graphic_item_handle item, const tc_visual_text_desc2d* desc);
 

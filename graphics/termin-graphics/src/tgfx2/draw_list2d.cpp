@@ -37,6 +37,11 @@ namespace tgfx {
             return anchor == TextAnchor2D::Left || anchor == TextAnchor2D::Center || anchor == TextAnchor2D::Right;
         }
 
+        bool valid_vertical_anchor(TextVerticalAnchor2D anchor) {
+            return anchor == TextVerticalAnchor2D::Default || anchor == TextVerticalAnchor2D::Top ||
+                   anchor == TextVerticalAnchor2D::Center;
+        }
+
     } // namespace
 
     bool DrawList2DBuilder::pop_scope_(Scope expected, const char* operation) {
@@ -187,14 +192,16 @@ namespace tgfx {
                                  termin::LinearColor color,
                                  FontHandle font,
                                  TextAnchor2D anchor,
-                                 std::optional<float> coverage_gamma) {
+                                 std::optional<float> coverage_gamma,
+                                 TextVerticalAnchor2D vertical_anchor) {
         if (text_value.empty() || !finite(origin) || !finite(size_px) || size_px <= 0.0f || !finite_color(color) ||
-            !font || !valid_anchor(anchor) ||
+            !font || !valid_anchor(anchor) || !valid_vertical_anchor(vertical_anchor) ||
             (coverage_gamma.has_value() && (!finite(*coverage_gamma) || *coverage_gamma <= 0.0f))) {
             tc::Log::error("[DrawList2DBuilder] invalid text draw rejected");
             return false;
         }
-        commands_.emplace_back(DrawText2D{std::move(text_value), origin, size_px, color, font, anchor, coverage_gamma});
+        commands_.emplace_back(
+            DrawText2D{std::move(text_value), origin, size_px, color, font, anchor, coverage_gamma, vertical_anchor});
         return true;
     }
 

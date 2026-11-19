@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include <numeric>
 #include <set>
 #include <utility>
 #include <vector>
@@ -40,6 +41,28 @@ namespace termin::nodegraph {
 
         tc_visual_color4f visual_color(ProjectionColor value) {
             return {value.r, value.g, value.b, value.a};
+        }
+
+        tc_graphic_item_handle create_label(tc_visual_scene_handle scene,
+                                            tc_graphic_item_handle parent,
+                                            const std::string& text,
+                                            const tc_bounds2f& bounds,
+                                            float font_size,
+                                            ProjectionColor color,
+                                            tc_visual_text_anchor2d anchor = TC_VISUAL_TEXT_ANCHOR_LEFT) {
+            const tc_visual_text_desc2d desc{
+                .text = text.c_str(),
+                .font_uri = "ui://default-font",
+                .origin = {anchor == TC_VISUAL_TEXT_ANCHOR_RIGHT ? bounds.x1 : bounds.x0,
+                           std::midpoint(bounds.y0, bounds.y1)},
+                .size_px = font_size,
+                .color = visual_color(color),
+                .anchor = anchor,
+                .layout_bounds = bounds,
+                .has_coverage_gamma = false,
+                .coverage_gamma = 0.0f,
+            };
+            return tc_visual_text_item2d_create_aligned(scene, parent, &desc, TC_VISUAL_TEXT_VERTICAL_ANCHOR_CENTER);
         }
 
         tc_visual_fill_paint2d fill(ProjectionColor color) {
@@ -675,18 +698,9 @@ namespace termin::nodegraph {
                 return fail("cannot position group item");
             tc_visual_scene_item_set_z_order(impl_->scene, item, -20);
 
-            const tc_visual_text_desc2d label_desc{
-                .text = group.title.c_str(),
-                .font_uri = "ui://default-font",
-                .origin = {8.0f, 18.0f},
-                .size_px = 12.0f,
-                .color = visual_color({0.92f, 0.94f, 0.98f, 1.0f}),
-                .anchor = TC_VISUAL_TEXT_ANCHOR_LEFT,
-                .layout_bounds = {8.0f, 4.0f, std::max(1.0f, group.width - 16.0f), 18.0f},
-                .has_coverage_gamma = false,
-                .coverage_gamma = 0.0f,
-            };
-            if (!impl_->valid_item(tc_visual_text_item2d_create(impl_->scene, item, &label_desc)))
+            const tc_bounds2f label_bounds{8.0f, 4.0f, std::max(8.0f, group.width - 8.0f), 18.0f};
+            if (!impl_->valid_item(create_label(
+                    impl_->scene, item, group.title, label_bounds, 12.0f, {0.92f, 0.94f, 0.98f, 1.0f})))
                 return fail("cannot create group label");
             impl_->groups.push_back({group.handle, item});
         }
@@ -741,18 +755,8 @@ namespace termin::nodegraph {
             if (!impl_->valid_item(tc_visual_rect_item2d_create(
                     impl_->scene, item, {0.0f, 0.0f, node.width, title_height}, title_fill, nullptr)))
                 return fail("cannot create node title background");
-            const tc_visual_text_desc2d title_desc{
-                .text = node.title.c_str(),
-                .font_uri = "ui://default-font",
-                .origin = {8.0f, 18.0f},
-                .size_px = 13.0f,
-                .color = visual_color(palette.text),
-                .anchor = TC_VISUAL_TEXT_ANCHOR_LEFT,
-                .layout_bounds = {8.0f, 3.0f, std::max(1.0f, node.width - 16.0f), 20.0f},
-                .has_coverage_gamma = false,
-                .coverage_gamma = 0.0f,
-            };
-            if (!impl_->valid_item(tc_visual_text_item2d_create(impl_->scene, item, &title_desc)))
+            const tc_bounds2f title_bounds{8.0f, 0.0f, std::max(8.0f, node.width - 8.0f), title_height};
+            if (!impl_->valid_item(create_label(impl_->scene, item, node.title, title_bounds, 13.0f, palette.text)))
                 return fail("cannot create node title");
 
             Impl::NodeVisual visual;
@@ -776,21 +780,12 @@ namespace termin::nodegraph {
                     if (!impl_->valid_item(marker))
                         return false;
                     const bool output = direction == SocketDirection::Output;
-                    const float label_x = output ? node.width - 8.0f : 8.0f;
                     const std::string label = impl_->policy->socket_label(node, socket, direction);
-                    const tc_visual_text_desc2d socket_desc{
-                        .text = label.c_str(),
-                        .font_uri = "ui://default-font",
-                        .origin = {label_x, y + 4.0f},
-                        .size_px = 11.0f,
-                        .color = visual_color(palette.text),
-                        .anchor = output ? TC_VISUAL_TEXT_ANCHOR_RIGHT : TC_VISUAL_TEXT_ANCHOR_LEFT,
-                        .layout_bounds = output ? tc_bounds2f{node.width * 0.52f, y - 8.0f, node.width - 8.0f, y + 8.0f}
-                                                : tc_bounds2f{8.0f, y - 8.0f, node.width * 0.48f, y + 8.0f},
-                        .has_coverage_gamma = false,
-                        .coverage_gamma = 0.0f,
-                    };
-                    if (!impl_->valid_item(tc_visual_text_item2d_create(impl_->scene, item, &socket_desc)))
+                    const tc_bounds2f label_bounds = output
+                        ? tc_bounds2f{node.width * 0.52f, y - 8.0f, node.width - 8.0f, y + 8.0f}
+                        : tc_bounds2f{8.0f, y - 8.0f, node.width * 0.48f, y + 8.0f};
+                    const auto anchor = output ? TC_VISUAL_TEXT_ANCHOR_RIGHT : TC_VISUAL_TEXT_ANCHOR_LEFT;
+                    if (!impl_->valid_item(create_label(impl_->scene, item, label, label_bounds, 11.0f, palette.text, anchor)))
                         return false;
                     visual.sockets.push_back({SocketRef{node.handle, socket.name, direction}, marker});
                 }
@@ -805,18 +800,10 @@ namespace termin::nodegraph {
             for (std::size_t index = 0; index < parameter_descriptors.size(); ++index) {
                 const ParameterEditorDescriptor& descriptor = parameter_descriptors[index];
                 const float row_y = parameter_y + parameter_row_height * static_cast<float>(index);
-                const tc_visual_text_desc2d parameter_label{
-                    .text = descriptor.label.c_str(),
-                    .font_uri = "ui://default-font",
-                    .origin = {8.0f, row_y + 19.0f},
-                    .size_px = 11.0f,
-                    .color = visual_color({0.70f, 0.74f, 0.82f, 1.0f}),
-                    .anchor = TC_VISUAL_TEXT_ANCHOR_LEFT,
-                    .layout_bounds = {8.0f, row_y, node.width * parameter_label_fraction, row_y + parameter_row_height},
-                    .has_coverage_gamma = false,
-                    .coverage_gamma = 0.0f,
-                };
-                if (!impl_->valid_item(tc_visual_text_item2d_create(impl_->scene, item, &parameter_label)))
+                const tc_bounds2f label_bounds{8.0f, row_y, node.width * parameter_label_fraction,
+                                              row_y + parameter_row_height};
+                if (!impl_->valid_item(create_label(
+                        impl_->scene, item, descriptor.label, label_bounds, 11.0f, {0.70f, 0.74f, 0.82f, 1.0f})))
                     return fail("cannot create node parameter label");
                 const bool checkbox = descriptor.kind == ParameterEditorKind::Boolean;
                 const float editor_height = checkbox ? parameter_checkbox_size : parameter_editor_height;

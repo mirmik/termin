@@ -208,6 +208,37 @@ namespace {
         return std::nullopt;
     }
 
+    std::optional<tgfx::TextVerticalAnchor2D> text_vertical_anchor(tc_visual_text_vertical_anchor2d value) {
+        switch (value) {
+        case TC_VISUAL_TEXT_VERTICAL_ANCHOR_DEFAULT:
+            return tgfx::TextVerticalAnchor2D::Default;
+        case TC_VISUAL_TEXT_VERTICAL_ANCHOR_TOP:
+            return tgfx::TextVerticalAnchor2D::Top;
+        case TC_VISUAL_TEXT_VERTICAL_ANCHOR_CENTER:
+            return tgfx::TextVerticalAnchor2D::Center;
+        }
+        return std::nullopt;
+    }
+
+    std::unique_ptr<termin::visual::TextItem2D> make_text(const tc_visual_text_desc2d* desc,
+                                                         tc_visual_text_vertical_anchor2d vertical_anchor) {
+        const auto anchor = desc != nullptr ? text_anchor(desc->anchor) : std::nullopt;
+        const auto vertical = text_vertical_anchor(vertical_anchor);
+        if (desc == nullptr || desc->text == nullptr || desc->font_uri == nullptr || !anchor || !vertical) {
+            throw std::invalid_argument("invalid text descriptor");
+        }
+        const auto coverage_gamma = desc->has_coverage_gamma ? std::optional<float>{desc->coverage_gamma} : std::nullopt;
+        return std::make_unique<termin::visual::TextItem2D>(desc->text,
+                                                            desc->font_uri,
+                                                            desc->origin,
+                                                            desc->size_px,
+                                                            authored_color(desc->color),
+                                                            *anchor,
+                                                            desc->layout_bounds,
+                                                            coverage_gamma,
+                                                            *vertical);
+    }
+
     std::optional<tgfx::DrawTextureSampling2D> sampling(tc_visual_texture_sampling2d value) {
         if (value == TC_VISUAL_TEXTURE_SAMPLING_LINEAR) {
             return tgfx::DrawTextureSampling2D::Linear;
@@ -294,21 +325,15 @@ bool tc_visual_path_item2d_set(tc_visual_scene_handle scene,
 tc_graphic_item_handle tc_visual_text_item2d_create(tc_visual_scene_handle scene,
                                                     tc_graphic_item_handle parent,
                                                     const tc_visual_text_desc2d* desc) {
+    return tc_visual_text_item2d_create_aligned(scene, parent, desc, TC_VISUAL_TEXT_VERTICAL_ANCHOR_DEFAULT);
+}
+
+tc_graphic_item_handle tc_visual_text_item2d_create_aligned(tc_visual_scene_handle scene,
+                                                            tc_graphic_item_handle parent,
+                                                            const tc_visual_text_desc2d* desc,
+                                                            tc_visual_text_vertical_anchor2d vertical_anchor) {
     return create<termin::visual::TextItem2D>(scene, parent, "create TextItem2D", [&] {
-        const auto anchor = desc != nullptr ? text_anchor(desc->anchor) : std::nullopt;
-        if (desc == nullptr || desc->text == nullptr || desc->font_uri == nullptr || !anchor) {
-            throw std::invalid_argument("invalid text descriptor");
-        }
-        const std::optional<float> coverage_gamma =
-            desc->has_coverage_gamma ? std::optional<float>{desc->coverage_gamma} : std::nullopt;
-        return std::make_unique<termin::visual::TextItem2D>(desc->text,
-                                                            desc->font_uri,
-                                                            desc->origin,
-                                                            desc->size_px,
-                                                            authored_color(desc->color),
-                                                            *anchor,
-                                                            desc->layout_bounds,
-                                                            coverage_gamma);
+        return make_text(desc, vertical_anchor);
     });
 }
 
@@ -316,20 +341,7 @@ bool tc_visual_text_item2d_set(tc_visual_scene_handle scene,
                                tc_graphic_item_handle item,
                                const tc_visual_text_desc2d* desc) {
     return replace<termin::visual::TextItem2D>(scene, item, "termin.visual.Text2D", "set TextItem2D", [&] {
-        const auto anchor = desc != nullptr ? text_anchor(desc->anchor) : std::nullopt;
-        if (desc == nullptr || desc->text == nullptr || desc->font_uri == nullptr || !anchor) {
-            throw std::invalid_argument("invalid text descriptor");
-        }
-        const std::optional<float> coverage_gamma =
-            desc->has_coverage_gamma ? std::optional<float>{desc->coverage_gamma} : std::nullopt;
-        return std::make_unique<termin::visual::TextItem2D>(desc->text,
-                                                            desc->font_uri,
-                                                            desc->origin,
-                                                            desc->size_px,
-                                                            authored_color(desc->color),
-                                                            *anchor,
-                                                            desc->layout_bounds,
-                                                            coverage_gamma);
+        return make_text(desc, TC_VISUAL_TEXT_VERTICAL_ANCHOR_DEFAULT);
     });
 }
 

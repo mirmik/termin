@@ -36,7 +36,8 @@ namespace termin::visual {
                   float size_px,
                   termin::SrgbColor color,
                   tgfx::TextAnchor2D anchor = tgfx::TextAnchor2D::Left,
-                  std::optional<float> coverage_gamma = std::nullopt);
+                  std::optional<float> coverage_gamma = std::nullopt,
+                  tgfx::TextVerticalAnchor2D vertical_anchor = tgfx::TextVerticalAnchor2D::Default);
         bool image(std::string image_uri,
                    termin::Rect2f rect,
                    termin::Rect2f uv = {0.0f, 0.0f, 1.0f, 1.0f},

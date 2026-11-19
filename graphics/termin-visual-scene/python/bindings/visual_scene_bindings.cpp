@@ -419,7 +419,16 @@ NB_MODULE(_visual_scene_native, m) {
                termin::SrgbColor color,
                nb::tuple layout_bounds,
                nb::object parent,
-               std::optional<float> coverage_gamma) {
+               std::optional<float> coverage_gamma,
+               const std::string& vertical_anchor) {
+                tgfx::TextVerticalAnchor2D vertical;
+                if (vertical_anchor == "top") {
+                    vertical = tgfx::TextVerticalAnchor2D::Top;
+                } else if (vertical_anchor == "center") {
+                    vertical = tgfx::TextVerticalAnchor2D::Center;
+                } else {
+                    throw nb::value_error("vertical_anchor must be 'top' or 'center'");
+                }
                 const auto bounds = parse_rect(layout_bounds);
                 return wrap(self,
                             self.adopt(std::make_unique<termin::visual::TextItem2D>(
@@ -431,7 +440,8 @@ NB_MODULE(_visual_scene_native, m) {
                                            tgfx::TextAnchor2D::Left,
                                            termin::Bounds2f{
                                                bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height},
-                                           coverage_gamma),
+                                           coverage_gamma,
+                                           vertical),
                                        parent_object(self, parent)));
             },
             nb::arg("text"),
@@ -440,7 +450,8 @@ NB_MODULE(_visual_scene_native, m) {
             nb::arg("color"),
             nb::arg("layout_bounds"),
             nb::arg("parent").none() = nb::none(),
-            nb::arg("coverage_gamma").none() = nb::none())
+            nb::arg("coverage_gamma").none() = nb::none(),
+            nb::arg("vertical_anchor") = "top")
         .def("clear", &TcVisualScene::clear)
         .def(
             "destroy",

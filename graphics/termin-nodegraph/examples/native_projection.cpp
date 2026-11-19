@@ -21,10 +21,11 @@ namespace ng = termin::nodegraph;
 namespace {
 
     tgfx::BackendType offscreen_backend() {
-        if (tgfx::backend_is_compiled(tgfx::BackendType::Vulkan))
-            return tgfx::BackendType::Vulkan;
+        // The Windows SDK ships D3D11 shader artifacts by default.
         if (tgfx::backend_is_compiled(tgfx::BackendType::D3D11))
             return tgfx::BackendType::D3D11;
+        if (tgfx::backend_is_compiled(tgfx::BackendType::Vulkan))
+            return tgfx::BackendType::Vulkan;
         return tgfx::BackendType::Null;
     }
 
@@ -86,6 +87,32 @@ namespace {
                 ++covered;
         }
         return covered > 4000;
+    }
+
+    void verify_title_placement(const std::vector<float>& pixels,
+                                int width,
+                                int height,
+                                const termin::gui_native::SceneView& view) {
+        const auto origin = view.world_to_screen({-180.0f, -55.0f});
+        const float zoom = view.zoom();
+        const int x0 = std::max(0, static_cast<int>(std::ceil(origin.x + 7.0f * zoom)));
+        const int x1 = std::min(width, static_cast<int>(std::ceil(origin.x + 65.0f * zoom)));
+        const int y0 = std::max(0, static_cast<int>(std::ceil(origin.y)));
+        const int y1 = std::min(height, static_cast<int>(std::ceil(origin.y + 34.0f * zoom)));
+        int top = y1;
+        int bottom = y0 - 1;
+        for (int y = y0; y < y1; ++y) {
+            for (int x = x0; x < x1; ++x) {
+                // In this strip only the light title text can exceed this threshold.
+                if (pixels[(static_cast<std::size_t>(y) * width + x) * 4] > 0.3f) {
+                    top = std::min(top, y);
+                    bottom = y;
+                    break;
+                }
+            }
+        }
+        if (bottom < top || top < origin.y + 4.0f * zoom || bottom >= origin.y + 22.0f * zoom)
+            throw std::runtime_error("node title text is not vertically centered in its header");
     }
 
     unsigned char linear_to_srgb8(float value) {
@@ -156,6 +183,7 @@ int main(int argc, char** argv) {
         const std::vector<float> first = composition.read_frame_rgba_float();
         if (first.size() != 640u * 400u * 4u || !different_from_background(first, 0.09f))
             throw std::runtime_error("projected graph is not visible in offscreen output");
+        verify_title_placement(first, 640, 400, *nodegraph.scene_view());
 
         nodegraph.scene_view()->invalidate_scene();
         if (!composition.render_frame())
@@ -168,6 +196,16 @@ int main(int argc, char** argv) {
             maximum_delta = std::max(maximum_delta, std::fabs(first[index] - second[index]));
         if (maximum_delta > 0.0005f)
             throw std::runtime_error("offscreen projection changed between identical frames");
+
+        auto& view = *nodegraph.scene_view();
+        view.set_zoom(2.5f, view.world_to_screen({-180.0f, -55.0f}));
+        composition.request_repaint();
+        if (!composition.render_frame())
+            throw std::runtime_error("offscreen composition did not render the zoomed graph");
+        const auto zoomed = composition.read_frame_rgba_float();
+        if (zoomed.size() != first.size())
+            throw std::runtime_error("zoomed offscreen output size changed");
+        verify_title_placement(zoomed, 640, 400, view);
 
         if (!output_path.empty())
             write_ppm(output_path, second, 640, 400);
