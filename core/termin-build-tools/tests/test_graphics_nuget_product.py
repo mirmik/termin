@@ -130,9 +130,11 @@ def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> Non
             "buildTransitive/net8.0-windows7.0/Termin.Graphics.targets"
         )
         targets = archive.read(targets_name).decode("utf-8")
-        ElementTree.fromstring(targets)
-        assert "TerminGraphicsCopyShaderResources" in targets
-        assert "$(OutDir)share\\termin" in targets
+        content = ElementTree.fromstring(targets).find(".//{*}Content")
+        assert content is not None
+        assert content.attrib["Link"] == r"share\termin\%(RecursiveDir)%(Filename)%(Extension)"
+        assert content.attrib["CopyToOutputDirectory"] == "PreserveNewest"
+        assert content.attrib["CopyToPublishDirectory"] == "PreserveNewest"
         nuspec = archive.read("Termin.Graphics.nuspec").decode("utf-8")
         assert "<id>Termin.Graphics</id>" in nuspec
         assert f"<version>{VERSION}</version>" in nuspec

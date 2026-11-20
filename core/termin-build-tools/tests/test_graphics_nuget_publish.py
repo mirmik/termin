@@ -21,6 +21,7 @@ from termin_build.graphics_nuget_publish import (
     validate_release_candidate,
     verify_remote_package,
 )
+from termin_build.versioning import public_version
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -166,7 +167,7 @@ def test_validates_candidate_bound_to_passed_gate(tmp_path: Path) -> None:
 
     release = validate_release_candidate(REPO_ROOT, candidate, evidence)
 
-    assert release.version == "0.5.2"
+    assert release.version == public_version()
     assert release.source_revision == REVISION
     assert [package.package_id for package in release.packages] == [
         "Termin.Graphics",
@@ -314,8 +315,8 @@ def test_dry_run_prints_ordered_plan_without_push(
     publish_release(release, client=client, upload=False)
 
     output = capsys.readouterr().out
-    assert output.index("Termin.Graphics 0.5.2") < output.index(
-        "Termin.Graphics.Wpf 0.5.2"
+    assert output.index(f"Termin.Graphics {release.version}") < output.index(
+        f"Termin.Graphics.Wpf {release.version}"
     )
     assert "action=would upload" in output
     assert client.pushes == []

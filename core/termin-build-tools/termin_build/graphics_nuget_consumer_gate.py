@@ -821,25 +821,29 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
                 log=results / "restore.log",
                 timeout_seconds=300,
             )
-            _run_command(
-                [
-                    str(dotnet),
-                    "build",
-                    str(project),
-                    "--configuration",
-                    "Release",
-                    "--runtime",
-                    lock.runtime_identifier,
-                    "--no-restore",
-                    "--output",
-                    str(app_output),
-                ],
-                cwd=project_root,
-                environment=environment,
-                log=results / "build.log",
-                timeout_seconds=600,
-            )
-            output_records = validate_consumer_output(app_output, lock, manifest)
+            for command, destination in (
+                ("build", workspace / "build-output"),
+                ("publish", app_output),
+            ):
+                _run_command(
+                    [
+                        str(dotnet),
+                        command,
+                        str(project),
+                        "--configuration",
+                        "Release",
+                        "--runtime",
+                        lock.runtime_identifier,
+                        "--no-restore",
+                        "--output",
+                        str(destination),
+                    ],
+                    cwd=project_root,
+                    environment=environment,
+                    log=results / f"{command}.log",
+                    timeout_seconds=600,
+                )
+                output_records = validate_consumer_output(destination, lock, manifest)
             run_output = _run_command(
                 [str(dotnet), str(app_output / "TerminGraphicsNugetConsumer.dll")],
                 cwd=app_output,

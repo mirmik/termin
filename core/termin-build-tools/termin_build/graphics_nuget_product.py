@@ -341,22 +341,16 @@ def _license_payloads(
     return payloads, records
 
 
-def _targets_payload(package_id: str) -> bytes:
+def _targets_payload() -> bytes:
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
         "  <ItemGroup>\n"
-        f'    <_{package_id.replace(".", "")}ShaderResource '
-        'Include="$(MSBuildThisFileDirectory)..\\..\\share\\termin\\**\\*" />\n'
+        '    <Content Include="$(MSBuildThisFileDirectory)..\\..\\share\\termin\\**\\*"\n'
+        '             Link="share\\termin\\%(RecursiveDir)%(Filename)%(Extension)"\n'
+        '             CopyToOutputDirectory="PreserveNewest"\n'
+        '             CopyToPublishDirectory="PreserveNewest" Visible="false" />\n'
         "  </ItemGroup>\n"
-        f'  <Target Name="{package_id.replace(".", "")}CopyShaderResources" '
-        'AfterTargets="Build">\n'
-        "    <Copy\n"
-        f'      SourceFiles="@(_{package_id.replace(".", "")}ShaderResource)"\n'
-        f'      DestinationFiles="@(_{package_id.replace(".", "")}ShaderResource->'
-        "'$(OutDir)share\\termin\\%(RecursiveDir)%(Filename)%(Extension)')\"\n"
-        '      SkipUnchangedFiles="true" />\n'
-        "  </Target>\n"
         "</Project>\n"
     ).encode("utf-8")
 
@@ -694,7 +688,7 @@ def build_product(
     wpf_payloads.update(common_payloads)
     runtime_payloads[
         f"buildTransitive/{lock.target_framework}/{lock.runtime_package}.targets"
-    ] = _targets_payload(lock.runtime_package)
+    ] = _targets_payload()
     termin_license = next(
         record["package_path"]
         for record in license_records

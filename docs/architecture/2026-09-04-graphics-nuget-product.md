@@ -14,7 +14,8 @@ Termin Graphics is published to .NET consumers as two coupled packages:
 
 - `Termin.Graphics` owns `Termin.Native.dll`, the Windows x64 native DLL
   closure, precompiled D3D11 shader resources, and the transitive MSBuild target
-  that copies those resources to consumer output;
+  that delivers those resources under `share/termin` in both build and
+  publish output;
 - `Termin.Graphics.Wpf` owns `Termin.Wpf.dll` and has an exact-version
   dependency on `Termin.Graphics`.
 
@@ -71,9 +72,10 @@ scene, display, render-pipeline, and component libraries remain forbidden.
 1. `task package:graphics:nuget` builds the canonical Windows graphics SDK with
    SDL, Vulkan, and OpenGL disabled, then creates an atomic local candidate.
 2. `task test:graphics:nuget` rebuilds that candidate, copies it into an
-   external temporary feed, and verifies managed references, native loading,
-   shader copying, and a real WPF D3D11 retained-chart frame without access to
-   the checkout or staged SDK at runtime. The gate preserves its report, logs,
+   external temporary feed, and verifies managed assemblies, native libraries,
+   and resources in both build and publish output. It runs the WPF D3D11 chart
+   and node graph from the publish directory without access to the checkout
+   or staged SDK at runtime. The gate preserves its report, logs,
    and exact candidate manifest under `build/graphics-nuget-consumer-gate`.
 3. `task publish:graphics:nuget` validates the candidate and its passed consumer
    evidence, checks both remote versions, and prints the exact dry-run plan.
