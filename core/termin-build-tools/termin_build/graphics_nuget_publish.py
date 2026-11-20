@@ -612,15 +612,29 @@ def publish_release(
                 file=sys.stderr,
                 flush=True,
             )
-        for attempt in range(visibility_attempts):
+        else:
+            print(
+                f"NuGet accepted {package.path.name}. Checking download availability...",
+                flush=True,
+            )
+        wait_started = time.monotonic()
+        for attempt in range(1, visibility_attempts + 1):
             current = _remote_evidence(client, package)
             if current is not None:
                 print(
                     f"Remote {package.package_id} {package.version} matches every "
-                    "candidate member."
+                    "candidate member.",
+                    flush=True,
                 )
                 break
-            if attempt + 1 < visibility_attempts:
+            if attempt < visibility_attempts:
+                print(
+                    f"{package.path.name} is not available for download yet "
+                    f"(HTTP 404, check {attempt}/{visibility_attempts}, "
+                    f"{time.monotonic() - wait_started:.0f}s elapsed). "
+                    f"Checking again in {visibility_delay:g}s.",
+                    flush=True,
+                )
                 sleep(visibility_delay)
         else:
             detail = f": {push_error}" if push_error is not None else ""

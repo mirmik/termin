@@ -322,21 +322,41 @@ def test_dry_run_prints_ordered_plan_without_push(
     assert client.pushes == []
 
 
-def test_publish_uploads_base_then_wpf_and_reconciles(tmp_path: Path) -> None:
+def test_publish_reports_acceptance_and_waits_for_each_download(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     candidate, evidence = _candidate(tmp_path)
     release = validate_release_candidate(REPO_ROOT, candidate, evidence)
-    client = FakeNugetClient(release)
+    first_check = {package.package_id for package in release.packages}
+
+    class DelayedNugetClient(FakeNugetClient):
+        def download_package(self, package_id: str, version: str) -> bytes | None:
+            if package_id in self.remote and package_id in first_check:
+                first_check.remove(package_id)
+                return None
+            return super().download_package(package_id, version)
+
+    client = DelayedNugetClient(release)
 
     publish_release(
         release,
         client=client,
         upload=True,
         api_key="secret",
-        visibility_delay=0,
+        visibility_attempts=2,
+        visibility_delay=15,
         sleep=lambda _seconds: None,
     )
 
     assert client.pushes == ["Termin.Graphics", "Termin.Graphics.Wpf"]
+    output = capsys.readouterr().out
+    for package in release.packages:
+        accepted = output.index(f"NuGet accepted {package.path.name}")
+        waiting = output.index(f"{package.path.name} is not available for download yet")
+        verified = output.index(f"Remote {package.package_id} {package.version} matches")
+        assert accepted < waiting < verified
+        assert "HTTP 404, check 1/2" in output[waiting:verified]
+        assert "Checking again in 15s." in output[waiting:verified]
 
 
 def test_uncertain_push_logs_original_error_before_reconciliation(
@@ -361,9 +381,11 @@ def test_uncertain_push_logs_original_error_before_reconciliation(
             sleep=lambda _seconds: None,
         )
 
+    output = capsys.readouterr()
+    assert "NuGet accepted" not in output.out
     assert (
         "reconciling remote content before failing: NuGet push failed: HTTP 400"
-        in capsys.readouterr().err
+        in output.err
     )
 
 
