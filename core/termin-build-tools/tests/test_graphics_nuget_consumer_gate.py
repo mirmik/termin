@@ -49,7 +49,7 @@ def _output_payloads(lock: GraphicsNugetLock) -> dict[str, bytes]:
 
 def _manifest(lock: GraphicsNugetLock, payloads: dict[str, bytes]) -> dict[str, object]:
     archive_paths = {
-        "Termin.Native.dll": f"lib/{lock.target_framework}/Termin.Native.dll",
+        "Termin.Native.dll": f"lib/{lock.runtime_framework}/Termin.Native.dll",
         "Termin.Wpf.dll": f"lib/{lock.target_framework}/Termin.Wpf.dll",
     }
     archive_paths.update(
@@ -77,6 +77,12 @@ def _manifest(lock: GraphicsNugetLock, payloads: dict[str, bytes]) -> dict[str, 
             wpf_files.append(record)
         else:
             runtime_files.append(record)
+    legacy_payload = b"legacy managed WPF"
+    wpf_files.append({
+        "path": "lib/netcoreapp3.1/Termin.Wpf.dll",
+        "sha256": _sha256(legacy_payload),
+        "size": len(legacy_payload),
+    })
     return {
         "packages": [
             {"id": lock.runtime_package, "archive_files": runtime_files},
@@ -101,7 +107,7 @@ def test_consumer_project_is_deterministic_and_package_reference_only() -> None:
     assert first == second
     assert set(first) == {"TerminGraphicsNugetConsumer.csproj", "Program.cs"}
     project = first["TerminGraphicsNugetConsumer.csproj"]
-    assert f"<TargetFramework>{lock.target_framework}</TargetFramework>" in project
+    assert f"<TargetFrameworks>{';'.join(lock.wpf_assemblies)}</TargetFrameworks>" in project
     assert f"<RuntimeIdentifier>{lock.runtime_identifier}</RuntimeIdentifier>" in project
     assert "<PlatformTarget>x64</PlatformTarget>" in project
     assert "<TreatWarningsAsErrors>true</TreatWarningsAsErrors>" in project
@@ -188,18 +194,25 @@ def test_output_validation_records_exact_candidate_hashes(tmp_path: Path) -> Non
     payloads = _output_payloads(lock)
     _write_output(tmp_path, payloads)
 
-    records = validate_consumer_output(tmp_path, lock, _manifest(lock, payloads))
+    manifest = _manifest(lock, payloads)
+    records = validate_consumer_output(tmp_path, lock, manifest, lock.target_framework)
 
     by_path = {record["path"]: record for record in records}
     assert by_path["Termin.Native.dll"] == {
         "kind": "managed assembly",
         "path": "Termin.Native.dll",
-        "package_path": f"lib/{lock.target_framework}/Termin.Native.dll",
+        "package_path": f"lib/{lock.runtime_framework}/Termin.Native.dll",
         "sha256": _sha256(payloads["Termin.Native.dll"]),
         "size": len(payloads["Termin.Native.dll"]),
     }
     shader = f"share/termin/{lock.required_resources[0].as_posix()}"
     assert by_path[shader]["sha256"] == _sha256(payloads[shader])
+
+    with pytest.raises(GraphicsNugetConsumerGateError, match="hash mismatch for managed assembly Termin.Wpf.dll"):
+        validate_consumer_output(tmp_path, lock, manifest, "netcoreapp3.1")
+    (tmp_path / "Termin.Wpf.dll").write_bytes(b"legacy managed WPF")
+    legacy = validate_consumer_output(tmp_path, lock, manifest, "netcoreapp3.1")
+    assert any(record["package_path"] == "lib/netcoreapp3.1/Termin.Wpf.dll" for record in legacy)
 
 
 def test_output_validation_accepts_nested_native_layout(tmp_path: Path) -> None:
@@ -211,7 +224,7 @@ def test_output_validation_accepts_nested_native_layout(tmp_path: Path) -> None:
     library = "termin_graphics2.dll"
     (tmp_path / library).replace(nested / library)
 
-    records = validate_consumer_output(tmp_path, lock, _manifest(lock, payloads))
+    records = validate_consumer_output(tmp_path, lock, _manifest(lock, payloads), lock.target_framework)
 
     by_package_path = {record["package_path"]: record for record in records}
     package_path = f"runtimes/{lock.runtime_identifier}/native/{library}"
@@ -234,6 +247,7 @@ def test_output_validation_names_missing_native_library(tmp_path: Path) -> None:
             tmp_path,
             lock,
             _manifest(lock, complete_payloads),
+            lock.target_framework,
         )
 
 
@@ -253,6 +267,7 @@ def test_output_validation_names_missing_shader_resource(tmp_path: Path) -> None
             tmp_path,
             lock,
             _manifest(lock, complete_payloads),
+            lock.target_framework,
         )
 
 
@@ -269,7 +284,7 @@ def test_output_validation_rejects_payload_different_from_package(
         GraphicsNugetConsumerGateError,
         match="consumer output hash mismatch for managed assembly Termin.Wpf.dll",
     ):
-        validate_consumer_output(tmp_path, lock, manifest)
+        validate_consumer_output(tmp_path, lock, manifest, lock.target_framework)
 
 
 def test_output_validation_rejects_undeclared_product_payload(tmp_path: Path) -> None:
@@ -282,7 +297,7 @@ def test_output_validation_rejects_undeclared_product_payload(tmp_path: Path) ->
         GraphicsNugetConsumerGateError,
         match="native libraries absent from the candidate: termin_unexpected.dll",
     ):
-        validate_consumer_output(tmp_path, lock, _manifest(lock, payloads))
+        validate_consumer_output(tmp_path, lock, _manifest(lock, payloads), lock.target_framework)
 
 
 def test_isolated_environment_scrubs_termin_and_checkout_paths(tmp_path: Path) -> None:

@@ -1,9 +1,10 @@
 {
-  "schema": 1,
+  "schema": 2,
   "product": "termin-graphics",
   "platform": "windows-x64",
   "runtime_identifier": "win-x64",
   "target_framework": "net8.0-windows7.0",
+  "runtime_framework": "netstandard2.1",
   "csharp_profile": "plot-d3d11",
   "packages": {
     "runtime": "Termin.Graphics",
@@ -11,7 +12,10 @@
   },
   "managed_assemblies": {
     "runtime": "csharp/lib/netstandard2.1/Termin.Native.dll",
-    "wpf": "csharp/lib/net8.0-windows/Termin.Wpf.dll"
+    "wpf": {
+      "netcoreapp3.1": "csharp/lib/netcoreapp3.1/Termin.Wpf.dll",
+      "net8.0-windows7.0": "csharp/lib/net8.0-windows/Termin.Wpf.dll"
+    }
   },
   "native_runtime_root": "csharp/runtimes/win-x64/native",
   "resource_root": "csharp/share/termin",

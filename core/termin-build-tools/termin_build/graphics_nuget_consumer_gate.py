@@ -24,7 +24,7 @@ from .graphics_nuget_product import (
 
 REPORT_NAME = "termin-graphics-nuget-consumer-report.json"
 REPORT_KIND = "termin-graphics-nuget-consumer-gate"
-REPORT_SCHEMA = 1
+REPORT_SCHEMA = 2
 SMOKE_MARKER = "TERMIN_GRAPHICS_NUGET_SMOKE="
 NATIVE_DOCUMENT_MODULES = frozenset({
     "termin_nodegraph_core.dll",
@@ -51,15 +51,19 @@ def consumer_project_files(lock: GraphicsNugetLock, version: str) -> dict[str, s
     project = f"""<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>{lock.target_framework}</TargetFramework>
+    <TargetFrameworks>{';'.join(lock.wpf_assemblies)}</TargetFrameworks>
     <RuntimeIdentifier>{lock.runtime_identifier}</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <PlatformTarget>x64</PlatformTarget>
     <UseWPF>true</UseWPF>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>10.0</LangVersion>
     <Nullable>enable</Nullable>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netcoreapp3.1'">
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <UseAppHost>false</UseAppHost>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="{lock.wpf_package}" Version="{version}" />
@@ -329,6 +333,47 @@ def _write_consumer_project(
     return project_root / "TerminGraphicsNugetConsumer.csproj"
 
 
+def _check_base_consumer(
+    workspace: Path,
+    lock: GraphicsNugetLock,
+    version: str,
+    dotnet: Path,
+    environment: dict[str, str],
+    config: Path,
+    log: Path,
+) -> str:
+    """Compile the base bindings as a portable library without WPF references."""
+    project_root = workspace / "base-consumer"
+    project_root.mkdir()
+    project = project_root / "BaseConsumer.csproj"
+    project.write_text(f'''<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>{lock.runtime_framework}</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="{lock.runtime_package}" Version="[{version}]" />
+  </ItemGroup>
+</Project>
+''', encoding="utf-8")
+    (project_root / "Consumer.cs").write_text(
+        "using Termin.Native;\n"
+        "public static class Consumer { public static NativeNodeGraph CreateGraph() => new NativeNodeGraph(); }\n",
+        encoding="utf-8",
+    )
+    _run_command(
+        [str(dotnet), "build", str(project), "--configuration", "Release", f"-p:RestoreConfigFile={config}"],
+        cwd=project_root, environment=environment, log=log, timeout_seconds=300,
+    )
+    assets = json.loads((project_root / "obj" / "project.assets.json").read_text(encoding="utf-8-sig"))
+    package = f"{lock.runtime_package}/{version}"
+    assembly = f"lib/{lock.runtime_framework}/Termin.Native.dll"
+    (selected,) = assets["targets"].values()
+    if set(selected) != {package} or set(selected[package]["compile"]) != {assembly}:
+        raise GraphicsNugetConsumerGateError(f"Unexpected {lock.runtime_framework} compile assets: {selected}")
+    return assembly
+
+
 def _nuget_config(feed: Path) -> str:
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -450,11 +495,12 @@ def validate_consumer_output(
     output_root: Path,
     lock: GraphicsNugetLock,
     manifest: dict[str, object],
+    wpf_framework: str,
 ) -> list[dict[str, object]]:
     """Validate and describe the package payload copied to consumer output."""
     managed_package_paths = {
-        "Termin.Native.dll": f"lib/{lock.target_framework}/Termin.Native.dll",
-        "Termin.Wpf.dll": f"lib/{lock.target_framework}/Termin.Wpf.dll",
+        "Termin.Native.dll": f"lib/{lock.runtime_framework}/Termin.Native.dll",
+        "Termin.Wpf.dll": f"lib/{wpf_framework}/Termin.Wpf.dll",
     }
     native_prefix = f"runtimes/{lock.runtime_identifier}/native/"
     resource_prefix = "share/termin/"
@@ -782,7 +828,6 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
         feed = workspace / "feed"
         project_root = workspace / "consumer"
         results = workspace / "evidence"
-        app_output = workspace / "app-output"
         feed.mkdir()
         results.mkdir()
         shutil.copy2(candidate / PRODUCT_MANIFEST, results / "candidate-manifest.json")
@@ -801,9 +846,12 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
 
         status = "failed"
         failure: str | None = None
-        output_records: list[dict[str, object]] = []
-        smoke: dict[str, object] | None = None
+        frameworks: dict[str, dict[str, object]] = {}
+        base_compile_asset: str | None = None
         try:
+            base_compile_asset = _check_base_consumer(
+                workspace, lock, version, dotnet, environment, config, results / "build-base.log"
+            )
             _run_command(
                 [
                     str(dotnet),
@@ -821,37 +869,34 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
                 log=results / "restore.log",
                 timeout_seconds=300,
             )
-            for command, destination in (
-                ("build", workspace / "build-output"),
-                ("publish", app_output),
-            ):
-                _run_command(
-                    [
-                        str(dotnet),
-                        command,
-                        str(project),
-                        "--configuration",
-                        "Release",
-                        "--runtime",
-                        lock.runtime_identifier,
-                        "--no-restore",
-                        "--output",
-                        str(destination),
-                    ],
-                    cwd=project_root,
+            for framework in lock.wpf_assemblies:
+                for command in ("build", "publish"):
+                    destination = workspace / framework / command
+                    _run_command(
+                        [
+                            str(dotnet), command, str(project),
+                            "--configuration", "Release", "--framework", framework,
+                            "--runtime", lock.runtime_identifier, "--no-restore",
+                            "--output", str(destination),
+                        ],
+                        cwd=project_root,
+                        environment=environment,
+                        log=results / f"{command}-{framework}.log",
+                        timeout_seconds=600,
+                    )
+                    output_records = validate_consumer_output(destination, lock, manifest, framework)
+                app_output = workspace / framework / "publish"
+                run_output = _run_command(
+                    [str(dotnet), str(app_output / "TerminGraphicsNugetConsumer.dll")],
+                    cwd=app_output,
                     environment=environment,
-                    log=results / f"{command}.log",
-                    timeout_seconds=600,
+                    log=results / f"run-{framework}.log",
+                    timeout_seconds=45,
                 )
-                output_records = validate_consumer_output(destination, lock, manifest)
-            run_output = _run_command(
-                [str(dotnet), str(app_output / "TerminGraphicsNugetConsumer.dll")],
-                cwd=app_output,
-                environment=environment,
-                log=results / "run.log",
-                timeout_seconds=45,
-            )
-            smoke = _parse_smoke_evidence(run_output)
+                frameworks[framework] = {
+                    "consumer_output": output_records,
+                    "smoke": _parse_smoke_evidence(run_output),
+                }
             leaks = _checkout_leaks(workspace, prohibited_roots)
             if leaks:
                 raise GraphicsNugetConsumerGateError(
@@ -883,8 +928,8 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
                 }
                 for package in manifest["packages"]
             ],
-            "consumer_output": output_records,
-            "smoke": smoke,
+            "frameworks": frameworks,
+            "base_compile_asset": base_compile_asset,
             "logs": sorted(path.name for path in results.glob("*.log")),
             "failure": failure,
         }

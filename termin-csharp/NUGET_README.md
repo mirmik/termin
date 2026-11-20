@@ -3,14 +3,15 @@
 Termin Graphics provides the focused C# bindings and native runtime used by
 Termin's retained 2D/3D charts, native nodegraph and UI documents on Windows.
 
-The initial public product supports .NET 8 applications on Windows x64 and the
-D3D11 backend. It is built from Termin's `plot-d3d11` profile and does not
-include the editor, Python runtime, SDL, Vulkan, or legacy OpenGL.
+The native runtime uses D3D11 on Windows x64. The `Termin.Graphics` package
+provides its managed bindings for `netstandard2.1`, so compatible non-WPF
+hosts can reference it directly. `Termin.Graphics.Wpf` supplies separate WPF
+assemblies for `netcoreapp3.1` and `net8.0-windows7.0`.
 
 The native binaries use the dynamic Microsoft C++ runtime. Install the latest
 [Microsoft Visual C++ v14 Redistributable for x64](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
-on the target machine. The `net8.0-windows7.0` asset name states the Windows API
-contract; run it only on a Windows release supported by .NET 8.
+on the target machine. For a framework-dependent WPF application, install the
+x64 Windows Desktop Runtime for the application's target framework.
 
 Use the base runtime directly for non-WPF hosts:
 

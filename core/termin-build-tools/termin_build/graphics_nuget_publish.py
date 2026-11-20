@@ -206,6 +206,8 @@ def _validate_gate_report(
     evidence_root: Path,
     candidate_manifest_path: Path,
     manifest: dict[str, object],
+    wpf_frameworks: set[str],
+    runtime_framework: str,
 ) -> None:
     evidence_manifest_path = evidence_root / "candidate-manifest.json"
     try:
@@ -229,6 +231,7 @@ def _validate_gate_report(
         "platform": manifest.get("platform"),
         "runtime_identifier": manifest.get("runtime_identifier"),
         "target_framework": manifest.get("target_framework"),
+        "base_compile_asset": f"lib/{runtime_framework}/Termin.Native.dll",
         "failure": None,
     }
     actual_header = {key: report.get(key) for key in expected_header}
@@ -248,17 +251,22 @@ def _validate_gate_report(
         raise GraphicsNugetPublishError(
             "consumer gate report candidate manifest digest does not match evidence"
         )
-    smoke = _require_object(report.get("smoke"), "consumer gate smoke")
-    if (
-        smoke.get("status") != "passed"
-        or smoke.get("backend") != "D3D11"
-        or smoke.get("wpf") is not True
-    ):
+    frameworks = _require_object(report.get("frameworks"), "consumer gate frameworks")
+    if frameworks.keys() != wpf_frameworks:
         raise GraphicsNugetPublishError(
-            f"consumer gate has no passed WPF/D3D11 smoke: {smoke!r}"
+            f"consumer gate framework mismatch: expected {sorted(wpf_frameworks)}, got {sorted(frameworks)}"
         )
-    if not _require_array(report.get("consumer_output"), "consumer gate output"):
-        raise GraphicsNugetPublishError("consumer gate recorded no validated output files")
+    for framework, raw_evidence in frameworks.items():
+        evidence = _require_object(raw_evidence, f"{framework} consumer gate evidence")
+        smoke = _require_object(evidence.get("smoke"), f"{framework} consumer gate smoke")
+        if (
+            smoke.get("status") != "passed"
+            or smoke.get("backend") != "D3D11"
+            or smoke.get("wpf") is not True
+        ):
+            raise GraphicsNugetPublishError(f"{framework} has no passed WPF/D3D11 smoke: {smoke!r}")
+        if not _require_array(evidence.get("consumer_output"), f"{framework} consumer gate output"):
+            raise GraphicsNugetPublishError(f"{framework} consumer gate recorded no validated output files")
     expected_packages = [
         {
             "id": package["id"],
@@ -306,8 +314,10 @@ def validate_release_candidate(
         )
 
     manifest_path = candidate_root / PRODUCT_MANIFEST
-    _validate_gate_report(evidence_root, manifest_path, manifest)
     lock = load_lock(repo_root)
+    _validate_gate_report(
+        evidence_root, manifest_path, manifest, set(lock.wpf_assemblies), lock.runtime_framework
+    )
     package_order = (lock.runtime_package, lock.wpf_package)
     raw_packages = {
         _require_string(package.get("id"), "candidate package id"): package

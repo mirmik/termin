@@ -38,7 +38,8 @@ def _synthetic_sdk(tmp_path: Path) -> Path:
     root = tmp_path / "sdk-graphics"
     lock = load_lock(REPO_ROOT)
     _write_file(root, lock.runtime_assembly, b"managed-runtime")
-    _write_file(root, lock.wpf_assembly, b"managed-wpf")
+    for source in lock.wpf_assemblies.values():
+        _write_file(root, source, b"managed-wpf")
     for name in lock.required_native_libraries:
         _write_file(root, lock.native_runtime_root / name, name.encode("ascii"))
     for relative in lock.required_resources:
@@ -60,6 +61,7 @@ def _write_evidence(candidate: Path, evidence: Path) -> None:
         "platform": manifest["platform"],
         "runtime_identifier": manifest["runtime_identifier"],
         "target_framework": manifest["target_framework"],
+        "base_compile_asset": f"lib/{load_lock(REPO_ROOT).runtime_framework}/Termin.Native.dll",
         "candidate_manifest": {
             "filename": "candidate-manifest.json",
             "sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
@@ -73,8 +75,13 @@ def _write_evidence(candidate: Path, evidence: Path) -> None:
             }
             for package in manifest["packages"]
         ],
-        "consumer_output": [{"path": "Termin.Native.dll"}],
-        "smoke": {"status": "passed", "backend": "D3D11", "wpf": True},
+        "frameworks": {
+            framework: {
+                "consumer_output": [{"path": "Termin.Native.dll"}],
+                "smoke": {"status": "passed", "backend": "D3D11", "wpf": True},
+            }
+            for framework in load_lock(REPO_ROOT).wpf_assemblies
+        },
         "logs": ["build.log", "restore.log", "run.log"],
         "failure": None,
     }
@@ -193,6 +200,17 @@ def test_rejects_evidence_for_a_different_candidate(tmp_path: Path) -> None:
     evidence_manifest.write_bytes(evidence_manifest.read_bytes() + b" ")
 
     with pytest.raises(GraphicsNugetPublishError, match="different candidate manifest"):
+        validate_release_candidate(REPO_ROOT, candidate, evidence)
+
+
+def test_rejects_evidence_missing_legacy_consumer(tmp_path: Path) -> None:
+    candidate, evidence = _candidate(tmp_path)
+    report_path = evidence / REPORT_NAME
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    del report["frameworks"]["netcoreapp3.1"]
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    with pytest.raises(GraphicsNugetPublishError, match="framework mismatch"):
         validate_release_candidate(REPO_ROOT, candidate, evidence)
 
 

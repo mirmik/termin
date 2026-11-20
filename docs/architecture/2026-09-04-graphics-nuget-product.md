@@ -1,12 +1,9 @@
 # Termin Graphics NuGet product contract
 
-Status: version 0.5.2 published to NuGet.org on 2026-10-12; initial contract
-accepted on 2026-09-04.
-
-Published packages: [Termin.Graphics 0.5.2](https://www.nuget.org/packages/Termin.Graphics/0.5.2)
-and [Termin.Graphics.Wpf 0.5.2](https://www.nuget.org/packages/Termin.Graphics.Wpf/0.5.2).
-Both remote archives matched the gated candidate, and a fresh external consumer
-restored only from NuGet.org passed the retained-chart WPF/D3D11 smoke.
+The initial contract was accepted on 2026-09-04. The 0.5.4 distribution adds
+.NET Standard 2.1 bindings and a .NET Core 3.1 WPF adapter. The preceding
+release is available on NuGet.org. [Termin.Graphics 0.5.3](https://www.nuget.org/packages/Termin.Graphics/0.5.3)
+and [Termin.Graphics.Wpf 0.5.3](https://www.nuget.org/packages/Termin.Graphics.Wpf/0.5.3).
 
 ## Decision
 
@@ -20,22 +17,20 @@ Termin Graphics is published to .NET consumers as two coupled packages:
   dependency on `Termin.Graphics`.
 
 Both packages use the repository-wide public version from
-`build-system/version.toml`. The initial support matrix is deliberately narrow:
+`build-system/version.toml`. The supported combinations are
 
-- Windows x64;
-- .NET 8 with the `net8.0-windows7.0` NuGet asset group;
-- D3D11 only;
-- the existing `plot-d3d11` C# binding profile.
+- Base bindings at `lib/netstandard2.1/Termin.Native.dll` and resource copying
+  through `buildTransitive/netstandard2.1/Termin.Graphics.targets`.
+- WPF bindings at `lib/netcoreapp3.1/Termin.Wpf.dll` and
+  `lib/net8.0-windows7.0/Termin.Wpf.dll`. Each asset group depends on the
+  exact same base package version.
+- Windows x64 D3D11 native runtime for all managed targets, built with
+  the `plot-d3d11` C# binding profile.
 
-The `windows7.0` TFM suffix is an API-version marker, not a promise to run on
-Windows 7. Consumers need a Windows release supported by .NET 8 and the latest
-x64 Microsoft Visual C++ v14 Redistributable because the native libraries use
-the dynamic MSVC runtime.
-
-The public product does not promise Linux, macOS, another RID, SDL, Vulkan,
-OpenGL, the broad `full` C# binding profile, or the legacy `netcoreapp3.1` WPF
-target. Those can be added only as explicit, separately tested product
-variants.
+The `windows7.0` TFM suffix identifies the Windows API contract. Framework-
+dependent applications need the matching x64 .NET runtime. WPF applications
+use its Windows Desktop distribution. The native libraries use the dynamic
+MSVC runtime and require the x64 Microsoft Visual C++ v14 Redistributable.
 
 The existing `Termin.Native` managed assembly and namespace are retained. A
 package projection does not require a source/API rename.
@@ -72,10 +67,12 @@ scene, display, render-pipeline, and component libraries remain forbidden.
 1. `task package:graphics:nuget` builds the canonical Windows graphics SDK with
    SDL, Vulkan, and OpenGL disabled, then creates an atomic local candidate.
 2. `task test:graphics:nuget` rebuilds that candidate, copies it into an
-   external temporary feed, and verifies managed assemblies, native libraries,
-   and resources in both build and publish output. It runs the WPF D3D11 chart
-   and node graph from the publish directory without access to the checkout
-   or staged SDK at runtime. The gate preserves its report, logs,
+   external temporary feed, and compiles a `netstandard2.1` library referencing
+   only the base package. For both WPF target frameworks it verifies managed
+   assemblies, native libraries, and resources in build and publish output,
+   then runs the D3D11 chart and node graph from each publish directory.
+   The machine needs the corresponding targeting packs and x64 Windows Desktop
+   runtimes. The gate preserves its report, logs,
    and exact candidate manifest under `build/graphics-nuget-consumer-gate`.
 3. `task publish:graphics:nuget` validates the candidate and its passed consumer
    evidence, checks both remote versions, and prints the exact dry-run plan.
@@ -106,7 +103,7 @@ argument or written to evidence:
 
 ```powershell
 $env:NUGET_API_KEY = '<scoped secret>'
-task publish:graphics:nuget -- --upload --confirm-version 0.5.2
+task publish:graphics:nuget -- --upload --confirm-version 0.5.4
 Remove-Item Env:NUGET_API_KEY
 ```
 
