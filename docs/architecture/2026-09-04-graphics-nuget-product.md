@@ -71,8 +71,12 @@ scene, display, render-pipeline, and component libraries remain forbidden.
    only the base package. For both WPF target frameworks it verifies managed
    assemblies, native libraries, and resources in build and publish output,
    then runs the D3D11 chart and node graph from each publish directory.
-   The machine needs the corresponding targeting packs and x64 Windows Desktop
-   runtimes. The gate preserves its report, logs,
+   The temporary consumer workspace selects a stable .NET SDK starting at
+   8.0.100 with the `major` roll-forward policy and records the selected
+   version in `dotnet-sdk.log`. Offline restore requires the targeting and
+   apphost packs expected by that SDK. Running the smokes requires the x64
+   Windows Desktop runtimes for .NET Core 3.1 and .NET 8.
+   The gate preserves its report, logs,
    and exact candidate manifest under `build/graphics-nuget-consumer-gate`.
 3. `task publish:graphics:nuget` validates the candidate and its passed consumer
    evidence, checks both remote versions, and prints the exact dry-run plan.

@@ -830,6 +830,12 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
         results = workspace / "evidence"
         feed.mkdir()
         results.mkdir()
+        # Both consumers restore offline. Prefer the SDK for the newest target
+        # framework before a newer SDK that may require different targeting packs.
+        (workspace / "global.json").write_text(
+            json.dumps({"sdk": {"version": "8.0.100", "rollForward": "major", "allowPrerelease": False}}),
+            encoding="utf-8",
+        )
         shutil.copy2(candidate / PRODUCT_MANIFEST, results / "candidate-manifest.json")
         for package in manifest["packages"]:
             if not isinstance(package, dict) or not isinstance(package.get("filename"), str):
@@ -849,6 +855,11 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
         frameworks: dict[str, dict[str, object]] = {}
         base_compile_asset: str | None = None
         try:
+            sdk_version = _run_command(
+                [str(dotnet), "--version"], cwd=project_root, environment=environment,
+                log=results / "dotnet-sdk.log", timeout_seconds=30,
+            ).strip()
+            print(f"Graphics NuGet consumer gate using .NET SDK {sdk_version}", flush=True)
             base_compile_asset = _check_base_consumer(
                 workspace, lock, version, dotnet, environment, config, results / "build-base.log"
             )
