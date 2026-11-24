@@ -10,6 +10,7 @@
 #define SDL_MAIN_HANDLED
 #endif
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -17,12 +18,54 @@
 #include <cstring>
 #include <exception>
 
+#include "tcbase/profiler_scope.hpp"
 #include "termin/platform/sdl_backend_window.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/graphics_host.hpp"
 #include "tgfx2/i_command_list.hpp"
 #include "tgfx2/i_render_device.hpp"
+
+namespace {
+    constexpr std::array presentation_stages{
+        "Presentation output transform (wall)",
+        "Vulkan frame slot wait (wall)",
+        "Vulkan acquire image (wall)",
+        "Vulkan compose recording (wall)",
+        "Vulkan queue submit (wall)",
+        "Vulkan queue present (wall)",
+    };
+
+    bool record_present_profile(bool vulkan, std::array<double, presentation_stages.size()>& totals) {
+        const tc_frame_profile& frame = *tc_profiler_current_frame();
+        if (frame.section_count == 0 || std::strcmp(frame.sections[0].name, "Window Present") != 0) {
+            return false;
+        }
+        const size_t count = vulkan ? presentation_stages.size() : 1;
+        int child = frame.sections[0].first_child;
+        double elapsed = 0.0;
+        std::array<double, presentation_stages.size()> samples{};
+        for (size_t i = 0; i < count; ++i) {
+            if (child < 0 || child >= frame.section_count) {
+                return false;
+            }
+            const tc_section_timing& section = frame.sections[child];
+            if (section.parent_index != 0 || std::strcmp(section.name, presentation_stages[i]) != 0) {
+                return false;
+            }
+            elapsed += section.cpu_ms;
+            samples[i] = section.cpu_ms;
+            child = section.next_sibling;
+        }
+        if (child != -1 || elapsed > frame.sections[0].cpu_ms + 1e-6) {
+            return false;
+        }
+        for (size_t i = 0; i < count; ++i) {
+            totals[i] += samples[i];
+        }
+        return true;
+    }
+} // namespace
 
 int main() {
     try {
@@ -66,6 +109,8 @@ int main() {
             fprintf(stderr, "BackendWindow has no device\n");
             return 1;
         }
+
+        const bool vulkan = dev->backend_type() == tgfx::BackendType::Vulkan;
 
         // GLSL 410 core — explicit location qualifiers on ALL stage I/O.
         // Needed for Vulkan (SPIR-V strict requirement) and legal on
@@ -162,6 +207,9 @@ void main() {
 
         auto start = std::chrono::steady_clock::now();
         uint64_t frame_index = 0;
+        uint64_t profiled_frames = 0;
+        std::array<double, presentation_stages.size()> present_totals{};
+        tc_profiler_set_enabled(true);
 
         while (!win.should_close()) {
             win.poll_events();
@@ -198,10 +246,20 @@ void main() {
 
             // The ONE place where "publish a frame" happens. GL does blit
             // + SwapWindow; Vulkan does acquire + compose + present.
-            win.present(rt);
+            tc_profiler_begin_frame();
+            {
+                const tc::ProfilerScope scope("Window Present");
+                win.present(rt);
+            }
+            if (record_present_profile(vulkan, present_totals)) {
+                ++profiled_frames;
+            }
+            tc_profiler_end_frame();
 
             ++frame_index;
         }
+        tc_profiler_set_enabled(false);
+        tc_profiler_clear_history();
 
         dev->destroy(ib);
         dev->destroy(vb);
@@ -212,6 +270,15 @@ void main() {
         window.reset();
         graphics_session->close();
 
+        if (profiled_frames == 0) {
+            fprintf(stderr, "No frame recorded the expected sequential presentation stages\n");
+            return 1;
+        }
+        const size_t stage_count = vulkan ? presentation_stages.size() : 1;
+        for (size_t i = 0; i < stage_count; ++i) {
+            printf("%s: %.3f ms mean\n", presentation_stages[i],
+                   present_totals[i] / static_cast<double>(profiled_frames));
+        }
         printf("Frames: %llu. OK.\n", static_cast<unsigned long long>(frame_index));
         return 0;
     } catch (const std::exception& e) {

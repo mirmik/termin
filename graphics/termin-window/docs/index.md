@@ -62,6 +62,13 @@ offer `render_ready` (dirty and presentable) and `set_repaint_wake(handle)`;
 their dirty state survives unavailable presentation. Repaint invalidation during
 composition schedules another frame instead of being cleared at frame end.
 
+With native profiling enabled, `UI Present` includes the presentation output
+transform and, on Vulkan, separate stages for the frame slot wait, image
+acquire, composition command recording, queue submit and queue present. Each
+stage reports elapsed wall time on the calling thread, including any driver
+or compositor wait inside the measured call. The output transform includes its
+submission. Use the parent section for the total and its children for attribution.
+
 On Linux with SDL 2.0.22 or newer, a nonempty `WAYLAND_DISPLAY` makes native
 Wayland the preferred video driver, followed by X11 if Wayland cannot
 initialize. This avoids routing Wayland sessions through XWayland by SDL2's

@@ -4,6 +4,7 @@
 #include "tgfx2/vulkan/vulkan_render_device.hpp"
 #include "tgfx2/vulkan/vulkan_type_conversions.hpp"
 #include "vulkan_stats.hpp"
+#include "tcbase/profiler_scope.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -458,44 +459,8 @@ namespace tgfx {
     // Compose + present — the one-shot frame publisher
     // ---------------------------------------------------------------------------
 
-    bool VulkanSwapchain::compose_and_present(tgfx::TextureHandle color_tex) {
-        require_usable();
-        VkTextureResource* rt = device_.get_texture(color_tex);
-        if (!rt || !rt->image || !has_flag(rt->desc.usage, TextureUsage::CopySrc) ||
-            rt->desc.sample_count != 1 || vk::format_aspect_flags(rt->desc.format) != VK_IMAGE_ASPECT_COLOR_BIT ||
-            rt->current_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
-            tc_log_error("VulkanSwapchain: invalid compose source texture id=%u", color_tex.id);
-            return false; // No image acquired and no synchronization state changed.
-        }
-        using Clock = std::chrono::steady_clock;
-        const bool stats_enabled = vulkan_stats_enabled();
-        const auto timestamp = [stats_enabled] {
-            return stats_enabled ? Clock::now() : Clock::time_point{};
-        };
-        const auto total0 = timestamp();
-
-        // 1. Wait until the command buffer + sync objects for this slot
-        //    are free.
-        const auto wait0 = timestamp();
-        wait_for_current_frame();
-        const auto wait1 = timestamp();
-
-        // 2. Acquire an image from the swapchain.
-        uint32_t image_idx = 0;
-        VkSemaphore image_available = VK_NULL_HANDLE;
-        const auto acquire0 = timestamp();
-        VkResult ar = acquire(&image_idx, &image_available);
-        const auto acquire1 = timestamp();
-        if (ar == VK_ERROR_OUT_OF_DATE_KHR) {
-            return true; // caller should recreate
-        }
-        if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR) {
-            return false;
-        }
-
-        // 4. Record the compose command buffer: transitions + blit +
-        //    present-src transition.
-        const auto record0 = timestamp();
+    VkCommandBuffer VulkanSwapchain::record_compose_commands(const VkTextureResource& source, uint32_t image_idx) {
+        const tc::ProfilerScope scope("Vulkan compose recording (wall)");
         VkCommandBuffer cb = compose_command_buffers_[current_frame_];
         check(vkResetCommandBuffer(cb, 0), "reset compose commands");
 
@@ -515,9 +480,9 @@ namespace tgfx {
         rt_to_src.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         rt_to_src.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         rt_to_src.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        rt_to_src.oldLayout = rt->current_layout;
+        rt_to_src.oldLayout = source.current_layout;
         rt_to_src.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        rt_to_src.image = rt->image;
+        rt_to_src.image = source.image;
         rt_to_src.subresourceRange = range;
         rt_to_src.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
         rt_to_src.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -554,8 +519,8 @@ namespace tgfx {
                              1,
                              &sc_to_dst);
 
-        const bool raw_copy = rt->desc.width == width_ && rt->desc.height == height_ &&
-                              rt->desc.sample_count == 1 && vk::to_vk_format(rt->desc.format) == format_;
+        const bool raw_copy = source.desc.width == width_ && source.desc.height == height_ &&
+                              source.desc.sample_count == 1 && vk::to_vk_format(source.desc.format) == format_;
         if (raw_copy) {
             VkImageCopy copy{};
             copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -564,7 +529,7 @@ namespace tgfx {
             copy.dstSubresource.layerCount = 1;
             copy.extent = {width_, height_, 1};
             vkCmdCopyImage(cb,
-                           rt->image,
+                           source.image,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                            sc_image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -578,13 +543,13 @@ namespace tgfx {
             blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             blit.srcSubresource.layerCount = 1;
             blit.srcOffsets[0] = {0, 0, 0};
-            blit.srcOffsets[1] = {static_cast<int32_t>(rt->desc.width), static_cast<int32_t>(rt->desc.height), 1};
+            blit.srcOffsets[1] = {static_cast<int32_t>(source.desc.width), static_cast<int32_t>(source.desc.height), 1};
             blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             blit.dstSubresource.layerCount = 1;
             blit.dstOffsets[0] = {0, 0, 0};
             blit.dstOffsets[1] = {static_cast<int32_t>(width_), static_cast<int32_t>(height_), 1};
             vkCmdBlitImage(cb,
-                           rt->image,
+                           source.image,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                            sc_image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -618,21 +583,77 @@ namespace tgfx {
         // Reflect the transition on the tgfx2 side — next render pass
         // will see TRANSFER_SRC and transition appropriately.
         check(vkEndCommandBuffer(cb), "end compose commands");
+        return cb;
+    }
+
+    bool VulkanSwapchain::compose_and_present(tgfx::TextureHandle color_tex) {
+        require_usable();
+        VkTextureResource* rt = device_.get_texture(color_tex);
+        if (!rt || !rt->image || !has_flag(rt->desc.usage, TextureUsage::CopySrc) ||
+            rt->desc.sample_count != 1 || vk::format_aspect_flags(rt->desc.format) != VK_IMAGE_ASPECT_COLOR_BIT ||
+            rt->current_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            tc_log_error("VulkanSwapchain: invalid compose source texture id=%u", color_tex.id);
+            return false; // No image acquired and no synchronization state changed.
+        }
+        using Clock = std::chrono::steady_clock;
+        const bool stats_enabled = vulkan_stats_enabled();
+        const auto timestamp = [stats_enabled] {
+            return stats_enabled ? Clock::now() : Clock::time_point{};
+        };
+        const auto total0 = timestamp();
+
+        // 1. Wait until the command buffer + sync objects for this slot
+        //    are free.
+        const auto wait0 = timestamp();
+        {
+            const tc::ProfilerScope scope("Vulkan frame slot wait (wall)");
+            wait_for_current_frame();
+        }
+        const auto wait1 = timestamp();
+
+        // 2. Acquire an image from the swapchain.
+        uint32_t image_idx = 0;
+        VkSemaphore image_available = VK_NULL_HANDLE;
+        const auto acquire0 = timestamp();
+        VkResult ar;
+        {
+            const tc::ProfilerScope scope("Vulkan acquire image (wall)");
+            ar = acquire(&image_idx, &image_available);
+        }
+        const auto acquire1 = timestamp();
+        if (ar == VK_ERROR_OUT_OF_DATE_KHR) {
+            return true; // caller should recreate
+        }
+        if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR) {
+            return false;
+        }
+
+        // 3. Record the compose command buffer: transitions + blit +
+        //    present-src transition.
+        const auto record0 = timestamp();
+        const VkCommandBuffer cb = record_compose_commands(*rt, image_idx);
         const auto record1 = timestamp();
 
-        // 5. Submit waiting on image_available, signalling render_finished
+        // 4. Submit waiting on image_available, signalling render_finished
         //    for this image and tripping the in-flight fence.
         VkSemaphore render_done = render_finished_semaphores_[image_idx];
         const auto submit0 = timestamp();
-        submit_frame(cb, image_idx, image_available);
-        rt->current_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        {
+            const tc::ProfilerScope scope("Vulkan queue submit (wall)");
+            submit_frame(cb, image_idx, image_available);
+            rt->current_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        }
         const auto submit1 = timestamp();
 
-        // 6. Present. OUT_OF_DATE requires recreation. SUBOPTIMAL remains usable:
+        // 5. Present. OUT_OF_DATE requires recreation. SUBOPTIMAL remains usable:
         // Android reports it continuously when identity differs from the current
         // surface transform, and resize callbacks already recreate explicitly.
         const auto present0 = timestamp();
-        VkResult pr = present(image_idx, render_done);
+        VkResult pr;
+        {
+            const tc::ProfilerScope scope("Vulkan queue present (wall)");
+            pr = present(image_idx, render_done);
+        }
         const auto present1 = timestamp();
         const bool should_recreate = swapchain_result_requires_recreate(pr);
 

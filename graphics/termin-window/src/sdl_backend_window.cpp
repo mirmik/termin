@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "tcbase/profiler_scope.hpp"
 #include "tgfx2/device_factory.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -1265,19 +1266,23 @@ namespace termin {
         const tgfx::TextureDesc presentation_desc =
             impl_->device_ref->texture_desc(impl_->presentation_texture);
         const bool low_precision_target = tgfx::is_rgba8_family(presentation_desc.format);
-        output_context.begin_frame();
-        const bool transformed = impl_->output_transform.record(
-            output_context,
-            color_tex,
-            impl_->presentation_texture,
-            tgfx::OutputTransformParams{
-                .sampled_input_encoding = tgfx::TextureEncoding::Linear,
-                .target_encoding = tgfx::texture_encoding_for_format(presentation_desc.format),
-                .dither = low_precision_target ? tgfx::OutputDitherMode::StableSpatial
-                                               : tgfx::OutputDitherMode::Disabled,
-                .target_rgb_bits = static_cast<uint8_t>(low_precision_target ? 8 : 0),
-            });
-        output_context.end_frame();
+        bool transformed;
+        {
+            const tc::ProfilerScope scope("Presentation output transform (wall)");
+            output_context.begin_frame();
+            transformed = impl_->output_transform.record(
+                output_context,
+                color_tex,
+                impl_->presentation_texture,
+                tgfx::OutputTransformParams{
+                    .sampled_input_encoding = tgfx::TextureEncoding::Linear,
+                    .target_encoding = tgfx::texture_encoding_for_format(presentation_desc.format),
+                    .dither = low_precision_target ? tgfx::OutputDitherMode::StableSpatial
+                                                   : tgfx::OutputDitherMode::Disabled,
+                    .target_rgb_bits = static_cast<uint8_t>(low_precision_target ? 8 : 0),
+                });
+            output_context.end_frame();
+        }
         if (!transformed) {
             return;
         }

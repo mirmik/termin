@@ -23,6 +23,7 @@
 namespace tgfx {
 
     class VulkanRenderDevice;
+    struct VkTextureResource;
 
     constexpr VkSurfaceTransformFlagBitsKHR
     select_swapchain_pre_transform(VkSurfaceTransformFlagsKHR supported_transforms) noexcept {
@@ -165,6 +166,7 @@ namespace tgfx {
     private:
         void wait_for_current_frame();
         void advance_frame();
+        VkCommandBuffer record_compose_commands(const VkTextureResource& source, uint32_t image_idx);
     public:
         PresentationMode presentation_mode() const {
             return requested_presentation_mode_;
