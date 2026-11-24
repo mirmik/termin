@@ -10,7 +10,7 @@
 #include <tcbase/tc_trent_json.hpp>
 
 namespace termin::gui_native {
-    namespace {
+    namespace detail {
 
         struct AssetSlot {
             std::uint32_t generation = 1;
@@ -19,36 +19,31 @@ namespace termin::gui_native {
             bool declared = false;
         };
 
-        std::mutex& registry_mutex() {
-            static std::mutex mutex;
-            return mutex;
+        struct UiDocumentAssetRegistry {
+            std::mutex mutex;
+            std::vector<AssetSlot> slots;
+            std::unordered_map<std::string, std::uint32_t> uuids;
+        };
+    } // namespace detail
+
+    namespace {
+        using detail::AssetSlot;
+        using detail::UiDocumentAssetRegistry;
+
+        const std::shared_ptr<UiDocumentAssetRegistry>& asset_registry() {
+            static const auto registry = std::make_shared<UiDocumentAssetRegistry>();
+            return registry;
         }
 
-        std::vector<AssetSlot>& registry_slots() {
-            static std::vector<AssetSlot> slots;
-            return slots;
-        }
-
-        std::unordered_map<std::string, std::uint32_t>& registry_uuids() {
-            static std::unordered_map<std::string, std::uint32_t> uuids;
-            return uuids;
-        }
-
-        AssetSlot* resolve_slot_locked(UiDocumentAssetHandle handle) {
-            auto& slots = registry_slots();
-            if (handle.index >= slots.size()) {
+        AssetSlot* resolve_slot_locked(UiDocumentAssetRegistry& registry, UiDocumentAssetHandle handle) {
+            if (handle.index >= registry.slots.size()) {
                 return nullptr;
             }
-            AssetSlot& slot = slots[handle.index];
+            AssetSlot& slot = registry.slots[handle.index];
             if (slot.generation != handle.generation || !slot.asset) {
                 return nullptr;
             }
             return &slot;
-        }
-
-        std::shared_ptr<const UiDocumentAsset> resolve_locked(UiDocumentAssetHandle handle) {
-            const auto* slot = resolve_slot_locked(handle);
-            return slot ? slot->asset : nullptr;
         }
 
         void reset_slot_locked(AssetSlot& slot) {
@@ -60,9 +55,9 @@ namespace termin::gui_native {
             }
         }
 
-        void retire_unowned_slot_locked(AssetSlot& slot) {
+        void retire_unowned_slot_locked(UiDocumentAssetRegistry& registry, AssetSlot& slot) {
             if (!slot.declared && slot.leases == 0) {
-                registry_uuids().erase(slot.asset->uuid());
+                registry.uuids.erase(slot.asset->uuid());
                 reset_slot_locked(slot);
             }
         }
@@ -192,10 +187,12 @@ namespace termin::gui_native {
                                                      std::move(description));
         }
 
-        UiDocumentAssetHandle register_asset(std::shared_ptr<const UiDocumentAsset> asset, bool declared) {
-            std::lock_guard lock(registry_mutex());
-            auto& slots = registry_slots();
-            auto& uuids = registry_uuids();
+        UiDocumentAssetHandle register_asset(UiDocumentAssetRegistry& registry,
+                                             std::shared_ptr<const UiDocumentAsset> asset,
+                                             bool declared) {
+            std::lock_guard lock(registry.mutex);
+            auto& slots = registry.slots;
+            auto& uuids = registry.uuids;
             const auto found = uuids.find(asset->uuid());
             std::uint32_t index;
             if (found != uuids.end()) {
@@ -230,8 +227,9 @@ namespace termin::gui_native {
     } // namespace
 
     bool UiDocumentAssetHandle::valid() const {
-        std::lock_guard lock(registry_mutex());
-        return static_cast<bool>(resolve_locked(*this));
+        auto& registry = *asset_registry();
+        std::lock_guard lock(registry.mutex);
+        return resolve_slot_locked(registry, *this) != nullptr;
     }
 
     UiDocumentAsset::UiDocumentAsset(std::string uuid,
@@ -266,8 +264,10 @@ namespace termin::gui_native {
     }
 
     std::shared_ptr<const UiDocumentAsset> TcUiDocumentAsset::resolve() const {
-        std::lock_guard lock(registry_mutex());
-        return resolve_locked(handle_);
+        auto& registry = *asset_registry();
+        std::lock_guard lock(registry.mutex);
+        const auto* slot = resolve_slot_locked(registry, handle_);
+        return slot ? slot->asset : nullptr;
     }
 
     std::string TcUiDocumentAsset::uuid() const {
@@ -343,23 +343,26 @@ namespace termin::gui_native {
             return false;
         }
 
-        std::lock_guard lock(registry_mutex());
-        if (!resolve_locked(handle_)) {
+        auto& registry = *asset_registry();
+        std::lock_guard lock(registry.mutex);
+        auto* slot = resolve_slot_locked(registry, handle_);
+        if (!slot) {
             tc_log_error("[gui-native-ui-asset] asset '%s' disappeared during reload", current->uuid().c_str());
             return false;
         }
-        registry_slots()[handle_.index].asset = std::move(replacement);
+        slot->asset = std::move(replacement);
         return true;
     }
 
     bool TcUiDocumentAsset::remove() {
-        std::lock_guard lock(registry_mutex());
-        auto* slot = resolve_slot_locked(handle_);
+        auto& registry = *asset_registry();
+        std::lock_guard lock(registry.mutex);
+        auto* slot = resolve_slot_locked(registry, handle_);
         if (!slot || !slot->declared) {
             return false;
         }
         slot->declared = false;
-        retire_unowned_slot_locked(*slot);
+        retire_unowned_slot_locked(registry, *slot);
         handle_ = {};
         return true;
     }
@@ -371,7 +374,9 @@ namespace termin::gui_native {
         const std::string diagnostic_source = source_identity;
         try {
             return TcUiDocumentAsset(register_asset(
-                build_source_asset(std::move(uuid), std::move(name), std::move(source_identity), source, 1), true));
+                *asset_registry(),
+                build_source_asset(std::move(uuid), std::move(name), std::move(source_identity), source, 1),
+                true));
         } catch (const std::exception& error) {
             tc_log_error("[gui-native-ui-asset] failed to declare source asset '%s': %s",
                          diagnostic_source.c_str(),
@@ -383,7 +388,8 @@ namespace termin::gui_native {
     TcUiDocumentAsset TcUiDocumentAsset::declare_compiled_json(const std::string& compiled_json,
                                                                const std::string& expected_uuid) {
         try {
-            return TcUiDocumentAsset(register_asset(build_compiled_asset(compiled_json, expected_uuid), true));
+            return TcUiDocumentAsset(
+                register_asset(*asset_registry(), build_compiled_asset(compiled_json, expected_uuid), true));
         } catch (const std::exception& error) {
             tc_log_error("[gui-native-ui-asset] failed to declare compiled asset: %s", error.what());
             return {};
@@ -397,46 +403,59 @@ namespace termin::gui_native {
     }
 
     TcUiDocumentAsset TcUiDocumentAsset::from_uuid(const std::string& uuid) {
-        std::lock_guard lock(registry_mutex());
-        const auto found = registry_uuids().find(uuid);
-        if (found == registry_uuids().end()) {
+        auto& registry = *asset_registry();
+        std::lock_guard lock(registry.mutex);
+        const auto found = registry.uuids.find(uuid);
+        if (found == registry.uuids.end()) {
             return {};
         }
-        const AssetSlot& slot = registry_slots()[found->second];
+        const AssetSlot& slot = registry.slots[found->second];
         return TcUiDocumentAsset(UiDocumentAssetHandle{found->second, slot.generation});
     }
 
     void TcUiDocumentAsset::clear_registry_for_tests() {
-        std::lock_guard lock(registry_mutex());
-        registry_uuids().clear();
-        for (AssetSlot& slot : registry_slots()) {
+        auto& registry = *asset_registry();
+        std::lock_guard lock(registry.mutex);
+        registry.uuids.clear();
+        for (AssetSlot& slot : registry.slots) {
             reset_slot_locked(slot);
         }
     }
+
+    UiDocumentAssetLease::UiDocumentAssetLease(std::shared_ptr<UiDocumentAssetRegistry> registry,
+                                             UiDocumentAssetHandle handle)
+        : registry_(std::move(registry)), handle_(handle) {}
 
     UiDocumentAssetLease::~UiDocumentAssetLease() {
         release();
     }
 
     UiDocumentAssetLease::UiDocumentAssetLease(UiDocumentAssetLease&& other) noexcept
-        : handle_(std::exchange(other.handle_, {})) {}
+        : registry_(std::move(other.registry_)), handle_(std::exchange(other.handle_, {})) {}
 
     UiDocumentAssetLease& UiDocumentAssetLease::operator=(UiDocumentAssetLease&& other) noexcept {
         if (this != &other) {
             release();
+            registry_ = std::move(other.registry_);
             handle_ = std::exchange(other.handle_, {});
         }
         return *this;
     }
 
     bool UiDocumentAssetLease::valid() const {
-        return handle_.valid();
+        if (!registry_) {
+            return false;
+        }
+        std::lock_guard lock(registry_->mutex);
+        return resolve_slot_locked(*registry_, handle_) != nullptr;
     }
 
     UiDocumentAssetLease UiDocumentAssetLease::acquire_compiled_json(const std::string& compiled_json,
                                                                     const std::string& expected_uuid) {
         try {
-            return UiDocumentAssetLease(register_asset(build_compiled_asset(compiled_json, expected_uuid), false));
+            auto registry = asset_registry();
+            const auto handle = register_asset(*registry, build_compiled_asset(compiled_json, expected_uuid), false);
+            return UiDocumentAssetLease(std::move(registry), handle);
         } catch (const std::exception& error) {
             tc_log_error("[gui-native-ui-asset] failed to acquire compiled asset: %s", error.what());
             return {};
@@ -444,13 +463,13 @@ namespace termin::gui_native {
     }
 
     void UiDocumentAssetLease::release() {
-        if (handle_.generation == 0) {
+        if (!registry_ || handle_.generation == 0) {
             return;
         }
-        std::lock_guard lock(registry_mutex());
-        if (auto* slot = resolve_slot_locked(handle_)) {
+        std::lock_guard lock(registry_->mutex);
+        if (auto* slot = resolve_slot_locked(*registry_, handle_)) {
             --slot->leases;
-            retire_unowned_slot_locked(*slot);
+            retire_unowned_slot_locked(*registry_, *slot);
         }
         handle_ = {};
     }

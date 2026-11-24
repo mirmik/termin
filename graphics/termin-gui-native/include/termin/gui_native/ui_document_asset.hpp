@@ -11,6 +11,10 @@
 
 namespace termin::gui_native {
 
+    namespace detail {
+        struct UiDocumentAssetRegistry;
+    }
+
     inline constexpr std::uint32_t UI_DOCUMENT_ASSET_SCHEMA_VERSION = 1;
 
     struct UiDocumentAssetHandle {
@@ -110,9 +114,11 @@ namespace termin::gui_native {
                                                           const std::string& expected_uuid);
 
     private:
-        explicit UiDocumentAssetLease(UiDocumentAssetHandle handle) : handle_(handle) {}
+        UiDocumentAssetLease(std::shared_ptr<detail::UiDocumentAssetRegistry> registry,
+                             UiDocumentAssetHandle handle);
         void release();
 
+        std::shared_ptr<detail::UiDocumentAssetRegistry> registry_;
         UiDocumentAssetHandle handle_;
     };
 
