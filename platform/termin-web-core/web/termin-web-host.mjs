@@ -354,6 +354,23 @@ export class TerminWebHost {
         return Number(this.module._termin_web_host_entity_count());
     }
 
+    /** Return the nearest mesh entity UUID at a top-left framebuffer pixel, or null on a miss. */
+    pickEntity(x, y) {
+        if (!Number.isFinite(x) || !Number.isFinite(y)) throw new TypeError("Expected finite framebuffer coordinates");
+        const pointer = this.module._termin_web_host_pick_entity(x, y);
+        if (!pointer) throw new Error(this.module.UTF8ToString(this.module._termin_web_host_error()) || "Scene picking failed");
+        return this.module.UTF8ToString(pointer) || null;
+    }
+
+    setLightEnabled(uuid, enabled) {
+        if (typeof uuid !== "string" || !uuid || typeof enabled !== "boolean") {
+            throw new TypeError("Expected a light entity UUID and a boolean");
+        }
+        const success = this.module.ccall("termin_web_host_set_light_enabled", "number",
+            ["string", "number"], [uuid, Number(enabled)]);
+        if (!success) throw new Error(this.module.UTF8ToString(this.module._termin_web_host_error()) || "Could not update light");
+    }
+
     async waitForFrames(minimum, timeoutMs = 3000) {
         const deadline = performance.now() + timeoutMs;
         while (this.frameCount() < minimum) {

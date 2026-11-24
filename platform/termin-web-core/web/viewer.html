@@ -41,9 +41,9 @@
 <div id="loading" class="panel">Загрузка package и выбор WebGPU / WebGL2…</div>
 <div id="error" class="panel" role="alert"></div>
 <script type="module">
-import {createTerminCore} from "./termin-web-core.mjs?v=20261124-chart3d1";
-import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-chart3d1";
-import {createTerminWebInputAdapter} from "./termin-web-input.mjs?v=20261124-chart3d1";
+import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-picking1";
+import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-picking1";
+import {createTerminWebInputAdapter} from "./termin-web-input.mjs?v=20261124-picking1";
 
 const canvas = document.querySelector("#termin-canvas");
 const status = document.querySelector("#status");
@@ -63,6 +63,7 @@ try {
     const core = await createTerminCore();
     const input = createTerminWebInputAdapter(core, {canvas}).attach();
     const host = createTerminWebHost(core, {
+        graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
         onStateChange({state, error}) {
             status.textContent = error ? `${state}: ${error}` : state;
         },
@@ -73,7 +74,7 @@ try {
         },
     });
     globalThis.__terminViewer = {core, host, input};
-    await host.load("./fixtures/render-package/");
+    await host.load(webAssetUrl("scene.trpkg", "./fixtures/render-package/package.trpkg"));
     status.textContent = `ready · ${host.graphicsBackend}`;
     input.setEnabled(true);
     canvas.focus({preventScroll: true});

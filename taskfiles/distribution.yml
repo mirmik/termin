@@ -1,6 +1,12 @@
 version: '3'
 
 tasks:
+  package:web:scene:
+    desc: Embed a web runtime package and viewer in a standalone HTML file
+    platforms: [linux]
+    cmds:
+      - python3 ./platform/termin-web-core/tools/package_web_html.py "${TERMIN_WEB_BUILD_DIR:-build/web-core}/bin/viewer.html" --scene-package {{.CLI_ARGS}}
+
   package:graphics:python:
     desc: Build standalone Linux Graphics wheels for CPython 3.14 and 3.14t
     platforms: [linux]

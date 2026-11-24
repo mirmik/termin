@@ -114,6 +114,8 @@ export class TerminWebInputAdapter {
         this.enabled = false;
         this.attached = false;
         this.activePointers = new Set();
+        this.onTap = options.onTap;
+        this.tapCandidate = null;
         this.listeners = [];
         this.resizeObserver = null;
         this.metrics = {events: 0, resizes: 0};
@@ -146,6 +148,9 @@ export class TerminWebInputAdapter {
         this.listen(this.canvas, "pointermove", (event) => this.onPointerMove(event));
         this.listen(this.canvas, "pointerup", (event) => this.onPointerEnd(event, false));
         this.listen(this.canvas, "pointercancel", (event) => this.onPointerEnd(event, true));
+        this.listen(this.canvas, "lostpointercapture", (event) => {
+            if (this.activePointers.has(event.pointerId)) this.onPointerEnd(event, true);
+        });
         this.listen(this.canvas, "wheel", (event) => this.onWheel(event), {passive: false});
         this.listen(this.canvas, "keydown", (event) => this.onKey(event, false));
         this.listen(this.canvas, "keyup", (event) => this.onKey(event, true));
@@ -190,6 +195,9 @@ export class TerminWebInputAdapter {
         event.preventDefault?.();
         this.canvas.focus?.({preventScroll: true});
         this.activePointers.add(event.pointerId);
+        this.tapCandidate = this.onTap && this.activePointers.size === 1 && event.button === 0
+            ? {id: event.pointerId, x: event.clientX, y: event.clientY, slop: event.pointerType === "touch" ? 8 : 4}
+            : null;
         try {
             this.canvas.setPointerCapture?.(event.pointerId);
         } catch (error) {
@@ -211,6 +219,7 @@ export class TerminWebInputAdapter {
 
     onPointerMove(event) {
         if (!this.enabled) return;
+        this.checkTapMotion(event);
         const point = canvasPoint(this.canvas, event);
         const device = pointerDevice(event.pointerType);
         this.invoke("_termin_web_host_dispatch_pointer", [
@@ -225,6 +234,9 @@ export class TerminWebInputAdapter {
     onPointerEnd(event, cancelled) {
         if (!this.enabled) return;
         event.preventDefault?.();
+        this.checkTapMotion(event);
+        const tapped = !cancelled && event.button === 0 && this.tapCandidate?.id === event.pointerId;
+        this.tapCandidate = null;
         const point = canvasPoint(this.canvas, event);
         const device = pointerDevice(event.pointerType);
         this.invoke("_termin_web_host_dispatch_pointer", [
@@ -246,10 +258,26 @@ export class TerminWebInputAdapter {
         } catch (error) {
             this.logger?.warn?.("TerminWebInputAdapter: pointer release failed", error);
         }
+        if (tapped) {
+            const rect = this.canvas.getBoundingClientRect();
+            if (event.clientX >= rect.left && event.clientX < rect.left + rect.width &&
+                    event.clientY >= rect.top && event.clientY < rect.top + rect.height) {
+                this.onTap(point, event);
+            }
+        }
+    }
+
+    checkTapMotion(event) {
+        const tap = this.tapCandidate;
+        if (!tap || tap.id !== event.pointerId) return;
+        if (event.buttons > 1 || Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > tap.slop) {
+            this.tapCandidate = null;
+        }
     }
 
     onWheel(event) {
         if (!this.enabled) return;
+        this.tapCandidate = null;
         event.preventDefault?.();
         const point = canvasPoint(this.canvas, event);
         const [wheelX, wheelY] = normalizedWheelDelta(event, this.canvas.height);
@@ -289,6 +317,7 @@ export class TerminWebInputAdapter {
 
     onFocusLost() {
         this.activePointers.clear();
+        this.tapCandidate = null;
         if (this.enabled) this.invoke("_termin_web_host_dispatch_focus_lost");
     }
 

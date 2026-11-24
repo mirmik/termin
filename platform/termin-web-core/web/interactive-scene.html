@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Студия света · Termin</title>
+<style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #141518; color: #f6f5f2; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(1040px, 100%); margin: 0 auto; padding: clamp(18px, 4vw, 42px); }
+    h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); line-height: 1.1; letter-spacing: -.045em; font-weight: 600; }
+    p { margin: 0; line-height: 1.5; }
+    #instruction { margin: 8px 0 18px; color: #c2c2c4; font-size: 15px; }
+    .stage { position: relative; background: black; border: 1px solid #38393d; border-radius: 14px; overflow: hidden; }
+    canvas { width: 100%; height: min(61vh, 87vw, 560px); display: block; touch-action: none; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    canvas:focus-visible { outline: 2px solid #e6e2db; outline-offset: -3px; }
+    #status { position: absolute; inset: 0; display: grid; place-content: center; padding: 1rem; text-align: center;
+              background: #060606de; overflow-wrap: anywhere; pointer-events: none; }
+    #status[hidden] { display: none; }
+    footer { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; gap: 16px; }
+    .lights { display: flex; gap: 8px; }
+    button { --bulb: #ffa14c; display: inline-flex; gap: 8px; align-items: center; min-height: 44px; padding: 8px 14px;
+             border: 1px solid #49494d; border-radius: 22px; background: #222326; color: inherit; font: inherit; cursor: pointer; }
+    #cyan { --bulb: #55dafa; }
+    button::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--bulb); }
+    button[aria-pressed="true"]::before { background: var(--bulb); }
+    button:hover { border-color: #868587; }
+    button:focus-visible { outline: 2px solid var(--bulb); outline-offset: 3px; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .state, #camera-hint { font-size: 13px; color: #b1b1b6; }
+    @media (max-width: 690px) {
+        footer { align-items: flex-start; flex-direction: column; gap: 10px; }
+        button { padding-inline: 11px; }
+    }
+</style>
+</head>
+<body>
+<main>
+    <h1>Студия света</h1>
+    <p id="instruction">Нажмите на цветную лампу в сцене, чтобы включить или погасить её.</p>
+    <div class="stage">
+        <canvas id="termin-canvas" width="800" height="480" tabindex="0" aria-label="Сфера между двумя лампами"
+            aria-describedby="instruction camera-hint"></canvas>
+        <p id="status" role="status">Загрузка сцены…</p>
+    </div>
+    <footer>
+        <div class="lights" role="group" aria-label="Источники света">
+            <button type="button" id="amber" data-entity="lamp-amber" aria-pressed="true" aria-label="Янтарная лампа" disabled>Янтарная <span class="state">вкл.</span></button>
+            <button type="button" id="cyan" data-entity="lamp-cyan" aria-pressed="true" aria-label="Голубая лампа" disabled>Голубая <span class="state">вкл.</span></button>
+        </div>
+        <p id="camera-hint">Вращение — перетаскиванием. Масштаб — щипком или колесом.</p>
+    </footer>
+</main>
+<script type="module">
+import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-picking1";
+import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-picking1";
+import {createTerminWebInputAdapter} from "./termin-web-input.mjs?v=20261124-picking1";
+
+const canvas = document.querySelector("canvas");
+const status = document.querySelector("#status");
+const lamps = new Map(Array.from(document.querySelectorAll("[data-entity]"), button => [button.dataset.entity, button]));
+
+function showError(error) {
+    status.textContent = error instanceof Error ? error.message : String(error);
+    status.hidden = false;
+    for (const button of lamps.values()) button.disabled = true;
+    console.error("Interactive scene failed", error);
+}
+
+try {
+    const core = await createTerminCore();
+    const host = createTerminWebHost(core, {
+        canvas,
+        graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
+        onStateChange({state, error}) { if (state === "error") showError(error); },
+    });
+    function toggleLamp(uuid) {
+        const button = lamps.get(uuid);
+        if (!button || button.disabled) return;
+        const enabled = button.getAttribute("aria-pressed") !== "true";
+        host.setLightEnabled(uuid, enabled);
+        button.setAttribute("aria-pressed", String(enabled));
+        button.querySelector(".state").textContent = enabled ? "вкл." : "выкл.";
+    }
+    const input = createTerminWebInputAdapter(core, {
+        canvas,
+        onTap({x, y}) {
+            try { toggleLamp(host.pickEntity(x, y)); }
+            catch (error) { showError(error); }
+        },
+    }).attach();
+    globalThis.__terminViewer = {host, core, input};
+    await host.load(webAssetUrl("scene.trpkg", "./fixtures/interactive-scene/package.trpkg"));
+    input.setEnabled(true);
+    for (const [uuid, button] of lamps) {
+        button.disabled = false;
+        button.addEventListener("click", () => {
+            try { toggleLamp(uuid); }
+            catch (error) { showError(error); }
+        });
+    }
+    status.hidden = true;
+} catch (error) {
+    showError(error);
+}
+</script>
+</body>
+</html>

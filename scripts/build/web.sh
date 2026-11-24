@@ -123,9 +123,11 @@ fi
     -DCMAKE_BUILD_TYPE=Release \
     -DTERMIN_PLATFORM_WEB=ON \
     -DTERMIN_WEB_HOST_SHADERC="$HOST_SHADERC" \
+    -DTERMIN_WEB_HOST_WGSL_VALIDATOR="$HOST_WGSL_VALIDATOR" \
     -DTERMIN_WEB_HOST_SLANGC="$HOST_SLANGC" \
     -DTERMIN_WEB_HOST_BUILTIN_SHADER_ROOT="$HOST_BUILTIN_SHADER_ROOT"
-cmake --build "$BUILD_DIR" --target termin_web_chart3d_standalone
+cmake --build "$BUILD_DIR" --target termin_web_standalone_demos
 
 echo "Termin Web core: $BUILD_DIR/bin/termin_web_core.mjs"
 echo "Standalone 3D chart: $BUILD_DIR/bin/Termin-Chart3D.html"
+echo "Standalone interactive scene: $BUILD_DIR/bin/Termin-InteractiveScene.html"

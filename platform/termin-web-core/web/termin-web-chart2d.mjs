@@ -1,5 +1,5 @@
-import {mountTerminChart, TerminWebChart} from "./termin-web-chart.mjs?v=20261124-chart3d1";
-import {canvasPoint, normalizedWheelDelta, TerminPointerPhase} from "./termin-web-input.mjs?v=20261124-chart3d1";
+import {mountTerminChart, TerminWebChart} from "./termin-web-chart.mjs?v=20261124-picking1";
+import {canvasPoint, normalizedWheelDelta, TerminPointerPhase} from "./termin-web-input.mjs?v=20261124-picking1";
 
 /** Mount an interactive tcplot line chart. Give the canvas a size in CSS pixels. */
 export async function createTerminChart2D(canvas, options = {}) {

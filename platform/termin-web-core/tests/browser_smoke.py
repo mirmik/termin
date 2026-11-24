@@ -18,6 +18,7 @@ import time
 import urllib.request
 import zlib
 from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -685,10 +686,11 @@ def check_chart3d(devtools: DevToolsSocket, url: str, backend: str) -> dict:
             "orbit_pixels": orbit_pixels, "zoom_pixels": zoom_pixels}
 
 
-def check_standalone_chart3d(devtools: DevToolsSocket, artifact: Path) -> dict:
-    with tempfile.TemporaryDirectory(prefix="termin-offline-chart-") as folder:
+@contextmanager
+def offline_page(devtools: DevToolsSocket, artifact: Path):
+    with tempfile.TemporaryDirectory(prefix="termin-offline-") as folder:
         # The delivered file has no sibling JS, Wasm or shader package to load.
-        page = Path(folder) / "Поверхность 3D.html"
+        page = Path(folder) / f"Проверка {artifact.name}"
         shutil.copyfile(artifact, page)
         timeout = devtools.socket.gettimeout()
         devtools.socket.settimeout(30)
@@ -698,14 +700,7 @@ def check_standalone_chart3d(devtools: DevToolsSocket, artifact: Path) -> dict:
             devtools.call("Network.emulateNetworkConditions", {
                 "offline": True, "latency": 0, "downloadThroughput": 0, "uploadThroughput": 0,
             })
-            chart = open_chart(devtools, page.as_uri(), None, "Chart3D")
-            before, wave = surface_frame(devtools, check_axes=True)
-            evaluate(devtools, "document.querySelector('#change-surface').click()")
-            after, saddle = surface_frame(devtools)
-            changed = surface_change(wave, saddle, "offline example button")
-            backend = evaluate(devtools, f"{chart}.backend")
-            evaluate(devtools, f"{chart}.dispose()")
-            return {"backend": backend, "initial": before, "replacement": after, "changed_samples": changed}
+            yield page.as_uri()
         finally:
             devtools.call("Network.emulateNetworkConditions", {
                 "offline": False, "latency": 0, "downloadThroughput": -1, "uploadThroughput": -1,
@@ -713,6 +708,156 @@ def check_standalone_chart3d(devtools: DevToolsSocket, artifact: Path) -> dict:
             devtools.call("Network.setCacheDisabled", {"cacheDisabled": False})
             devtools.call("Network.disable")
             devtools.socket.settimeout(timeout)
+
+
+def check_standalone_chart3d(devtools: DevToolsSocket, artifact: Path) -> dict:
+    with offline_page(devtools, artifact) as url:
+        chart = open_chart(devtools, url, None, "Chart3D")
+        before, wave = surface_frame(devtools, check_axes=True)
+        evaluate(devtools, "document.querySelector('#change-surface').click()")
+        after, saddle = surface_frame(devtools)
+        changed = surface_change(wave, saddle, "offline example button")
+        backend = evaluate(devtools, f"{chart}.backend")
+        evaluate(devtools, f"{chart}.dispose()")
+        return {"backend": backend, "initial": before, "replacement": after, "changed_samples": changed}
+
+
+def dispatch_gesture(devtools: DevToolsSocket, touch: bool, start: tuple, *moves: tuple):
+    if touch:
+        devtools.call("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [
+            {"id": 1, "x": start[0], "y": start[1]}]})
+        for x, y in moves:
+            devtools.call("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [
+                {"id": 1, "x": x, "y": y}]})
+        devtools.call("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    else:
+        devtools.call("Input.dispatchMouseEvent", {
+            "type": "mousePressed", "x": start[0], "y": start[1], "button": "left", "buttons": 1, "clickCount": 1})
+        for x, y in moves:
+            devtools.call("Input.dispatchMouseEvent", {
+                "type": "mouseMoved", "x": x, "y": y, "button": "left", "buttons": 1})
+        x, y = moves[-1] if moves else start
+        devtools.call("Input.dispatchMouseEvent", {
+            "type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0, "clickCount": 1})
+
+
+def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: str, *, touch: bool) -> dict:
+    with offline_page(devtools, artifact) as url:
+        devtools.call("Emulation.setDeviceMetricsOverride", {
+            "width": 412 if touch else 800, "height": 730 if touch else 560,
+            "mobile": touch, "deviceScaleFactor": 2 if touch else 1})
+        devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": touch})
+        try:
+            first_event = len(devtools.events)
+            url += f"?backend={backend}"
+            devtools.call("Page.navigate", {"url": url})
+            wait_for_viewer(devtools, expected_url=url)
+            if evaluate(devtools, "__terminViewer.host.graphicsBackend") != backend:
+                raise RuntimeError(f"Interactive scene did not start on {backend}")
+            x, y, width, height = evaluate(devtools, """(() => {
+                const r = document.querySelector('canvas').getBoundingClientRect();
+                return [r.x, r.y, r.width, r.height];
+            })()""")
+            cx, cy = x + width / 2, y + height / 2
+
+            # Project the demo's known lamp centres independently of the native picking implementation.
+            focal_length = width / (2 * math.tan(math.radians(60) / 2))
+            pixels_per_unit = focal_length / (5.5 - 0.65)
+            amber = (cx - 1.06 * pixels_per_unit, cy - 0.18 * pixels_per_unit)
+            cyan = (cx + 1.06 * pixels_per_unit, amber[1])
+
+            def state(amber_on, cyan_on):
+                actual = evaluate(devtools, """['amber', 'cyan'].map(id =>
+                    document.getElementById(id).getAttribute('aria-pressed') === 'true')""")
+                if actual != [amber_on, cyan_on]:
+                    raise RuntimeError(f"Interactive scene on {backend}: expected {[amber_on, cyan_on]}, got {actual}")
+
+            def sphere_pixels():
+                # Sample a patch containing only the lit sphere. DOM and switch indicators lie outside it.
+                evaluate(devtools, "new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))")
+                w, h = width * 0.24, width * 0.10
+                data = devtools.call("Page.captureScreenshot", {"format": "png", "clip": {
+                    "x": cx - w / 2, "y": cy - h / 2, "width": w, "height": h, "scale": 0.5}})
+                w, _, channels, rows = decode_png(base64.b64decode(data["data"]))
+                return [row[i:i+3] for row in rows[::2] for i in range(0, w * channels, channels * 2)]
+
+            def lamp_frame():
+                image = devtools.call("Page.captureScreenshot", {"format": "png", "clip": {
+                    "x": x, "y": y, "width": width, "height": height, "scale": 0.5}})
+                return decode_png(base64.b64decode(image["data"]))
+
+            def check_darkened(before, after, channel):
+                darker = sum(a[channel] - b[channel] > 24 for a, b in zip(before, after, strict=True))
+                if darker < 0.08 * len(before):
+                    raise RuntimeError(f"Switch {channel} on {backend} dimmed only {darker}/{len(before)} sphere samples")
+                return darker
+
+            state(True, True)
+            lit = sphere_pixels()
+            fw, fh, channels, before_rows = lamp_frame()
+            lamp_colors = []
+            for px, py in (amber, cyan):
+                column = round((px - x) * fw / width) * channels
+                lamp_colors.append(before_rows[round((py - y) * fh / height)][column:column + 3])
+            dispatch_gesture(devtools, touch, (cx, cy))  # an unbound, visible mesh
+            state(True, True)
+            dispatch_gesture(devtools, touch, (x + 0.06 * width, cy))  # empty background
+            state(True, True)
+            dispatch_gesture(devtools, touch, amber)
+            state(False, True)
+            blue = sphere_pixels()
+            dispatch_gesture(devtools, touch, cyan)
+            state(False, False)
+            dark = sphere_pixels()
+            changed_amber = check_darkened(lit, blue, 0)
+            changed_cyan = check_darkened(blue, dark, 2)
+
+            dispatch_gesture(devtools, touch, cyan)
+            dispatch_gesture(devtools, touch, amber)
+            state(True, True)
+            restored = sphere_pixels()
+            if any(abs(a[c] - b[c]) > 3 for a, b in zip(lit, restored, strict=True) for c in range(3)):
+                raise RuntimeError(f"Restoring the lights on {backend} did not restore the sphere")
+            # A drag that returns to the lamp must still suppress the release tap.
+            dispatch_gesture(devtools, touch, amber, (amber[0] + 30, amber[1]), amber)
+            state(True, True)
+            dispatch_gesture(devtools, touch, amber, (amber[0] + 160, amber[1] + 45))
+            state(True, True)
+            moved = sphere_pixels()
+            changed_orbit = sum(max(abs(a[c] - b[c]) for c in range(3)) > 12
+                                for a, b in zip(restored, moved, strict=True))
+            if changed_orbit < 0.05 * len(restored):
+                raise RuntimeError("Dragging from a lamp did not orbit the camera")
+            # Locate a moved bulb by the colour of its glowing centre in the rendered image.
+            # Requiring displacement beyond its original radius catches a picker using stale matrices.
+            fw, fh, channels, rows = lamp_frame()
+            candidates = []
+            for lamp, color, (px, py) in zip(("amber", "cyan"), lamp_colors, (amber, cyan), strict=True):
+                origin_x, origin_y = (px - x) * fw / width, (py - y) * fh / height
+                radius = 0.23 * pixels_per_unit * fw / width
+                distances = (
+                    (sum(abs(row[col * channels + c] - color[c]) for c in range(3)), col, r)
+                    for r, row in enumerate(rows)
+                    for col in range(1, fw, 2)
+                    if (col - origin_x)**2 + (r - origin_y)**2 > (1.2 * radius)**2
+                )
+                error, col, r = min(distances)
+                candidates.append((error, lamp, x + (col + 0.5) * width / fw, y + (r + 0.5) * height / fh))
+            error, lamp, click_x, click_y = min(candidates)
+            if error > 20:
+                raise RuntimeError(f"No moved light matched its rendered colour after orbit: {candidates}")
+            dispatch_gesture(devtools, touch, (click_x, click_y))
+            state(lamp != "amber", lamp != "cyan")
+            for event in devtools.events[first_event:]:
+                if event.get("method") == "Network.requestWillBeSent":
+                    requested = event["params"]["request"]["url"]
+                    if requested != url and not requested.startswith(("data:", "blob:")):
+                        raise RuntimeError(f"Standalone scene requested another file: {requested[:200]}")
+            return {"touch": touch, "sphere_samples": len(lit), "amber_darkened": changed_amber,
+                    "cyan_darkened": changed_cyan, "orbit_changed": changed_orbit, "picked_after_orbit": lamp}
+        finally:
+            devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": False})
+            devtools.call("Emulation.clearDeviceMetricsOverride")
 
 
 def main() -> int:
@@ -1040,6 +1185,11 @@ def main() -> int:
                 report["retained_chart3d"][backend] = check_chart3d(devtools, chart3d_url, backend)
             report["standalone_chart3d"] = check_standalone_chart3d(
                 devtools, Path(args.output_directory) / "Termin-Chart3D.html")
+            interactive = Path(args.output_directory) / "Termin-InteractiveScene.html"
+            report["interactive_scene"] = {
+                backend: check_interactive_scene(devtools, interactive, backend, touch=backend == "webgl2")
+                for backend in ("webgpu", "webgl2")
+            }
     except Exception as error:
         failure = error
     finally:

@@ -49,6 +49,7 @@ extern "C" {
 #include "web_chart2d.hpp"
 #include "web_chart3d.hpp"
 #include "web_render_shaders.hpp"
+#include "web_scene_pick.hpp"
 
 namespace {
 
@@ -844,6 +845,38 @@ extern "C" EMSCRIPTEN_KEEPALIVE std::size_t termin_web_host_entity_count() {
     return web_player && web_player->package.ok && web_player->package.scene.valid()
                ? web_player->package.scene.entity_count()
                : 0;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_pick_entity(float x, float y) {
+    try {
+        if (!web_player || !web_player->engine || !web_player->package.scene.valid())
+            throw std::runtime_error("there is no active browser scene");
+        return termin::web::pick_mesh_entity(web_player->presentation_display, x, y);
+    } catch (const std::exception& e) {
+        web_host_error = e.what();
+        tc_log_error("TerminWebHost pick: %s", web_host_error.c_str());
+        return nullptr;
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_set_light_enabled(const char* uuid, int enabled) {
+    try {
+        if (!web_player || !web_player->engine || !web_player->package.scene.valid())
+            throw std::runtime_error("there is no active browser scene");
+        tc_entity_pool* pool = tc_scene_entity_pool(web_player->package.scene.handle());
+        const auto id = uuid && *uuid ? tc_entity_pool_find_by_uuid(pool, uuid) : TC_ENTITY_ID_INVALID;
+        if (!tc_entity_id_valid(id)) throw std::runtime_error("light entity UUID was not found in the scene");
+        termin::Entity entity(pool, id);
+        tc_component* light = entity.get_component_by_type_name("LightComponent");
+        if (!light) throw std::runtime_error("entity has no LightComponent");
+        tc_component_set_enabled(light, enabled != 0);
+        web_player->engine->scene_manager.request_render();
+        return 1;
+    } catch (const std::exception& e) {
+        web_host_error = e.what();
+        tc_log_error("TerminWebHost set light: %s", web_host_error.c_str());
+        return 0;
+    }
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint32_t height) {
