@@ -35,6 +35,21 @@ Console.WriteLine($"Camera far = {camera.far}");
 var projMatrix = camera.projection_matrix();
 Console.WriteLine("Projection matrix created successfully");
 
+if (OperatingSystem.IsLinux())
+{
+    // SWIG has already loaded the graphics dependencies through termin.so.
+    // The direct call must resolve to the same ELF object in normal .NET output.
+    _ = TerminCore.Tgfx2GetGraphicsDomainKey();
+    var graphicsMappings = File.ReadLines("/proc/self/maps")
+        .Where(line => line.Contains("/libtermin_graphics2.so", StringComparison.Ordinal))
+        .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[4])
+        .Distinct()
+        .ToArray();
+    if (graphicsMappings.Length != 1)
+        throw new InvalidOperationException(
+            $"Expected one graphics2 ELF object, found {graphicsMappings.Length}");
+}
+
 // Custom owner-ref constructors must preserve SWIG's pending-exception check.
 // A null string is rejected by the native-input typemap before owner setup.
 try

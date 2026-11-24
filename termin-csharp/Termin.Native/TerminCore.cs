@@ -13,7 +13,7 @@ public static class TerminCore
     const string SCENE_DLL = "termin_scene";
     const string MESH_DLL = "termin_mesh";
     const string GRAPHICS_DLL = "termin_graphics";
-    const string TGFX2_DLL = "termin_graphics2";
+    const string TGFX2_DLL = NativeLibraryNames.Graphics2;
     const string RENDER_DLL = "termin_render";
     const string DISPLAY_DLL = "termin_display";
     const string INSPECT_DLL = "termin_inspect";

@@ -137,6 +137,11 @@ requested profile that does not match the generated SWIG files. Switch
 profiles through `build-sdk-csharp.*` (or reconfigure and build the native
 CMake target) before invoking managed-only builds.
 
+On Linux the generated bindings use the installed graphics library's ELF
+SONAME for direct graphics calls. This lets a project reference or published
+application share the graphics domain loaded by the SWIG bridge even when
+MSBuild copies the native library aliases into separate files.
+
 Both `full` and `plot-d3d11` profiles expose `PlotView2D` data markers.
 `create_data_marker`, `update_data_marker`, `data_marker_snapshot`,
 `destroy_annotation` and `take_annotation_action` exchange value-only

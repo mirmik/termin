@@ -85,6 +85,14 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
 
     termin_csharp_require_package(termin_mesh tmesh::termin_mesh)
     termin_csharp_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
+    set(_termin_csharp_graphics2_import "termin_graphics2")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # MSBuild may materialize ELF symlinks as distinct files. P/Invoke
+        # must request the same SONAME that the SWIG bridge dependencies use.
+        set(_termin_csharp_graphics2_import "$<TARGET_SONAME_FILE_NAME:tgfx::termin_graphics2>")
+    endif()
+    file(GENERATE OUTPUT "${_termin_csharp_generated_dir}/NativeLibraryNames.cs"
+        CONTENT "namespace Termin.Native;\ninternal static class NativeLibraryNames\n{\n    internal const string Graphics2 = \"${_termin_csharp_graphics2_import}\";\n}\n")
     termin_csharp_require_package(termin_visual_scene termin_visual_scene::termin_visual_scene)
     termin_csharp_require_package(tcplot tcplot::tcplot)
     termin_csharp_require_package(termin_gui_native termin_gui_native::termin_gui_native termin_gui_native::document_renderer)
@@ -112,6 +120,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         termin_csharp_require_package(termin_animation termin_animation::termin_animation)
         termin_csharp_require_package(termin_skeleton termin_skeleton::termin_skeleton)
         termin_csharp_require_package(termin_render termin_render::termin_render)
+        termin_csharp_require_package(termin_render_core termin_render_core::termin_render_core)
         termin_csharp_require_package(termin_render_passes termin_render_passes::termin_render_passes)
     endif()
     if(NOT DEFINED TERMIN_CSHARP_ENABLE_OPENGL)
@@ -255,6 +264,7 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
             termin_skeleton::termin_skeleton
             termin_render::termin_render
             termin_render_passes::termin_render_passes
+            termin_render_core::termin_render_core
             tgfx::termin_graphics
             tgfx::termin_graphics_binding_policy
             tgfx::termin_graphics2

@@ -9,7 +9,7 @@ namespace Termin.Native;
 public static class TerminCore
 {
     private const string BASE_DLL = "termin_base";
-    private const string TGFX2_DLL = "termin_graphics2";
+    private const string TGFX2_DLL = NativeLibraryNames.Graphics2;
 
     public static void Init()
     {
