@@ -10,11 +10,17 @@ import sys
 import tempfile
 from pathlib import Path
 
+from bathyscaphe import BACKGROUND, BEACONS, FINISHES, instrument_entities, instrument_meshes
 from demo_scenes import physics_entities, studio_entities
+import salvage
 
 
 EXAMPLE = Path(__file__).resolve().parent
 BLOB_WRITER = EXAMPLE.parents[3] / "editor/termin-project-build/python/termin/project_build/runtime_package_blob.py"
+
+
+LIT_PHASE = "shader-phase-96a0186326cade95"
+LIT_PROGRAM = "interactive-lit"
 
 
 def read(path):
@@ -51,18 +57,28 @@ def compile_stages(directory, shader, args):
         shader["artifacts"][target] = stages
 
 
-def build_shader(directory, manifest, args):
+def add_lit_material(directory, manifest, name, color, *, lamp=False):
+    material = {
+        "uuid": name, "name": name, "shader_program": LIT_PROGRAM,
+        "phases": [{"mark": "opaque", "shader": LIT_PHASE, "priority": 0}],
+        "uniforms": {"u_color": [*color, int(lamp)]}, "textures": {},
+    }
+    add_resource(directory, manifest, "material", f"materials/{name}.tmat.json", material)
+
+
+def build_shader(directory, manifest, args, fragment="lit.frag.slang"):
     # Stable phase UUID for the interactive-lit program and its opaque pass.
     shader = {
-        "uuid": "shader-phase-96a0186326cade95", "name": "Demo lighting", "language": "slang", "features": 1,
+        "uuid": LIT_PHASE, "name": "Demo lighting", "language": "slang", "features": 1,
         "artifact_role": "executable", "artifacts": {}, "source_path": "shaders/lit.frag.slang",
     }
     digest = hashlib.sha256()
     for stage, extension in (("vertex", "vert"), ("fragment", "frag")):
         filename = f"lit.{extension}.slang"
         path = Path("shaders") / filename
-        shutil.copyfile(EXAMPLE / filename, directory / path)
-        digest.update((EXAMPLE / filename).read_bytes())
+        source = EXAMPLE / (fragment if stage == "fragment" else filename)
+        shutil.copyfile(source, directory / path)
+        digest.update(source.read_bytes())
         shader[f"{stage}_source_path"] = path.as_posix()
         shader[f"{stage}_entry"] = "main"
     shader["source_identity"] = "sha256:" + digest.hexdigest()
@@ -73,18 +89,11 @@ def build_shader(directory, manifest, args):
         {key: shader[key] for key in ("uuid", "name", "source_identity")} | {"path": path}
     ]
     program = read(args.fixture / "shaders/web-render-fixture-textured-shader.shader-program.json")
-    program.update(uuid="interactive-lit", name="Interactive lights", features=1, source_path=shader["source_path"],
-                   properties=[{"name": "u_emission", "label": "Lamp color", "property_type": "Vec4",
-                                "default": [0, 0, 0, 0]}])
+    program.update(uuid=LIT_PROGRAM, name="Interactive lights", features=1, source_path=shader["source_path"],
+                   properties=[{"name": "u_color", "label": "Surface or lamp color", "property_type": "Vec4",
+                                "default": [1, 1, 1, 0]}])
     program["phases"][0]["shader"] = shader["uuid"]
     add_resource(directory, manifest, "shader_program", "shaders/interactive-lit.shader-program.json", program)
-    for name, emission in (("porcelain", [0, 0, 0, 0]), ("amber", [1, 0.34, 0.05, 1]), ("cyan", [0.03, 0.65, 1, 1])):
-        material = {
-            "uuid": name, "name": name, "shader_program": program["uuid"],
-            "phases": [{"mark": "opaque", "shader": shader["uuid"], "priority": 0}],
-            "uniforms": {"u_emission": emission}, "textures": {},
-        }
-        add_resource(directory, manifest, "material", f"materials/{name}.tmat.json", material)
 
 
 def build_shadow_casters(directory, manifest, args):
@@ -155,18 +164,59 @@ def build_meshes(directory, manifest, fixture):
     add_resource(directory, manifest, "mesh", "meshes/sphere.tmesh.json", sphere)
 
 
-def build_scene(directory, fixture, make_entities):
+def build_scene(directory, fixture, make_entities, *, background=None):
     scene = read(fixture / "scenes/Main.scene.json")
     camera = next(entity for entity in scene["entities"] if entity["name"] == "Main Camera")
     scene["entities"] = make_entities(camera)
     scene["extensions"]["render_state"]["lighting"].update(ambient_color=[.62, .69, .8], ambient_intensity=.085)
+    if background:
+        render_state = scene["extensions"]["render_state"]
+        render_state["background_color"] = background
+        render_state["skybox"]["color"] = background[:3]
+        scene["extensions"]["render_mount"]["render_target_configs"][0]["clear_color"] = background
     write(directory / "scenes/Main.scene.json", scene)
+
+
+def build_bathyscaphe_package(shader_directory, shader_manifest, args):
+    with tempfile.TemporaryDirectory(prefix="termin-bathyscaphe-") as temporary:
+        directory = Path(temporary)
+        shutil.copytree(shader_directory, directory, dirs_exist_ok=True)
+        manifest = shader_manifest | {"resources": shader_manifest["resources"].copy()}
+        mesh_template = read(args.fixture / "meshes/web-render-fixture-mesh-resource.tmesh.json")
+        for mesh in instrument_meshes(mesh_template):
+            add_resource(directory, manifest, "mesh", f"meshes/{mesh['uuid']}.tmesh.json", mesh)
+        for name, color in FINISHES.items():
+            add_lit_material(directory, manifest, name, color)
+        for name, _, _, color in BEACONS:
+            add_lit_material(directory, manifest, name, color, lamp=True)
+        write(directory / "manifest.json", manifest)
+        build_scene(directory, args.fixture, instrument_entities, background=BACKGROUND)
+        subprocess.run([sys.executable, BLOB_WRITER, directory, args.bathyscaphe_output], check=True)
+
+
+def build_salvage_package(shader_directory, shader_manifest, args):
+    with tempfile.TemporaryDirectory(prefix="termin-salvage-") as temporary:
+        directory = Path(temporary)
+        shutil.copytree(shader_directory, directory, dirs_exist_ok=True)
+        manifest = shader_manifest | {"resources": shader_manifest["resources"].copy()}
+        build_shader(directory, manifest, args, fragment="salvage.frag.slang")
+        template = read(args.fixture / "meshes/web-render-fixture-mesh-resource.tmesh.json")
+        meshes, make_entities = salvage.salvage_scene(template)
+        for mesh in meshes:
+            add_resource(directory, manifest, "mesh", f"meshes/{mesh['uuid']}.tmesh.json", mesh)
+        for name, color in salvage.FINISHES.items():
+            add_lit_material(directory, manifest, name, color, lamp=name in {"mint", "glass"})
+        write(directory / "manifest.json", manifest)
+        build_scene(directory, args.fixture, make_entities, background=salvage.BACKGROUND)
+        subprocess.run([sys.executable, BLOB_WRITER, directory, args.salvage_output], check=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for flag in ("fixture", "shaderc", "slangc", "wgsl-validator", "output"):
         parser.add_argument("--" + flag, type=Path, required=True)
+    parser.add_argument("--bathyscaphe-output", type=Path, help="also package the signal memory game")
+    parser.add_argument("--salvage-output", type=Path, help="also package the underwater salvage game")
     parser.add_argument("--physics-output", type=Path, help="also package the rigid-body demo")
     args = parser.parse_args()
     manifest = read(args.fixture / "manifest.json")
@@ -175,7 +225,14 @@ def main():
         directory = Path(temporary)
         for subdir in ("builtin_shaders", "shaders/webgpu", "shaders/webgl2"):
             shutil.copytree(args.fixture / subdir, directory / subdir, ignore=shutil.ignore_patterns("shader-phase-*"))
+        if args.salvage_output:
+            build_salvage_package(directory, manifest, args)
         build_shader(directory, manifest, args)
+        if args.bathyscaphe_output:
+            build_bathyscaphe_package(directory, manifest, args)
+        add_lit_material(directory, manifest, "porcelain", [1, 1, 1])
+        add_lit_material(directory, manifest, "amber", [1, .34, .05], lamp=True)
+        add_lit_material(directory, manifest, "cyan", [.03, .65, 1], lamp=True)
         build_meshes(directory, manifest, args.fixture)
         write(directory / "manifest.json", manifest)
         build_scene(directory, args.fixture, studio_entities)

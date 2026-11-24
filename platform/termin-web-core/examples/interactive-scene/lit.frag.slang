@@ -2,7 +2,7 @@ import termin_prelude;
 import termin_lighting;
 import termin_single_shadow;
 
-struct MaterialParams { float4 u_emission; };
+struct MaterialParams { float4 u_color; };
 [[TerminScope("material")]] ConstantBuffer<MaterialParams> material;
 
 struct FragmentInput {
@@ -17,6 +17,7 @@ float4 main(FragmentInput input) : SV_Target0 {
     float3 n = normalize(input.normal);
     float3 v = normalize(get_camera_position() - input.world);
     float3 lighting = get_ambient_color() * get_ambient_intensity();
+    float3 reflection = 0;
     float lampPower = 0;
     for (int i = 0; i < min(get_light_count(), MAX_LIGHTS); ++i) {
         float3 lightDirection;
@@ -36,13 +37,15 @@ float4 main(FragmentInput input) : SV_Target0 {
         }
         float diffuse = max(dot(n, lightDirection), 0);
         float specular = pow(max(dot(n, normalize(lightDirection + v)), 0), 40);
-        lighting += lightWeight * get_light_color(i) * get_light_intensity(i) * (0.78 * diffuse + 0.23 * specular);
+        float3 radiance = lightWeight * get_light_color(i) * get_light_intensity(i);
+        reflection += radiance * specular;
+        lighting += radiance * (0.78 * diffuse + 0.23 * specular);
     }
-    if (material.u_emission.a > 0.5) {
+    if (material.u_color.a > 0.5) {
         float facing = saturate(dot(n, v));
-        float3 glass = material.u_emission.rgb * (0.09 + 0.10 * facing);
-        float3 glow = material.u_emission.rgb * (0.65 + 0.35 * facing) + 0.24 * pow(facing, 6);
-        return float4(lerp(glass, glow, lampPower), 1);
+        float3 glass = material.u_color.rgb * (0.09 + 0.10 * facing);
+        float3 glow = material.u_color.rgb * (0.65 + 0.35 * facing) + 0.24 * pow(facing, 6);
+        return float4(lerp(glass, glow, lampPower) + 0.25 * reflection, 1);
     }
-    return float4(lighting, 1);
+    return float4(lighting * material.u_color.rgb, 1);
 }

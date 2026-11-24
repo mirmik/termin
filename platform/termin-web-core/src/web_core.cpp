@@ -50,6 +50,7 @@ extern "C" {
 }
 
 #include "visual_scene_example.hpp"
+#include "web_active_scene.hpp"
 #include "web_graphics_assets.hpp"
 #include "web_chart2d.hpp"
 #include "web_chart3d.hpp"
@@ -615,6 +616,10 @@ namespace {
     }
 
 } // namespace
+
+tc_scene_handle termin::web::active_scene() {
+    return web_player && web_player->engine ? web_player->package.scene.handle() : TC_SCENE_HANDLE_INVALID;
+}
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_smoke() {
     if (tc_version_int() <= 0 || termin_scene_version_int() <= 0) {

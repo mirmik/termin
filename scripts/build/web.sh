@@ -131,5 +131,7 @@ cmake --build "$BUILD_DIR" --target termin_web_standalone_demos
 echo "Termin Web core: $BUILD_DIR/bin/termin_web_core.mjs"
 echo "Standalone 3D chart: $BUILD_DIR/bin/Termin-Chart3D.html"
 echo "Standalone interactive scene: $BUILD_DIR/bin/Termin-InteractiveScene.html"
+echo "Standalone Bathyscaphe game: $BUILD_DIR/bin/Termin-Bathyscaphe.html"
+echo "Standalone salvage game: $BUILD_DIR/bin/Termin-Salvage.html"
 echo "Standalone physics scene: $BUILD_DIR/bin/Termin-PhysicsScene.html"
 echo "Standalone UI scene: $BUILD_DIR/bin/Termin-UiScene.html"

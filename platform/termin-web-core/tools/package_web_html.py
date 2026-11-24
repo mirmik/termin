@@ -25,7 +25,7 @@ def packed_asset(name, mime, data):
     return f'<script type="application/octet-stream" data-termin-asset="{name}" data-mime="{mime}">{encoded}</script>'
 
 
-def bundle(source, scene_package, project_name=None):
+def bundle(source, scene_package, project_name=None, *, wasm_name="termin_web_core.wasm"):
     modules = {}
     directory = source.parent
 
@@ -53,7 +53,7 @@ def bundle(source, scene_package, project_name=None):
     embedded = list(modules.values())
     package_name = "scene.trpkg" if scene_package else "graphics.trpkg"
     assets = (
-        ("termin_web_core.wasm", directory / "termin_web_core.wasm", "application/wasm"),
+        (wasm_name, directory / wasm_name, "application/wasm"),
         (package_name, scene_package or directory / package_name, "application/octet-stream"),
     )
     for name, path, mime in assets:
@@ -115,16 +115,19 @@ def main():
     inputs = parser.add_mutually_exclusive_group()
     inputs.add_argument("--scene-package", type=Path, help="runtime .trpkg to embed in the scene viewer")
     inputs.add_argument("--project", type=Path, help="Termin project directory to export with the host SDK")
+    parser.add_argument("--wasm", help="Wasm module beside the built page (default: termin_web_core.wasm)")
     parser.add_argument("--entry-scene", type=Path, help="entry scene relative to the project")
     args = parser.parse_args()
     if bool(args.project) != bool(args.entry_scene):
         parser.error("--project and --entry-scene must be used together")
+    if args.wasm and (args.project or not re.fullmatch(r"[\w.-]+\.wasm", args.wasm)):
+        parser.error("--wasm expects a local .wasm filename for a prebuilt page")
     if args.output.suffix.lower() != ".html" or args.source.resolve() == args.output.resolve():
         parser.error("output must be a separate .html file")
     if args.project:
         html = bundle_project(args.source, args.project, args.entry_scene)
     else:
-        html = bundle(args.source, args.scene_package)
+        html = bundle(args.source, args.scene_package, wasm_name=args.wasm or "termin_web_core.wasm")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(html, encoding="utf-8")
 

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#07181d">
+<title>Батискаф · Termin</title>
+<style>
+    :root {
+        color-scheme: dark;
+        font-family: "Inter", system-ui, sans-serif;
+        --ink: #e3eee8; --muted: #9cb6b5; --line: #315054; --mint: #91f4ce;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+        background: #07181d; color: var(--ink);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 24% 25%, #183f43, transparent 65%); }
+    main { width: min(960px, 100%); margin: auto; padding: clamp(16px, 3vw, 36px); }
+    header, .instrument-label, .readout, footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    header { margin-bottom: clamp(16px, 3vw, 30px); }
+    h1 { margin: 0; font: 600 clamp(36px, 7vw, 68px)/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: -.065em; }
+    button { cursor: pointer; font: inherit; color: inherit; }
+    button:disabled { cursor: default; }
+    button:focus-visible, canvas:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+    #sound { font: 12px var(--mono); border: 1px solid var(--line); border-radius: 30px; padding: 9px 15px; background: #11282d; }
+    #sound:enabled:hover { border-color: var(--mint); }
+    .deck { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); border: 1px solid var(--line);
+        border-radius: 8px; overflow: hidden; box-shadow: 0 22px 65px #04101488; }
+    .instrument { background: #0b191c; min-width: 0; }
+    .instrument-label, .readout dt, footer, .profile figcaption, .key-hint {
+        font: 11px/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase;
+    }
+    .instrument-label { color: var(--muted); padding: 10px 16px; border-bottom: 1px solid var(--line); }
+    canvas { width: 100%; aspect-ratio: 1; display: block; touch-action: manipulation; background: #07151a; }
+    [data-phase="input"] canvas { cursor: pointer; }
+    .keys { display: flex; align-items: center; gap: 7px; padding: 10px 16px; border-top: 1px solid var(--line); }
+    .key-hint { color: var(--muted); margin-right: auto; }
+    [data-channel] { min-width: 42px; min-height: 38px; border: 1px solid var(--line); border-bottom: 3px solid var(--lamp);
+        border-radius: 4px; background: #13282b; font: bold 16px var(--mono); }
+    [data-channel]:enabled:hover { border-color: var(--lamp); }
+    [data-channel].lit { background: var(--lamp); border-color: var(--lamp); color: #021918; }
+    .console { display: flex; flex-direction: column; padding: clamp(18px, 3.4vw, 36px); gap: 17px;
+        background: linear-gradient(155deg, #183438, #0d2229 78%); border-left: 1px solid var(--line); }
+    .readout { align-items: end; margin: 0; }
+    .readout dt, .profile figcaption { color: var(--muted); }
+    .readout dd { margin: 3px 0 0; font: 500 clamp(24px, 4vw, 38px)/1.15 var(--mono); letter-spacing: -.07em; }
+    .readout small { color: var(--muted); font-size: .55em; }
+    .profile { margin: 0; }
+    .plot { height: clamp(104px, 13vw, 136px); margin: 7px 0 0; position: relative; overflow: hidden; border: 1px solid var(--line);
+        background-color: #0a2428;
+        background-image: linear-gradient(#34606455 1px, transparent 1px), linear-gradient(90deg,#34606455 1px, transparent 1px);
+        background-size: 10% 20%; }
+    .seabed { position: absolute; inset: 0; background: repeating-linear-gradient(145deg, #39635e 0 1px, #21433f 1px 5px);
+        clip-path: polygon(0 19%, 8% 28%, 17% 30%, 26% 51%, 36% 47%, 45% 64%, 55% 63%, 68% 84%, 79% 94%, 95% 92%, 100% 86%, 100% 100%, 0 100%); }
+    .track { position: absolute; inset: 7% 5% 10%; }
+    #sub { position: absolute; left: 0%; top: 0%; transform: translate(-50%, -50%); width: 11px; height: 7px;
+        background: var(--mint); border-radius: 5px; box-shadow: 0 0 0 4px #7af6cc26, 0 0 14px #7af6cc; transition: top .6s, left .6s; }
+    .brief { margin: auto 0 0; }
+    h2 { margin: 0 0 8px; font-size: clamp(22px, 3.5vw, 31px); line-height: 1.05; letter-spacing: -.04em; }
+    p { margin: 0; font-size: 15px; line-height: 1.45; color: #b6ccca; }
+    #action { width: 100%; min-height: 46px; border: 0; border-radius: 4px; background: var(--mint); color: #08241d; font-weight: 700; }
+    #action:enabled:hover { background: #c2ffe8; }
+    #action:disabled { background: #203e42; color: #a9c8c7; }
+    footer { color: var(--muted); padding: 13px 0; }
+    @media (min-width: 621px) {
+        main { max-width: clamp(650px, calc(168svh - 365px), 960px); }
+    }
+    @media (max-width: 620px) {
+        main { max-width: 440px; padding: 14px; }
+        header { margin-bottom: 14px; }
+        .deck { grid-template-columns: 1fr; }
+        .console { border: 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px 18px; padding: 15px; }
+        .profile figcaption { display: none; }
+        .plot { height: 44px; margin: 0; }
+        .brief, #action { grid-column: 1 / -1; }
+        .keys { padding-block: 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) { #sub { transition: none; } }
+</style>
+</head>
+<body>
+<main data-phase="loading">
+    <header><h1>Батискаф</h1><button id="sound" type="button" aria-pressed="true" disabled>Звук вкл.</button></header>
+    <div class="deck">
+        <section class="instrument" aria-label="Пульт связи">
+            <div class="instrument-label"><span>Гидроакустический пульт</span><span>1—4</span></div>
+            <canvas id="termin-canvas" width="500" height="500" tabindex="-1" aria-label="Четыре фонаря. Слева направо сверху 1 и 2, снизу 3 и 4."></canvas>
+            <div class="keys" role="group" aria-label="Каналы связи">
+                <span class="key-hint">Каналы</span>
+                <button data-channel="1" style="--lamp:#53e7b6" disabled>1</button>
+                <button data-channel="2" style="--lamp:#ffb14e" disabled>2</button>
+                <button data-channel="3" style="--lamp:#ff6b60" disabled>3</button>
+                <button data-channel="4" style="--lamp:#639dff" disabled>4</button>
+            </div>
+        </section>
+        <section class="console" aria-label="Управление погружением">
+            <dl class="readout">
+                <div><dt>Глубина</dt><dd><span id="depth">0</span> <small>м</small></dd></div>
+                <div><dt>Станции</dt><dd><span id="cleared">0</span><small> / 5</small></dd></div>
+            </dl>
+            <figure class="profile" aria-hidden="true"><figcaption>Профиль погружения</figcaption>
+                <div class="plot"><div class="seabed"></div><div class="track"><i id="sub"></i></div></div>
+            </figure>
+            <div class="brief" role="status" aria-live="polite"><h2 id="message">Проверка связи</h2><p id="hint">Загружаем пульт…</p></div>
+            <button id="action" type="button" disabled>Начать погружение</button>
+        </section>
+    </div>
+    <footer><span>Termin Web</span><span>Целевая глубина · 1000 м</span></footer>
+</main>
+<script type="module">
+import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs";
+import {createTerminWebHost} from "./termin-web-host.mjs";
+import {createTerminWebInputAdapter} from "./termin-web-input.mjs";
+
+const main = document.querySelector("main");
+const canvas = document.querySelector("canvas");
+const message = document.querySelector("#message");
+const hint = document.querySelector("#hint");
+const action = document.querySelector("#action");
+const sound = document.querySelector("#sound");
+const channels = [...document.querySelectorAll("[data-channel]")];
+const depths = [0, 100, 250, 450, 700, 1000];
+const tones = [261.63, 329.63, 392, 523.25];
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+let host, audio;
+let sequence = [], cursor = 0, stations = 0, playback = 0;
+const offTimers = new Map();
+
+function phase(name, title, instruction) {
+    main.dataset.phase = name;
+    message.textContent = title;
+    hint.textContent = instruction;
+    for (const button of channels) button.disabled = name !== "input";
+    action.disabled = !["ready", "lost", "won"].includes(name);
+}
+
+function fail(error) {
+    ++playback;
+    for (const timer of offTimers.values()) clearTimeout(timer);
+    offTimers.clear();
+    phase("error", "Пульт недоступен", String(error?.message ?? error));
+    sound.disabled = true;
+    console.error("Bathyscaphe failed", error);
+}
+
+function illuminate(id, enabled) {
+    host.setLightEnabled("beacon-" + id, enabled);
+    channels[id - 1].classList.toggle("lit", enabled);
+}
+
+function ping(id) {
+    if (!audio || audio.state !== "running" || sound.getAttribute("aria-pressed") !== "true") return;
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    const t = audio.currentTime;
+    oscillator.frequency.value = tones[id - 1];
+    gain.gain.setValueAtTime(.0001, t);
+    gain.gain.exponentialRampToValueAtTime(.12, t + .018);
+    gain.gain.exponentialRampToValueAtTime(.0001, t + .33);
+    oscillator.connect(gain).connect(audio.destination);
+    oscillator.start(t);
+    oscillator.stop(t + .35);
+}
+
+function enableAudio() {
+    if (sound.getAttribute("aria-pressed") === "true" && window.AudioContext) {
+        try {
+            audio ??= new AudioContext();
+            if (audio.state === "suspended") audio.resume().catch(disableAudio);
+        } catch (error) { disableAudio(error); }
+    }
+}
+
+function disableAudio(error) {
+    console.warn("Bathyscaphe audio unavailable", error);
+    sound.setAttribute("aria-pressed", "false");
+    sound.textContent = "Без звука";
+    sound.disabled = true;
+}
+
+function darken() {
+    for (const timer of offTimers.values()) clearTimeout(timer);
+    offTimers.clear();
+    for (let id = 1; id <= channels.length; ++id) illuminate(id, false);
+}
+
+function readout() {
+    document.querySelector("#cleared").textContent = stations;
+    document.querySelector("#depth").textContent = depths[stations];
+    const sub = document.querySelector("#sub");
+    sub.style.left = (stations * 20) + "%";
+    sub.style.top = (depths[stations] / 10) + "%";
+}
+
+async function transmit() {
+    const token = ++playback;
+    darken();
+    cursor = 0;
+    action.textContent = "Идёт передача";
+    phase("listening", "Слушайте эфир", "Запомните, в каком порядке загораются фонари.");
+    if (document.hidden) return;
+    await delay(600);
+    for (const id of sequence) {
+        if (token !== playback) return;
+        illuminate(id, true);
+        ping(id);
+        await delay(520);
+        if (token !== playback) return;
+        illuminate(id, false);
+        await delay(220);
+    }
+    if (token !== playback) return;
+    action.textContent = "Ожидание ответа";
+    phase("input", "Ваш ответ", "Повторите сигнал. Нажимайте на фонари или клавиши 1–4.");
+}
+
+function nextChannel() { return 1 + Math.floor(Math.random() * channels.length); }
+
+async function answer(id) {
+    if (main.dataset.phase !== "input") return;
+    clearTimeout(offTimers.get(id));
+    illuminate(id, true);
+    ping(id);
+    offTimers.set(id, setTimeout(() => {
+        try { illuminate(id, false); offTimers.delete(id); }
+        catch (error) { fail(error); }
+    }, 190));
+    if (sequence[cursor] !== id) {
+        action.textContent = "Попробовать снова";
+        phase("lost", "Связь потеряна", "Станция ждала канал " + sequence[cursor] + ". Достигнутая глубина — " + depths[stations] + " м.");
+        return;
+    }
+    if (++cursor < sequence.length) {
+        hint.textContent = "Принято сигналов: " + cursor + " из " + sequence.length + ".";
+        return;
+    }
+    ++stations;
+    readout();
+    if (stations === depths.length - 1) {
+        darken();
+        for (let channel = 1; channel <= channels.length; ++channel) illuminate(channel, true);
+        action.textContent = "Новое погружение";
+        phase("won", "Есть контакт!", "На глубине 1000 метров вас услышала донная станция. Все пять сигналов приняты.");
+        return;
+    }
+    action.textContent = "Погружение";
+    phase("between", "Сигнал принят", "Следующая станция добавит к позывному ещё один сигнал.");
+    const token = playback;
+    await delay(1000);
+    if (token !== playback) return;
+    sequence.push(nextChannel());
+    await transmit();
+}
+
+function press(id) { answer(id).catch(fail); }
+
+try {
+    const core = await createTerminCore();
+    host = createTerminWebHost(core, {
+        canvas, graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
+        onStateChange({state, error}) { if (state === "error") fail(error); },
+    });
+    // Let Tab leave the fixed instrument after a pointer tap focuses the canvas.
+    canvas.addEventListener("keydown", event => {
+        if (event.key === "Tab") event.stopImmediatePropagation();
+    });
+    const input = createTerminWebInputAdapter(core, {
+        canvas, onTap({x, y}) {
+            if (main.dataset.phase !== "input") return;
+            try {
+                const hit = /^beacon-([1-4])$/.exec(host.pickEntity(x, y));
+                if (hit) press(Number(hit[1]));
+            } catch (error) { fail(error); }
+        },
+    }).attach();
+    globalThis.__terminViewer = {core, host, input};
+    await host.load(webAssetUrl("scene.trpkg", "./fixtures/bathyscaphe-scene/package.trpkg"));
+    input.setEnabled(true);
+    for (const button of channels) button.classList.add("lit");
+    phase("ready", "Выйти на связь", "Пять станций отделяют вас от дна. Запоминайте их световые позывные и отвечайте в том же порядке.");
+    sound.disabled = !window.AudioContext;
+    if (sound.disabled) { sound.textContent = "Без звука"; sound.setAttribute("aria-pressed", "false"); }
+    sound.addEventListener("click", () => {
+        const enabled = sound.getAttribute("aria-pressed") !== "true";
+        sound.setAttribute("aria-pressed", String(enabled));
+        sound.textContent = enabled ? "Звук вкл." : "Звук выкл.";
+        enableAudio();
+    });
+    action.addEventListener("click", () => {
+        enableAudio();
+        stations = 0;
+        sequence = [nextChannel(), nextChannel()];
+        readout();
+        transmit().catch(fail);
+    });
+    channels.forEach(button => button.addEventListener("click", () => press(Number(button.dataset.channel))));
+    document.addEventListener("keydown", event => {
+        if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || main.dataset.phase !== "input") return;
+        if (/^[1-4]$/.test(event.key)) { event.preventDefault(); press(Number(event.key)); }
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (main.dataset.phase !== "listening") return;
+        if (document.hidden) {
+            ++playback;
+            try { darken(); } catch (error) { fail(error); }
+        } else {
+            transmit().catch(fail);
+        }
+    });
+} catch (error) { fail(error); }
+</script>
+</body>
+</html>

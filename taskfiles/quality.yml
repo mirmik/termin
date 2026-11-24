@@ -44,6 +44,12 @@ tasks:
     cmds:
       - xvfb-run -a python3 platform/termin-web-core/tests/sprite_flipbook_browser_smoke.py {{.CLI_ARGS}}
 
+  test:web:salvage:
+    desc: Play the standalone salvage mission offline on WebGPU and WebGL2
+    platforms: [linux]
+    cmds:
+      - xvfb-run -a python3 platform/termin-web-core/tests/salvage_browser_smoke.py "${TERMIN_WEB_BUILD_DIR:-build/web-core}/bin/Termin-Salvage.html" {{.CLI_ARGS}}
+
   smoke:
     desc: Verify installed and relocated SDK consumption
     deps:

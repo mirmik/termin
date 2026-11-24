@@ -14,7 +14,7 @@ configure_file(
     @ONLY
 )
 
-add_executable(termin_web_core
+add_library(termin_web_runtime_objects OBJECT
     src/visual_scene_example.cpp
     src/web_chart2d.cpp
     src/web_chart3d.cpp
@@ -22,10 +22,10 @@ add_executable(termin_web_core
     src/web_scene_pick.cpp
     src/web_graphics_assets.cpp
 )
-target_include_directories(termin_web_core PRIVATE
+target_include_directories(termin_web_runtime_objects PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
-target_link_libraries(termin_web_core PRIVATE
+target_link_libraries(termin_web_runtime_objects PUBLIC
     tcbase::termin_base
     termin_inspect::termin_inspect
     termin_bootstrap::termin_bootstrap
@@ -40,9 +40,8 @@ target_link_libraries(termin_web_core PRIVATE
 )
 set(TERMIN_WEB_CHART_FONT
     "${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")
-set_property(TARGET termin_web_core APPEND PROPERTY LINK_DEPENDS "${TERMIN_WEB_CHART_FONT}")
-target_compile_options(termin_web_core PRIVATE -fexceptions)
-target_link_options(termin_web_core PRIVATE
+target_compile_options(termin_web_runtime_objects PUBLIC -fexceptions)
+target_link_options(termin_web_runtime_objects INTERFACE
     "-fexceptions"
     "--no-entry"
     "--embed-file" "${TERMIN_WEB_CHART_FONT}@/fonts/DroidSans.ttf"
@@ -58,12 +57,19 @@ target_link_options(termin_web_core PRIVATE
     "-sEXPORTED_FUNCTIONS=['_malloc','_free','_termin_web_core_smoke','_termin_web_core_lifecycle_smoke','_termin_web_core_shutdown','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_backend','_termin_web_host_graphics_error','_termin_web_host_set_package_blob','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_pick_entity','_termin_web_host_set_light_enabled','_termin_web_host_reset_rigid_body','_termin_web_host_record_rigid_body_height','_termin_web_host_read_rigid_body_height_trace','_termin_web_host_height_trace_error','_termin_web_host_set_ui_widget_enabled','_termin_web_host_bind_ui_button','_termin_web_host_unbind_ui_button','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_visual_scene_render','_termin_web_visual_scene_error','_termin_web_chart2d_create','_termin_web_chart2d_set_data','_termin_web_chart2d_set_range','_termin_web_chart2d_resize','_termin_web_chart2d_pointer','_termin_web_chart2d_wheel','_termin_web_chart2d_range','_termin_web_chart2d_render','_termin_web_chart2d_destroy','_termin_web_chart2d_error','_termin_web_chart3d_create','_termin_web_chart3d_set_surface','_termin_web_chart3d_resize','_termin_web_chart3d_pointer','_termin_web_chart3d_wheel','_termin_web_chart3d_fit','_termin_web_chart3d_reset','_termin_web_chart3d_camera','_termin_web_chart3d_render','_termin_web_chart3d_destroy','_termin_web_chart3d_error','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
     "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','FS','ccall','getExceptionMessage','HEAPU8']"
 )
-set_target_properties(termin_web_core PROPERTIES
-    OUTPUT_NAME "termin_web_core"
-    SUFFIX ".mjs"
-)
+# Link example gameplay only into its own Wasm module. Both modules share the
+# same compiled runtime and browser ABI.
+add_executable(termin_web_core)
+add_executable(termin_web_salvage examples/salvage/web_salvage.cpp)
+target_include_directories(termin_web_salvage PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+foreach(runtime IN ITEMS termin_web_core termin_web_salvage)
+    target_link_libraries(${runtime} PRIVATE termin_web_runtime_objects)
+    set_property(TARGET ${runtime} APPEND PROPERTY LINK_DEPENDS "${TERMIN_WEB_CHART_FONT}")
+    set_target_properties(${runtime} PROPERTIES SUFFIX ".mjs")
+endforeach()
 
 file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+configure_file(web/termin-web-assets.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-assets.mjs" COPYONLY)
 configure_file(web/termin-web-core.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs" COPYONLY)
 configure_file(web/termin-web-host.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs" COPYONLY)
 configure_file(web/termin-web-input.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs" COPYONLY)
@@ -71,6 +77,8 @@ configure_file(web/smoke.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/smoke.html" COP
 configure_file(web/physics-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/physics-scene.html" COPYONLY)
 configure_file(web/ui-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ui-scene.html" COPYONLY)
 configure_file(web/interactive-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/interactive-scene.html" COPYONLY)
+configure_file(web/bathyscaphe-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/bathyscaphe-scene.html" COPYONLY)
+configure_file(web/salvage-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/salvage-scene.html" COPYONLY)
 configure_file(web/viewer.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/viewer.html" COPYONLY)
 configure_file(web/visual-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/visual-scene.html" COPYONLY)
 set(TERMIN_WEB_CHART_MODULES
@@ -181,6 +189,7 @@ add_custom_command(OUTPUT "${TERMIN_WEB_CHART3D_PAGE}"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart3d.mjs"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart.mjs"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-assets.mjs"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs"
     VERBATIM)
@@ -223,13 +232,20 @@ endif()
 set(TERMIN_WEB_INTERACTIVE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/examples/interactive-scene")
 set(TERMIN_WEB_INTERACTIVE_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/interactive-scene/package.trpkg")
 set(TERMIN_WEB_PHYSICS_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/physics-scene/package.trpkg")
+set(TERMIN_WEB_BATHYSCAPHE_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/bathyscaphe-scene/package.trpkg")
+set(TERMIN_WEB_SALVAGE_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/salvage-scene/package.trpkg")
 add_custom_command(OUTPUT "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYSICS_PACKAGE}"
+        "${TERMIN_WEB_BATHYSCAPHE_PACKAGE}" "${TERMIN_WEB_SALVAGE_PACKAGE}"
     COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_INTERACTIVE_SOURCE}/build_package.py"
         --fixture "${TERMIN_WEB_RENDER_FIXTURE_DIR}"
         --shaderc "${TERMIN_WEB_HOST_SHADERC}" --slangc "${TERMIN_WEB_HOST_SLANGC}"
         --wgsl-validator "${TERMIN_WEB_HOST_WGSL_VALIDATOR}" --output "${TERMIN_WEB_INTERACTIVE_PACKAGE}"
         --physics-output "${TERMIN_WEB_PHYSICS_PACKAGE}"
+        --bathyscaphe-output "${TERMIN_WEB_BATHYSCAPHE_PACKAGE}"
+        --salvage-output "${TERMIN_WEB_SALVAGE_PACKAGE}"
     DEPENDS "${TERMIN_WEB_INTERACTIVE_SOURCE}/build_package.py" "${TERMIN_WEB_INTERACTIVE_SOURCE}/demo_scenes.py"
+        "${TERMIN_WEB_INTERACTIVE_SOURCE}/bathyscaphe.py" "${TERMIN_WEB_INTERACTIVE_SOURCE}/salvage.py"
+        "${TERMIN_WEB_INTERACTIVE_SOURCE}/salvage.frag.slang"
         "${TERMIN_WEB_INTERACTIVE_SOURCE}/physics-hud.ui-document.json"
         "${TERMIN_WEB_INTERACTIVE_SOURCE}/lit.vert.slang" "${TERMIN_WEB_INTERACTIVE_SOURCE}/lit.frag.slang"
         "${TERMIN_WEB_INTERACTIVE_SOURCE}/static-shadow.vert.slang" "${TERMIN_WEB_INTERACTIVE_SOURCE}/static-shadow.variants.json"
@@ -245,32 +261,37 @@ add_custom_command(OUTPUT "${TERMIN_WEB_UI_PACKAGE}"
         "${TERMIN_WEB_RENDER_FIXTURE_DIR}/package.trpkg" "${TERMIN_PACKAGE_BLOB_SCRIPT}"
     VERBATIM)
 add_custom_target(termin_web_demo_packages DEPENDS
-    "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYSICS_PACKAGE}" "${TERMIN_WEB_UI_PACKAGE}")
+    "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYSICS_PACKAGE}"
+    "${TERMIN_WEB_BATHYSCAPHE_PACKAGE}" "${TERMIN_WEB_SALVAGE_PACKAGE}" "${TERMIN_WEB_UI_PACKAGE}")
 add_dependencies(termin_web_demo_packages termin_web_core_fixture_packages)
 
-function(termin_web_scene_demo name page package)
+function(termin_web_scene_demo name page package runtime)
     set(source "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${name}-scene.html")
     set(output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${page}.html")
     add_custom_command(OUTPUT "${output}"
         COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_HTML_PACKER}"
-            "${source}" "${output}" --scene-package "${package}"
-        DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${TERMIN_WEB_HTML_LOADER}" "${package}" "${source}"
+            "${source}" "${output}" --scene-package "${package}" --wasm "${runtime}.wasm"
+        DEPENDS ${runtime} "${TERMIN_WEB_HTML_PACKER}" "${TERMIN_WEB_HTML_LOADER}" "${package}" "${source}"
             ${ARGN}
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-assets.mjs"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs"
         VERBATIM)
     add_custom_target(termin_web_${name}_scene DEPENDS "${output}")
     add_dependencies(termin_web_${name}_scene termin_web_demo_packages)
 endfunction()
-termin_web_scene_demo(interactive Termin-InteractiveScene "${TERMIN_WEB_INTERACTIVE_PACKAGE}")
-termin_web_scene_demo(physics Termin-PhysicsScene "${TERMIN_WEB_PHYSICS_PACKAGE}"
+termin_web_scene_demo(salvage Termin-Salvage "${TERMIN_WEB_SALVAGE_PACKAGE}" termin_web_salvage)
+termin_web_scene_demo(interactive Termin-InteractiveScene "${TERMIN_WEB_INTERACTIVE_PACKAGE}" termin_web_core)
+termin_web_scene_demo(bathyscaphe Termin-Bathyscaphe "${TERMIN_WEB_BATHYSCAPHE_PACKAGE}" termin_web_core)
+termin_web_scene_demo(physics Termin-PhysicsScene "${TERMIN_WEB_PHYSICS_PACKAGE}" termin_web_core
     "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart2d.mjs"
     "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart.mjs")
-termin_web_scene_demo(ui Termin-UiScene "${TERMIN_WEB_UI_PACKAGE}")
+termin_web_scene_demo(ui Termin-UiScene "${TERMIN_WEB_UI_PACKAGE}" termin_web_core)
 add_custom_target(termin_web_standalone_demos)
 add_dependencies(termin_web_standalone_demos
-    termin_web_chart3d_standalone termin_web_interactive_scene termin_web_physics_scene termin_web_ui_scene)
+    termin_web_chart3d_standalone termin_web_interactive_scene termin_web_physics_scene termin_web_ui_scene
+    termin_web_bathyscaphe_scene termin_web_salvage_scene)
 
 add_custom_target(termin_web_core_node_smoke
     COMMAND "${CMAKE_COMMAND}" -E env

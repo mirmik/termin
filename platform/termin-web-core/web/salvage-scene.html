@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c1c21">
+<title>Батискаф · Чёрный ящик</title>
+<style>
+    :root {
+        color-scheme: dark; --ink: #e9eee2; --muted: #a0b7b3; --line: #3e5657;
+        --amber: #ffc864; --mint: #8be5bb; --mono: "IBM Plex Mono", ui-monospace, monospace;
+        font-family: "Inter", system-ui, sans-serif; color: var(--ink); background: #0c1c21;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100svh; display: grid; place-items: center;
+        background: radial-gradient(ellipse at 46% 10%, #26474b, #122b30 49%, #091b20 87%); }
+    main { width: min(100%, 1080px, max(650px, calc(177svh - 380px))); display: grid;
+        padding: clamp(12px, 2vw, 25px); gap: 12px 22px; align-items: center;
+        grid-template-columns: auto minmax(0,1fr) auto; grid-template-areas: "head head head" "stage stage stage" "stick brief hook"; }
+    header { grid-area: head; display: flex; align-items: end; justify-content: space-between; gap: .5rem; }
+    .eyebrow, .dial-label, .key-hint, .timer-label { font: 10px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .eyebrow, .timer-label { color: var(--muted); }
+    h1 { font: 650 clamp(26px, 4.4vw, 54px)/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: -.055em; margin: .06em 0 0; }
+    .timer { min-width: 92px; text-align: right; }
+    #clock { display: block; font: 500 clamp(24px, 3.6vw, 38px)/1.05 var(--mono); letter-spacing: -.065em; font-variant-numeric: tabular-nums; }
+    #clock.urgent { color: var(--amber); }
+    .viewport { grid-area: stage; position: relative; width: 100%; overflow: hidden; border: 1px solid var(--line);
+        background: #071a20; border-radius: 5px; box-shadow: 0 14px 34px #00111555; }
+    canvas { display: block; width: 100%; aspect-ratio: 16 / 9; touch-action: none; }
+    .brief { grid-area: brief; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+    #status { font-size: clamp(14px, 1.6vw, 17px); line-height: 1.36; margin: 0; max-width: 58ch; }
+    .key-hint { font-size: 10px; color: var(--muted); letter-spacing: .025em; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button:disabled { cursor: default; }
+    button:focus-visible { outline: 2px solid var(--amber); outline-offset: 4px; }
+    #start { padding: 8px 16px; min-height: 40px; border: 1px solid #ffe1a4; border-radius: 4px;
+        background: var(--amber); color: #242210; font-size: 14px; font-weight: 700; }
+    #start:enabled:hover { filter: brightness(1.12); }
+    [data-phase="active"] #start { background: transparent; border-color: var(--line); color: var(--muted); min-height: 30px; padding: 4px 12px; }
+    [data-phase="error"] #status { color: #ffab90; overflow-wrap: anywhere; }
+    .station { display: grid; justify-items: center; gap: 5px; }
+    .helm { grid-area: stick; }
+    .winch { grid-area: hook; }
+    .dial-label { color: var(--muted); }
+    #stick, #hook { touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+    #stick { position: relative; width: 102px; aspect-ratio: 1; border-radius: 50%; border: 1px solid #57736f;
+        background: linear-gradient(0deg, transparent calc(50% - .5px), #496565 50%, transparent calc(50% + .5px)),
+                    linear-gradient(90deg, transparent calc(50% - .5px), #496565 50%, transparent calc(50% + .5px)),
+                    radial-gradient(circle, #213c40 0 38%, #142d32 39% 61%, #3c5353 62% 64%, #182d32 65%);
+        cursor: grab; }
+    #stick:active { cursor: grabbing; }
+    #knob { position: absolute; left: 50%; top: 50%; width: 34%; aspect-ratio: 1; border-radius: 50%;
+        background: radial-gradient(circle at 34% 25%, #758e8b, #4b6767 68%, #234348);
+        border: 1px solid #78918c; box-shadow: 0 3px 5px #06191e88; pointer-events: none;
+        transform: translate(-50%, -50%) translate(var(--dx,0px), var(--dy,0px)); }
+    #hook { width: 91px; min-height: 57px; background: #233c3e; border: 1px solid #52716c;
+        border-bottom: 4px solid #415855; border-radius: 9px; font-size: 13px; font-weight: 650; }
+    #hook[data-armed="true"] { background: #277256; border-color: var(--mint); color: #edfff4; }
+    #hook[data-attached="true"] { background: #685127; border-color: var(--amber); color: #fff1cb; }
+    #hook:active:enabled { transform: translateY(1px); }
+    #hook:disabled, #stick[aria-disabled="true"] { opacity: .46; }
+    @media (max-width: 630px) {
+        body { align-items: start; }
+        main { padding: 14px 10px; gap: 12px; grid-template-areas: "head head head" "stage stage stage" "brief brief brief" "stick . hook"; }
+        .brief { min-height: 87px; }
+        #status { font-size: 15px; }
+        .helm, .winch { margin-inline: 10px; }
+    }
+    @media (hover: none) and (pointer: coarse) { .key-hint { display: none; } }
+    @media (orientation: landscape) and (max-height: 520px) {
+        body { align-items: center; }
+        main { width: 100%; padding: 4px max(8px, env(safe-area-inset-right)) 4px max(8px, env(safe-area-inset-left)); gap: 3px 6px;
+            grid-template-columns: minmax(65px, 1fr) minmax(0, min(69vw, calc(177svh - 178px))) minmax(65px, 1fr);
+            grid-template-areas: "head head head" "stick stage hook" "brief brief brief"; }
+        header { align-items: center; }
+        .title { display: flex; align-items: baseline; gap: 8px; }
+        h1 { font-size: 23px; }
+        .timer { display: flex; align-items: baseline; gap: 8px; min-width: auto; }
+        #clock { font-size: 24px; }
+        .brief { flex-direction: row; align-items: center; justify-content: space-between; min-height: 36px; }
+        #status { font-size: 13px; }
+        #start { flex-shrink: 0; min-height: 32px; padding: 4px 10px; }
+        .key-hint { display: none; }
+        .helm, .winch { margin: 0; }
+        #stick { width: min(100%, 90px); }
+        #hook { width: min(100%, 85px); min-height: 54px; }
+    }
+</style>
+</head>
+<body>
+<main data-phase="loading">
+    <header>
+        <div class="title"><span class="eyebrow">Батискаф</span><h1>Чёрный ящик</h1></div>
+        <div class="timer"><span class="timer-label">Запас воздуха</span><span id="clock" role="timer">1:00</span></div>
+    </header>
+    <div class="viewport"><canvas id="termin-canvas" width="800" height="450" tabindex="-1" aria-label="Трюм затонувшего судна. Батискаф и ящик слева, приёмная площадка справа."></canvas></div>
+    <div class="brief">
+        <p id="status" role="status">Загружаем трюм…</p>
+        <span class="key-hint">Стрелки или WASD — тяга · Пробел — трос</span>
+        <button id="start" type="button" disabled>Начать погружение</button>
+    </div>
+    <div class="station helm">
+        <div id="stick" aria-label="Джойстик тяги" aria-disabled="true"><span id="knob"></span></div>
+        <span class="dial-label">Тяга</span>
+    </div>
+    <div class="station winch">
+        <button type="button" id="hook" aria-label="Зацепить ящик" data-attached="false" disabled>Зацепить</button>
+        <span class="dial-label">Трос</span>
+    </div>
+</main>
+<script type="module">
+import createSalvageModule from "./termin_web_salvage.mjs";
+import {webAssetUrl} from "./termin-web-assets.mjs";
+import {createTerminWebHost} from "./termin-web-host.mjs";
+import {createTerminWebInputAdapter} from "./termin-web-input.mjs";
+
+const main = document.querySelector("main");
+const canvas = document.querySelector("canvas");
+const start = document.querySelector("#start");
+const hook = document.querySelector("#hook");
+const stick = document.querySelector("#stick");
+const knob = document.querySelector("#knob");
+const status = document.querySelector("#status");
+const clock = document.querySelector("#clock");
+
+function showError(error) {
+    main.dataset.phase = "error";
+    status.textContent = "Не удалось запустить погружение. " + (error?.message ?? error);
+    start.disabled = true;
+    hook.disabled = true;
+    stick.setAttribute("aria-disabled", "true");
+    console.error("Salvage mission failed", error);
+}
+
+try {
+    const module = await createSalvageModule({locateFile: name => webAssetUrl(name)});
+    const core = {module};
+    const buffer = module._malloc(9 * Float64Array.BYTES_PER_ELEMENT);
+    if (!buffer) throw new Error("Не удалось выделить память для телеметрии.");
+    const input = createTerminWebInputAdapter(core, {
+        canvas, devicePixelRatio: () => Math.min(devicePixelRatio, 2),
+    }).attach();
+    const host = createTerminWebHost(core, {
+        canvas, graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
+        onFrame: update,
+        onStateChange({state, error}) { if (state === "error") showError(error); },
+    });
+    globalThis.__terminViewer = {core, host, input};
+    const held = new Set();
+    let stickId = null, stickX = 0, stickZ = 0;
+    function setPhase(name, label, instruction) {
+        main.dataset.phase = name;
+        start.textContent = label;
+        start.disabled = false;
+        hook.disabled = name !== "active";
+        stick.setAttribute("aria-disabled", String(name !== "active"));
+        status.textContent = instruction;
+    }
+    function check(result) {
+        if (!result) throw new Error(module.UTF8ToString(module._termin_web_salvage_error()) || "Ошибка управления батискафом.");
+    }
+    function update() {
+        if (main.dataset.phase !== "active") return;
+        check(module._termin_web_salvage_read(buffer));
+        const [phase, remaining, attached, canHook] = new Float64Array(module.HEAPU8.buffer, buffer, 9);
+        const seconds = Math.max(0, Math.ceil(remaining));
+        const display = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+        if (clock.textContent !== display) clock.textContent = display;
+        clock.classList.toggle("urgent", seconds <= 10);
+        const onRope = Boolean(attached);
+        if (hook.dataset.attached !== String(onRope)) {
+            hook.dataset.attached = String(onRope);
+            hook.textContent = onRope ? "Отцепить" : "Зацепить";
+            hook.setAttribute("aria-label", hook.textContent + " ящик");
+        }
+        hook.dataset.armed = String(Boolean(canHook));
+        if (phase === 2 || phase === 3) {
+            resetInput();
+            host.stop();
+            if (phase === 2) setPhase("won", "Ещё погружение", "Ящик на палубе. Бортовой самописец спасён!");
+            else setPhase("timeout", "Попробовать снова", "Воздух закончился. Пора всплывать.");
+            return;
+        }
+        const instruction = onRope ? "Проведите груз через пролом. Отцепите его над зелёной площадкой."
+            : canHook ? "Ящик в зоне захвата. Зацепите его тросом."
+            : "Подведите конец троса к ушку на оранжевом ящике.";
+        if (status.textContent !== instruction) status.textContent = instruction;
+    }
+    function drive(hookPulse = false) {
+        if (main.dataset.phase !== "active") return;
+        const right = held.has("ArrowRight") || held.has("KeyD");
+        const left = held.has("ArrowLeft") || held.has("KeyA");
+        const up = held.has("ArrowUp") || held.has("KeyW");
+        const down = held.has("ArrowDown") || held.has("KeyS");
+        const x = Math.max(-1, Math.min(1, stickX + Number(right) - Number(left)));
+        const z = Math.max(-1, Math.min(1, stickZ + Number(up) - Number(down)));
+        const length = Math.max(1, Math.hypot(x, z));
+        try { check(module._termin_web_salvage_control(x / length, z / length, Number(hookPulse))); }
+        catch (error) { showError(error); }
+    }
+    function resetInput() {
+        held.clear();
+        stickId = null;
+        stickX = stickZ = 0;
+        knob.style.removeProperty("--dx");
+        knob.style.removeProperty("--dy");
+    }
+    function neutral() { resetInput(); drive(); }
+    function moveStick(event) {
+        if (event.pointerId !== stickId) return;
+        const rect = stick.getBoundingClientRect();
+        const radius = rect.width * .32;
+        const dx = (event.clientX - rect.left - rect.width / 2) / radius;
+        const dy = (event.clientY - rect.top - rect.height / 2) / radius;
+        const length = Math.max(1, Math.hypot(dx, dy));
+        stickX = dx / length;
+        stickZ = -dy / length;
+        knob.style.setProperty("--dx", String(stickX * radius) + "px");
+        knob.style.setProperty("--dy", String(-stickZ * radius) + "px");
+        drive();
+    }
+    stick.addEventListener("pointerdown", event => {
+        if (main.dataset.phase !== "active" || stickId !== null || event.button !== 0) return;
+        event.preventDefault();
+        stickId = event.pointerId;
+        stick.setPointerCapture(stickId);
+        moveStick(event);
+    });
+    stick.addEventListener("pointermove", moveStick);
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+        stick.addEventListener(type, event => {
+            if (event.pointerId !== stickId) return;
+            stickId = null;
+            stickX = stickZ = 0;
+            knob.style.removeProperty("--dx");
+            knob.style.removeProperty("--dy");
+            drive();
+        });
+    }
+    // A second finger can operate the winch while the first one holds the stick.
+    hook.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || hook.disabled) return;
+        event.preventDefault();
+        drive(true);
+    });
+    hook.addEventListener("click", event => { if (event.detail === 0) drive(true); });
+    const movement = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"]);
+    function onKey(event) {
+        if (main.dataset.phase !== "active") return;
+        if (event.code !== "Space" && !movement.has(event.code)) return;
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        if (event.code === "Space") {
+            if (event.type === "keydown") drive(true);
+        } else {
+            if (event.type === "keydown") held.add(event.code);
+            else held.delete(event.code);
+            drive();
+        }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("keyup", onKey, true);
+    // A canvas tap gives it focus. Keep Tab available for the DOM controls.
+    canvas.addEventListener("keydown", event => { if (event.key === "Tab") event.stopImmediatePropagation(); }, true);
+    window.addEventListener("blur", neutral);
+    document.addEventListener("visibilitychange", () => {
+        try {
+            if (document.hidden) {
+                neutral();
+                if (host.state === "running") host.stop();
+            } else if (main.dataset.phase === "active" && host.state === "stopped") host.start();
+        } catch (error) { showError(error); }
+    });
+    start.addEventListener("click", () => {
+        try {
+            resetInput();
+            check(module._termin_web_salvage_start());
+            setPhase("active", "Заново", "");
+            update();
+            if (host.state !== "running") host.start();
+            canvas.focus({preventScroll: true});
+        } catch (error) { showError(error); }
+    });
+    function drawPreview() {
+        if (host.state !== "ready" && host.state !== "stopped") return;
+        if (!module._termin_web_host_tick(0)) showError(module.UTF8ToString(module._termin_web_host_error()));
+    }
+    await host.load(webAssetUrl("scene.trpkg", "./fixtures/salvage-scene/package.trpkg"), {autoStart: false});
+    input.setEnabled(true);
+    setPhase("ready", "Начать погружение", "У вас минута. Заберите оранжевый ящик из трюма и доставьте на зелёную площадку справа.");
+    drawPreview();
+    new ResizeObserver(drawPreview).observe(canvas);
+    window.addEventListener("pagehide", event => {
+        if (!event.persisted) {
+            host.stop();
+            module._free(buffer);
+        }
+    });
+} catch (error) { showError(error); }
+</script>
+</body>
+</html>

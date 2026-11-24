@@ -45,6 +45,7 @@ def artifact_measurements(output_directory: str) -> dict:
         "termin_web_core.wasm",
         "termin_web_core.mjs",
         "termin-web-core.mjs",
+        "termin-web-assets.mjs",
         "termin-web-host.mjs",
         "termin-web-input.mjs",
         "termin-web-chart.mjs",
@@ -71,6 +72,7 @@ def artifact_measurements(output_directory: str) -> dict:
         "standalone_html_bytes": {
             name: (root / name).stat().st_size for name in (
                 "Termin-Chart3D.html", "Termin-InteractiveScene.html", "Termin-PhysicsScene.html", "Termin-UiScene.html",
+                "Termin-Bathyscaphe.html", "Termin-Salvage.html",
             )
         },
         "package_files": len(package),
@@ -898,6 +900,121 @@ def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: s
             devtools.call("Emulation.clearDeviceMetricsOverride")
 
 
+def check_bathyscaphe(devtools: DevToolsSocket, artifact: Path, backend: str) -> dict:
+    touch = backend == "webgl2"
+    with offline_page(devtools, artifact) as url:
+        devtools.call("Emulation.setDeviceMetricsOverride", {
+            "width": 390 if touch else 900, "height": 780, "deviceScaleFactor": 1, "mobile": touch,
+        })
+        devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": touch})
+        try:
+            url += f"?backend={backend}"
+            devtools.call("Page.navigate", {"url": url})
+            state = wait_for_viewer(devtools, expected_url=url)
+            if state["hostMetrics"]["graphicsBackend"] != backend:
+                raise RuntimeError(f"Bathyscaphe selected the wrong backend: {state}")
+
+            def wait_phase(expected):
+                phase = evaluate(devtools, f"""new Promise(resolve => {{
+                    const main = document.querySelector('main');
+                    const observer = new MutationObserver(check);
+                    const timer = setTimeout(finish, 20000);
+                    function finish() {{
+                        clearTimeout(timer);
+                        observer.disconnect();
+                        resolve(main.dataset.phase);
+                    }}
+                    function check() {{
+                        if ([{json.dumps(expected)}, 'error', 'lost', 'won'].includes(main.dataset.phase)) finish();
+                    }}
+                    observer.observe(main, {{attributes:true, attributeFilter:['data-phase']}});
+                    check();
+                }})""")
+                if phase != expected:
+                    raise RuntimeError(f"Bathyscaphe on {backend}: expected {expected}, reached {phase}")
+
+            wait_phase("ready")
+            # The lenses are offset from the centre in units of canvas height (fixed vertical FOV).
+            offsets = [(-.18, -.18), (.18, -.18), (-.18, .18), (.18, .18)]
+            evaluate(devtools, "window.scrollTo({top:0, behavior:'instant'})")
+            picked = evaluate(devtools, f"""(() => {{
+                const c = document.querySelector('canvas');
+                return {json.dumps(offsets)}.map(([dx, dy]) =>
+                    __terminViewer.host.pickEntity(c.width / 2 + dx * c.height, (.5 + dy) * c.height));
+            }})()""")
+            if picked != ["beacon-1", "beacon-2", "beacon-3", "beacon-4"]:
+                raise RuntimeError(f"Bathyscaphe channel layout on {backend}: {picked}")
+
+            def lens_frame():
+                bounds, png = chart_screenshot(devtools)
+                width, height, channels, rows = decode_png(png)
+                colors = []
+                for dx, dy in offsets:
+                    col = round(width / 2 + dx * height) * channels
+                    row = rows[round(height / 2 + dy * height)]
+                    colors.append(tuple(row[col:col + 3]))
+                return bounds, colors
+
+            _, lit = lens_frame()
+            # Record what a player sees, including adjacent pulses on the same channel.
+            evaluate(devtools, """(() => {
+                window.heard = [];
+                for (const button of document.querySelectorAll('[data-channel]')) {
+                    new MutationObserver(changes => {
+                        if (document.querySelector('main').dataset.phase === 'listening' &&
+                            button.classList.contains('lit') &&
+                            changes.some(change => !(change.oldValue || '').split(' ').includes('lit'))) {
+                            heard.push(Number(button.dataset.channel));
+                        }
+                    }).observe(button, {attributes:true, attributeFilter:['class'], attributeOldValue:true});
+                }
+            })()""")
+            action = "document.querySelector('#action').click()"
+            evaluate(devtools, action)
+            wait_phase("input")
+            first = evaluate(devtools, "heard.splice(0)")
+            if len(first) != 2:
+                raise RuntimeError(f"Bathyscaphe opening signal should have two pulses: {first}")
+            bounds, dark = lens_frame()
+            for channel, (before, after) in enumerate(zip(lit, dark), start=1):
+                if max(a - b for a, b in zip(before, after)) < 20:
+                    raise RuntimeError(f"Bathyscaphe lens {channel} did not dim: {before} -> {after}")
+
+            def press_lens(channel):
+                dx, dy = offsets[channel - 1]
+                point = (bounds["x"] + bounds["width"] / 2 + dx * bounds["height"],
+                         bounds["y"] + (.5 + dy) * bounds["height"])
+                dispatch_gesture(devtools, touch, point)
+
+            press_lens(first[0] % 4 + 1)
+            wait_phase("lost")
+            evaluate(devtools, action)
+            previous = []
+            lengths = []
+            for index in range(5):
+                wait_phase("input")
+                signal = evaluate(devtools, "heard.splice(0)")
+                if len(signal) != index + 2 or (previous and signal[:-1] != previous):
+                    raise RuntimeError(f"Bathyscaphe signal did not grow by one: {previous} -> {signal}")
+                for channel in signal:
+                    if index == 0:
+                        press_lens(channel)
+                    else:
+                        devtools.call("Input.dispatchKeyEvent", {
+                            "type": "keyDown", "key": str(channel), "code": f"Digit{channel}",
+                        })
+                        devtools.call("Input.dispatchKeyEvent", {
+                            "type": "keyUp", "key": str(channel), "code": f"Digit{channel}",
+                        })
+                lengths.append(len(signal))
+                previous = signal
+            wait_phase("won")
+            return {"touch": touch, "retry": True, "signal_lengths": lengths}
+        finally:
+            devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": False})
+            devtools.call("Emulation.clearDeviceMetricsOverride")
+
+
 def check_ui_scene(devtools: DevToolsSocket, artifact: Path, backend: str) -> dict:
     with offline_page(devtools, artifact) as url:
         dpr = 2 if backend == "webgl2" else 1
@@ -1555,6 +1672,10 @@ def main() -> int:
             report["interactive_scene"] = {
                 backend: check_interactive_scene(devtools, interactive, backend, touch=backend == "webgl2")
                 for backend in ("webgpu", "webgl2")
+            }
+            game = Path(args.output_directory) / "Termin-Bathyscaphe.html"
+            report["bathyscaphe"] = {
+                backend: check_bathyscaphe(devtools, game, backend) for backend in ("webgpu", "webgl2")
             }
             physics = Path(args.output_directory) / "Termin-PhysicsScene.html"
             report["physics_scene"] = {
