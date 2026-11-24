@@ -890,6 +890,114 @@ def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: s
             devtools.call("Emulation.clearDeviceMetricsOverride")
 
 
+def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) -> dict:
+    with offline_page(devtools, artifact) as url:
+        url += f"?backend={backend}"
+        devtools.call("Page.navigate", {"url": url})
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if evaluate(devtools, f"location.href === {json.dumps(url)} && document.getElementById('drop')?.disabled === false"):
+                break
+            time.sleep(0.05)
+        else:
+            raise RuntimeError(f"Physics scene did not load: {console_diagnostics(devtools)}")
+        if evaluate(devtools, "__terminViewer.host.graphicsBackend") != backend:
+            raise RuntimeError(f"Physics scene failed to select {backend}")
+
+        def tick(dt):
+            evaluate(devtools, f"""(() => {{
+                const mod = __terminViewer.core.module;
+                if (!mod._termin_web_host_tick({dt}))
+                    throw Error(mod.UTF8ToString(mod._termin_web_host_error()));
+            }})()""")
+
+        def height_after(dt):
+            # The camera is horizontal, six units from the centre line, with a
+            # fixed 40 degree vertical field of view.
+            tick(dt)
+            row = evaluate(devtools, """(() => {
+                const {host} = __terminViewer;
+                const canvas = document.querySelector('canvas');
+                const hits = [];
+                for (let i = 0; i < 80; ++i) {
+                    const y = (i + 0.5) / 80;
+                    if (host.pickEntity(canvas.width / 2, y * canvas.height) === "drop-ball") hits.push(y);
+                }
+                if (!hits.length) throw Error("Falling rigid body disappeared");
+                return (hits[0] + hits[hits.length - 1]) / 2;
+            })()""")
+            return (0.5 - row) * 12 * math.tan(math.radians(20))
+
+        def frame_probes():
+            _, png = chart_screenshot(devtools)
+            w, h, channels, rows = decode_png(png)
+            scale = h / (12 * math.tan(math.radians(20)))  # pixels per world unit at y = 0
+            ball_y = round(h / 2 - 1.05 * scale)
+            column = w // 2 * channels
+            ball_rgb = list(rows[ball_y][column:column + 3])
+
+            # The key's rays travel in (+0.48, 0, -1). Project the initial umbra
+            # onto the top face at z = -1.03, and mirror it for a lit control.
+            shadow_x = (1.05 + 1.03) * 0.48
+            platform_y = round(h / 2 + 1.03 * scale)
+            blue = []
+            for world_x in (shadow_x, -shadow_x):
+                x = round(w / 2 + world_x * scale)
+                blue.append(sum(rows[y][col * channels + 2]
+                                for y in range(platform_y - 1, platform_y + 2)
+                                for col in range(x - 1, x + 2)) / 9)
+            return ball_rgb, blue
+
+        def key_contribution(lit):
+            # Measure only the directional light. The emissive ball also has a
+            # moving point light which changes the platform colour during the drop.
+            evaluate(devtools, "__terminViewer.host.setLightEnabled('key-light', false)")
+            tick(0)
+            _, unlit = frame_probes()
+            evaluate(devtools, "__terminViewer.host.setLightEnabled('key-light', true)")
+            tick(0)
+            return [round(a - b, 1) for a, b in zip(lit, unlit, strict=True)]
+
+        initial = height_after(0)
+        before, lit = frame_probes()
+        initial_key = key_contribution(lit)
+        # Release via the same UI as the user, then advance deterministic elapsed time.
+        evaluate(devtools, "document.getElementById('drop').click(); __terminViewer.host.stop()")
+        falling = height_after(0.35)
+        contact = height_after(0.25)
+        rebound = height_after(0.30)
+        resting = [height_after(1.0) for _ in range(5)]
+        settled = resting[-1]
+        after, lit = frame_probes()
+        settled_key = key_contribution(lit)
+        if not (abs(initial - 1.05) < 0.1 and initial - falling > 0.3 and
+                contact < falling - 0.5 and rebound > contact + 0.12 and
+                abs(resting[-2] - settled) < 0.06 and abs(settled + 0.67) < 0.12):
+            raise RuntimeError(f"Unexpected drop heights on {backend}: {initial}, {falling}, {contact}, {rebound}, {settled}")
+        if max(abs(a - b) for a, b in zip(before, after, strict=True)) < 35:
+            raise RuntimeError(f"Ball moved without updating its rendered pixels: {before} -> {after}")
+        # The suspended ball blocks the key at +x. When it lands, the same
+        # patch must receive direct light again. The -x control stays lit.
+        if (min(initial_key[1], settled_key[1]) < 24 or initial_key[0] > 0.35 * initial_key[1]
+                or settled_key[0] < 0.65 * settled_key[1]):
+            raise RuntimeError(f"Unexpected cast shadow on {backend}: key contribution at "
+                               f"[initial shadow, lit control] = {initial_key} -> {settled_key}")
+        evaluate(devtools, """(async () => {
+            const drop = document.getElementById('drop');
+            drop.click();
+            while (drop.disabled && __terminViewer.host.state !== 'error')
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            if (__terminViewer.host.state !== 'running') throw Error('Physics restart failed');
+            __terminViewer.host.stop();
+        })()""")
+        restarted = height_after(0)
+        if abs(initial - restarted) > 0.12 or restarted - height_after(0.35) < 0.3:
+            raise RuntimeError(f"Restart did not reset the falling body on {backend}: {restarted}")
+        return {"initial": initial, "falling": falling, "contact": contact, "rebound": rebound,
+                "settled": settled, "restarted": restarted, "initial_key_blue": initial_key,
+                "settled_key_blue": settled_key}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Termin Web core browser smoke test")
     parser.add_argument("output_directory")
@@ -1219,6 +1327,10 @@ def main() -> int:
             report["interactive_scene"] = {
                 backend: check_interactive_scene(devtools, interactive, backend, touch=backend == "webgl2")
                 for backend in ("webgpu", "webgl2")
+            }
+            physics = Path(args.output_directory) / "Termin-PhysicsScene.html"
+            report["physics_scene"] = {
+                backend: check_physics_scene(devtools, physics, backend) for backend in ("webgpu", "webgl2")
             }
     except Exception as error:
         failure = error

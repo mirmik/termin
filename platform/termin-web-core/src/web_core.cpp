@@ -25,7 +25,6 @@
 #include <termin/engine/engine_core.hpp>
 #include <termin/platform/offscreen_render_surface.hpp>
 #include <termin/runtime/runtime_package.hpp>
-#include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin_scene/termin_scene.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -564,8 +563,13 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_lifecycle_smoke() {
         const size_t current_component_type_count = tc_component_registry_type_count();
         const size_t current_pass_type_count = tc_pass_registry_type_count();
         const bool registry_complete = tc_component_registry_has("MeshComponent") &&
-                                       tc_component_registry_has("MeshRenderer") && tc_pass_registry_has("ColorPass") &&
+                                       tc_component_registry_has("MeshRenderer") &&
+                                       tc_component_registry_has("ColliderComponent") &&
+                                       tc_component_registry_has("RigidBodyComponent") &&
+                                       tc_component_registry_has("PhysicsWorldComponent") &&
+                                       tc_pass_registry_has("ColorPass") &&
                                        tc_pass_registry_has("SkyBoxPass") &&
+                                       tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD) &&
                                        tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT) &&
                                        tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_STATE);
         const bool registry_counts_stable = cycle == 0 || (current_component_type_count == component_type_count &&
@@ -580,6 +584,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_lifecycle_smoke() {
         pass_type_count = current_pass_type_count;
         termin::bootstrap::shutdown_runtime();
         if (tc_component_registry_type_count() != 0 || tc_pass_registry_type_count() != 0 ||
+            tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD) ||
             tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT) ||
             tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_STATE)) {
             tc_log_error("TerminWebCore lifecycle smoke: Render registry survived shutdown on cycle %d", cycle + 1);
@@ -619,7 +624,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
     }
     termin::runtime::RuntimePackageLoadOptions options;
     options.bootstrap_profile = termin::bootstrap::RuntimeBootstrapProfile::Render;
-    options.scene_extensions = termin::default_scene_extension_ids();
+    options.scene_extensions = {TC_SCENE_EXT_TYPE_RENDER_MOUNT, TC_SCENE_EXT_TYPE_RENDER_STATE,
+                                TC_SCENE_EXT_TYPE_COLLISION_WORLD};
     try {
         termin::runtime::RuntimePackageLoader loader;
         if (web_pending_package_reader) {

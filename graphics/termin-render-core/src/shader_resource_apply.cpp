@@ -122,18 +122,22 @@ namespace termin {
                                      std::span<const tgfx::TextureHandle> shadow_maps,
                                      tgfx::SamplerHandle sampler,
                                      size_t max_count) {
+        const tc_shader_resource_binding* single_map =
+            find_valid_abi_resource(shader, ShaderAbiResourceId::SingleShadowMap, "single_shadow_map");
+        if (single_map) {
+            // WebGPU requires a matching depth view even when the shadow count is zero.
+            const auto texture = shadow_maps.empty() || max_count == 0 ? ctx.empty_depth_texture() : shadow_maps.front();
+            ctx.bind_texture(single_map, texture, sampler);
+        }
         const tc_shader_resource_binding* rb =
             find_valid_abi_resource(shader, ShaderAbiResourceId::ShadowMaps, "shadow_maps");
-        if (rb) {
-            // Bind by reflected resource name below.
-        } else {
-            if (shader_layout_omits_resource(shader)) {
-                return false;
+        if (!rb) {
+            if (!single_map && !shader_layout_omits_resource(shader)) {
+                tc::Log::error("[ShaderResourceApply] shader '%s' has no shadow map texture "
+                               "resource layout entry",
+                               shader_debug_name(shader));
             }
-            tc::Log::error("[ShaderResourceApply] shader '%s' has no shadow map texture "
-                           "resource layout entry",
-                           shader_debug_name(shader));
-            return false;
+            return single_map != nullptr;
         }
 
         // Comparison samplers are part of the statically compiled shader ABI even
@@ -147,14 +151,12 @@ namespace termin {
             return true;
         }
 
-        bool any_bound = false;
+        bool any_bound = single_map != nullptr;
         const size_t count = std::min(shadow_maps.size(), max_count);
         for (size_t i = 0; i < count; ++i) {
             if (!shadow_maps[i])
                 continue;
-            if (rb) {
-                ctx.bind_texture_array_element(rb, static_cast<uint32_t>(i), shadow_maps[i], sampler);
-            }
+            ctx.bind_texture_array_element(rb, static_cast<uint32_t>(i), shadow_maps[i], sampler);
             any_bound = true;
         }
         return any_bound;

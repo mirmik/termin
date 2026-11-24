@@ -170,6 +170,7 @@ namespace tgfx {
         BufferHandle fsq_vbo_;
         BufferHandle fsq_ibo_;
         ShaderHandle fsq_vs_;
+        TextureHandle empty_depth_texture_;
 
         // Last vbo/ibo bound on the command list — lets draw() skip the
         // redundant vkCmdBindVertexBuffers / vkCmdBindIndexBuffer when the
@@ -302,6 +303,8 @@ namespace tgfx {
                                  uint64_t offset = 0,
                                  uint64_t range = 0);
         void bind_texture(std::string_view name, TextureHandle texture, SamplerHandle sampler = {});
+        // Valid descriptor for optional depth inputs guarded by their shader's active count.
+        TextureHandle empty_depth_texture();
         void
         bind_texture(const struct ::tc_shader_resource_binding* rb, TextureHandle texture, SamplerHandle sampler = {});
         void bind_texture_array_element(std::string_view name,

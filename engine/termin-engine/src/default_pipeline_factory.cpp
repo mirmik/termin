@@ -47,19 +47,25 @@ namespace termin::rendering_manager_detail {
         tc_pipeline_handle ph = tc_pipeline_create("Default");
         RenderPipeline pipeline(ph);
 
-#ifdef TERMIN_ENGINE_CORE_RENDER_PIPELINE
         if (tc_pass* p = create_and_configure_pass(
                 "EnvironmentLightingPass", "EnvironmentLighting", {{"output_res", "environment_lighting"}})) {
             adopt_default_pass(ph, p);
         }
+
+        if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {{"output_res", "shadow_maps"}})) {
+            adopt_default_pass(ph, p);
+        }
+
         if (tc_pass* p =
                 create_and_configure_pass("SkyBoxPass", "Skybox", {{"input_res", "empty"}, {"output_res", "skybox"}})) {
             adopt_default_pass(ph, p);
         }
+
+#ifdef TERMIN_ENGINE_CORE_RENDER_PIPELINE
         if (tc_pass* p = create_and_configure_pass(
                 "ColorPass",
                 "Color",
-                {{"input_res", "skybox"}, {"output_res", "color"}, {"shadow_res", ""}, {"phase_mark", "opaque"}})) {
+                {{"input_res", "skybox"}, {"output_res", "color"}, {"shadow_res", "shadow_maps"}, {"phase_mark", "opaque"}})) {
             adopt_default_pass(ph, p);
         }
 #ifdef __EMSCRIPTEN__
@@ -93,20 +99,6 @@ namespace termin::rendering_manager_detail {
         pipeline.set_color_export("color_tonemapped", ColorContent::DisplayLinear);
         return ph;
 #endif
-
-        if (tc_pass* p = create_and_configure_pass(
-                "EnvironmentLightingPass", "EnvironmentLighting", {{"output_res", "environment_lighting"}})) {
-            adopt_default_pass(ph, p);
-        }
-
-        if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {{"output_res", "shadow_maps"}})) {
-            adopt_default_pass(ph, p);
-        }
-
-        if (tc_pass* p =
-                create_and_configure_pass("SkyBoxPass", "Skybox", {{"input_res", "empty"}, {"output_res", "skybox"}})) {
-            adopt_default_pass(ph, p);
-        }
 
         if (tc_pass* p = create_and_configure_pass("ColorPass",
                                                    "Color",

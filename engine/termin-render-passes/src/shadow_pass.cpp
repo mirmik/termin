@@ -505,13 +505,6 @@ struct VertexInput {
 
         auto& device = ctx.ctx2->device();
 
-        ensure_tgfx2_resources(device);
-
-        if (!tc_shader_is_valid(shadow_shader_handle_)) {
-            tc::Log::error("ShadowPass/tgfx2: shadow_shader_handle_ not registered");
-            return results;
-        }
-
         // Find directional lights that cast shadows.
         std::vector<std::pair<int, const Light*>> shadow_lights;
         for (size_t i = 0; i < request.lights.size(); ++i) {
@@ -521,6 +514,13 @@ struct VertexInput {
             }
         }
         if (shadow_lights.empty()) {
+            return results;
+        }
+
+        ensure_tgfx2_resources(device);
+
+        if (!tc_shader_is_valid(shadow_shader_handle_)) {
+            tc::Log::error("ShadowPass/tgfx2: shadow_shader_handle_ not registered");
             return results;
         }
 

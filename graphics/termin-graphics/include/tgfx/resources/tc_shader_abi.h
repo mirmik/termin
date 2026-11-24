@@ -21,6 +21,7 @@ typedef enum tc_shader_abi_resource_id {
     TC_SHADER_ABI_RESOURCE_IBL_DIFFUSE_IRRADIANCE = 7,
     TC_SHADER_ABI_RESOURCE_IBL_PREFILTERED_SPECULAR = 8,
     TC_SHADER_ABI_RESOURCE_IBL_BRDF_LUT = 9,
+    TC_SHADER_ABI_RESOURCE_SINGLE_SHADOW_MAP = 10,
 } tc_shader_abi_resource_id;
 
 typedef struct tc_shader_abi_resource_decl {

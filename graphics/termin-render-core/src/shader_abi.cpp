@@ -36,6 +36,8 @@ namespace termin {
                 return TC_SHADER_ABI_RESOURCE_IBL_PREFILTERED_SPECULAR;
             case ShaderAbiResourceId::IblBrdfLut:
                 return TC_SHADER_ABI_RESOURCE_IBL_BRDF_LUT;
+            case ShaderAbiResourceId::SingleShadowMap:
+                return TC_SHADER_ABI_RESOURCE_SINGLE_SHADOW_MAP;
             }
             return UINT32_MAX;
         }
@@ -77,6 +79,7 @@ namespace termin {
             make_cpp_decl(*tc_shader_abi_resource(TC_SHADER_ABI_RESOURCE_IBL_DIFFUSE_IRRADIANCE)),
             make_cpp_decl(*tc_shader_abi_resource(TC_SHADER_ABI_RESOURCE_IBL_PREFILTERED_SPECULAR)),
             make_cpp_decl(*tc_shader_abi_resource(TC_SHADER_ABI_RESOURCE_IBL_BRDF_LUT)),
+            make_cpp_decl(*tc_shader_abi_resource(TC_SHADER_ABI_RESOURCE_SINGLE_SHADOW_MAP)),
         };
 
         const uint32_t c_id = shader_abi_c_id(id);

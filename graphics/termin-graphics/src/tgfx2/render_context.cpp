@@ -114,6 +114,8 @@ namespace tgfx {
     RenderContext2::~RenderContext2() {
         if (current_resource_set_)
             device_.destroy(current_resource_set_);
+        if (empty_depth_texture_)
+            device_.destroy(empty_depth_texture_);
         if (fsq_vbo_)
             device_.destroy(fsq_vbo_);
         if (fsq_ibo_)
@@ -718,7 +720,8 @@ namespace tgfx {
                a.vulkan.descriptor_kind == b.vulkan.descriptor_kind &&
                a.d3d11.register_class == b.d3d11.register_class && a.d3d11.register_index == b.d3d11.register_index &&
                a.opengl.binding_class == b.opengl.binding_class && a.opengl.binding_point == b.opengl.binding_point &&
-               a.opengl.texture_unit == b.opengl.texture_unit;
+               a.opengl.texture_unit == b.opengl.texture_unit &&
+               a.webgpu.group == b.webgpu.group && a.webgpu.binding == b.webgpu.binding;
     }
 
     bool same_backend_bound_resource_slot(const BackendBoundResourceSlot& a, const BackendBoundResourceSlot& b) {
@@ -1022,6 +1025,19 @@ namespace tgfx {
         value.range = range;
         const BackendBoundResourceSlot slot = bound_resource_slot_from_plan_entry(*plan_entry);
         upsert_pending_planned_binding(scope_from_shader_resource(rb->scope), slot, value);
+    }
+
+    TextureHandle RenderContext2::empty_depth_texture() {
+        if (!empty_depth_texture_) {
+            TextureDesc desc;
+            desc.format = PixelFormat::D32F;
+            desc.usage = TextureUsage::Sampled;
+            empty_depth_texture_ = device_.create_texture(desc);
+            if (!empty_depth_texture_) {
+                tc_log_error("RenderContext2: could not create an empty sampled depth texture");
+            }
+        }
+        return empty_depth_texture_;
     }
 
     void RenderContext2::bind_texture(std::string_view name, TextureHandle texture, SamplerHandle sampler) {

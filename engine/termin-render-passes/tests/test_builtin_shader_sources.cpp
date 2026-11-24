@@ -111,22 +111,23 @@ TEST_CASE("default scene background replaces disabled skybox without gray fallba
 }
 
 TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {
-    const std::string source = read_text(repo_root_from_test_file() /
-                                         "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
-
-    CHECK(source.find("float4 u_light_space_matrix[MAX_SHADOW_MAPS * 4]") != std::string::npos);
-    CHECK(source.find("float4x4 u_light_space_matrix[MAX_SHADOW_MAPS]") == std::string::npos);
-    CHECK(source.find("dot(shadow_block.u_light_space_matrix[row + 0], world)") != std::string::npos);
+    const auto root = repo_root_from_test_file() / "graphics/termin-graphics/resources/builtin_shaders";
+    const std::string data = read_text(root / "termin_shadow_data.slang");
+    const std::string filter = read_text(root / "termin_shadow_filter.slang");
+    CHECK(data.find("float4 u_light_space_matrix[MAX_SHADOW_MAPS * 4]") != std::string::npos);
+    CHECK(data.find("float4x4 u_light_space_matrix[MAX_SHADOW_MAPS]") == std::string::npos);
+    CHECK(filter.find("dot(shadow_block.u_light_space_matrix[row + 0], world)") != std::string::npos);
 }
 
 TEST_CASE("shadow helper keeps filtering methods and cascade blending in Slang") {
-    const std::string source = read_text(repo_root_from_test_file() /
-                                         "graphics/termin-graphics/resources/builtin_shaders/termin_shadows.slang");
-
-    CHECK(source.find("SHADOW_METHOD_HARD") != std::string::npos);
-    CHECK(source.find("POISSON_SAMPLE_COUNT = 16") != std::string::npos);
-    CHECK(source.find("visibility / 25.0") != std::string::npos);
-    CHECK(source.find("get_shadow_softness()") != std::string::npos);
+    const auto root = repo_root_from_test_file() / "graphics/termin-graphics/resources/builtin_shaders";
+    const std::string source = read_text(root / "termin_shadows.slang");
+    const std::string data = read_text(root / "termin_shadow_data.slang");
+    const std::string filter = read_text(root / "termin_shadow_filter.slang");
+    CHECK(filter.find("SHADOW_METHOD_HARD") != std::string::npos);
+    CHECK(data.find("POISSON_SAMPLE_COUNT = 16") != std::string::npos);
+    CHECK(filter.find("visibility / 25.0") != std::string::npos);
+    CHECK(filter.find("get_shadow_softness()") != std::string::npos);
     CHECK(source.find("SampleCmpLevelZero") != std::string::npos);
     CHECK(source.find(".SampleCmp(") == std::string::npos);
     CHECK(source.find("get_light_cascade_blend(light_index)") != std::string::npos);

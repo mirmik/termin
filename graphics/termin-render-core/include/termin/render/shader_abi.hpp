@@ -23,6 +23,7 @@ namespace termin {
         IblDiffuseIrradiance,
         IblPrefilteredSpecular,
         IblBrdfLut,
+        SingleShadowMap,
     };
 
     struct ShaderAbiResourceDecl {

@@ -1,5 +1,6 @@
 import termin_prelude;
 import termin_lighting;
+import termin_single_shadow;
 
 struct MaterialParams { float4 u_emission; };
 [[TerminScope("material")]] ConstantBuffer<MaterialParams> material;
@@ -18,17 +19,24 @@ float4 main(FragmentInput input) : SV_Target0 {
     float3 lighting = get_ambient_color() * get_ambient_intensity();
     float lampPower = 0;
     for (int i = 0; i < min(get_light_count(), MAX_LIGHTS); ++i) {
-        float3 lightPosition = get_light_position(i);
-        float3 toLight = lightPosition - input.world;
-        float dist = max(length(toLight), 0.0001);
-        float3 l = toLight / dist;
-        float a = compute_distance_attenuation(get_light_attenuation(i), get_light_range(i), dist);
-        float diffuse = max(dot(n, l), 0);
-        float specular = pow(max(dot(n, normalize(l + v)), 0), 40);
-        lighting += a * get_light_color(i) * get_light_intensity(i) * (0.78 * diffuse + 0.23 * specular);
-        // A bulb's point light and mesh share one entity and hence one origin.
-        if (distance(lightPosition, input.center) < 0.001)
-            lampPower = saturate(get_light_intensity(i));
+        float3 lightDirection;
+        float lightWeight;
+        if (get_light_type(i) == LIGHT_TYPE_DIRECTIONAL) {
+            lightDirection = -get_light_direction(i);
+            lightWeight = compute_single_shadow(i, input.world);
+        } else {
+            float3 lightPosition = get_light_position(i);
+            float3 toLight = lightPosition - input.world;
+            float dist = max(length(toLight), 0.0001);
+            lightDirection = toLight / dist;
+            lightWeight = compute_distance_attenuation(get_light_attenuation(i), get_light_range(i), dist);
+            // A bulb's point light and mesh share one entity and hence one origin.
+            if (distance(lightPosition, input.center) < 0.001)
+                lampPower = saturate(get_light_intensity(i));
+        }
+        float diffuse = max(dot(n, lightDirection), 0);
+        float specular = pow(max(dot(n, normalize(lightDirection + v)), 0), 40);
+        lighting += lightWeight * get_light_color(i) * get_light_intensity(i) * (0.78 * diffuse + 0.23 * specular);
     }
     if (material.u_emission.a > 0.5) {
         float facing = saturate(dot(n, v));

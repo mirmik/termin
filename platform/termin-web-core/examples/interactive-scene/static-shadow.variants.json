@@ -1,0 +1,12 @@
+[
+  {
+    "uuid": "shv_031d3b9bc8e83058",
+    "name": "ShadowEngineModular_MaterialPipeline_static_shadow_shadow",
+    "source_identity": "sha256:37be87ce04024dc1ac3b8203444eff135f47a6e0af2f607dca0a6fc1225797d9"
+  },
+  {
+    "uuid": "shv_d0fb358f8489dab1",
+    "name": "ShadowEngineModular",
+    "source_identity": "sha256:37be87ce04024dc1ac3b8203444eff135f47a6e0af2f607dca0a6fc1225797d9"
+  }
+]

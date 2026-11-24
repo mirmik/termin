@@ -1,65 +1,13 @@
 import termin_prelude;
 import termin_lighting;
-
-public static const int MAX_SHADOW_MAPS = 16;
+__exported import termin_shadow_data;
 
 #ifndef TERMIN_MAX_SHADOW_SAMPLERS
 #define TERMIN_MAX_SHADOW_SAMPLERS 16
 #endif
 
-public struct ShadowBlock {
-    int u_shadow_map_count;
-    // Explicit matrix rows keep the std140 footprint stable without nested
-    // RowMajor/MatrixStride decorations, which older mobile Vulkan drivers
-    // can miscompile for arrays of matrices.
-    float4 u_light_space_matrix[MAX_SHADOW_MAPS * 4];
-    int u_shadow_light_index[MAX_SHADOW_MAPS];
-    int u_shadow_cascade_index[MAX_SHADOW_MAPS];
-    float u_shadow_split_near[MAX_SHADOW_MAPS];
-    float u_shadow_split_far[MAX_SHADOW_MAPS];
-    // Row 1 of the camera view matrix. Termin uses +Y as view-space depth.
-    float4 u_camera_view_depth;
-    // xy = 1 / shadow-map dimensions. float4 keeps array stride explicit and
-    // identical across std140, HLSL constant buffers and older Vulkan drivers.
-    float4 u_shadow_texel_size[MAX_SHADOW_MAPS];
-};
-
-[[TerminScope("pass")]]
-public ConstantBuffer<ShadowBlock> shadow_block;
-
 [[TerminScope("pass")]]
 public Sampler2DShadow shadow_maps[TERMIN_MAX_SHADOW_SAMPLERS];
-
-public static const int SHADOW_METHOD_HARD = 0;
-public static const int SHADOW_METHOD_PCF = 1;
-public static const int SHADOW_METHOD_POISSON = 2;
-
-public static const int POISSON_SAMPLE_COUNT = 16;
-public static const float2 POISSON_DISK[POISSON_SAMPLE_COUNT] = {
-    float2(-0.94201624, -0.39906216),
-    float2( 0.94558609, -0.76890725),
-    float2(-0.09418410, -0.92938870),
-    float2( 0.34495938,  0.29387760),
-    float2(-0.91588581,  0.45771432),
-    float2(-0.81544232, -0.87912464),
-    float2(-0.38277543,  0.27676845),
-    float2( 0.97484398,  0.75648379),
-    float2( 0.44323325, -0.97511554),
-    float2( 0.53742981, -0.47373420),
-    float2(-0.26496911, -0.41893023),
-    float2( 0.79197514,  0.19090188),
-    float2(-0.24188840,  0.99706507),
-    float2(-0.81409955,  0.91437590),
-    float2( 0.19984126,  0.78641367),
-    float2( 0.14383161, -0.14100790),
-};
-
-public float shadow_bias_depth(int sm) {
-    float depth_range = max(
-        shadow_block.u_shadow_split_far[sm] - shadow_block.u_shadow_split_near[sm],
-        0.0001);
-    return max(get_shadow_bias(), 0.0) / depth_range;
-}
 
 public float sample_shadow_map(int sm, float2 uv, float depth) {
     // Shadow maps have one mip level. An explicit LOD keeps comparison
@@ -87,72 +35,7 @@ public float sample_shadow_map(int sm, float2 uv, float depth) {
     }
 }
 
-public float sample_shadow_filtered(int sm, float2 uv, float depth) {
-    int method = get_shadow_method();
-    float result = 1.0;
-    if (method == SHADOW_METHOD_HARD) {
-        // The comparison sampler is linear, so a single lookup gives the
-        // portable hardware 2x2 PCF normally expected from a hard shadow.
-        result = sample_shadow_map(sm, uv, depth);
-    } else {
-        float2 texel_size = shadow_block.u_shadow_texel_size[sm].xy;
-        float softness = max(get_shadow_softness(), 0.0);
-        if (method == SHADOW_METHOD_POISSON) {
-            float visibility = 0.0;
-            float radius = 2.5 * softness;
-            for (int i = 0; i < POISSON_SAMPLE_COUNT; ++i) {
-                visibility += sample_shadow_map(
-                    sm,
-                    uv + POISSON_DISK[i] * texel_size * radius,
-                    depth);
-            }
-            result = visibility / float(POISSON_SAMPLE_COUNT);
-        } else {
-            // Unknown values deliberately use the default PCF method, matching
-            // the scene setting's default and keeping corrupted data visibly
-            // filtered.
-            float visibility = 0.0;
-            for (int y = -2; y <= 2; ++y) {
-                for (int x = -2; x <= 2; ++x) {
-                    visibility += sample_shadow_map(
-                        sm,
-                        uv + float2(float(x), float(y)) * texel_size * softness,
-                        depth);
-                }
-            }
-            result = visibility / 25.0;
-        }
-    }
-    return result;
-}
-
-public float compute_shadow_candidate(int sm, int light_index, float3 world_pos) {
-    if (shadow_block.u_shadow_map_count <= sm ||
-        shadow_block.u_shadow_light_index[sm] != light_index) {
-        return -1.0;
-    }
-
-    float4 world = float4(world_pos, 1.0);
-    int row = sm * 4;
-    float4 light_space_pos = float4(
-        dot(shadow_block.u_light_space_matrix[row + 0], world),
-        dot(shadow_block.u_light_space_matrix[row + 1], world),
-        dot(shadow_block.u_light_space_matrix[row + 2], world),
-        dot(shadow_block.u_light_space_matrix[row + 3], world));
-    float3 proj_coords = light_space_pos.xyz / light_space_pos.w;
-    proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
-
-    if (proj_coords.x < 0.0 || proj_coords.x > 1.0 ||
-        proj_coords.y < 0.0 || proj_coords.y > 1.0 ||
-        proj_coords.z < 0.0 || proj_coords.z > 1.0) {
-        return -1.0;
-    }
-
-    return sample_shadow_filtered(
-        sm,
-        proj_coords.xy,
-        proj_coords.z - shadow_bias_depth(sm));
-}
+#include "termin_shadow_filter.slang"
 
 public int find_shadow_map_for_cascade(int light_index, int cascade_index) {
     for (int sm = 0; sm < shadow_block.u_shadow_map_count; ++sm) {

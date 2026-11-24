@@ -66,6 +66,7 @@ configure_file(web/termin-web-core.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin
 configure_file(web/termin-web-host.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs" COPYONLY)
 configure_file(web/termin-web-input.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs" COPYONLY)
 configure_file(web/smoke.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/smoke.html" COPYONLY)
+configure_file(web/physics-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/physics-scene.html" COPYONLY)
 configure_file(web/interactive-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/interactive-scene.html" COPYONLY)
 configure_file(web/viewer.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/viewer.html" COPYONLY)
 configure_file(web/visual-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/visual-scene.html" COPYONLY)
@@ -217,31 +218,40 @@ endif()
 
 set(TERMIN_WEB_INTERACTIVE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/examples/interactive-scene")
 set(TERMIN_WEB_INTERACTIVE_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/interactive-scene/package.trpkg")
-set(TERMIN_WEB_INTERACTIVE_PAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Termin-InteractiveScene.html")
-add_custom_command(OUTPUT "${TERMIN_WEB_INTERACTIVE_PACKAGE}"
+set(TERMIN_WEB_PHYSICS_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/physics-scene/package.trpkg")
+add_custom_command(OUTPUT "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYSICS_PACKAGE}"
     COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_INTERACTIVE_SOURCE}/build_package.py"
         --fixture "${TERMIN_WEB_RENDER_FIXTURE_DIR}"
         --shaderc "${TERMIN_WEB_HOST_SHADERC}" --slangc "${TERMIN_WEB_HOST_SLANGC}"
         --wgsl-validator "${TERMIN_WEB_HOST_WGSL_VALIDATOR}" --output "${TERMIN_WEB_INTERACTIVE_PACKAGE}"
-    DEPENDS "${TERMIN_WEB_INTERACTIVE_SOURCE}/build_package.py"
+        --physics-output "${TERMIN_WEB_PHYSICS_PACKAGE}"
+    DEPENDS "${TERMIN_WEB_INTERACTIVE_SOURCE}/build_package.py" "${TERMIN_WEB_INTERACTIVE_SOURCE}/demo_scenes.py"
         "${TERMIN_WEB_INTERACTIVE_SOURCE}/lit.vert.slang" "${TERMIN_WEB_INTERACTIVE_SOURCE}/lit.frag.slang"
+        "${TERMIN_WEB_INTERACTIVE_SOURCE}/static-shadow.vert.slang" "${TERMIN_WEB_INTERACTIVE_SOURCE}/static-shadow.variants.json"
         "${TERMIN_WEB_RENDER_FIXTURE_DIR}/package.trpkg" "${TERMIN_PACKAGE_BLOB_SCRIPT}"
         "${TERMIN_WEB_HOST_SHADERC}" "${TERMIN_WEB_HOST_SLANGC}" "${TERMIN_WEB_HOST_WGSL_VALIDATOR}"
     VERBATIM)
-add_custom_command(OUTPUT "${TERMIN_WEB_INTERACTIVE_PAGE}"
-    COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_HTML_PACKER}"
-        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/interactive-scene.html" "${TERMIN_WEB_INTERACTIVE_PAGE}"
-        --scene-package "${TERMIN_WEB_INTERACTIVE_PACKAGE}"
-    DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${TERMIN_WEB_INTERACTIVE_PACKAGE}"
-        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/interactive-scene.html"
-        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs"
-        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs"
-        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs"
-    VERBATIM)
-add_custom_target(termin_web_interactive_scene DEPENDS "${TERMIN_WEB_INTERACTIVE_PAGE}")
-add_dependencies(termin_web_interactive_scene termin_web_core_fixture_packages)
+add_custom_target(termin_web_demo_packages DEPENDS "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYSICS_PACKAGE}")
+add_dependencies(termin_web_demo_packages termin_web_core_fixture_packages)
+
+function(termin_web_scene_demo name page package)
+    set(source "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${name}-scene.html")
+    set(output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${page}.html")
+    add_custom_command(OUTPUT "${output}"
+        COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_HTML_PACKER}"
+            "${source}" "${output}" --scene-package "${package}"
+        DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${package}" "${source}"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs"
+        VERBATIM)
+    add_custom_target(termin_web_${name}_scene DEPENDS "${output}")
+    add_dependencies(termin_web_${name}_scene termin_web_demo_packages)
+endfunction()
+termin_web_scene_demo(interactive Termin-InteractiveScene "${TERMIN_WEB_INTERACTIVE_PACKAGE}")
+termin_web_scene_demo(physics Termin-PhysicsScene "${TERMIN_WEB_PHYSICS_PACKAGE}")
 add_custom_target(termin_web_standalone_demos)
-add_dependencies(termin_web_standalone_demos termin_web_chart3d_standalone termin_web_interactive_scene)
+add_dependencies(termin_web_standalone_demos termin_web_chart3d_standalone termin_web_interactive_scene termin_web_physics_scene)
 
 add_custom_target(termin_web_core_node_smoke
     COMMAND "${CMAKE_COMMAND}" -E env

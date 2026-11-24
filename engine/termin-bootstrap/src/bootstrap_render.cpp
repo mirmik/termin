@@ -2,6 +2,11 @@
 #include <termin/bootstrap/bootstrap_c.h>
 
 #include <components/components_mesh_bootstrap.hpp>
+#ifdef TERMIN_BOOTSTRAP_HAS_RIGID_BODY
+#include <components/components_collision_bootstrap.hpp>
+#include <physics/tc_collision_world.h>
+#include <termin/physics_components/components_bootstrap.hpp>
+#endif
 #include <tcbase/tc_log.h>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/unknown_component.hpp>
@@ -78,8 +83,13 @@ namespace termin::bootstrap {
             tc_scene_render_mount_extension_init();
         if (options.render_state)
             tc_scene_render_state_extension_init();
-        if (options.collision_world)
+        if (options.collision_world) {
+#ifdef TERMIN_BOOTSTRAP_HAS_RIGID_BODY
+            tc_collision_world_extension_init();
+#else
             log_unavailable("collision scene extensions");
+#endif
+        }
         g_extensions_registered = true;
     }
 
@@ -143,12 +153,18 @@ namespace termin::bootstrap {
             }
             register_builtin_mesh_component_types();
             register_builtin_render_component_types();
+#ifdef TERMIN_BOOTSTRAP_HAS_RIGID_BODY
+            register_builtin_collision_component_types();
+            register_builtin_physics_component_types();
+#endif
             g_components_registered = true;
         }
         register_builtin_pass_types();
         if (!g_extensions_registered) {
             SceneExtensionOptions extensions;
+#ifndef TERMIN_BOOTSTRAP_HAS_RIGID_BODY
             extensions.collision_world = false;
+#endif
             register_scene_extensions(extensions);
         }
     }

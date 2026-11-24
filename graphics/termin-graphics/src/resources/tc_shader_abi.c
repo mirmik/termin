@@ -106,6 +106,14 @@ static const tc_shader_abi_resource_decl k_shader_abi_resources[] = {
         NULL,
         0,
     },
+    {
+        TC_SHADER_ABI_RESOURCE_SINGLE_SHADOW_MAP,
+        "single_shadow_map",
+        TC_SHADER_RESOURCE_TEXTURE,
+        TC_SHADER_RESOURCE_SCOPE_PASS,
+        NULL,
+        0,
+    },
 };
 
 static uint32_t shader_abi_resource_count(void) {

@@ -106,6 +106,8 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/skybox_pass.cpp
         src/tonemap_pass.cpp
         src/lighting_ubo.cpp
+        src/shadow_camera.cpp
+        src/shadow_pass.cpp
         src/shadow_resource.cpp
         src/standard_gbuffer_pass.cpp
     )

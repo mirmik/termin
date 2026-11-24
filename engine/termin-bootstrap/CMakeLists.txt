@@ -38,6 +38,29 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_scene REQUIRED)
 endif()
+if(TERMIN_BOOTSTRAP_RENDER_ONLY)
+    set(_render_bootstrap_packages
+        termin_mesh termin_graphics termin_materials termin_render termin_render_passes
+        termin_components_mesh termin_components_render)
+    if(TERMIN_PLATFORM_WEB)
+        list(APPEND _render_bootstrap_packages termin_components_collision termin_components_physics)
+    endif()
+    foreach(_package IN LISTS _render_bootstrap_packages)
+        if(_package STREQUAL "termin_mesh")
+            set(_targets tmesh::termin_mesh)
+        elseif(_package STREQUAL "termin_graphics")
+            set(_targets tgfx::termin_graphics tgfx::termin_graphics2)
+        else()
+            set(_targets ${_package}::${_package})
+        endif()
+        if(COMMAND termin_require_package)
+            termin_require_package(${_package} ${_targets})
+        else()
+            find_package(${_package} REQUIRED)
+        endif()
+        list(APPEND _render_bootstrap_targets ${_targets})
+    endforeach()
+endif()
 if(NOT TERMIN_BOOTSTRAP_MINIMAL_ONLY AND NOT TERMIN_BOOTSTRAP_RENDER_ONLY)
 if(COMMAND termin_require_package)
     termin_require_package(termin_prefab termin_prefab::termin_prefab)
@@ -45,29 +68,6 @@ else()
     find_package(termin_prefab REQUIRED)
 endif()
 
-if(TERMIN_BOOTSTRAP_RENDER_ONLY)
-    foreach(_termin_render_bootstrap_dependency IN ITEMS
-            termin_mesh termin_graphics termin_materials termin_render
-            termin_render_passes termin_components_mesh termin_components_render)
-        if(COMMAND termin_require_package)
-            if(_termin_render_bootstrap_dependency STREQUAL "termin_mesh")
-                termin_require_package(termin_mesh tmesh::termin_mesh)
-            elseif(_termin_render_bootstrap_dependency STREQUAL "termin_graphics")
-                termin_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
-            elseif(_termin_render_bootstrap_dependency STREQUAL "termin_materials")
-                termin_require_package(termin_materials termin_materials::termin_materials)
-            elseif(_termin_render_bootstrap_dependency STREQUAL "termin_render")
-                termin_require_package(termin_render termin_render::termin_render)
-            elseif(_termin_render_bootstrap_dependency STREQUAL "termin_render_passes")
-                termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
-            elseif(_termin_render_bootstrap_dependency STREQUAL "termin_components_mesh")
-                termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
-            elseif(_termin_render_bootstrap_dependency STREQUAL "termin_components_render")
-                termin_require_package(termin_components_render termin_components_render::termin_components_render)
-            endif()
-        endif()
-    endforeach()
-endif()
 if(COMMAND termin_require_package)
     termin_require_package(termin_render termin_render::termin_render)
 else()
@@ -334,16 +334,10 @@ target_link_libraries(termin_bootstrap PUBLIC
 )
 endif()
 if(TERMIN_BOOTSTRAP_RENDER_ONLY)
-target_link_libraries(termin_bootstrap PUBLIC
-        tmesh::termin_mesh
-        tgfx::termin_graphics
-        tgfx::termin_graphics2
-        termin_materials::termin_materials
-        termin_render::termin_render
-        termin_render_passes::termin_render_passes
-        termin_components_mesh::termin_components_mesh
-        termin_components_render::termin_components_render
-)
+    target_link_libraries(termin_bootstrap PUBLIC ${_render_bootstrap_targets})
+    if(TERMIN_PLATFORM_WEB)
+        target_compile_definitions(termin_bootstrap PRIVATE TERMIN_BOOTSTRAP_HAS_RIGID_BODY)
+    endif()
 endif()
 
 if(TERMIN_BOOTSTRAP_HAS_ANIMATION)
@@ -424,7 +418,11 @@ install(EXPORT termin_bootstrapTargets
 include(CMakePackageConfigHelpers)
 
 set(TERMIN_BOOTSTRAP_CONFIG_FIND_FULL_DEPS "")
-if(NOT TERMIN_BOOTSTRAP_MINIMAL_ONLY)
+if(TERMIN_BOOTSTRAP_RENDER_ONLY)
+    foreach(_package IN LISTS _render_bootstrap_packages)
+        string(APPEND TERMIN_BOOTSTRAP_CONFIG_FIND_FULL_DEPS "find_dependency(${_package} REQUIRED)\n")
+    endforeach()
+elseif(NOT TERMIN_BOOTSTRAP_MINIMAL_ONLY)
     set(TERMIN_BOOTSTRAP_CONFIG_FIND_FULL_DEPS
 "find_dependency(termin_audio REQUIRED)
 find_dependency(termin_prefab REQUIRED)

@@ -1405,7 +1405,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             expected_entry_count += item.has_sampler_binding ? 2u : 1u;
         }
         if (entries.size() != expected_entry_count) {
-            fail("resource set does not provide every pipeline binding exactly once");
+            for (const WebGpuLayoutEntry& item : pipeline->layout) {
+                const auto has_binding = [&](uint32_t slot) {
+                    return std::any_of(entries.begin(), entries.end(), [&](const auto& e) { return e.binding == slot; });
+                };
+                if (!has_binding(item.binding) || (item.has_sampler_binding && !has_binding(item.sampler_binding))) {
+                    fail("resource set missing WebGPU binding for '" + item.name + "'");
+                }
+            }
+            fail("resource set provides extra WebGPU bindings");
         }
         for (size_t index = 1; index < entries.size(); ++index) {
             if (entries[index - 1].binding == entries[index].binding) {

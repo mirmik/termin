@@ -44,6 +44,12 @@ TEST_CASE("shader ABI exposes canonical resource contracts") {
     CHECK(shadows.kind == TC_SHADER_RESOURCE_TEXTURE);
     CHECK(shadows.scope == TC_SHADER_RESOURCE_SCOPE_PASS);
 
+    const auto* single_shadow = find_shader_abi_resource("single_shadow_map");
+    REQUIRE(single_shadow != nullptr);
+    CHECK(single_shadow->id == ShaderAbiResourceId::SingleShadowMap);
+    CHECK(single_shadow->kind == TC_SHADER_RESOURCE_TEXTURE);
+    CHECK(single_shadow->scope == TC_SHADER_RESOURCE_SCOPE_PASS);
+
     for (ShaderAbiResourceId id : {ShaderAbiResourceId::IblDiffuseIrradiance,
                                    ShaderAbiResourceId::IblPrefilteredSpecular,
                                    ShaderAbiResourceId::IblBrdfLut}) {

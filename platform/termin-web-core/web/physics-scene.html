@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Падающий шар · Termin</title>
+<style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; color: #f0f2f5; background: #13171c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1040px; margin: 0 auto; padding: clamp(18px, 4vw, 42px); }
+    header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    h1 { margin: 0; font-weight: 600; font-size: clamp(28px, 5vw, 44px); line-height: 1.1; letter-spacing: -.045em; }
+    button { min-height: 44px; padding: 9px 19px; color: #221709; background: #f6bd65; border: 0; border-radius: 8px;
+             font: inherit; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: wait; }
+    button:focus-visible, canvas:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+    .stage { position: relative; background: #07090b; border: 1px solid #343c45; border-radius: 12px; overflow: hidden; }
+    canvas { width: 100%; height: clamp(280px, min(62vh, 100vw), 600px); display: block; touch-action: none; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    #status { position: absolute; inset: 0; display: grid; place-content: center; margin: 0; padding: 1em;
+              background: #13171ceb; text-align: center; overflow-wrap: anywhere; }
+    #status[hidden] { display: none; }
+    #camera-hint { margin: 12px 0 0; color: #b2bdc7; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+    <header>
+        <h1>Падающий шар</h1>
+        <button type="button" id="drop" disabled>Отпустить шар</button>
+    </header>
+    <div class="stage">
+        <canvas id="termin-canvas" width="800" height="480" tabindex="0" aria-label="Шар над платформой"
+                aria-describedby="camera-hint"></canvas>
+        <p id="status" role="status">Загрузка сцены…</p>
+    </div>
+    <p id="camera-hint">Перетаскивайте, чтобы вращать камеру. Щипок или колесо меняют масштаб.</p>
+</main>
+<script type="module">
+import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-shadows1";
+import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-shadows1";
+import {createTerminWebInputAdapter} from "./termin-web-input.mjs?v=20261124-shadows1";
+
+const canvas = document.querySelector("canvas");
+const status = document.getElementById("status");
+const drop = document.getElementById("drop");
+
+function showError(error) {
+    status.hidden = false;
+    status.textContent = error instanceof Error ? error.message : String(error);
+    drop.disabled = true;
+    console.error("Physics scene failed", error);
+}
+
+try {
+    const core = await createTerminCore();
+    const input = createTerminWebInputAdapter(core, {canvas}).attach();
+    const host = createTerminWebHost(core, {
+        canvas,
+        statusElement: status,
+        graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
+        onStateChange({state, error}) { if (state === "error") showError(error); },
+    });
+    globalThis.__terminViewer = {core, host, input};
+    const scene = webAssetUrl("scene.trpkg", "./fixtures/physics-scene/package.trpkg");
+    await host.load(scene, {autoStart: false});
+    input.setEnabled(true);
+
+    // Before release, redraw the native initial pose after a resize or camera movement.
+    function drawPreview() {
+        if (host.state === "ready" && !core.module._termin_web_host_tick(0)) {
+            throw new Error(core.module.UTF8ToString(core.module._termin_web_host_error()));
+        }
+    }
+    let pendingPreview = 0;
+    function schedulePreview() {
+        if (host.state !== "ready" || pendingPreview) return;
+        pendingPreview = requestAnimationFrame(() => {
+            pendingPreview = 0;
+            try { drawPreview(); } catch (error) { showError(error); }
+        });
+    }
+    const previewEvents = new AbortController();
+    const resizePreview = new ResizeObserver(schedulePreview);
+    resizePreview.observe(canvas);
+    for (const name of ["pointermove", "wheel", "keydown", "keyup"]) {
+        canvas.addEventListener(name, schedulePreview, {signal: previewEvents.signal, passive: true});
+    }
+    drawPreview();
+    status.hidden = true;
+    drop.disabled = false;
+
+    drop.addEventListener("click", async () => {
+        drop.disabled = true;
+        try {
+            if (host.state === "ready") {
+                previewEvents.abort();
+                resizePreview.disconnect();
+                cancelAnimationFrame(pendingPreview);
+                host.start();
+            } else {
+                input.setEnabled(false);
+                status.textContent = "Подготовка падения…";
+                status.hidden = false;
+                await host.reload(scene);
+                input.setEnabled(true);
+                status.hidden = true;
+            }
+            drop.textContent = "Повторить падение";
+            drop.disabled = false;
+        } catch (error) { showError(error); }
+    });
+} catch (error) { showError(error); }
+</script>
+</body>
+</html>
