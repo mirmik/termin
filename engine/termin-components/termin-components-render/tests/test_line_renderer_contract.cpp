@@ -665,6 +665,53 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     tc_material_shutdown();
 }
 
+TEST_CASE("MeshRenderer honors cast_shadow for render items and shader usage collection") {
+    tc_material_init();
+    tc_mesh_init();
+    {
+        const auto handle = tc_material_create("mesh-shadow-toggle", "mesh-shadow-toggle");
+        tc_material* material = tc_material_get(handle);
+        REQUIRE(material != nullptr);
+        REQUIRE(tc_material_add_phase(material, tc_shader_handle_invalid(), "opaque", 0));
+        REQUIRE(tc_material_add_phase(material, tc_shader_handle_invalid(), "shadow", 0));
+
+        termin::TcMesh mesh = make_two_submesh_mesh();
+        REQUIRE(mesh.is_valid());
+        auto scene = termin::TcSceneRef::create("mesh-shadow-toggle");
+        auto entity = scene.create_entity("mesh");
+        auto* mesh_component = new termin::MeshComponent();
+        mesh_component->set_mesh(mesh);
+        entity.add_component(mesh_component);
+        auto* renderer = new termin::MeshRenderer();
+        renderer->set_material(termin::TcMaterial(handle));
+        entity.add_component(renderer);
+
+        for (const bool casts_shadow : {true, false, true}) {
+            renderer->cast_shadow = casts_shadow;
+            CHECK_EQ(tc_phase_mask_contains(renderer->get_phase_mask(), TC_PHASE_SHADOW), casts_shadow);
+            for (const auto phase : {TC_PHASE_OPAQUE, TC_PHASE_SHADOW, TC_PHASE_NONE}) {
+                tc_render_item_collect_context context{};
+                context.phase = phase;
+                context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+                termin::RenderItemCollection collection;
+                REQUIRE(termin::collect_drawable_render_items(renderer->tc_component_ptr(), context, collection));
+                size_t opaque_count = 0;
+                size_t shadow_count = 0;
+                for (const auto& item : collection.items) {
+                    REQUIRE(item.material_phase != nullptr);
+                    opaque_count += item.material_phase->phase == TC_PHASE_OPAQUE;
+                    shadow_count += item.material_phase->phase == TC_PHASE_SHADOW;
+                }
+                CHECK_EQ(opaque_count, phase != TC_PHASE_SHADOW ? 2u : 0u);
+                CHECK_EQ(shadow_count, phase != TC_PHASE_OPAQUE && casts_shadow ? 2u : 0u);
+                check_materials_match_render_items(*renderer, context);
+            }
+        }
+    }
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+}
+
 TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick passes") {
     tc_material_init();
     tc_mesh_init();

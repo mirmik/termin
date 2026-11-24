@@ -640,6 +640,8 @@ namespace termin {
         }
         if (cast_shadow) {
             mask |= TC_PHASE_SHADOW;
+        } else {
+            mask &= ~TC_PHASE_SHADOW;
         }
         return mask;
     }
@@ -668,6 +670,9 @@ namespace termin {
 
     template <typename Visit>
     bool MeshRenderer::visit_material_phases(const tc_render_item_collect_context& context, Visit&& visit) {
+        if (context.phase == TC_PHASE_SHADOW && !cast_shadow) {
+            return true;
+        }
         tc_mesh* mesh = current_mesh_ptr();
         if (!mesh) {
             return true;
@@ -714,6 +719,9 @@ namespace termin {
                 }
             }
             for (size_t i = 0; i < count; ++i) {
+                if (phases[i]->phase == TC_PHASE_SHADOW && !cast_shadow) {
+                    continue;
+                }
                 if (!visit(submesh_index, material_ref, phases[i])) {
                     return false;
                 }
