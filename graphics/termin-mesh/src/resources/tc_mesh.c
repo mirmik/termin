@@ -670,27 +670,24 @@ static bool tc_mesh_add_prepared_edge_record(tc_mesh_edge_adjacency* edges,
     return true;
 }
 
-static bool tc_mesh_is_boundary_edge(const tc_mesh* mesh,
-                                     const tc_mesh_edge_adjacency* edges,
-                                     const tc_mesh_edge_index* index,
-                                     const bool* accepted,
-                                     uint32_t tri,
-                                     uint32_t a,
-                                     uint32_t b) {
-    int64_t key[6];
-    uint64_t hash = 0;
-    if (!tc_mesh_make_geometric_edge_key(mesh, a, b, key, &hash)) {
-        return false;
-    }
-    const tc_mesh_edge_adjacency* edge = tc_mesh_find_edge_record(edges, index, key, hash);
+static bool tc_mesh_check_boundary_edge(const tc_mesh_edge_adjacency* edge,
+                                        const bool* accepted,
+                                        size_t triangle_count,
+                                        uint32_t tri,
+                                        bool* is_boundary) {
+    *is_boundary = true;
     if (!edge) {
         return true;
     }
     size_t count = edge->count < 2 ? edge->count : 2;
     for (size_t i = 0; i < count; ++i) {
         uint32_t neighbor = edge->tris[i];
-        if (neighbor != tri && accepted[neighbor]) {
+        if (neighbor >= triangle_count) {
             return false;
+        }
+        if (neighbor != tri && accepted[neighbor]) {
+            *is_boundary = false;
+            return true;
         }
     }
     return true;
@@ -1037,19 +1034,13 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
     bool* has_normal = (bool*)calloc(triangle_count, sizeof(bool));
     bool* accepted = (bool*)calloc(triangle_count, sizeof(bool));
     uint32_t* queue = (uint32_t*)calloc(triangle_count, sizeof(uint32_t));
+    bool success = false;
     if (!edges || !edge_index.slots || !normals || !has_normal || !accepted || !queue) {
         tc_log(TC_LOG_ERROR, "%s: failed to allocate surface-edge traversal state", api_name);
-        free(edges);
-        free(edge_index.slots);
-        free(normals);
-        free(has_normal);
-        free(accepted);
-        free(queue);
-        return false;
+        goto cleanup;
     }
 
     size_t edge_count = 0;
-    bool topology_ready = true;
     for (uint32_t tri = 0; tri < (uint32_t)triangle_count; ++tri) {
         uint32_t idx[3];
         if (!tc_mesh_triangle_indices(mesh, tri, idx)) {
@@ -1094,20 +1085,13 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
                                               idx[0],
                                               tri)) {
             tc_log(TC_LOG_ERROR, "%s: failed to index surface-edge topology", api_name);
-            topology_ready = false;
-            break;
+            goto cleanup;
         }
         has_normal[tri] = true;
     }
 
-    if (!topology_ready || !has_normal[query->start_triangle]) {
-        free(edges);
-        free(edge_index.slots);
-        free(normals);
-        free(has_normal);
-        free(accepted);
-        free(queue);
-        return false;
+    if (!has_normal[query->start_triangle]) {
+        goto cleanup;
     }
 
     const float normal_cos_threshold = 0.9063077870366499f;
@@ -1139,6 +1123,11 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
             size_t count = edge->count < 2 ? edge->count : 2;
             for (size_t i = 0; i < count; ++i) {
                 uint32_t next = edge->tris[i];
+                if (next >= triangle_count) {
+                    tc_log(TC_LOG_ERROR, "%s: adjacent triangle %u is outside the mesh (%zu triangles)",
+                           api_name, next, triangle_count);
+                    goto cleanup;
+                }
                 if (next == tri || accepted[next] || !has_normal[next]) {
                     continue;
                 }
@@ -1200,7 +1189,18 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
         for (int e = 0; e < 3; ++e) {
             uint32_t ia = idx[e];
             uint32_t ib = idx[(e + 1) % 3];
-            if (!tc_mesh_is_boundary_edge(mesh, edges, &edge_index, accepted, tri, ia, ib)) {
+            int64_t edge_key[6];
+            uint64_t edge_hash = 0;
+            if (!tc_mesh_make_geometric_edge_key(mesh, ia, ib, edge_key, &edge_hash)) {
+                continue;
+            }
+            const tc_mesh_edge_adjacency* edge = tc_mesh_find_edge_record(edges, &edge_index, edge_key, edge_hash);
+            bool is_boundary;
+            if (!tc_mesh_check_boundary_edge(edge, accepted, triangle_count, tri, &is_boundary)) {
+                tc_log(TC_LOG_ERROR, "%s: invalid triangle adjacency at edge (%u, %u)", api_name, ia, ib);
+                goto cleanup;
+            }
+            if (!is_boundary) {
                 continue;
             }
 
@@ -1255,27 +1255,27 @@ static bool tc_mesh_find_surface_edge_filtered(const char* api_name,
         }
     }
 
+    if (found) {
+        const tc_mesh_surface_edge_hit best_hit = {
+            .point = best_point,
+            .indices = {best_a, best_b},
+            .distance = best_distance,
+            .side = best_side,
+        };
+        if (tc_mesh_surface_edge_hit_is_finite(&best_hit)) {
+            *out_hit = best_hit;
+            success = true;
+        }
+    }
+
+cleanup:
     free(edges);
     free(edge_index.slots);
     free(normals);
     free(has_normal);
     free(accepted);
     free(queue);
-    if (!found) {
-        return false;
-    }
-
-    const tc_mesh_surface_edge_hit best_hit = {
-        .point = best_point,
-        .indices = {best_a, best_b},
-        .distance = best_distance,
-        .side = best_side,
-    };
-    if (!tc_mesh_surface_edge_hit_is_finite(&best_hit)) {
-        return false;
-    }
-    *out_hit = best_hit;
-    return true;
+    return success;
 }
 
 static bool tc_mesh_find_surface_edge_checked(const char* api_name,
