@@ -111,6 +111,7 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/shadow_resource.cpp
         src/standard_gbuffer_pass.cpp
         src/ui_widget_pass.cpp
+        src/world2d_pass.cpp
     )
 endif()
 

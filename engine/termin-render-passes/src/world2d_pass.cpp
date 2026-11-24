@@ -191,18 +191,6 @@ namespace termin {
             return;
         }
 
-        ensure_resources(ctx.ctx2->device());
-        if (tc_shader_handle_is_invalid(shader_handle_) || !linear_sampler_ || !nearest_sampler_) {
-            return;
-        }
-        tc_shader* shader = tc_shader_get(shader_handle_);
-        tgfx::ShaderHandle vertex_shader;
-        tgfx::ShaderHandle fragment_shader;
-        if (!shader || !tc_shader_ensure_tgfx2(shader, &ctx.ctx2->device(), &vertex_shader, &fragment_shader)) {
-            tc::Log::error("[World2DPass] failed to prepare world2d shader");
-            return;
-        }
-
         const Mat44f view = primary_view->view.to_float();
         const Mat44f projection = primary_view->projection.to_float();
         const Mat44f view_projection = projection * view;
@@ -232,11 +220,25 @@ namespace termin {
                 index,
             });
         }
+        if (order.empty()) {
+            return;
+        }
         if (!sort_world2d_order_entries(order)) {
             tc::Log::error("[World2DPass] rejected malformed world2d order keys");
             return;
         }
 
+        ensure_resources(ctx.ctx2->device());
+        if (tc_shader_handle_is_invalid(shader_handle_) || !linear_sampler_ || !nearest_sampler_) {
+            return;
+        }
+        tc_shader* shader = tc_shader_get(shader_handle_);
+        tgfx::ShaderHandle vertex_shader;
+        tgfx::ShaderHandle fragment_shader;
+        if (!shader || !tc_shader_ensure_tgfx2(shader, &ctx.ctx2->device(), &vertex_shader, &fragment_shader)) {
+            tc::Log::error("[World2DPass] failed to prepare world2d shader");
+            return;
+        }
         const auto output_desc = ctx.ctx2->device().texture_desc(color_it->second);
         ctx.ctx2->begin_pass(color_it->second, depth, nullptr, 1.0f, false);
         ctx.ctx2->set_viewport(0, 0, static_cast<int>(output_desc.width), static_cast<int>(output_desc.height));
@@ -251,7 +253,7 @@ namespace termin {
 
         tgfx::VertexLayoutDesc layout{};
         layout.stride = sizeof(World2DVertex);
-        layout.use_shader_input_locations = true;
+        layout.use_shader_input_locations = ctx.ctx2->device().backend_type() != tgfx::BackendType::WebGPU;
         layout.attribute_count = 3;
         layout.attributes[0] = {0, tgfx::VertexFormat::Float3, offsetof(World2DVertex, position), nullptr};
         layout.attributes[1] = {1, tgfx::VertexFormat::Float2, offsetof(World2DVertex, uv), nullptr};

@@ -62,6 +62,21 @@ JavaScript-модули gzip перед встраиванием в HTML. При
 пакета для WebGPU и WebGL2. Упаковка в HTML сохраняет возможности web-профиля
 runtime, включая `ShadowPass` для направленного света.
 
+### Покадровая анимация спрайтов
+
+Из исходного проекта с установленным SDK и собранным веб-плеером можно
+сразу получить один HTML. Например, для [сцены со слизнем](../test-projects/sprite-flipbook/README.md)
+выполните из корня репозитория
+
+```bash
+task package:web:project -- --project test-projects/sprite-flipbook --entry-scene Scenes/Main.scene build/web-core/bin/Termin-SpriteFlipbook.html
+```
+
+Откройте полученный файл с диска. Встроенный пакет содержит клип, его
+спрайты и текстуру атласа. В сцене работает тот же `SpriteAnimator2D`,
+что и в настольном плеере. В стандартном фреймграфе `World2DPass`
+рисует текущую позу поверх непрозрачной геометрии до тональной коррекции.
+
 ### Экранный UI из пакета сцены
 
 После `task build:web` откройте `build/web-core/bin/Termin-UiScene.html` с диска.

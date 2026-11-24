@@ -2,8 +2,12 @@
 import argparse
 import base64
 import gzip
+from html import escape
+import os
 from pathlib import Path
 import re
+import sys
+import tempfile
 
 
 # The web modules use static imports of sibling .mjs files. Give each module a
@@ -21,7 +25,7 @@ def packed_asset(name, mime, data):
     return f'<script type="application/octet-stream" data-termin-asset="{name}" data-mime="{mime}">{encoded}</script>'
 
 
-def bundle(source, scene_package):
+def bundle(source, scene_package, project_name=None):
     modules = {}
     directory = source.parent
 
@@ -39,6 +43,8 @@ def bundle(source, scene_package):
         return f"{prefix}{quote}{key}{quote}"
 
     html = source.read_text(encoding="utf-8")
+    if project_name is not None:
+        html = html.replace("</head>", f'<meta name="termin-project" content="{escape(project_name)}">\n</head>', 1)
     scripts = list(MODULE_SCRIPT.finditer(html))
     if len(scripts) != 1:
         raise ValueError("expected one inline page entry module")
@@ -60,15 +66,67 @@ def bundle(source, scene_package):
     return html[:script.start()] + "\n".join(embedded) + html[script.end():]
 
 
+def bundle_project(source, project, entry_scene):
+    from termin.project_build.common import (
+        cleanup_project_build_runtime_state,
+        initialize_project_build_runtime_state,
+        preload_project_resources,
+        read_project_name,
+    )
+    from termin.project_build.runtime_package_blob import write_runtime_package_blob
+    from termin.project_build.runtime_package_exporter import export_runtime_package
+    from termin.project_build.runtime_package_validator import validate_runtime_package
+
+    # Use the exact offline tools and built-ins selected by task build:web.
+    cache = source.parent.parent / "CMakeCache.txt"
+    tools = dict(re.findall(r"^(TERMIN_WEB_HOST_\w+):(?:PATH|FILEPATH)=(.+)$", cache.read_text(), re.MULTILINE))
+    os.environ["TERMIN_SLANGC"] = tools["TERMIN_WEB_HOST_SLANGC"]
+    os.environ["TERMIN_WGSL_VALIDATOR"] = tools["TERMIN_WEB_HOST_WGSL_VALIDATOR"]
+    project = project.resolve()
+    log_prefix = "[WebPackage]"
+    initialize_project_build_runtime_state(log_prefix)
+    try:
+        preload_project_resources(project, log_prefix)
+        with tempfile.TemporaryDirectory(prefix="termin-web-project-") as staging:
+            root = Path(staging)
+            result = export_runtime_package(
+                project, entry_scene, root / "package",
+                shader_compiler=tools["TERMIN_WEB_HOST_SHADERC"],
+                builtin_shader_artifact_root=tools["TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT"],
+                shader_targets=("webgpu", "webgl2"),
+                target_platform=("web", "wasm32"),
+                resource_policy="strict",
+            )
+            diagnostics = [*result.diagnostics, *validate_runtime_package(result.package_dir)]
+            for item in diagnostics:
+                print(f"{item.level}: {item.path}: {item.message}", file=sys.stderr)
+            if any(item.level == "error" for item in diagnostics):
+                raise ValueError("Web runtime package failed validation")
+            blob = write_runtime_package_blob(result.package_dir, root / "scene.trpkg")
+            return bundle(source, blob, read_project_name(project))
+    finally:
+        cleanup_project_build_runtime_state(log_prefix)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="built demo HTML beside its runtime assets")
     parser.add_argument("output", type=Path, help="standalone output HTML")
-    parser.add_argument("--scene-package", type=Path, help="runtime .trpkg to embed in the scene viewer")
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("--scene-package", type=Path, help="runtime .trpkg to embed in the scene viewer")
+    inputs.add_argument("--project", type=Path, help="Termin project directory to export with the host SDK")
+    parser.add_argument("--entry-scene", type=Path, help="entry scene relative to the project")
     args = parser.parse_args()
+    if bool(args.project) != bool(args.entry_scene):
+        parser.error("--project and --entry-scene must be used together")
     if args.output.suffix.lower() != ".html" or args.source.resolve() == args.output.resolve():
         parser.error("output must be a separate .html file")
-    args.output.write_text(bundle(args.source, args.scene_package), encoding="utf-8")
+    if args.project:
+        html = bundle_project(args.source, args.project, args.entry_scene)
+    else:
+        html = bundle(args.source, args.scene_package)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(html, encoding="utf-8")
 
 
 if __name__ == "__main__":

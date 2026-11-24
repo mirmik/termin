@@ -8,6 +8,7 @@
 #include <termin/render/standard_gbuffer_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
 #include <termin/render/ui_widget_pass.hpp>
+#include <termin/render/world2d_pass.hpp>
 #include <termin/render_passes/bootstrap.hpp>
 
 namespace termin {
@@ -25,6 +26,7 @@ namespace termin {
         StandardGBufferPass::register_type();
         TonemapPass::register_type();
         UIWidgetPass::register_type();
+        World2DPass::register_type();
     }
 
 } // namespace termin

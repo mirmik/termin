@@ -4,6 +4,8 @@
 #include <termin/camera/orbit_camera_controller.hpp>
 #include <termin/lighting/light_component.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/sprite_animator_2d.hpp>
+#include <termin/render/sprite_renderer_2d.hpp>
 
 namespace termin {
 
@@ -12,6 +14,8 @@ namespace termin {
         OrbitCameraController::register_type();
         LightComponent::register_type();
         MeshRenderer::register_type();
+        SpriteRenderer2D::register_type();
+        SpriteAnimator2D::register_type();
     }
 
     void register_builtin_render_component_pass_types() {}

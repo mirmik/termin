@@ -49,6 +49,13 @@ const canvas = document.querySelector("#termin-canvas");
 const status = document.querySelector("#status");
 const loading = document.querySelector("#loading");
 const errorPanel = document.querySelector("#error");
+const project = document.querySelector('meta[name="termin-project"]');
+if (project) {
+    document.title = project.content;
+    canvas.setAttribute("aria-label", project.content);
+    document.querySelector("#brand").hidden = true;
+    document.querySelector("#help").hidden = true;
+}
 
 function fail(error) {
     const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
@@ -68,7 +75,7 @@ try {
             status.textContent = error ? `${state}: ${error}` : state;
         },
         onFrame({frameCount, metrics}) {
-            if (frameCount % 30 === 0) {
+            if (!project && frameCount % 30 === 0) {
                 status.textContent = `running · ${canvas.width}×${canvas.height} · ${metrics.averageFrameMs.toFixed(1)} ms · input ${input.metrics.events}`;
             }
         },

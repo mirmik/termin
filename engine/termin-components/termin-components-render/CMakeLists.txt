@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(termin_components_render LANGUAGES C CXX)
 
 option(TERMIN_COMPONENTS_RENDER_CORE_ONLY
-    "Build the portable camera/light/static-mesh component slice"
+    "Build the portable camera, light, static mesh and sprite components"
     ${TERMIN_PLATFORM_WEB})
 
 set(CMAKE_C_STANDARD 11)
@@ -128,9 +128,17 @@ if(TERMIN_COMPONENTS_RENDER_CORE_ONLY)
         src/orbit_camera_controller.cpp
         src/light_component.cpp
         src/mesh_renderer.cpp
+        src/sprite_asset.cpp
+        src/sprite_animation_clip.cpp
+        src/sprite_renderer_2d.cpp
+        src/sprite_animator_2d.cpp
     )
     target_compile_definitions(termin_components_render
         PUBLIC TERMIN_COMPONENTS_RENDER_CORE_ONLY)
+endif()
+
+if(EMSCRIPTEN)
+    target_compile_options(termin_components_render PRIVATE -fexceptions)
 endif()
 
 if(MSVC)

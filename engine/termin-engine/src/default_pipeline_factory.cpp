@@ -50,6 +50,13 @@ namespace termin::rendering_manager_detail {
         }
     }
 
+    static void add_world_2d(tc_pipeline_handle pipeline) {
+        if (tc_pass* pass = create_and_configure_pass(
+                "World2DPass", "World2D", {{"input_res", "color"}, {"output_res", "color_world2d"}})) {
+            adopt_default_pass(pipeline, pass);
+        }
+    }
+
     tc_pipeline_handle make_default_pipeline([[maybe_unused]] const tgfx::IRenderDevice* device) {
         tc_pipeline_handle ph = tc_pipeline_create("Default");
         RenderPipeline pipeline(ph);
@@ -80,10 +87,11 @@ namespace termin::rendering_manager_detail {
 #else
         constexpr bool use_msaa = false;
 #endif
-        const char* tonemap_input = use_msaa ? "color_resolved" : "color";
+        add_world_2d(ph);
+        const char* tonemap_input = use_msaa ? "color_resolved" : "color_world2d";
         if (use_msaa) {
             if (tc_pass* p = create_and_configure_pass(
-                    "ResolvePass", "Resolve", {{"input_res", "color"}, {"output_res", tonemap_input}})) {
+                    "ResolvePass", "Resolve", {{"input_res", "color_world2d"}, {"output_res", tonemap_input}})) {
                 adopt_default_pass(ph, p);
             }
         }
@@ -98,7 +106,7 @@ namespace termin::rendering_manager_detail {
             spec.samples = samples;
             pipeline.add_spec(spec);
         };
-        for (const char* name : {"empty", "skybox", "color"})
+        for (const char* name : {"empty", "skybox", "color", "color_world2d"})
             add_color(name, use_msaa ? 4 : 1);
         if (use_msaa)
             add_color(tonemap_input, 1);
@@ -128,10 +136,7 @@ namespace termin::rendering_manager_detail {
             adopt_default_pass(ph, p);
         }
 
-        if (tc_pass* p = create_and_configure_pass(
-                "World2DPass", "World2D", {{"input_res", "color"}, {"output_res", "color_world2d"}})) {
-            adopt_default_pass(ph, p);
-        }
+        add_world_2d(ph);
 
         if (tc_pass* p = create_and_configure_pass("ResolvePass",
                                                    "Resolve",

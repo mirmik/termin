@@ -22,3 +22,15 @@ To build and run the Linux desktop package:
 ./sdk/bin/termin_builder build linux-dev --project test-projects/sprite-flipbook
 test-projects/sprite-flipbook/dist/linux/SpriteFlipbook
 ```
+
+To export the same scene to a single HTML file, build the SDK with `task build`
+and the browser runtime with `task build:web`. From the checkout root, run
+
+```bash
+task package:web:project -- --project test-projects/sprite-flipbook \
+  --entry-scene Scenes/Main.scene build/web-core/bin/Termin-SpriteFlipbook.html
+```
+
+Open `build/web-core/bin/Termin-SpriteFlipbook.html` directly in a browser.
+The file embeds the runtime, the clip, its atlas and shaders for WebGPU and
+WebGL2. Repeat the export after editing the clip or its sprites.

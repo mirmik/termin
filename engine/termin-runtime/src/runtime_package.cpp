@@ -35,10 +35,8 @@
 #include <termin/image/image_decode.hpp>
 #include <termin/entity/entity_classification_registry.hpp>
 #include <termin/render/render_pipeline.hpp>
-#ifndef TERMIN_RUNTIME_RENDER_ONLY
 #include <termin/render/sprite_animation_clip.hpp>
 #include <termin/render/sprite_asset.hpp>
-#endif
 #include <termin/render/tc_pipeline_template.hpp>
 
 extern "C" {
@@ -58,10 +56,8 @@ namespace termin::runtime {
 #ifndef TERMIN_RUNTIME_RENDER_ONLY
         std::vector<TcFoliageData> foliage_data;
 #endif
-#ifndef TERMIN_RUNTIME_RENDER_ONLY
         std::unordered_map<std::string, TcSpriteAsset> sprites;
         std::vector<TcSpriteAnimationClip> sprite_animation_clips;
-#endif
         std::vector<TcPipelineTemplate> pipeline_templates;
         std::vector<gui_native::TcUiDocumentAsset> ui_documents;
     };
@@ -1521,7 +1517,6 @@ namespace termin::runtime {
         }
 #endif
 
-#ifndef TERMIN_RUNTIME_RENDER_ONLY
         bool load_sprite_asset_resource(const nos::trent& entry,
                                         const nos::trent& spec,
                                         RuntimePackageResourceKeepalive& keepalive,
@@ -1633,7 +1628,6 @@ namespace termin::runtime {
             keepalive.sprite_animation_clips.push_back(std::move(clip));
             return true;
         }
-#endif
 
         bool load_pipeline_resource(const RuntimePackageReader& reader,
                                     const nos::trent& entry,
@@ -1727,26 +1721,15 @@ namespace termin::runtime {
                 return load_mesh_resource(spec, keepalive, error);
             }
             if (type == "sprite_asset") {
-#ifdef TERMIN_RUNTIME_RENDER_ONLY
-                error = "render runtime profile does not support sprite_asset resources";
-                tc_log_error("RuntimePackageLoader: %s", error.c_str());
-                return false;
-#else
                 return load_sprite_asset_resource(entry, spec, keepalive, error);
-#endif
             }
             if (type == "sprite_animation_clip") {
-#ifdef TERMIN_RUNTIME_RENDER_ONLY
-                error = "render runtime profile does not support sprite_animation_clip resources";
-                return false;
-#else
                 try {
                     return load_sprite_animation_clip(entry, spec, keepalive, error);
                 } catch (const std::invalid_argument& ex) {
                     error = ex.what();
                     return false;
                 }
-#endif
             }
             if (type == "ui_document") {
                 const std::string uuid = string_field(entry, "uuid");

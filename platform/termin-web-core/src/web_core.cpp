@@ -664,12 +664,15 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_lifecycle_smoke() {
         const size_t current_pass_type_count = tc_pass_registry_type_count();
         const bool registry_complete = tc_component_registry_has("MeshComponent") &&
                                        tc_component_registry_has("MeshRenderer") &&
+                                       tc_component_registry_has("SpriteRenderer2D") &&
+                                       tc_component_registry_has("SpriteAnimator2D") &&
                                        tc_component_registry_has("ColliderComponent") &&
                                        tc_component_registry_has("RigidBodyComponent") &&
                                        tc_component_registry_has("PhysicsWorldComponent") &&
                                        tc_component_registry_has("UIComponent") &&
                                        tc_kind_exists("ui_document") &&
                                        tc_pass_registry_has("ColorPass") &&
+                                       tc_pass_registry_has("World2DPass") &&
                                        tc_pass_registry_has("UIWidgetPass") &&
                                        tc_pass_registry_has("SkyBoxPass") &&
                                        tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD) &&
@@ -813,9 +816,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
             }
             web_player->viewport_input_managers.push_back(input);
         }
-        web_player->presentation_display = manager.get_display_by_name("Main");
+        const auto& displays = manager.displays();
+        web_player->presentation_display = displays.size() == 1 ? displays.front() : manager.get_display_by_name("Main");
         if (!tc_display_handle_valid(web_player->presentation_display)) {
-            throw std::runtime_error("entry scene render_mount has no 'Main' display");
+            throw std::runtime_error("browser presentation requires one scene display or a display named 'Main'");
         }
         update_scene_ui_density(*web_player);
         scene_manager.request_render();

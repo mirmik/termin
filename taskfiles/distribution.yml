@@ -1,6 +1,12 @@
 version: '3'
 
 tasks:
+  package:web:project:
+    desc: Export a Termin project scene as standalone HTML for WebGPU and WebGL2
+    platforms: [linux]
+    cmds:
+      - ./sdk/bin/termin_python ./platform/termin-web-core/tools/package_web_html.py "${TERMIN_WEB_BUILD_DIR:-build/web-core}/bin/viewer.html" {{.CLI_ARGS}}
+
   package:web:scene:
     desc: Embed a web runtime package and viewer in a standalone HTML file
     platforms: [linux]
