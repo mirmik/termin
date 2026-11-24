@@ -49,19 +49,22 @@ if(MSVC)
 endif()
 
 if(TERMIN_BUILD_TESTS)
-    add_executable(termin_components_kinematic_articulation_component_test
+    # MSBuild repeats the target name in its intermediate tracking paths.
+    add_executable(termin_kinematic_articulation_test
         tests/test_articulation_component.cpp)
     target_include_directories(
-        termin_components_kinematic_articulation_component_test PRIVATE
+        termin_kinematic_articulation_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/guard)
     target_link_libraries(
-        termin_components_kinematic_articulation_component_test PRIVATE
+        termin_kinematic_articulation_test PRIVATE
         termin_components_kinematic)
     set_target_properties(
-        termin_components_kinematic_articulation_component_test PROPERTIES
+        termin_kinematic_articulation_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
     add_test(NAME termin_components_kinematic_articulation_component_test
-        COMMAND termin_components_kinematic_articulation_component_test)
+        COMMAND termin_kinematic_articulation_test)
+    termin_set_test_build_target(termin_components_kinematic_articulation_component_test
+        termin_kinematic_articulation_test)
 endif()
 
 if(TERMIN_BUILD_PYTHON)
