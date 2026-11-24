@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Termin · интерфейс сцены</title>
+<style>
+    html, body { margin: 0; width: 100%; height: 100%; background: #050914; color: white; }
+    canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
+    #status { position: fixed; inset: auto 1rem 1rem; font: 1rem system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<canvas id="termin-canvas" tabindex="0" aria-label="Сцена с флажком «Отметить сцену»"></canvas>
+<p id="status" role="status">Загрузка сцены…</p>
+<script type="module">
+import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs";
+import {createTerminWebHost} from "./termin-web-host.mjs";
+import {createTerminWebInputAdapter} from "./termin-web-input.mjs";
+
+const canvas = document.querySelector("canvas");
+const status = document.getElementById("status");
+function showError(error) {
+    status.hidden = false;
+    status.textContent = String(error);
+    console.error("UI scene failed", error);
+}
+
+try {
+    const core = await createTerminCore();
+    const input = createTerminWebInputAdapter(core, {canvas}).attach();
+    const host = createTerminWebHost(core, {
+        canvas, graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
+        onStateChange({state, error}) { if (state === "error") showError(error); },
+    });
+    globalThis.__terminViewer = {core, host, input};
+    await host.load(webAssetUrl("scene.trpkg", "./fixtures/ui-scene/package.trpkg"));
+    input.setEnabled(true);
+    status.hidden = true;
+    canvas.focus({preventScroll: true});
+} catch (error) { showError(error); }
+</script>
+</body>
+</html>

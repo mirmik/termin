@@ -53,6 +53,8 @@ termin_add_module(
 
 if(MSVC)
     target_compile_options(termin_components_ui PRIVATE /wd4251 /wd4275)
+elseif(EMSCRIPTEN)
+    target_compile_options(termin_components_ui PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fexceptions>)
 endif()
 
 if(TERMIN_BUILD_TESTS)

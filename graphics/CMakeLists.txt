@@ -82,9 +82,7 @@ add_subdirectory(termin-visual-scene)
 add_subdirectory(termin-materials)
 add_subdirectory(termin-render-core)
 
-if(NOT TERMIN_PLATFORM_WEB)
-    add_subdirectory(termin-gui-native)
-endif()
+add_subdirectory(termin-gui-native)
 
 if(NOT TERMIN_PLATFORM_ANDROID)
     add_subdirectory(tcplot)

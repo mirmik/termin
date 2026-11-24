@@ -86,7 +86,7 @@ headers и использует только зарегистрированны�
 каскад, дающий полный обзор shadow distance) для обычных
 texture/debugger consumers.
 
-`UIWidgetPass` is one native C++ pass on desktop, Android, and OpenXR. It
+`UIWidgetPass` is one native C++ pass on desktop, Android, OpenXR, and the web. It
 collects the `scene_ui_document` component capability, applies component,
 entity, layer, and optional internal-hierarchy filtering, then submits the
 documents in stable `(priority, identity)` order to
@@ -108,6 +108,9 @@ Android publishes density, normalized font scale, safe insets, and the latest
 surface extent through its Activity/bootstrap bridge before scene rendering;
 the frame pass verifies that the preserved safe-area policy is valid for the
 actual target extent.
+The web host derives density from the framebuffer width and the canvas width
+in CSS pixels on package load and resize. The default web pipeline draws
+scene documents over the tone-mapped image before the canvas output transform.
 
 For distinct framegraph resources the pass copies input scene color to the
 output before opening the UI pass with load semantics. For an inplace alias it

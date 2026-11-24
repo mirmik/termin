@@ -41,7 +41,7 @@ endif()
 if(TERMIN_BOOTSTRAP_RENDER_ONLY)
     set(_render_bootstrap_packages
         termin_mesh termin_graphics termin_materials termin_render termin_render_passes
-        termin_components_mesh termin_components_render)
+        termin_components_mesh termin_components_render termin_components_ui)
     if(TERMIN_PLATFORM_WEB)
         list(APPEND _render_bootstrap_packages termin_components_collision termin_components_physics)
     endif()

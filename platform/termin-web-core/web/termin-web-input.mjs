@@ -119,6 +119,7 @@ export class TerminWebInputAdapter {
         this.listeners = [];
         this.resizeObserver = null;
         this.metrics = {events: 0, resizes: 0};
+        this.canvasDensity = 0;
     }
 
     listen(target, type, handler, options) {
@@ -173,19 +174,24 @@ export class TerminWebInputAdapter {
         const next = Boolean(enabled);
         if (!next && this.enabled) this.onFocusLost();
         this.enabled = next;
-        if (this.enabled) this.syncCanvasSize();
+        if (this.enabled) this.syncCanvasSize(true);
         return this;
     }
 
-    syncCanvasSize() {
+    syncCanvasSize(forcePublish = false) {
         const rect = this.canvas.getBoundingClientRect();
         const dpr = Math.min(Math.max(Number(this.getDevicePixelRatio()) || 1, 0.25), 4);
         const width = Math.max(1, Math.round(rect.width * dpr));
         const height = Math.max(1, Math.round(rect.height * dpr));
-        if (this.canvas.width === width && this.canvas.height === height) return false;
-        this.canvas.width = width;
-        this.canvas.height = height;
-        this.metrics.resizes += 1;
+        const density = rect.width > 0 ? width / rect.width : 0;
+        const resized = this.canvas.width !== width || this.canvas.height !== height;
+        if (!resized && this.canvasDensity === density && !forcePublish) return false;
+        if (resized) {
+            this.canvas.width = width;
+            this.canvas.height = height;
+            this.metrics.resizes += 1;
+        }
+        this.canvasDensity = density;
         if (this.enabled) this.invoke("_termin_web_host_resize", [width, height]);
         return true;
     }
@@ -205,14 +211,17 @@ export class TerminWebInputAdapter {
         }
         const point = canvasPoint(this.canvas, event);
         const device = pointerDevice(event.pointerType);
-        this.invoke("_termin_web_host_dispatch_pointer", [
-            event.pointerId >>> 0, device,
-            TerminPointerPhase.Down, point.x, point.y, Number(event.pressure) || 0,
-        ]);
+        // Mouse events carry the actual button and modifiers. Sending a contact as
+        // well would deliver a second, implicit left press to native widgets.
         if (device === TerminPointerDevice.Mouse) {
             this.invoke("_termin_web_host_dispatch_mouse_button", [
                 point.x, point.y, terminMouseButton(event.button),
                 TerminInputAction.Press, inputModifiers(event), event.detail || 1,
+            ]);
+        } else {
+            this.invoke("_termin_web_host_dispatch_pointer", [
+                event.pointerId >>> 0, device,
+                TerminPointerPhase.Down, point.x, point.y, Number(event.pressure) || 0,
             ]);
         }
     }
@@ -222,12 +231,13 @@ export class TerminWebInputAdapter {
         this.checkTapMotion(event);
         const point = canvasPoint(this.canvas, event);
         const device = pointerDevice(event.pointerType);
-        this.invoke("_termin_web_host_dispatch_pointer", [
-            event.pointerId >>> 0, device,
-            TerminPointerPhase.Move, point.x, point.y, Number(event.pressure) || 0,
-        ]);
         if (device === TerminPointerDevice.Mouse) {
             this.invoke("_termin_web_host_dispatch_mouse_move", [point.x, point.y]);
+        } else {
+            this.invoke("_termin_web_host_dispatch_pointer", [
+                event.pointerId >>> 0, device,
+                TerminPointerPhase.Move, point.x, point.y, Number(event.pressure) || 0,
+            ]);
         }
     }
 
@@ -239,11 +249,13 @@ export class TerminWebInputAdapter {
         this.tapCandidate = null;
         const point = canvasPoint(this.canvas, event);
         const device = pointerDevice(event.pointerType);
-        this.invoke("_termin_web_host_dispatch_pointer", [
-            event.pointerId >>> 0, device,
-            cancelled ? TerminPointerPhase.Cancel : TerminPointerPhase.Up,
-            point.x, point.y, Number(event.pressure) || 0,
-        ]);
+        if (device !== TerminPointerDevice.Mouse || cancelled) {
+            this.invoke("_termin_web_host_dispatch_pointer", [
+                event.pointerId >>> 0, device,
+                cancelled ? TerminPointerPhase.Cancel : TerminPointerPhase.Up,
+                point.x, point.y, Number(event.pressure) || 0,
+            ]);
+        }
         if (device === TerminPointerDevice.Mouse) {
             this.invoke("_termin_web_host_dispatch_mouse_button", [
                 point.x, point.y, terminMouseButton(event.button),

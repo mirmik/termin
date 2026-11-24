@@ -1,0 +1,23 @@
+{
+  "ui_document_asset": 1,
+  "uuid": "physics-controls",
+  "name": "Physics controls",
+  "source_identity": "",
+  "revision": 1,
+  "type_dependencies": ["termin.gui.OverlayLayout", "termin.gui.Button"],
+  "recipe": {
+    "uiscript": 2,
+    "root": {
+      "type": "termin.gui.OverlayLayout",
+      "name": "controls",
+      "children": [{
+        "type": "termin.gui.Button",
+        "name": "release",
+        "text": "Отпустить шар",
+        "anchor": "top-left",
+        "offset": [12, 12],
+        "layout": {"width": 148, "height": 44}
+      }]
+    }
+  }
+}

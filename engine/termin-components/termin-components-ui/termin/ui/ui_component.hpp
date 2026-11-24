@@ -46,6 +46,7 @@ namespace termin {
         void set_input_source_mask_value(std::uint32_t value);
 
         gui_native::TcDocument document() const;
+        tc_widget_handle named_widget(const std::string& name) const;
         bool has_document() const;
         bool reload_document();
         void clear_document();

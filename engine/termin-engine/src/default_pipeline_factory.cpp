@@ -43,6 +43,13 @@ namespace termin::rendering_manager_detail {
         }
     }
 
+    static void add_ui_widgets(tc_pipeline_handle pipeline) {
+        if (tc_pass* pass = create_and_configure_pass(
+                "UIWidgetPass", "UIWidgets", {{"input_res", "color_tonemapped"}, {"output_res", "color+widgets"}})) {
+            adopt_default_pass(pipeline, pass);
+        }
+    }
+
     tc_pipeline_handle make_default_pipeline([[maybe_unused]] const tgfx::IRenderDevice* device) {
         tc_pipeline_handle ph = tc_pipeline_create("Default");
         RenderPipeline pipeline(ph);
@@ -96,7 +103,9 @@ namespace termin::rendering_manager_detail {
         if (use_msaa)
             add_color(tonemap_input, 1);
         add_color("color_tonemapped", 1);
-        pipeline.set_color_export("color_tonemapped", ColorContent::DisplayLinear);
+        add_ui_widgets(ph);
+        add_color("color+widgets", 1);
+        pipeline.set_color_export("color+widgets", ColorContent::DisplayLinear);
         return ph;
 #endif
 
@@ -151,10 +160,7 @@ namespace termin::rendering_manager_detail {
             adopt_default_pass(ph, p);
         }
 
-        if (tc_pass* p = create_and_configure_pass(
-                "UIWidgetPass", "UIWidgets", {{"input_res", "color_tonemapped"}, {"output_res", "color+widgets"}})) {
-            adopt_default_pass(ph, p);
-        }
+        add_ui_widgets(ph);
 
         const char* color_resources[] = {
             "empty",

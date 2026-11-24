@@ -1,0 +1,52 @@
+{
+  "ui_document_asset": 1,
+  "uuid": "web-native-hud",
+  "name": "Scene marker",
+  "source_identity": "",
+  "revision": 1,
+  "type_dependencies": [
+    "termin.gui.OverlayLayout",
+    "termin.gui.Checkbox",
+    "termin.gui.Label"
+  ],
+  "recipe": {
+    "uiscript": 2,
+    "root": {
+      "type": "termin.gui.OverlayLayout",
+      "name": "hud",
+      "children": [
+        {
+          "type": "termin.gui.Checkbox",
+          "name": "mark",
+          "checked": false,
+          "anchor": "top-left",
+          "offset": [
+            24,
+            112
+          ],
+          "layout": {
+            "width": 48,
+            "height": 48
+          }
+        },
+        {
+          "type": "termin.gui.Label",
+          "name": "caption",
+          "text": "Отметить сцену",
+          "font_size": 20,
+          "color": [
+            0.94,
+            0.96,
+            1,
+            1
+          ],
+          "anchor": "top-left",
+          "offset": [
+            84,
+            124
+          ]
+        }
+      ]
+    }
+  }
+}

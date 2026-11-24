@@ -52,18 +52,18 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_lighting REQUIRED)
 endif()
-if(NOT TERMIN_RENDER_PASSES_CORE_ONLY AND COMMAND termin_require_package)
+if(COMMAND termin_require_package)
     termin_require_package(
         termin_gui_native
         termin_gui_native::document_renderer)
-elseif(NOT TERMIN_RENDER_PASSES_CORE_ONLY)
+else()
     find_package(termin_gui_native REQUIRED)
 endif()
-if(NOT TERMIN_RENDER_PASSES_CORE_ONLY AND COMMAND termin_require_package)
+if(COMMAND termin_require_package)
     termin_require_package(
         termin_components_ui
         termin_components_ui::termin_components_ui)
-elseif(NOT TERMIN_RENDER_PASSES_CORE_ONLY)
+else()
     find_package(termin_components_ui REQUIRED)
 endif()
 
@@ -110,6 +110,7 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
         src/shadow_pass.cpp
         src/shadow_resource.cpp
         src/standard_gbuffer_pass.cpp
+        src/ui_widget_pass.cpp
     )
 endif()
 
@@ -175,15 +176,14 @@ target_link_libraries(termin_render_passes PUBLIC
     termin_components_render::termin_components_render
     termin_components_mesh::termin_components_mesh
     termin_lighting::termin_lighting
+    termin_gui_native::document_renderer
+    termin_components_ui::termin_components_ui
 )
-if(NOT TERMIN_RENDER_PASSES_CORE_ONLY)
-    target_link_libraries(termin_render_passes PUBLIC
-        termin_gui_native::document_renderer
-        termin_components_ui::termin_components_ui
-    )
-endif()
 if(TERMIN_RENDER_PASSES_CORE_ONLY)
     target_compile_definitions(termin_render_passes PUBLIC TERMIN_RENDER_PASSES_CORE_ONLY)
+endif()
+if(EMSCRIPTEN)
+    set_property(SOURCE src/ui_widget_pass.cpp APPEND PROPERTY COMPILE_OPTIONS -fexceptions)
 endif()
 target_compile_definitions(termin_render_passes PRIVATE
     TERMIN_RENDER_PASSES_EXPORTS

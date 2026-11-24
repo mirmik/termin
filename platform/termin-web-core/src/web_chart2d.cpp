@@ -1,4 +1,5 @@
 #include "web_chart2d.hpp"
+#include "web_graphics_assets.hpp"
 
 #include <stdexcept>
 
@@ -11,7 +12,7 @@ namespace termin::web {
                            const char* x_label,
                            const char* y_label,
                            const char* series_name)
-        : host_("/fonts/DroidSans.ttf", host),
+        : host_(default_font_path, host),
           chart_(tc_retained_chart2d_create(&host_, viewport, {0, 1, 0, 1}, "ui://default-font", scale, nullptr),
                  &tc_retained_chart2d_destroy),
           renderer_(nullptr, &tc_retained_scene_renderer2d_destroy) {

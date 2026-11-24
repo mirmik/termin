@@ -13,7 +13,7 @@
     h1 { margin: 0; font-weight: 600; font-size: clamp(28px, 5vw, 44px); line-height: 1.1; letter-spacing: -.045em; }
     button { min-height: 44px; padding: 9px 19px; color: #221709; background: #f6bd65; border: 0; border-radius: 8px;
              font: inherit; font-weight: 600; cursor: pointer; }
-    button:disabled { opacity: .5; cursor: wait; }
+    button:disabled { opacity: .5; cursor: default; }
     button:focus-visible, canvas:focus-visible { outline: 2px solid white; outline-offset: 2px; }
     .stage { position: relative; background: #07090b; border: 1px solid #343c45; border-radius: 12px; overflow: hidden; }
     canvas { width: 100%; height: clamp(280px, min(62vh, 100vw), 600px); display: block; touch-action: none; cursor: grab; }
@@ -28,7 +28,7 @@
 <main>
     <header>
         <h1>Падающий шар</h1>
-        <button type="button" id="drop" disabled>Отпустить шар</button>
+        <button type="button" id="reset" disabled>Вернуть шар</button>
     </header>
     <div class="stage">
         <canvas id="termin-canvas" width="800" height="480" tabindex="0" aria-label="Шар над платформой"
@@ -44,12 +44,12 @@ import {createTerminWebInputAdapter} from "./termin-web-input.mjs?v=20261124-srg
 
 const canvas = document.querySelector("canvas");
 const status = document.getElementById("status");
-const drop = document.getElementById("drop");
+const reset = document.getElementById("reset");
 
 function showError(error) {
     status.hidden = false;
     status.textContent = error instanceof Error ? error.message : String(error);
-    drop.disabled = true;
+    reset.disabled = true;
     console.error("Physics scene failed", error);
 }
 
@@ -58,16 +58,12 @@ try {
     const input = createTerminWebInputAdapter(core, {canvas}).attach();
     const host = createTerminWebHost(core, {
         canvas,
-        statusElement: status,
         graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
         onStateChange({state, error}) { if (state === "error") showError(error); },
     });
     globalThis.__terminViewer = {core, host, input};
     const scene = webAssetUrl("scene.trpkg", "./fixtures/physics-scene/package.trpkg");
-    await host.load(scene, {autoStart: false});
-    input.setEnabled(true);
-
-    // Before release, redraw the native initial pose after a resize or camera movement.
+    // Redraw the suspended ball and its native controls without advancing physics.
     function drawPreview() {
         if (host.state === "ready" && !core.module._termin_web_host_tick(0)) {
             throw new Error(core.module.UTF8ToString(core.module._termin_web_host_error()));
@@ -81,36 +77,32 @@ try {
             try { drawPreview(); } catch (error) { showError(error); }
         });
     }
-    const previewEvents = new AbortController();
-    const resizePreview = new ResizeObserver(schedulePreview);
-    resizePreview.observe(canvas);
-    for (const name of ["pointermove", "wheel", "keydown", "keyup"]) {
-        canvas.addEventListener(name, schedulePreview, {signal: previewEvents.signal, passive: true});
+    new ResizeObserver(schedulePreview).observe(canvas);
+    for (const name of ["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel", "keydown", "keyup", "blur"]) {
+        canvas.addEventListener(name, schedulePreview, {passive: true});
     }
-    drawPreview();
-    status.hidden = true;
-    drop.disabled = false;
 
-    drop.addEventListener("click", async () => {
-        drop.disabled = true;
-        try {
-            if (host.state === "ready") {
-                previewEvents.abort();
-                resizePreview.disconnect();
-                cancelAnimationFrame(pendingPreview);
+    async function prepareDrop() {
+        reset.disabled = true;
+        input.setEnabled(false);
+        status.textContent = "Подготовка сцены…";
+        status.hidden = false;
+        await host.load(scene, {autoStart: false});
+        host.onUiButtonClick("physics-hud", "release", () => {
+            if (host.state !== "ready") return;
+            try {
+                host.setUiWidgetEnabled("physics-hud", "release", false);
                 host.start();
-            } else {
-                input.setEnabled(false);
-                status.textContent = "Подготовка падения…";
-                status.hidden = false;
-                await host.reload(scene);
-                input.setEnabled(true);
-                status.hidden = true;
-            }
-            drop.textContent = "Повторить падение";
-            drop.disabled = false;
-        } catch (error) { showError(error); }
-    });
+                reset.disabled = false;
+            } catch (error) { showError(error); }
+        });
+        input.setEnabled(true);
+        drawPreview();
+        status.hidden = true;
+    }
+
+    await prepareDrop();
+    reset.addEventListener("click", () => prepareDrop().catch(showError));
 } catch (error) { showError(error); }
 </script>
 </body>

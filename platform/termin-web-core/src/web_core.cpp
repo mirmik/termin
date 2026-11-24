@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <span>
@@ -23,8 +24,11 @@
 #include <tcbase/tc_version.h>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/engine/engine_core.hpp>
+#include <termin/gui_native/button.hpp>
 #include <termin/platform/offscreen_render_surface.hpp>
 #include <termin/runtime/runtime_package.hpp>
+#include <termin/ui/tc_scene_ui_document_capability.h>
+#include <termin/ui/ui_component.hpp>
 #include <termin_scene/termin_scene.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -94,6 +98,29 @@ namespace {
     int web_render_status = 0;
     std::string web_render_error;
 
+    struct WebButtonBinding {
+        tc_ui_document_handle document;
+        tc_widget_handle widget;
+        size_t connection = 0;
+
+        termin::gui_native::Button* resolve() const {
+            auto* entry = tc_ui_document_resolve_widget(document, widget);
+            return entry && entry->native_language == TC_LANGUAGE_CXX
+                       ? dynamic_cast<termin::gui_native::Button*>(static_cast<termin::gui_native::Widget*>(entry->body))
+                       : nullptr;
+        }
+    };
+
+    EM_JS(void, notify_ui_button_click, (uint32_t id), {
+        const listeners = Module['terminUiButtonListeners'];
+        const listener = listeners && listeners.get(id);
+        if (listener) {
+            queueMicrotask(() => {
+                if (listeners.get(id) === listener) listener();
+            });
+        }
+    });
+
     struct WebPlayerState {
         std::string canvas_selector = "#termin-canvas";
         std::unique_ptr<WebGL2Context> webgl2_context;
@@ -109,6 +136,7 @@ namespace {
         WebGraphicsBackend backend = WebGraphicsBackend::None;
         std::unique_ptr<termin::EngineCore> engine;
         termin::runtime::RuntimePackageLoadResult package;
+        std::unordered_map<uint32_t, WebButtonBinding> button_bindings;
         std::vector<termin::SceneKey> registered_scene_keys;
         std::vector<tc_viewport_handle> viewports;
         std::vector<tc_viewport_input_manager*> viewport_input_managers;
@@ -119,6 +147,55 @@ namespace {
     };
 
     std::unique_ptr<WebPlayerState> web_player;
+
+    tc_widget* find_ui_widget(const char* uuid, const char* name) {
+        if (!web_player || !web_player->engine || !web_player->package.scene.valid())
+            throw std::runtime_error("there is no active browser scene");
+        if (!uuid || !name || !*uuid || !*name) throw std::invalid_argument("expected a UI entity UUID and widget name");
+        auto* pool = tc_scene_entity_pool(web_player->package.scene.handle());
+        const auto entity_id = tc_entity_pool_find_by_uuid(pool, uuid);
+        if (!tc_entity_id_valid(entity_id)) throw std::runtime_error("UI entity was not found");
+        auto* ui = termin::Entity(pool, entity_id).get_component<termin::UIComponent>();
+        if (!ui || !ui->has_document()) throw std::runtime_error("entity has no active UI document");
+        auto* widget = tc_ui_document_resolve_widget(ui->document().handle(), ui->named_widget(name));
+        if (!widget) throw std::runtime_error("named widget is no longer available");
+        return widget;
+    }
+
+    const char* ui_widget_error(const char* operation, const char* uuid, const char* name, const std::exception& e) {
+        static std::string error;
+        error = e.what();
+        tc_log_error("TerminWebHost %s '%s' on '%s': %s", operation, name ? name : "", uuid ? uuid : "", error.c_str());
+        return error.c_str();
+    }
+
+    void update_scene_ui_density(WebPlayerState& player) {
+        if (!player.package.scene.valid())
+            return;
+        double css_width = 0, css_height = 0;
+        if (emscripten_get_element_css_size(player.canvas_selector.c_str(), &css_width, &css_height) !=
+            EMSCRIPTEN_RESULT_SUCCESS) {
+            throw std::runtime_error("could not measure the browser canvas");
+        }
+        // A hidden canvas has no CSS extent. ResizeObserver publishes its size when it becomes visible.
+        if (css_width <= 0 || css_height <= 0)
+            return;
+        const tc_ui_size extent{static_cast<float>(player.width), static_cast<float>(player.height)};
+        auto metrics = tc_ui_presentation_metrics_identity(extent);
+        metrics.density_scale = static_cast<float>(player.width / css_width);
+        auto apply_metrics = [](tc_component* component, void* data) {
+            tc_scene_ui_document_snapshot snapshot{};
+            if (tc_scene_ui_document_snapshot_get(component, &snapshot) &&
+                !tc_ui_document_set_presentation_metrics(snapshot.document,
+                                                         static_cast<const tc_ui_presentation_metrics*>(data))) {
+                tc_log_error("TerminWebHost: failed to update UI metrics on '%s'", tc_component_get_type_name(component));
+            }
+            return true;
+        };
+        tc_scene_foreach_with_capability(player.package.scene.handle(), tc_scene_ui_document_capability_id(),
+                                         apply_metrics, &metrics, TC_SCENE_FILTER_NONE);
+    }
+
     termin::runtime::RuntimePackageLoadResult web_headless_package;
     int web_player_graphics_status = 0;
     std::string web_player_graphics_error;
@@ -549,6 +626,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_lifecycle_smoke() {
     size_t component_type_count = 0;
     size_t pass_type_count = 0;
     for (int cycle = 0; cycle < 2; ++cycle) {
+        if (cycle == 0)
+            termin::bootstrap::bootstrap_runtime(termin::bootstrap::RuntimeBootstrapProfile::Minimal);
         termin::bootstrap::bootstrap_runtime(termin::bootstrap::RuntimeBootstrapProfile::Render);
         const size_t current_component_type_count = tc_component_registry_type_count();
         const size_t current_pass_type_count = tc_pass_registry_type_count();
@@ -557,7 +636,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_core_lifecycle_smoke() {
                                        tc_component_registry_has("ColliderComponent") &&
                                        tc_component_registry_has("RigidBodyComponent") &&
                                        tc_component_registry_has("PhysicsWorldComponent") &&
+                                       tc_component_registry_has("UIComponent") &&
+                                       tc_kind_exists("ui_document") &&
                                        tc_pass_registry_has("ColorPass") &&
+                                       tc_pass_registry_has("UIWidgetPass") &&
                                        tc_pass_registry_has("SkyBoxPass") &&
                                        tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD) &&
                                        tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_RENDER_MOUNT) &&
@@ -609,6 +691,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
     }
     if (!web_pending_package_reader && (root_path == nullptr || root_path[0] == '\0')) {
         web_host_error = "runtime package root must not be empty";
+        tc_log_error("TerminWebHost: %s", web_host_error.c_str());
+        return 0;
+    }
+    if (setenv("TERMIN_UI_FONT", termin::web::default_font_path, 0) != 0) {
+        web_host_error = "failed to configure the embedded UI font";
         tc_log_error("TerminWebHost: %s", web_host_error.c_str());
         return 0;
     }
@@ -699,6 +786,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
         if (!tc_display_handle_valid(web_player->presentation_display)) {
             throw std::runtime_error("entry scene render_mount has no 'Main' display");
         }
+        update_scene_ui_density(*web_player);
         scene_manager.request_render();
         tc_log_info("TerminWebHost: attached packaged scene '%s' entities=%zu viewports=%zu input_managers=%zu",
                     web_player->package.entry_scene_identity.c_str(),
@@ -875,6 +963,48 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_set_light_enabled(const char
     }
 }
 
+extern "C" EMSCRIPTEN_KEEPALIVE const char*
+termin_web_host_bind_ui_button(const char* uuid, const char* name, uint32_t id) {
+    try {
+        auto* widget = find_ui_widget(uuid, name);
+        const WebButtonBinding binding{widget->document, widget->handle};
+        auto* button = binding.resolve();
+        if (!button) throw std::runtime_error("target widget is not a Button");
+        auto [it, inserted] = web_player->button_bindings.emplace(id, binding);
+        if (!inserted) throw std::runtime_error("duplicate UI button subscription");
+        try {
+            it->second.connection = button->clicked().connect(
+                [id](termin::gui_native::Button&) { notify_ui_button_click(id); });
+        } catch (...) {
+            web_player->button_bindings.erase(it);
+            throw;
+        }
+        return nullptr;
+    } catch (const std::exception& e) {
+        return ui_widget_error("bind UI button", uuid, name, e);
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char*
+termin_web_host_set_ui_widget_enabled(const char* uuid, const char* name, int enabled) {
+    try {
+        tc_widget_set_enabled(find_ui_widget(uuid, name), enabled != 0);
+        web_player->engine->scene_manager.request_render();
+        return nullptr;
+    } catch (const std::exception& e) {
+        return ui_widget_error("set UI widget enabled", uuid, name, e);
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_unbind_ui_button(uint32_t id) {
+    if (!web_player) return;
+    const auto it = web_player->button_bindings.find(id);
+    if (it == web_player->button_bindings.end()) return;
+    if (auto* button = it->second.resolve())
+        button->clicked().disconnect(it->second.connection);
+    web_player->button_bindings.erase(it);
+}
+
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint32_t height) {
     if (!web_player || !web_player->device || web_player_graphics_status != 2) {
         return 0;
@@ -884,9 +1014,13 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint3
         tc_log_error("TerminWebHost resize failed: %s", web_host_error.c_str());
         return 0;
     }
-    if (web_player->width == width && web_player->height == height)
-        return 1;
     try {
+        if (web_player->width == width && web_player->height == height) {
+            update_scene_ui_density(*web_player);
+            if (web_player->engine)
+                web_player->engine->scene_manager.request_render();
+            return 1;
+        }
         if (web_player->webgpu_device) {
             web_player->webgpu_device->configure_surface(width, height);
         } else if (emscripten_set_canvas_element_size(web_player->canvas_selector.c_str(),
@@ -900,6 +1034,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint3
         }
         web_player->width = width;
         web_player->height = height;
+        update_scene_ui_density(*web_player);
         if (web_player->engine) {
             web_player->engine->scene_manager.request_render();
         }

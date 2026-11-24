@@ -1,4 +1,5 @@
 #include "web_chart3d.hpp"
+#include "web_graphics_assets.hpp"
 
 #include <limits>
 #include <stdexcept>
@@ -6,7 +7,7 @@
 namespace termin::web {
 
     WebChart3D::WebChart3D(tgfx::GraphicsHost& host, const char* x_label, const char* y_label, const char* z_label)
-        : host_("/fonts/DroidSans.ttf", host), chart_(tc_retained_chart3d_create(&host_), &tc_retained_chart3d_destroy) {
+        : host_(default_font_path, host), chart_(tc_retained_chart3d_create(&host_), &tc_retained_chart3d_destroy) {
         if (!chart_ || !tc_retained_chart3d_set_msaa_samples(chart(), 1)) {
             throw std::runtime_error("could not initialize retained 3D chart");
         }

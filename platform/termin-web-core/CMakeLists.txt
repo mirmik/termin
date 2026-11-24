@@ -29,6 +29,7 @@ target_link_libraries(termin_web_core PRIVATE
     tcbase::termin_base
     termin_inspect::termin_inspect
     termin_bootstrap::termin_bootstrap
+    termin_components_ui::termin_components_ui
     termin_runtime::termin_runtime
     tmesh::termin_mesh
     termin_scene::termin_scene
@@ -53,7 +54,7 @@ target_link_options(termin_web_core PRIVATE
     "-sMIN_WEBGL_VERSION=2"
     "-sMAX_WEBGL_VERSION=2"
     "-sFULL_ES3=1"
-    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_termin_web_core_smoke','_termin_web_core_lifecycle_smoke','_termin_web_core_shutdown','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_backend','_termin_web_host_graphics_error','_termin_web_host_set_package_blob','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_pick_entity','_termin_web_host_set_light_enabled','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_visual_scene_render','_termin_web_visual_scene_error','_termin_web_chart2d_create','_termin_web_chart2d_set_data','_termin_web_chart2d_set_range','_termin_web_chart2d_resize','_termin_web_chart2d_pointer','_termin_web_chart2d_wheel','_termin_web_chart2d_range','_termin_web_chart2d_render','_termin_web_chart2d_destroy','_termin_web_chart2d_error','_termin_web_chart3d_create','_termin_web_chart3d_set_surface','_termin_web_chart3d_resize','_termin_web_chart3d_pointer','_termin_web_chart3d_wheel','_termin_web_chart3d_fit','_termin_web_chart3d_reset','_termin_web_chart3d_camera','_termin_web_chart3d_render','_termin_web_chart3d_destroy','_termin_web_chart3d_error','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
+    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_termin_web_core_smoke','_termin_web_core_lifecycle_smoke','_termin_web_core_shutdown','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_backend','_termin_web_host_graphics_error','_termin_web_host_set_package_blob','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_pick_entity','_termin_web_host_set_light_enabled','_termin_web_host_set_ui_widget_enabled','_termin_web_host_bind_ui_button','_termin_web_host_unbind_ui_button','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_visual_scene_render','_termin_web_visual_scene_error','_termin_web_chart2d_create','_termin_web_chart2d_set_data','_termin_web_chart2d_set_range','_termin_web_chart2d_resize','_termin_web_chart2d_pointer','_termin_web_chart2d_wheel','_termin_web_chart2d_range','_termin_web_chart2d_render','_termin_web_chart2d_destroy','_termin_web_chart2d_error','_termin_web_chart3d_create','_termin_web_chart3d_set_surface','_termin_web_chart3d_resize','_termin_web_chart3d_pointer','_termin_web_chart3d_wheel','_termin_web_chart3d_fit','_termin_web_chart3d_reset','_termin_web_chart3d_camera','_termin_web_chart3d_render','_termin_web_chart3d_destroy','_termin_web_chart3d_error','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
     "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','FS','ccall','getExceptionMessage','HEAPU8']"
 )
 set_target_properties(termin_web_core PROPERTIES
@@ -67,6 +68,7 @@ configure_file(web/termin-web-host.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin
 configure_file(web/termin-web-input.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs" COPYONLY)
 configure_file(web/smoke.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/smoke.html" COPYONLY)
 configure_file(web/physics-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/physics-scene.html" COPYONLY)
+configure_file(web/ui-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ui-scene.html" COPYONLY)
 configure_file(web/interactive-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/interactive-scene.html" COPYONLY)
 configure_file(web/viewer.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/viewer.html" COPYONLY)
 configure_file(web/visual-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/visual-scene.html" COPYONLY)
@@ -226,12 +228,22 @@ add_custom_command(OUTPUT "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYS
         --wgsl-validator "${TERMIN_WEB_HOST_WGSL_VALIDATOR}" --output "${TERMIN_WEB_INTERACTIVE_PACKAGE}"
         --physics-output "${TERMIN_WEB_PHYSICS_PACKAGE}"
     DEPENDS "${TERMIN_WEB_INTERACTIVE_SOURCE}/build_package.py" "${TERMIN_WEB_INTERACTIVE_SOURCE}/demo_scenes.py"
+        "${TERMIN_WEB_INTERACTIVE_SOURCE}/physics-hud.ui-document.json"
         "${TERMIN_WEB_INTERACTIVE_SOURCE}/lit.vert.slang" "${TERMIN_WEB_INTERACTIVE_SOURCE}/lit.frag.slang"
         "${TERMIN_WEB_INTERACTIVE_SOURCE}/static-shadow.vert.slang" "${TERMIN_WEB_INTERACTIVE_SOURCE}/static-shadow.variants.json"
         "${TERMIN_WEB_RENDER_FIXTURE_DIR}/package.trpkg" "${TERMIN_PACKAGE_BLOB_SCRIPT}"
         "${TERMIN_WEB_HOST_SHADERC}" "${TERMIN_WEB_HOST_SLANGC}" "${TERMIN_WEB_HOST_WGSL_VALIDATOR}"
     VERBATIM)
-add_custom_target(termin_web_demo_packages DEPENDS "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYSICS_PACKAGE}")
+set(TERMIN_WEB_UI_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui-scene")
+set(TERMIN_WEB_UI_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/ui-scene/package.trpkg")
+add_custom_command(OUTPUT "${TERMIN_WEB_UI_PACKAGE}"
+    COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_UI_SOURCE}/build_package.py"
+        --fixture "${TERMIN_WEB_RENDER_FIXTURE_DIR}" --output "${TERMIN_WEB_UI_PACKAGE}"
+    DEPENDS "${TERMIN_WEB_UI_SOURCE}/build_package.py" "${TERMIN_WEB_UI_SOURCE}/hud.ui-document.json"
+        "${TERMIN_WEB_RENDER_FIXTURE_DIR}/package.trpkg" "${TERMIN_PACKAGE_BLOB_SCRIPT}"
+    VERBATIM)
+add_custom_target(termin_web_demo_packages DEPENDS
+    "${TERMIN_WEB_INTERACTIVE_PACKAGE}" "${TERMIN_WEB_PHYSICS_PACKAGE}" "${TERMIN_WEB_UI_PACKAGE}")
 add_dependencies(termin_web_demo_packages termin_web_core_fixture_packages)
 
 function(termin_web_scene_demo name page package)
@@ -250,8 +262,10 @@ function(termin_web_scene_demo name page package)
 endfunction()
 termin_web_scene_demo(interactive Termin-InteractiveScene "${TERMIN_WEB_INTERACTIVE_PACKAGE}")
 termin_web_scene_demo(physics Termin-PhysicsScene "${TERMIN_WEB_PHYSICS_PACKAGE}")
+termin_web_scene_demo(ui Termin-UiScene "${TERMIN_WEB_UI_PACKAGE}")
 add_custom_target(termin_web_standalone_demos)
-add_dependencies(termin_web_standalone_demos termin_web_chart3d_standalone termin_web_interactive_scene termin_web_physics_scene)
+add_dependencies(termin_web_standalone_demos
+    termin_web_chart3d_standalone termin_web_interactive_scene termin_web_physics_scene termin_web_ui_scene)
 
 add_custom_target(termin_web_core_node_smoke
     COMMAND "${CMAKE_COMMAND}" -E env

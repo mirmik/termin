@@ -13,6 +13,8 @@ namespace termin::runtime {
 
 namespace termin::web {
 
+    inline constexpr char default_font_path[] = "/fonts/DroidSans.ttf";
+
     ShaderArtifactResolver::ReadCallback
     bind_package_shader_sources(std::shared_ptr<runtime::RuntimePackageReader> reader, const char* builtin_root);
 

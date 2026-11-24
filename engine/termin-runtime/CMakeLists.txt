@@ -76,11 +76,11 @@ if(NOT TERMIN_RUNTIME_RENDER_ONLY AND COMMAND termin_require_package)
 elseif(NOT TERMIN_RUNTIME_RENDER_ONLY)
     find_package(termin_components_foliage REQUIRED)
 endif()
-if(NOT TERMIN_RUNTIME_RENDER_ONLY AND COMMAND termin_require_package)
+if(COMMAND termin_require_package)
     termin_require_package(
         termin_gui_native
         termin_gui_native::termin_gui_native)
-elseif(NOT TERMIN_RUNTIME_RENDER_ONLY)
+else()
     find_package(termin_gui_native REQUIRED)
 endif()
 endif()
@@ -143,13 +143,13 @@ target_link_libraries(termin_runtime PUBLIC
         termin_engine::termin_engine
         termin_components_mesh::termin_components_mesh
         termin_components_render::termin_components_render
+        termin_gui_native::termin_gui_native
     PRIVATE
         termin_image::termin_image
 )
 if(NOT TERMIN_RUNTIME_RENDER_ONLY)
 target_link_libraries(termin_runtime PUBLIC
         termin_components_foliage::termin_components_foliage
-        termin_gui_native::termin_gui_native
 )
 endif()
 endif()

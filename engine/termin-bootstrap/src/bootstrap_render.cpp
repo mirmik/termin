@@ -10,12 +10,14 @@
 #include <tcbase/tc_log.h>
 #include <termin/entity/entity.hpp>
 #include <termin/entity/unknown_component.hpp>
+#include <termin/gui_native/ui_document_asset.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/materials/surface_contract_registry.h>
 #include <termin/render/builtin_passes.hpp>
 #include <termin/render/components_bootstrap.hpp>
 #include <termin/render/frame_graph_resource_registry.hpp>
 #include <termin/render_passes/bootstrap.hpp>
+#include <termin/ui/components_bootstrap.hpp>
 
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -47,7 +49,10 @@ namespace {
 
     bool g_runtime_initialized = false;
     bool g_inspect_initialized = false;
-    bool g_kinds_registered = false;
+    bool g_mesh_kind_registered = false;
+    bool g_material_kind_registered = false;
+    bool g_entity_kind_registered = false;
+    bool g_ui_document_kind_registered = false;
     bool g_scene_components_registered = false;
     bool g_components_registered = false;
     bool g_passes_registered = false;
@@ -57,6 +62,13 @@ namespace {
         tc_log_error("[termin-bootstrap] render-only build does not provide %s", feature);
     }
 
+    template <typename T> void register_kind_once(const char* name, bool& registered) {
+        if (!registered) {
+            tc::register_cpp_handle_kind<T>(name);
+            registered = true;
+        }
+    }
+
 } // namespace
 
 namespace termin::bootstrap {
@@ -64,16 +76,15 @@ namespace termin::bootstrap {
     void reset_python_bootstrap_state();
 
     void register_runtime_kinds(const RuntimeKindOptions& options) {
-        if (!g_kinds_registered) {
-            if (options.mesh)
-                tc::register_cpp_handle_kind<TcMesh>("tc_mesh");
-            if (options.material)
-                tc::register_cpp_handle_kind<TcMaterial>("tc_material");
-            if (options.entity)
-                tc::register_cpp_handle_kind<Entity>("entity");
-            g_kinds_registered = true;
-        }
-        if (options.skeleton || options.animation || options.voxel_grid || options.navmesh || options.ui_document) {
+        if (options.mesh)
+            register_kind_once<TcMesh>("tc_mesh", g_mesh_kind_registered);
+        if (options.material)
+            register_kind_once<TcMaterial>("tc_material", g_material_kind_registered);
+        if (options.entity)
+            register_kind_once<Entity>("entity", g_entity_kind_registered);
+        if (options.ui_document)
+            register_kind_once<gui_native::TcUiDocumentAsset>("ui_document", g_ui_document_kind_registered);
+        if (options.skeleton || options.animation || options.voxel_grid || options.navmesh) {
             log_unavailable("non-render runtime handle kinds");
         }
     }
@@ -144,7 +155,6 @@ namespace termin::bootstrap {
         kinds.animation = false;
         kinds.voxel_grid = false;
         kinds.navmesh = false;
-        kinds.ui_document = false;
         register_runtime_kinds(kinds);
         if (!g_components_registered) {
             if (!g_scene_components_registered) {
@@ -153,6 +163,7 @@ namespace termin::bootstrap {
             }
             register_builtin_mesh_component_types();
             register_builtin_render_component_types();
+            register_builtin_ui_component_types();
 #ifdef TERMIN_BOOTSTRAP_HAS_RIGID_BODY
             register_builtin_collision_component_types();
             register_builtin_physics_component_types();
@@ -234,7 +245,10 @@ void tc_shutdown(void) {
     tc_intern_cleanup();
     g_runtime_initialized = false;
     g_inspect_initialized = false;
-    g_kinds_registered = false;
+    g_mesh_kind_registered = false;
+    g_material_kind_registered = false;
+    g_entity_kind_registered = false;
+    g_ui_document_kind_registered = false;
     g_scene_components_registered = false;
     g_components_registered = false;
     g_passes_registered = false;

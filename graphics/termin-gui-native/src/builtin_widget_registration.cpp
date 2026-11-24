@@ -7,6 +7,7 @@
 
 #include <tcbase/tc_log.h>
 #include <termin/gui_native/box_layout.hpp>
+#include <termin/gui_native/button.hpp>
 #include <termin/gui_native/checkbox.hpp>
 #include <termin/gui_native/grid_layout.hpp>
 #include <termin/gui_native/h_stack.hpp>
@@ -396,6 +397,13 @@ namespace termin::gui_native {
             return true;
         }
 
+        bool apply_button_properties(tc_widget* widget, const tc_value* properties) {
+            if (const tc_value* text = property(properties, "text")) {
+                static_cast<Button*>(widget->body)->set_text(text->data.s);
+            }
+            return true;
+        }
+
         bool append_child(tc_widget* parent, tc_widget* child, const tc_value*) {
             return tc_widget_append_child(parent, child);
         }
@@ -614,6 +622,7 @@ namespace termin::gui_native {
         };
         constexpr const char* kLabelProperties[] = {"text", "font_size", "color", "wrap", "overflow", "max_lines"};
         constexpr const char* kCheckboxProperties[] = {"checked"};
+        constexpr const char* kButtonProperties[] = {"text"};
         constexpr const char* kTextWidgetProperties[] = {"text", "placeholder"};
 
         const tc_uiscript_type_descriptor kOverlayUiScript{
@@ -681,6 +690,17 @@ namespace termin::gui_native {
             nullptr,
             0,
             1,
+        };
+        const tc_uiscript_type_descriptor kButtonUiScript{
+            TC_UISCRIPT_TYPE_ABI_VERSION,
+            kButtonProperties,
+            std::size(kButtonProperties),
+            &validate_text_widget_property,
+            &apply_button_properties,
+            nullptr,
+            nullptr,
+            0,
+            0,
         };
         const tc_uiscript_type_descriptor kIconButtonUiScript{
             TC_UISCRIPT_TYPE_ABI_VERSION,
@@ -793,6 +813,7 @@ namespace termin::gui_native {
                register_declarative_widget<HStack>(NativeWidgetRuntimeType<HStack>::name, &kBoxUiScript) &&
                register_declarative_widget<VStack>(NativeWidgetRuntimeType<VStack>::name, &kBoxUiScript) &&
                register_label_widget() &&
+               register_declarative_widget<Button>(NativeWidgetRuntimeType<Button>::name, &kButtonUiScript) &&
                register_declarative_widget<Checkbox>(NativeWidgetRuntimeType<Checkbox>::name, &kCheckboxUiScript) &&
                register_declarative_widget<IconButton>(NativeWidgetRuntimeType<IconButton>::name, &kIconButtonUiScript);
     }

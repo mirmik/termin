@@ -85,6 +85,8 @@ export class TerminWebHost {
         this.packageBlobUrl = "";
         this.nativeLoaded = false;
         this.graphicsStarted = false;
+        this.uiButtonListeners = null;
+        this.nextUiButtonId = 1;
         this.frameRequest = 0;
         this.lastTimestamp = null;
         this.lastObservedFrameCount = 0;
@@ -176,12 +178,14 @@ export class TerminWebHost {
             this.metrics.nativeLoadMs = performance.now() - nativeLoadStartedAt;
             this.metrics.startupMs = performance.now() - loadStartedAt;
             this.nativeLoaded = true;
+            if (!this.headless) this.uiButtonListeners = new Map();
             this.setState(TerminWebHostState.Ready);
             this.logger?.info?.("TerminWebHost startup metrics", {...this.metrics});
             if (autoStart) this.start();
             return this;
         } catch (error) {
             const message = describeThrown(this.module, error);
+            this.clearUiButtonListeners();
             if (this.nativeLoaded || this.graphicsStarted) {
                 this.module._termin_web_host_unload();
             }
@@ -371,6 +375,43 @@ export class TerminWebHost {
         if (!success) throw new Error(this.module.UTF8ToString(this.module._termin_web_host_error()) || "Could not update light");
     }
 
+    #callUiWidget(operation, entityUuid, widgetName, value) {
+        if (!this.uiButtonListeners) throw new Error("A rendered scene must be loaded first");
+        if (typeof entityUuid !== "string" || !entityUuid || typeof widgetName !== "string" || !widgetName) {
+            throw new TypeError("Expected a UI entity UUID and widget name");
+        }
+        const error = this.module.ccall(operation, "string",
+            ["string", "string", "number"], [entityUuid, widgetName, value]);
+        if (error) throw new Error(error);
+    }
+
+    setUiWidgetEnabled(entityUuid, widgetName, enabled) {
+        if (typeof enabled !== "boolean") throw new TypeError("Expected a boolean for widget enabled state");
+        this.#callUiWidget("termin_web_host_set_ui_widget_enabled", entityUuid, widgetName, Number(enabled));
+    }
+
+    /** Listen to a named native Button until unsubscribed or the current package is unloaded. */
+    onUiButtonClick(entityUuid, widgetName, callback) {
+        if (typeof callback !== "function") throw new TypeError("Expected a button click callback");
+        const id = this.nextUiButtonId++;
+        this.#callUiWidget("termin_web_host_bind_ui_button", entityUuid, widgetName, id);
+        const listeners = this.uiButtonListeners;
+        listeners.set(id, callback);
+        this.module.terminUiButtonListeners = listeners;
+        return () => {
+            if (listeners.delete(id)) this.module._termin_web_host_unbind_ui_button(id);
+        };
+    }
+
+    clearUiButtonListeners() {
+        const listeners = this.uiButtonListeners;
+        if (!listeners) return;
+        this.uiButtonListeners = null;
+        for (const id of listeners.keys()) this.module._termin_web_host_unbind_ui_button(id);
+        listeners.clear();
+        if (this.module.terminUiButtonListeners === listeners) delete this.module.terminUiButtonListeners;
+    }
+
     async waitForFrames(minimum, timeoutMs = 3000) {
         const deadline = performance.now() + timeoutMs;
         while (this.frameCount() < minimum) {
@@ -389,6 +430,7 @@ export class TerminWebHost {
     }
 
     async teardown() {
+        this.clearUiButtonListeners();
         this.stop();
         // emscripten_request_animation_frame_loop is cancelled by its next
         // callback returning false. Let that callback observe loop_stop before

@@ -182,6 +182,8 @@ def main():
         subprocess.run([sys.executable, BLOB_WRITER, directory, args.output], check=True)
         if args.physics_output:
             build_shadow_casters(directory, manifest, args)
+            hud_path = "physics-hud.ui-document.json"
+            add_resource(directory, manifest, "ui_document", "ui/" + hud_path, read(EXAMPLE / hud_path))
             write(directory / "manifest.json", manifest)
             build_scene(directory, args.fixture, physics_entities)
             subprocess.run([sys.executable, BLOB_WRITER, directory, args.physics_output], check=True)

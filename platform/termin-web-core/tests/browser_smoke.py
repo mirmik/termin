@@ -893,17 +893,74 @@ def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: s
             devtools.call("Emulation.clearDeviceMetricsOverride")
 
 
+def check_ui_scene(devtools: DevToolsSocket, artifact: Path, backend: str) -> dict:
+    with offline_page(devtools, artifact) as url:
+        dpr = 2 if backend == "webgl2" else 1
+        devtools.call("Emulation.setDeviceMetricsOverride", {
+            "width": 400 if dpr == 2 else 800, "height": 560, "mobile": dpr == 2, "deviceScaleFactor": dpr})
+        devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": True})
+        try:
+            url += f"?backend={backend}"
+            devtools.call("Page.navigate", {"url": url})
+            wait_for_viewer(devtools, expected_url=url)
+            if evaluate(devtools, "__terminViewer.host.graphicsBackend") != backend:
+                raise RuntimeError(f"UI scene did not start on {backend}")
+
+            def frame():
+                bounds, png = chart_screenshot(devtools)
+                w, h, channels, rows = decode_png(png)
+                # Count light glyph pixels, excluding the checkbox's focus border.
+                def ink(left, top, right, bottom):
+                    left, right = (round(x * w / bounds["width"]) for x in (left, right))
+                    top, bottom = (round(y * h / bounds["height"]) for y in (top, bottom))
+                    return sum(min(row[i:i+3]) > 170 for row in rows[top:bottom]
+                               for i in range(left * channels, right * channels, channels))
+
+                scene = [row[w//3*channels:w*2//3*channels] for row in rows[h//3:h*2//3:3]]
+                return bounds, ink(31, 119, 65, 154), ink(80, 112, 250, 160), scene
+
+            bounds, unchecked, label, initial_scene = frame()
+            if unchecked > 5 or label < 30:
+                raise RuntimeError(f"UI scene on {backend}: empty checkbox ink={unchecked}, label ink={label}")
+            center = (bounds["x"] + 48, bounds["y"] + 136)
+            # Drag within the control. It must consume the gesture before the orbit camera.
+            dispatch_gesture(devtools, False, center, (center[0] + 12, center[1] + 8))
+            _, checked, _, after_mouse = frame()
+            if checked < 20 or initial_scene != after_mouse:
+                raise RuntimeError(f"UI scene on {backend}: mouse check ink={checked}, "
+                                   f"camera moved={initial_scene != after_mouse}")
+            dispatch_gesture(devtools, True, center)
+            _, after_tap, _, after_touch = frame()
+            if after_tap > 5 or initial_scene != after_touch:
+                raise RuntimeError(f"UI scene on {backend}: touch uncheck ink={after_tap}, "
+                                   f"camera moved={initial_scene != after_touch}")
+            for event in ("mousePressed", "mouseReleased"):
+                devtools.call("Input.dispatchMouseEvent", {
+                    "type": event, "x": center[0], "y": center[1], "button": "right", "clickCount": 1})
+            if frame()[1] > 5:
+                raise RuntimeError(f"UI scene on {backend}: right mouse click activated the checkbox")
+            return {"device_scale_factor": dpr, "label_pixels": label, "checked_pixels": checked,
+                    "unchecked_after_tap": after_tap}
+        finally:
+            devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": False})
+            devtools.call("Emulation.clearDeviceMetricsOverride")
+
+
 def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) -> dict:
     with offline_page(devtools, artifact) as url:
         url += f"?backend={backend}"
         devtools.call("Page.navigate", {"url": url})
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            if evaluate(devtools, f"location.href === {json.dumps(url)} && document.getElementById('drop')?.disabled === false"):
-                break
-            time.sleep(0.05)
-        else:
-            raise RuntimeError(f"Physics scene did not load: {console_diagnostics(devtools)}")
+        def wait_for_preview():
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                if evaluate(devtools, f"location.href === {json.dumps(url)} && "
+                            "globalThis.__terminViewer?.host.state === 'ready' && "
+                            "document.getElementById('status').hidden && document.getElementById('reset').disabled"):
+                    return
+                time.sleep(0.05)
+            raise RuntimeError(f"Physics scene did not reach its suspended preview: {console_diagnostics(devtools)}")
+
+        wait_for_preview()
         if evaluate(devtools, "__terminViewer.host.graphicsBackend") != backend:
             raise RuntimeError(f"Physics scene failed to select {backend}")
 
@@ -914,10 +971,9 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
                     throw Error(mod.UTF8ToString(mod._termin_web_host_error()));
             }})()""")
 
-        def height_after(dt):
+        def ball_height():
             # The camera is horizontal, six units from the centre line, with a
             # fixed 40 degree vertical field of view.
-            tick(dt)
             row = evaluate(devtools, """(() => {
                 const {host} = __terminViewer;
                 const canvas = document.querySelector('canvas');
@@ -930,6 +986,10 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
                 return (hits[0] + hits[hits.length - 1]) / 2;
             })()""")
             return (0.5 - row) * 12 * math.tan(math.radians(20))
+
+        def height_after(dt):
+            tick(dt)
+            return ball_height()
 
         def frame_probes():
             _, png = chart_screenshot(devtools)
@@ -975,8 +1035,27 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
         if max(abs(a - b) for a, b in zip(before["ball"], expected, strict=True)) > 4:
             raise RuntimeError(f"Wrong displayed ball colour on {backend}: {before['ball']}, expected sRGB {expected}")
         initial_key = key_contribution(before)
-        # Release via the same UI as the user, then advance deterministic elapsed time.
-        evaluate(devtools, "document.getElementById('drop').click(); __terminViewer.host.stop()")
+        bounds, png = chart_screenshot(devtools)
+        w, h, channels, rows = decode_png(png)
+        # Count bright lettering inside the native release button, excluding its border.
+        sx, sy = w / bounds["width"], h / bounds["height"]
+        label_ink = sum(min(row[i:i+3]) > 155 for row in rows[round(20*sy):round(48*sy)]
+                        for i in range(round(18*sx)*channels, round(153*sx)*channels, channels))
+        if label_ink < 30:
+            raise RuntimeError(f"Missing native release caption on {backend}: {label_ink} bright pixels")
+        release = (bounds["x"] + 86, bounds["y"] + 34)
+
+        # Track an additional listener so reload also exercises native subscription cleanup.
+        evaluate(devtools, """(() => {
+            globalThis.oldHudClicks = 0;
+            __terminViewer.host.onUiButtonClick('physics-hud', 'release', () => ++globalThis.oldHudClicks);
+        })()""")
+        dispatch_gesture(devtools, False, release)
+        evaluate(devtools, """(() => {
+            if (__terminViewer.host.state !== 'running' || document.getElementById('reset').disabled)
+                throw Error('Native release button did not start physics and enable the HTML reset');
+            __terminViewer.host.stop();
+        })()""")
         falling = height_after(0.35)
         contact = height_after(0.25)
         rebound = height_after(0.30)
@@ -996,20 +1075,38 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
                 or settled_key[0] < 0.65 * settled_key[1]):
             raise RuntimeError(f"Unexpected cast shadow on {backend}: key contribution at "
                                f"[initial shadow, lit control] = {initial_key} -> {settled_key}")
-        evaluate(devtools, """(async () => {
-            const drop = document.getElementById('drop');
-            drop.click();
-            while (drop.disabled && __terminViewer.host.state !== 'error')
-                await new Promise(resolve => requestAnimationFrame(resolve));
-            if (__terminViewer.host.state !== 'running') throw Error('Physics restart failed');
-            __terminViewer.host.stop();
+        dispatch_gesture(devtools, False, release)
+        if evaluate(devtools, "oldHudClicks") != 1:
+            raise RuntimeError(f"Release button still accepts clicks after the drop on {backend}")
+        reset = evaluate(devtools, """(() => {
+            const r = document.getElementById('reset').getBoundingClientRect();
+            return [r.x + r.width/2, r.y + r.height/2];
         })()""")
-        restarted = height_after(0)
-        if abs(initial - restarted) > 0.12 or restarted - height_after(0.35) < 0.3:
-            raise RuntimeError(f"Restart did not reset the falling body on {backend}: {restarted}")
+        devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": True})
+        try:
+            dispatch_gesture(devtools, True, reset)
+            wait_for_preview()
+            restarted = height_after(0)
+            if abs(initial - restarted) > 0.12:
+                raise RuntimeError(f"HTML reset did not suspend the ball on {backend}: {restarted}")
+            # Run the second drop at browser speed and reset it with the frame loop still active.
+            dispatch_gesture(devtools, True, release)
+            deadline = time.monotonic() + 5
+            while restarted - ball_height() < 0.3:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f"Native release did not restart live physics on {backend}")
+                time.sleep(0.04)
+            if evaluate(devtools, "oldHudClicks") != 1:
+                raise RuntimeError(f"Old UI subscription fired after reload on {backend}")
+            dispatch_gesture(devtools, True, reset)
+            wait_for_preview()
+            if abs(ball_height() - initial) > 0.12:
+                raise RuntimeError(f"HTML reset during live physics failed on {backend}")
+        finally:
+            devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": False})
         return {"initial": initial, "falling": falling, "contact": contact, "rebound": rebound,
                 "settled": settled, "restarted": restarted, "initial_key_blue": initial_key,
-                "settled_key_blue": settled_key, "initial_srgb": before}
+                "settled_key_blue": settled_key, "initial_srgb": before, "release_label_pixels": label_ink}
 
 
 def main() -> int:
@@ -1100,6 +1197,7 @@ def main() -> int:
                         "packaged scene did not produce a visible textured frame: "
                         f"{frame_metrics}; console={console_diagnostics(devtools)}"
                     )
+                events_before = evaluate(devtools, "__terminSmokeInput.metrics.events")
                 devtools.call("Input.dispatchMouseEvent", {
                     "type": "mousePressed", "x": 320, "y": 180,
                     "button": "left", "buttons": 1, "clickCount": 1,
@@ -1141,8 +1239,9 @@ def main() -> int:
                     "returnByValue": True,
                 }).get("result", {}).get("value", "")
                 resize_data = json.loads(resize_result)
+                # Three mouse events, a wheel, two keys and the resize reach the runtime.
                 if resize_data["width"] < 800 or resize_data["height"] < 450 or \
-                        resize_data["metrics"]["events"] < 10 or \
+                        resize_data["metrics"]["events"] - events_before < 7 or \
                         resize_data["metrics"]["resizes"] < 1:
                     raise RuntimeError(
                         f"browser input/resize adapter did not report expected activity: {resize_data}"
@@ -1338,6 +1437,10 @@ def main() -> int:
             report["standalone_chart3d"] = check_standalone_chart3d(
                 devtools, Path(args.output_directory) / "Termin-Chart3D.html")
             interactive = Path(args.output_directory) / "Termin-InteractiveScene.html"
+            ui = Path(args.output_directory) / "Termin-UiScene.html"
+            report["ui_scene"] = {
+                backend: check_ui_scene(devtools, ui, backend) for backend in ("webgpu", "webgl2")
+            }
             report["interactive_scene"] = {
                 backend: check_interactive_scene(devtools, interactive, backend, touch=backend == "webgl2")
                 for backend in ("webgpu", "webgl2")

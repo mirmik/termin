@@ -111,16 +111,18 @@ const fakeCanvas = new FakeCanvas();
 const fakeWindow = new FakeEventTarget();
 const fakeDocument = new FakeEventTarget();
 fakeDocument.hidden = false;
+let pixelRatio = 2;
 const inputAdapter = createTerminWebInputAdapter(fakeModule, {
     canvas: fakeCanvas,
     window: fakeWindow,
     document: fakeDocument,
     ResizeObserver: null,
-    devicePixelRatio: () => 2,
+    devicePixelRatio: () => pixelRatio,
     logger: {error() {}, warn() {}},
 }).attach();
 assert.deepEqual([fakeCanvas.width, fakeCanvas.height], [400, 200]);
 inputAdapter.setEnabled(true);
+assert.deepEqual(inputCalls.shift(), {name: "_termin_web_host_resize", args: [400, 200]});
 fakeCanvas.emit("pointerdown", {
     pointerId: 7, pointerType: "mouse", button: 1, detail: 1,
     clientX: 110, clientY: 70, pressure: 0.5,
@@ -131,13 +133,11 @@ fakeCanvas.emit("pointermove", {
     pointerId: 7, pointerType: "mouse", clientX: 150, clientY: 80, pressure: 0.5,
 });
 assert.deepEqual(inputCalls[0], {
-    name: "_termin_web_host_dispatch_pointer",
-    args: [7, 0, 0, 200, 100, 0.5],
+    name: "_termin_web_host_dispatch_mouse_button",
+    args: [200, 100, 2, 1, 0, 1],
 });
-assert.equal(inputCalls[1].name, "_termin_web_host_dispatch_mouse_button");
-assert.equal(inputCalls[1].args[2], 2);
-assert.equal(inputCalls[2].name, "_termin_web_host_dispatch_pointer");
-assert.equal(inputCalls[3].name, "_termin_web_host_dispatch_mouse_move");
+assert.equal(inputCalls[1].name, "_termin_web_host_dispatch_mouse_move");
+assert.equal(inputCalls.length, 2);
 fakeCanvas.emit("pointermove", {
     pointerId: 8, clientX: 160, clientY: 85, pressure: 0,
 });
@@ -148,6 +148,11 @@ assert.deepEqual(inputCalls.at(-1), {
     name: "_termin_web_host_resize",
     args: [600, 300],
 });
+pixelRatio = 3;
+fakeCanvas.rect = {left: 10, top: 20, width: 200, height: 100};
+assert.equal(inputAdapter.syncCanvasSize(), true);
+assert.deepEqual([fakeCanvas.width, fakeCanvas.height], [600, 300]);
+assert.equal(inputAdapter.syncCanvasSize(), false);
 inputAdapter.setEnabled(false);
 assert.equal(inputCalls.at(-1).name, "_termin_web_host_dispatch_focus_lost");
 inputAdapter.detach();

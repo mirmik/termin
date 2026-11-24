@@ -222,7 +222,6 @@ namespace termin {
         : input_res(input),
           output_res(output),
           painter_(std::make_unique<gui_native::NativeDocumentPainter>()) {
-        configure_font();
         pass_name_set("UIWidgets");
         link_to_type_registry("UIWidgetPass");
     }
@@ -263,8 +262,6 @@ namespace termin {
             tc::Log::error("[UIWidgetPass] ctx.ctx2 is null");
             return;
         }
-        configure_font();
-
         auto in_it = ctx.tex2_reads.find(input_res);
         auto out_it = ctx.tex2_writes.find(output_res);
         if (in_it == ctx.tex2_reads.end() || !in_it->second || out_it == ctx.tex2_writes.end() || !out_it->second) {
@@ -303,6 +300,7 @@ namespace termin {
             return;
         }
 
+        configure_font();
         try {
             painter_->prepare_documents(*ctx.ctx2, width, height, submissions);
         } catch (const std::exception& error) {

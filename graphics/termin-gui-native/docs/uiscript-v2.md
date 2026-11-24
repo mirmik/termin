@@ -31,9 +31,13 @@ The initial cross-platform baseline contains:
 - `termin.gui.GridLayout`;
 - `termin.gui.ScrollArea`;
 - `termin.gui.Label`;
+- `termin.gui.Button`;
 - `termin.gui.Checkbox`;
 - `termin.gui.WrapLayout`;
 - `termin.gui.IconButton`.
+
+`Button` accepts a UTF-8 `text` caption. Its `clicked()` signal is emitted on
+activation by pointer or keyboard.
 
 `Checkbox` accepts a boolean `checked` property. The value initializes the
 native checked state and can subsequently be changed through ordinary pointer

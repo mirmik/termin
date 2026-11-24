@@ -48,7 +48,12 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 
-add_library(termin_gui_native SHARED
+set(TERMIN_GUI_NATIVE_LIBRARY_TYPE SHARED)
+if(EMSCRIPTEN)
+    set(TERMIN_GUI_NATIVE_LIBRARY_TYPE STATIC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexceptions>)
+endif()
+add_library(termin_gui_native ${TERMIN_GUI_NATIVE_LIBRARY_TYPE}
     src/tc_document.cpp
     src/document_snapshot.cpp
     src/draw_list_renderer.cpp
@@ -147,7 +152,7 @@ target_link_libraries(termin_gui_native
         termin_inspect::termin_inspect
 )
 
-add_library(termin_gui_native_document_renderer SHARED
+add_library(termin_gui_native_document_renderer ${TERMIN_GUI_NATIVE_LIBRARY_TYPE}
     src/document_renderer.cpp
     src/document_renderer_c_api.cpp
     src/native_document_painter.cpp
@@ -179,7 +184,7 @@ if(NOT WIN32)
     )
 endif()
 
-add_library(termin_gui_native_offscreen SHARED
+add_library(termin_gui_native_offscreen ${TERMIN_GUI_NATIVE_LIBRARY_TYPE}
     src/offscreen_composition.cpp
 )
 add_library(termin_gui_native::offscreen ALIAS termin_gui_native_offscreen)

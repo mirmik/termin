@@ -14,6 +14,7 @@ namespace termin::gui_native {
     class ScrollArea;
     class HStack;
     class VStack;
+    class Button;
     class IconButton;
     class Label;
     class Checkbox;
@@ -62,6 +63,10 @@ namespace termin::gui_native {
 
     template <> struct NativeWidgetRuntimeType<VStack> {
         static constexpr const char* name = "termin.gui.VStack";
+    };
+
+    template <> struct NativeWidgetRuntimeType<Button> {
+        static constexpr const char* name = "termin.gui.Button";
     };
 
     template <> struct NativeWidgetRuntimeType<IconButton> {

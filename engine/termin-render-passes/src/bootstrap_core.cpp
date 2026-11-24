@@ -7,6 +7,7 @@
 #include <termin/render/skybox_pass.hpp>
 #include <termin/render/standard_gbuffer_pass.hpp>
 #include <termin/render/tonemap_pass.hpp>
+#include <termin/render/ui_widget_pass.hpp>
 #include <termin/render_passes/bootstrap.hpp>
 
 namespace termin {
@@ -23,6 +24,7 @@ namespace termin {
         SkyBoxPass::register_type();
         StandardGBufferPass::register_type();
         TonemapPass::register_type();
+        UIWidgetPass::register_type();
     }
 
 } // namespace termin

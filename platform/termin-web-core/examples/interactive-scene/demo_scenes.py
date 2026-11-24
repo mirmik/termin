@@ -72,4 +72,9 @@ def physics_entities(camera):
                "light_type": "directional", "color": [0.64, 0.81, 1], "intensity": 1.2,
                "shadows_enabled": True, "shadows_map_resolution": 512, "cascade_count": 1, "max_distance": 16,
            }}]}
-    return [camera, world, ball, platform, key, fill]
+    hud = {"uuid": "physics-hud", "name": "Physics controls", "components": [{
+        "type": "UIComponent", "source_id": "physics-controls-component", "data": {"ui_layout": {
+            "type": "uuid", "kind": "ui_document", "role": "ui_document", "uuid": "physics-controls",
+        }},
+    }]}
+    return [camera, world, ball, platform, key, fill, hud]

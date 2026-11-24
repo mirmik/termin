@@ -197,6 +197,10 @@ namespace termin {
         return loaded_ ? loaded_->document() : gui_native::TcDocument{};
     }
 
+    tc_widget_handle UIComponent::named_widget(const std::string& name) const {
+        return has_document() ? loaded_->named(name).handle : tc_widget_handle_invalid();
+    }
+
     bool UIComponent::has_document() const {
         return loaded_ && !loaded_->closed() && loaded_->document().valid();
     }

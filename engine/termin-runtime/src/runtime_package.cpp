@@ -29,8 +29,8 @@
 #include <tgfx/tgfx_texture_handle.hpp>
 #ifndef TERMIN_RUNTIME_RENDER_ONLY
 #include <termin/foliage/foliage_data_registry.hpp>
-#include <termin/gui_native/ui_document_asset.hpp>
 #endif
+#include <termin/gui_native/ui_document_asset.hpp>
 #include <termin/image/image_decode.hpp>
 #include <termin/entity/entity_classification_registry.hpp>
 #include <termin/render/render_pipeline.hpp>
@@ -60,9 +60,7 @@ namespace termin::runtime {
         std::vector<TcSpriteAsset> sprites;
 #endif
         std::vector<TcPipelineTemplate> pipeline_templates;
-#ifndef TERMIN_RUNTIME_RENDER_ONLY
         std::vector<gui_native::TcUiDocumentAsset> ui_documents;
-#endif
     };
 
     namespace {
@@ -1702,11 +1700,6 @@ namespace termin::runtime {
 #endif
             }
             if (type == "ui_document") {
-#ifdef TERMIN_RUNTIME_RENDER_ONLY
-                error = "render runtime profile does not support ui_document resources";
-                tc_log_error("RuntimePackageLoader: %s", error.c_str());
-                return false;
-#else
                 const std::string uuid = string_field(entry, "uuid");
                 if (uuid.empty()) {
                     error = "ui_document resource requires a UUID";
@@ -1722,7 +1715,6 @@ namespace termin::runtime {
                 }
                 keepalive.ui_documents.push_back(asset);
                 return true;
-#endif
             }
 
             error = "unsupported resource type '" + type + "'";
