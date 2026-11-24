@@ -95,6 +95,7 @@ namespace termin {
             world_component_->remove_rigid_body_component(*this);
         }
         clear_runtime_link();
+        initial_shape_pose_.reset();
         CxxComponent::on_destroy();
     }
 
@@ -280,6 +281,18 @@ namespace termin {
         }
     }
 
+    bool RigidBodyComponent::reset_to_initial_pose() {
+        if (!initialized() || !initial_shape_pose_ || !entity().valid()) {
+            return false;
+        }
+        // The attached collider reads the entity transform when the world refreshes its bounds.
+        entity().transform().set_global_pose(*initial_shape_pose_);
+        world_component_->physics_world().reset_body_pose(body_index_, *initial_shape_pose_);
+        last_synced_entity_pose_ = *initial_shape_pose_;
+        has_last_synced_entity_pose_ = true;
+        return true;
+    }
+
     void RigidBodyComponent::apply_impulse_at_point(const Vec3& impulse, const Vec3& point) {
         if (physics::RigidBody* body = rigid_body(); body != nullptr) {
             body->apply_impulse_at_point(impulse, point);
@@ -417,12 +430,11 @@ namespace termin {
         component.world_component_ = this;
         component.body_index_ = world_.add_body(body);
         bodies_.push_back(&component);
-        Pose3 pose;
-        Vec3 scale;
-        if (component.physics_pose_and_scale(pose, scale, false)) {
-            component.last_synced_entity_pose_ = pose;
-            component.has_last_synced_entity_pose_ = true;
-        }
+        const Pose3 pose = body.shape_pose();
+        if (!component.initial_shape_pose_)
+            component.initial_shape_pose_ = pose;
+        component.last_synced_entity_pose_ = pose;
+        component.has_last_synced_entity_pose_ = true;
         (void)component.ensure_collider_registered();
         return true;
     }

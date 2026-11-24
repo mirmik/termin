@@ -213,6 +213,13 @@ await host.waitForFrames(3);
 if (host.state !== TerminWebHostState.Running || host.entityCount() !== 1) {
     throw new Error("runtime host did not run the packaged entry scene");
 }
+host.onFrame = () => {
+    host.onFrame = null;
+    host.stop();
+    host.start();
+};
+await host.waitForFrames(host.frameCount() + 2);
+assert.equal(frameTimers.size, 1, "restart from onFrame must leave one scheduled callback");
 await host.reload(new URL("core-package/", fixtures));
 await host.waitForFrames(2);
 if (host.entityCount() !== 1) {

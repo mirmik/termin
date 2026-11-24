@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -25,6 +26,7 @@
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/engine/engine_core.hpp>
 #include <termin/gui_native/button.hpp>
+#include <termin/physics_components/components.hpp>
 #include <termin/platform/offscreen_render_surface.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/ui/tc_scene_ui_document_capability.h>
@@ -204,28 +206,36 @@ namespace {
     std::string web_chart_error;
     std::shared_ptr<termin::runtime::RuntimePackageReader> web_pending_package_reader;
     std::uint32_t web_host_frame_count = 0;
-    bool web_host_loop_running = false;
+    std::optional<int> web_host_frame_request;
     double web_host_loop_last_timestamp = -1.0;
 
     extern "C" int termin_web_host_tick(double delta_seconds);
     extern "C" int termin_web_host_graphics_status();
 
-    EM_BOOL web_host_animation_frame(double timestamp_ms, void*) {
-        if (!web_host_loop_running)
-            return EM_FALSE;
-        const double delta_seconds =
-            web_host_loop_last_timestamp < 0.0 ? 0.0 : (timestamp_ms - web_host_loop_last_timestamp) / 1000.0;
-        web_host_loop_last_timestamp = timestamp_ms;
-        if (!termin_web_host_tick(delta_seconds)) {
-            web_host_loop_running = false;
-            return EM_FALSE;
+    void stop_web_host_loop() {
+        if (web_host_frame_request) {
+            emscripten_cancel_animation_frame(*web_host_frame_request);
+            web_host_frame_request.reset();
         }
-        return EM_TRUE;
+        web_host_loop_last_timestamp = -1.0;
+    }
+
+    EM_BOOL web_host_animation_frame(double timestamp_ms, void*) {
+        // Keep an actual, cancelable request even while tick() is executing.
+        web_host_frame_request = emscripten_request_animation_frame(&web_host_animation_frame, nullptr);
+        const double elapsed_ms = timestamp_ms - web_host_loop_last_timestamp;
+        // Browsers can suspend callbacks while the page is hidden. Resume from
+        // the current simulation state instead of passing the suspension to physics.
+        const double delta_seconds =
+            web_host_loop_last_timestamp >= 0.0 && elapsed_ms >= 0.0 && elapsed_ms <= 1000.0 ? elapsed_ms / 1000.0 : 0.0;
+        web_host_loop_last_timestamp = timestamp_ms;
+        if (!termin_web_host_tick(delta_seconds))
+            stop_web_host_loop();
+        return EM_FALSE;
     }
 
     void unload_web_host_package() {
-        web_host_loop_running = false;
-        web_host_loop_last_timestamp = -1.0;
+        stop_web_host_loop();
         web_headless_package.destroy();
         tgfx::set_builtin_shader_read_callback({});
         tgfx::set_builtin_shader_root(nullptr);
@@ -896,17 +906,13 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_loop_start() {
         tc_log_error("TerminWebHost: %s", web_host_error.c_str());
         return 0;
     }
-    if (web_host_loop_running)
-        return 1;
-    web_host_loop_running = true;
-    web_host_loop_last_timestamp = -1.0;
-    emscripten_request_animation_frame_loop(&web_host_animation_frame, nullptr);
+    if (!web_host_frame_request)
+        web_host_frame_request = emscripten_request_animation_frame(&web_host_animation_frame, nullptr);
     return 1;
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_loop_stop() {
-    web_host_loop_running = false;
-    web_host_loop_last_timestamp = -1.0;
+    stop_web_host_loop();
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE void termin_web_host_unload() {
@@ -959,6 +965,25 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_set_light_enabled(const char
     } catch (const std::exception& e) {
         web_host_error = e.what();
         tc_log_error("TerminWebHost set light: %s", web_host_error.c_str());
+        return 0;
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_reset_rigid_body(const char* uuid) {
+    try {
+        if (!web_player || !web_player->engine || !web_player->package.scene.valid())
+            throw std::runtime_error("there is no active browser scene");
+        tc_entity_pool* pool = tc_scene_entity_pool(web_player->package.scene.handle());
+        const auto id = uuid && *uuid ? tc_entity_pool_find_by_uuid(pool, uuid) : TC_ENTITY_ID_INVALID;
+        if (!tc_entity_id_valid(id)) throw std::runtime_error("rigid body entity UUID was not found in the scene");
+        auto* body = termin::Entity(pool, id).get_component<termin::RigidBodyComponent>();
+        if (!body) throw std::runtime_error("entity has no RigidBodyComponent");
+        if (!body->reset_to_initial_pose()) throw std::runtime_error("rigid body has not been initialized");
+        web_player->engine->scene_manager.request_render();
+        return 1;
+    } catch (const std::exception& e) {
+        web_host_error = e.what();
+        tc_log_error("TerminWebHost reset rigid body '%s': %s", uuid ? uuid : "", web_host_error.c_str());
         return 0;
     }
 }

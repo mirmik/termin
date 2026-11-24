@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <vector>
 
 #include <termin/entity/component.hpp>
@@ -35,6 +36,7 @@ namespace termin {
         [[nodiscard]] const physics::RigidBody* rigid_body() const noexcept;
 
         bool sync_to_physics();
+        bool reset_to_initial_pose();
         void apply_impulse(const Vec3& impulse);
         void apply_impulse_at_point(const Vec3& impulse, const Vec3& point);
 
@@ -49,6 +51,7 @@ namespace termin {
         colliders::Collider* registered_collider_ = nullptr;
         std::uint64_t registered_collider_revision_ = 0;
         Pose3 last_synced_entity_pose_{};
+        std::optional<Pose3> initial_shape_pose_;
         bool has_last_synced_entity_pose_ = false;
 
         [[nodiscard]] bool physics_pose_and_scale(Pose3& pose, Vec3& scale, bool report_error) const;

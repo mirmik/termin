@@ -87,7 +87,7 @@ export class TerminWebHost {
         this.graphicsStarted = false;
         this.uiButtonListeners = null;
         this.nextUiButtonId = 1;
-        this.frameRequest = 0;
+        this.frameRequest = null;
         this.lastTimestamp = null;
         this.lastObservedFrameCount = 0;
         this.loadStartedAt = 0;
@@ -270,13 +270,13 @@ export class TerminWebHost {
         }
         this.lastTimestamp = null;
         this.lastObservedFrameCount = this.frameCount();
-        this.setState(TerminWebHostState.Running);
         if (!this.headless && !this.module._termin_web_host_loop_start()) {
             this.setState(TerminWebHostState.Error, this.module.UTF8ToString(
                 this.module._termin_web_host_error()));
             throw new Error(this.error || "native browser frame loop failed to start");
         }
         this.frameRequest = this.requestFrame((timestamp) => this.tick(timestamp));
+        this.setState(TerminWebHostState.Running);
     }
 
     tick(timestamp) {
@@ -310,6 +310,7 @@ export class TerminWebHost {
                     this.module._termin_web_host_error());
                 if (nativeError) throw new Error(nativeError);
             }
+            this.frameRequest = this.requestFrame((next) => this.tick(next));
             if (advanced) {
                 const frameMs = this.headless
                     ? performance.now() - frameStartedAt
@@ -323,14 +324,13 @@ export class TerminWebHost {
                 if (!this.metrics.firstFrameMs) {
                     this.metrics.firstFrameMs = performance.now() - this.loadStartedAt;
                 }
+                this.lastObservedFrameCount = nativeFrameCount;
                 this.onFrame?.({
                     frameCount: nativeFrameCount,
                     timestamp,
                     metrics: this.metrics,
                 });
-                this.lastObservedFrameCount = nativeFrameCount;
             }
-            this.frameRequest = this.requestFrame((next) => this.tick(next));
         } catch (error) {
             this.stop();
             this.setState(
@@ -341,9 +341,9 @@ export class TerminWebHost {
     }
 
     stop() {
-        if (this.frameRequest) this.cancelFrame(this.frameRequest);
+        if (this.frameRequest !== null) this.cancelFrame(this.frameRequest);
         if (!this.headless) this.module._termin_web_host_loop_stop();
-        this.frameRequest = 0;
+        this.frameRequest = null;
         this.lastTimestamp = null;
         if (this.state === TerminWebHostState.Running) {
             this.setState(TerminWebHostState.Stopped);
@@ -373,6 +373,12 @@ export class TerminWebHost {
         const success = this.module.ccall("termin_web_host_set_light_enabled", "number",
             ["string", "number"], [uuid, Number(enabled)]);
         if (!success) throw new Error(this.module.UTF8ToString(this.module._termin_web_host_error()) || "Could not update light");
+    }
+
+    resetRigidBody(uuid) {
+        if (typeof uuid !== "string" || !uuid) throw new TypeError("Expected a rigid body entity UUID");
+        const success = this.module.ccall("termin_web_host_reset_rigid_body", "number", ["string"], [uuid]);
+        if (!success) throw new Error(this.module.UTF8ToString(this.module._termin_web_host_error()) || "Could not reset rigid body");
     }
 
     #callUiWidget(operation, entityUuid, widgetName, value) {
@@ -432,13 +438,6 @@ export class TerminWebHost {
     async teardown() {
         this.clearUiButtonListeners();
         this.stop();
-        // emscripten_request_animation_frame_loop is cancelled by its next
-        // callback returning false. Let that callback observe loop_stop before
-        // destroying the engine/device state it references.
-        if (!this.headless && (this.state === TerminWebHostState.Stopped || this.state === TerminWebHostState.Error)
-                && (this.nativeLoaded || this.graphicsStarted)) {
-            await new Promise((resolve) => this.requestFrame(() => resolve()));
-        }
         if (this.nativeLoaded || this.graphicsStarted) {
             this.module._termin_web_host_unload();
         }

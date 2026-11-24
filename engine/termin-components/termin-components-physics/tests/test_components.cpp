@@ -126,6 +126,43 @@ TEST_CASE("native game physics falls onto scene-only static collider") {
     fixture.scene.destroy();
 }
 
+TEST_CASE("reset returns a colliding body to its initial pose at rest") {
+    using namespace termin;
+
+    initialize_runtime();
+    FallingBoxScene fixture = make_falling_box_scene();
+    const Pose3 initial = fixture.box_entity.transform().global_pose();
+    auto& world = fixture.world->physics_world();
+    auto* body = fixture.body->rigid_body();
+    REQUIRE(body != nullptr);
+    constexpr float dt = 1.0F / 120.0F;
+    fixture.world->fixed_update(dt);
+    const Vec3 first_step_velocity = body->linear_velocity;
+    for (int step = 0; step < 360 && world.contacts().empty(); ++step) {
+        fixture.world->fixed_update(dt);
+    }
+    REQUIRE(!world.contacts().empty());
+    body->angular_velocity = {1.0, 2.0, 3.0};
+    body->add_force({1.0, 2.0, 3.0});
+    body->add_torque({4.0, 5.0, 6.0});
+
+    REQUIRE(fixture.body->reset_to_initial_pose());
+    CHECK(fixture.box_entity.transform().global_position() == initial.lin);
+    CHECK(body->shape_pose().lin == initial.lin);
+    CHECK(body->linear_velocity == Vec3{});
+    CHECK(body->angular_velocity == Vec3{});
+    CHECK(body->force == Vec3{});
+    CHECK(body->torque == Vec3{});
+    CHECK(world.contacts().empty());
+    CHECK(world.collision_world()->detect_contacts().empty());
+    fixture.world->fixed_update(dt);
+    CHECK(body->shape_pose().lin.z < initial.lin.z);
+    CHECK(body->linear_velocity == first_step_velocity);
+    REQUIRE(fixture.body->reset_to_initial_pose());
+    CHECK(body->shape_pose().lin == initial.lin);
+    fixture.scene.destroy();
+}
+
 TEST_CASE("external entity transform teleports native rigid body") {
     using namespace termin;
 

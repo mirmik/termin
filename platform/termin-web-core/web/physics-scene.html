@@ -28,14 +28,14 @@
 <main>
     <header>
         <h1>Падающий шар</h1>
-        <button type="button" id="reset" disabled>Вернуть шар</button>
+        <button type="button" id="reset" autocomplete="off" disabled>Вернуть шар</button>
     </header>
     <div class="stage">
         <canvas id="termin-canvas" width="800" height="480" tabindex="0" aria-label="Шар над платформой"
                 aria-describedby="camera-hint"></canvas>
         <p id="status" role="status">Загрузка сцены…</p>
     </div>
-    <p id="camera-hint">Перетаскивайте, чтобы вращать камеру. Щипок или колесо меняют масштаб.</p>
+    <p id="camera-hint">Нажмите «Отпустить шар» внутри сцены. Перетаскивайте, чтобы вращать камеру. Щипок или колесо меняют масштаб.</p>
 </main>
 <script type="module">
 import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-srgb1";
@@ -65,15 +65,16 @@ try {
     const scene = webAssetUrl("scene.trpkg", "./fixtures/physics-scene/package.trpkg");
     // Redraw the suspended ball and its native controls without advancing physics.
     function drawPreview() {
-        if (host.state === "ready" && !core.module._termin_web_host_tick(0)) {
+        if (!core.module._termin_web_host_tick(0)) {
             throw new Error(core.module.UTF8ToString(core.module._termin_web_host_error()));
         }
     }
     let pendingPreview = 0;
     function schedulePreview() {
-        if (host.state !== "ready" || pendingPreview) return;
+        if ((host.state !== "ready" && host.state !== "stopped") || pendingPreview) return;
         pendingPreview = requestAnimationFrame(() => {
             pendingPreview = 0;
+            if (host.state !== "ready" && host.state !== "stopped") return;
             try { drawPreview(); } catch (error) { showError(error); }
         });
     }
@@ -82,27 +83,27 @@ try {
         canvas.addEventListener(name, schedulePreview, {passive: true});
     }
 
-    async function prepareDrop() {
+    await host.load(scene, {autoStart: false});
+    host.onUiButtonClick("physics-hud", "release", () => {
+        if (host.state !== "ready" && host.state !== "stopped") return;
+        try {
+            host.setUiWidgetEnabled("physics-hud", "release", false);
+            host.start();
+            reset.disabled = false;
+        } catch (error) { showError(error); }
+    });
+    reset.addEventListener("click", () => {
         reset.disabled = true;
-        input.setEnabled(false);
-        status.textContent = "Подготовка сцены…";
-        status.hidden = false;
-        await host.load(scene, {autoStart: false});
-        host.onUiButtonClick("physics-hud", "release", () => {
-            if (host.state !== "ready") return;
-            try {
-                host.setUiWidgetEnabled("physics-hud", "release", false);
-                host.start();
-                reset.disabled = false;
-            } catch (error) { showError(error); }
-        });
-        input.setEnabled(true);
-        drawPreview();
-        status.hidden = true;
-    }
-
-    await prepareDrop();
-    reset.addEventListener("click", () => prepareDrop().catch(showError));
+        try {
+            host.stop();
+            host.resetRigidBody("drop-ball");
+            host.setUiWidgetEnabled("physics-hud", "release", true);
+            drawPreview();
+        } catch (error) { showError(error); }
+    });
+    input.setEnabled(true);
+    drawPreview();
+    status.hidden = true;
 } catch (error) { showError(error); }
 </script>
 </body>

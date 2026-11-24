@@ -951,21 +951,55 @@ def check_ui_scene(devtools: DevToolsSocket, artifact: Path, backend: str) -> di
             devtools.call("Emulation.clearDeviceMetricsOverride")
 
 
+def check_native_animation_loop(devtools: DevToolsSocket):
+    # Drive the actual Wasm renderer with controlled browser-timestamp gaps.
+    evaluate(devtools, """(() => {
+        const m = __terminViewer.core.module;
+        const request = window.requestAnimationFrame, cancel = window.cancelAnimationFrame;
+        const pending = new Map();
+        let id = 0;
+        window.requestAnimationFrame = callback => {
+            pending.set(++id, callback);
+            return id;
+        };
+        window.cancelAnimationFrame = id => pending.delete(id);
+        try {
+            m._termin_web_host_loop_start();
+            m._termin_web_host_loop_stop();
+            m._termin_web_host_loop_start();
+            for (const timestamp of [100, 1400, 1400]) {
+                if (pending.size !== 1) throw Error("Expected exactly one native frame request");
+                const callback = pending.values().next().value;
+                pending.clear();
+                const before = m._termin_web_host_frame_count();
+                callback(timestamp);
+                if (m._termin_web_host_frame_count() !== before + 1) throw Error("Native frame loop stalled");
+            }
+        } finally {
+            m._termin_web_host_loop_stop();
+            window.requestAnimationFrame = request;
+            window.cancelAnimationFrame = cancel;
+        }
+        if (pending.size) throw Error("Native frame request survived stop");
+    })()""")
+
+
 def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) -> dict:
     with offline_page(devtools, artifact) as url:
         url += f"?backend={backend}"
         devtools.call("Page.navigate", {"url": url})
-        def wait_for_preview():
+        def wait_for_preview(state="ready"):
             deadline = time.monotonic() + 30
             while time.monotonic() < deadline:
                 if evaluate(devtools, f"location.href === {json.dumps(url)} && "
-                            "globalThis.__terminViewer?.host.state === 'ready' && "
+                            f"globalThis.__terminViewer?.host.state === {json.dumps(state)} && "
                             "document.getElementById('status').hidden && document.getElementById('reset').disabled"):
                     return
                 time.sleep(0.05)
             raise RuntimeError(f"Physics scene did not reach its suspended preview: {console_diagnostics(devtools)}")
 
         wait_for_preview()
+        check_native_animation_loop(devtools)
         if evaluate(devtools, "__terminViewer.host.graphicsBackend") != backend:
             raise RuntimeError(f"Physics scene failed to select {backend}")
 
@@ -1050,10 +1084,11 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             raise RuntimeError(f"Missing native release caption on {backend}: {label_ink} bright pixels")
         release = (bounds["x"] + 86, bounds["y"] + 34)
 
-        # Track an additional listener so reload also exercises native subscription cleanup.
+        # A ball reset must preserve the loaded package and its input subscriptions.
         evaluate(devtools, """(() => {
-            globalThis.oldHudClicks = 0;
-            __terminViewer.host.onUiButtonClick('physics-hud', 'release', () => ++globalThis.oldHudClicks);
+            globalThis.physicsMetrics = __terminViewer.host.metrics;
+            globalThis.hudClicks = 0;
+            __terminViewer.host.onUiButtonClick('physics-hud', 'release', () => ++globalThis.hudClicks);
         })()""")
         dispatch_gesture(devtools, False, release)
         evaluate(devtools, """(() => {
@@ -1081,32 +1116,48 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             raise RuntimeError(f"Unexpected cast shadow on {backend}: key contribution at "
                                f"[initial shadow, lit control] = {initial_key} -> {settled_key}")
         dispatch_gesture(devtools, False, release)
-        if evaluate(devtools, "oldHudClicks") != 1:
+        if evaluate(devtools, "hudClicks") != 1:
             raise RuntimeError(f"Release button still accepts clicks after the drop on {backend}")
         reset = evaluate(devtools, """(() => {
             const r = document.getElementById('reset').getBoundingClientRect();
             return [r.x + r.width/2, r.y + r.height/2];
         })()""")
         devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": True})
+        def wait_for_live_drop():
+            deadline = time.monotonic() + 5
+            while initial - ball_height() < 0.3:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f"Native release did not start live physics on {backend}")
+                time.sleep(0.04)
+
         try:
             dispatch_gesture(devtools, True, reset)
-            wait_for_preview()
+            wait_for_preview("stopped")
             restarted = height_after(0)
             if abs(initial - restarted) > 0.12:
                 raise RuntimeError(f"HTML reset did not suspend the ball on {backend}: {restarted}")
-            # Run the second drop at browser speed and reset it with the frame loop still active.
-            dispatch_gesture(devtools, True, release)
-            deadline = time.monotonic() + 5
-            while restarted - ball_height() < 0.3:
-                if time.monotonic() >= deadline:
-                    raise RuntimeError(f"Native release did not restart live physics on {backend}")
-                time.sleep(0.04)
-            if evaluate(devtools, "oldHudClicks") != 1:
-                raise RuntimeError(f"Old UI subscription fired after reload on {backend}")
-            dispatch_gesture(devtools, True, reset)
+            # Reset successive drops while the browser frame loop is still active.
+            for expected_clicks in (2, 3, 4):
+                dispatch_gesture(devtools, True, release)
+                wait_for_live_drop()
+                if evaluate(devtools, "hudClicks") != expected_clicks:
+                    raise RuntimeError(f"UI listener was lost or duplicated on {backend}")
+                dispatch_gesture(devtools, True, reset)
+                wait_for_preview("stopped")
+                if abs(ball_height() - initial) > 0.12 or not evaluate(
+                        devtools, "physicsMetrics === __terminViewer.host.metrics"):
+                    raise RuntimeError(f"Ball reset during live physics failed or reloaded the package on {backend}")
+
+            devtools.call("Page.reload", {"ignoreCache": True})
             wait_for_preview()
             if abs(ball_height() - initial) > 0.12:
-                raise RuntimeError(f"HTML reset during live physics failed on {backend}")
+                raise RuntimeError(f"Reload did not restore the suspended ball on {backend}")
+            dispatch_gesture(devtools, True, release)
+            wait_for_live_drop()
+            dispatch_gesture(devtools, True, reset)
+            wait_for_preview("stopped")
+            if abs(ball_height() - initial) > 0.12:
+                raise RuntimeError(f"First reset after reload failed on {backend}")
         finally:
             devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": False})
         return {"initial": initial, "falling": falling, "contact": contact, "rebound": rebound,

@@ -58,6 +58,8 @@ namespace termin {
 
             size_t add_body(const RigidBody& body);
 
+            void reset_body_pose(size_t body_idx, const Pose3& shape_pose);
+
             void register_collider(size_t body_idx, Collider* collider);
 
             void unregister_collider(size_t body_idx);
@@ -93,6 +95,7 @@ namespace termin {
         private:
             void sync_collider_velocities();
             void sync_collider_poses();
+            void sync_collider_pose(const RigidBody& body, Collider* collider);
 
             RigidBody* find_body(Collider* collider);
 

@@ -1,5 +1,7 @@
 #include <termin/physics/physics_world.hpp>
 
+#include <algorithm>
+
 namespace termin::physics {
     void PhysicsWorld::set_collision_world(CollisionWorld* cw) {
         collision_world_ = cw;
@@ -17,6 +19,21 @@ namespace termin::physics {
     size_t PhysicsWorld::add_body(const RigidBody& body) {
         bodies_.push_back(body);
         return bodies_.size() - 1;
+    }
+    void PhysicsWorld::reset_body_pose(size_t i, const Pose3& pose) {
+        auto& body = bodies_.at(i);
+        body.set_shape_pose(pose);
+        body.linear_velocity = {};
+        body.angular_velocity = {};
+        body.force = {};
+        body.torque = {};
+        std::erase_if(contacts_, [&body](const Contact& c) { return c.body_a == &body || c.body_b == &body; });
+        if (auto it = body_to_collider_.find(i); it != body_to_collider_.end()) {
+            Collider* collider = it->second;
+            collider->linear_velocity = {};
+            collider->angular_velocity = {};
+            sync_collider_pose(body, collider);
+        }
     }
     void PhysicsWorld::register_collider(size_t i, Collider* c) {
         if (i >= bodies_.size() || !c)
@@ -81,15 +98,17 @@ namespace termin::physics {
     }
     void PhysicsWorld::sync_collider_poses() {
         for (auto& [i, c] : body_to_collider_)
-            if (i < bodies_.size()) {
-                if (auto* p = dynamic_cast<colliders::ColliderPrimitive*>(c);
-                    p && dynamic_cast<colliders::AttachedCollider*>(c) == nullptr) {
-                    const Pose3 pose = bodies_[i].shape_pose();
-                    p->transform = GeneralPose3(pose.ang, pose.lin, p->transform.scale);
-                }
-                if (collision_world_)
-                    collision_world_->update_pose(c);
-            }
+            if (i < bodies_.size())
+                sync_collider_pose(bodies_[i], c);
+    }
+    void PhysicsWorld::sync_collider_pose(const RigidBody& body, Collider* collider) {
+        if (auto* primitive = dynamic_cast<colliders::ColliderPrimitive*>(collider);
+            primitive && dynamic_cast<colliders::AttachedCollider*>(collider) == nullptr) {
+            const Pose3 pose = body.shape_pose();
+            primitive->transform = GeneralPose3(pose.ang, pose.lin, primitive->transform.scale);
+        }
+        if (collision_world_)
+            collision_world_->update_pose(collider);
     }
     RigidBody* PhysicsWorld::find_body(Collider* c) {
         auto it = collider_to_body_.find(c);
