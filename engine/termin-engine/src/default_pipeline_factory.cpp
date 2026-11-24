@@ -4,6 +4,8 @@
 #include <string>
 #include <utility>
 
+#include <tgfx2/i_render_device.hpp>
+
 extern "C" {
 #include "inspect/tc_inspect_pass_adapter.h"
 #include "render/tc_pass.h"
@@ -41,7 +43,7 @@ namespace termin::rendering_manager_detail {
         }
     }
 
-    tc_pipeline_handle make_default_pipeline() {
+    tc_pipeline_handle make_default_pipeline([[maybe_unused]] const tgfx::IRenderDevice* device) {
         tc_pipeline_handle ph = tc_pipeline_create("Default");
         RenderPipeline pipeline(ph);
 
@@ -60,16 +62,34 @@ namespace termin::rendering_manager_detail {
                 {{"input_res", "skybox"}, {"output_res", "color"}, {"shadow_res", ""}, {"phase_mark", "opaque"}})) {
             adopt_default_pass(ph, p);
         }
+#ifdef __EMSCRIPTEN__
+        const bool use_msaa = device && device->capabilities().supports_hdr_msaa4;
+#else
+        constexpr bool use_msaa = false;
+#endif
+        const char* tonemap_input = use_msaa ? "color_resolved" : "color";
+        if (use_msaa) {
+            if (tc_pass* p = create_and_configure_pass(
+                    "ResolvePass", "Resolve", {{"input_res", "color"}, {"output_res", tonemap_input}})) {
+                adopt_default_pass(ph, p);
+            }
+        }
         if (tc_pass* p = create_and_configure_pass(
-                "TonemapPass", "Tonemap", {{"input_res", "color"}, {"output_res", "color_tonemapped"}})) {
+                "TonemapPass", "Tonemap", {{"input_res", tonemap_input}, {"output_res", "color_tonemapped"}})) {
             adopt_default_pass(ph, p);
         }
-        for (const char* resource : {"empty", "skybox", "color", "color_tonemapped"}) {
+        const auto add_color = [&](const char* name, int samples) {
             ResourceSpec spec;
-            spec.resource = resource;
+            spec.resource = name;
             spec.format = "rgba16f";
+            spec.samples = samples;
             pipeline.add_spec(spec);
-        }
+        };
+        for (const char* name : {"empty", "skybox", "color"})
+            add_color(name, use_msaa ? 4 : 1);
+        if (use_msaa)
+            add_color(tonemap_input, 1);
+        add_color("color_tonemapped", 1);
         pipeline.set_color_export("color_tonemapped", ColorContent::DisplayLinear);
         return ph;
 #endif

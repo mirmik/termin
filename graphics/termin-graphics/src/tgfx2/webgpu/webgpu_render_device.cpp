@@ -653,6 +653,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         caps_.supports_geometry_shaders = false;
         caps_.supports_timestamp_queries = false;
         caps_.supports_multisample_resolve = true;
+        caps_.supports_hdr_msaa4 = true;
         caps_.supports_dynamic_uniform_offsets = false;
         caps_.supports_storage_textures = false;
         caps_.max_color_attachments = 4;
@@ -947,7 +948,17 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             return;
         }
         if (src->desc.sample_count != 1) {
-            fail("shader blit requires a single-sample source texture");
+            if (src_rect.width() != static_cast<int>(src->desc.width) ||
+                src_rect.height() != static_cast<int>(src->desc.height) ||
+                dst_rect.width() != static_cast<int>(dst->desc.width) ||
+                dst_rect.height() != static_cast<int>(dst->desc.height))
+                fail("MSAA resolve requires full attachment rectangles");
+            auto commands = create_command_list();
+            commands->begin();
+            commands->copy_texture(src_handle, dst_handle);
+            commands->end();
+            submit(*commands);
+            return;
         }
         if (!linearly_filterable_color_format(src->desc.format)) {
             fail("shader blit source format does not support portable linear filtering");

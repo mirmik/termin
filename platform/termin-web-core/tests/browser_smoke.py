@@ -741,6 +741,28 @@ def dispatch_gesture(devtools: DevToolsSocket, touch: bool, start: tuple, *moves
             "type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0, "clickCount": 1})
 
 
+def check_lamp_silhouette(devtools: DevToolsSocket, center: tuple[float, float], radius: float) -> dict:
+    # Each horizontal scanline crosses only the bulb's left edge, from sky to lit glass.
+    # Capture at native device resolution: shrinking the screenshot would antialias it.
+    cx, cy = center
+    clip = {"x": round(cx - 1.45 * radius), "y": round(cy - 0.65 * radius),
+            "width": round(1.05 * radius), "height": round(1.3 * radius), "scale": 1}
+    shot = devtools.call("Page.captureScreenshot", {"format": "png", "clip": clip})
+    _, height, channels, rows = decode_png(base64.b64decode(shot["data"]))
+    partial = 0
+    for row in rows:
+        # Use the channel with most contrast and measure relative to this row's
+        # endpoints. This also works with the different transfer curves of the backends.
+        c = max(range(3), key=lambda i: abs(row[i - channels] - row[i]))
+        background = row[c]
+        contrast = row[c - channels] - background
+        if abs(contrast) >= 32:
+            partial += any(0.12 < (v - background) / contrast < 0.72 for v in row[c::channels])
+    if partial < 0.20 * height:
+        raise RuntimeError(f"Lamp silhouette has partial pixel coverage on only {partial}/{height} rows")
+    return {"partially_covered_rows": partial, "sampled_rows": height}
+
+
 def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: str, *, touch: bool) -> dict:
     with offline_page(devtools, artifact) as url:
         devtools.call("Emulation.setDeviceMetricsOverride", {
@@ -754,8 +776,15 @@ def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: s
             wait_for_viewer(devtools, expected_url=url)
             if evaluate(devtools, "__terminViewer.host.graphicsBackend") != backend:
                 raise RuntimeError(f"Interactive scene did not start on {backend}")
-            x, y, width, height = evaluate(devtools, """(() => {
-                const r = document.querySelector('canvas').getBoundingClientRect();
+            x, y, width, height = evaluate(devtools, """(async () => {
+                // Pixel-align the canvas so the compositor cannot smooth a single-sample frame.
+                const canvas = document.querySelector('canvas');
+                const box = canvas.getBoundingClientRect();
+                Object.assign(canvas.style, {position:'relative',
+                    left:(Math.round(box.x)-box.x)+'px', top:(Math.round(box.y)-box.y)+'px',
+                    width:Math.round(box.width)+'px', height:Math.round(box.height)+'px'});
+                await __terminViewer.host.waitForFrames(__terminViewer.host.frameCount()+3);
+                const r = canvas.getBoundingClientRect();
                 return [r.x, r.y, r.width, r.height];
             })()""")
             cx, cy = x + width / 2, y + height / 2
@@ -794,6 +823,7 @@ def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: s
 
             state(True, True)
             lit = sphere_pixels()
+            silhouette = check_lamp_silhouette(devtools, amber, 0.23 * pixels_per_unit)
             fw, fh, channels, before_rows = lamp_frame()
             lamp_colors = []
             for px, py in (amber, cyan):
@@ -853,7 +883,7 @@ def check_interactive_scene(devtools: DevToolsSocket, artifact: Path, backend: s
                     requested = event["params"]["request"]["url"]
                     if requested != url and not requested.startswith(("data:", "blob:")):
                         raise RuntimeError(f"Standalone scene requested another file: {requested[:200]}")
-            return {"touch": touch, "sphere_samples": len(lit), "amber_darkened": changed_amber,
+            return {"touch": touch, "silhouette": silhouette, "sphere_samples": len(lit), "amber_darkened": changed_amber,
                     "cyan_darkened": changed_cyan, "orbit_changed": changed_orbit, "picked_after_orbit": lamp}
         finally:
             devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": False})

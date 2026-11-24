@@ -615,13 +615,13 @@ namespace tgfx {
         glGenFramebuffers(1, &fbo_draw);
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo_read);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, attach, s->target, s->gl_id, 0);
+        s->attach(GL_READ_FRAMEBUFFER, attach);
         if (!depth_copy) {
             glReadBuffer(GL_COLOR_ATTACHMENT0);
         }
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo_draw);
-        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, attach, d->target, d->gl_id, 0);
+        d->attach(GL_DRAW_FRAMEBUFFER, attach);
         if (!depth_copy) {
             GLenum draw_buf = GL_COLOR_ATTACHMENT0;
             glDrawBuffers(1, &draw_buf);

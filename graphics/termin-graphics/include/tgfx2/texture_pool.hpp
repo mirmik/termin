@@ -13,6 +13,9 @@ namespace tgfx {
 
     class IRenderDevice;
 
+    TGFX2_API TextureUsage render_target_texture_usage(const IRenderDevice& device, uint32_t samples,
+                                                       TextureUsage attachment);
+
     struct TGFX2_TYPE_API TexturePoolEntry {
         std::string key;
         TextureDesc desc;

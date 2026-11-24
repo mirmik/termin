@@ -127,7 +127,8 @@ namespace termin {
 
     tc_pipeline_handle RenderingManager::create_pipeline(const std::string& name) {
         if (name == "(Default)" || name == "Default" || name.empty()) {
-            return make_default_pipeline();
+            const auto* device = render_engine_ ? render_engine_->tgfx2_device() : nullptr;
+            return rendering_manager_detail::make_default_pipeline(device);
         }
         if (pipeline_factory_) {
             return pipeline_factory_(name);
@@ -228,7 +229,7 @@ namespace termin {
     }
 
     tc_pipeline_handle RenderingManager::make_default_pipeline() {
-        return rendering_manager_detail::make_default_pipeline();
+        return rendering_manager_detail::make_default_pipeline(nullptr);
     }
 
     void RenderingManager::set_display_removed_callback(DisplayRemovedCallback callback) {

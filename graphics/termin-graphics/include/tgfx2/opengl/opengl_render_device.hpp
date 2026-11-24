@@ -40,6 +40,13 @@ namespace tgfx {
         // destroyed. Used by register_external_texture() to wrap existing GL
         // textures as tgfx2 handles for interop during the Phase 2 migration.
         bool external = false;
+
+        void attach(GLenum framebuffer, GLenum attachment) const {
+            if (target == GL_RENDERBUFFER)
+                glFramebufferRenderbuffer(framebuffer, attachment, target, gl_id);
+            else
+                glFramebufferTexture2D(framebuffer, attachment, target, gl_id, 0);
+        }
     };
 
     struct GLSampler {
@@ -123,7 +130,7 @@ namespace tgfx {
 
     class TGFX2_TYPE_API OpenGLRenderDevice : public IRenderDevice {
     private:
-        // FBO cache key: sorted vector of (GL attachment enum, GL texture id).
+        // Logical handles distinguish objects from the texture and renderbuffer namespaces.
         using FBOKey = std::vector<std::pair<GLenum, GLuint>>;
 
         HandlePool<GLBuffer> buffers_;
@@ -273,7 +280,7 @@ namespace tgfx {
         }
 
         // Get or create an FBO for the given attachment combination.
-        // Key: sorted list of (attachment_point, texture_gl_id).
+        // Key: sorted list of (attachment_point, texture handle id).
         // Returns GL FBO id. FBO 0 = default framebuffer (when no textures specified).
         GLuint get_or_create_fbo(const RenderPassDesc& pass);
 

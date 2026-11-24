@@ -1,6 +1,6 @@
-import createTerminWebCore from "./termin_web_core.mjs?v=20261124-picking1";
+import createTerminWebCore from "./termin_web_core.mjs?v=20261124-msaa1";
 
-export const TERMIN_WEB_ASSET_REVISION = "20261124-picking1";
+export const TERMIN_WEB_ASSET_REVISION = "20261124-msaa1";
 
 export function webAssetUrl(file, relativePath = file) {
     const embedded = globalThis.document?.getElementById(`termin-web-asset-${file}`);

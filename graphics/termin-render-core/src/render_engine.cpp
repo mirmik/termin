@@ -625,8 +625,6 @@ namespace termin {
                     }
                 }
 
-                tgfx::TextureUsage usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment |
-                                           tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
                 tgfx::PixelFormat color_format = resolve_fbo_color_format(format, *extent.target, *device);
                 tgfx::TextureDesc texture_desc;
                 texture_desc.width = static_cast<uint32_t>(extent.width);
@@ -635,7 +633,7 @@ namespace termin {
                 texture_desc.array_layers =
                     static_cast<uint32_t>(spec && spec->array_layers > 0 ? spec->array_layers : 1);
                 texture_desc.sample_count = static_cast<uint32_t>(spec && spec->samples > 0 ? spec->samples : 1);
-                texture_desc.usage = usage;
+                texture_desc.usage = tgfx::render_target_texture_usage(*device, texture_desc.sample_count, tgfx::TextureUsage::ColorAttachment);
                 auto direct_color = direct_color_allocations.find(canon);
                 if (direct_color != direct_color_allocations.end()) {
                     pipeline_cache.texture_pool.erase(canon);
@@ -660,8 +658,6 @@ namespace termin {
 
             if (resource_type == "depth_texture" || resource_type == "multiview_depth_texture") {
                 const ResolvedResourceExtent& extent = resolved_resource_extents.at(canon);
-                tgfx::TextureUsage usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::DepthStencilAttachment |
-                                           tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
                 tgfx::TextureDesc texture_desc;
                 texture_desc.width = static_cast<uint32_t>(extent.width);
                 texture_desc.height = static_cast<uint32_t>(extent.height);
@@ -669,7 +665,7 @@ namespace termin {
                 texture_desc.array_layers =
                     static_cast<uint32_t>(spec && spec->array_layers > 0 ? spec->array_layers : 1);
                 texture_desc.sample_count = static_cast<uint32_t>(spec && spec->samples > 0 ? spec->samples : 1);
-                texture_desc.usage = usage;
+                texture_desc.usage = tgfx::render_target_texture_usage(*device, texture_desc.sample_count, tgfx::TextureUsage::DepthStencilAttachment);
                 if (!pipeline_cache.texture_pool.ensure(*device, canon, texture_desc)) {
                     tc::Log::error("RenderEngine::execute_pipeline: failed to allocate depth_texture '%s'", canon);
                     tc_profiler_end_section();

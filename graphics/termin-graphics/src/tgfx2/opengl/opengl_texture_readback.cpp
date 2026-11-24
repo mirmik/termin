@@ -39,6 +39,13 @@ namespace tgfx {
         };
     } // namespace
 
+    static bool can_read_directly(const GLTexture& texture) {
+        if (texture.desc.sample_count <= 1)
+            return true;
+        tc_log_error("OpenGL readback requires a resolved single-sample texture");
+        return false;
+    }
+
     static void flip_rows_in_place(float* data, uint32_t width, uint32_t height, uint32_t channels) {
         if (!data || width == 0 || height < 2 || channels == 0)
             return;
@@ -54,7 +61,7 @@ namespace tgfx {
     }
     bool OpenGLRenderDevice::read_texture_rgba_float(TextureHandle tex, float* out) {
         auto* t = get_texture(tex);
-        if (!t || !out)
+        if (!t || !out || !can_read_directly(*t))
             return false;
 
         GLint prev_read_fbo = 0;
@@ -85,7 +92,7 @@ namespace tgfx {
 
     bool OpenGLRenderDevice::read_texture_depth_float(TextureHandle tex, float* out) {
         auto* t = get_texture(tex);
-        if (!t || !out)
+        if (!t || !out || !can_read_directly(*t))
             return false;
 
         const DepthReadFramebuffer framebuffer(t->target, t->gl_id);
@@ -107,7 +114,7 @@ namespace tgfx {
 
     bool OpenGLRenderDevice::read_pixel_rgba8(TextureHandle tex, int x, int y, float out_rgba[4]) {
         auto* t = get_texture(tex);
-        if (!t || !out_rgba)
+        if (!t || !out_rgba || !can_read_directly(*t))
             return false;
 
         GLint prev_read_fbo = 0;
@@ -141,7 +148,7 @@ namespace tgfx {
 
     bool OpenGLRenderDevice::read_pixel_depth_float(TextureHandle tex, int x, int y, float* out_depth) {
         auto* t = get_texture(tex);
-        if (!t || !out_depth)
+        if (!t || !out_depth || !can_read_directly(*t))
             return false;
 
         const DepthReadFramebuffer framebuffer(t->target, t->gl_id);

@@ -235,6 +235,23 @@ namespace tgfx {
         if (!src || !dst || src->desc.format != dst->desc.format) {
             command_fail("texture copy requires valid equal-format textures");
         }
+        if (src->desc.sample_count > 1 || dst->desc.sample_count > 1) {
+            if (src->desc.sample_count <= 1 || dst->desc.sample_count != 1 ||
+                src->desc.width != dst->desc.width || src->desc.height != dst->desc.height ||
+                !has_flag(src->desc.usage, TextureUsage::ColorAttachment) ||
+                !has_flag(dst->desc.usage, TextureUsage::ColorAttachment))
+                command_fail("MSAA resolve requires matching color attachments and a single-sample destination");
+            RenderPassDesc pass;
+            ColorAttachmentDesc color;
+            color.texture = src_handle;
+            color.resolve_texture = dst_handle;
+            color.load = LoadOp::Load;
+            color.store = StoreOp::Store;
+            pass.colors.push_back(color);
+            begin_render_pass(pass);
+            end_render_pass();
+            return;
+        }
         wgpu::TexelCopyTextureInfo source;
         source.texture = src->object;
         wgpu::TexelCopyTextureInfo destination;

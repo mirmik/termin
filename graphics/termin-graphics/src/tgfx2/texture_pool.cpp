@@ -5,6 +5,13 @@
 #include <tcbase/tc_log.h>
 
 namespace tgfx {
+    TextureUsage render_target_texture_usage(const IRenderDevice& device, uint32_t samples, TextureUsage attachment) {
+        // Browser MSAA attachments are consumed via a single-sample resolve.
+        if (samples > 1 && (device.backend_type() == BackendType::WebGPU ||
+                            device.shader_artifact_target() == ShaderArtifactTarget::WebGL2))
+            return attachment;
+        return attachment | TextureUsage::Sampled | TextureUsage::CopySrc | TextureUsage::CopyDst;
+    }
 
     namespace {
 
@@ -173,8 +180,7 @@ namespace tgfx {
             color_desc.format = desc.color_format;
             color_desc.sample_count = static_cast<uint32_t>(desc.samples);
             color_desc.array_layers = static_cast<uint32_t>(desc.array_layers);
-            color_desc.usage =
-                TextureUsage::Sampled | TextureUsage::ColorAttachment | TextureUsage::CopySrc | TextureUsage::CopyDst;
+            color_desc.usage = render_target_texture_usage(device, color_desc.sample_count, TextureUsage::ColorAttachment);
             entry.color_tgfx2 = device.create_texture(color_desc);
             entry.owns_color = true;
         };
@@ -188,8 +194,7 @@ namespace tgfx {
             depth_desc.format = desc.depth_format;
             depth_desc.sample_count = static_cast<uint32_t>(desc.samples);
             depth_desc.array_layers = static_cast<uint32_t>(desc.array_layers);
-            depth_desc.usage = TextureUsage::Sampled | TextureUsage::DepthStencilAttachment | TextureUsage::CopySrc |
-                               TextureUsage::CopyDst;
+            depth_desc.usage = render_target_texture_usage(device, depth_desc.sample_count, TextureUsage::DepthStencilAttachment);
             entry.depth_tgfx2 = device.create_texture(depth_desc);
         };
 

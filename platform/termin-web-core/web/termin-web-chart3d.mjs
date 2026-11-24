@@ -1,5 +1,5 @@
-import {mountTerminChart, TerminWebChart} from "./termin-web-chart.mjs?v=20261124-picking1";
-import {canvasPoint, normalizedWheelDelta, TerminPointerPhase} from "./termin-web-input.mjs?v=20261124-picking1";
+import {mountTerminChart, TerminWebChart} from "./termin-web-chart.mjs?v=20261124-msaa1";
+import {canvasPoint, normalizedWheelDelta, TerminPointerPhase} from "./termin-web-input.mjs?v=20261124-msaa1";
 
 /** Mount an interactive Cartesian tcplot surface chart in a canvas sized by CSS. */
 export async function createTerminChart3D(canvas, options = {}) {

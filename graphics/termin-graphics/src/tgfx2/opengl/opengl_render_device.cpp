@@ -26,6 +26,7 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/html5_webgl.h>
 extern "C" void* tgfx_webgl2_get_proc_address(const char* name);
+extern "C" int tgfx_webgl2_supports_sample_count(GLenum format, GLint samples);
 #endif
 
 extern "C" {
@@ -145,6 +146,11 @@ namespace tgfx {
         TGFX_REQUIRE_WEBGL2_PROC(glGenFramebuffers);
         TGFX_REQUIRE_WEBGL2_PROC(glBindFramebuffer);
         TGFX_REQUIRE_WEBGL2_PROC(glFramebufferTexture2D);
+        TGFX_REQUIRE_WEBGL2_PROC(glGenRenderbuffers);
+        TGFX_REQUIRE_WEBGL2_PROC(glBindRenderbuffer);
+        TGFX_REQUIRE_WEBGL2_PROC(glRenderbufferStorageMultisample);
+        TGFX_REQUIRE_WEBGL2_PROC(glFramebufferRenderbuffer);
+        TGFX_REQUIRE_WEBGL2_PROC(glDeleteRenderbuffers);
         TGFX_REQUIRE_WEBGL2_PROC(glDrawBuffers);
         TGFX_REQUIRE_WEBGL2_PROC(glReadBuffer);
         TGFX_REQUIRE_WEBGL2_PROC(glClearBufferfv);
@@ -183,8 +189,12 @@ namespace tgfx {
     }
 
     static void release_texture(GLTexture& texture) {
-        if (texture.gl_id && !texture.external)
-            glDeleteTextures(1, &texture.gl_id);
+        if (texture.gl_id && !texture.external) {
+            if (texture.target == GL_RENDERBUFFER)
+                glDeleteRenderbuffers(1, &texture.gl_id);
+            else
+                glDeleteTextures(1, &texture.gl_id);
+        }
         texture.gl_id = 0;
     }
 
@@ -351,6 +361,10 @@ namespace tgfx {
         caps_.supports_geometry_shaders = gl_features_.supports_geometry_shaders;
         caps_.supports_timestamp_queries = gl_features_.supports_timestamp_queries;
         caps_.supports_multisample_resolve = true;
+#if defined(__EMSCRIPTEN__)
+        caps_.supports_hdr_msaa4 = tgfx_webgl2_supports_sample_count(GL_RGBA16F, 4) &&
+                                   tgfx_webgl2_supports_sample_count(GL_DEPTH_COMPONENT32F, 4);
+#endif
         caps_.supports_dynamic_uniform_offsets = false;
         caps_.supports_storage_textures = false;
     }
@@ -851,6 +865,29 @@ namespace tgfx {
 
         auto fmt = gl::to_gl_format(desc.format);
 
+        if (desc.sample_count > 1 && gl_features_.tier == GlFeatureTier::WebGL2) {
+            if (desc.mip_levels != 1 || has_flag(desc.usage, TextureUsage::Sampled)) {
+                tc_log_error("WebGL2 multisample renderbuffers must be resolved before sampling");
+                return {};
+            }
+            tex.target = GL_RENDERBUFFER;
+            GLint previous = 0;
+            glGetIntegerv(GL_RENDERBUFFER_BINDING, &previous);
+            glGenRenderbuffers(1, &tex.gl_id);
+            glBindRenderbuffer(GL_RENDERBUFFER, tex.gl_id);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, desc.sample_count, fmt.internal_format,
+                                             desc.width, desc.height);
+            const GLenum error = glGetError();
+            glBindRenderbuffer(GL_RENDERBUFFER, static_cast<GLuint>(previous));
+            if (error != GL_NO_ERROR) {
+                tc_log_error("WebGL2 multisample allocation failed: format=0x%x samples=%u size=%ux%u error=0x%x",
+                             fmt.internal_format, desc.sample_count, desc.width, desc.height, error);
+                glDeleteRenderbuffers(1, &tex.gl_id);
+                return {};
+            }
+            return {textures_.add(std::move(tex))};
+        }
+
         if (desc.sample_count > 1) {
             tex.target = GL_TEXTURE_2D_MULTISAMPLE;
             glGenTextures(1, &tex.gl_id);
@@ -1227,39 +1264,16 @@ namespace tgfx {
 
     void OpenGLRenderDevice::destroy(TextureHandle handle) {
         if (auto* tex = textures_.get(handle.id)) {
-            const GLuint deleted_gl_id = tex->gl_id;
-
             release_texture(*tex);
             textures_.remove(handle.id);
 
-            // Drop any FBO cache entry that referenced this GL texture id.
-            // Without this, a subsequent resize (PlotView*::ensure_offscreen_)
-            // destroys the old color/depth textures, creates new ones, and
-            // begin_pass may hit the old FBO cache entry — whose
-            // glFramebufferTexture2D attachment still points at the
-            // now-deleted texture object. OpenGL then silently renders into
-            // nothing (black screen) because the FBO is effectively
-            // incomplete or its attachments are dangling.
-            //
-            // External (non-owning) textures go through the same path —
-            // the GL object is preserved but any FBO attached to its id is
-            // still stale from tgfx2's point of view.
-            if (deleted_gl_id != 0) {
-                for (auto it = fbo_cache_.begin(); it != fbo_cache_.end();) {
-                    bool match = false;
-                    for (const auto& [attach_point, tex_id] : it->first) {
-                        if (tex_id == deleted_gl_id) {
-                            match = true;
-                            break;
-                        }
-                    }
-                    if (match) {
-                        if (it->second != 0)
-                            glDeleteFramebuffers(1, &it->second);
-                        it = fbo_cache_.erase(it);
-                    } else {
-                        ++it;
-                    }
+            for (auto it = fbo_cache_.begin(); it != fbo_cache_.end();) {
+                const auto& key = it->first;
+                if (std::any_of(key.begin(), key.end(), [handle](const auto& entry) { return entry.second == handle.id; })) {
+                    glDeleteFramebuffers(1, &it->second);
+                    it = fbo_cache_.erase(it);
+                } else {
+                    ++it;
                 }
             }
         }
@@ -1480,13 +1494,13 @@ namespace tgfx {
         for (size_t i = 0; i < pass.colors.size(); ++i) {
             auto* tex = get_texture(pass.colors[i].texture);
             if (tex) {
-                key.emplace_back(static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i), tex->gl_id);
+                key.emplace_back(static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i), pass.colors[i].texture.id);
             }
         }
         if (pass.has_depth) {
             auto* tex = get_texture(pass.depth.texture);
             if (tex) {
-                key.emplace_back(GL_DEPTH_ATTACHMENT, tex->gl_id);
+                key.emplace_back(GL_DEPTH_ATTACHMENT, pass.depth.texture.id);
             }
         }
 
@@ -1510,8 +1524,7 @@ namespace tgfx {
         for (size_t i = 0; i < pass.colors.size(); ++i) {
             auto* tex = get_texture(pass.colors[i].texture);
             if (tex) {
-                glFramebufferTexture2D(
-                    GL_FRAMEBUFFER, static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i), tex->target, tex->gl_id, 0);
+                tex->attach(GL_FRAMEBUFFER, static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i));
                 has_color = true;
             }
         }
@@ -1519,7 +1532,7 @@ namespace tgfx {
         if (pass.has_depth) {
             auto* tex = get_texture(pass.depth.texture);
             if (tex) {
-                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, tex->target, tex->gl_id, 0);
+                tex->attach(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT);
             }
         }
 
@@ -1683,12 +1696,12 @@ namespace tgfx {
         glGenFramebuffers(2, fbos);
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, fbos[0]);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, src->target, src->gl_id, 0);
+        src->attach(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
         GLenum read_status = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbos[1]);
-        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dst->target, dst->gl_id, 0);
+        dst->attach(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0);
         gl_web_compat::set_draw_buffer(GL_COLOR_ATTACHMENT0);
         GLenum draw_status = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
 
@@ -1765,7 +1778,7 @@ namespace tgfx {
         GLuint fbo = 0;
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
-        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dst->target, dst->gl_id, 0);
+        dst->attach(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0);
         if (glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             tc_log_error("OpenGLRenderDevice::clear_texture: incomplete color framebuffer");
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(prev_draw));
@@ -1838,7 +1851,7 @@ namespace tgfx {
         GLuint read_fbo = 0;
         glGenFramebuffers(1, &read_fbo);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, src->target, src->gl_id, 0);
+        src->attach(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
 
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);

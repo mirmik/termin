@@ -56,6 +56,8 @@ namespace tgfx {
         bool supports_geometry_shaders = false;
         bool supports_timestamp_queries = false;
         bool supports_multisample_resolve = true;
+        // RGBA16F color with a D32F depth attachment, both at four samples.
+        bool supports_hdr_msaa4 = false;
         bool supports_dynamic_uniform_offsets = false;
         bool supports_storage_textures = false;
         bool supports_texture_arrays = false;

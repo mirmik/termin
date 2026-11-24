@@ -3,6 +3,16 @@
 #include <stdint.h>
 #include <string.h>
 
+int tgfx_webgl2_supports_sample_count(GLenum format, GLint samples) {
+    GLint counts[32] = {0};
+    glGetInternalformativ(GL_RENDERBUFFER, format, GL_SAMPLES, 32, counts);
+    for (int i = 0; i < 32 && counts[i] != 0; ++i) {
+        if (counts[i] == samples)
+            return 1;
+    }
+    return 0;
+}
+
 /*
  * Emscripten intentionally recommends static GLES linking. Its generic
  * getProcAddress table only contains functions otherwise retained by the
@@ -20,6 +30,7 @@ void* tgfx_webgl2_get_proc_address(const char* name) {
     TGFX_WEBGL2_PROC(glBindBufferBase);
     TGFX_WEBGL2_PROC(glBindBufferRange);
     TGFX_WEBGL2_PROC(glBindFramebuffer);
+    TGFX_WEBGL2_PROC(glBindRenderbuffer);
     TGFX_WEBGL2_PROC(glBindSampler);
     TGFX_WEBGL2_PROC(glBindTexture);
     TGFX_WEBGL2_PROC(glBindVertexArray);
@@ -41,6 +52,7 @@ void* tgfx_webgl2_get_proc_address(const char* name) {
     TGFX_WEBGL2_PROC(glCullFace);
     TGFX_WEBGL2_PROC(glDeleteBuffers);
     TGFX_WEBGL2_PROC(glDeleteFramebuffers);
+    TGFX_WEBGL2_PROC(glDeleteRenderbuffers);
     TGFX_WEBGL2_PROC(glDeleteProgram);
     TGFX_WEBGL2_PROC(glDeleteSamplers);
     TGFX_WEBGL2_PROC(glDeleteShader);
@@ -61,9 +73,11 @@ void* tgfx_webgl2_get_proc_address(const char* name) {
     TGFX_WEBGL2_PROC(glFinish);
     TGFX_WEBGL2_PROC(glFlush);
     TGFX_WEBGL2_PROC(glFramebufferTexture2D);
+    TGFX_WEBGL2_PROC(glFramebufferRenderbuffer);
     TGFX_WEBGL2_PROC(glFrontFace);
     TGFX_WEBGL2_PROC(glGenBuffers);
     TGFX_WEBGL2_PROC(glGenFramebuffers);
+    TGFX_WEBGL2_PROC(glGenRenderbuffers);
     TGFX_WEBGL2_PROC(glGenSamplers);
     TGFX_WEBGL2_PROC(glGenTextures);
     TGFX_WEBGL2_PROC(glGenVertexArrays);
@@ -85,6 +99,7 @@ void* tgfx_webgl2_get_proc_address(const char* name) {
     TGFX_WEBGL2_PROC(glPolygonOffset);
     TGFX_WEBGL2_PROC(glReadBuffer);
     TGFX_WEBGL2_PROC(glReadPixels);
+    TGFX_WEBGL2_PROC(glRenderbufferStorageMultisample);
     TGFX_WEBGL2_PROC(glSamplerParameterf);
     TGFX_WEBGL2_PROC(glSamplerParameteri);
     TGFX_WEBGL2_PROC(glScissor);
