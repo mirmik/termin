@@ -54,6 +54,7 @@ extern "C" {
 #include "web_chart2d.hpp"
 #include "web_chart3d.hpp"
 #include "web_render_shaders.hpp"
+#include "web_rigid_body_height_trace.hpp"
 #include "web_scene_pick.hpp"
 
 namespace {
@@ -139,6 +140,7 @@ namespace {
         std::unique_ptr<termin::EngineCore> engine;
         termin::runtime::RuntimePackageLoadResult package;
         std::unordered_map<uint32_t, WebButtonBinding> button_bindings;
+        termin::Entity height_trace_entity;
         std::vector<termin::SceneKey> registered_scene_keys;
         std::vector<tc_viewport_handle> viewports;
         std::vector<tc_viewport_input_manager*> viewport_input_managers;
@@ -149,6 +151,22 @@ namespace {
     };
 
     std::unique_ptr<WebPlayerState> web_player;
+
+    termin::RigidBodyComponent& find_rigid_body(const char* uuid) {
+        if (!web_player || !web_player->engine || !web_player->package.scene.valid())
+            throw std::runtime_error("there is no active browser scene");
+        auto* pool = tc_scene_entity_pool(web_player->package.scene.handle());
+        const auto id = uuid && *uuid ? tc_entity_pool_find_by_uuid(pool, uuid) : TC_ENTITY_ID_INVALID;
+        if (!tc_entity_id_valid(id)) throw std::runtime_error("rigid body entity UUID was not found in the scene");
+        auto* component = termin::Entity(pool, id).get_component<termin::RigidBodyComponent>();
+        if (!component) throw std::runtime_error("entity has no RigidBodyComponent");
+        return *component;
+    }
+
+    termin::web::RigidBodyHeightTrace* active_height_trace() {
+        if (!web_player || !web_player->height_trace_entity.valid()) return nullptr;
+        return web_player->height_trace_entity.get_component<termin::web::RigidBodyHeightTrace>();
+    }
 
     tc_widget* find_ui_widget(const char* uuid, const char* name) {
         if (!web_player || !web_player->engine || !web_player->package.scene.valid())
@@ -202,6 +220,9 @@ namespace {
     int web_player_graphics_status = 0;
     std::string web_player_graphics_error;
     std::string web_host_error;
+    // A rejected probe is a synchronous caller error. The render loop separately
+    // monitors web_host_error for fatal simulation/render failures.
+    std::string web_height_trace_error;
     std::string web_visual_scene_error;
     std::string web_chart_error;
     std::shared_ptr<termin::runtime::RuntimePackageReader> web_pending_package_reader;
@@ -971,14 +992,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_set_light_enabled(const char
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_reset_rigid_body(const char* uuid) {
     try {
-        if (!web_player || !web_player->engine || !web_player->package.scene.valid())
-            throw std::runtime_error("there is no active browser scene");
-        tc_entity_pool* pool = tc_scene_entity_pool(web_player->package.scene.handle());
-        const auto id = uuid && *uuid ? tc_entity_pool_find_by_uuid(pool, uuid) : TC_ENTITY_ID_INVALID;
-        if (!tc_entity_id_valid(id)) throw std::runtime_error("rigid body entity UUID was not found in the scene");
-        auto* body = termin::Entity(pool, id).get_component<termin::RigidBodyComponent>();
-        if (!body) throw std::runtime_error("entity has no RigidBodyComponent");
-        if (!body->reset_to_initial_pose()) throw std::runtime_error("rigid body has not been initialized");
+        if (!find_rigid_body(uuid).reset_to_initial_pose()) throw std::runtime_error("rigid body has not been initialized");
         web_player->engine->scene_manager.request_render();
         return 1;
     } catch (const std::exception& e) {
@@ -986,6 +1000,50 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_reset_rigid_body(const char*
         tc_log_error("TerminWebHost reset rigid body '%s': %s", uuid ? uuid : "", web_host_error.c_str());
         return 0;
     }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_record_rigid_body_height(const char* uuid, int max_samples) {
+    try {
+        if (max_samples < 1) throw std::invalid_argument("expected a positive height trace sample limit");
+        auto& component = find_rigid_body(uuid);
+        const auto* body = component.rigid_body();
+        if (!body) throw std::runtime_error("rigid body has not been initialized");
+        auto owner = component.entity();
+        auto* previous = active_height_trace();
+        const double height = body->position().z;
+        if (previous && web_player->height_trace_entity == owner) {
+            previous->begin(height, max_samples);
+        } else {
+            auto trace = std::make_unique<termin::web::RigidBodyHeightTrace>();
+            trace->begin(height, max_samples);
+            if (!owner.add_component_ptr_checked(trace->c_component()))
+                throw std::runtime_error("could not attach physics height trace");
+            trace.release(); // The entity retained the component.
+            if (previous) web_player->height_trace_entity.remove_component(previous);
+            web_player->height_trace_entity = owner;
+        }
+        return 1;
+    } catch (const std::exception& e) {
+        web_height_trace_error = e.what();
+        tc_log_error("TerminWebHost record rigid body height '%s': %s", uuid ? uuid : "", web_height_trace_error.c_str());
+        return 0;
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_read_rigid_body_height_trace(double* output, int capacity) {
+    try {
+        auto* trace = active_height_trace();
+        if (!trace) throw std::runtime_error("no active rigid body height trace");
+        return trace->read(output, capacity);
+    } catch (const std::exception& e) {
+        web_height_trace_error = e.what();
+        tc_log_error("TerminWebHost read rigid body height trace: %s", web_height_trace_error.c_str());
+        return -1;
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_host_height_trace_error() {
+    return web_height_trace_error.c_str();
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE const char*

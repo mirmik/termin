@@ -55,7 +55,7 @@ target_link_options(termin_web_core PRIVATE
     "-sMIN_WEBGL_VERSION=2"
     "-sMAX_WEBGL_VERSION=2"
     "-sFULL_ES3=1"
-    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_termin_web_core_smoke','_termin_web_core_lifecycle_smoke','_termin_web_core_shutdown','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_backend','_termin_web_host_graphics_error','_termin_web_host_set_package_blob','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_pick_entity','_termin_web_host_set_light_enabled','_termin_web_host_reset_rigid_body','_termin_web_host_set_ui_widget_enabled','_termin_web_host_bind_ui_button','_termin_web_host_unbind_ui_button','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_visual_scene_render','_termin_web_visual_scene_error','_termin_web_chart2d_create','_termin_web_chart2d_set_data','_termin_web_chart2d_set_range','_termin_web_chart2d_resize','_termin_web_chart2d_pointer','_termin_web_chart2d_wheel','_termin_web_chart2d_range','_termin_web_chart2d_render','_termin_web_chart2d_destroy','_termin_web_chart2d_error','_termin_web_chart3d_create','_termin_web_chart3d_set_surface','_termin_web_chart3d_resize','_termin_web_chart3d_pointer','_termin_web_chart3d_wheel','_termin_web_chart3d_fit','_termin_web_chart3d_reset','_termin_web_chart3d_camera','_termin_web_chart3d_render','_termin_web_chart3d_destroy','_termin_web_chart3d_error','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
+    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_termin_web_core_smoke','_termin_web_core_lifecycle_smoke','_termin_web_core_shutdown','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_backend','_termin_web_host_graphics_error','_termin_web_host_set_package_blob','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_pick_entity','_termin_web_host_set_light_enabled','_termin_web_host_reset_rigid_body','_termin_web_host_record_rigid_body_height','_termin_web_host_read_rigid_body_height_trace','_termin_web_host_height_trace_error','_termin_web_host_set_ui_widget_enabled','_termin_web_host_bind_ui_button','_termin_web_host_unbind_ui_button','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_visual_scene_render','_termin_web_visual_scene_error','_termin_web_chart2d_create','_termin_web_chart2d_set_data','_termin_web_chart2d_set_range','_termin_web_chart2d_resize','_termin_web_chart2d_pointer','_termin_web_chart2d_wheel','_termin_web_chart2d_range','_termin_web_chart2d_render','_termin_web_chart2d_destroy','_termin_web_chart2d_error','_termin_web_chart3d_create','_termin_web_chart3d_set_surface','_termin_web_chart3d_resize','_termin_web_chart3d_pointer','_termin_web_chart3d_wheel','_termin_web_chart3d_fit','_termin_web_chart3d_reset','_termin_web_chart3d_camera','_termin_web_chart3d_render','_termin_web_chart3d_destroy','_termin_web_chart3d_error','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
     "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','FS','ccall','getExceptionMessage','HEAPU8']"
 )
 set_target_properties(termin_web_core PROPERTIES
@@ -255,6 +255,7 @@ function(termin_web_scene_demo name page package)
         COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_HTML_PACKER}"
             "${source}" "${output}" --scene-package "${package}"
         DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${TERMIN_WEB_HTML_LOADER}" "${package}" "${source}"
+            ${ARGN}
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs"
@@ -263,7 +264,9 @@ function(termin_web_scene_demo name page package)
     add_dependencies(termin_web_${name}_scene termin_web_demo_packages)
 endfunction()
 termin_web_scene_demo(interactive Termin-InteractiveScene "${TERMIN_WEB_INTERACTIVE_PACKAGE}")
-termin_web_scene_demo(physics Termin-PhysicsScene "${TERMIN_WEB_PHYSICS_PACKAGE}")
+termin_web_scene_demo(physics Termin-PhysicsScene "${TERMIN_WEB_PHYSICS_PACKAGE}"
+    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart2d.mjs"
+    "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart.mjs")
 termin_web_scene_demo(ui Termin-UiScene "${TERMIN_WEB_UI_PACKAGE}")
 add_custom_target(termin_web_standalone_demos)
 add_dependencies(termin_web_standalone_demos

@@ -381,6 +381,37 @@ export class TerminWebHost {
         if (!success) throw new Error(this.module.UTF8ToString(this.module._termin_web_host_error()) || "Could not reset rigid body");
     }
 
+    /** Sample the body's world-space centre-of-mass Z after each fixed physics step.
+     * The initial point is at t=0. Starting another measurement replaces the previous trace. */
+    recordRigidBodyHeight(uuid, maxSamples) {
+        if (typeof uuid !== "string" || !uuid) throw new TypeError("Expected a rigid body entity UUID");
+        // Two Float64 values per point must fit in a wasm32 allocation.
+        if (!Number.isSafeInteger(maxSamples) || maxSamples < 1 ||
+                maxSamples > Math.floor(0xffffffff / (2 * Float64Array.BYTES_PER_ELEMENT))) {
+            throw new RangeError("Invalid rigid body height trace sample limit");
+        }
+        const ok = this.module.ccall("termin_web_host_record_rigid_body_height", "number",
+            ["string", "number"], [uuid, maxSamples]);
+        if (!ok) throw new Error(this.module.UTF8ToString(this.module._termin_web_host_height_trace_error()));
+    }
+
+    /** Return a JS-owned snapshot with times in simulation seconds and heights in world units. */
+    readRigidBodyHeightTrace() {
+        const module = this.module;
+        const count = module._termin_web_host_read_rigid_body_height_trace(0, 0);
+        if (count < 0) throw new Error(module.UTF8ToString(module._termin_web_host_height_trace_error()));
+        const pointer = module._malloc(count * 2 * Float64Array.BYTES_PER_ELEMENT);
+        if (!pointer) throw new Error("Could not allocate rigid body height trace buffer");
+        try {
+            if (module._termin_web_host_read_rigid_body_height_trace(pointer, count) < 0)
+                throw new Error(module.UTF8ToString(module._termin_web_host_height_trace_error()));
+            const values = new Float64Array(module.HEAPU8.buffer, pointer, count * 2).slice();
+            return {times: values.subarray(0, count), heights: values.subarray(count)};
+        } finally {
+            module._free(pointer);
+        }
+    }
+
     #callUiWidget(operation, entityUuid, widgetName, value) {
         if (!this.uiButtonListeners) throw new Error("A rendered scene must be loaded first");
         if (typeof entityUuid !== "string" || !entityUuid || typeof widgetName !== "string" || !widgetName) {

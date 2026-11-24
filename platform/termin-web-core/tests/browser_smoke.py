@@ -442,13 +442,13 @@ def evaluate(devtools: DevToolsSocket, expression: str):
     return response["result"].get("value")
 
 
-def chart_screenshot(devtools: DevToolsSocket, width_fraction: float = 1.0) -> tuple[dict, bytes]:
+def chart_screenshot(devtools: DevToolsSocket, width_fraction: float = 1.0, *, selector: str = "canvas") -> tuple[dict, bytes]:
     # Synchronize with a scheduled chart redraw and Chromium's compositor.
     evaluate(devtools, "new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))")
-    bounds = evaluate(devtools, """(() => {
-        const c = document.querySelector('canvas'), r = c.getBoundingClientRect();
-        return {x:r.x, y:r.y, width:r.width, height:r.height, bufferWidth:c.width, bufferHeight:c.height};
-    })()""")
+    bounds = evaluate(devtools, f"""(() => {{
+        const c = document.querySelector({json.dumps(selector)}), r = c.getBoundingClientRect();
+        return {{x:r.x, y:r.y, width:r.width, height:r.height, bufferWidth:c.width, bufferHeight:c.height}};
+    }})()""")
     screenshot = devtools.call("Page.captureScreenshot", {
         "format": "png",
         "clip": {"x": round(bounds["x"] + bounds["width"] * (1 - width_fraction) / 2),
@@ -1015,7 +1015,7 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             # fixed 40 degree vertical field of view.
             row = evaluate(devtools, """(() => {
                 const {host} = __terminViewer;
-                const canvas = document.querySelector('canvas');
+                const canvas = document.getElementById('termin-canvas');
                 const hits = [];
                 for (let i = 0; i < 80; ++i) {
                     const y = (i + 0.5) / 80;
@@ -1031,7 +1031,7 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             return ball_height()
 
         def frame_probes():
-            _, png = chart_screenshot(devtools)
+            _, png = chart_screenshot(devtools, selector="#termin-canvas")
             w, h, channels, rows = decode_png(png)
             scale = h / (12 * math.tan(math.radians(20)))  # pixels per world unit at y = 0
 
@@ -1074,7 +1074,7 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
         if max(abs(a - b) for a, b in zip(before["ball"], expected, strict=True)) > 4:
             raise RuntimeError(f"Wrong displayed ball colour on {backend}: {before['ball']}, expected sRGB {expected}")
         initial_key = key_contribution(before)
-        bounds, png = chart_screenshot(devtools)
+        bounds, png = chart_screenshot(devtools, selector="#termin-canvas")
         w, h, channels, rows = decode_png(png)
         # Count bright lettering inside the native release button, excluding its border.
         sx, sy = w / bounds["width"], h / bounds["height"]
@@ -1084,23 +1084,53 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             raise RuntimeError(f"Missing native release caption on {backend}: {label_ink} bright pixels")
         release = (bounds["x"] + 86, bounds["y"] + 34)
 
+        def line_pixels():
+            _, png = chart_screenshot(devtools, selector="#height-chart")
+            width, _, channels, rows = decode_png(png)
+            # Only the tcplot line and its legend use the teal series colour.
+            return {(x, y) for y, row in enumerate(rows) for x in range(width)
+                    if row[x * channels + 1] > 120 and row[x * channels + 1] > row[x * channels] + 45
+                    and row[x * channels + 2] > row[x * channels] + 35}
+
+        def read_trace():
+            return evaluate(devtools, """(() => {
+                const {times, heights} = __terminViewer.host.readRigidBodyHeightTrace();
+                return [Array.from(times), Array.from(heights)];
+            })()""")
+
+        def check_new_measurement():
+            times, heights = read_trace()
+            if times != [0] or len(heights) != 1 or abs(heights[0] - initial) > 0.08:
+                raise RuntimeError(f"Expected just the initial ball height on {backend}: {times[:3]}, {heights[:3]}")
+
+        check_new_measurement()
+        empty_plot = line_pixels()
+
         # A ball reset must preserve the loaded package and its input subscriptions.
         evaluate(devtools, """(() => {
             globalThis.physicsMetrics = __terminViewer.host.metrics;
             globalThis.hudClicks = 0;
-            __terminViewer.host.onUiButtonClick('physics-hud', 'release', () => ++globalThis.hudClicks);
+            __terminViewer.host.onUiButtonClick('physics-hud', 'release', () => {
+                ++globalThis.hudClicks;
+                // Pause after both listeners and before the first physics frame.
+                if (hudClicks === 1) queueMicrotask(() => __terminViewer.host.stop());
+            });
         })()""")
         dispatch_gesture(devtools, False, release)
         evaluate(devtools, """(() => {
-            if (__terminViewer.host.state !== 'running' || document.getElementById('reset').disabled)
+            if (__terminViewer.host.state !== 'stopped' || document.getElementById('reset').disabled)
                 throw Error('Native release button did not start physics and enable the HTML reset');
-            __terminViewer.host.stop();
         })()""")
         falling = height_after(0.35)
         contact = height_after(0.25)
         rebound = height_after(0.30)
         resting = [height_after(1.0) for _ in range(5)]
         settled = resting[-1]
+        full_times, full_heights = read_trace()
+        if (len(full_times) != 301 or abs(full_times[-1] - 5) > 1e-5 or
+                len(full_heights) != len(full_times) or abs(full_heights[-1] - settled) > 0.1):
+            raise RuntimeError(f"The five-second measurement on {backend} has an unexpected endpoint: "
+                               f"{len(full_times)} samples, t={full_times[-1:]}, z={full_heights[-1:]}")
         after = frame_probes()
         settled_key = key_contribution(after)
         if not (abs(initial - 1.05) < 0.1 and initial - falling > 0.3 and
@@ -1133,6 +1163,7 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
         try:
             dispatch_gesture(devtools, True, reset)
             wait_for_preview("stopped")
+            check_new_measurement()
             restarted = height_after(0)
             if abs(initial - restarted) > 0.12:
                 raise RuntimeError(f"HTML reset did not suspend the ball on {backend}: {restarted}")
@@ -1140,16 +1171,39 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             for expected_clicks in (2, 3, 4):
                 dispatch_gesture(devtools, True, release)
                 wait_for_live_drop()
+                if expected_clicks == 2:
+                    deadline = time.monotonic() + 10
+                    while True:
+                        times, heights = read_trace()
+                        if times and times[-1] >= 1.1:
+                            break
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError(f"Height graph did not receive live physics steps on {backend}")
+                        time.sleep(0.04)
+                    if (len(times) != len(heights) or times[0] != 0 or
+                            any(abs(b - a - 1 / 60) > 1e-6 for a, b in zip(times, times[1:]))):
+                        raise RuntimeError(f"Height graph skipped a fixed physics step on {backend}: {times}")
+                    # Check independently picked positions against the recorded fixed steps.
+                    for seconds, picked in ((0, initial), (0.35, falling), (0.60, contact), (0.90, rebound)):
+                        if abs(heights[round(seconds * 60)] - picked) > 0.13:
+                            raise RuntimeError(f"Height graph differs from the falling ball at t={seconds} on {backend}")
+                    curve = line_pixels() - empty_plot
+                    if len(curve) < 45 or (max(y for _, y in curve) - min(y for _, y in curve)) < 30:
+                        raise RuntimeError(f"Live trajectory is missing from the chart on {backend}: {len(curve)} pixels")
                 if evaluate(devtools, "hudClicks") != expected_clicks:
                     raise RuntimeError(f"UI listener was lost or duplicated on {backend}")
                 dispatch_gesture(devtools, True, reset)
                 wait_for_preview("stopped")
+                check_new_measurement()
+                if expected_clicks == 2 and len(line_pixels() - empty_plot) > 20:
+                    raise RuntimeError(f"The previous drop is still drawn after reset on {backend}")
                 if abs(ball_height() - initial) > 0.12 or not evaluate(
                         devtools, "physicsMetrics === __terminViewer.host.metrics"):
                     raise RuntimeError(f"Ball reset during live physics failed or reloaded the package on {backend}")
 
             devtools.call("Page.reload", {"ignoreCache": True})
             wait_for_preview()
+            check_new_measurement()
             if abs(ball_height() - initial) > 0.12:
                 raise RuntimeError(f"Reload did not restore the suspended ball on {backend}")
             dispatch_gesture(devtools, True, release)
@@ -1162,7 +1216,8 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             devtools.call("Emulation.setTouchEmulationEnabled", {"enabled": False})
         return {"initial": initial, "falling": falling, "contact": contact, "rebound": rebound,
                 "settled": settled, "restarted": restarted, "initial_key_blue": initial_key,
-                "settled_key_blue": settled_key, "initial_srgb": before, "release_label_pixels": label_ink}
+                "settled_key_blue": settled_key, "initial_srgb": before, "release_label_pixels": label_ink,
+                "live_trace_samples": len(times), "live_trace_pixels": len(curve)}
 
 
 def main() -> int:

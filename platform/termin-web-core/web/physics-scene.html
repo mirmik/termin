@@ -8,20 +8,29 @@
     :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; color: #f0f2f5; background: #13171c; }
     * { box-sizing: border-box; }
     body { margin: 0; }
-    main { max-width: 1040px; margin: 0 auto; padding: clamp(18px, 4vw, 42px); }
+    main { max-width: 1340px; margin: 0 auto; padding: clamp(16px, 3vw, 40px); }
     header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
     h1 { margin: 0; font-weight: 600; font-size: clamp(28px, 5vw, 44px); line-height: 1.1; letter-spacing: -.045em; }
     button { min-height: 44px; padding: 9px 19px; color: #221709; background: #f6bd65; border: 0; border-radius: 8px;
              font: inherit; font-weight: 600; cursor: pointer; }
     button:disabled { opacity: .5; cursor: default; }
     button:focus-visible, canvas:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+    .panels { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; }
+    h2 { font-size: 16px; font-weight: 600; margin: 0; }
+    .panel-heading { min-height: 32px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    #reading { font: 13px ui-monospace, monospace; color: #a6dfd1; white-space: nowrap; }
     .stage { position: relative; background: #07090b; border: 1px solid #343c45; border-radius: 12px; overflow: hidden; }
-    canvas { width: 100%; height: clamp(280px, min(62vh, 100vw), 600px); display: block; touch-action: none; cursor: grab; }
+    canvas { width: 100%; height: clamp(290px, min(48vh, 33vw), 440px); display: block; touch-action: none; cursor: grab; }
     canvas:active { cursor: grabbing; }
     #status { position: absolute; inset: 0; display: grid; place-content: center; margin: 0; padding: 1em;
               background: #13171ceb; text-align: center; overflow-wrap: anywhere; }
     #status[hidden] { display: none; }
-    #camera-hint { margin: 12px 0 0; color: #b2bdc7; font-size: 14px; }
+    .hint { margin: 10px 0 0; color: #b2bdc7; font-size: 14px; line-height: 1.5; }
+    @media (max-width: 760px) {
+        .panels { grid-template-columns: minmax(0, 1fr); }
+        canvas { height: clamp(245px, 60vw, 340px); }
+        #height-chart { height: clamp(220px, 55vw, 300px); }
+    }
 </style>
 </head>
 <body>
@@ -30,21 +39,36 @@
         <h1>Падающий шар</h1>
         <button type="button" id="reset" autocomplete="off" disabled>Вернуть шар</button>
     </header>
-    <div class="stage">
-        <canvas id="termin-canvas" width="800" height="480" tabindex="0" aria-label="Шар над платформой"
-                aria-describedby="camera-hint"></canvas>
-        <p id="status" role="status">Загрузка сцены…</p>
+    <div class="panels">
+        <section>
+            <div class="panel-heading"><h2>Сцена</h2></div>
+            <div class="stage">
+                <canvas id="termin-canvas" width="800" height="480" tabindex="0" aria-label="Шар над платформой"
+                        aria-describedby="camera-hint"></canvas>
+                <p id="status" role="status">Загрузка сцены…</p>
+            </div>
+            <p class="hint" id="camera-hint">Нажмите «Отпустить шар» внутри сцены. Чтобы повернуть камеру, перетащите фон.</p>
+        </section>
+        <section>
+            <div class="panel-heading"><h2 id="chart-heading">Высота центра шара</h2><span id="reading"></span></div>
+            <div class="stage"><canvas id="height-chart" aria-labelledby="chart-heading" aria-describedby="chart-hint"></canvas></div>
+            <p class="hint" id="chart-hint">Первые 5 секунд падения. Высота отсчитывается от нуля сцены, платформа расположена ниже.</p>
+        </section>
     </div>
-    <p id="camera-hint">Нажмите «Отпустить шар» внутри сцены. Перетаскивайте, чтобы вращать камеру. Щипок или колесо меняют масштаб.</p>
 </main>
 <script type="module">
 import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-srgb1";
 import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-srgb1";
 import {createTerminWebInputAdapter} from "./termin-web-input.mjs?v=20261124-srgb1";
+import {createTerminChart2D} from "./termin-web-chart2d.mjs?v=20261124-srgb1";
 
-const canvas = document.querySelector("canvas");
+const canvas = document.getElementById("termin-canvas");
 const status = document.getElementById("status");
 const reset = document.getElementById("reset");
+const reading = document.getElementById("reading");
+const range = {xMin: 0, xMax: 5, yMin: -1, yMax: 1.25};
+const sampleLimit = 301; // Initial position, then five seconds at the scene's fixed 60 Hz.
+const number = new Intl.NumberFormat("ru-RU", {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 function showError(error) {
     status.hidden = false;
@@ -56,9 +80,26 @@ function showError(error) {
 try {
     const core = await createTerminCore();
     const input = createTerminWebInputAdapter(core, {canvas}).attach();
+    let chart;
+    let plottedSamples = 0;
+    function updateChart() {
+        if (plottedSamples === sampleLimit) return;
+        const {times, heights} = host.readRigidBodyHeightTrace();
+        if (times.length === plottedSamples) return;
+        chart.setData(times, heights);
+        const last = times.length - 1;
+        reading.textContent = `${number.format(times[last])} с · ${number.format(heights[last])} м`;
+        plottedSamples = times.length;
+    }
+    function beginMeasurement() {
+        host.recordRigidBodyHeight("drop-ball", sampleLimit);
+        plottedSamples = 0;
+        updateChart();
+    }
     const host = createTerminWebHost(core, {
         canvas,
         graphicsBackend: new URL(location.href).searchParams.get("backend") ?? "auto",
+        onFrame: updateChart,
         onStateChange({state, error}) { if (state === "error") showError(error); },
     });
     globalThis.__terminViewer = {core, host, input};
@@ -84,6 +125,12 @@ try {
     }
 
     await host.load(scene, {autoStart: false});
+    chart = await createTerminChart2D(document.getElementById("height-chart"), {
+        packageUrl: scene, backend: host.graphicsBackend, range,
+        xLabel: "Время, с", yLabel: "Z, м", seriesName: "",
+    });
+    drawPreview();
+    beginMeasurement();
     host.onUiButtonClick("physics-hud", "release", () => {
         if (host.state !== "ready" && host.state !== "stopped") return;
         try {
@@ -99,10 +146,11 @@ try {
             host.resetRigidBody("drop-ball");
             host.setUiWidgetEnabled("physics-hud", "release", true);
             drawPreview();
+            chart.setRange(range);
+            beginMeasurement();
         } catch (error) { showError(error); }
     });
     input.setEnabled(true);
-    drawPreview();
     status.hidden = true;
 } catch (error) { showError(error); }
 </script>

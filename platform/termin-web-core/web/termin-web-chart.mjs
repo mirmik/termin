@@ -2,7 +2,6 @@ import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-sr
 import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-srgb1";
 
 const mounted = new WeakSet();
-const defaultPackage = webAssetUrl("graphics.trpkg");
 
 function viewport(canvas) {
     const rect = canvas.getBoundingClientRect();
@@ -38,7 +37,7 @@ export async function mountTerminChart(canvas, options, ChartType) {
         core = await createTerminCore();
         host = createTerminWebHost(core, {canvas, graphicsBackend: options.backend ?? "auto"});
         await host.initializeGraphics();
-        await host.loadPackageBlob(options.packageUrl ?? defaultPackage);
+        await host.loadPackageBlob(options.packageUrl ?? webAssetUrl("graphics.trpkg"));
         chart = new ChartType(canvas, core, host, initial.scale);
         chart.initialize(options);
         chart.attachInput();
