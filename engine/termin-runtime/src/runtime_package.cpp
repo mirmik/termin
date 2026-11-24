@@ -59,7 +59,7 @@ namespace termin::runtime {
         std::unordered_map<std::string, TcSpriteAsset> sprites;
         std::vector<TcSpriteAnimationClip> sprite_animation_clips;
         std::vector<TcPipelineTemplate> pipeline_templates;
-        std::vector<gui_native::TcUiDocumentAsset> ui_documents;
+        std::vector<gui_native::UiDocumentAssetLease> ui_documents;
     };
 
     namespace {
@@ -1738,14 +1738,13 @@ namespace termin::runtime {
                     tc_log_error("RuntimePackageLoader: %s", error.c_str());
                     return false;
                 }
-                gui_native::TcUiDocumentAsset asset =
-                    gui_native::TcUiDocumentAsset::declare_compiled_json(spec_text, uuid);
+                auto asset = gui_native::UiDocumentAssetLease::acquire_compiled_json(spec_text, uuid);
                 if (!asset.valid()) {
                     error = "failed to register native UI document '" + uuid + "'";
                     tc_log_error("RuntimePackageLoader: %s", error.c_str());
                     return false;
                 }
-                keepalive.ui_documents.push_back(asset);
+                keepalive.ui_documents.push_back(std::move(asset));
                 return true;
             }
 

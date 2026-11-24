@@ -15,6 +15,8 @@ namespace termin::gui_native {
         struct AssetSlot {
             std::uint32_t generation = 1;
             std::shared_ptr<const UiDocumentAsset> asset;
+            std::size_t leases = 0;
+            bool declared = false;
         };
 
         std::mutex& registry_mutex() {
@@ -32,16 +34,37 @@ namespace termin::gui_native {
             return uuids;
         }
 
-        std::shared_ptr<const UiDocumentAsset> resolve_locked(UiDocumentAssetHandle handle) {
-            const auto& slots = registry_slots();
+        AssetSlot* resolve_slot_locked(UiDocumentAssetHandle handle) {
+            auto& slots = registry_slots();
             if (handle.index >= slots.size()) {
-                return {};
+                return nullptr;
             }
-            const AssetSlot& slot = slots[handle.index];
-            if (slot.generation != handle.generation) {
-                return {};
+            AssetSlot& slot = slots[handle.index];
+            if (slot.generation != handle.generation || !slot.asset) {
+                return nullptr;
             }
-            return slot.asset;
+            return &slot;
+        }
+
+        std::shared_ptr<const UiDocumentAsset> resolve_locked(UiDocumentAssetHandle handle) {
+            const auto* slot = resolve_slot_locked(handle);
+            return slot ? slot->asset : nullptr;
+        }
+
+        void reset_slot_locked(AssetSlot& slot) {
+            slot.asset.reset();
+            slot.leases = 0;
+            slot.declared = false;
+            if (++slot.generation == 0) {
+                slot.generation = 1;
+            }
+        }
+
+        void retire_unowned_slot_locked(AssetSlot& slot) {
+            if (!slot.declared && slot.leases == 0) {
+                registry_uuids().erase(slot.asset->uuid());
+                reset_slot_locked(slot);
+            }
         }
 
         tc::trent encode_node(const UiScriptNode& node) {
@@ -169,33 +192,39 @@ namespace termin::gui_native {
                                                      std::move(description));
         }
 
-        TcUiDocumentAsset register_asset(std::shared_ptr<const UiDocumentAsset> asset) {
+        UiDocumentAssetHandle register_asset(std::shared_ptr<const UiDocumentAsset> asset, bool declared) {
             std::lock_guard lock(registry_mutex());
             auto& slots = registry_slots();
             auto& uuids = registry_uuids();
             const auto found = uuids.find(asset->uuid());
+            std::uint32_t index;
             if (found != uuids.end()) {
-                const AssetSlot& slot = slots[found->second];
+                index = found->second;
+                const AssetSlot& slot = slots[index];
                 if (!slot.asset || slot.asset->compiled_json(-1) != asset->compiled_json(-1)) {
                     tc_log_error("[gui-native-ui-asset] UUID collision for '%s'", asset->uuid().c_str());
                     return {};
                 }
-                return TcUiDocumentAsset(UiDocumentAssetHandle{found->second, slot.generation});
+            } else {
+                for (index = 0; index < slots.size(); ++index) {
+                    if (!slots[index].asset) {
+                        break;
+                    }
+                }
+                if (index == slots.size()) {
+                    slots.push_back({});
+                }
+                uuids.emplace(asset->uuid(), index);
+                slots[index].asset = std::move(asset);
             }
 
-            std::uint32_t index = 0;
-            for (; index < slots.size(); ++index) {
-                if (!slots[index].asset) {
-                    break;
-                }
-            }
-            if (index == slots.size()) {
-                slots.push_back({});
-            }
             AssetSlot& slot = slots[index];
-            slot.asset = std::move(asset);
-            uuids.emplace(slot.asset->uuid(), index);
-            return TcUiDocumentAsset(UiDocumentAssetHandle{index, slot.generation});
+            if (declared) {
+                slot.declared = true;
+            } else {
+                ++slot.leases;
+            }
+            return {index, slot.generation};
         }
 
     } // namespace
@@ -325,17 +354,12 @@ namespace termin::gui_native {
 
     bool TcUiDocumentAsset::remove() {
         std::lock_guard lock(registry_mutex());
-        const auto asset = resolve_locked(handle_);
-        if (!asset) {
+        auto* slot = resolve_slot_locked(handle_);
+        if (!slot || !slot->declared) {
             return false;
         }
-        registry_uuids().erase(asset->uuid());
-        AssetSlot& slot = registry_slots()[handle_.index];
-        slot.asset.reset();
-        ++slot.generation;
-        if (slot.generation == 0) {
-            slot.generation = 1;
-        }
+        slot->declared = false;
+        retire_unowned_slot_locked(*slot);
         handle_ = {};
         return true;
     }
@@ -346,8 +370,8 @@ namespace termin::gui_native {
                                                         const std::string& source) {
         const std::string diagnostic_source = source_identity;
         try {
-            return register_asset(
-                build_source_asset(std::move(uuid), std::move(name), std::move(source_identity), source, 1));
+            return TcUiDocumentAsset(register_asset(
+                build_source_asset(std::move(uuid), std::move(name), std::move(source_identity), source, 1), true));
         } catch (const std::exception& error) {
             tc_log_error("[gui-native-ui-asset] failed to declare source asset '%s': %s",
                          diagnostic_source.c_str(),
@@ -359,7 +383,7 @@ namespace termin::gui_native {
     TcUiDocumentAsset TcUiDocumentAsset::declare_compiled_json(const std::string& compiled_json,
                                                                const std::string& expected_uuid) {
         try {
-            return register_asset(build_compiled_asset(compiled_json, expected_uuid));
+            return TcUiDocumentAsset(register_asset(build_compiled_asset(compiled_json, expected_uuid), true));
         } catch (const std::exception& error) {
             tc_log_error("[gui-native-ui-asset] failed to declare compiled asset: %s", error.what());
             return {};
@@ -386,12 +410,49 @@ namespace termin::gui_native {
         std::lock_guard lock(registry_mutex());
         registry_uuids().clear();
         for (AssetSlot& slot : registry_slots()) {
-            slot.asset.reset();
-            ++slot.generation;
-            if (slot.generation == 0) {
-                slot.generation = 1;
-            }
+            reset_slot_locked(slot);
         }
+    }
+
+    UiDocumentAssetLease::~UiDocumentAssetLease() {
+        release();
+    }
+
+    UiDocumentAssetLease::UiDocumentAssetLease(UiDocumentAssetLease&& other) noexcept
+        : handle_(std::exchange(other.handle_, {})) {}
+
+    UiDocumentAssetLease& UiDocumentAssetLease::operator=(UiDocumentAssetLease&& other) noexcept {
+        if (this != &other) {
+            release();
+            handle_ = std::exchange(other.handle_, {});
+        }
+        return *this;
+    }
+
+    bool UiDocumentAssetLease::valid() const {
+        return handle_.valid();
+    }
+
+    UiDocumentAssetLease UiDocumentAssetLease::acquire_compiled_json(const std::string& compiled_json,
+                                                                    const std::string& expected_uuid) {
+        try {
+            return UiDocumentAssetLease(register_asset(build_compiled_asset(compiled_json, expected_uuid), false));
+        } catch (const std::exception& error) {
+            tc_log_error("[gui-native-ui-asset] failed to acquire compiled asset: %s", error.what());
+            return {};
+        }
+    }
+
+    void UiDocumentAssetLease::release() {
+        if (handle_.generation == 0) {
+            return;
+        }
+        std::lock_guard lock(registry_mutex());
+        if (auto* slot = resolve_slot_locked(handle_)) {
+            --slot->leases;
+            retire_unowned_slot_locked(*slot);
+        }
+        handle_ = {};
     }
 
 } // namespace termin::gui_native

@@ -891,7 +891,7 @@ TEST_CASE("RuntimePackageLoader releases compiled pipelines for a repeated runti
     resumed.destroy();
 }
 
-TEST_CASE("RuntimePackageLoader registers native UI documents before the scene") {
+TEST_CASE("RuntimePackageLoader owns native UI document registrations until the last package is destroyed") {
     const std::filesystem::path root = make_package_root();
     std::filesystem::create_directories(root / "ui");
     constexpr const char* ui_uuid = "runtime-native-ui";
@@ -905,7 +905,7 @@ root:
     const std::string compiled = termin::gui_native::TcUiDocumentAsset::compile_source_json(
         ui_uuid, "Runtime UI", "UI/runtime.uiscript", source);
     write_text(root / "ui" / "runtime.ui-document.json", compiled);
-    write_text(root / "manifest.json", with_entity_classification(R"({
+    const auto manifest = with_entity_classification(R"({
   "version": 4,
   "world_controller": null,
   "entry_scene": "Scenes/Main.scene",
@@ -916,7 +916,8 @@ root:
     {"type": "ui_document", "uuid": "runtime-native-ui", "name": "Runtime UI", "path": "ui/runtime.ui-document.json"}
   ]
 }
-)"));
+)");
+    write_text(root / "manifest.json", manifest);
     write_text(root / "scene.json", R"({
   "uuid": "runtime-native-ui-scene",
   "entities": []
@@ -936,7 +937,38 @@ root:
     CHECK_EQ(recipe->type_dependencies().size(), 1u);
     auto document = asset.instantiate();
     CHECK_EQ(document.root().type_name, "termin.gui.Panel");
-    termin::gui_native::TcUiDocumentAsset::clear_registry_for_tests();
+
+    auto overlapping = termin::runtime::load_runtime_package(root.string());
+    REQUIRE(overlapping.ok);
+    result.destroy();
+    CHECK(asset.valid());
+    overlapping.destroy();
+    CHECK_FALSE(asset.valid());
+    CHECK_FALSE(termin::gui_native::TcUiDocumentAsset::from_uuid(ui_uuid).valid());
+
+    const std::string changed = termin::gui_native::TcUiDocumentAsset::compile_source_json(
+        ui_uuid, "Updated Runtime UI", "UI/runtime.uiscript", source);
+    write_text(root / "ui" / "runtime.ui-document.json", changed);
+    auto updated = termin::runtime::load_runtime_package(root.string());
+    REQUIRE(updated.ok);
+    CHECK_EQ(termin::gui_native::TcUiDocumentAsset::from_uuid(ui_uuid).name(), "Updated Runtime UI");
+    CHECK_FALSE(asset.valid());
+    updated.destroy();
+
+    write_text(root / "manifest.json", replace_once(manifest, "\"path\": \"scene.json\"", "\"path\": \"missing.json\""));
+    CHECK_FALSE(termin::runtime::load_runtime_package(root.string()).ok);
+    CHECK_FALSE(termin::gui_native::TcUiDocumentAsset::from_uuid(ui_uuid).valid());
+
+    auto independent = termin::gui_native::TcUiDocumentAsset::declare_compiled_json(changed, ui_uuid);
+    REQUIRE(independent.valid());
+    CHECK_FALSE(termin::runtime::load_runtime_package(root.string()).ok);
+    CHECK(independent.valid());
+    write_text(root / "manifest.json", manifest);
+    auto borrowing = termin::runtime::load_runtime_package(root.string());
+    REQUIRE(borrowing.ok);
+    borrowing.destroy();
+    CHECK(independent.valid());
+    CHECK(independent.remove());
 }
 
 TEST_CASE("RuntimePackageLoader requires an explicit supported shader language") {

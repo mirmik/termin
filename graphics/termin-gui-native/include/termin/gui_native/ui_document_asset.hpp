@@ -95,4 +95,25 @@ namespace termin::gui_native {
         UiDocumentAssetHandle handle_;
     };
 
+    // Keeps a compiled registration alive for the lifetime of one package.
+    class TERMIN_GUI_NATIVE_API UiDocumentAssetLease {
+    public:
+        UiDocumentAssetLease() = default;
+        ~UiDocumentAssetLease();
+        UiDocumentAssetLease(UiDocumentAssetLease&& other) noexcept;
+        UiDocumentAssetLease& operator=(UiDocumentAssetLease&& other) noexcept;
+        UiDocumentAssetLease(const UiDocumentAssetLease&) = delete;
+        UiDocumentAssetLease& operator=(const UiDocumentAssetLease&) = delete;
+
+        bool valid() const;
+        static UiDocumentAssetLease acquire_compiled_json(const std::string& compiled_json,
+                                                          const std::string& expected_uuid);
+
+    private:
+        explicit UiDocumentAssetLease(UiDocumentAssetHandle handle) : handle_(handle) {}
+        void release();
+
+        UiDocumentAssetHandle handle_;
+    };
+
 } // namespace termin::gui_native
