@@ -1,22 +1,24 @@
 """Bundle a Termin web page with its ES modules, Wasm and runtime package."""
 import argparse
 import base64
-import json
+import gzip
 from pathlib import Path
 import re
 
 
 # The web modules use static imports of sibling .mjs files. Give each module a
-# bare specifier since a data: module has no base URL for relative imports.
+# bare specifier since a blob: module has no base URL for relative imports.
 STATIC_IMPORT = re.compile(
     r"""^([ \t]*(?:import|export)\s+(?:[\w\s{},*]+?\bfrom\s*)?)(["'])([^"'\s]+)\2""",
     re.MULTILINE,
 )
-MODULE_SCRIPT = re.compile(r'(<script type="module">)(.*?)(</script>)', re.DOTALL)
+MODULE_SCRIPT = re.compile(r'<script type="module">(.*?)</script>', re.DOTALL)
 
 
-def data_url(data, mime):
-    return f"data:{mime};base64," + base64.b64encode(data).decode("ascii")
+def packed_asset(name, mime, data):
+    packed = gzip.compress(data, compresslevel=9, mtime=0)
+    encoded = base64.b64encode(packed).decode("ascii")
+    return f'<script type="application/octet-stream" data-termin-asset="{name}" data-mime="{mime}">{encoded}</script>'
 
 
 def bundle(source, scene_package):
@@ -33,7 +35,7 @@ def bundle(source, scene_package):
         if key not in modules:
             modules[key] = None  # Static imports can form a cycle.
             code = STATIC_IMPORT.sub(resolve, (directory / name).read_text(encoding="utf-8"))
-            modules[key] = data_url(code.encode("utf-8"), "text/javascript")
+            modules[key] = packed_asset(key, "text/javascript", code.encode("utf-8"))
         return f"{prefix}{quote}{key}{quote}"
 
     html = source.read_text(encoding="utf-8")
@@ -41,22 +43,21 @@ def bundle(source, scene_package):
     if len(scripts) != 1:
         raise ValueError("expected one inline page entry module")
     script = scripts[0]
-    entry = STATIC_IMPORT.sub(resolve, script[2])
-    import_map = json.dumps({"imports": modules}, separators=(",", ":"))
-    embedded = []
+    entry = STATIC_IMPORT.sub(resolve, script[1])
+    embedded = list(modules.values())
     package_name = "scene.trpkg" if scene_package else "graphics.trpkg"
     assets = (
         ("termin_web_core.wasm", directory / "termin_web_core.wasm", "application/wasm"),
         (package_name, scene_package or directory / package_name, "application/octet-stream"),
     )
     for name, path, mime in assets:
-        url = data_url(path.read_bytes(), mime)
-        embedded.append(f'<link id="termin-web-asset-{name}" rel="termin-web-asset" href="{url}">')
-    embedded.append(f'<script type="importmap">{import_map}</script>')
+        embedded.append(packed_asset(name, mime, path.read_bytes()))
     if html.count("</head>") != 1 or html.index("</head>") > script.start():
         raise ValueError("expected the page entry module after </head>")
-    head = html[:script.start()].replace("</head>", "\n".join(embedded) + "\n</head>")
-    return head + script[1] + entry + script[3] + html[script.end():]
+    loader = Path(__file__).with_name("standalone-loader.js").read_text(encoding="utf-8")
+    embedded.append(f'<script type="text/plain" id="termin-web-entry">{entry}</script>')
+    embedded.append(f"<script>{loader}</script>")
+    return html[:script.start()] + "\n".join(embedded) + html[script.end():]
 
 
 def main():

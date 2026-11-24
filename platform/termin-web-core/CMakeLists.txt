@@ -171,10 +171,11 @@ add_dependencies(termin_web_core termin_web_graphics_package)
 
 set(TERMIN_WEB_CHART3D_PAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Termin-Chart3D.html")
 set(TERMIN_WEB_HTML_PACKER "${CMAKE_CURRENT_SOURCE_DIR}/tools/package_web_html.py")
+set(TERMIN_WEB_HTML_LOADER "${CMAKE_CURRENT_SOURCE_DIR}/tools/standalone-loader.js")
 add_custom_command(OUTPUT "${TERMIN_WEB_CHART3D_PAGE}"
     COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_HTML_PACKER}"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/chart3d.html" "${TERMIN_WEB_CHART3D_PAGE}"
-    DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${TERMIN_WEB_GRAPHICS_PACKAGE}"
+    DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${TERMIN_WEB_HTML_LOADER}" "${TERMIN_WEB_GRAPHICS_PACKAGE}"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/chart3d.html"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart3d.mjs"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart.mjs"
@@ -252,7 +253,7 @@ function(termin_web_scene_demo name page package)
     add_custom_command(OUTPUT "${output}"
         COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_HTML_PACKER}"
             "${source}" "${output}" --scene-package "${package}"
-        DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${package}" "${source}"
+        DEPENDS termin_web_core "${TERMIN_WEB_HTML_PACKER}" "${TERMIN_WEB_HTML_LOADER}" "${package}" "${source}"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs"

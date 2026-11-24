@@ -52,7 +52,11 @@ task package:web:scene -- path/to/package.trpkg Scene.html
 ```
 
 Откройте `Scene.html` с диска. Файл включает viewer, Wasm и переданный пакет
-с геометрией, материалами и шейдерами. Камера и источники света берутся из сцены.
+с геометрией, материалами и шейдерами. Упаковщик сжимает Wasm, пакет сцены и
+JavaScript-модули gzip перед встраиванием в HTML. При открытии страницы
+браузер распаковывает их в памяти через `DecompressionStream("gzip")`.
+Загрузчик использует локальные blob URL и при повторном запуске сцены.
+Камера и источники света берутся из сцены.
 Для прямого освещения добавьте `LightComponent` и материал, шейдер которого
 читает источники сцены. Для работы на обоих бэкендах экспортируйте шейдеры
 пакета для WebGPU и WebGL2. Упаковка в HTML сохраняет возможности web-профиля
@@ -278,6 +282,7 @@ Report schema v1 содержит:
 
 - версию Chromium, user agent и признаки secure context/WebGPU;
 - raw и gzip-размеры Wasm/ESM/host/input/viewer artifacts;
+- размеры автономных HTML-файлов в байтах в `artifacts.standalone_html_bytes`;
 - число файлов, raw/gzip-размер directory fixture и отдельный размер
   deterministic `package.trpkg`;
 - package fetch, graphics init, native load, startup, first-frame и frame-time

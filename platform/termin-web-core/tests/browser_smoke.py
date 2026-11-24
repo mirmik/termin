@@ -68,6 +68,11 @@ def artifact_measurements(output_directory: str) -> dict:
         "artifacts": primary,
         "artifact_bytes": sum(item["bytes"] for item in primary),
         "artifact_gzip_bytes": sum(item["gzip_bytes"] for item in primary),
+        "standalone_html_bytes": {
+            name: (root / name).stat().st_size for name in (
+                "Termin-Chart3D.html", "Termin-InteractiveScene.html", "Termin-PhysicsScene.html", "Termin-UiScene.html",
+            )
+        },
         "package_files": len(package),
         "package_bytes": sum(item["bytes"] for item in package),
         "package_gzip_bytes": sum(item["gzip_bytes"] for item in package),
