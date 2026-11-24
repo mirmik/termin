@@ -1,5 +1,5 @@
-import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-shadows1";
-import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-shadows1";
+import {createTerminCore, webAssetUrl} from "./termin-web-core.mjs?v=20261124-srgb1";
+import {createTerminWebHost} from "./termin-web-host.mjs?v=20261124-srgb1";
 
 const mounted = new WeakSet();
 const defaultPackage = webAssetUrl("graphics.trpkg");

@@ -108,7 +108,7 @@
           "name": "Main Target",
           "camera_uuid": "web-render-fixture-camera",
           "dynamic_resolution": true,
-          "color_format": "rgba8",
+          "color_format": "rgba16f",
           "depth_format": "depth24",
           "clear_color": [
             0.02,

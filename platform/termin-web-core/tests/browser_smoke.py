@@ -741,6 +741,13 @@ def dispatch_gesture(devtools: DevToolsSocket, touch: bool, start: tuple, *moves
             "type": "mouseReleased", "x": x, "y": y, "button": "left", "buttons": 0, "clickCount": 1})
 
 
+def aces_to_srgb8(radiance: float) -> int:
+    # The default framegraph applies the ACES fitted curve, then the sRGB output transfer.
+    linear = min(1, radiance * (2.51 * radiance + 0.03) / (radiance * (2.43 * radiance + 0.59) + 0.14))
+    srgb = 12.92 * linear if linear <= 0.0031308 else 1.055 * linear ** (1 / 2.4) - 0.055
+    return round(255 * srgb)
+
+
 def check_lamp_silhouette(devtools: DevToolsSocket, center: tuple[float, float], radius: float) -> dict:
     # Each horizontal scanline crosses only the bulb's left edge, from sky to lit glass.
     # Capture at native device resolution: shrinking the screenshot would antialias it.
@@ -749,15 +756,11 @@ def check_lamp_silhouette(devtools: DevToolsSocket, center: tuple[float, float],
             "width": round(1.05 * radius), "height": round(1.3 * radius), "scale": 1}
     shot = devtools.call("Page.captureScreenshot", {"format": "png", "clip": clip})
     _, height, channels, rows = decode_png(base64.b64decode(shot["data"]))
-    partial = 0
-    for row in rows:
-        # Use the channel with most contrast and measure relative to this row's
-        # endpoints. This also works with the different transfer curves of the backends.
-        c = max(range(3), key=lambda i: abs(row[i - channels] - row[i]))
-        background = row[c]
-        contrast = row[c - channels] - background
-        if abs(contrast) >= 32:
-            partial += any(0.12 < (v - background) / contrast < 0.72 for v in row[c::channels])
+    # At the amber bulb's silhouette the lit material emits about 0.65–0.75 red.
+    # The 4x resolve mixes 1, 2 or 3 covered samples with dark sky in linear HDR.
+    # Bound those intermediate values before applying the nonlinear display transform.
+    low, high = aces_to_srgb8(0.20 * 0.65), aces_to_srgb8(0.80 * 0.75)
+    partial = sum(any(low <= red <= high for red in row[::channels]) for row in rows)
     if partial < 0.20 * height:
         raise RuntimeError(f"Lamp silhouette has partial pixel coverage on only {partial}/{height} rows")
     return {"partially_covered_rows": partial, "sampled_rows": height}
@@ -932,35 +935,46 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             _, png = chart_screenshot(devtools)
             w, h, channels, rows = decode_png(png)
             scale = h / (12 * math.tan(math.radians(20)))  # pixels per world unit at y = 0
-            ball_y = round(h / 2 - 1.05 * scale)
-            column = w // 2 * channels
-            ball_rgb = list(rows[ball_y][column:column + 3])
+
+            def rgb_at(world_x, world_z):
+                x, y = round(w / 2 + world_x * scale), round(h / 2 - world_z * scale)
+                return [
+                    round(sum(rows[row][col * channels + c]
+                              for row in range(y - 1, y + 2) for col in range(x - 1, x + 2)) / 9, 1)
+                    for c in range(3)
+                ]
 
             # The key's rays travel in (+0.48, 0, -1). Project the initial umbra
             # onto the top face at z = -1.03, and mirror it for a lit control.
             shadow_x = (1.05 + 1.03) * 0.48
-            platform_y = round(h / 2 + 1.03 * scale)
-            blue = []
-            for world_x in (shadow_x, -shadow_x):
-                x = round(w / 2 + world_x * scale)
-                blue.append(sum(rows[y][col * channels + 2]
-                                for y in range(platform_y - 1, platform_y + 2)
-                                for col in range(x - 1, x + 2)) / 9)
-            return ball_rgb, blue
+            # At the camera target, an 8x8 patch contains only the solid sky.
+            # Early UNORM8 quantization can make this dark area dither visibly.
+            for c in range(3):
+                sky = [rows[y][x * channels + c]
+                       for y in range(h // 2 - 4, h // 2 + 4) for x in range(w // 2 - 4, w // 2 + 4)]
+                if max(sky) - min(sky) > 2:
+                    raise RuntimeError(f"Nonuniform sky on {backend}: channel {c} ranges from {min(sky)} to {max(sky)}")
+            return {"ball": rgb_at(0, 1.05), "shadow": rgb_at(shadow_x, -1.03), "lit": rgb_at(-shadow_x, -1.03)}
 
         def key_contribution(lit):
             # Measure only the directional light. The emissive ball also has a
             # moving point light which changes the platform colour during the drop.
             evaluate(devtools, "__terminViewer.host.setLightEnabled('key-light', false)")
             tick(0)
-            _, unlit = frame_probes()
+            unlit = frame_probes()
             evaluate(devtools, "__terminViewer.host.setLightEnabled('key-light', true)")
             tick(0)
-            return [round(a - b, 1) for a, b in zip(lit, unlit, strict=True)]
+            return [round(lit[p][2] - unlit[p][2], 1) for p in ("shadow", "lit")]
 
         initial = height_after(0)
-        before, lit = frame_probes()
-        initial_key = key_contribution(lit)
+        before = frame_probes()
+        # Viewed head-on, the lit demo material emits linear RGB (1, .34, .05) + .24.
+        # With the default ACES filmic curve at unit exposure and one sRGB encoding
+        # this gives (237, 213, 175) on the displayed canvas.
+        expected = [aces_to_srgb8(c + 0.24) for c in (1.0, 0.34, 0.05)]
+        if max(abs(a - b) for a, b in zip(before["ball"], expected, strict=True)) > 4:
+            raise RuntimeError(f"Wrong displayed ball colour on {backend}: {before['ball']}, expected sRGB {expected}")
+        initial_key = key_contribution(before)
         # Release via the same UI as the user, then advance deterministic elapsed time.
         evaluate(devtools, "document.getElementById('drop').click(); __terminViewer.host.stop()")
         falling = height_after(0.35)
@@ -968,13 +982,13 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
         rebound = height_after(0.30)
         resting = [height_after(1.0) for _ in range(5)]
         settled = resting[-1]
-        after, lit = frame_probes()
-        settled_key = key_contribution(lit)
+        after = frame_probes()
+        settled_key = key_contribution(after)
         if not (abs(initial - 1.05) < 0.1 and initial - falling > 0.3 and
                 contact < falling - 0.5 and rebound > contact + 0.12 and
                 abs(resting[-2] - settled) < 0.06 and abs(settled + 0.67) < 0.12):
             raise RuntimeError(f"Unexpected drop heights on {backend}: {initial}, {falling}, {contact}, {rebound}, {settled}")
-        if max(abs(a - b) for a, b in zip(before, after, strict=True)) < 35:
+        if max(abs(a - b) for a, b in zip(before["ball"], after["ball"], strict=True)) < 35:
             raise RuntimeError(f"Ball moved without updating its rendered pixels: {before} -> {after}")
         # The suspended ball blocks the key at +x. When it lands, the same
         # patch must receive direct light again. The -x control stays lit.
@@ -995,7 +1009,7 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
             raise RuntimeError(f"Restart did not reset the falling body on {backend}: {restarted}")
         return {"initial": initial, "falling": falling, "contact": contact, "rebound": rebound,
                 "settled": settled, "restarted": restarted, "initial_key_blue": initial_key,
-                "settled_key_blue": settled_key}
+                "settled_key_blue": settled_key, "initial_srgb": before}
 
 
 def main() -> int:
@@ -1332,6 +1346,10 @@ def main() -> int:
             report["physics_scene"] = {
                 backend: check_physics_scene(devtools, physics, backend) for backend in ("webgpu", "webgl2")
             }
+            gpu, gl = (report["physics_scene"][b]["initial_srgb"] for b in ("webgpu", "webgl2"))
+            for patch in gpu:
+                if max(abs(a - b) for a, b in zip(gpu[patch], gl[patch], strict=True)) > 4:
+                    raise RuntimeError(f"Displayed {patch} colours differ: WebGPU {gpu[patch]}, WebGL2 {gl[patch]}")
     except Exception as error:
         failure = error
     finally:

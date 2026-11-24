@@ -263,13 +263,14 @@ namespace {
         return transformed;
     }
 
-    tgfx::TextureHandle encode_webgl2_canvas(tgfx::TextureHandle input, tgfx::OutputDitherMode dither) {
-        // WebGL2 blitFramebuffer decodes an sRGB read attachment when blitting
-        // to the linear default framebuffer. Transport the encoded bytes in a
-        // UNorm texture instead. Sampling the input already yields linear RGB.
-        const auto output = webgl2_canvas_target(tgfx::PixelFormat::RGBA8_UNorm);
+    tgfx::TextureHandle encode_to_canvas_target(tgfx::TextureHandle input, tgfx::OutputDitherMode dither) {
+        // Store sRGB display codes in a UNorm target. WebGPU can draw directly
+        // into the canvas. WebGL2 transports the encoded texture by framebuffer blit.
+        const auto output = web_player->webgpu_device
+                                ? web_player->webgpu_device->acquire_surface_texture(tgfx::TextureEncoding::Linear)
+                                : webgl2_canvas_target(tgfx::PixelFormat::RGBA8_UNorm);
         if (!encode_canvas(input, output, dither)) {
-            throw std::runtime_error("WebGL2 canvas output transform failed");
+            throw std::runtime_error("canvas output transform failed");
         }
         return output;
     }
@@ -286,24 +287,13 @@ namespace {
             tc_log_error("TerminWebHost: rendered display output is invalid");
             return false;
         }
-        if (web_player->backend == WebGraphicsBackend::WebGPU) {
-            tgfx::TextureHandle canvas = web_player->webgpu_device->acquire_surface_texture();
-            const termin::Bounds2i extent{
-                0, 0, static_cast<int>(web_player->width), static_cast<int>(web_player->height)};
-            web_player->webgpu_device->blit_to_texture(canvas, tgfx::TextureHandle{output_texture_id}, extent, extent);
-            web_player->device->present();
-        } else if (web_player->backend == WebGraphicsBackend::WebGL2) {
-            const auto target = encode_webgl2_canvas(tgfx::TextureHandle{output_texture_id},
-                                                     tgfx::OutputDitherMode::StableSpatial);
-
-            web_player->webgl2_device->present_to_default_framebuffer(target,
-                                                                      static_cast<int>(web_player->width),
-                                                                      static_cast<int>(web_player->height));
-            web_player->device->present();
-        } else {
-            tc_log_error("TerminWebHost: no browser graphics backend selected");
-            return false;
+        const auto target = encode_to_canvas_target(tgfx::TextureHandle{output_texture_id},
+                                                    tgfx::OutputDitherMode::StableSpatial);
+        if (web_player->webgl2_device) {
+            web_player->webgl2_device->present_to_default_framebuffer(
+                target, static_cast<int>(web_player->width), static_cast<int>(web_player->height));
         }
+        web_player->device->present();
         return true;
     }
 
@@ -984,7 +974,7 @@ namespace {
             }
             if (web_player->webgl2_device) {
                 const auto output = encoding == tgfx::TextureEncoding::SRGB
-                                        ? encode_webgl2_canvas(target, tgfx::OutputDitherMode::Disabled)
+                                        ? encode_to_canvas_target(target, tgfx::OutputDitherMode::Disabled)
                                         : target;
                 web_player->webgl2_device->present_to_default_framebuffer(
                     output, static_cast<int>(web_player->width), static_cast<int>(web_player->height));
