@@ -7,6 +7,7 @@
 #include "tgfx2/builtin_shader_sources.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
+#include "tgfx2/pixel_format_utils.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 
@@ -21,9 +22,11 @@ namespace tgfx {
         constexpr const char* kOutputTransformShaderUuid = "termin-engine-output-transform";
         constexpr const char* kMultiviewOutputTransformShaderUuid = "termin-engine-multiview-output-transform";
 
+        enum class TargetEncodingMode : uint32_t { Linear = 0, HardwareSRGB = 1, ShaderSRGB = 2 };
+
         struct alignas(16) OutputTransformGpuParams {
             uint32_t sampled_input_is_srgb = 0;
-            uint32_t target_is_srgb = 0;
+            TargetEncodingMode target_encoding_mode = TargetEncodingMode::Linear;
             float dither_step = 0.0f;
             uint32_t dither_enabled = 0;
         };
@@ -100,9 +103,14 @@ namespace tgfx {
 
         const bool dither_enabled = params.dither == OutputDitherMode::StableSpatial && params.target_rgb_bits > 0;
         const uint32_t quantization_levels = params.target_rgb_bits >= 31 ? 0u : ((1u << params.target_rgb_bits) - 1u);
+        TargetEncodingMode encoding_mode = TargetEncodingMode::Linear;
+        if (params.target_encoding == TextureEncoding::SRGB) {
+            encoding_mode = is_srgb_format(output_desc.format) ? TargetEncodingMode::HardwareSRGB
+                                                              : TargetEncodingMode::ShaderSRGB;
+        }
         const OutputTransformGpuParams gpu_params{
             .sampled_input_is_srgb = params.sampled_input_encoding == TextureEncoding::SRGB ? 1u : 0u,
-            .target_is_srgb = params.target_encoding == TextureEncoding::SRGB ? 1u : 0u,
+            .target_encoding_mode = encoding_mode,
             .dither_step = dither_enabled && quantization_levels > 0
                                 ? 1.0f / static_cast<float>(quantization_levels)
                                 : 0.0f,

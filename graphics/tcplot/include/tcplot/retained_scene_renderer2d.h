@@ -1,6 +1,7 @@
 #ifndef TCPLOT_RETAINED_SCENE_RENDERER2D_H
 #define TCPLOT_RETAINED_SCENE_RENDERER2D_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <geom/tc_color.h>
@@ -23,7 +24,7 @@ typedef struct tc_retained_scene_renderer2d_timings {
 } tc_retained_scene_renderer2d_timings;
 
 /*
- * Creates an offscreen renderer for a retained visual scene. Both borrowed
+ * Creates a renderer for a retained visual scene. Both borrowed
  * arguments must outlive the renderer. gpu_host is a tcplot::GpuHost* kept
  * opaque here so this header remains usable from a C ABI consumer.
  */
@@ -40,6 +41,11 @@ TCPLOT_API int tc_retained_scene_renderer2d_msaa_samples(const tc_retained_scene
 
 /* Returns the tgfx texture handle id, or zero after a logged failure. */
 TCPLOT_API uint32_t tc_retained_scene_renderer2d_render(tc_retained_scene_renderer2d* renderer, int width, int height);
+
+/* Render directly to a borrowed color attachment, including an acquired swapchain
+ * texture. The caller supplies its framebuffer dimensions and owns presentation. */
+TCPLOT_API bool tc_retained_scene_renderer2d_render_to(tc_retained_scene_renderer2d* renderer,
+                                                      uint32_t target, int width, int height);
 
 /* Snapshot for the last successful render call. */
 TCPLOT_API int tc_retained_scene_renderer2d_last_timings(const tc_retained_scene_renderer2d* renderer,

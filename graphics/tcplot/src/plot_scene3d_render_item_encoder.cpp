@@ -16,6 +16,7 @@
 #include <termin/render/render_context.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
+#include <tgfx2/i_render_device.hpp>
 #include <tgfx2/render_context.hpp>
 
 #include "tcplot/axes.hpp"
@@ -205,7 +206,9 @@ namespace tcplot {
 
             out_layout = tgfx::VertexLayoutDesc{};
             out_layout.stride = kPlot3DFloatsPerVertex * sizeof(float);
-            out_layout.use_shader_input_locations = true;
+            // WGSL declares the five locations below explicitly. The native
+            // pipelines use their reflected shader inputs, including D3D semantics.
+            out_layout.use_shader_input_locations = request.device->backend_type() != tgfx::BackendType::WebGPU;
             out_layout.attribute_count = 5;
             out_layout.attributes[0] = {0, tgfx::VertexFormat::Float3, 0, nullptr};
             out_layout.attributes[1] = {1, tgfx::VertexFormat::Float4, 3 * sizeof(float), nullptr};

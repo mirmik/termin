@@ -1,11 +1,15 @@
-import createTerminWebCore from "./termin_web_core.mjs?v=20260807-packageblob1";
+import createTerminWebCore from "./termin_web_core.mjs?v=20261124-chart3d1";
 
-export const TERMIN_WEB_ASSET_REVISION = "20260807-packageblob1";
+export const TERMIN_WEB_ASSET_REVISION = "20261124-chart3d1";
+
+export function webAssetUrl(file) {
+    const embedded = globalThis.document?.getElementById(`termin-web-asset-${file}`);
+    return embedded?.href ?? new URL(`${file}?v=${TERMIN_WEB_ASSET_REVISION}`, import.meta.url).href;
+}
 
 export async function createTerminCore(options = {}) {
     const module = await createTerminWebCore({
-        locateFile: (file) => new URL(
-            `${file}?v=${TERMIN_WEB_ASSET_REVISION}`, import.meta.url).href,
+        locateFile: webAssetUrl,
         ...options,
     });
     return {

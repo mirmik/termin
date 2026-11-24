@@ -8,7 +8,7 @@ Sampler2DArray u_input;
 
 struct OutputTransformParams {
     uint sampled_input_is_srgb;
-    uint target_is_srgb;
+    uint target_encoding_mode;
     float dither_step;
     uint dither_enabled;
 };
@@ -72,11 +72,13 @@ FragmentOutput fs_main(
     float noise = u_params.dither_enabled != 0
                       ? output_dither(input.screen_pos.xy) * u_params.dither_step
                       : 0.0;
-    float3 target_domain = u_params.target_is_srgb != 0
+    const uint linear_target = 0;
+    const uint hardware_srgb_target = 1;
+    float3 target_domain = u_params.target_encoding_mode != linear_target
                                ? linear_to_srgb(linear)
                                : linear;
     target_domain = clamp(target_domain + noise, 0.0, 1.0);
-    float3 shader_output = u_params.target_is_srgb != 0
+    float3 shader_output = u_params.target_encoding_mode == hardware_srgb_target
                                ? srgb_to_linear(target_domain)
                                : target_domain;
 

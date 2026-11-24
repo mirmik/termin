@@ -1,5 +1,6 @@
 #include "tgfx2/webgpu/webgpu_render_device.hpp"
 
+#include "tgfx2/pixel_format_utils.hpp"
 #include "tgfx2/webgpu/webgpu_command_list.hpp"
 #include "webgpu_primitive_state.hpp"
 #include "webgpu_raster_state.hpp"
@@ -1529,6 +1530,13 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         wgpu::SurfaceConfiguration config;
         config.device = device_;
         config.format = surface_format_;
+        // Register the compatible alternate attachment view. Chart shaders emit
+        // linear-light RGB, whereas pre-encoded display images use the base view.
+        const PixelFormat base = surface_pixel_format();
+        const auto alternate_encoding = is_srgb_format(base) ? TextureEncoding::Linear : TextureEncoding::SRGB;
+        const auto alternate_view = texture_format(pixel_format_for_encoding(base, alternate_encoding));
+        config.viewFormatCount = 1;
+        config.viewFormats = &alternate_view;
         config.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopyDst;
         config.width = width;
         config.height = height;
@@ -1540,6 +1548,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     TextureHandle WebGpuRenderDevice::acquire_surface_texture() {
+        return acquire_surface_texture(texture_encoding_for_format(surface_pixel_format()));
+    }
+
+    TextureHandle WebGpuRenderDevice::acquire_surface_texture(TextureEncoding attachment_encoding) {
         if (acquired_surface_texture_) {
             textures_.remove(acquired_surface_texture_.id);
             acquired_surface_texture_ = {};
@@ -1554,9 +1566,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         TextureDesc desc;
         desc.width = surface_width_;
         desc.height = surface_height_;
-        desc.format = surface_pixel_format();
+        desc.format = pixel_format_for_encoding(surface_pixel_format(), attachment_encoding);
         desc.usage = TextureUsage::ColorAttachment | TextureUsage::CopyDst;
         wgpu::TextureViewDescriptor view_desc;
+        view_desc.format = texture_format(desc.format);
         view_desc.mipLevelCount = 1;
         view_desc.arrayLayerCount = 1;
         wgpu::TextureView attachment_view = surface_texture.texture.CreateView(&view_desc);

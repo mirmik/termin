@@ -141,12 +141,12 @@ float3 map_surface_color(float t, float map_id) {
     return id == 5 ? result : srgb_to_linear(result);
 }
 
-float grid_line_mask(float coord, float step, float max_coord, float width_px) {
+float grid_line_mask(float coord, float step, float max_coord, float width_px, float derivative) {
     step = max(step, 1.0);
     float d_step = abs(coord - round(coord / step) * step);
     float d_edge = min(abs(coord), abs(coord - max_coord));
     float d = min(d_step, d_edge);
-    float fw = max(fwidth(coord), 1e-6);
+    float fw = max(derivative, 1e-6);
     float half_width = max(width_px, 0.1) * fw * 0.5;
     return 1.0 - smoothstep(half_width, half_width + fw, d);
 }
@@ -190,17 +190,19 @@ FragmentOutput fs_main(VertexOutput input) {
             shade = clamp(shade, 0.72, 1.08);
             rgb *= shade;
         }
+        // Fragment derivatives require uniform control flow on WebGPU.
+        float2 grid_fw = fwidth(input.surface_grid.xy);
         if (input.surface_grid_opts.x != 0.0) {
             float col_mask = grid_line_mask(
                 input.surface_grid.x,
                 input.surface_grid.z,
                 input.surface_grid_opts.z,
-                input.surface_grid_opts.y);
+                input.surface_grid_opts.y, grid_fw.x);
             float row_mask = grid_line_mask(
                 input.surface_grid.y,
                 input.surface_grid.w,
                 input.surface_grid_opts.w,
-                input.surface_grid_opts.y);
+                input.surface_grid_opts.y, grid_fw.y);
             float grid_mask = max(col_mask, row_mask);
             rgb = lerp(rgb, input.surface_grid_color.rgb,
                        clamp(input.surface_grid_color.a * grid_mask, 0.0, 1.0));

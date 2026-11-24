@@ -9,6 +9,8 @@ scene-neutral `termin_render_core`. Retained plot annotations использую
 
 - [Module Map](../../../docs/modules.md#tcplot)
 - [C# Retained Chart Composition](../../../docs/architecture/2026-07-30-csharp-retained-chart-composition.md)
+- [RetainedChart2D в браузере: пример и JavaScript API](../../../docs/web-runtime-browser-gate.md#интерактивный-график-данных)
+- [RetainedChart3D в браузере и автономное демо](../../../docs/web-runtime-browser-gate.md#интерактивная-3d-поверхность)
 - [termin-graphics](../../termin-graphics/docs/index.md)
 - [tcplot-gui-native](../../tcplot-gui-native/README.md)
 

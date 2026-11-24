@@ -80,7 +80,13 @@ set(TCPLOT_SOURCES
     src/gpu_host.cpp
 )
 
-add_library(tcplot SHARED ${TCPLOT_SOURCES})
+if(EMSCRIPTEN)
+    # The Wasm linker pulls only the chart and renderer objects used by the host.
+    add_library(tcplot STATIC ${TCPLOT_SOURCES})
+    target_compile_options(tcplot PRIVATE -fexceptions)
+else()
+    add_library(tcplot SHARED ${TCPLOT_SOURCES})
+endif()
 add_library(tcplot::tcplot ALIAS tcplot)
 
 if(COMMAND termin_enable_pch_for)

@@ -184,8 +184,7 @@ namespace termin::web {
 
     } // namespace
 
-    bool render_visual_scene_example(tgfx::IRenderDevice& device,
-                                     tgfx::GraphicsHost& graphics_host,
+    bool render_visual_scene_example(tgfx::GraphicsHost& graphics_host,
                                      tgfx::TextureHandle presentation_texture,
                                      std::uint32_t width,
                                      std::uint32_t height,
@@ -216,7 +215,6 @@ namespace termin::web {
             if (!executed) {
                 throw std::runtime_error("Canvas2DRenderer rejected the visual-scene DrawList2D");
             }
-            device.present();
             return true;
         } catch (const std::exception& exception) {
             error = exception.what();

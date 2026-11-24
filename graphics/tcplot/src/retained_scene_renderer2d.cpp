@@ -100,13 +100,17 @@ namespace {
         }
 
         uint32_t render(int width, int height) {
+            return render_to(std::nullopt, width, height) ? offscreen_color_.id : 0;
+        }
+
+        bool render_to(std::optional<tgfx::TextureHandle> target, int width, int height) {
             if (width <= 0 || height <= 0) {
                 tc::Log::error("RetainedSceneRenderer2D: invalid target size %dx%d", width, height);
-                return 0;
+                return false;
             }
             if (!scene_.valid()) {
                 tc::Log::error("RetainedSceneRenderer2D: borrowed visual scene is stale");
-                return 0;
+                return false;
             }
 
             timings_ = {};
@@ -117,23 +121,38 @@ namespace {
             if (!painted) {
                 builder_.clear();
                 tc::Log::error("RetainedSceneRenderer2D: failed to paint visual scene");
-                return 0;
+                return false;
             }
             const auto freeze_started = RenderClock::now();
             auto draw_list = builder_.freeze();
             timings_.freeze_ms = elapsed_ms(freeze_started, RenderClock::now());
             if (!draw_list) {
                 tc::Log::error("RetainedSceneRenderer2D: failed to freeze visual scene draw list");
-                return 0;
+                return false;
             }
-            ensure_offscreen(width, height);
+            if (!target) {
+                ensure_offscreen(width, height);
+                target = offscreen_color_;
+            }
 
             const auto submit_started = RenderClock::now();
             tgfx::RenderContext2& ctx = host_->ctx();
+            if (ctx.in_frame()) {
+                tc::Log::error("RetainedSceneRenderer2D: graphics host already has an active frame");
+                return false;
+            }
+            tgfx::ColorAttachmentDesc color;
+            color.texture = *target;
+            color.load = tgfx::LoadOp::Clear;
+            color.clear_color = termin::srgb_to_linear(clear_color_);
+            tgfx::RenderPassDesc pass;
+            pass.colors.push_back(color);
             ctx.begin_frame();
-            const termin::LinearColor clear_color =
-                termin::srgb_to_linear(clear_color_);
-            ctx.begin_pass(offscreen_color_, tgfx::TextureHandle{}, &clear_color, 1.0f, false);
+            if (!ctx.begin_pass(pass)) {
+                ctx.end_frame();
+                tc::Log::error("RetainedSceneRenderer2D: failed to begin color pass");
+                return false;
+            }
             canvas_.begin(ctx, width, height);
             const bool executed = canvas_.execute(*draw_list, resources_);
             canvas_.end();
@@ -144,10 +163,10 @@ namespace {
             builder_.recycle(std::move(*draw_list));
             if (!executed) {
                 tc::Log::error("RetainedSceneRenderer2D: failed to execute visual scene draw list");
-                return 0;
+                return false;
             }
             timings_.total_ms = elapsed_ms(total_started, RenderClock::now());
-            return offscreen_color_.id;
+            return true;
         }
 
         void release_gpu() {
@@ -286,6 +305,17 @@ uint32_t tc_retained_scene_renderer2d_render(tc_retained_scene_renderer2d* rende
         return 0;
     }
     return logged_call("render", uint32_t{0}, [&] { return renderer->value.render(width, height); });
+}
+
+bool tc_retained_scene_renderer2d_render_to(tc_retained_scene_renderer2d* renderer,
+                                            uint32_t target, int width, int height) {
+    if (!renderer || !target) {
+        tc::Log::error("RetainedSceneRenderer2D: render_to requires a renderer and color attachment");
+        return false;
+    }
+    return logged_call("render_to", false, [&] {
+        return renderer->value.render_to(tgfx::TextureHandle{target}, width, height);
+    });
 }
 
 int tc_retained_scene_renderer2d_last_timings(const tc_retained_scene_renderer2d* renderer,

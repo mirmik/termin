@@ -139,10 +139,21 @@ def main() -> int:
                 "clip": {"x": 0, "y": 0, "width": 960, "height": 600, "scale": 1},
                 "captureBeyondViewport": False,
             })
-            runtime_metrics = analyze_png(base64.b64decode(runtime_screenshot["data"]))
-            if runtime_metrics["bright_pixels"] < 100 or runtime_metrics["quantized_colors"] < 3:
+            # Sample the packaged texture on three faces/regions, away from the
+            # scrollbars. Frame-count and brightness alone also pass on stale
+            # VisualScene2D content or on an empty canvas with browser chrome.
+            runtime_metrics = analyze_png(base64.b64decode(runtime_screenshot["data"]), {
+                "cyan": (480, 260), "yellow": (670, 260), "red": (450, 460),
+            })
+            cyan = runtime_metrics["probes"]["cyan"]
+            yellow = runtime_metrics["probes"]["yellow"]
+            red = runtime_metrics["probes"]["red"]
+            if (runtime_metrics["pixel_sha256"] == metrics["pixel_sha256"]
+                or min(cyan[1:]) - cyan[0] < 30
+                or min(yellow[:2]) - yellow[2] < 30
+                or red[0] - red[1] < 40):
                 raise RuntimeError(
-                    "WebGL2 packaged 3D runtime produced no visible frame: "
+                    "WebGL2 packaged 3D runtime failed its textured mesh probes: "
                     f"state={runtime_state} metrics={runtime_metrics}; "
                     f"console={console_diagnostics(devtools)}"
                 )

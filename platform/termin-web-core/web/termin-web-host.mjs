@@ -13,6 +13,8 @@ export const TerminWebGraphicsBackend = Object.freeze({
     WebGL2: "webgl2",
 });
 
+let nextCanvasId = 1;
+
 export function terminWebEnvironment(scope = globalThis) {
     return Object.freeze({
         secureContext: scope.isSecureContext === true,
@@ -60,6 +62,8 @@ function describeThrown(module, error) {
 export class TerminWebHost {
     constructor(core, options = {}) {
         this.module = core.module ?? core;
+        this.canvas = options.canvas ?? null;
+        this.generatedCanvasId = "";
         this.statusElement = options.statusElement ?? null;
         this.onStateChange = options.onStateChange ?? null;
         this.onFrame = options.onFrame ?? null;
@@ -107,6 +111,31 @@ export class TerminWebHost {
         return new Uint8Array(await response.arrayBuffer());
     }
 
+    async loadPackageBlob(packageUrl) {
+        const supplied = new URL(packageUrl, globalThis.location?.href ?? import.meta.url);
+        const isBlob = supplied.protocol === "data:" || supplied.protocol === "blob:" || supplied.pathname.endsWith(".trpkg");
+        const blobUrl = isBlob
+            ? supplied
+            : new URL("package.trpkg", packageBaseUrl(supplied));
+        const startedAt = performance.now();
+        const blob = await this.fetchFile(blobUrl, "runtime package blob");
+        const pointer = this.module._malloc(blob.byteLength);
+        if (!pointer) throw new Error("failed to allocate runtime package blob memory");
+        try {
+            this.module.HEAPU8.set(blob, pointer);
+            if (!this.module._termin_web_host_set_package_blob(pointer, blob.byteLength)) {
+                const message = this.module.UTF8ToString(this.module._termin_web_host_error());
+                throw new Error(message || "native runtime package blob validation failed");
+            }
+        } finally {
+            this.module._free(pointer);
+        }
+        this.packageBlobUrl = blobUrl.href;
+        this.metrics.packageBytes = blob.byteLength;
+        this.metrics.packageRequests = 1;
+        this.metrics.packageFetchMs = performance.now() - startedAt;
+    }
+
     async load(packageUrl, {autoStart = true} = {}) {
         if (this.state === TerminWebHostState.Loading) {
             throw new Error("runtime package load is already in progress");
@@ -131,28 +160,7 @@ export class TerminWebHost {
             graphicsBackend: "",
         };
         try {
-            const supplied = new URL(packageUrl, globalThis.location?.href ?? import.meta.url);
-            const blobUrl = supplied.pathname.endsWith(".trpkg")
-                ? supplied
-                : new URL("package.trpkg", packageBaseUrl(supplied));
-            this.packageBlobUrl = blobUrl.href;
-            const packageBlob = await this.fetchFile(blobUrl, "runtime package blob");
-            this.metrics.packageBytes = packageBlob.byteLength;
-            this.metrics.packageRequests = 1;
-            const pointer = this.module._malloc(packageBlob.byteLength);
-            if (!pointer) throw new Error("failed to allocate runtime package blob memory");
-            try {
-                this.module.HEAPU8.set(packageBlob, pointer);
-                if (!this.module._termin_web_host_set_package_blob(
-                        pointer, packageBlob.byteLength)) {
-                    const message = this.module.UTF8ToString(
-                        this.module._termin_web_host_error());
-                    throw new Error(message || "native runtime package blob validation failed");
-                }
-            } finally {
-                this.module._free(pointer);
-            }
-            this.metrics.packageFetchMs = performance.now() - loadStartedAt;
+            await this.loadPackageBlob(packageUrl);
             const graphicsStartedAt = performance.now();
             if (!this.headless) await this.initializeGraphics();
             this.metrics.graphicsInitMs = performance.now() - graphicsStartedAt;
@@ -188,7 +196,7 @@ export class TerminWebHost {
 
     async initializeGraphics(timeoutMs = 5000) {
         const environment = assertTerminWebEnvironment(globalThis);
-        const canvas = globalThis.document?.querySelector?.("#termin-canvas");
+        const canvas = this.canvas ?? globalThis.document?.querySelector?.("#termin-canvas");
         if (!canvas) throw new Error("TerminWebHost requires #termin-canvas");
         let requested = this.requestedGraphicsBackend;
         if (!Object.values(TerminWebGraphicsBackend).includes(requested)) {
@@ -216,8 +224,18 @@ export class TerminWebHost {
             throw new Error("WebGL 2 is not available in this browser");
         }
         const nativeBackend = requested === TerminWebGraphicsBackend.WebGPU ? 1 : 2;
-        const initial = this.module._termin_web_host_graphics_start(
-            Number(canvas.width), Number(canvas.height), nativeBackend);
+        if (!canvas.id) {
+            do {
+                this.generatedCanvasId = `termin-web-canvas-${nextCanvasId++}`;
+            } while (document.getElementById(this.generatedCanvasId));
+            canvas.id = this.generatedCanvasId;
+        }
+        if (document.getElementById(canvas.id) !== canvas) {
+            throw new Error("TerminWebHost requires a canvas mounted in the document with a unique id");
+        }
+        const initial = this.module.ccall("termin_web_host_graphics_start", "number",
+            ["number", "number", "number", "string"],
+            [canvas.width, canvas.height, nativeBackend, `#${CSS.escape(canvas.id)}`]);
         this.graphicsStarted = initial > 0;
         const deadline = performance.now() + timeoutMs;
         let status = initial;
@@ -358,12 +376,17 @@ export class TerminWebHost {
         // emscripten_request_animation_frame_loop is cancelled by its next
         // callback returning false. Let that callback observe loop_stop before
         // destroying the engine/device state it references.
-        if (!this.headless && (this.nativeLoaded || this.graphicsStarted)) {
+        if (!this.headless && (this.state === TerminWebHostState.Stopped || this.state === TerminWebHostState.Error)
+                && (this.nativeLoaded || this.graphicsStarted)) {
             await new Promise((resolve) => this.requestFrame(() => resolve()));
         }
         if (this.nativeLoaded || this.graphicsStarted) {
             this.module._termin_web_host_unload();
         }
+        if (this.generatedCanvasId && this.canvas?.id === this.generatedCanvasId) {
+            this.canvas.removeAttribute("id");
+        }
+        this.generatedCanvasId = "";
         this.nativeLoaded = false;
         this.graphicsStarted = false;
         this.graphicsBackend = "";

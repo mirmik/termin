@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Поверхности · Termin</title>
+    <style>
+        :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; color: #e9eeee; background: #111518; }
+        * { box-sizing: border-box; }
+        body { margin: 0; }
+        main { width: min(100% - 32px, 1040px); margin: clamp(20px, 5vh, 56px) auto; }
+        header, footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+        header { margin-bottom: 18px; }
+        h1 { margin: 0; font-size: clamp(24px, 4vw, 36px); font-weight: 600; letter-spacing: -.04em; }
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+        button { font: inherit; font-size: 14px; border-radius: 7px; border: 1px solid #495256;
+                 padding: 10px 14px; background: #20282c; color: inherit; cursor: pointer; }
+        #change-surface { background: #b1eddb; color: #103c31; border-color: #b1eddb; }
+        :focus-visible { outline: 2px solid white; outline-offset: 3px; }
+        button:disabled { opacity: .5; cursor: wait; }
+        canvas { display: block; width: 100%; height: clamp(300px, 65vh, 650px); border-radius: 9px;
+                 background: #15171c; touch-action: none; }
+        footer { align-items: baseline; color: #b7c2c3; font-size: 13px; line-height: 1.5; margin-top: 12px; }
+        footer p { margin: 0; }
+        .touch { display: none; }
+        @media (pointer: coarse) { .touch { display: inline; } .mouse { display: none; } }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <h1 id="surface-name">Круговая волна</h1>
+        <div class="controls">
+            <button type="button" id="change-surface" disabled>Показать седло</button>
+            <button type="button" id="reset-camera" disabled>Сбросить вид</button>
+        </div>
+    </header>
+    <canvas id="termin-canvas" aria-labelledby="surface-name" aria-describedby="hint status"></canvas>
+    <footer>
+        <p id="hint"><span class="mouse">Вращайте мышью или стрелками. Shift для сдвига, колесо или + и − для масштаба.</span>
+            <span class="touch">Вращайте одним пальцем. Двумя пальцами сдвигайте и меняйте масштаб.</span></p>
+        <p id="status" role="status">Загрузка графика…</p>
+    </footer>
+</main>
+<script type="module">
+    import {createTerminChart3D} from "./termin-web-chart3d.mjs?v=20261124-chart3d1";
+
+    const canvas = document.querySelector("canvas");
+    const title = document.querySelector("#surface-name");
+    const change = document.querySelector("#change-surface");
+    const reset = document.querySelector("#reset-camera");
+    const status = document.querySelector("#status");
+    const state = window.__terminChart3D = {status: "loading", chart: null, backend: "", error: ""};
+    const x = Float64Array.from({length: 65}, (_, column) => -3 + 6 * column / 64);
+    const y = Float64Array.from({length: 57}, (_, row) => -3 + 6 * row / 56);
+    let saddle = false;
+
+    function updateSurface() {
+        const heights = new Float64Array(x.length * y.length);
+        for (let row = 0; row < y.length; row++) {
+            for (let column = 0; column < x.length; column++) {
+                const u = x[column], v = y[row], r = Math.hypot(u, v);
+                heights[row * x.length + column] = saddle
+                    ? (u * u - v * v) / 6
+                    : 1.5 * Math.cos(3 * r) * Math.exp(-0.45 * r);
+            }
+        }
+        state.chart.setSurface(x, y, heights);
+        title.textContent = saddle ? "Седловая поверхность" : "Круговая волна";
+        change.textContent = saddle ? "Показать волну" : "Показать седло";
+        status.textContent = `${x.length} × ${y.length} · ${state.backend}`;
+    }
+
+    try {
+        state.chart = await createTerminChart3D(canvas, {
+            backend: new URL(location.href).searchParams.get("backend") ?? "auto",
+        });
+        state.backend = state.chart.backend;
+        updateSurface();
+        state.status = "ready";
+        change.disabled = reset.disabled = false;
+        change.addEventListener("click", () => {
+            saddle = !saddle;
+            updateSurface();
+        });
+        reset.addEventListener("click", () => state.chart.reset());
+    } catch (error) {
+        state.status = "error";
+        state.error = error.message;
+        status.textContent = error.message;
+        console.error("RetainedChart3D example failed", error);
+    }
+</script>
+</body>
+</html>

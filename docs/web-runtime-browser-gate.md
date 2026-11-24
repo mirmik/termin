@@ -42,6 +42,86 @@ task test:web:browser
 TERMIN_WEB_BROWSER=/path/to/chrome task test:web:browser
 ```
 
+## Интерактивный график данных
+
+`chart2d.html` строит линейный график через C API `tc_retained_chart2d`
+библиотеки `tcplot`. JavaScript передаёт координаты, а оси, подписи,
+деления и сам ряд рисует Termin. Для запуска из корня репозитория выполните
+
+```bash
+task build:web
+python3 -m http.server 8000 --bind 127.0.0.1 --directory build/web-core/bin
+```
+
+Откройте `http://127.0.0.1:8000/chart2d.html`. Кнопка меняет набор точек
+на том же графике. Перетаскивание сдвигает видимую область, колесо меняет
+масштаб вокруг курсора. Для проверки конкретного бэкенда добавьте
+`?backend=webgpu` или `?backend=webgl2`.
+
+В своей странице задайте canvas размер через CSS, затем подключите модуль:
+
+```html
+<canvas id="signal" style="display:block;width:100%;height:360px;touch-action:none"></canvas>
+<script type="module">
+    import {createTerminChart2D} from "./termin-web-chart2d.mjs";
+
+    const chart = await createTerminChart2D(document.querySelector("#signal"), {
+        xLabel: "Time (s)", yLabel: "Voltage (V)", seriesName: "V(t)",
+    });
+    chart.setData([0, 1, 2, 3], [0, 0.5, 0.2, 1]);
+</script>
+```
+
+`setData(x, y)` принимает обычные и типизированные числовые массивы
+одинаковой длины. Первый непустой ряд задаёт диапазон автоматически.
+Следующие вызовы заменяют точки и сохраняют текущий вид. Для повторной
+подгонки передайте третий аргумент `{fit: true}`. Явный диапазон задаётся
+через `chart.setRange({xMin, xMax, yMin, yMax})` или параметр `range`
+при создании. При удалении графика вызовите `await chart.dispose()` для
+освобождения GPU-ресурсов и обработчиков ввода.
+
+Для публикации разместите рядом `termin-web-chart2d.mjs`, `termin-web-chart.mjs`,
+`termin-web-core.mjs`, `termin-web-host.mjs`, `termin-web-input.mjs`,
+сгенерированные `termin_web_core.mjs`, `termin_web_core.wasm` и
+`graphics.trpkg` из одной сборки. Шрифт встроен в Wasm.
+`graphics.trpkg` содержит каталог и готовые шейдеры обоих бэкендов.
+График работает с собственным canvas без загрузки сцены и обновляет кадр
+при изменении данных, области просмотра или размера.
+
+## Интерактивная 3D-поверхность
+
+После `task build:web` откройте `build/web-core/bin/Termin-Chart3D.html`
+прямо в браузере. В файле собраны демо, Wasm со шрифтом и шейдеры.
+Для встраивания в приложение та же сборка содержит ES-модуль и страницу
+`chart3d.html`, доступную через описанный выше локальный HTTP-сервер.
+
+```html
+<canvas id="surface" style="display:block;width:100%;height:400px;touch-action:none"></canvas>
+<script type="module">
+    import {createTerminChart3D} from "./termin-web-chart3d.mjs";
+
+    const chart = await createTerminChart3D(document.querySelector("#surface"), {
+        xLabel: "X (m)", yLabel: "Y (m)", zLabel: "Height (m)",
+    });
+    const x = [-1, 0, 1], y = [-1, 0, 1];
+    chart.setSurface(x, y, [0, 1, 0, 1, 2, 1, 0, 1, 0]);
+</script>
+```
+
+`setSurface(x, y, z)` принимает координаты прямоугольной сетки и высоты
+по строкам. Высота точки `(x[i], y[j])` лежит в `z[j * x.length + i]`.
+Каждая ось содержит хотя бы две точки. Первая поверхность помещается в кадр
+автоматически. Повторный вызов заменяет данные и сохраняет положение камеры.
+Чтобы подобрать вид при обновлении, передайте четвёртым аргументом `{fit: true}`.
+
+Левая кнопка мыши или движение одним пальцем вращает поверхность.
+Shift с левой кнопкой или движение двумя пальцами сдвигает камеру.
+Колесо мыши и щипок меняют масштаб. Вызов `await chart.dispose()`
+освобождает ресурсы графика. На HTTP-странице можно задать бэкенд через
+`?backend=webgpu` или `?backend=webgl2`.
+
+## Проверки Chromium
+
 Gate поднимает временный HTTP server только на loopback, запускает отдельный
 временный browser profile и проверяет:
 
@@ -56,6 +136,12 @@ Gate поднимает временный HTTP server только на loopbac
 - тот же orbit path непосредственно в полноэкранном `viewer.html`.
 - retained `TcVisualScene` → `DrawList2D` → `Canvas2DRenderer` путь на отдельной
   странице `visual-scene.html`, включая устойчивые pixel probes.
+- `RetainedChart2D` на WebGPU и WebGL2: пиксели подписей и линии при замене
+  ряда, изменение диапазона после ввода, resize и повторное создание.
+- `RetainedChart3D` на обоих бэкендах. Gate проверяет изображение поверхности
+  и осей, обновление сетки, вращение, масштабирование, resize и повторное создание.
+- Открытие автономного `Termin-Chart3D.html` в отдельном каталоге через
+  `file://` с отключённой сетью и смену поверхности кнопкой.
 
 Успех обозначается маркером `TERMIN_WEB_CORE_SMOKE_PASSED`. При любой ошибке
 команда возвращает ненулевой exit code и сохраняет diagnostics.
@@ -76,6 +162,10 @@ Report schema v1 содержит:
 - package fetch, graphics init, native load, startup, first-frame и frame-time
   metrics;
 - input/resize counters и характеристики кадров до/после orbit;
+- диапазоны и результаты пиксельных проверок графика по каждому бэкенду
+  в поле `retained_chart2d`;
+- результаты проверки 3D-поверхности, осей и движения камеры для каждого
+  бэкенда в поле `retained_chart3d`, а для автономного файла — в `standalone_chart3d`;
 - статус, длительность gate и ошибку/Chrome stderr при падении.
 
 GitHub Actions job `web-runtime-chromium` запускает те же публичные build и

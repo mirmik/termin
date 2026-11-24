@@ -1367,10 +1367,15 @@ MSVC-специфичные warnings (C4251 — STL-члены в dllexport-кл
 
 ## WebAssembly core profile
 
-Браузерный runtime начинается с намеренно небольшой статической композиции:
-`termin-base`, `termin-inspect`, `termin-mesh`, `termin-scene`, minimal-only
-`termin-bootstrap`, minimal-only `termin-runtime` и минимального среза
-`termin-graphics`. Профиль CMake
+Браузерный runtime статически линкует `termin-web-core` с библиотеками
+сцены, рендеринга и `tcplot`. Для линейных графиков модуль
+`termin-web-chart2d.mjs` создаёт `RetainedChart2D` на переданном canvas
+и загружает готовые шейдеры из отдельного `graphics.trpkg`.
+Пример встраивания приведён в [руководстве по web runtime](web-runtime-browser-gate.md#интерактивный-график-данных).
+Модуль `termin-web-chart3d.mjs` рисует декартову поверхность через
+`RetainedChart3D`. Сборка также создаёт автономный `bin/Termin-Chart3D.html`,
+который открывается с диска. [Пример передачи сетки](web-runtime-browser-gate.md#интерактивная-3d-поверхность).
+Профиль CMake
 `TERMIN_PLATFORM_WEB` включает два tgfx2 presentation path: WebGPU через
 закреплённый Emscripten port `emdawnwebgpu` и WebGL2 через общий constrained-GL
 backend. Профиль исключает desktop renderer stack, windowing,

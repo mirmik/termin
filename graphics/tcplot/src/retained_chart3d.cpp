@@ -1265,6 +1265,8 @@ namespace {
 
             tc_render_item item{};
             item.kind = render_kind;
+            item.material = tc_material_handle_invalid();
+            item.material_phase_index = SIZE_MAX;
             item.source.domain_id = tcplot::PLOT_RENDER_ITEM_SOURCE_DOMAIN;
             item.source.namespace_id = scene_->scene_id_;
             item.source.object_id = slot.index;

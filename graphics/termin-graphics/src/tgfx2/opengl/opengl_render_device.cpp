@@ -787,26 +787,28 @@ namespace tgfx {
     // --- Buffer ---
 
     namespace {
-        struct CopyBufferBinding {
+        struct ScopedTransferBufferBinding {
             GLenum target;
             GLint previous = 0;
 
-            CopyBufferBinding(GLenum copy_target, GLuint buffer) : target(copy_target) {
-                // COPY_READ/WRITE_BUFFER are also their binding query enums.
-                glGetIntegerv(target, &previous);
+            ScopedTransferBufferBinding(GLenum transfer_target, GLuint buffer)
+                : target(transfer_target) {
+                // The COPY_READ/WRITE targets double as their binding queries.
+                const GLenum query = target == GL_ELEMENT_ARRAY_BUFFER ? GL_ELEMENT_ARRAY_BUFFER_BINDING : target;
+                glGetIntegerv(query, &previous);
                 glBindBuffer(target, buffer);
             }
-            ~CopyBufferBinding() {
+            ~ScopedTransferBufferBinding() {
                 glBindBuffer(target, static_cast<GLuint>(previous));
             }
         };
 
         bool valid_buffer_transfer(const GLBuffer& buffer, uint64_t offset, size_t size) {
             const auto native_max = static_cast<uint64_t>(std::numeric_limits<GLsizeiptr>::max());
-            return offset <= buffer.desc.size && size <= buffer.desc.size - offset &&
-                   offset <= native_max && size <= native_max - offset;
+            return offset <= buffer.desc.size && size <= buffer.desc.size - offset && offset <= native_max &&
+                   size <= native_max - offset;
         }
-    }
+    } // namespace
 
     BufferHandle OpenGLRenderDevice::create_buffer(const BufferDesc& desc) {
         if (desc.size > static_cast<uint64_t>(std::numeric_limits<GLsizeiptr>::max())) {
@@ -818,9 +820,15 @@ namespace tgfx {
         buf.target = gl::to_gl_buffer_target(desc.usage);
 
         glGenBuffers(1, &buf.gl_id);
-        CopyBufferBinding binding(GL_COPY_WRITE_BUFFER, buf.gl_id);
-        glBufferData(GL_COPY_WRITE_BUFFER, static_cast<GLsizeiptr>(desc.size), nullptr,
-                     gl::to_gl_buffer_usage(desc.cpu_visible));
+        // WebGL classifies a buffer by its first binding. Creating an index
+        // buffer through COPY_WRITE would permanently classify it as non-index.
+        const GLenum allocation_target =
+            gl_features_.tier == GlFeatureTier::WebGL2 && buf.target == GL_ELEMENT_ARRAY_BUFFER
+                ? GL_ELEMENT_ARRAY_BUFFER
+                : GL_COPY_WRITE_BUFFER;
+        ScopedTransferBufferBinding binding(allocation_target, buf.gl_id);
+        glBufferData(
+            allocation_target, static_cast<GLsizeiptr>(desc.size), nullptr, gl::to_gl_buffer_usage(desc.cpu_visible));
 
         return {buffers_.add(std::move(buf))};
     }
@@ -1319,7 +1327,7 @@ namespace tgfx {
         }
         if (data.empty())
             return;
-        CopyBufferBinding binding(GL_COPY_WRITE_BUFFER, buf->gl_id);
+        ScopedTransferBufferBinding binding(GL_COPY_WRITE_BUFFER, buf->gl_id);
         glBufferSubData(GL_COPY_WRITE_BUFFER, static_cast<GLintptr>(offset),
                        static_cast<GLsizeiptr>(data.size()), data.data());
     }
@@ -1420,7 +1428,7 @@ namespace tgfx {
         }
         if (data.empty())
             return;
-        CopyBufferBinding binding(GL_COPY_READ_BUFFER, buf->gl_id);
+        ScopedTransferBufferBinding binding(GL_COPY_READ_BUFFER, buf->gl_id);
         void* mapped = glMapBufferRange(
             GL_COPY_READ_BUFFER, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(data.size()), GL_MAP_READ_BIT);
         if (!mapped) {

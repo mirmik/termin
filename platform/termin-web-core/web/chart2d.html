@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Сигнал во времени · Termin</title>
+    <style>
+        :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; color: #e9eeee; background: #111518; }
+        * { box-sizing: border-box; }
+        body { margin: 0; }
+        main { width: min(100% - 32px, 1040px); margin: clamp(22px, 6vh, 64px) auto; }
+        header, footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+        header { margin-bottom: 18px; }
+        h1 { margin: 0; font-size: clamp(23px, 4vw, 36px); font-weight: 600; letter-spacing: -.04em; }
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+        button { font: inherit; font-size: 14px; border-radius: 7px; border: 1px solid #495256; padding: 9px 13px;
+                 background: #20282c; color: inherit; cursor: pointer; }
+        #change-series { background: #b1eddb; color: #103c31; border-color: #b1eddb; }
+        :focus-visible { outline: 2px solid white; outline-offset: 3px; }
+        button:disabled { opacity: .5; cursor: wait; }
+        canvas { display: block; width: 100%; height: clamp(280px, 60vh, 620px);
+                 border-radius: 9px; background: #15171c; touch-action: none; }
+        footer { align-items: baseline; color: #b7c2c3; font-size: 13px; line-height: 1.5; margin-top: 12px; }
+        footer p { margin: 0; }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <h1>Сигнал во времени</h1>
+        <div class="controls">
+            <button type="button" id="change-series" disabled>Показать затухание</button>
+            <button type="button" id="reset-range" disabled>Сбросить масштаб</button>
+        </div>
+    </header>
+    <canvas id="termin-canvas" aria-label="График напряжения от времени" aria-describedby="hint status"></canvas>
+    <footer>
+        <p id="hint">Сдвиг — перетаскивание или стрелки. Масштаб — колесо или клавиши + и −.</p>
+        <p id="status" role="status">Загрузка графика…</p>
+    </footer>
+</main>
+<script type="module">
+    import {createTerminChart2D} from "./termin-web-chart2d.mjs?v=20261124-chart3d1";
+
+    const canvas = document.querySelector("canvas");
+    const change = document.querySelector("#change-series");
+    const reset = document.querySelector("#reset-range");
+    const status = document.querySelector("#status");
+    const state = window.__terminChart2D = {status: "loading", chart: null, backend: "", error: ""};
+    const originalRange = {xMin: 0, xMax: 10, yMin: -1.25, yMax: 1.25};
+    const x = Float64Array.from({length: 501}, (_, i) => i / 50);
+    let damped = false;
+
+    function updateSignal() {
+        const y = x.map(t => damped ? Math.exp(-t / 4) * Math.cos(3 * t) : Math.sin(2 * t));
+        state.chart.setData(x, y);
+        change.textContent = damped ? "Показать синусоиду" : "Показать затухание";
+        status.textContent = `${damped ? "Затухающая косинусоида" : "Синусоида"} · ${state.backend}`;
+    }
+    try {
+        state.chart = await createTerminChart2D(canvas, {
+            backend: new URL(location.href).searchParams.get("backend") ?? "auto",
+            range: originalRange, xLabel: "Time (s)", yLabel: "Voltage (V)", seriesName: "V(t)",
+        });
+        state.backend = state.chart.backend;
+        updateSignal();
+        state.status = "ready";
+        change.disabled = reset.disabled = false;
+        change.addEventListener("click", () => {
+            damped = !damped;
+            updateSignal();
+        });
+        reset.addEventListener("click", () => state.chart.setRange(originalRange));
+    } catch (error) {
+        state.status = "error";
+        state.error = error.message;
+        status.textContent = error.message;
+        console.error("RetainedChart2D example failed", error);
+    }
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -44,6 +45,9 @@ extern "C" {
 }
 
 #include "visual_scene_example.hpp"
+#include "web_graphics_assets.hpp"
+#include "web_chart2d.hpp"
+#include "web_chart3d.hpp"
 #include "web_render_shaders.hpp"
 
 namespace {
@@ -91,12 +95,16 @@ namespace {
     std::string web_render_error;
 
     struct WebPlayerState {
+        std::string canvas_selector = "#termin-canvas";
         std::unique_ptr<WebGL2Context> webgl2_context;
         std::unique_ptr<tgfx::GraphicsHost> graphics_host;
+        std::unique_ptr<termin::web::WebChart2D> chart;
+        std::unique_ptr<termin::web::WebChart3D> chart3d;
         tgfx::IRenderDevice* device = nullptr;
         tgfx::WebGpuRenderDevice* webgpu_device = nullptr;
         tgfx::OpenGLRenderDevice* webgl2_device = nullptr;
         tgfx::OutputTransformRenderer output_transform;
+        tgfx::TextureHandle webgl2_srgb_attachment;
         tgfx::TextureHandle webgl2_presentation_texture;
         WebGraphicsBackend backend = WebGraphicsBackend::None;
         std::unique_ptr<termin::EngineCore> engine;
@@ -116,12 +124,14 @@ namespace {
     std::string web_player_graphics_error;
     std::string web_host_error;
     std::string web_visual_scene_error;
+    std::string web_chart_error;
     std::shared_ptr<termin::runtime::RuntimePackageReader> web_pending_package_reader;
     std::uint32_t web_host_frame_count = 0;
     bool web_host_loop_running = false;
     double web_host_loop_last_timestamp = -1.0;
 
     extern "C" int termin_web_host_tick(double delta_seconds);
+    extern "C" int termin_web_host_graphics_status();
 
     EM_BOOL web_host_animation_frame(double timestamp_ms, void*) {
         if (!web_host_loop_running)
@@ -146,6 +156,11 @@ namespace {
             web_host_frame_count = 0;
             return;
         }
+        if (web_player->webgl2_context && !web_player->webgl2_context->make_current()) {
+            tc_log_error("TerminWebHost unload: failed to make WebGL2 context current");
+        }
+        web_player->chart.reset();
+        web_player->chart3d.reset();
         if (web_player->engine) {
             for (tc_viewport_input_manager* input : web_player->viewport_input_managers) {
                 tc_viewport_input_manager_free(input);
@@ -170,14 +185,14 @@ namespace {
         }
         web_player->owned_displays.clear();
         web_player->output_transform.close();
+        if (web_player->webgl2_srgb_attachment) {
+            web_player->device->destroy(web_player->webgl2_srgb_attachment);
+        }
         if (web_player->webgl2_presentation_texture && web_player->device) {
             web_player->device->destroy(web_player->webgl2_presentation_texture);
             web_player->webgl2_presentation_texture = {};
         }
         if (web_player->graphics_host) {
-            if (web_player->webgl2_context && !web_player->webgl2_context->make_current()) {
-                tc_log_error("TerminWebHost unload: failed to make WebGL2 context current");
-            }
             tc_log_info("TerminWebHost unload: closing GraphicsHost");
             web_player->graphics_host->close();
             web_player->graphics_host.reset();
@@ -204,6 +219,61 @@ namespace {
         return display;
     }
 
+    tgfx::TextureHandle webgl2_canvas_target(tgfx::PixelFormat format) {
+        if (!web_player->webgl2_context->make_current()) {
+            throw std::runtime_error("failed to make WebGL2 context current for presentation");
+        }
+        auto& texture = tgfx::is_srgb_format(format) ? web_player->webgl2_srgb_attachment
+                                                     : web_player->webgl2_presentation_texture;
+        const auto current = texture ? web_player->device->texture_desc(texture) : tgfx::TextureDesc{};
+        if (texture && current.width == web_player->width && current.height == web_player->height &&
+            current.format == format) {
+            return texture;
+        }
+        tgfx::TextureDesc desc;
+        desc.width = web_player->width;
+        desc.height = web_player->height;
+        desc.format = format;
+        desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled | tgfx::TextureUsage::CopySrc;
+        const auto replacement = web_player->device->create_texture(desc);
+        if (!replacement) {
+            throw std::runtime_error("failed to allocate WebGL2 presentation texture");
+        }
+        if (texture) {
+            web_player->device->destroy(texture);
+        }
+        texture = replacement;
+        return texture;
+    }
+
+    bool encode_canvas(tgfx::TextureHandle input, tgfx::TextureHandle output, tgfx::OutputDitherMode dither) {
+        auto& context = web_player->graphics_host->context();
+        context.begin_frame();
+        bool transformed;
+        try {
+            transformed = web_player->output_transform.record(
+                context, input, output,
+                {.sampled_input_encoding = tgfx::TextureEncoding::Linear,
+                 .target_encoding = tgfx::TextureEncoding::SRGB, .dither = dither, .target_rgb_bits = 8});
+        } catch (...) {
+            context.end_frame();
+            throw;
+        }
+        context.end_frame();
+        return transformed;
+    }
+
+    tgfx::TextureHandle encode_webgl2_canvas(tgfx::TextureHandle input, tgfx::OutputDitherMode dither) {
+        // WebGL2 blitFramebuffer decodes an sRGB read attachment when blitting
+        // to the linear default framebuffer. Transport the encoded bytes in a
+        // UNorm texture instead. Sampling the input already yields linear RGB.
+        const auto output = webgl2_canvas_target(tgfx::PixelFormat::RGBA8_UNorm);
+        if (!encode_canvas(input, output, dither)) {
+            throw std::runtime_error("WebGL2 canvas output transform failed");
+        }
+        return output;
+    }
+
     bool present_web_player_canvas() {
         if (!web_player || !web_player->device || !tc_display_handle_valid(web_player->presentation_display)) {
             return false;
@@ -223,52 +293,10 @@ namespace {
             web_player->webgpu_device->blit_to_texture(canvas, tgfx::TextureHandle{output_texture_id}, extent, extent);
             web_player->device->present();
         } else if (web_player->backend == WebGraphicsBackend::WebGL2) {
-            if (!web_player->webgl2_context->make_current()) {
-                tc_log_error("TerminWebHost: failed to make WebGL2 context current for presentation");
-                return false;
-            }
+            const auto target = encode_webgl2_canvas(tgfx::TextureHandle{output_texture_id},
+                                                     tgfx::OutputDitherMode::StableSpatial);
 
-            const tgfx::TextureDesc current_desc = web_player->webgl2_presentation_texture
-                                                       ? web_player->device->texture_desc(
-                                                             web_player->webgl2_presentation_texture)
-                                                       : tgfx::TextureDesc{};
-            if (!web_player->webgl2_presentation_texture || current_desc.width != web_player->width ||
-                current_desc.height != web_player->height || current_desc.format != tgfx::PixelFormat::RGBA8_sRGB) {
-                if (web_player->webgl2_presentation_texture) {
-                    web_player->device->destroy(web_player->webgl2_presentation_texture);
-                }
-                tgfx::TextureDesc desc;
-                desc.width = web_player->width;
-                desc.height = web_player->height;
-                desc.format = tgfx::PixelFormat::RGBA8_sRGB;
-                desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::Sampled |
-                             tgfx::TextureUsage::CopySrc;
-                web_player->webgl2_presentation_texture = web_player->device->create_texture(desc);
-                if (!web_player->webgl2_presentation_texture) {
-                    tc_log_error("TerminWebHost: failed to allocate WebGL2 sRGB presentation texture");
-                    return false;
-                }
-            }
-
-            tgfx::RenderContext2& output_context = web_player->graphics_host->context();
-            output_context.begin_frame();
-            const bool transformed = web_player->output_transform.record(
-                output_context,
-                tgfx::TextureHandle{output_texture_id},
-                web_player->webgl2_presentation_texture,
-                tgfx::OutputTransformParams{
-                    .sampled_input_encoding = tgfx::TextureEncoding::Linear,
-                    .target_encoding = tgfx::TextureEncoding::SRGB,
-                    .dither = tgfx::OutputDitherMode::StableSpatial,
-                    .target_rgb_bits = 8,
-                });
-            output_context.end_frame();
-            if (!transformed) {
-                tc_log_error("TerminWebHost: WebGL2 display output transform failed");
-                return false;
-            }
-
-            web_player->webgl2_device->present_to_default_framebuffer(web_player->webgl2_presentation_texture,
+            web_player->webgl2_device->present_to_default_framebuffer(target,
                                                                       static_cast<int>(web_player->width),
                                                                       static_cast<int>(web_player->height));
             web_player->device->present();
@@ -615,39 +643,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_load(const char* root_path) 
         render_engine->set_graphics_host(*web_player->graphics_host);
         termin::ShaderArtifactResolver::ReadCallback read_artifact;
         if (web_player->package.shader_runtime.resource_provider) {
-            const auto provider = web_player->package.shader_runtime.resource_provider;
-            tgfx::set_builtin_shader_root(web_player->package.shader_runtime.builtin_shader_root.c_str());
-            tgfx::set_builtin_shader_read_callback([provider](std::string_view path, std::string& output) {
-                if (!provider->contains(path))
-                    return false;
-                try {
-                    const termin::runtime::RuntimePackageBytes bytes = provider->read(path);
-                    output.assign(reinterpret_cast<const char*>(bytes.view().data()), bytes.view().size());
-                    return true;
-                } catch (const std::exception& exception) {
-                    tc_log_error("TerminWebHost built-in shader read failed for '%.*s': %s",
-                                 static_cast<int>(path.size()),
-                                 path.data(),
-                                 exception.what());
-                    return false;
-                }
-            });
-            read_artifact = [provider = web_player->package.shader_runtime.resource_provider](
-                                std::string_view path, std::vector<std::uint8_t>& output) {
-                if (!provider->contains(path))
-                    return false;
-                try {
-                    const termin::runtime::RuntimePackageBytes bytes = provider->read(path);
-                    output.assign(bytes.view().begin(), bytes.view().end());
-                    return true;
-                } catch (const std::exception& exception) {
-                    tc_log_error("TerminWebHost shader artifact read failed for '%.*s': %s",
-                                 static_cast<int>(path.size()),
-                                 path.data(),
-                                 exception.what());
-                    return false;
-                }
-            };
+            read_artifact = termin::web::bind_package_shader_sources(
+                web_player->package.shader_runtime.resource_provider,
+                web_player->package.shader_runtime.builtin_shader_root.c_str());
         }
         render_engine->configure_shader_artifacts(web_player->package.shader_runtime.artifact_root,
                                                   web_player->package.shader_runtime.cache_root,
@@ -849,8 +847,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE std::size_t termin_web_host_entity_count() {
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint32_t height) {
-    if (!web_player || !web_player->device || !tc_display_handle_valid(web_player->presentation_display) ||
-        web_player_graphics_status != 2) {
+    if (!web_player || !web_player->device || web_player_graphics_status != 2) {
         return 0;
     }
     if (width == 0 || height == 0) {
@@ -863,17 +860,20 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_resize(uint32_t width, uint3
     try {
         if (web_player->webgpu_device) {
             web_player->webgpu_device->configure_surface(width, height);
-        } else if (emscripten_set_canvas_element_size("#termin-canvas",
+        } else if (emscripten_set_canvas_element_size(web_player->canvas_selector.c_str(),
                                                       static_cast<int>(width),
                                                       static_cast<int>(height)) != EMSCRIPTEN_RESULT_SUCCESS) {
             throw std::runtime_error("failed to resize the WebGL2 canvas drawing buffer");
         }
-        if (!tc_display_resize(web_player->presentation_display, static_cast<int>(width), static_cast<int>(height))) {
+        if (tc_display_handle_valid(web_player->presentation_display) &&
+            !tc_display_resize(web_player->presentation_display, static_cast<int>(width), static_cast<int>(height))) {
             throw std::runtime_error("offscreen display rejected browser resize");
         }
         web_player->width = width;
         web_player->height = height;
-        web_player->engine->scene_manager.request_render();
+        if (web_player->engine) {
+            web_player->engine->scene_manager.request_render();
+        }
         return 1;
     } catch (const std::exception& exception) {
         web_host_error = exception.what();
@@ -927,45 +927,309 @@ extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_host_dispatch_focus_lost() {
     return web_host_input_ready() && tc_display_dispatch_focus_lost(web_player->presentation_display);
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_visual_scene_render() {
-    if (!web_player || web_player_graphics_status != 2 || !web_player->device || !web_player->graphics_host) {
-        web_visual_scene_error = "browser graphics player is not initialized";
-        tc_log_error("TerminWebVisualScene: %s", web_visual_scene_error.c_str());
+namespace {
+
+    template <typename Draw> bool render_canvas(tgfx::TextureEncoding encoding, std::string& error, Draw draw) {
+        error.clear();
+        try {
+            if (!web_player || termin_web_host_graphics_status() != 2) {
+                throw std::runtime_error(web_player_graphics_error.empty() ? "browser graphics host is not ready"
+                                                                           : web_player_graphics_error);
+            }
+            const auto target =
+                web_player->webgpu_device
+                    ? web_player->webgpu_device->acquire_surface_texture(encoding)
+                    : webgl2_canvas_target(tgfx::pixel_format_for_encoding(tgfx::PixelFormat::RGBA8_UNorm, encoding));
+            if (!draw(target)) {
+                throw std::runtime_error(error.empty() ? "failed to render canvas" : error);
+            }
+            if (web_player->webgl2_device) {
+                const auto output = encoding == tgfx::TextureEncoding::SRGB
+                                        ? encode_webgl2_canvas(target, tgfx::OutputDitherMode::Disabled)
+                                        : target;
+                web_player->webgl2_device->present_to_default_framebuffer(
+                    output, static_cast<int>(web_player->width), static_cast<int>(web_player->height));
+            }
+            web_player->device->present();
+            return true;
+        } catch (const std::exception& exception) {
+            error = exception.what();
+            tc_log_error("TerminWeb canvas render: %s", error.c_str());
+            return false;
+        }
+    }
+
+    int chart_failure(const char* message) {
+        web_chart_error = message;
+        tc_log_error("TerminWebChart: %s", message);
         return 0;
     }
-    tgfx::TextureHandle presentation_texture;
-    bool owns_presentation_texture = false;
-    if (web_player->backend == WebGraphicsBackend::WebGPU) {
-        presentation_texture = web_player->webgpu_device->acquire_surface_texture();
-    } else if (web_player->backend == WebGraphicsBackend::WebGL2) {
-        if (!web_player->webgl2_context->make_current()) {
-            web_visual_scene_error = "failed to make WebGL2 context current";
-            tc_log_error("TerminWebVisualScene: %s", web_visual_scene_error.c_str());
-            return 0;
+
+    tc_retained_chart2d* active_chart() {
+        if (!web_player || !web_player->chart) {
+            chart_failure("chart is not initialized");
+            return nullptr;
         }
-        tgfx::TextureDesc presentation_desc;
-        presentation_desc.width = web_player->width;
-        presentation_desc.height = web_player->height;
-        presentation_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
-        presentation_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
-        presentation_texture = web_player->device->create_texture(presentation_desc);
-        owns_presentation_texture = true;
+        return web_player->chart->chart();
     }
-    const bool rendered = termin::web::render_visual_scene_example(*web_player->device,
-                                                                   *web_player->graphics_host,
-                                                                   presentation_texture,
-                                                                   web_player->width,
-                                                                   web_player->height,
-                                                                   web_visual_scene_error);
-    if (rendered && web_player->backend == WebGraphicsBackend::WebGL2) {
-        web_player->webgl2_device->present_to_default_framebuffer(
-            presentation_texture, static_cast<int>(web_player->width), static_cast<int>(web_player->height));
-        web_player->device->present();
+
+    tc_retained_chart3d* active_chart3d() {
+        if (!web_player || !web_player->chart3d) {
+            chart_failure("3D chart is not initialized");
+            return nullptr;
+        }
+        return web_player->chart3d->chart();
     }
-    if (owns_presentation_texture) {
-        web_player->device->destroy(presentation_texture);
+
+    void prepare_chart_host() {
+        if (!web_player || web_player_graphics_status != 2 || web_player->engine || web_player->chart ||
+            web_player->chart3d) {
+            throw std::runtime_error("chart creation requires an unused browser graphics host");
+        }
+        if (!web_pending_package_reader) {
+            throw std::runtime_error("chart graphics assets have not been supplied");
+        }
+        termin::web::configure_graphics_assets(*web_player->graphics_host, std::move(web_pending_package_reader));
     }
-    return rendered ? 1 : 0;
+
+} // namespace
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_visual_scene_render() {
+    return render_canvas(tgfx::TextureEncoding::Linear, web_visual_scene_error, [](tgfx::TextureHandle target) {
+        return termin::web::render_visual_scene_example(
+            *web_player->graphics_host, target, web_player->width, web_player->height, web_visual_scene_error);
+    });
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_create(
+    const char* title, const char* x_label, const char* y_label, const char* series_name, float pixel_scale) {
+    try {
+        prepare_chart_host();
+        web_player->chart = std::make_unique<termin::web::WebChart2D>(
+            *web_player->graphics_host,
+            tc_plot_rect2d{0, 0, static_cast<float>(web_player->width), static_cast<float>(web_player->height)},
+            pixel_scale,
+            title,
+            x_label,
+            y_label,
+            series_name);
+        web_chart_error.clear();
+        return 1;
+    } catch (const std::exception& exception) {
+        return chart_failure(exception.what());
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int
+termin_web_chart2d_set_data(const double* x, const double* y, size_t count, int fit) {
+    if (!active_chart()) {
+        return 0;
+    }
+    try {
+        if (!web_player->chart->set_data(x, y, count, fit)) {
+            return chart_failure("could not set line data");
+        }
+        return 1;
+    } catch (const std::exception& exception) {
+        return chart_failure(exception.what());
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_set_range(double xmin, double xmax, double ymin, double ymax) {
+    auto* chart = active_chart();
+    if (!chart) {
+        return 0;
+    }
+    return tc_retained_chart2d_set_range(chart, {xmin, xmax, ymin, ymax}) ? 1 : chart_failure("invalid range");
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_range(double* out) {
+    tc_plot_range2d range;
+    auto* chart = active_chart();
+    if (!out || !tc_retained_chart2d_range(chart, &range)) {
+        return chart_failure("could not read chart range");
+    }
+    out[0] = range.x_min;
+    out[1] = range.x_max;
+    out[2] = range.y_min;
+    out[3] = range.y_max;
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_resize(uint32_t width, uint32_t height, float pixel_scale) {
+    auto* chart = active_chart();
+    if (!chart) {
+        return 0;
+    }
+    if (!std::isfinite(pixel_scale) || pixel_scale <= 0) {
+        return chart_failure("invalid pixel scale");
+    }
+    if (!termin_web_host_resize(width, height)) {
+        return chart_failure(web_host_error.c_str());
+    }
+    const tc_plot_rect2d viewport{0, 0, static_cast<float>(width), static_cast<float>(height)};
+    return tc_retained_chart2d_set_viewport(chart, viewport, pixel_scale) ? 1 : chart_failure("invalid chart viewport");
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_pointer(int phase, float x, float y, int button) {
+    auto* chart = active_chart();
+    if (!chart) {
+        return 0;
+    }
+    switch (phase) {
+    case 0:
+        return tc_retained_chart2d_pointer_down(chart, x, y, button);
+    case 1:
+        return tc_retained_chart2d_pointer_move(chart, x, y);
+    case 2:
+        return tc_retained_chart2d_pointer_up(chart, x, y, button);
+    case 3:
+        tc_retained_chart2d_cancel_interaction(chart);
+        return 1;
+    default:
+        return chart_failure("unknown chart pointer phase");
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_wheel(float x, float y, float steps, int x_only) {
+    auto* chart = active_chart();
+    return chart && tc_retained_chart2d_wheel(chart, x, y, steps, x_only);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_render() {
+    if (!active_chart()) {
+        return 0;
+    }
+    return render_canvas(tgfx::TextureEncoding::SRGB, web_chart_error, [](tgfx::TextureHandle target) {
+        return web_player->chart->render(
+            target.id, static_cast<int>(web_player->width), static_cast<int>(web_player->height));
+    });
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart2d_destroy() {
+    if (web_player && web_player->chart) {
+        if (web_player->webgl2_context && !web_player->webgl2_context->make_current()) {
+            return chart_failure("failed to make WebGL2 context current for chart disposal");
+        }
+        web_player->chart.reset();
+    }
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_chart2d_error() {
+    return web_chart_error.c_str();
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_create(const char* x_label, const char* y_label,
+                                                              const char* z_label) {
+    try {
+        prepare_chart_host();
+        web_player->chart3d = std::make_unique<termin::web::WebChart3D>(*web_player->graphics_host,
+                                                                       x_label, y_label, z_label);
+        web_chart_error.clear();
+        return 1;
+    } catch (const std::exception& exception) {
+        return chart_failure(exception.what());
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_set_surface(
+    const double* x, const double* y, const double* z, uint32_t rows, uint32_t columns, int fit) {
+    if (!active_chart3d()) {
+        return 0;
+    }
+    return web_player->chart3d->set_surface(x, y, z, rows, columns, fit) ? 1 : chart_failure("invalid surface data");
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_fit() {
+    auto* chart = active_chart3d();
+    if (!chart) {
+        return 0;
+    }
+    tc_retained_chart3d_fit_camera(chart);
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_reset() {
+    auto* chart = active_chart3d();
+    if (!chart) {
+        return 0;
+    }
+    tc_retained_chart3d_reset_camera(chart);
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_camera(double* out) {
+    tc_orbit_camera3d_state camera{};
+    if (!out || !tc_retained_chart3d_get_camera(active_chart3d(), &camera)) {
+        return chart_failure("could not read 3D chart camera");
+    }
+    const std::array values{camera.target_x, camera.target_y, camera.target_z, camera.distance, camera.azimuth,
+                            camera.elevation, camera.fov_y, camera.near_clip, camera.far_clip, camera.ortho_size};
+    std::memcpy(out, values.data(), sizeof(double) * values.size());
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_resize(uint32_t width, uint32_t height) {
+    if (!active_chart3d()) {
+        return 0;
+    }
+    return termin_web_host_resize(width, height) ? 1 : chart_failure(web_host_error.c_str());
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_pointer(int phase, float x, float y, int button) {
+    auto* chart = active_chart3d();
+    if (!chart) {
+        return 0;
+    }
+    if (!std::isfinite(x) || !std::isfinite(y)) {
+        return chart_failure("invalid chart pointer position");
+    }
+    switch (phase) {
+    case 0:
+        return tc_retained_chart3d_pointer_down(chart, x, y, button);
+    case 1:
+        tc_retained_chart3d_pointer_move(chart, x, y);
+        return 1;
+    case 2:
+    case 3:
+        tc_retained_chart3d_pointer_up(chart, x, y, button);
+        return 1;
+    default:
+        return chart_failure("unknown chart pointer phase");
+    }
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_wheel(float x, float y, float steps) {
+    return tc_retained_chart3d_wheel(active_chart3d(), x, y, steps);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_render() {
+    auto* chart = active_chart3d();
+    if (!chart) {
+        return 0;
+    }
+    // The retained renderer publishes linear RGB in a UNorm texture. Write
+    // display-encoded bytes to the canvas' UNorm target on both backends.
+    return render_canvas(tgfx::TextureEncoding::Linear, web_chart_error, [chart](tgfx::TextureHandle target) {
+        const tgfx::TextureHandle source{tc_retained_chart3d_render(
+            chart, static_cast<int>(web_player->width), static_cast<int>(web_player->height))};
+        return source && encode_canvas(source, target, tgfx::OutputDitherMode::Disabled);
+    });
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int termin_web_chart3d_destroy() {
+    if (web_player && web_player->chart3d) {
+        if (web_player->webgl2_context && !web_player->webgl2_context->make_current()) {
+            return chart_failure("failed to make WebGL2 context current for chart disposal");
+        }
+        web_player->chart3d.reset();
+    }
+    return 1;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_chart3d_error() {
+    return web_chart_error.c_str();
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_visual_scene_error() {
@@ -973,7 +1237,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char* termin_web_visual_scene_error() {
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int
-termin_web_host_graphics_start(uint32_t width, uint32_t height, int requested_backend) {
+termin_web_host_graphics_start(uint32_t width, uint32_t height, int requested_backend, const char* canvas_selector) {
     if (web_player_graphics_status != 0)
         return web_player_graphics_status;
     if (width == 0 || height == 0) {
@@ -982,6 +1246,9 @@ termin_web_host_graphics_start(uint32_t width, uint32_t height, int requested_ba
         return web_player_graphics_status;
     }
     web_player = std::make_unique<WebPlayerState>();
+    if (canvas_selector && *canvas_selector) {
+        web_player->canvas_selector = canvas_selector;
+    }
     web_player->width = width;
     web_player->height = height;
 
@@ -997,7 +1264,7 @@ termin_web_host_graphics_start(uint32_t width, uint32_t height, int requested_ba
             attributes.majorVersion = 2;
             attributes.minorVersion = 0;
             attributes.enableExtensionsByDefault = EM_TRUE;
-            context->handle = emscripten_webgl_create_context("#termin-canvas", &attributes);
+            context->handle = emscripten_webgl_create_context(web_player->canvas_selector.c_str(), &attributes);
             if (context->handle <= 0) {
                 throw std::runtime_error("browser refused to create a WebGL 2 context");
             }
@@ -1032,7 +1299,7 @@ termin_web_host_graphics_start(uint32_t width, uint32_t height, int requested_ba
 
     web_player_graphics_status = 1;
     tgfx::WebGpuDeviceRequest request;
-    request.canvas_selector = "#termin-canvas";
+    request.canvas_selector = web_player->canvas_selector.c_str();
     request.width = width;
     request.height = height;
     tgfx::WebGpuRenderDevice::request_async(

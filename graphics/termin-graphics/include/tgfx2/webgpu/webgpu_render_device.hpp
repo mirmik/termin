@@ -151,6 +151,7 @@ namespace tgfx {
 
         void configure_surface(uint32_t width, uint32_t height);
         TextureHandle acquire_surface_texture();
+        TextureHandle acquire_surface_texture(TextureEncoding attachment_encoding);
         PixelFormat surface_pixel_format() const;
         bool has_device_error() const {
             return error_state_->failed;

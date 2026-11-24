@@ -16,7 +16,10 @@ configure_file(
 
 add_executable(termin_web_core
     src/visual_scene_example.cpp
+    src/web_chart2d.cpp
+    src/web_chart3d.cpp
     src/web_core.cpp
+    src/web_graphics_assets.cpp
 )
 target_include_directories(termin_web_core PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
@@ -30,10 +33,16 @@ target_link_libraries(termin_web_core PRIVATE
     termin_scene::termin_scene
     termin_visual_scene::termin_visual_scene
     tgfx::termin_graphics2
+    tcplot::tcplot
 )
+set(TERMIN_WEB_CHART_FONT
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf")
+set_property(TARGET termin_web_core APPEND PROPERTY LINK_DEPENDS "${TERMIN_WEB_CHART_FONT}")
+target_compile_options(termin_web_core PRIVATE -fexceptions)
 target_link_options(termin_web_core PRIVATE
     "-fexceptions"
     "--no-entry"
+    "--embed-file" "${TERMIN_WEB_CHART_FONT}@/fonts/DroidSans.ttf"
     "-sMODULARIZE=1"
     "-sEXPORT_ES6=1"
     "-sEXPORT_NAME=createTerminWebCore"
@@ -43,7 +52,7 @@ target_link_options(termin_web_core PRIVATE
     "-sMIN_WEBGL_VERSION=2"
     "-sMAX_WEBGL_VERSION=2"
     "-sFULL_ES3=1"
-    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_termin_web_core_smoke','_termin_web_core_lifecycle_smoke','_termin_web_core_shutdown','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_backend','_termin_web_host_graphics_error','_termin_web_host_set_package_blob','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_visual_scene_render','_termin_web_visual_scene_error','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
+    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_termin_web_core_smoke','_termin_web_core_lifecycle_smoke','_termin_web_core_shutdown','_termin_web_host_graphics_start','_termin_web_host_graphics_status','_termin_web_host_graphics_backend','_termin_web_host_graphics_error','_termin_web_host_set_package_blob','_termin_web_host_load','_termin_web_host_load_headless','_termin_web_host_tick','_termin_web_host_loop_start','_termin_web_host_loop_stop','_termin_web_host_unload','_termin_web_host_error','_termin_web_host_frame_count','_termin_web_host_entity_count','_termin_web_host_resize','_termin_web_host_dispatch_pointer','_termin_web_host_dispatch_mouse_move','_termin_web_host_dispatch_mouse_button','_termin_web_host_dispatch_wheel','_termin_web_host_dispatch_key','_termin_web_host_dispatch_text','_termin_web_host_dispatch_focus_lost','_termin_web_visual_scene_render','_termin_web_visual_scene_error','_termin_web_chart2d_create','_termin_web_chart2d_set_data','_termin_web_chart2d_set_range','_termin_web_chart2d_resize','_termin_web_chart2d_pointer','_termin_web_chart2d_wheel','_termin_web_chart2d_range','_termin_web_chart2d_render','_termin_web_chart2d_destroy','_termin_web_chart2d_error','_termin_web_chart3d_create','_termin_web_chart3d_set_surface','_termin_web_chart3d_resize','_termin_web_chart3d_pointer','_termin_web_chart3d_wheel','_termin_web_chart3d_fit','_termin_web_chart3d_reset','_termin_web_chart3d_camera','_termin_web_chart3d_render','_termin_web_chart3d_destroy','_termin_web_chart3d_error','_termin_web_render_smoke_start','_termin_web_render_smoke_status','_termin_web_render_smoke_error','_termin_web_render_smoke_resize']"
     "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','FS','ccall','getExceptionMessage','HEAPU8']"
 )
 set_target_properties(termin_web_core PROPERTIES
@@ -58,6 +67,14 @@ configure_file(web/termin-web-input.mjs "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termi
 configure_file(web/smoke.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/smoke.html" COPYONLY)
 configure_file(web/viewer.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/viewer.html" COPYONLY)
 configure_file(web/visual-scene.html "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/visual-scene.html" COPYONLY)
+set(TERMIN_WEB_CHART_MODULES
+    termin-web-chart.mjs
+    termin-web-chart2d.mjs
+    termin-web-chart3d.mjs
+)
+foreach(asset IN ITEMS ${TERMIN_WEB_CHART_MODULES} chart2d.html chart3d.html)
+    configure_file("web/${asset}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${asset}" COPYONLY)
+endforeach()
 foreach(TERMIN_WEB_STATIC_FIXTURE
         core-package
         invalid-package
@@ -90,6 +107,11 @@ set(TERMIN_WEB_HOST_SLANGC "" CACHE FILEPATH
     "Native slangc used to prepare offline WebGL2 artifacts")
 set(TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT "" CACHE PATH
     "Canonical native build root containing offline built-in shader artifacts")
+if(NOT EXISTS "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}/builtin-shader-artifacts.json")
+    message(FATAL_ERROR
+        "Web packaging requires TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT with a "
+        "built-in shader artifact manifest. Configure through 'task build:web'.")
+endif()
 if(TGFX2_ENABLE_WEBGL2)
     if(NOT EXISTS "${TERMIN_WEB_HOST_SHADERC}")
         message(FATAL_ERROR
@@ -100,11 +122,6 @@ if(TGFX2_ENABLE_WEBGL2)
         message(FATAL_ERROR
             "WebGL2 packaging requires native TERMIN_WEB_HOST_SLANGC. "
             "Configure through 'task build:web -- ...' or provide the executable explicitly.")
-    endif()
-    if(NOT EXISTS "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}/builtin-shader-artifacts.json")
-        message(FATAL_ERROR
-            "Web packaging requires TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT with a "
-            "built-in shader artifact manifest. Configure through 'task build:web'.")
     endif()
     set(TERMIN_WEBGL2_FIXTURE_STAMP
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/fixtures/render-package/.webgl2-artifacts.stamp")
@@ -131,6 +148,35 @@ endif()
 
 set(TERMIN_PACKAGE_BLOB_SCRIPT
     "${CMAKE_CURRENT_SOURCE_DIR}/../../editor/termin-project-build/python/termin/project_build/runtime_package_blob.py")
+file(GLOB_RECURSE TERMIN_WEB_GRAPHICS_ASSETS CONFIGURE_DEPENDS
+    "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}/builtin_shaders/*"
+    "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}/shaders/*")
+set(TERMIN_WEB_GRAPHICS_PACKAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/graphics.trpkg")
+add_custom_command(OUTPUT "${TERMIN_WEB_GRAPHICS_PACKAGE}"
+    COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_PACKAGE_BLOB_SCRIPT}"
+        "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}" "${TERMIN_WEB_GRAPHICS_PACKAGE}"
+    DEPENDS "${TERMIN_PACKAGE_BLOB_SCRIPT}"
+        "${TERMIN_WEB_HOST_BUILTIN_SHADER_ROOT}/builtin-shader-artifacts.json"
+        ${TERMIN_WEB_GRAPHICS_ASSETS}
+    VERBATIM)
+add_custom_target(termin_web_graphics_package DEPENDS "${TERMIN_WEB_GRAPHICS_PACKAGE}")
+add_dependencies(termin_web_core termin_web_graphics_package)
+
+set(TERMIN_WEB_CHART3D_PAGE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Termin-Chart3D.html")
+set(TERMIN_WEB_CHART_PACKER "${CMAKE_CURRENT_SOURCE_DIR}/tools/package_chart_html.py")
+add_custom_command(OUTPUT "${TERMIN_WEB_CHART3D_PAGE}"
+    COMMAND "${TERMIN_HOST_PYTHON}" "${TERMIN_WEB_CHART_PACKER}"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/chart3d.html" "${TERMIN_WEB_CHART3D_PAGE}"
+    DEPENDS termin_web_core "${TERMIN_WEB_CHART_PACKER}" "${TERMIN_WEB_GRAPHICS_PACKAGE}"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/chart3d.html"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart3d.mjs"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-chart.mjs"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-core.mjs"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-host.mjs"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin-web-input.mjs"
+    VERBATIM)
+add_custom_target(termin_web_chart3d_standalone DEPENDS "${TERMIN_WEB_CHART3D_PAGE}")
+
 set(TERMIN_WEB_FIXTURE_PACKAGES)
 foreach(TERMIN_WEB_FIXTURE
         core-package
@@ -173,7 +219,7 @@ add_custom_target(termin_web_core_browser_smoke
     COMMAND "${TERMIN_HOST_PYTHON}"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/browser_smoke.py"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-    DEPENDS termin_web_core termin_web_core_fixture_packages
+    DEPENDS termin_web_chart3d_standalone termin_web_core_fixture_packages
     USES_TERMINAL
 )
 if(TARGET tgfx2_webgpu_binding_layout_browser_gate)

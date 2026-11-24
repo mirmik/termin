@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import http.server
 import json
+import math
 import os
 import shutil
 import socket
@@ -16,6 +17,7 @@ import threading
 import time
 import urllib.request
 import zlib
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -44,6 +46,12 @@ def artifact_measurements(output_directory: str) -> dict:
         "termin-web-core.mjs",
         "termin-web-host.mjs",
         "termin-web-input.mjs",
+        "termin-web-chart.mjs",
+        "termin-web-chart2d.mjs",
+        "termin-web-chart3d.mjs",
+        "graphics.trpkg",
+        "chart2d.html",
+        "chart3d.html",
         "viewer.html",
         "visual-scene.html",
     )
@@ -309,10 +317,7 @@ def wait_for_visual_scene_example(devtools: DevToolsSocket, timeout: float = 30.
     raise RuntimeError("VisualScene2D example did not reach ready state")
 
 
-def analyze_png(
-    content: bytes,
-    probes: dict[str, tuple[int, int]] | None = None,
-) -> dict:
+def decode_png(content: bytes) -> tuple[int, int, int, list[bytearray]]:
     if not content.startswith(b"\x89PNG\r\n\x1a\n"):
         raise RuntimeError("DevTools canvas screenshot is not a PNG")
     offset = 8
@@ -365,6 +370,14 @@ def analyze_png(
                 raise RuntimeError(f"unsupported PNG filter {filter_type}")
         rows.append(scanline)
         previous = scanline
+    return width, height, channels, rows
+
+
+def analyze_png(
+    content: bytes,
+    probes: dict[str, tuple[int, int]] | None = None,
+) -> dict:
+    width, height, channels, rows = decode_png(content)
     bright_pixels = 0
     colors: set[tuple[int, int, int]] = set()
     channel_min = [255, 255, 255]
@@ -414,6 +427,294 @@ def console_diagnostics(devtools: DevToolsSocket) -> list[str]:
     return messages[-100:]
 
 
+def evaluate(devtools: DevToolsSocket, expression: str):
+    response = devtools.call("Runtime.evaluate", {
+        "expression": expression, "returnByValue": True, "awaitPromise": True,
+    })
+    if "exceptionDetails" in response:
+        raise RuntimeError(f"Chart script failed: {response['exceptionDetails']}")
+    return response["result"].get("value")
+
+
+def chart_screenshot(devtools: DevToolsSocket, width_fraction: float = 1.0) -> tuple[dict, bytes]:
+    # Synchronize with a scheduled chart redraw and Chromium's compositor.
+    evaluate(devtools, "new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))")
+    bounds = evaluate(devtools, """(() => {
+        const c = document.querySelector('canvas'), r = c.getBoundingClientRect();
+        return {x:r.x, y:r.y, width:r.width, height:r.height, bufferWidth:c.width, bufferHeight:c.height};
+    })()""")
+    screenshot = devtools.call("Page.captureScreenshot", {
+        "format": "png",
+        "clip": {"x": round(bounds["x"] + bounds["width"] * (1 - width_fraction) / 2),
+                 "y": round(bounds["y"]), "width": round(bounds["width"] * width_fraction),
+                 "height": round(bounds["height"]), "scale": 1},
+        "captureBeyondViewport": True,
+    })
+    return bounds, base64.b64decode(screenshot["data"])
+
+
+def chart_frame(devtools: DevToolsSocket) -> dict:
+    # The central half of the canvas contains both the plotted series and the X-axis caption.
+    bounds, png = chart_screenshot(devtools, width_fraction=0.5)
+    width, height, channels, rows = decode_png(png)
+    series_rows = []
+    series_colors = Counter()
+    plot_colors = Counter()
+    caption_pixels = 0
+    for y, row in enumerate(rows):
+        if height // 10 < y < height * 9 // 10:
+            if y % 7 == 0:
+                plot_colors.update(tuple(row[i:i + 3]) for i in range(0, len(row), channels * 7))
+            # The native line is teal; axes, grids, and label glyphs are gray.
+            teal = sum(1 for i in range(0, len(row), channels)
+                       if row[i + 1] > 120 and row[i + 1] > row[i] + 45 and row[i + 2] > row[i] + 35)
+            if teal >= width * 0.75:
+                series_rows.append(y)
+                series_colors.update(tuple(row[i:i + 3]) for i in range(0, len(row), channels))
+        if height - 26 <= y < height - 5:
+            caption_pixels += sum(1 for i in range(0, len(row), channels)
+                                  if min(row[i:i + 3]) > 130)
+    if not series_rows or caption_pixels < 12:
+        raise RuntimeError(f"RetainedChart2D native pixel probes failed: "
+                           f"{bounds=}, {series_rows=}, {caption_pixels=}; console={console_diagnostics(devtools)}")
+    color = series_colors.most_common(1)[0][0]
+    background = plot_colors.most_common(1)[0][0]
+    for feature, sampled, expected in (
+        ("line", color, (15, 209, 168)), ("plot background", background, (31, 33, 41)),
+    ):
+        if max(abs(a - b) for a, b in zip(sampled, expected, strict=True)) > 3:
+            raise RuntimeError(f"RetainedChart2D {feature} sRGB mismatch: expected {expected}, got {sampled}")
+    return {"bounds": bounds, "line_y": sum(series_rows) / len(series_rows),
+            "line_rgb": color, "plot_rgb": background, "caption_pixels": caption_pixels}
+
+
+def open_chart(devtools: DevToolsSocket, url: str, backend: str | None, name: str) -> str:
+    chart_url = f"{url}?backend={backend}" if backend else url
+    devtools.call("Page.navigate", {"url": chart_url})
+    state = None
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        state = evaluate(devtools, f"""(() => {{
+            const page = globalThis.__termin{name};
+            return page && {{url:location.href, status:page.status, backend:page.backend, error:page.error}};
+        }})()""")
+        if state and state["url"] == chart_url and state["status"] in ("ready", "error"):
+            break
+        time.sleep(0.05)
+    expected = (backend,) if backend else ("webgpu", "webgl2")
+    if not state or state["url"] != chart_url or state["status"] != "ready" or state["backend"] not in expected:
+        raise RuntimeError(f"Retained{name} failed to initialize on {backend}: {state}; "
+                           f"console={console_diagnostics(devtools)}")
+    return f"globalThis.__termin{name}.chart"
+
+
+def check_chart(devtools: DevToolsSocket, url: str, backend: str) -> dict:
+    chart = open_chart(devtools, url, backend, "Chart2D")
+    initial = evaluate(devtools, f"{chart}.getRange()")
+    x_min, x_max = initial["xMin"], initial["xMax"]
+    y_span = initial["yMax"] - initial["yMin"]
+    if not (x_max > x_min and y_span > 0):
+        raise RuntimeError(f"Invalid initial chart range: {initial}")
+
+    frames = []
+    for fraction in (0.75, 0.25):
+        y = initial["yMin"] + fraction * y_span
+        evaluate(devtools, f"{chart}.setData(new Float64Array([{x_min},{x_max}]), [{y},{y}]); true")
+        frames.append(chart_frame(devtools))
+    bounds = frames[1]["bounds"]
+    if frames[1]["line_y"] - frames[0]["line_y"] < bounds["height"] * 0.25:
+        raise RuntimeError(f"Replacing the chart series didn't move it down the plot: {frames}")
+
+    x, y = bounds["x"] + bounds["width"] * 0.55, bounds["y"] + bounds["height"] * 0.45
+    devtools.call("Input.dispatchMouseEvent", {
+        "type": "mouseWheel", "x": x, "y": y, "deltaX": 0, "deltaY": -100,
+    })
+    zoomed = chart_frame(devtools)
+    zoom_range = evaluate(devtools, f"{chart}.getRange()")
+    zoom_span = zoom_range["xMax"] - zoom_range["xMin"]
+    if not (0 < zoom_span < x_max - x_min) or abs(zoomed["line_y"] - frames[1]["line_y"]) < 2:
+        raise RuntimeError(f"Wheel zoom failed: {initial=}, {zoom_range=}, {zoomed=}")
+
+    for action, dx, dy, buttons in (
+        ("mousePressed", 0, 0, 4), ("mouseMoved", 36, -18, 4), ("mouseReleased", 36, -18, 0),
+    ):
+        devtools.call("Input.dispatchMouseEvent", {
+            "type": action, "x": x + dx, "y": y + dy, "button": "middle", "buttons": buttons,
+        })
+    panned = chart_frame(devtools)
+    pan_range = evaluate(devtools, f"{chart}.getRange()")
+    if (not math.isclose(pan_range["xMax"] - pan_range["xMin"], zoom_span)
+        or pan_range["xMin"] >= zoom_range["xMin"] or panned["line_y"] >= zoomed["line_y"] - 5):
+        raise RuntimeError(f"Pointer pan failed: {zoom_range=}, {pan_range=}, {panned=}")
+
+    width, height = round(bounds["width"] * 0.85), round(bounds["height"] * 0.8)
+    evaluate(devtools, f"""Object.assign(document.querySelector('canvas').style,
+        {{ width:'{width}px', height:'{height}px' }}); true""")
+    resized = chart_frame(devtools)
+    if (resized["bounds"]["bufferWidth"], resized["bounds"]["bufferHeight"]) != (width, height):
+        raise RuntimeError(f"Chart framebuffer did not follow CSS resize to {width}x{height}: {resized}")
+    invalid_range_error = evaluate(devtools, f"""(async () => {{
+        await {chart}.dispose();
+        const canvas = document.querySelector('canvas');
+        canvas.removeAttribute('id');
+        const {{createTerminChart2D}} = await import('./termin-web-chart2d.mjs');
+        const remounted = await createTerminChart2D(canvas, {{backend:'{backend}'}});
+        const before = remounted.getRange();
+        let invalidRangeError;
+        try {{
+            remounted.setRange({{...before, xMin:before.xMax}});
+        }} catch (error) {{
+            invalidRangeError = error;
+        }}
+        if (!(invalidRangeError instanceof Error) || !/range/i.test(invalidRangeError.message))
+            throw new Error('Invalid chart range did not produce an actionable JS Error: ' + invalidRangeError);
+        if (JSON.stringify(remounted.getRange()) !== JSON.stringify(before))
+            throw new Error('Invalid chart range changed the previous range');
+        remounted.setData([0, 1], [0, 1]);
+        await remounted.dispose();
+        if (canvas.id) throw new Error('Chart disposal left its generated canvas ID behind');
+        return invalidRangeError.message;
+    }})()""")
+    return {"series_frames": frames, "zoom_range": zoom_range, "pan_range": pan_range,
+            "resized": resized, "invalid_range_error": invalid_range_error}
+
+
+def surface_frame(devtools: DevToolsSocket, *, check_axes: bool = False) -> tuple[dict, list[tuple[int, ...]]]:
+    bounds, png = chart_screenshot(devtools)
+    width, height, channels, rows = decode_png(png)
+    samples = [tuple(row[i:i + 3]) for row in rows[::4] for i in range(0, width * channels, channels * 4)]
+    # The native mesh uses a colormap. Grid lines, axes, labels and background are neutral.
+    surface = [rgb for rgb in samples if max(rgb) - min(rgb) > 35]
+    bins = {tuple(c >> 4 for c in rgb) for rgb in surface}
+    if len(surface) < len(samples) * 0.02 or len(bins) < 6:
+        raise RuntimeError(f"Missing 3D surface in {width}x{height} canvas: {len(surface)} colored samples, "
+                           f"{len(bins)} colors; console={console_diagnostics(devtools)}")
+    metrics = {"bounds": bounds, "mesh_samples": len(surface), "mesh_colors": len(bins)}
+    if check_axes:
+        background = Counter(samples).most_common(1)[0][0]
+        if max(abs(a - b) for a, b in zip(background, (20, 23, 28), strict=True)) > 3:
+            raise RuntimeError(f"RetainedChart3D background sRGB mismatch: {background}")
+        # The default 3D grid is blue-gray; its tick and axis glyphs are brighter and neutral.
+        grid = sum(90 <= r <= 125 and 0 < g - r < 14 and 10 < b - r < 33 for r, g, b in samples)
+        glyphs = sum(min(rgb) >= 148 and max(rgb) - min(rgb) < 8 for rgb in samples)
+        if grid < 30 or glyphs < 4:
+            raise RuntimeError(f"Missing native 3D axes or labels in {width}x{height}: {grid=}, {glyphs=}")
+        metrics.update(grid_samples=grid, glyph_samples=glyphs, background=background)
+    return metrics, samples
+
+
+def surface_change(before: list, after: list, action: str) -> int:
+    changed = sum(max(abs(a - b) for a, b in zip(first, second, strict=True)) > 24
+                  for first, second in zip(before, after, strict=True))
+    if changed < len(before) * 0.01:
+        raise RuntimeError(f"RetainedChart3D {action} changed just {changed} of {len(before)} sampled pixels")
+    return changed
+
+
+def check_chart3d(devtools: DevToolsSocket, url: str, backend: str) -> dict:
+    chart = open_chart(devtools, url, backend, "Chart3D")
+    first, original = surface_frame(devtools, check_axes=True)
+    invalid_errors = evaluate(devtools, f"""(() => {{
+        const errors = [];
+        for (const z of [[0, 1, 2], [0, 1, Infinity, 0]]) {{
+            try {{ {chart}.setSurface([0, 1], [0, 1], z); }}
+            catch (error) {{ if (error instanceof Error && error.message) errors.push(error.message); }}
+        }}
+        {chart}.render();
+        return errors;
+    }})()""")
+    _, after_invalid = surface_frame(devtools)
+    if len(invalid_errors) != 2 or after_invalid != original:
+        raise RuntimeError(f"Invalid 3D surface input was accepted or changed the previous frame: {invalid_errors}")
+
+    # A non-square replacement grid exercises the layout of the packed axis and elevation data.
+    evaluate(devtools, f"""(() => {{
+        const x = Float64Array.from({{length: 31}}, (_, i) => (i - 15) / 7);
+        const y = Array.from({{length: 17}}, (_, j) => (j - 8) / 5);
+        {chart}.setSurface(x, y, y.flatMap(v => Array.from(x, u => Math.sin(2*u + v) + 0.5*v)), {{fit:true}});
+    }})()""")
+    updated, replacement = surface_frame(devtools)
+    replaced_pixels = surface_change(original, replacement, "data replacement")
+    camera = evaluate(devtools, f"{chart}.getCamera()")
+    bounds = updated["bounds"]
+    x, y = bounds["x"] + bounds["width"] / 2, bounds["y"] + bounds["height"] / 2
+    for action, dx, dy, buttons in (
+        ("mousePressed", 0, 0, 1), ("mouseMoved", 62, -28, 1), ("mouseReleased", 62, -28, 0),
+    ):
+        devtools.call("Input.dispatchMouseEvent", {
+            "type": action, "x": x + dx, "y": y + dy, "button": "left", "buttons": buttons,
+        })
+    _, orbited = surface_frame(devtools)
+    after_orbit = evaluate(devtools, f"{chart}.getCamera()")
+    if all(math.isclose(camera[k], after_orbit[k]) for k in ("azimuth", "elevation")):
+        raise RuntimeError(f"Pointer drag did not orbit the camera: {camera} -> {after_orbit}")
+    orbit_pixels = surface_change(replacement, orbited, "orbit")
+
+    devtools.call("Input.dispatchMouseEvent", {
+        "type": "mouseWheel", "x": x, "y": y, "deltaX": 0, "deltaY": -160,
+    })
+    _, zoomed = surface_frame(devtools)
+    after_zoom = evaluate(devtools, f"{chart}.getCamera()")
+    if not (0 < after_zoom["distance"] < after_orbit["distance"]):
+        raise RuntimeError(f"Wheel did not zoom the camera: {after_orbit} -> {after_zoom}")
+    zoom_pixels = surface_change(orbited, zoomed, "zoom")
+
+    width, height = round(bounds["width"] * 0.85), round(bounds["height"] * 0.8)
+    evaluate(devtools, f"""Object.assign(document.querySelector('canvas').style,
+        {{ width:'{width}px', height:'{height}px' }}); true""")
+    resized, _ = surface_frame(devtools)
+    if (resized["bounds"]["bufferWidth"], resized["bounds"]["bufferHeight"]) != (width, height):
+        raise RuntimeError(f"3D chart framebuffer did not follow CSS resize to {width}x{height}: {resized}")
+
+    evaluate(devtools, f"""(async () => {{
+        await {chart}.dispose();
+        const canvas = document.querySelector('canvas');
+        canvas.removeAttribute('id');
+        const {{createTerminChart3D}} = await import('./termin-web-chart3d.mjs');
+        const again = await createTerminChart3D(canvas, {{backend:'{backend}'}});
+        again.setSurface([0, 1, 2], [0, 1], [0, 1, 0, -1, 0, 1]);
+        globalThis.__terminChart3D.chart = again;
+    }})()""")
+    remounted, _ = surface_frame(devtools)
+    evaluate(devtools, f"""(async () => {{
+        await {chart}.dispose();
+        if (document.querySelector('canvas').id) throw Error('Chart disposal left a generated canvas ID');
+    }})()""")
+    return {"initial": first, "replacement": updated, "resized": resized, "remounted": remounted,
+            "invalid_errors": invalid_errors, "replaced_pixels": replaced_pixels,
+            "orbit_pixels": orbit_pixels, "zoom_pixels": zoom_pixels}
+
+
+def check_standalone_chart3d(devtools: DevToolsSocket, artifact: Path) -> dict:
+    with tempfile.TemporaryDirectory(prefix="termin-offline-chart-") as folder:
+        # The delivered file has no sibling JS, Wasm or shader package to load.
+        page = Path(folder) / "Поверхность 3D.html"
+        shutil.copyfile(artifact, page)
+        timeout = devtools.socket.gettimeout()
+        devtools.socket.settimeout(30)
+        devtools.call("Network.enable")
+        try:
+            devtools.call("Network.setCacheDisabled", {"cacheDisabled": True})
+            devtools.call("Network.emulateNetworkConditions", {
+                "offline": True, "latency": 0, "downloadThroughput": 0, "uploadThroughput": 0,
+            })
+            chart = open_chart(devtools, page.as_uri(), None, "Chart3D")
+            before, wave = surface_frame(devtools, check_axes=True)
+            evaluate(devtools, "document.querySelector('#change-surface').click()")
+            after, saddle = surface_frame(devtools)
+            changed = surface_change(wave, saddle, "offline example button")
+            backend = evaluate(devtools, f"{chart}.backend")
+            evaluate(devtools, f"{chart}.dispose()")
+            return {"backend": backend, "initial": before, "replacement": after, "changed_samples": changed}
+        finally:
+            devtools.call("Network.emulateNetworkConditions", {
+                "offline": False, "latency": 0, "downloadThroughput": -1, "uploadThroughput": -1,
+            })
+            devtools.call("Network.setCacheDisabled", {"cacheDisabled": False})
+            devtools.call("Network.disable")
+            devtools.socket.settimeout(timeout)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Termin Web core browser smoke test")
     parser.add_argument("output_directory")
@@ -455,6 +756,7 @@ def main() -> int:
                     "--no-first-run",
                     "--disable-default-apps",
                     "--enable-unsafe-webgpu",
+                    "--enable-unsafe-swiftshader",
                     "--use-webgpu-adapter=swiftshader",
                     "--enable-dawn-features=allow_unsafe_apis",
                     "--disable-dawn-features=use_dxc",
@@ -728,6 +1030,16 @@ def main() -> int:
                 "state": visual_scene_state,
                 "frame": visual_scene_metrics,
             }
+            chart_url = f"http://127.0.0.1:{server.server_port}/chart2d.html"
+            report["retained_chart2d"] = {}
+            for backend in ("webgpu", "webgl2"):
+                report["retained_chart2d"][backend] = check_chart(devtools, chart_url, backend)
+            chart3d_url = f"http://127.0.0.1:{server.server_port}/chart3d.html"
+            report["retained_chart3d"] = {}
+            for backend in ("webgpu", "webgl2"):
+                report["retained_chart3d"][backend] = check_chart3d(devtools, chart3d_url, backend)
+            report["standalone_chart3d"] = check_standalone_chart3d(
+                devtools, Path(args.output_directory) / "Termin-Chart3D.html")
     except Exception as error:
         failure = error
     finally:
