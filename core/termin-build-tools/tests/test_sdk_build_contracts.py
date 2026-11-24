@@ -233,14 +233,20 @@ def test_linux_csharp_stage_accepts_forwarded_profiles() -> None:
     assert '-DTERMIN_CSHARP_PROFILE="$PROFILE"' in csharp_script
 
 
-def test_csharp_build_entrypoints_reset_generated_bindings() -> None:
+def test_csharp_swig_outputs_belong_to_the_configured_build_profile() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     linux_script = (repo_root / "scripts/build/csharp.sh").read_text(encoding="utf-8")
     windows_script = (repo_root / "scripts/build/csharp.ps1").read_text(encoding="utf-8")
+    cmake = (repo_root / "termin-csharp/CMakeLists.txt").read_text(encoding="utf-8")
+    props = (repo_root / "termin-csharp/cmake/TerminCsharpGeneratedProfile.props.in").read_text(encoding="utf-8")
+    project = (repo_root / "termin-csharp/Termin.Native/Termin.Native.csproj").read_text(encoding="utf-8")
 
-    assert 'find "$generated_dir" -maxdepth 1 -type f -delete' in linux_script
-    assert "Get-ChildItem -Path $generatedDir -File" in windows_script
-    assert "Remove-Item -Force" in windows_script
+    assert "generated_dir" not in linux_script
+    assert "$generatedDir" not in windows_script
+    assert "set(UseSWIG_MODULE_VERSION 2)" in cmake
+    assert '${CMAKE_CURRENT_BINARY_DIR}/swig/${TERMIN_CSHARP_PROFILE}/managed' in cmake
+    assert "<TerminCsharpSwigSources>@CMAKE_SWIG_OUTDIR@</TerminCsharpSwigSources>" in props
+    assert 'Include="$(TerminCsharpSwigSources)/*.cs"' in project
 
 
 def test_graphics_sdk_profile_selects_chart_capable_native_and_csharp_stages(

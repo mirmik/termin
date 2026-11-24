@@ -157,10 +157,6 @@ try {
         Remove-Item -Recurse -Force $buildDir
     }
 
-    $generatedDir = Join-Path (Join-Path $PWD "Termin.Native") "Generated"
-    if (Test-Path $generatedDir) {
-        Get-ChildItem -Path $generatedDir -File -ErrorAction SilentlyContinue | Remove-Item -Force
-    }
     $runtimeSourceDir = Join-Path (Join-Path (Join-Path (Join-Path $PWD "Termin.Native") "runtimes") "win-x64") "native"
     if (Test-Path $runtimeSourceDir) {
         Get-ChildItem -Path $runtimeSourceDir -File -ErrorAction SilentlyContinue | Remove-Item -Force

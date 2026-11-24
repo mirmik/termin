@@ -38,39 +38,17 @@ set(_termin_csharp_generated_profile_file
     "${_termin_csharp_generated_dir}/TerminCsharpGeneratedProfile.props")
 file(MAKE_DIRECTORY "${_termin_csharp_generated_dir}")
 
-# Generated bindings are a profile-specific artifact.  A normal build script
-# starts from an empty directory, but direct CMake reconfiguration must be just
-# as safe: remove stale SWIG output when switching between full and plot-d3d11.
-if(EXISTS "${_termin_csharp_generated_profile_file}")
-    file(READ "${_termin_csharp_generated_profile_file}" _termin_csharp_generated_profile_contents)
-    string(REGEX MATCH
-        "<TerminCsharpGeneratedProfile>([^<]+)</TerminCsharpGeneratedProfile>"
-        _termin_csharp_generated_profile_match
-        "${_termin_csharp_generated_profile_contents}")
-    set(_termin_csharp_previous_profile "${CMAKE_MATCH_1}")
-    if(_termin_csharp_previous_profile
-       AND NOT _termin_csharp_previous_profile STREQUAL TERMIN_CSHARP_PROFILE)
-        file(GLOB _termin_csharp_stale_generated_files
-            "${_termin_csharp_generated_dir}/*.cs"
-            "${_termin_csharp_generated_dir}/*CSHARP_wrap.cxx"
-            "${_termin_csharp_generated_dir}/*CSHARP_wrap.h")
-        if(_termin_csharp_stale_generated_files)
-            message(STATUS
-                "termin-csharp: generated profile changed "
-                "${_termin_csharp_previous_profile} -> ${TERMIN_CSHARP_PROFILE}; "
-                "removing stale SWIG output")
-            file(REMOVE ${_termin_csharp_stale_generated_files})
-        endif()
-    endif()
+# Migrate the former flat SWIG output so the managed project sees one wrapper set.
+if(TERMIN_CSHARP_BUILD_NATIVE AND EXISTS "${_termin_csharp_generated_dir}/terminPINVOKE.cs")
+    file(GLOB _legacy_swig_files
+        "${_termin_csharp_generated_dir}/*.cs"
+        "${_termin_csharp_generated_dir}/*CSHARP_wrap.cxx"
+        "${_termin_csharp_generated_dir}/*CSHARP_wrap.h")
+    file(REMOVE ${_legacy_swig_files})
 endif()
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TerminCsharpGeneratedProfile.props.in"
-    "${_termin_csharp_generated_profile_file}"
-    @ONLY
-)
-
 if(TERMIN_CSHARP_BUILD_NATIVE)
     find_package(SWIG REQUIRED COMPONENTS csharp)
+    set(UseSWIG_MODULE_VERSION 2)
     include(UseSWIG)
 
     function(termin_csharp_require_package package_name)
@@ -138,7 +116,15 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         message(STATUS "termin-csharp: OpenGL APIs disabled")
     endif()
 
-    set(CMAKE_SWIG_OUTDIR "${_termin_csharp_generated_dir}")
+    # Keep wrapper and managed outputs in the same per-profile build graph.
+    # UseSWIG refreshes managed files only when the interface is regenerated.
+    set(CMAKE_SWIG_OUTDIR "${CMAKE_CURRENT_BINARY_DIR}/swig/${TERMIN_CSHARP_PROFILE}/managed")
+    set(SWIG_OUTFILE_DIR "${CMAKE_CURRENT_BINARY_DIR}/swig/${TERMIN_CSHARP_PROFILE}/native")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/TerminCsharpGeneratedProfile.props.in"
+        "${_termin_csharp_generated_profile_file}"
+        @ONLY
+    )
 
     set(_termin_csharp_swig_flags "-namespace;Termin.Native")
     if(TERMIN_CSHARP_ENABLE_OPENGL)
