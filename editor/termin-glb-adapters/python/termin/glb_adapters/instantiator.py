@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Protocol
 import numpy as np
 
 from termin.geombase import GeneralPose3, Mat44, Quat, Vec3
+from termin.graphics import TcTexture, TextureAddress, TextureFilter
 from termin.animation import TcAnimationClip
 from termin.animation_components import AnimationPlayer
 from termin.skeleton import SkeletonInstance, TcSkeleton
@@ -437,6 +438,55 @@ def _sampler_identity(texture: "GLBTcTexture") -> tuple[int, int, int, int]:
     )
 
 
+@dataclass(frozen=True)
+class _GLBSampler:
+    min_filter: TextureFilter
+    mag_filter: TextureFilter
+    mip_filter: TextureFilter
+    mipmap: bool
+    u: TextureAddress
+    v: TextureAddress
+
+    def matches(self, texture: TcTexture) -> bool:
+        return (
+            texture.min_filter == self.min_filter
+            and texture.mag_filter == self.mag_filter
+            and texture.mipmap == self.mipmap
+            and (not self.mipmap or texture.mip_filter == self.mip_filter)
+            and texture.address_u == self.u
+            and texture.address_v == self.v
+        )
+
+    def apply(self, texture: TcTexture) -> None:
+        if not texture.set_filters(self.min_filter, self.mag_filter, self.mip_filter):
+            raise RuntimeError("Failed to set glTF texture filters")
+        if not texture.set_wraps(self.u, self.v, TextureAddress.REPEAT):
+            raise RuntimeError("Failed to set glTF texture address modes")
+        texture.set_mipmap(self.mipmap)
+
+
+def _native_sampler(texture: "GLBTcTexture") -> _GLBSampler:
+    mag, mini, wrap_s, wrap_t = _sampler_identity(texture)
+    nearest = TextureFilter.NEAREST
+    linear = TextureFilter.LINEAR
+    magnification = {9728: nearest, 9729: linear}
+    minification = {
+        9728: (nearest, nearest, False),
+        9729: (linear, linear, False),
+        9984: (nearest, nearest, True),
+        9985: (linear, nearest, True),
+        9986: (nearest, linear, True),
+        9987: (linear, linear, True),
+    }
+    address = {
+        10497: TextureAddress.REPEAT,
+        33071: TextureAddress.CLAMP_TO_EDGE,
+        33648: TextureAddress.MIRRORED_REPEAT,
+    }
+    min_filter, mip_filter, mipmap = minification[mini]
+    return _GLBSampler(min_filter, magnification[mag], mip_filter, mipmap, address[wrap_s], address[wrap_t])
+
+
 def _texture_resource_key(texture: "GLBTcTexture") -> GLBTextureResourceKey:
     return GLBTextureResourceKey(texture.image_index, _sampler_identity(texture))
 
@@ -586,6 +636,7 @@ def _register_external_texture_asset(
     source_path: Path,
     texture: "GLBTcTexture",
     encoding: TextureEncodingName,
+    sampler: _GLBSampler,
 ) -> str | None:
     from termin.base import log
     from termin.default_assets.render.texture_asset import TextureAsset
@@ -596,6 +647,19 @@ def _register_external_texture_asset(
         return None
 
     spec_data = read_spec_file(str(source_path))
+    # Ordinary file-backed assets can represent uniform filtering and wrapping.
+    if (
+        sampler.min_filter != sampler.mag_filter
+        or (sampler.mipmap and sampler.min_filter != sampler.mip_filter)
+        or sampler.u != sampler.v
+        or sampler.u not in (TextureAddress.REPEAT, TextureAddress.CLAMP_TO_EDGE)
+    ):
+        return None
+    sampler_spec = {
+        "filter": "nearest" if sampler.min_filter == TextureFilter.NEAREST else "linear",
+        "wrap": "repeat" if sampler.u == TextureAddress.REPEAT else "clamp",
+        "mipmaps": sampler.mipmap,
+    }
     if spec_data is not None:
         metadata_encoding = spec_data.get("encoding", "srgb")
         if metadata_encoding != encoding:
@@ -604,6 +668,11 @@ def _register_external_texture_asset(
                 f"source_path={source_path.resolve()} metadata={metadata_encoding} "
                 f"glTF={encoding}; creating an immutable glTF runtime texture"
             )
+            return None
+        if any(
+            spec_data.get(field, default) != sampler_spec[field]
+            for field, default in (("filter", "linear"), ("wrap", "clamp"), ("mipmaps", False))
+        ):
             return None
     texture_uuid = spec_data.get("uuid") if spec_data else _stable_glb_texture_uuid(texture)
     name = source_path.stem
@@ -633,6 +702,7 @@ def _register_external_texture_asset(
         encoding=encoding,
     )
     effective_spec = dict(spec_data or {})
+    effective_spec.update(sampler_spec)
     effective_spec["encoding"] = encoding
     asset.parse_spec(effective_spec)
     rm.register_runtime_asset(TEXTURE_ASSET_TYPE, name, asset, source_path=str(source_path), uuid=asset.uuid)
@@ -648,6 +718,7 @@ def _registered_glb_texture(
     rm,
     texture: "GLBTcTexture",
     encoding: TextureEncodingName,
+    sampler: _GLBSampler,
 ):
     from termin.base import log
 
@@ -665,7 +736,7 @@ def _registered_glb_texture(
     )
     name = _texture_name_for_source_path(rm, source_path, encoding)
     if name is None:
-        name = _register_external_texture_asset(rm, source_path, texture, encoding)
+        name = _register_external_texture_asset(rm, source_path, texture, encoding, sampler)
     if name is None:
         log.warning(
             f"[glb_instantiator] external glTF texture cannot reuse a file-backed "
@@ -674,20 +745,22 @@ def _registered_glb_texture(
             f"encoding={encoding}"
         )
         return None
-    return _tc_texture_from_asset_name(rm, name)
+    registered = _tc_texture_from_asset_name(rm, name)
+    return registered if registered is not None and sampler.matches(registered) else None
 
 
 def _decode_glb_texture(
     rm,
     texture: "GLBTcTexture",
     encoding: TextureEncodingName,
+    sampler: _GLBSampler,
     *,
     collision: bool,
 ):
     """Decode glTF image bytes into a registered TextureAsset."""
     from termin.image import decode_rgba8
     from termin.default_assets.render.texture_asset import TextureAsset
-    from termin.graphics import TcTexture, TextureEncoding
+    from termin.graphics import TextureEncoding
     from termin.base import log
 
     texture_uuid = _stable_glb_texture_uuid(
@@ -710,14 +783,14 @@ def _decode_glb_texture(
             )
     if existing_asset is not None:
         tc_texture = existing_asset.texture_data
-        if tc_texture is not None and tc_texture.is_valid:
+        if tc_texture is not None and tc_texture.is_valid and sampler.matches(tc_texture):
             log.info(
                 f"[glb_instantiator] reused decoded glTF texture asset: "
                 f"index={texture.index} name='{texture.name}' asset_uuid={existing_asset.uuid} "
                 f"tc_uuid={tc_texture.uuid}"
             )
             return tc_texture
-        log.warning(f"[glb_instantiator] Registered glTF texture asset is invalid: {texture.name} ({texture_uuid})")
+        log.warning(f"[glb_instantiator] Rebuilding glTF texture asset: {texture.name} ({texture_uuid})")
 
     try:
         texture_name = _unique_glb_texture_name(
@@ -734,7 +807,7 @@ def _decode_glb_texture(
             uuid=texture_uuid,
             encoding=encoding,
         )
-        asset.texture_data = TcTexture.from_data(
+        tc_texture = TcTexture.from_data(
             data,
             width=decoded.width,
             height=decoded.height,
@@ -750,6 +823,8 @@ def _decode_glb_texture(
                 else TextureEncoding.LINEAR
             ),
         )
+        sampler.apply(tc_texture)
+        asset.texture_data = tc_texture
         rm.register_runtime_asset(TEXTURE_ASSET_TYPE, texture_name, asset, uuid=texture_uuid)
         log.info(
             f"[glb_instantiator] decoded glTF texture bytes into runtime asset: "
@@ -835,18 +910,25 @@ def _build_texture_lookup(
     textures: dict[tuple[int, TextureEncodingName], object] = {}
     for texture_import in imports:
         texture = textures_by_index[texture_import.texture_indices[0]]
+        try:
+            sampler = _native_sampler(texture)
+        except (ValueError, KeyError):
+            log.error(f"[glb_instantiator] Invalid glTF sampler for texture '{texture.name}'", exc_info=True)
+            continue
         tc_texture = None
         if not texture_import.collision:
             tc_texture = _registered_glb_texture(
                 rm,
                 texture,
                 texture_import.encoding,
+                sampler,
             )
         if tc_texture is None:
             tc_texture = _decode_glb_texture(
                 rm,
                 texture,
                 texture_import.encoding,
+                sampler,
                 collision=texture_import.collision,
             )
         if tc_texture is not None and tc_texture.is_valid:

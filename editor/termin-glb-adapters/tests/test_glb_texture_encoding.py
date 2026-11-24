@@ -15,7 +15,7 @@ from termin.default_assets.render.shader_asset import ShaderAsset
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.image import encode_png_rgba8
 from termin.stdlib import stdlib_root
-from termin.graphics import TextureEncoding
+from termin.graphics import TextureAddress, TextureEncoding, TextureFilter
 
 
 _PNG_1X1 = encode_png_rgba8(
@@ -29,12 +29,14 @@ def _texture(
     image_index: int = 0,
     sampler_index: int | None = None,
     sampler: dict[str, int] | None = None,
+    source_path=None,
 ) -> GLBTcTexture:
     return GLBTcTexture(
         index=index,
         name="SharedImage",
         data=_PNG_1X1,
         mime_type="image/png",
+        source_path=source_path,
         image_index=image_index,
         sampler_index=sampler_index,
         sampler=sampler,
@@ -370,6 +372,38 @@ def test_shared_same_encoding_lookup_reuses_one_native_asset() -> None:
 
     assert len(rm.by_uuid) == 1
     assert lookup[(0, "srgb")].uuid == lookup[(1, "srgb")].uuid
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_shared_image_uses_distinct_native_samplers(tmp_path, external) -> None:
+    source_path = tmp_path / "shared.png" if external else None
+    if source_path is not None:
+        source_path.write_bytes(_PNG_1X1)
+    scene = _scene(
+        [
+            _texture(0, source_path=source_path),
+            _texture(1, source_path=source_path, sampler={
+                "minFilter": 9985, "magFilter": 9728, "wrapS": 33648, "wrapT": 33071,
+            }),
+        ],
+        [GLBMaterialData("Base", base_color_texture=0, emissive_texture=1)],
+    )
+    rm = _RuntimeTextureManager()
+
+    lookup = _build_texture_lookup(rm, scene)
+    ordinary, custom = lookup[(0, "srgb")], lookup[(1, "srgb")]
+
+    assert ordinary.uuid != custom.uuid
+    assert (ordinary.min_filter, ordinary.mag_filter) == (TextureFilter.LINEAR, TextureFilter.LINEAR)
+    assert not ordinary.mipmap
+    assert (ordinary.address_u, ordinary.address_v) == (TextureAddress.REPEAT, TextureAddress.REPEAT)
+    assert (custom.min_filter, custom.mag_filter, custom.mip_filter) == (
+        TextureFilter.LINEAR, TextureFilter.NEAREST, TextureFilter.NEAREST,
+    )
+    assert custom.mipmap
+    assert (custom.address_u, custom.address_v) == (
+        TextureAddress.MIRRORED_REPEAT, TextureAddress.CLAMP_TO_EDGE,
+    )
 
 
 def test_external_metadata_mismatch_creates_immutable_runtime_texture(
