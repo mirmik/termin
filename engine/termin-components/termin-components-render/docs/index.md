@@ -21,6 +21,30 @@ Standalone camera math types (`Camera`, `CameraProjection`) are exported from
 `termin.render_components`. The legacy `termin._native.render` compatibility
 surface has been removed.
 
+## Покадровая анимация спрайта
+
+Добавьте `SpriteRenderer2D` и `SpriteAnimator2D` на одну сущность. В поле
+`Clip` аниматора выберите клип проекта. Файл `.spriteclip` хранит UUID
+спрайтов в порядке воспроизведения и длительность каждого кадра в секундах.
+Один спрайт можно использовать в нескольких кадрах. Например, кадр
+`{"sprite": "sprite-landing", "duration": 0.12, "event": "land"}`
+показывает спрайт с UUID `sprite-landing` в течение 120 мс и посылает
+событие `land` при входе в кадр. Полный файл клипа с соответствующими
+ассетами лежит в [демопроекте Sprite Flipbook](../../../../test-projects/sprite-flipbook/README.md).
+
+`Autoplay` запускает воспроизведение при старте, `Loop` повторяет клип,
+`Speed` задаёт множитель скорости. Во время воспроизведения рендерер
+показывает спрайт текущего кадра. При сохранении сцены он сохраняет ссылку
+на заданный автором спрайт. Экспортёр по ссылке на клип собирает в пакет
+его кадры и используемые ими текстуры.
+
+Из Python метод `pause()` оставляет анимацию на текущем кадре, `play()`
+возобновляет её, а `stop()` возвращает к первому кадру. Для реакции на
+события вызовите `animator.set_frame_event_callback(on_frame)`. Обработчик
+`on_frame(event_name, frame_index)` получает имя события и индекс кадра,
+начиная с нуля. Если за одно обновление пройдено несколько кадров,
+их события приходят в порядке воспроизведения.
+
 ## MeshRenderer
 
 `MeshRenderer` no longer owns mesh data and does not accept `mesh`,

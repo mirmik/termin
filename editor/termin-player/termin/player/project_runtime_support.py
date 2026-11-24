@@ -18,7 +18,7 @@ from termin.player.project_settings import (
 )
 
 _RENDER_RESOURCE_TYPE_IDS = frozenset(
-    {"glb", "material", "mesh", "pipeline", "shader", "sprite_asset", "texture", "ui"}
+    {"glb", "material", "mesh", "pipeline", "shader", "sprite_asset", "sprite_animation_clip", "texture", "ui"}
 )
 
 

@@ -1,13 +1,12 @@
 #include "guard_main.h"
+#include "sprite_test_types.hpp"
 
 GUARD_TEST_MAIN();
 
 #include <cmath>
 
-#include <termin/entity/unknown_component.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/sprite_asset.hpp>
-#include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 
@@ -18,8 +17,7 @@ extern "C" {
 TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") {
     tc_texture_init();
     termin::TcSpriteAsset::clear_registry_for_tests();
-    termin::register_builtin_scene_component_types();
-    termin::SpriteRenderer2D::register_type();
+    register_sprite_test_types();
 
     const uint8_t pixels[4 * 8 * 4] = {};
     termin::TcTexture texture = termin::TcTexture::from_data(termin::TcTextureCreateInfo{
@@ -64,6 +62,8 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
     REQUIRE_EQ(collection.items.size(), 1u);
     const tc_render_item& item = collection.items.front();
     CHECK_EQ(item.kind, static_cast<uint32_t>(TC_RENDER_ITEM_KIND_WORLD_QUAD));
+    CHECK(tc_material_handle_is_invalid(item.material));
+    CHECK_EQ(item.material_phase_index, SIZE_MAX);
     CHECK_EQ(item.payload.world_quad.sorting_layer, 3);
     CHECK_EQ(item.payload.world_quad.order_in_layer, -2);
     CHECK_EQ(item.payload.world_quad.sampling, static_cast<uint32_t>(TC_WORLD_QUAD_SAMPLING_NEAREST));
@@ -94,4 +94,41 @@ TEST_CASE("SpriteRenderer2D emits canonical XZ world quad and typed asset ref") 
     scene.destroy();
     texture = {};
     tc_texture_shutdown();
+}
+
+TEST_CASE("Sprite UUID fields round-trip through the inspector and typed scene data") {
+    register_sprite_test_types();
+
+    const auto check_field = [](auto& component, auto& restored, const char* field) {
+        tc_value input = tc_value_string("inspector-asset-ref");
+        REQUIRE(tc_inspect_set_checked(&component, component.type_name(), field, input, nullptr));
+        tc_value_free(&input);
+        tc_value saved = component.serialize_data();
+        const auto* reference = tc_value_dict_get(&saved, field);
+        REQUIRE(reference && reference->type == TC_VALUE_DICT);
+        restored.deserialize_data(&saved);
+        tc_value_free(&saved);
+        tc_value actual = tc_inspect_get(&restored, restored.type_name(), field);
+        REQUIRE(actual.type == TC_VALUE_STRING);
+        CHECK_EQ(std::string(actual.data.s), "inspector-asset-ref");
+        tc_value_free(&actual);
+    };
+    termin::SpriteRenderer2D renderer, restored_renderer;
+    check_field(renderer, restored_renderer, "sprite");
+    CHECK_EQ(restored_renderer.sprite_uuid, "inspector-asset-ref");
+    tc_value channels = tc_value_list_new();
+    for (double channel : {0.125, 0.25, 0.5, 0.75}) tc_value_list_push(&channels, tc_value_double(channel));
+    REQUIRE(tc_inspect_set_checked(&renderer, renderer.type_name(), "tint", channels, nullptr));
+    tc_value_free(&channels);
+    tc_value saved = renderer.serialize_data();
+    restored_renderer.deserialize_data(&saved);
+    tc_value_free(&saved);
+    CHECK_EQ(restored_renderer.tint.x, 0.125);
+    CHECK_EQ(restored_renderer.tint.y, 0.25);
+    CHECK_EQ(restored_renderer.tint.z, 0.5);
+    CHECK_EQ(restored_renderer.tint.w, 0.75);
+
+    termin::SpriteAnimator2D animator, restored_animator;
+    check_field(animator, restored_animator, "clip");
+    CHECK_EQ(restored_animator.clip_uuid(), "inspector-asset-ref");
 }

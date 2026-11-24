@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import pytest
 
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
+from termin_assets import AssetCatalog, AssetRecord
 
 
 @dataclass
@@ -58,3 +59,14 @@ def test_inspector_resource_catalog_rejects_unknown_create_kind():
     assert catalog.choices("missing") is None
     with pytest.raises(ValueError, match="unknown"):
         catalog.create("missing")
+
+
+@pytest.mark.parametrize("kind", ["sprite_asset", "sprite_animation_clip"])
+def test_sprite_resource_field_round_trips_native_uuid(kind):
+    resources = _Resources()
+    resources.external_assets = AssetCatalog()
+    resources.external_assets.upsert(AssetRecord(kind, "Flame", "flame", "asset-uuid"))
+    choices = InspectorResourceCatalog(resources).choices(kind)
+    assert choices.items[choices.index_for_value("asset-uuid")].value == "asset-uuid"
+    assert choices.items[choices.index_for_value("")].value == ""
+    assert not choices.can_create

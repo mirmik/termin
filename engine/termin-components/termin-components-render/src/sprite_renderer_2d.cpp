@@ -5,11 +5,46 @@
 
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
+#include <termin/tc_scene.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 #include <tgfx2/render_context.hpp>
 
+#include "sprite_reference_kind.hpp"
+
 namespace termin {
     namespace {
+
+        void register_sprite_tint(tc::InspectFacetBuilder& builder) {
+            tc::InspectFieldInfo field;
+            field.type_name = "SpriteRenderer2D";
+            field.path = "tint";
+            field.label = "Tint";
+            field.kind = "color";
+            field.getter = [](void* object) {
+                const auto& tint = static_cast<SpriteRenderer2D*>(object)->tint;
+                tc_value values = tc_value_list_new();
+                for (int i = 0; i < 4; ++i) tc_value_list_push(&values, tc_value_double(tint[i]));
+                return values;
+            };
+            field.setter = [](void* object, tc_value values, void*) {
+                if (values.type != TC_VALUE_LIST || (values.data.list.count != 3 && values.data.list.count != 4)) {
+                    tc::Log::error("[SpriteRenderer2D] tint requires three or four color channels");
+                    return false;
+                }
+                Vec4 tint{1, 1, 1, 1};
+                for (size_t i = 0; i < values.data.list.count; ++i) {
+                    const auto& channel = values.data.list.items[i];
+                    if (channel.type != TC_VALUE_FLOAT && channel.type != TC_VALUE_DOUBLE && channel.type != TC_VALUE_INT) {
+                        tc::Log::error("[SpriteRenderer2D] tint channel %zu must be numeric", i);
+                        return false;
+                    }
+                    tint[static_cast<int>(i)] = tc::tc_value_to_double(&channel);
+                }
+                static_cast<SpriteRenderer2D*>(object)->set_tint(tint);
+                return true;
+            };
+            (void)builder.add_field(std::move(field));
+        }
 
         bool encode_world_quad_id(tgfx::RenderContext2& ctx,
                                   const tc_render_item& item,
@@ -94,6 +129,7 @@ namespace termin {
     }
 
     void SpriteRenderer2D::register_type() {
+        register_sprite_reference_kind("sprite_asset");
         ensure_world_quad_id_encoder_registered();
         auto descriptor = ComponentTypeDescriptorBuilder::native<SpriteRenderer2D>(
             "SpriteRenderer2D", "termin-components-render", "Component");
@@ -106,13 +142,7 @@ namespace termin {
             "sprite_asset",
             [](SpriteRenderer2D* self) -> std::string& { return self->sprite_uuid; },
             [](SpriteRenderer2D* self, const std::string& value) { self->set_sprite_uuid(value); });
-        inspect.add_with_callbacks<SpriteRenderer2D, Vec4>(
-            "SpriteRenderer2D",
-            "tint",
-            "Tint",
-            "color",
-            [](SpriteRenderer2D* self) -> Vec4& { return self->tint; },
-            [](SpriteRenderer2D* self, const Vec4& value) { self->set_tint(value); });
+        register_sprite_tint(inspect);
         inspect.add_with_callbacks<SpriteRenderer2D, bool>(
             "SpriteRenderer2D",
             "flip_x",
@@ -149,6 +179,22 @@ namespace termin {
             [](SpriteRenderer2D* self) -> bool& { return self->visible; },
             [](SpriteRenderer2D* self, const bool& value) { self->set_visible(value); });
         (void)descriptor.commit();
+    }
+
+    const std::string& SpriteRenderer2D::effective_sprite_uuid() const {
+        return animation_sprite_uuid_.empty() ? sprite_uuid : animation_sprite_uuid_;
+    }
+
+    void SpriteRenderer2D::set_animation_sprite_uuid(const std::string& value) {
+        if (value == animation_sprite_uuid_) return;
+        animation_sprite_uuid_ = value;
+        last_missing_asset_version_ = UINT32_MAX;
+        if (!value.empty() && !TcSpriteAsset::from_uuid(value).is_loaded()) {
+            tc::Log::error("[SpriteRenderer2D] animation frame sprite is missing or unloaded: uuid='%s'", value.c_str());
+            last_missing_asset_version_ = 0;
+        }
+        const auto scene = entity().scene();
+        if (scene.valid()) tc_scene_request_render(scene.handle());
     }
 
     void SpriteRenderer2D::set_sprite_uuid(const std::string& value) {
@@ -215,12 +261,12 @@ namespace termin {
                                          float& out_v0,
                                          float& out_u1,
                                          float& out_v1) const {
-        out_asset = TcSpriteAsset::from_uuid(sprite_uuid);
+        out_asset = TcSpriteAsset::from_uuid(effective_sprite_uuid());
         SpriteAsset* asset = out_asset.get();
         if (!asset || !asset->loaded) {
             if (last_missing_asset_version_ != 0) {
                 tc::Log::error("[SpriteRenderer2D] sprite asset is missing or unloaded: uuid='%s'",
-                               sprite_uuid.c_str());
+                               effective_sprite_uuid().c_str());
                 last_missing_asset_version_ = 0;
             }
             return false;
@@ -250,7 +296,7 @@ namespace termin {
     }
 
     tc_phase_mask SpriteRenderer2D::get_phase_mask() const {
-        return visible && !sprite_uuid.empty() ? (TC_PHASE_TRANSPARENT | TC_PHASE_ID) : TC_PHASE_NONE;
+        return visible && !effective_sprite_uuid().empty() ? (TC_PHASE_TRANSPARENT | TC_PHASE_ID) : TC_PHASE_NONE;
     }
 
     bool SpriteRenderer2D::collect_materials(const tc_render_item_collect_context&, tc_material_sink& sink) {
@@ -268,7 +314,7 @@ namespace termin {
             tc::Log::error("[SpriteRenderer2D] render item sink is null");
             return false;
         }
-        if (!visible || sprite_uuid.empty()) {
+        if (!visible || effective_sprite_uuid().empty()) {
             return true;
         }
         if (context.phase != TC_PHASE_NONE && context.phase != TC_PHASE_TRANSPARENT && context.phase != TC_PHASE_ID) {
@@ -288,13 +334,15 @@ namespace termin {
         TcTexture texture = TcTexture::from_uuid(asset->texture_uuid);
         if (!texture.is_valid()) {
             tc::Log::error("[SpriteRenderer2D] texture is not declared: sprite='%s' texture='%s'",
-                           sprite_uuid.c_str(),
+                           effective_sprite_uuid().c_str(),
                            asset->texture_uuid.c_str());
             return true;
         }
 
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_WORLD_QUAD;
+        item.material = tc_material_handle_invalid();
+        item.material_phase_index = SIZE_MAX;
         item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
         item.geometry_id = 0;
         const Mat44f model = get_model_matrix(entity());

@@ -22,6 +22,7 @@ GUARD_TEST_MAIN();
 #include <termin/image/image_decode.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/render_pipeline.hpp>
+#include <termin/render/sprite_animation_clip.hpp>
 #include <termin/render/sprite_asset.hpp>
 #include <termin/render/tc_pipeline_template.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
@@ -1287,7 +1288,7 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
     termin::tgfx2_set_shader_artifact_root("");
 }
 
-TEST_CASE("RuntimePackageLoader loads SpriteAsset after its texture") {
+TEST_CASE("RuntimePackageLoader loads textures, sprites and flipbook frames in dependency order") {
     const std::filesystem::path root = make_package_root();
     write_test_package_with_texture(root);
     std::filesystem::create_directories(root / "sprites");
@@ -1304,12 +1305,19 @@ TEST_CASE("RuntimePackageLoader loads SpriteAsset after its texture") {
   "sampling": "nearest"
 }
 )");
-    write_text(root / "manifest.json",
-               replace_once(manifest_with_packaged_texture(),
-                            "    {\"type\": \"material\"",
-                            "    {\"type\": \"sprite_asset\", \"uuid\": \"runtime-loader-test-sprite\", "
-                            "\"path\": \"sprites/hero.sprite.json\"},\n"
-                            "    {\"type\": \"material\""));
+    write_text(root / "sprites" / "idle.spriteclip", R"({
+  "format": "termin.sprite-animation", "version": 1,
+  "frames": [{"sprite": "runtime-loader-test-sprite", "duration": 0.125, "event": "idle"}]
+})");
+    const std::string sprite_entry =
+        "    {\"type\": \"sprite_asset\", \"uuid\": \"runtime-loader-test-sprite\", "
+        "\"path\": \"sprites/hero.sprite.json\"},\n";
+    const std::string clip_entry =
+        "    {\"type\": \"sprite_animation_clip\", \"uuid\": \"runtime-loader-test-clip\", "
+        "\"path\": \"sprites/idle.spriteclip\"},\n";
+    const std::string manifest = replace_once(manifest_with_packaged_texture(), "    {\"type\": \"material\"",
+                                              clip_entry + sprite_entry + "    {\"type\": \"material\"");
+    write_text(root / "manifest.json", manifest);
 
     termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
     REQUIRE(result.ok);
@@ -1320,6 +1328,25 @@ TEST_CASE("RuntimePackageLoader loads SpriteAsset after its texture") {
     CHECK_EQ(sprite.get()->region.width, 1);
     CHECK_EQ(sprite.get()->pixels_per_unit, 16.0f);
     CHECK(sprite.get()->sampling == termin::SpriteSampling::Nearest);
+    auto clip = termin::TcSpriteAnimationClip::from_uuid("runtime-loader-test-clip");
+    REQUIRE(clip.is_loaded());
+    REQUIRE(clip.get()->frames.size() == 1);
+    CHECK_EQ(clip.get()->frames.front().sprite_uuid, sprite.get()->uuid);
+    CHECK_EQ(clip.get()->frames.front().duration, 0.125);
+    CHECK_EQ(clip.get()->frames.front().event, std::string("idle"));
+
+    // A live registry entry from a previous load must not hide missing package content.
+    write_text(root / "manifest.json", replace_once(manifest, sprite_entry, ""));
+    auto missing_sprite = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing_sprite.ok);
+    CHECK(missing_sprite.message.find("missing packaged sprite 'runtime-loader-test-sprite'") != std::string::npos);
+    const std::string texture_entry =
+        "    {\"type\": \"texture\", \"uuid\": \"runtime-loader-test-texture\", "
+        "\"path\": \"textures/test.texture.json\"},\n";
+    write_text(root / "manifest.json", replace_once(manifest, texture_entry, ""));
+    auto missing_texture = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing_texture.ok);
+    CHECK(missing_texture.message.find("missing packaged texture 'runtime-loader-test-texture'") != std::string::npos);
 }
 
 TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform separators") {

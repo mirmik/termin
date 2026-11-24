@@ -11,6 +11,8 @@ Each project owns its build and run instructions in its local `README.md`.
   lifecycle coverage.
 - `desktop-physics-showcase`: desktop runtime packaging with falling rigid
   bodies, collisions, lighting, and shadows.
+- [Sprite Flipbook](sprite-flipbook/README.md) plays a six-frame character
+  animation in the editor and in the packaged desktop player.
 - `fem-double-pendulum`: native desktop QP multibody simulation with two rigid
   links, a fixed anchor, and an axial inter-body revolute joint.
 - `world-controller-scene-cycle`: playable two-room portal walk for Editor

@@ -7,6 +7,8 @@ The exporter writes the package contract consumed by termin-runtime:
     pipelines/*.pipeline-template
     meshes/*.tmesh.json
     materials/*.tmat.json
+    sprite_clips/*.spriteclip
+    sprites/*.sprite.json
     textures/*.texture.json
     textures/*.{png,jpg,jpeg,tga,bmp}
     shaders/*.shader.json
@@ -76,7 +78,7 @@ from termin.project_build.runtime_package.standard_resources import (
     prepare_standard_resources as _prepare_standard_resources,
 )
 from termin.project_build.runtime_package.textures import write_textures as _write_textures
-from termin.project_build.runtime_package.sprites import write_sprites as _write_sprites
+from termin.project_build.runtime_package.sprites import write_sprite_animation_clips, write_sprites as _write_sprites
 from termin.project_build.runtime_package.ui_documents import (
     stage_ui_documents_for_scene_analysis as _stage_ui_documents_for_scene_analysis,
     write_ui_documents as _write_ui_documents,
@@ -148,6 +150,7 @@ def export_runtime_package(
             refs.textures.update(scene_refs.textures)
             refs.pipelines.update(scene_refs.pipelines)
             refs.sprites.update(scene_refs.sprites)
+            refs.sprite_animation_clips.update(scene_refs.sprite_animation_clips)
             refs.ui_documents.update(scene_refs.ui_documents)
     if refs is None:
         raise ValueError("Runtime package must contain at least one scene root")
@@ -200,6 +203,9 @@ def export_runtime_package(
         default_shader_language,
         resource_policy,
         refs.textures,
+    )
+    write_sprite_animation_clips(
+        project_root_path, output_dir_path, refs.sprite_animation_clips, refs.sprites, resources, diagnostics,
     )
     _write_sprites(
         project_root_path,

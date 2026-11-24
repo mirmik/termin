@@ -81,6 +81,8 @@ termin_add_module(
         src/xr_thumbstick_locomotion_component.cpp
         src/xr_interaction_components.cpp
         src/line_renderer.cpp
+        src/sprite_animation_clip.cpp
+        src/sprite_animator_2d.cpp
         src/sprite_asset.cpp
         src/sprite_renderer_2d.cpp
         src/mesh_renderer.cpp
@@ -164,6 +166,11 @@ if(TERMIN_BUILD_TESTS)
         NAME termin_components_render_sprite_renderer_2d_test
         COMMAND termin_components_render_sprite_renderer_2d_test
     )
+    add_executable(termin_components_render_sprite_animator_2d_test tests/test_sprite_animator_2d.cpp)
+    target_include_directories(termin_components_render_sprite_animator_2d_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../termin-thirdparty/guard)
+    target_link_libraries(termin_components_render_sprite_animator_2d_test PRIVATE termin_components_render)
+    add_test(NAME termin_components_render_sprite_animator_2d_test COMMAND termin_components_render_sprite_animator_2d_test)
     add_executable(termin_components_render_xr_interaction_test
         tests/test_xr_interaction.cpp
     )
@@ -196,6 +203,7 @@ if(TERMIN_BUILD_TESTS)
         termin_components_render_line_renderer_contract_test
         termin_components_render_world_text_font_cache_test
         termin_components_render_sprite_renderer_2d_test
+        termin_components_render_sprite_animator_2d_test
         termin_components_render_xr_interaction_test
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )

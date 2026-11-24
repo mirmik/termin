@@ -14,6 +14,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -35,6 +36,7 @@
 #include <termin/entity/entity_classification_registry.hpp>
 #include <termin/render/render_pipeline.hpp>
 #ifndef TERMIN_RUNTIME_RENDER_ONLY
+#include <termin/render/sprite_animation_clip.hpp>
 #include <termin/render/sprite_asset.hpp>
 #endif
 #include <termin/render/tc_pipeline_template.hpp>
@@ -50,14 +52,15 @@ namespace termin::runtime {
         std::shared_ptr<RuntimePackageReader> reader;
         std::vector<TcShader> shaders;
         std::vector<TcShaderProgram> shader_programs;
-        std::vector<TcTexture> textures;
+        std::unordered_map<std::string, TcTexture> textures;
         std::vector<TcMaterial> materials;
         std::vector<TcMesh> meshes;
 #ifndef TERMIN_RUNTIME_RENDER_ONLY
         std::vector<TcFoliageData> foliage_data;
 #endif
 #ifndef TERMIN_RUNTIME_RENDER_ONLY
-        std::vector<TcSpriteAsset> sprites;
+        std::unordered_map<std::string, TcSpriteAsset> sprites;
+        std::vector<TcSpriteAnimationClip> sprite_animation_clips;
 #endif
         std::vector<TcPipelineTemplate> pipeline_templates;
         std::vector<gui_native::TcUiDocumentAsset> ui_documents;
@@ -1321,7 +1324,7 @@ namespace termin::runtime {
                     tc_log_error("RuntimePackageLoader: %s", error.c_str());
                     return false;
                 }
-                keepalive.textures.push_back(std::move(texture));
+                keepalive.textures.insert_or_assign(uuid, std::move(texture));
                 return true;
             } catch (const std::exception& ex) {
                 error = "failed to load texture '" + uuid + "': " + ex.what();
@@ -1594,7 +1597,40 @@ namespace termin::runtime {
                 tc_log_error("RuntimePackageLoader: %s", error.c_str());
                 return false;
             }
-            keepalive.sprites.push_back(std::move(sprite));
+            keepalive.sprites.insert_or_assign(uuid, std::move(sprite));
+            return true;
+        }
+
+        bool load_sprite_animation_clip(const nos::trent& entry,
+                                        const nos::trent& spec,
+                                        RuntimePackageResourceKeepalive& keepalive,
+                                        std::string& error) {
+            const std::string uuid = string_field(entry, "uuid");
+            if (uuid.empty()) {
+                error = "sprite_animation_clip resource requires a UUID";
+                return false;
+            }
+            auto frames = parse_sprite_animation_clip(spec);
+            for (const auto& frame : frames) {
+                const auto sprite = keepalive.sprites.find(frame.sprite_uuid);
+                if (sprite == keepalive.sprites.end()) {
+                    error = "sprite_animation_clip '" + uuid + "' references missing packaged sprite '" +
+                            frame.sprite_uuid + "'";
+                    return false;
+                }
+                const auto& texture = sprite->second.get()->texture_uuid;
+                if (!keepalive.textures.contains(texture)) {
+                    error = "sprite_animation_clip '" + uuid + "' frame '" + frame.sprite_uuid +
+                            "' requires missing packaged texture '" + texture + "'";
+                    return false;
+                }
+            }
+            auto clip = TcSpriteAnimationClip::declare(uuid, string_field(entry, "name", uuid));
+            if (!clip.update(std::move(frames))) {
+                error = "failed to register sprite_animation_clip '" + uuid + "'";
+                return false;
+            }
+            keepalive.sprite_animation_clips.push_back(std::move(clip));
             return true;
         }
 #endif
@@ -1697,6 +1733,19 @@ namespace termin::runtime {
                 return false;
 #else
                 return load_sprite_asset_resource(entry, spec, keepalive, error);
+#endif
+            }
+            if (type == "sprite_animation_clip") {
+#ifdef TERMIN_RUNTIME_RENDER_ONLY
+                error = "render runtime profile does not support sprite_animation_clip resources";
+                return false;
+#else
+                try {
+                    return load_sprite_animation_clip(entry, spec, keepalive, error);
+                } catch (const std::invalid_argument& ex) {
+                    error = ex.what();
+                    return false;
+                }
 #endif
             }
             if (type == "ui_document") {
@@ -1926,11 +1975,12 @@ namespace termin::runtime {
             if (options.bootstrap_profile != bootstrap::RuntimeBootstrapProfile::Minimal) {
                 ensure_runtime_builtin_textures();
             }
-            constexpr std::array<const char*, 9> resource_order = {"shader",
+            constexpr std::array<const char*, 10> resource_order = {"shader",
                                                                    "shader_program",
                                                                    "mesh",
                                                                    "texture",
                                                                    "sprite_asset",
+                                                                   "sprite_animation_clip",
                                                                    "material",
                                                                    "pipeline",
                                                                    "foliage_data",

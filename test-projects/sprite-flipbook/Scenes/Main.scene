@@ -1,0 +1,195 @@
+{
+  "version": "1.0",
+  "scene": {
+    "uuid": "6d1ab15e-db57-5a0a-ac95-98a87c49a44d",
+    "entities": [
+      {
+        "uuid": "30465e1e-9156-5004-94cb-50e34d1e864a",
+        "name": "Slime",
+        "pose": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "79fb22cb-3a96-5a83-8aa1-9741c01fb6a3",
+            "type": "SpriteRenderer2D",
+            "data": {
+              "enabled": true,
+              "sprite": {
+                "type": "uuid",
+                "kind": "sprite_asset",
+                "role": "sprite",
+                "uuid": "3cd0aa48-9ff8-5955-aa75-640440f04944"
+              }
+            }
+          },
+          {
+            "source_id": "72faab6d-b57b-5475-8577-f0afd010ef90",
+            "type": "SpriteAnimator2D",
+            "data": {
+              "enabled": true,
+              "clip": {
+                "type": "uuid",
+                "kind": "sprite_animation_clip",
+                "role": "clip",
+                "uuid": "d1391847-ecb6-5257-a3c3-8aa36b0d15a9"
+              },
+              "autoplay": true,
+              "loop": true,
+              "speed": 1.0
+            }
+          }
+        ]
+      },
+      {
+        "uuid": "9d146b7f-4c93-56c5-9991-a4988f920872",
+        "name": "Main Camera",
+        "pose": {
+          "position": [
+            0,
+            -4.2,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "components": [
+          {
+            "source_id": "e7ba11c3-120e-55c7-bf9f-53dd01ea9105",
+            "type": "CameraComponent",
+            "data": {
+              "enabled": true,
+              "near_clip": 0.1,
+              "far_clip": 100,
+              "fov_mode": "FixVertical",
+              "fov_y_degrees": 45
+            }
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "termin": {
+        "editor": {
+          "entities_data": {
+            "position": [
+              0,
+              -4.2,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "radius": 4.2,
+            "editor_entities": {
+              "camera": [
+                {
+                  "type": "CameraComponent",
+                  "data": {
+                    "projection_type": "orthographic",
+                    "ortho_size": 1.72
+                  }
+                },
+                {
+                  "type": "OrbitCameraController",
+                  "data": {
+                    "radius": 4.2
+                  }
+                },
+                {
+                  "type": "EditorCameraUIController",
+                  "data": {
+                    "ortho_enabled": true
+                  }
+                }
+              ]
+            }
+          },
+          "viewport_camera_name": "camera"
+        }
+      }
+    },
+    "extensions": {
+      "render_mount": {
+        "pipeline_templates": [],
+        "viewport_configs": [
+          {
+            "name": "Main Viewport",
+            "display_name": "Sprite Flipbook",
+            "render_target": {
+              "name": "Main Target"
+            },
+            "region": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "enabled": true
+          }
+        ],
+        "render_target_configs": [
+          {
+            "name": "Main Target",
+            "camera_uuid": "9d146b7f-4c93-56c5-9991-a4988f920872",
+            "dynamic_resolution": true,
+            "color_format": "rgba8",
+            "depth_format": "depth24",
+            "clear_color": [
+              0.012,
+              0.026,
+              0.041,
+              1
+            ],
+            "clear_depth": 1.0,
+            "pipeline_name": "Default",
+            "enabled": true
+          }
+        ]
+      },
+      "render_state": {
+        "background_color": [
+          0.012,
+          0.026,
+          0.041,
+          1
+        ],
+        "skybox": {
+          "type": 0,
+          "color": [
+            0.012,
+            0.026,
+            0.041
+          ]
+        }
+      }
+    }
+  }
+}

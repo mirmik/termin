@@ -133,6 +133,8 @@ def collect_typed_ref(
     sprite_reason = resource_ref_match_reason(value, field_name, "sprite_asset")
     if sprite_reason is not None:
         refs.sprites[uuid_value] = name
+    if value.get("kind") == "sprite_animation_clip":
+        refs.sprite_animation_clips[uuid_value] = name
     ui_document_reason = resource_ref_match_reason(
         value, field_name, "ui_document"
     )

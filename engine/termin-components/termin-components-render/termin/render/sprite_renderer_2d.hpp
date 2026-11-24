@@ -25,6 +25,7 @@ namespace termin {
         bool visible = true;
 
     private:
+        std::string animation_sprite_uuid_;
         mutable uint32_t last_missing_asset_version_ = UINT32_MAX;
 
         bool resolved_quad(TcSpriteAsset& out_asset,
@@ -40,6 +41,9 @@ namespace termin {
 
         static void register_type();
 
+        // Animation only overrides the displayed frame. Authored sprite references survive preview/save.
+        const std::string& effective_sprite_uuid() const;
+        void set_animation_sprite_uuid(const std::string& value);
         void set_sprite_uuid(const std::string& value);
         void set_tint(const Vec4& value);
         void set_flip_x(bool value);

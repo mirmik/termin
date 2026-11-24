@@ -147,7 +147,10 @@ nos::trent nos::json::parser::parse_mnemonic() {
 
     buf[0] = onebuf;
 
-    while (isalpha(onebuf = readnext_skipping())) {
+    while (std::isalpha(static_cast<unsigned char>(onebuf = readnext_skipping()))) {
+        if (ptr == buf + sizeof(buf) - 1) {
+            throw std::runtime_error("unexpected_mnemonic "s + errloc());
+        }
         *ptr++ = onebuf;
     }
 

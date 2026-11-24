@@ -1,5 +1,6 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/function.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
+#include <tcbase/trent/json.h>
 #include <termin/bindings/entity_helpers.hpp>
 #include <termin/camera/camera.hpp>
 #include <termin/camera/camera_component.hpp>
@@ -25,6 +27,8 @@
 #include <termin/render/normal_pass.hpp>
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/render/skinned_mesh_renderer.hpp>
+#include <termin/render/sprite_animation_clip.hpp>
+#include <termin/render/sprite_animator_2d.hpp>
 #include <termin/render/sprite_asset.hpp>
 #include <termin/render/sprite_renderer_2d.hpp>
 #include <termin/render/world_text_component.hpp>
@@ -212,6 +216,31 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("termin.base._base_native");
 
     tc::init_cpp_inspect_vtable();
+
+    nb::class_<SpriteAnimationFrame>(m, "SpriteAnimationFrame")
+        .def(nb::init<std::string, double, std::string>(), nb::arg("sprite_uuid"), nb::arg("duration"), nb::arg("event") = "")
+        .def_ro("sprite_uuid", &SpriteAnimationFrame::sprite_uuid)
+        .def_ro("duration", &SpriteAnimationFrame::duration)
+        .def_ro("event", &SpriteAnimationFrame::event);
+    m.def("parse_sprite_animation_clip", [](const std::string& text) {
+        return parse_sprite_animation_clip(nos::json::parse(text));
+    }, nb::arg("text"));
+
+    nb::class_<TcSpriteAnimationClip>(m, "TcSpriteAnimationClip")
+        .def_static("declare", &TcSpriteAnimationClip::declare, nb::arg("uuid"), nb::arg("name"), nb::arg("source_path") = "")
+        .def_static("from_uuid", &TcSpriteAnimationClip::from_uuid, nb::arg("uuid"))
+        .def("load_json", &TcSpriteAnimationClip::load_json, nb::arg("text"))
+        .def("update", &TcSpriteAnimationClip::update, nb::arg("frames"))
+        .def("unload", &TcSpriteAnimationClip::unload)
+        .def_prop_ro("is_valid", &TcSpriteAnimationClip::is_valid)
+        .def_prop_ro("is_loaded", &TcSpriteAnimationClip::is_loaded)
+        .def_prop_ro("version", &TcSpriteAnimationClip::version)
+        .def_prop_ro("uuid", [](const TcSpriteAnimationClip& self) -> std::string {
+            return self.is_valid() ? self.get()->uuid : "";
+        })
+        .def_prop_ro("frames", [](const TcSpriteAnimationClip& self) {
+            return self.is_loaded() ? self.get()->frames : std::vector<SpriteAnimationFrame>{};
+        });
 
     nb::enum_<SpriteSampling>(m, "SpriteSampling")
         .value("Linear", SpriteSampling::Linear)
@@ -856,6 +885,20 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_ro("is_drawable", [](WorldTextComponent&) { return true; })
         .def_prop_ro("phase_mask", &WorldTextComponent::get_phase_mask);
 
+    nb::class_<SpriteAnimator2D, Component>(m, "SpriteAnimator2D")
+        .def("__init__", [](nb::handle self) { cxx_component_init<SpriteAnimator2D>(self); })
+        .def_prop_rw("clip_uuid", &SpriteAnimator2D::clip_uuid, &SpriteAnimator2D::set_clip_uuid)
+        .def_rw("autoplay", &SpriteAnimator2D::autoplay)
+        .def_rw("loop", &SpriteAnimator2D::loop)
+        .def_prop_rw("speed", &SpriteAnimator2D::speed, &SpriteAnimator2D::set_speed)
+        .def_prop_ro("playing", &SpriteAnimator2D::playing)
+        .def_prop_ro("current_frame", &SpriteAnimator2D::current_frame)
+        .def_prop_ro("current_time", &SpriteAnimator2D::current_time)
+        .def("play", &SpriteAnimator2D::play)
+        .def("pause", &SpriteAnimator2D::pause)
+        .def("stop", &SpriteAnimator2D::stop)
+        .def("set_frame_event_callback", &SpriteAnimator2D::set_frame_event_callback, nb::arg("callback").none());
+
     nb::class_<SpriteRenderer2D, Component>(m, "SpriteRenderer2D")
         .def("__init__", [](nb::handle self) { cxx_component_init<SpriteRenderer2D>(self); })
         .def_prop_rw(
@@ -878,6 +921,7 @@ NB_MODULE(_components_render_native, m) {
             &SpriteRenderer2D::set_order_in_layer)
         .def_prop_rw(
             "visible", [](const SpriteRenderer2D& self) { return self.visible; }, &SpriteRenderer2D::set_visible)
+        .def_prop_ro("effective_sprite_uuid", &SpriteRenderer2D::effective_sprite_uuid)
         .def_prop_ro("world_bounds", &SpriteRenderer2D::world_bounds)
         .def_prop_ro("is_drawable", [](SpriteRenderer2D&) { return true; })
         .def_prop_ro("phase_mask", &SpriteRenderer2D::get_phase_mask);

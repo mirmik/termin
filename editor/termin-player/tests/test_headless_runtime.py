@@ -744,6 +744,8 @@ def test_headless_runtime_strips_render_components_but_keeps_gameplay_component(
             "MeshRenderer",
             "LightComponent",
             "CameraComponent",
+            "SpriteRenderer2D",
+            "SpriteAnimator2D",
         )
     )
     scene_path.write_text(json.dumps(document), encoding="utf-8")
@@ -764,6 +766,8 @@ def test_headless_runtime_strips_render_components_but_keeps_gameplay_component(
             "MeshRenderer",
             "LightComponent",
             "CameraComponent",
+            "SpriteRenderer2D",
+            "SpriteAnimator2D",
         ):
             assert runtime.scene.get_components_of_type(component_type) == []
     finally:

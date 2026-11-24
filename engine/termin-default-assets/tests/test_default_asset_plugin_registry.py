@@ -11,6 +11,8 @@ DEFAULT_ASSET_PLUGIN_SETUP_FILES = (
 EXPECTED_PLUGIN_TYPES = {
     "animation_clip",
     "audio_clip",
+    "sprite_asset",
+    "sprite_animation_clip",
     "glb",
     "material",
     "mesh",
@@ -25,6 +27,8 @@ EXPECTED_PLUGIN_TYPES = {
 
 EXPECTED_IMPORT_EXTENSIONS = {
     ".tanim": "animation_clip",
+    ".sprite": "sprite_asset",
+    ".spriteclip": "sprite_animation_clip",
     ".glb": "glb",
     ".gltf": "glb",
     ".jpeg": "texture",

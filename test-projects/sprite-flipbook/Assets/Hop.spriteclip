@@ -1,0 +1,32 @@
+{
+  "format": "termin.sprite-animation",
+  "version": 1,
+  "frames": [
+    {
+      "sprite": "3cd0aa48-9ff8-5955-aa75-640440f04944",
+      "duration": 0.28
+    },
+    {
+      "sprite": "63130a9b-37d0-5cf2-aee0-ff43b6db71ae",
+      "duration": 0.14
+    },
+    {
+      "sprite": "330f133d-4abe-532a-a4e0-b708ad2d10e6",
+      "duration": 0.1,
+      "event": "takeoff"
+    },
+    {
+      "sprite": "1f753af6-af43-552d-b650-ecb82960d9a0",
+      "duration": 0.2
+    },
+    {
+      "sprite": "481de7df-a0e2-59ec-a95c-e2157f136146",
+      "duration": 0.1
+    },
+    {
+      "sprite": "63130a9b-37d0-5cf2-aee0-ff43b6db71ae",
+      "duration": 0.12,
+      "event": "land"
+    }
+  ]
+}

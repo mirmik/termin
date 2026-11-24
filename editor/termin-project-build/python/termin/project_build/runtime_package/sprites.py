@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import quote
 
 from termin.project_build.runtime_package.models import RuntimePackageExportDiagnostic
 from termin.project_build.runtime_package.package_files import project_relative_path, write_json
@@ -20,7 +21,7 @@ def write_sprites(
     if not sprites:
         return
 
-    sources = _index_sprite_sources(project_root, set(sprites), diagnostics)
+    sources = _index_sprite_sources(project_root, set(sprites), diagnostics, "*.sprite", "SpriteAsset")
     for uuid_value, name in sorted(sprites.items()):
         source = sources.get(uuid_value)
         output_rel = f"sprites/{uuid_value}.sprite.json"
@@ -68,14 +69,57 @@ def write_sprites(
         )
 
 
+def write_sprite_animation_clips(
+    project_root: Path,
+    package_dir: Path,
+    clips: dict[str, str],
+    sprites: dict[str, str],
+    resources: list[dict[str, str]],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    if not clips:
+        return
+
+    from termin.render_components import parse_sprite_animation_clip
+
+    sources = _index_sprite_sources(project_root, set(clips), diagnostics, "*.spriteclip", "SpriteAnimationClip")
+    for uuid_value, name in sorted(clips.items()):
+        output_rel = f"sprite_clips/{quote(uuid_value, safe='')}.spriteclip"
+        source = sources.get(uuid_value)
+        if source is None:
+            diagnostics.append(RuntimePackageExportDiagnostic(
+                level="error", path=output_rel,
+                message=f"Runtime exporter could not find SpriteAnimationClip UUID '{uuid_value}'",
+            ))
+            continue
+        try:
+            text = source.read_text(encoding="utf-8")
+            frames = parse_sprite_animation_clip(text)
+        except (OSError, ValueError, RuntimeError) as exc:
+            diagnostics.append(RuntimePackageExportDiagnostic(
+                level="error", path=project_relative_path(project_root, source),
+                message=f"Runtime exporter rejected SpriteAnimationClip: {exc}",
+            ))
+            continue
+
+        for frame in frames:
+            sprites.setdefault(frame.sprite_uuid, frame.sprite_uuid)
+        output = package_dir / output_rel
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(text, encoding="utf-8")
+        resources.append({"type": "sprite_animation_clip", "uuid": uuid_value, "name": name, "path": output_rel})
+
+
 def _index_sprite_sources(
     project_root: Path,
     required: set[str],
     diagnostics: list[RuntimePackageExportDiagnostic],
+    pattern: str,
+    asset_type: str,
 ) -> dict[str, Path]:
     result: dict[str, Path] = {}
     ignored = {".git", "__pycache__", "build", "dist"}
-    for source in project_root.rglob("*.sprite"):
+    for source in sorted(project_root.rglob(pattern)):
         if any(part in ignored for part in source.relative_to(project_root).parts):
             continue
         meta_path = Path(f"{source}.meta")
@@ -88,19 +132,19 @@ def _index_sprite_sources(
                 RuntimePackageExportDiagnostic(
                     level="warning",
                     path=project_relative_path(project_root, meta_path),
-                    message=f"Runtime exporter failed to inspect SpriteAsset metadata: {exc}",
+                    message=f"Runtime exporter failed to inspect {asset_type} metadata: {exc}",
                 )
             )
             continue
         uuid_value = metadata.get("uuid") if isinstance(metadata, dict) else None
-        if uuid_value not in required:
+        if not isinstance(uuid_value, str) or uuid_value not in required:
             continue
         if uuid_value in result:
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     level="error",
                     path=project_relative_path(project_root, source),
-                    message=f"Duplicate SpriteAsset UUID '{uuid_value}'",
+                    message=f"Duplicate {asset_type} UUID '{uuid_value}'",
                 )
             )
             continue

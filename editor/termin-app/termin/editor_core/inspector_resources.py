@@ -15,9 +15,12 @@ class InspectorResourceChoice:
     label: str
     name: str | None
     uuid: str | None
+    uuid_only: bool = False
 
     @property
-    def value(self) -> dict[str, str | None] | None:
+    def value(self) -> dict[str, str | None] | str | None:
+        if self.uuid_only:
+            return self.uuid or ""
         if self.name is None:
             return None
         return {"uuid": self.uuid, "name": self.name}
@@ -30,11 +33,14 @@ class InspectorResourceChoices:
     can_create: bool
 
     def index_for_value(self, value: Any) -> int:
-        if value is None:
+        if value is None or value == "":
             return next((index for index, item in enumerate(self.items) if item.name is None), -1)
-        if not isinstance(value, dict):
+        if isinstance(value, str):
+            uuid = value
+        elif isinstance(value, dict):
+            uuid = value.get("uuid")
+        else:
             return -1
-        uuid = value.get("uuid")
         if uuid:
             for index, item in enumerate(self.items):
                 if item.uuid == uuid:
@@ -54,17 +60,25 @@ class InspectorResourceCatalog:
         return self._resource_manager
 
     def choices(self, kind: str) -> InspectorResourceChoices | None:
-        accessors = self._resource_manager.get_handle_accessors(kind)
-        if accessors is None:
-            return None
+        uuid_only = kind in ("sprite_asset", "sprite_animation_clip")
+        if uuid_only:
+            # These native component fields expose UUID strings to the inspector.
+            records = self._resource_manager.external_assets.iter_records(kind)
+            resources = sorted((record.name, record.uuid) for record in records)
+            allow_none, can_create = True, False
+        else:
+            accessors = self._resource_manager.get_handle_accessors(kind)
+            if accessors is None:
+                return None
+            try:
+                resources = accessors.list_items()
+            except Exception:
+                _logger.exception("Failed to list inspector resources for kind '%s'", kind)
+                raise
+            allow_none, can_create = accessors.allow_none, accessors.create_item is not None
         items = []
-        if accessors.allow_none:
-            items.append(InspectorResourceChoice("(None)", None, None))
-        try:
-            resources = accessors.list_items()
-        except Exception:
-            _logger.exception("Failed to list inspector resources for kind '%s'", kind)
-            raise
+        if allow_none:
+            items.append(InspectorResourceChoice("(None)", None, None, uuid_only))
         name_counts: dict[str, int] = {}
         for name, _uuid in resources:
             name_counts[name] = name_counts.get(name, 0) + 1
@@ -73,11 +87,11 @@ class InspectorResourceCatalog:
                 _logger.error("Skipping inspector resource '%s' for kind '%s': missing UUID", name, kind)
                 continue
             label = name if name_counts[name] == 1 else f"{name} — {uuid[:8]}"
-            items.append(InspectorResourceChoice(label, name, uuid))
+            items.append(InspectorResourceChoice(label, name, uuid, uuid_only))
         return InspectorResourceChoices(
             kind=kind,
             items=tuple(items),
-            can_create=accessors.create_item is not None,
+            can_create=can_create,
         )
 
     def create(self, kind: str) -> InspectorResourceChoice | None:

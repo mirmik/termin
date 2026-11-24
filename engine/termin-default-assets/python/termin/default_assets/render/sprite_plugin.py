@@ -17,9 +17,9 @@ SPRITE_ASSET_FORMAT = "termin.sprite"
 SPRITE_ASSET_FORMAT_VERSION = 1
 
 
-class SpriteAssetImportPlugin:
-    type_id = "sprite_asset"
-    extensions = {".sprite"}
+class SpriteDescriptorImportPlugin:
+    type_id: str
+    extensions: set[str]
     priority = 10
 
     def preload(self, path: str) -> "PreLoadResult":
@@ -35,6 +35,11 @@ class SpriteAssetImportPlugin:
             spec_data=spec_data,
             identity_policy=AssetIdentityPolicy.GENERATE_SIDECAR,
         )
+
+
+class SpriteAssetImportPlugin(SpriteDescriptorImportPlugin):
+    type_id = "sprite_asset"
+    extensions = {".sprite"}
 
 
 class SpriteAssetRuntimePlugin:

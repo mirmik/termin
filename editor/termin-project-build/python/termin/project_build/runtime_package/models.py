@@ -38,6 +38,7 @@ class RuntimeRefs:
     textures: dict[str, str] = field(default_factory=dict)
     pipelines: dict[str, str] = field(default_factory=dict)
     sprites: dict[str, str] = field(default_factory=dict)
+    sprite_animation_clips: dict[str, str] = field(default_factory=dict)
     ui_documents: dict[str, str] = field(default_factory=dict)
 
 

@@ -1,0 +1,14 @@
+{
+  "application": {
+    "id": "org.termin.testprojects.spriteflipbook",
+    "label": "Sprite Flipbook",
+    "version_name": "1.0",
+    "version_code": 1
+  },
+  "player_window": {
+    "width": 760,
+    "height": 500,
+    "fullscreen": false,
+    "vsync": true
+  }
+}

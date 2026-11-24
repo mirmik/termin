@@ -26,7 +26,7 @@ from termin.project_build.runtime_package.shaders import (
     write_shader,
 )
 from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
-from termin.project_build.runtime_package.sprites import write_sprites
+from termin.project_build.runtime_package.sprites import write_sprite_animation_clips, write_sprites
 from termin.project_build.runtime_package.ui_documents import (
     stage_ui_documents_for_scene_analysis,
     write_ui_documents,
@@ -155,6 +155,54 @@ def test_sprite_asset_ref_and_texture_are_exported_together(tmp_path: Path) -> N
     ]
     packaged = json.loads((package / "sprites" / f"{sprite_uuid}.sprite.json").read_text(encoding="utf-8"))
     assert packaged["texture"]["uuid"] == texture_uuid
+
+
+def test_sprite_animation_clip_collects_unique_frame_dependencies(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    package = tmp_path / "package"
+    source = project / "walk.spriteclip"
+    frames = [
+        {"sprite": "right", "duration": 0.1, "event": "step"},
+        {"sprite": "left", "duration": 0.2},
+        {"sprite": "right", "duration": 0.3},
+    ]
+    _write_json(source, {"format": "termin.sprite-animation", "version": 1, "frames": frames})
+    _write_json(Path(f"{source}.meta"), {"uuid": "walk"})
+    refs = collect_runtime_refs({
+        "components": [{"type": "SpriteAnimator2D", "data": {
+            "clip": {"type": "uuid", "kind": "sprite_animation_clip", "uuid": "walk"},
+        }}],
+    })
+    assert refs.sprite_animation_clips == {"walk": "walk"}
+    resources = []
+    diagnostics = []
+    write_sprite_animation_clips(project, package, refs.sprite_animation_clips, refs.sprites, resources, diagnostics)
+    assert diagnostics == []
+    assert refs.sprites == {"right": "right", "left": "left"}
+    assert resources[0]["type"] == "sprite_animation_clip"
+    assert json.loads((package / resources[0]["path"]).read_text())["frames"] == frames
+
+    # Independently authored frames share an atlas. Each sprite is required even
+    # when it is only referenced by a clip and appears after the initial frame.
+    def add_frame(sprite: str, x: int) -> None:
+        path = project / f"{sprite}.sprite"
+        _write_json(path, {
+            "format": "termin.sprite", "version": 1, "texture": "atlas",
+            "region": [x, 0, 16, 16], "source_size": [32, 16],
+        })
+        _write_json(Path(f"{path}.meta"), {"uuid": sprite})
+
+    add_frame("right", 0)
+    write_sprites(project, package, refs.sprites, refs.textures, resources, diagnostics)
+    assert len(diagnostics) == 1
+    assert diagnostics[0].level == "error" and "'left'" in diagnostics[0].message
+    add_frame("left", 16)
+    diagnostics.clear()
+    resources.clear()
+    write_sprites(project, package, refs.sprites, refs.textures, resources, diagnostics)
+    assert diagnostics == []
+    assert {entry["uuid"] for entry in resources} == {"left", "right"}
+    assert refs.textures == {"atlas": "atlas"}
 
 
 def test_native_ui_document_ref_is_compiled_for_runtime(tmp_path: Path) -> None:

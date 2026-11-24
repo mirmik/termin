@@ -11,6 +11,7 @@ COMPONENT_SPECS: list[tuple[str, str]] = [
     ("termin.render_components", "LineRenderer"),
     ("termin.render_components", "WorldTextComponent"),
     ("termin.render_components", "SpriteRenderer2D"),
+    ("termin.render_components", "SpriteAnimator2D"),
     ("termin.render_components", "LightComponent"),
     ("termin.render_components", "XrOriginComponent"),
     ("termin.render_components", "XrThumbstickLocomotionComponent"),

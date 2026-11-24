@@ -18,7 +18,7 @@ from termin.player.project_runtime_support import (
 
 _RENDER_SCENE_EXTENSION_KEYS = frozenset({"render_mount", "render_state"})
 _RENDER_ONLY_COMPONENT_TYPES = frozenset(
-    {"CameraComponent", "LightComponent", "MeshComponent", "MeshRenderer"}
+    {"CameraComponent", "LightComponent", "MeshComponent", "MeshRenderer", "SpriteRenderer2D", "SpriteAnimator2D"}
 )
 
 
