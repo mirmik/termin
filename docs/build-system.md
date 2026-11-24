@@ -1549,12 +1549,18 @@ cross-backend binding numbers must not be passed directly to GL texture units.
 
 Web build не компилирует Slang в браузере. `task build:web` сначала строит
 native host-tool `termin_shaderc`, использует закреплённые `slangc` и Naga, а
-затем один раз генерирует полные `webgpu` и `webgl2` builtin matrices в
+затем собирает `webgpu` и `webgl2` builtin matrices в
 `build/web-core-host-tools/share/termin`. Версионированный
 `builtin-shader-artifacts.json` перечисляет каталог, stage artifacts, layout
 sidecars и их SHA-256. Browser fixture и внешние runtime-package exporters
 берут built-in стадии из этого общего корня; несовместимый, неполный или
 изменённый корень отвергается до упаковки.
+
+Desktop и Web build проверяют целостность built-in артефактов перед сборкой.
+При изменении исходника пересобираются стадии затронутой программы с учётом
+её локальных Slang imports и literal includes. SHA-256 в manifest также
+учитывают compiler inputs для каждого backend. Лог показывает ход компиляции
+и итоговое количество собранных и переиспользованных стадий.
 
 Package-specific material/pipeline stages по-прежнему собираются во время
 export, потому что зависят от содержимого сцены. Exporter принимает

@@ -618,6 +618,8 @@ if(TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS)
 
     set(_termin_builtin_shader_artifact_args
         "--shaderc" "$<TARGET_FILE:termin_shaderc>"
+        "--tool-dependency" "$<TARGET_FILE:termin_graphics_binding_policy>"
+        "--tool-dependency" "$<TARGET_FILE:termin_graphics>"
         "--slangc" "${_termin_builtin_shader_slangc}"
         "--source-dir" "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin_shaders"
         "--output-root" "${CMAKE_BINARY_DIR}/share/termin"
@@ -645,32 +647,23 @@ if(TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS)
 
     set(_termin_builtin_shader_artifact_script
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/compile_builtin_shader_artifacts.py")
-    string(REPLACE ";" "-" _termin_builtin_shader_artifact_target_key
-        "${TERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS}")
-    set(_termin_builtin_shader_artifact_stamp
-        "${CMAKE_BINARY_DIR}/share/termin/.builtin_shader_artifacts-${_termin_builtin_shader_artifact_target_key}.stamp")
     set(_termin_builtin_shader_artifact_manifest
         "${CMAKE_BINARY_DIR}/share/termin/builtin-shader-artifacts.json")
-    add_custom_command(
-        OUTPUT
-            "${_termin_builtin_shader_artifact_stamp}"
-            "${_termin_builtin_shader_artifact_manifest}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/termin"
+    # Check the content cache even in a no-op build so missing or invalid
+    # artifacts are restored without depending on a catalog-wide stamp.
+    add_custom_target(termin_builtin_shader_artifacts ALL
         COMMAND "${Python_EXECUTABLE}" "${_termin_builtin_shader_artifact_script}"
                 ${_termin_builtin_shader_artifact_args}
-        COMMAND ${CMAKE_COMMAND} -E touch "${_termin_builtin_shader_artifact_stamp}"
+        BYPRODUCTS "${_termin_builtin_shader_artifact_manifest}"
         DEPENDS
             termin_shaderc
+            termin_builtin_shaders_build_tree
             "${_termin_builtin_shader_artifact_script}"
             ${TERMIN_BUILTIN_SHADER_FILES}
-        COMMENT "Compiling built-in shader artifacts"
+        COMMENT "Checking built-in shader artifacts"
         VERBATIM
         COMMAND_EXPAND_LISTS
     )
-    add_custom_target(termin_builtin_shader_artifacts ALL
-        DEPENDS
-            "${_termin_builtin_shader_artifact_stamp}"
-            "${_termin_builtin_shader_artifact_manifest}")
     add_dependencies(termin_graphics2 termin_builtin_shader_artifacts)
 endif()
 

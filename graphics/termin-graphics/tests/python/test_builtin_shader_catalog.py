@@ -142,3 +142,100 @@ def test_builtin_shader_compiler_writes_versioned_artifact_manifest(
     assert manifest["targets"] == ["webgl2"]
     assert manifest["artifacts"][0]["sha256"] == hashlib.sha256(artifact.read_bytes()).hexdigest()
     assert (output_root / "builtin_shaders/example.slang").is_file()
+
+
+def test_builtin_shader_cache_tracks_program_inputs_and_recovers_outputs(tmp_path: Path) -> None:
+    source_root = tmp_path / "sources"
+    source_root.mkdir()
+    (source_root / "vertex.slang").write_text("import shared;\n", encoding="utf-8")
+    (source_root / "shared.slang").write_text('#include "math.slang"\n', encoding="utf-8")
+    (source_root / "math.slang").write_text("// a helper\n", encoding="utf-8")
+    (source_root / "fragment.slang").write_text("// a fragment\n", encoding="utf-8")
+    (source_root / "other.slang").write_text("// unrelated\n", encoding="utf-8")
+    shaders = [
+        {
+            "uuid": "program",
+            "name": "Program",
+            "language": "slang",
+            "stages": {
+                "vertex": {"path": "vertex.slang", "entry": "main"},
+                "fragment": {"path": "fragment.slang", "entry": "main"},
+            },
+        },
+        {
+            "uuid": "other",
+            "name": "Other",
+            "language": "slang",
+            "stages": {"vertex": {"path": "other.slang", "entry": "main"}},
+        },
+    ]
+    catalog_path = source_root / "engine-shader-catalog.json"
+    catalog_path.write_text(json.dumps({"shaders": shaders}), encoding="utf-8")
+    compiler = tmp_path / "fake_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import pathlib, sys\n"
+        "def opt(name): return sys.argv[sys.argv.index(name) + 1]\n"
+        "if 'BROKEN' in pathlib.Path(opt('--input')).read_text(): sys.exit(1)\n"
+        "out = pathlib.Path(opt('--output'))\n"
+        "inputs = [pathlib.Path(sys.argv[index + 1]).read_text()\n"
+        "          for index, arg in enumerate(sys.argv) if arg == '--program-source']\n"
+        "out.write_text(opt('--debug-name') + opt('--target') + ''.join(inputs))\n"
+        "pathlib.Path(str(out) + '.layout.json').write_text('{}')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+    output = tmp_path / "output"
+
+    def build(destination=output, *, expected=0, count=None):
+        result = subprocess.run(
+            [
+                sys.executable, str(_catalog_module().__file__),
+                "--shaderc", str(compiler), "--source-dir", str(source_root),
+                "--output-root", str(destination), "--target", "vulkan", "--target", "webgl2",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == expected, result.stderr
+        if count is not None:
+            assert result.stdout.count("] compiling ") == count, result.stdout
+        return result.stdout
+
+    build(count=6)
+    manifest = output / "builtin-shader-artifacts.json"
+    reused = output / "shaders/vulkan/other.vert.spv"
+    original_times = (manifest.stat().st_mtime_ns, reused.stat().st_mtime_ns)
+    build(count=0)
+    assert (manifest.stat().st_mtime_ns, reused.stat().st_mtime_ns) == original_times
+
+    (source_root / "math.slang").write_text("// updated helper\n", encoding="utf-8")
+    progress = build(count=4)
+    assert "program:vertex" in progress and "program:fragment" in progress
+    assert reused.stat().st_mtime_ns == original_times[1]
+    (source_root / "fragment.slang").write_text("// updated fragment\n", encoding="utf-8")
+    build(count=4)
+
+    layout = output / "shaders/vulkan/program.vert.spv.layout.json"
+    layout.unlink()
+    build(count=1)
+    reused.write_bytes(b"corrupt")
+    build(count=1)
+    clean = tmp_path / "clean"
+    build(clean, count=6)
+    assert manifest.read_bytes() == (clean / manifest.name).read_bytes()
+
+    successful = manifest.read_bytes()
+    original_artifact = (output / "shaders/vulkan/program.vert.spv").read_bytes()
+    (source_root / "fragment.slang").write_text("BROKEN", encoding="utf-8")
+    build(expected=1)
+    assert manifest.read_bytes() == successful
+    assert (output / "shaders/vulkan/program.vert.spv").read_bytes() == original_artifact
+
+    catalog_path.write_text(json.dumps({"shaders": [shaders[1]]}), encoding="utf-8")
+    build(count=0)
+    assert not layout.exists()
+    assert reused.exists()
+    compiler.write_text(compiler.read_text(encoding="utf-8") + "# compiler update\n", encoding="utf-8")
+    build(count=2)
