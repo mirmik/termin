@@ -106,6 +106,8 @@ namespace tgfx {
         bool in_pass_ = false;
         bool pipeline_dirty_ = true;
 
+        int viewport_x_ = 0;
+        int viewport_y_ = 0;
         int viewport_w_ = 1;
         int viewport_h_ = 1;
 
@@ -361,6 +363,8 @@ namespace tgfx {
             return viewport_h_;
         }
         void set_scissor(int x, int y, int w, int h);
+        // Restore the scissor to the current viewport in top-left coordinates.
+        // A new render pass starts with a viewport covering its attachments.
         void clear_scissor();
 
         // --- Drawing ---

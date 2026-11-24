@@ -432,6 +432,8 @@ namespace tgfx {
             pipeline_dirty_ = true;
         }
 
+        viewport_x_ = 0;
+        viewport_y_ = 0;
         viewport_w_ = std::max(1, static_cast<int>(expected_width));
         viewport_h_ = std::max(1, static_cast<int>(expected_height));
 
@@ -1199,6 +1201,8 @@ namespace tgfx {
     // ============================================================================
 
     void RenderContext2::set_viewport(int x, int y, int w, int h) {
+        viewport_x_ = x;
+        viewport_y_ = y;
         viewport_w_ = std::max(1, w);
         viewport_h_ = std::max(1, h);
         cmd_->set_viewport((float)x, (float)y, (float)w, (float)h);
@@ -1209,10 +1213,7 @@ namespace tgfx {
     }
 
     void RenderContext2::clear_scissor() {
-        // Keep scissoring enabled, but restore it to the active render extent.
-        // The cached extent is synchronized from color or depth attachments in
-        // begin_pass() and from explicit viewport changes in set_viewport().
-        cmd_->set_scissor(0, 0, viewport_w_, viewport_h_);
+        set_scissor(viewport_x_, viewport_y_, viewport_w_, viewport_h_);
     }
 
     // ============================================================================

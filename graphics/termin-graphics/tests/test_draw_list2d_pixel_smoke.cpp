@@ -366,9 +366,29 @@ namespace {
                          immediate_control[3]);
         }
         const bool regressions_ok = clip_regressions(*device, context, canvas, resources, target);
+
+        context.begin_frame();
+        context.begin_pass(target, {}, &black, 1.0f, false);
+        canvas.begin(context, 9, 11, 31, 29);
+        canvas.draw_rect(9, 11, 31, 29, {1, 0, 0, 1});
+        canvas.end();
+        context.end_pass();
+        context.end_frame();
+        device->wait_idle();
+        float right_edge[4]{};
+        float bottom_edge[4]{};
+        float outside[4]{};
+        const bool viewport_read = device->read_pixel_rgba8(target, 39, 18, right_edge) &&
+                                   device->read_pixel_rgba8(target, 18, 39, bottom_edge) &&
+                                   device->read_pixel_rgba8(target, 40, 40, outside);
+        const bool viewport_ok = viewport_read && red(right_edge) && red(bottom_edge) && clear(outside);
+        if (!viewport_ok)
+            std::fprintf(stderr, "Offset Canvas2D viewport read=%d, edge red=(%.2f, %.2f), outside red=%.2f\n",
+                         viewport_read, right_edge[0], bottom_edge[0], outside[0]);
+
         canvas.release_gpu();
         device->destroy(target);
-        return result && regressions_ok ? 0 : 3;
+        return result && regressions_ok && viewport_ok ? 0 : 3;
     }
 
 } // namespace

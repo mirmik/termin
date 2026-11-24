@@ -7,6 +7,8 @@
 #include <SDL.h>
 #include "tgfx2/i_command_list.hpp"
 #include "tgfx2/opengl/opengl_render_device.hpp"
+#include "tgfx2/pipeline_cache.hpp"
+#include "tgfx2/render_context.hpp"
 
 namespace {
     constexpr int width = 7;
@@ -174,6 +176,24 @@ void main() { first = vec4(1, 0, 0, 1); second = vec4(0, 1, 0, 1); }
         glDeleteFramebuffers(2, fbos.data());
         glDeleteTextures(2, colors.data());
         commands.reset();
+
+        tgfx::PipelineCache cache(device);
+        tgfx::RenderContext2 render(device, cache);
+        render.begin_frame();
+        render.begin_pass({}, depth, nullptr, 1.0f, false);
+        render.set_viewport(2, 1, 4, 2);
+        render.set_scissor(0, 0, 1, 1);
+        render.clear_scissor();
+        std::array<GLint, 4> scissor{};
+        glGetIntegerv(GL_SCISSOR_BOX, scissor.data());
+        require(scissor == std::array<GLint, 4>{2, 2, 4, 2}, "scissor must cover the offset viewport");
+        render.end_pass();
+        render.begin_pass({}, depth, nullptr, 1.0f, false);
+        render.clear_scissor();
+        glGetIntegerv(GL_SCISSOR_BOX, scissor.data());
+        require(scissor == std::array<GLint, 4>{0, 0, width, height}, "new pass must restore the full viewport");
+        render.end_pass();
+        render.end_frame();
         device.destroy(depth);
     }
 } // namespace
