@@ -113,6 +113,20 @@ def resolve_test_sdk_context(
     }
 
 
+def resolve_editor_smoke_sdk(repo_root: Path) -> Path:
+    """Resolve the installed Full SDK used by editor process smokes."""
+    sdk_prefix = os.environ.get("SDK_PREFIX")
+    termin_sdk = os.environ.get("TERMIN_SDK")
+    context = resolve_test_sdk_context(
+        repo_root,
+        profile="full",
+        sdk_prefix=Path(sdk_prefix) if sdk_prefix else None,
+        termin_sdk=Path(termin_sdk) if termin_sdk else None,
+        installed=True,
+    )
+    return Path(context["sdk-prefix"])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, required=True)

@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
 
 from termin_build.managed_process import ManagedProcess  # noqa: E402
+from termin_build.sdk_test_context import TestSdkContextError, resolve_editor_smoke_sdk  # noqa: E402
 
 
 class SmokeError(RuntimeError):
@@ -45,24 +46,22 @@ def _shared_library_name(stem: str) -> str:
     return f"lib{stem}.so"
 
 
-def _locate_core_artifact(root: Path) -> Path:
+def _locate_core_artifact(root: Path, sdk_root: Path) -> Path:
     name = _shared_library_name("termin_engine_cpp_hot_reload_test_module")
-    candidates = (
-        root / "build" / "Release" / "bin" / name,
-        root / "build" / "Release-tests" / "bin" / name,
-        root / "sdk" / "bin" / name,
-    )
+    build_dir = os.environ.get("BUILD_DIR")
+    build_dirs = (Path(build_dir),) if build_dir else (root / "build" / "Release", root / "build" / "Release-tests")
+    candidates = [directory / "bin" / name for directory in (*build_dirs, sdk_root)]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
 
     raise SmokeError(
         "C++ hot-reload test module artifact was not found. "
-        "Build the SDK first with 'task build'."
+        f"Checked: {candidates}. Build the C++ tests first with 'task test:cpp'."
     )
 
 
-def _compile_leaf_artifact(project_root: Path) -> Path:
+def _compile_leaf_artifact(project_root: Path, sdk_root: Path) -> Path:
     if sys.platform == "win32":
         raise SmokeError("This smoke script currently builds the no-op leaf module only on Unix-like hosts.")
 
@@ -102,7 +101,7 @@ def _compile_leaf_artifact(project_root: Path) -> Path:
         "-shared",
         "-fPIC",
         "-I",
-        str(_repo_root() / "sdk" / "include"),
+        str(sdk_root / "include"),
         str(source),
         "-o",
         str(artifact),
@@ -144,7 +143,7 @@ def _write_descriptor(path: Path, *, module_id: str, artifact: Path, dependencie
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _write_project(project_root: Path, core_artifact_source: Path) -> Path:
+def _write_project(project_root: Path, core_artifact_source: Path, sdk_root: Path) -> Path:
     project_root.mkdir(parents=True, exist_ok=True)
     project_file = project_root / "NativeCascadeSmoke.terminproj"
     project_file.write_text(
@@ -153,7 +152,7 @@ def _write_project(project_root: Path, core_artifact_source: Path) -> Path:
     )
 
     core_artifact = _copy_core_artifact(project_root, core_artifact_source)
-    leaf_artifact = _compile_leaf_artifact(project_root)
+    leaf_artifact = _compile_leaf_artifact(project_root, sdk_root)
     _write_descriptor(
         project_root / "native_core.module",
         module_id=CORE_MODULE,
@@ -518,14 +517,16 @@ def main() -> int:
     args = parser.parse_args()
 
     root = _repo_root()
-    editor = root / "sdk" / "bin" / "termin_editor"
+    sdk_root = resolve_editor_smoke_sdk(root)
+    print("[smoke] SDK:", sdk_root, flush=True)
+    editor = sdk_root / "bin" / "termin_editor"
     helper = root / "scripts" / "termin-editor-mcp"
     if not editor.exists():
         raise SmokeError(f"Editor executable not found: {editor}. Build the SDK first.")
     if not helper.exists():
         raise SmokeError(f"Editor MCP helper not found: {helper}")
 
-    core_artifact_source = _locate_core_artifact(root)
+    core_artifact_source = _locate_core_artifact(root, sdk_root)
 
     tmp_handle = None if args.keep_temp else tempfile.TemporaryDirectory(prefix="termin-cpp-cascade-smoke-")
     tmp_dir = (
@@ -536,7 +537,7 @@ def main() -> int:
     project_root = tmp_dir / "project"
     session_file = tmp_dir / "editor-mcp.json"
     editor_log = tmp_dir / "editor.log"
-    project_file = _write_project(project_root, core_artifact_source)
+    project_file = _write_project(project_root, core_artifact_source, sdk_root)
     status_probe = _write_probe(tmp_dir, "probe_cpp_cascade_status.py", _status_script())
     reload_probe = _write_probe(tmp_dir, "probe_cpp_cascade_reload.py", _reload_script())
 
@@ -546,7 +547,7 @@ def main() -> int:
     env["TERMIN_EDITOR_MCP_PORT"] = "0"
     env["TERMIN_EDITOR_MCP_SESSION_FILE"] = str(session_file)
     env.setdefault("TERMIN_BACKEND", "opengl")
-    env.setdefault("TERMIN_SDK", str(root / "sdk"))
+    env["TERMIN_SDK"] = str(sdk_root)
 
     managed: ManagedProcess | None = None
     try:
@@ -631,6 +632,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except SmokeError as exc:
+    except (SmokeError, TestSdkContextError) as exc:
         print(f"[smoke] FAIL: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

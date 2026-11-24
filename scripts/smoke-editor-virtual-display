@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
 
 from termin_build.managed_process import ManagedProcess  # noqa: E402
+from termin_build.sdk_test_context import TestSdkContextError, resolve_editor_smoke_sdk  # noqa: E402
 
 
 class SmokeError(RuntimeError):
@@ -186,8 +187,10 @@ def main() -> int:
     root = _repo_root()
     wrapper = root / "scripts" / "termin-editor-virtual-display"
     helper = root / "scripts" / "termin-editor-mcp"
-    editor = root / "sdk" / "bin" / "termin_editor"
-    sdk_python = root / "sdk" / "bin" / "termin_python"
+    sdk_root = resolve_editor_smoke_sdk(root)
+    print("[smoke] SDK:", sdk_root, flush=True)
+    editor = sdk_root / "bin" / "termin_editor"
+    sdk_python = sdk_root / "bin" / "termin_python"
     for path, label in (
         (wrapper, "virtual-display wrapper"),
         (helper, "editor MCP helper"),
@@ -368,6 +371,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except SmokeError as exc:
+    except (SmokeError, TestSdkContextError) as exc:
         print(f"[virtual-display-smoke] FAIL: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

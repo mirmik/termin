@@ -18,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
 
 from termin_build.managed_process import ManagedProcess  # noqa: E402
+from termin_build.sdk_test_context import TestSdkContextError, resolve_editor_smoke_sdk  # noqa: E402
 
 
 class SmokeError(RuntimeError):
@@ -386,7 +387,9 @@ def main() -> int:
     args = parser.parse_args()
 
     root = _repo_root()
-    editor = root / "sdk" / "bin" / "termin_editor"
+    sdk_root = resolve_editor_smoke_sdk(root)
+    print("[smoke] SDK:", sdk_root, flush=True)
+    editor = sdk_root / "bin" / "termin_editor"
     helper = root / "scripts" / "termin-editor-mcp"
     if not editor.exists():
         raise SmokeError(f"Editor executable not found: {editor}. Build the SDK first.")
@@ -412,7 +415,7 @@ def main() -> int:
     env["TERMIN_EDITOR_MCP_PORT"] = "0"
     env["TERMIN_EDITOR_MCP_SESSION_FILE"] = str(session_file)
     env.setdefault("TERMIN_BACKEND", "opengl")
-    env.setdefault("TERMIN_SDK", str(root / "sdk"))
+    env["TERMIN_SDK"] = str(sdk_root)
 
     managed: ManagedProcess | None = None
     try:
@@ -526,6 +529,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except SmokeError as exc:
+    except (SmokeError, TestSdkContextError) as exc:
         print(f"[smoke] FAIL: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

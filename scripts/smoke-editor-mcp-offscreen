@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
 
 from termin_build.managed_process import ManagedProcess  # noqa: E402
+from termin_build.sdk_test_context import TestSdkContextError, resolve_editor_smoke_sdk  # noqa: E402
 
 
 class SmokeError(RuntimeError):
@@ -503,7 +504,9 @@ def main() -> int:
         raise SmokeError("capture dimensions must be positive")
 
     root = _repo_root()
-    editor = root / "sdk" / "bin" / "termin_editor"
+    sdk_root = resolve_editor_smoke_sdk(root)
+    print("[smoke] SDK:", sdk_root, flush=True)
+    editor = sdk_root / "bin" / "termin_editor"
     helper = root / "scripts" / "termin-editor-mcp"
     for path, label in ((editor, "SDK editor"), (helper, "editor MCP helper")):
         if not path.is_file() or not os.access(path, os.X_OK):
@@ -519,7 +522,7 @@ def main() -> int:
                     name=name,
                     root=temp_root,
                     editor=editor,
-                    sdk_root=editor.parent.parent,
+                    sdk_root=sdk_root,
                     width=args.width,
                     height=args.height,
                 )
@@ -577,6 +580,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except SmokeError as error:
+    except (SmokeError, TestSdkContextError) as error:
         print(f"[offscreen-mcp-smoke] FAIL: {error}", file=sys.stderr, flush=True)
         raise SystemExit(1) from error

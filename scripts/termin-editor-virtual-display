@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "core" / "termin-build-tools"))
 
 from termin_build.managed_process import ManagedProcess  # noqa: E402
+from termin_build.sdk_test_context import TestSdkContextError, resolve_editor_smoke_sdk  # noqa: E402
 
 
 DEFAULT_SCREEN = "1920x1080x24"
@@ -277,8 +278,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--editor",
         type=Path,
-        default=_repo_root() / "sdk" / "bin" / "termin_editor",
-        help="Editor executable (default: repository SDK editor)",
+        help="Editor executable (default: editor in the selected Full SDK)",
     )
     parser.add_argument(
         "--session-file",
@@ -299,7 +299,8 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = _parser().parse_args()
     project = _resolve_project(args.project)
-    editor = args.editor.expanduser().resolve()
+    editor_path = args.editor or resolve_editor_smoke_sdk(_repo_root()) / "bin" / "termin_editor"
+    editor = editor_path.expanduser().resolve()
     if not editor.is_file() or not os.access(editor, os.X_OK):
         raise VirtualDisplayError(
             f"Editor executable is missing or not executable: {editor}. "
@@ -373,6 +374,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except VirtualDisplayError as exc:
+    except (VirtualDisplayError, TestSdkContextError) as exc:
         print(f"[virtual-display] ERROR: {exc}", file=sys.stderr, flush=True)
         raise SystemExit(1) from exc
