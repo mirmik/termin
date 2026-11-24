@@ -311,9 +311,13 @@ class SceneFileController:
 
             stage = "staging-create"
             with trace.stage(stage):
+                # Older scenes may omit the UUID or store an empty string.
+                scene_uuid = scene_data.get("uuid", "") if scene_data is not None else ""
+                if not isinstance(scene_uuid, str) or "\0" in scene_uuid:
+                    raise ValueError("Scene UUID must be a string without NUL characters")
                 staged_scene = create_scene_with_extensions(
                     scene_label,
-                    "",
+                    scene_uuid,
                     default_scene_extensions(),
                 )
                 if staged_scene is None or not staged_scene.is_alive():

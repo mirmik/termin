@@ -7,7 +7,7 @@ from termin.editor_core.scene_file_controller import SceneFileController
 from termin.glb_adapters import scene_animation_repair
 from termin.project.settings import ProjectSettingsManager
 from termin.project_modules import runtime as project_modules_runtime
-from termin.engine import SceneKey, SceneRole
+from termin.engine import SceneKey, SceneManager, SceneRole
 
 
 def _authoring_key(identity: str) -> SceneKey:
@@ -80,26 +80,27 @@ def _build_controller(
     monkeypatch,
     calls: list[object],
     *,
-    staged_scene: _Scene,
+    staged_scene: _Scene | None = None,
     project_root,
-) -> tuple[SceneFileController, _SceneManager, list[str | None]]:
-    old_scene = _Scene(calls)
-    manager = _SceneManager(calls, old_scene)
+    manager: SceneManager | None = None,
+) -> tuple[SceneFileController, _SceneManager | SceneManager, list[str | None]]:
+    if manager is None:
+        manager = _SceneManager(calls, _Scene(calls))
     active_name: list[str | None] = ["old"]
 
-    monkeypatch.setattr(
-        scene_file_controller_module,
-        "create_scene_with_extensions",
-        lambda name, uuid, extensions: (
-            calls.append(("stage", name, uuid, extensions)) or staged_scene
-        ),
-    )
-
-    monkeypatch.setattr(
-        scene_file_controller_module,
-        "default_scene_extensions",
-        lambda: (11, 12),
-    )
+    if staged_scene is not None:
+        monkeypatch.setattr(
+            scene_file_controller_module,
+            "create_scene_with_extensions",
+            lambda name, uuid, extensions: (
+                calls.append(("stage", name, uuid, extensions)) or staged_scene
+            ),
+        )
+        monkeypatch.setattr(
+            scene_file_controller_module,
+            "default_scene_extensions",
+            lambda: (11, 12),
+        )
     monkeypatch.setattr(
         ProjectSettingsManager,
         "instance",
@@ -174,6 +175,55 @@ def _assert_old_scene_untouched(
         and call[0] in {"close", "register", "detach-editor", "detach-render"}
         for call in calls
     )
+
+
+@pytest.mark.parametrize("invalid_uuid", [None, 123, "truncated\0uuid"])
+def test_invalid_scene_uuid_preserves_active_scene(monkeypatch, tmp_path, invalid_uuid) -> None:
+    calls: list[object] = []
+    controller, manager, active_name = _build_controller(
+        monkeypatch, calls, staged_scene=_Scene(calls), project_root=tmp_path
+    )
+    path = tmp_path / "broken.scene"
+    path.write_text(json.dumps({"scene": {"uuid": invalid_uuid, "entities": []}}), encoding="utf-8")
+
+    controller.load_scene_from_file(str(path))
+
+    _assert_old_scene_untouched(calls, manager, active_name)
+    assert not any(isinstance(call, tuple) and call[0] == "stage" for call in calls)
+    assert any(
+        isinstance(call, tuple) and call[0] == "log-error" and "Scene UUID" in call[1]
+        for call in calls
+    )
+
+
+@pytest.mark.parametrize("uuid", ["071b3d92-9db7-52fb-bc75-f96b9ab3489f", "", None])
+def test_scene_uuid_round_trips_through_native_staging(monkeypatch, tmp_path, uuid) -> None:
+    manager = SceneManager()
+    original = manager.create_scene(_authoring_key("old"))
+    original.uuid = uuid or ""
+    original.set_metadata_value("label", "persistent metadata")
+    original.create_entity("persistent entity")
+    controller, _, active_name = _build_controller(
+        monkeypatch, [], project_root=tmp_path, manager=manager
+    )
+    path = tmp_path / "loaded.scene"
+    try:
+        assert controller.save_scene_to_file(str(path))
+        before = json.loads(path.read_text(encoding="utf-8"))
+        if uuid is None:
+            del before["scene"]["uuid"]
+            path.write_text(json.dumps(before), encoding="utf-8")
+        controller.load_scene_from_file(str(path))
+        loaded = manager.get_scene(_authoring_key("loaded.scene"))
+        assert active_name == ["loaded.scene"]
+        assert loaded.uuid == (uuid or "")
+        assert controller.save_scene_to_file(str(path))
+        after = json.loads(path.read_text(encoding="utf-8"))
+        assert after["scene"]["uuid"] == (uuid or "")
+        assert after["scene"]["metadata"] == before["scene"]["metadata"]
+        assert after["scene"]["entities"] == before["scene"]["entities"]
+    finally:
+        manager.close_scene(_authoring_key(active_name[0]))
 
 
 def test_malformed_scene_does_not_replace_active_scene(monkeypatch, tmp_path) -> None:
