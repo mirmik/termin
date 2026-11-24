@@ -14,11 +14,12 @@ from termin_build.graphics_python_publish import (
     publish_candidate,
     validate_candidate,
 )
+from termin_build.versioning import public_version
 from termin_build.wheelhouse import inspect_wheel
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-VERSION = "0.5.2"
+VERSION = public_version()
 ABIS = ("cp314", "cp314t")
 
 

@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import tomllib
 
 from termin_build.versioning import public_version
 from termin_build.package_manifest import load_manifest
@@ -9,7 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_public_version_is_canonical() -> None:
-    assert public_version() == "0.5.2"
+    with (REPO_ROOT / "build-system/version.toml").open("rb") as config:
+        assert public_version() == tomllib.load(config)["version"]
 
 
 def test_distribution_metadata_uses_canonical_version_source() -> None:
@@ -27,4 +29,4 @@ def test_distribution_metadata_uses_canonical_version_source() -> None:
     for path in pyproject_files:
         text = path.read_text(encoding="utf-8")
         if 'version = "' in text:
-            assert 'version = "0.5.2"' in text, path
+            assert f'version = "{public_version()}"' in text, path
