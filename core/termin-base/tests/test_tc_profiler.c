@@ -193,6 +193,46 @@ GUARD_C_TEST(test_profiler_large_captures_own_independent_copies_across_growth_a
     return 0;
 }
 
+GUARD_C_TEST(test_profiler_lookup_handles_collisions_and_truncated_names) {
+    const char* first = "probe-59aea5a680f8";
+    const char* second = "probe-48a55dfa3925";
+    char long_name[TC_PROFILER_MAX_NAME_LEN + 1];
+    memset(long_name, 'x', sizeof(long_name) - 1u);
+    long_name[sizeof(long_name) - 1u] = '\0';
+    char short_name[TC_PROFILER_MAX_NAME_LEN];
+    memcpy(short_name, long_name, sizeof(short_name) - 1u);
+    short_name[sizeof(short_name) - 1u] = '\0';
+
+    tc_profiler_set_enabled(true);
+    tc_profiler_begin_frame();
+    tc_profiler_begin_section("root");
+    // Two names with the same lookup hash when the parent is section 0.
+    const char* calls[] = {first, second, second, first, long_name, long_name, short_name};
+    for (size_t i = 0; i < sizeof(calls) / sizeof(calls[0]); ++i) {
+        tc_profiler_begin_section(calls[i]);
+        tc_profiler_end_section();
+    }
+    tc_profiler_end_section();
+
+    const tc_frame_profile* frame = tc_profiler_current_frame();
+    GUARD_C_REQUIRE(frame->section_count == 5);
+    const tc_section_timing* sections = frame->sections;
+    GUARD_C_CHECK(strcmp(sections[1].name, first) == 0);
+    GUARD_C_CHECK(strcmp(sections[2].name, second) == 0);
+    GUARD_C_CHECK(strcmp(sections[3].name, short_name) == 0);
+    GUARD_C_CHECK(strcmp(sections[4].name, short_name) == 0);
+    GUARD_C_CHECK(sections[0].first_child == 1);
+    for (int i = 1; i <= 4; ++i) {
+        GUARD_C_CHECK(sections[i].parent_index == 0);
+        GUARD_C_CHECK(sections[i].next_sibling == (i == 4 ? -1 : i + 1));
+        GUARD_C_CHECK(sections[i].call_count == (i == 4 ? 1 : 2));
+    }
+    tc_profiler_end_frame();
+    tc_profiler_clear_history();
+    tc_profiler_set_enabled(false);
+    return 0;
+}
+
 GUARD_C_TEST(test_profiler_bounds_deeply_nested_sections) {
     tc_profiler_set_enabled(true);
     tc_profiler_clear_history();
@@ -448,6 +488,7 @@ int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_profiler_preserves_thousands_of_shallow_sections_and_reuses_storage);
     GUARD_C_RUN(test_profiler_large_captures_own_independent_copies_across_growth_and_clear);
+    GUARD_C_RUN(test_profiler_lookup_handles_collisions_and_truncated_names);
     GUARD_C_RUN(test_profiler_bounds_deeply_nested_sections);
     GUARD_C_RUN(test_profiler_preserves_raw_frame_timing_and_excludes_open_frame);
     GUARD_C_RUN(test_profiler_history_cursor_reports_ring_overwrite);

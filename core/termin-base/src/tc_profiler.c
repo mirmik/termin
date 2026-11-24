@@ -154,6 +154,12 @@ profile_ring_after(const tc_profile_ring* ring, int last_frame_number, tc_profil
 }
 
 typedef struct {
+    uint32_t epoch;
+    uint32_t hash;
+    int section_index;
+} tc_section_lookup_entry;
+
+typedef struct {
     bool enabled_requested;
     bool sections_enabled;
     bool frame_capture_enabled;
@@ -177,7 +183,11 @@ typedef struct {
     int muted_depth;
     tc_frame_profile current_frame_storage;
     tc_section_timing* current_sections;
+    int* last_children;
     size_t current_section_capacity;
+    tc_section_lookup_entry* section_lookup;
+    size_t section_lookup_capacity;
+    uint32_t section_lookup_epoch;
     bool section_growth_failed;
     tc_profile_ring history;
     tc_profiler_capture* captures;
@@ -264,6 +274,13 @@ void tc_profiler_begin_frame_with_info(const tc_profiler_frame_info* info) {
     g_profiler.overflow_depth = 0;
     g_profiler.muted_depth = -1;
     g_profiler.section_growth_failed = false;
+    if (++g_profiler.section_lookup_epoch == 0) {
+        if (g_profiler.section_lookup) {
+            memset(g_profiler.section_lookup, 0,
+                   g_profiler.section_lookup_capacity * sizeof(*g_profiler.section_lookup));
+        }
+        g_profiler.section_lookup_epoch = 1;
+    }
     g_profiler.frame_start_time = measured_start_time;
 }
 
@@ -348,6 +365,13 @@ static bool reserve_current_sections(size_t required) {
     while (capacity < required) {
         capacity = capacity > max_capacity / 2u ? max_capacity : capacity * 2u;
     }
+    int* last_children = (int*)realloc(g_profiler.last_children, capacity * sizeof(int));
+    if (!last_children) {
+        g_profiler.section_growth_failed = true;
+        tc_log(TC_LOG_ERROR, "tc_profiler: failed to grow section child tails to %zu entries", capacity);
+        return false;
+    }
+    g_profiler.last_children = last_children;
     tc_section_timing* sections = (tc_section_timing*)realloc(
         g_profiler.current_sections, capacity * sizeof(tc_section_timing));
     if (!sections) {
@@ -361,54 +385,116 @@ static bool reserve_current_sections(size_t required) {
     return true;
 }
 
-static int find_or_create_section(const char* name, int parent_index) {
-    tc_frame_profile* frame = g_profiler.current_frame;
+static bool reserve_section_lookup(size_t required) {
+    const size_t old_capacity = g_profiler.section_lookup_capacity;
+    if (required <= old_capacity / 2u)
+        return true;
+    if (g_profiler.section_growth_failed)
+        return false;
 
-    int first_child = (parent_index >= 0) ? frame->sections[parent_index].first_child : -1;
-
-    if (parent_index < 0) {
-        for (int i = 0; i < frame->section_count; i++) {
-            if (frame->sections[i].parent_index == -1 && strcmp(frame->sections[i].name, name) == 0) {
-                return i;
-            }
-        }
-    } else {
-        int idx = first_child;
-        while (idx >= 0) {
-            if (strcmp(frame->sections[idx].name, name) == 0) {
-                return idx;
-            }
-            idx = frame->sections[idx].next_sibling;
-        }
+    const size_t max_capacity = SIZE_MAX / sizeof(tc_section_lookup_entry);
+    size_t capacity = old_capacity ? old_capacity : 64u;
+    while (capacity / 2u < required && capacity <= max_capacity / 2u) {
+        capacity *= 2u;
+    }
+    tc_section_lookup_entry* entries = NULL;
+    if (capacity / 2u >= required) {
+        entries = (tc_section_lookup_entry*)calloc(capacity, sizeof(*entries));
+    }
+    if (!entries) {
+        g_profiler.section_growth_failed = true;
+        tc_log(TC_LOG_ERROR, "tc_profiler: failed to grow section lookup for %zu entries", required);
+        return false;
     }
 
-    if (!reserve_current_sections((size_t)frame->section_count + 1u)) {
+    const uint32_t epoch = g_profiler.section_lookup_epoch;
+    for (size_t i = 0; i < old_capacity; ++i) {
+        const tc_section_lookup_entry entry = g_profiler.section_lookup[i];
+        if (entry.epoch != epoch) {
+            continue;
+        }
+        size_t slot = entry.hash & (capacity - 1u);
+        while (entries[slot].epoch == epoch) {
+            slot = (slot + 1u) & (capacity - 1u);
+        }
+        entries[slot] = entry;
+    }
+    free(g_profiler.section_lookup);
+    g_profiler.section_lookup = entries;
+    g_profiler.section_lookup_capacity = capacity;
+    return true;
+}
+
+static tc_section_lookup_entry* section_lookup_slot(
+    uint32_t hash, const char* name, size_t length, int parent_index) {
+    const size_t mask = g_profiler.section_lookup_capacity - 1u;
+    size_t slot = hash & mask;
+    for (;;) {
+        tc_section_lookup_entry* entry = &g_profiler.section_lookup[slot];
+        if (entry->epoch != g_profiler.section_lookup_epoch)
+            return entry;
+        if (entry->hash == hash) {
+            const tc_section_timing* section = &g_profiler.current_sections[entry->section_index];
+            if (section->parent_index == parent_index && section->name[length] == '\0' &&
+                memcmp(section->name, name, length) == 0) {
+                return entry;
+            }
+        }
+        slot = (slot + 1u) & mask;
+    }
+}
+
+static int find_or_create_section(const char* name, int parent_index) {
+    tc_frame_profile* frame = g_profiler.current_frame;
+    uint32_t hash = 2166136261u ^ (uint32_t)parent_index;
+    size_t length = 0;
+    while (length < TC_PROFILER_MAX_NAME_LEN - 1u && name[length] != '\0') {
+        hash = (hash ^ (unsigned char)name[length]) * 16777619u;
+        ++length;
+    }
+    const bool truncated = name[length] != '\0';
+    const uint32_t epoch = g_profiler.section_lookup_epoch;
+    const size_t capacity = g_profiler.section_lookup_capacity;
+    tc_section_lookup_entry* entry = capacity ? section_lookup_slot(hash, name, length, parent_index) : NULL;
+    // An overlong name never compared equal to its stored spelling.
+    // Keep the first matching stored spelling available for shorter callers.
+    if (entry && entry->epoch == epoch && !truncated) {
+        return entry->section_index;
+    }
+
+    const size_t required = (size_t)frame->section_count + 1u;
+    if (!reserve_current_sections(required) || !reserve_section_lookup(required)) {
         return -1;
+    }
+    if (capacity != g_profiler.section_lookup_capacity || !entry) {
+        entry = section_lookup_slot(hash, name, length, parent_index);
     }
 
     int new_idx = frame->section_count++;
     tc_section_timing* section = &frame->sections[new_idx];
 
-    strncpy(section->name, name, TC_PROFILER_MAX_NAME_LEN - 1);
-    section->name[TC_PROFILER_MAX_NAME_LEN - 1] = '\0';
+    memset(section->name, 0, sizeof(section->name));
+    memcpy(section->name, name, length);
     section->cpu_ms = 0.0;
     section->children_ms = 0.0;
     section->call_count = 0;
     section->parent_index = parent_index;
     section->first_child = -1;
     section->next_sibling = -1;
+    g_profiler.last_children[new_idx] = -1;
 
     if (parent_index >= 0) {
         tc_section_timing* parent = &frame->sections[parent_index];
-        if (parent->first_child < 0) {
+        const int last = g_profiler.last_children[parent_index];
+        if (last < 0) {
             parent->first_child = new_idx;
         } else {
-            int last = parent->first_child;
-            while (frame->sections[last].next_sibling >= 0) {
-                last = frame->sections[last].next_sibling;
-            }
             frame->sections[last].next_sibling = new_idx;
         }
+        g_profiler.last_children[parent_index] = new_idx;
+    }
+    if (entry->epoch != epoch) {
+        *entry = (tc_section_lookup_entry){epoch, hash, new_idx};
     }
 
     return new_idx;
