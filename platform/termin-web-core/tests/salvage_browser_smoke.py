@@ -128,11 +128,11 @@ class Pilot:
             # native fixed-step clock, which can advance differently on software GPUs.
             dt = previous.seconds - s.seconds
             if dt > 0:
-                def thrust(error, displacement):
-                    residual = error - .40 * displacement / dt
+                def thrust(error, displacement, step):
+                    residual = error - .40 * displacement / step
                     return (residual > .07) - (residual < -.07)
-                self.steer(thrust(target_x - s.x, s.x - previous.x),
-                           thrust(target_z - s.z, s.z - previous.z))
+                self.steer(thrust(target_x - s.x, s.x - previous.x, dt),
+                           thrust(target_z - s.z, s.z - previous.z, dt))
                 previous = s
             time.sleep(.055)
         self.steer(0, 0)

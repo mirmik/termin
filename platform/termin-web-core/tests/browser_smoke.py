@@ -20,6 +20,7 @@ import zlib
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from itertools import pairwise
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -976,8 +977,8 @@ def check_bathyscaphe(devtools: DevToolsSocket, artifact: Path, backend: str) ->
             if len(first) != 2:
                 raise RuntimeError(f"Bathyscaphe opening signal should have two pulses: {first}")
             bounds, dark = lens_frame()
-            for channel, (before, after) in enumerate(zip(lit, dark), start=1):
-                if max(a - b for a, b in zip(before, after)) < 20:
+            for channel, (before, after) in enumerate(zip(lit, dark, strict=True), start=1):
+                if max(a - b for a, b in zip(before, after, strict=True)) < 20:
                     raise RuntimeError(f"Bathyscaphe lens {channel} did not dim: {before} -> {after}")
 
             def press_lens(channel):
@@ -1298,7 +1299,7 @@ def check_physics_scene(devtools: DevToolsSocket, artifact: Path, backend: str) 
                             raise RuntimeError(f"Height graph did not receive live physics steps on {backend}")
                         time.sleep(0.04)
                     if (len(times) != len(heights) or times[0] != 0 or
-                            any(abs(b - a - 1 / 60) > 1e-6 for a, b in zip(times, times[1:]))):
+                            any(abs(b - a - 1 / 60) > 1e-6 for a, b in pairwise(times))):
                         raise RuntimeError(f"Height graph skipped a fixed physics step on {backend}: {times}")
                     # Check independently picked positions against the recorded fixed steps.
                     for seconds, picked in ((0, initial), (0.35, falling), (0.60, contact), (0.90, rebound)):

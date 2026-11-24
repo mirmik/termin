@@ -1,6 +1,7 @@
 """Turned metalwork and Fresnel lenses for the bathyscaphe signal receiver."""
 
 import math
+from itertools import pairwise
 
 from demo_scenes import object_entity
 
@@ -33,7 +34,7 @@ def turn_profile(name, fixture_mesh, profile, segments=80):
     """Revolve a (radius, depth) tool profile around Y, keeping machined edges crisp."""
     vertices = []
     indices = []
-    for (r0, y0), (r1, y1) in zip(profile, profile[1:]):
+    for (r0, y0), (r1, y1) in pairwise(profile):
         dr, dy = r1 - r0, y1 - y0
         length = math.hypot(dr, dy)
         first = len(vertices) // 12

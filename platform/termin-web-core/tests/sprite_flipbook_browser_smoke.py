@@ -16,7 +16,7 @@ def green_pixels(image):
     _, _, channels, rows = image
     return {
         (x, y) for y, row in enumerate(rows)
-        for x, (r, g, b) in enumerate(zip(row[0::channels], row[1::channels], row[2::channels]))
+        for x, (r, g, b) in enumerate(zip(row[0::channels], row[1::channels], row[2::channels], strict=True))
         if g > 65 and g > r + 25 and g > b + 3
     }
 
@@ -24,7 +24,7 @@ def green_pixels(image):
 def bounds(mask):
     if not mask:
         raise RuntimeError("The sprite's green body is missing from the canvas")
-    xs, ys = zip(*mask)
+    xs, ys = zip(*mask, strict=True)
     return min(xs), min(ys), max(xs) + 1, max(ys) + 1
 
 
