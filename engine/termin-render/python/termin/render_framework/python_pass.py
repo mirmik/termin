@@ -15,6 +15,8 @@ from termin.render_framework._render_framework_native import (
 
 _registered_python_pass_types: dict[str, str] = {}
 _python_pass_registrations: dict[str, tuple[type, str]] = {}
+_python_pass_declarations: dict[str, dict[str, type]] = {}
+_BUILTIN_PASS_OWNER = "termin-render-python"
 
 
 def _log_cleanup_error(message: str) -> None:
@@ -64,6 +66,7 @@ def shutdown_python_passes() -> None:
 
 def unregister_python_pass_owner(owner: str) -> None:
     """Forget loaded pass definitions owned by an unloaded project module."""
+    _python_pass_declarations.pop(owner, None)
     for type_name, (_cls, registered_owner) in tuple(
         _python_pass_registrations.items()
     ):
@@ -73,11 +76,12 @@ def unregister_python_pass_owner(owner: str) -> None:
 
 
 def list_python_pass_owner(owner: str) -> list[str]:
-    return sorted(
+    registered = {
         type_name
         for type_name, (_cls, registered_owner) in _python_pass_registrations.items()
         if registered_owner == owner
-    )
+    }
+    return sorted(registered | _python_pass_declarations.get(owner, {}).keys())
 
 
 atexit.register(shutdown_python_passes)
@@ -114,23 +118,20 @@ def _inspect_registry():
     return InspectRegistry.instance()
 
 
-def _register_python_pass_class(cls: type, owner: str | None = None) -> None:
-    if owner is None:
-        try:
-            from termin_modules.module_context import owner_for_python_module
-        except ModuleNotFoundError as exc:
-            if exc.name not in ("termin_modules", "termin_modules.module_context"):
-                from termin.base import log
-
-                log.error("Failed to load module ownership context", exc_info=True)
-            owner = "termin-render-python"
-        except Exception:
+def _owner_for_python_pass(cls: type) -> str | None:
+    try:
+        from termin_modules.module_context import owner_for_python_module
+    except ModuleNotFoundError as exc:
+        if exc.name not in ("termin_modules", "termin_modules.module_context"):
             from termin.base import log
 
             log.error("Failed to load module ownership context", exc_info=True)
-            owner = "termin-render-python"
-        else:
-            owner = owner_for_python_module(cls.__module__) or "termin-render-python"
+            raise
+        return None
+    return owner_for_python_module(cls.__module__)
+
+
+def _register_python_pass_class(cls: type, owner: str) -> bool:
     parent_name = None
     for klass in cls.__mro__[1:]:
         if klass.__name__ in ("PythonFramePass", "FramePass", "RenderFramePass"):
@@ -140,7 +141,7 @@ def _register_python_pass_class(cls: type, owner: str | None = None) -> None:
             parent_name = klass.__name__
             break
 
-    registered_python = _register_python_pass_type(
+    return _register_python_pass_type(
         cls.__name__,
         cls,
         owner=owner,
@@ -148,10 +149,17 @@ def _register_python_pass_class(cls: type, owner: str | None = None) -> None:
         inspect_fields=cls.__dict__.get("inspect_fields", {}),
         metadata={"graph": _collect_graph_socket_metadata(cls)},
     )
-    if not registered_python:
-        _log_cleanup_error(
-            f"[PythonFramePass] registration rejected for '{cls.__name__}'"
-        )
+
+
+def publish_python_pass_owner(owner: str) -> list[str]:
+    """Publish descriptors after a project owner has imported all its packages."""
+    declarations = _python_pass_declarations.get(owner, {}).values()
+    published = []
+    for cls in sorted(declarations, key=lambda cls: (len(cls.__mro__), cls.__name__)):
+        if not _register_python_pass_class(cls, owner):
+            raise RuntimeError(f"Python frame pass descriptor rejected for {cls.__name__}")
+        published.append(cls.__name__)
+    return published
 
 
 class PythonFramePass:
@@ -262,7 +270,11 @@ class PythonFramePass:
         if cls.__name__ in ("PythonFramePass", "FramePass", "RenderFramePass"):
             return
 
-        _register_python_pass_class(cls)
+        owner = _owner_for_python_pass(cls)
+        if owner is not None:
+            _python_pass_declarations.setdefault(owner, {})[cls.__name__] = cls
+        elif not _register_python_pass_class(cls, _BUILTIN_PASS_OWNER):
+            _log_cleanup_error(f"[PythonFramePass] registration rejected for '{cls.__name__}'")
 
     def __repr__(self) -> str:
         return f"PythonFramePass({self.pass_name!r})"
@@ -350,14 +362,14 @@ def register_loaded_python_passes() -> None:
     _register_python_pass_type(
         "PythonFramePass",
         PythonFramePass,
-        owner="termin-render-python",
+        owner=_BUILTIN_PASS_OWNER,
         inspect_fields=PythonFramePass.inspect_fields,
         metadata={"graph": _collect_graph_socket_metadata(PythonFramePass)},
     )
     definitions = list(_python_pass_registrations.values())
     for cls, owner in definitions:
-        if cls is not PythonFramePass:
-            _register_python_pass_class(cls, owner)
+        if cls is not PythonFramePass and not _register_python_pass_class(cls, owner):
+            _log_cleanup_error(f"[PythonFramePass] re-registration rejected for '{cls.__name__}'")
 
 
 register_loaded_python_passes()

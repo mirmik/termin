@@ -118,6 +118,7 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
     from termin.render_framework.python_pass import register_loaded_python_passes
     from termin_modules.module_context import (
         module_registration_context,
+        publish_module_owner,
         unregister_module_owner,
     )
 
@@ -134,6 +135,11 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
         with module_registration_context(module_id, [__name__]):
             class OwnerContextProbeFramePass(PythonFramePass):
                 pass
+
+            assert not tc_pass_registry_has(pass_name)
+            register_loaded_python_passes()
+            assert not tc_pass_registry_has(pass_name)
+            publish_module_owner(module_id)
 
         records = {
             record["name"]: record

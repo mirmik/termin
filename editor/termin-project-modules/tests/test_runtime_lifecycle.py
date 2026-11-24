@@ -430,6 +430,83 @@ def test_overlapping_python_package_claims_fail_before_import(tmp_path: Path) ->
     assert runtime.close()
 
 
+@pytest.mark.parametrize("failure", [None, "import", "commit"])
+def test_python_frame_passes_follow_project_owner_transactions(tmp_path, monkeypatch, failure) -> None:
+    from termin import render_framework
+    from termin.inspect import _inspect_native
+    from termin.render_framework import python_pass
+
+    owner = "sample"
+    first = "OwnedLifecycleAPass"
+    second = "OwnedLifecycleBPass"
+    source_root = _write_python_module(tmp_path)
+    source = source_root / "sample_module" / "__init__.py"
+    python_pass.register_loaded_python_passes()
+
+    def write_passes(version: int) -> None:
+        source.write_text(
+            "from termin.render_framework import PythonFramePass, tc_pass_registry_has\n"
+            f"class {first}(PythonFramePass):\n"
+            f"    version = {version!r}\n"
+            f"assert not tc_pass_registry_has({first!r})\n"
+            f"class {second}({first}):\n"
+            "    pass\n"
+            f"assert not tc_pass_registry_has({second!r})\n"
+            + ("raise RuntimeError('injected pass import failure')\n" if failure == "import" else ""),
+            encoding="utf-8",
+        )
+
+    def assert_removed() -> None:
+        assert not render_framework.tc_pass_registry_has(first)
+        assert not render_framework.tc_pass_registry_has(second)
+        assert not python_pass.list_python_pass_owner(owner)
+        assert not any(record["owner"] == owner for record in _inspect_native.runtime_type_registry_snapshot())
+        assert "sample_module" not in sys.modules
+
+    if failure == "commit":
+        register_pass = python_pass.tc_pass_registry_register_python
+
+        def fail_second_registration(name, *args):
+            if name == second:
+                assert render_framework.tc_pass_registry_has(first)
+                return False
+            return register_pass(name, *args)
+
+        monkeypatch.setattr(python_pass, "tc_pass_registry_register_python", fail_second_registration)
+
+    write_passes(1)
+    runtime = _runtime_without_project_venv()
+    runtime.set_sync_live_scenes(False)
+    try:
+        if failure:
+            assert not runtime.load_project(tmp_path)
+            assert ("injected pass import failure" if failure == "import" else second) in runtime.last_error
+            assert_removed()
+            return
+
+        assert runtime.load_project(tmp_path)
+        original = render_framework.tc_pass_registry_get_class(first)
+        assert original.version == 1
+        assert render_framework.tc_pass_registry_has(second)
+
+        write_passes(22)
+        assert runtime.reload_module(owner)
+        replacement = render_framework.tc_pass_registry_get_class(first)
+        assert replacement is not original and replacement.version == 22
+
+        with monkeypatch.context() as patch:
+            patch.setattr(render_framework, "tc_pass_registry_unregister_python", lambda _name: False)
+            assert not runtime.unload_module(owner)
+            assert "refused owner unload" in runtime.last_error
+            assert "sample_module" in sys.modules
+            assert render_framework.tc_pass_registry_has(first)
+
+        assert runtime.unload_module(owner)
+        assert_removed()
+    finally:
+        runtime.close()
+
+
 def test_partial_python_import_evicts_only_transaction_modules(tmp_path: Path) -> None:
     source_root = tmp_path / "Scripts"
     package = source_root / "broken_package"

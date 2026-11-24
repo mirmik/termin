@@ -253,7 +253,8 @@ def _unregister_python_frame_pass_classes(module_id: str) -> list[str]:
     names = sorted(_runtime_type_records_for_owner(module_id, "termin.render.frame_pass"))
     declarations = list_python_pass_owner(module_id)
     for name in names:
-        tc_pass_registry_unregister_python(name)
+        if not tc_pass_registry_unregister_python(name):
+            raise RuntimeError(f"Python frame pass descriptor '{name}' refused owner unload")
     unregister_python_pass_owner(module_id)
     return sorted(set(names) | set(declarations))
 
@@ -262,6 +263,12 @@ def _audit_python_frame_pass_classes(module_id: str) -> list[str]:
     from termin.render_framework.python_pass import list_python_pass_owner
 
     return list_python_pass_owner(module_id)
+
+
+def _publish_python_frame_pass_classes(module_id: str) -> list[str]:
+    from termin.render_framework.python_pass import publish_python_pass_owner
+
+    return publish_python_pass_owner(module_id)
 
 
 def _commit_runtime_type_records(module_id: str) -> list[str]:
@@ -323,6 +330,7 @@ for _participant in (
         "python-frame-pass-classes",
         lambda owner: _unregister_python_frame_pass_classes(owner),
         lambda owner: _audit_python_frame_pass_classes(owner),
+        lambda owner: _publish_python_frame_pass_classes(owner),
     ),
     OwnerContributionParticipant(
         "python-kinds",
