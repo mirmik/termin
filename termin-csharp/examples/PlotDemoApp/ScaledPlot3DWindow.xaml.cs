@@ -16,7 +16,7 @@ public partial class ScaledPlot3DWindow : Window
     {
         RetainedChart3D chart = Plot.Chart;
         chart.MsaaSamples = 8;
-        chart.SetAxisLabels("time, us", "angle, deg", "20log10|S|");
+        chart.SetAxisLabels("time, s", "angle, deg", "20log10|S|");
         chart.SetAxisScale(1_000_000f, 1, 40);
         chart.SetSurfaceShading(true, 0.42f);
         chart.SetLightDirection(-0.4f, -0.6f, 0.7f);
