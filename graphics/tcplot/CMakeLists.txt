@@ -42,16 +42,7 @@ include(TerminRpath)
 
 # --- tcplot core library ---
 #
-# Pure C++ port of the Python tcplot package (tcplot/*.py). Offers
-# host-agnostic plot engines (PlotEngine2D for 2D axes + series,
-# PlotEngine3D for 3D scenes with billboard labels) backed by tgfx2.
-#
-# The library is split into orthogonal translation units:
-#   - styles / axes     : color palette, tick/label helpers (no deps).
-#   - orbit_camera      : compatibility wrapper over termin::OrbitCamera.
-#   - plot_data         : series + PlotData container.
-#   - engine3d          : 3D plot state + rendering through tgfx2.
-#   - engine2d          : 2D plot state + rendering through tgfx2.
+# Retained 2D and 3D charts, scene items, and rendering through tgfx2.
 set(TCPLOT_SOURCES
     src/styles.cpp
     src/axes.cpp
@@ -72,11 +63,6 @@ set(TCPLOT_SOURCES
     src/plot_scene3d_chart_chrome.cpp
     src/plot_scene3d_render_pipeline.cpp
     src/plot_scene3d_render_item_encoder.cpp
-    src/engine3d.cpp
-    src/engine2d.cpp
-    src/plot_view3d.cpp
-    src/plot_view2d.cpp
-    src/plot_view2d_multi.cpp
     src/gpu_host.cpp
 )
 
@@ -258,7 +244,8 @@ if(TERMIN_BUILD_TESTS)
             "termin:capability:vulkan")
 
         add_executable(tcplot_retained_chart3d_test
-            tests/test_retained_chart3d.cpp)
+            tests/test_retained_chart3d.cpp
+            tests/test_retained_chart2d_colors.cpp)
         target_link_libraries(tcplot_retained_chart3d_test PRIVATE
             tcplot)
         if(TGFX2_ENABLE_VULKAN)

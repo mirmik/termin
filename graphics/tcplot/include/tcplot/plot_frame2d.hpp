@@ -1,15 +1,7 @@
 // plot_frame2d.hpp - Immutable snapshot of a 2D plot projection.
 #pragma once
 
-#include <array>
-#include <cstddef>
-
 #include "tcplot/tcplot_api.h"
-
-namespace tgfx {
-    class FontAtlas;
-    class RenderContext2;
-} // namespace tgfx
 
 namespace tcplot {
 
@@ -96,9 +88,8 @@ namespace tcplot {
         double y_max_ = 1.0;
     };
 
-    // A detached, immutable projection snapshot. It deliberately contains no
-    // PlotEngine2D pointer: callers may keep and use a frame after the engine has
-    // advanced to another viewport or range.
+    // A detached, immutable projection snapshot. A frame remains usable after
+    // its chart changes viewport or range.
     class TCPLOT_API PlotFrame2D final {
     public:
         PlotFrame2D() = default;
@@ -133,38 +124,6 @@ namespace tcplot {
         PlotRange2D range_{};
         PlotRect2D clip_rect_{};
         float pixel_scale_ = 1.0f;
-    };
-
-    // Stable back-to-front order of the PlotEngine2D render pipeline.
-    enum class PlotRenderPhase2D {
-        Background,
-        AnnotationUnderlay,
-        Series,
-        AnnotationOverlay,
-        UnclippedChrome,
-    };
-
-    inline constexpr std::array<PlotRenderPhase2D, 5> kPlotRenderPhaseOrder2D = {
-        PlotRenderPhase2D::Background,
-        PlotRenderPhase2D::AnnotationUnderlay,
-        PlotRenderPhase2D::Series,
-        PlotRenderPhase2D::AnnotationOverlay,
-        PlotRenderPhase2D::UnclippedChrome,
-    };
-
-    // Advanced extension seam used by retained plot overlays. The sink is
-    // borrowed by PlotEngine2D and must outlive its registration. Calls happen at
-    // the start of each phase. AnnotationUnderlay and AnnotationOverlay are
-    // clipped to PlotFrame2D::clip_rect(); UnclippedChrome is clipped only to the
-    // viewport. Background and Series expose ordering but are normally observed,
-    // not drawn into.
-    class TCPLOT_API PlotRenderPhaseSink2D {
-    public:
-        virtual ~PlotRenderPhaseSink2D() = default;
-        virtual void begin_plot_phase(PlotRenderPhase2D phase,
-                                      const PlotFrame2D& frame,
-                                      tgfx::RenderContext2& context,
-                                      tgfx::FontAtlas* font) = 0;
     };
 
 } // namespace tcplot

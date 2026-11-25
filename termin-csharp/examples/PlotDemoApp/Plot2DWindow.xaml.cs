@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Termin.Native;
 
 namespace PlotDemoApp;
 
@@ -48,12 +49,13 @@ public partial class Plot2DWindow : Window
                         x[i] = i * 0.001;
                         y[i] = Math.Sin(i * 0.1 + panel);
                     }
-                    extra.View.clear();
-                    extra.View.plot(x, y, (uint)x.Length, 0.2f, 0.7f, 1f, 1f, 1.5, "I/Q");
-                    extra.View.set_title("S_C: I / Q / magnitude");
-                    extra.View.set_x_label("t, s");
-                    extra.View.set_y_label("model units");
-                    extra.View.fit();
+                    Chart2D chart = extra.Chart;
+                    chart.AddLineSeries("I/Q", x, y,
+                        style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(0.2f, 0.7f, 1)));
+                    chart.TitleText = "S_C: I / Q / magnitude";
+                    chart.XAxisText = "t, s";
+                    chart.YAxisText = "model units";
+                    chart.Fit();
                 };
             }
             foreach (Plot2DControl host in _smokeHosts)
@@ -70,12 +72,11 @@ public partial class Plot2DWindow : Window
         }
         Plot.NativeInitialized += (_, _) =>
         {
-            Plot.View.set_title("sine demo");
-            Plot.View.set_x_label("t");
-            Plot.View.set_y_label("f(t)");
+            Chart2D chart = Plot.Chart;
+            chart.TitleText = "sine demo";
+            chart.XAxisText = "t";
+            chart.YAxisText = "f(t)";
 
-            // High-res sine: 400 points — the whole series hits one
-            // draw call in the C++ engine2d, no drag lag.
             const int N = 400;
             var x = new double[N];
             var y = new double[N];
@@ -85,7 +86,8 @@ public partial class Plot2DWindow : Window
                 x[i] = t;
                 y[i] = Math.Sin(t);
             }
-            Plot.Plot(x, y, 0.2f, 0.6f, 1.0f, 1.0f, thickness: 1.5, label: "sin");
+            chart.AddLineSeries("sin", x, y,
+                style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(0.2f, 0.6f, 1)));
 
             // Secondary: dampened sine.
             var y2 = new double[N];
@@ -93,7 +95,8 @@ public partial class Plot2DWindow : Window
             {
                 y2[i] = Math.Sin(x[i]) * Math.Exp(-x[i] * 0.05);
             }
-            Plot.Plot(x, y2, 1.0f, 0.5f, 0.1f, 1.0f, thickness: 1.5, label: "damped");
+            chart.AddLineSeries("damped", x, y2,
+                style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(1, 0.5f, 0.1f)));
 
             // Scatter samples from the same function.
             var sx = new double[20];
@@ -103,7 +106,9 @@ public partial class Plot2DWindow : Window
                 sx[i] = i * 1.0;
                 sy[i] = Math.Sin(sx[i]);
             }
-            Plot.Scatter(sx, sy, 0.2f, 0.8f, 0.2f, 1.0f, size: 6.0, label: "samples");
+            chart.AddScatterSeries("samples", sx, sy,
+                new PlotScatterSeriesStyle2D(new PlotSrgbColor2D(0.2f, 0.8f, 0.2f), diameterPx: 6));
+            chart.Fit();
         };
     }
 

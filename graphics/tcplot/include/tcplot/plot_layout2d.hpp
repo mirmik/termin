@@ -43,7 +43,7 @@ namespace tcplot {
                                                                      int minimum_ticks = 3);
 
     // Expands finite data bounds by padding_fraction. Degenerate axes receive a
-    // stable unit base extent before padding, matching PlotEngine2D::fit().
+    // stable unit base extent before padding.
     TCPLOT_API std::optional<PlotRange2D> fit_plot_range2d(PlotRange2D data_bounds, double padding_fraction = 0.05);
 
     // Empty data has no bounds. This overload maps it to the established neutral

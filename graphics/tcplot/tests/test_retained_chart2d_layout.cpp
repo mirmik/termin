@@ -1,10 +1,12 @@
 #include "tcplot/gpu_host.hpp"
 #include "tcplot/retained_chart2d.h"
+#include "tcplot/retained_multi_chart2d.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <termin_visual_scene/scene2d.hpp>
@@ -193,10 +195,45 @@ namespace {
         require(entries == 3, "all named legend entries must participate in the layout fixture");
     }
 
+    void verify_shared_x(tcplot::GpuHost& host) {
+        using MultiChart = std::unique_ptr<tc_retained_multi_chart2d, decltype(&tc_retained_multi_chart2d_destroy)>;
+        const auto theme = tc_retained_chart2d_default_theme();
+        MultiChart chart(tc_retained_multi_chart2d_create(
+                             &host, {5, 7, 640, 480}, {-4, 8, -2, 6}, 2, 0, 4, TCPLOT_TEST_FONT, 1.5f, &theme),
+                         tc_retained_multi_chart2d_destroy);
+        require(chart != nullptr, "multi-chart creation failed");
+        auto* first =
+            tc_retained_multi_chart2d_panel_chart(chart.get(), tc_retained_multi_chart2d_panel_at(chart.get(), 0));
+        auto* second =
+            tc_retained_multi_chart2d_panel_chart(chart.get(), tc_retained_multi_chart2d_panel_at(chart.get(), 1));
+        require(first && second && tc_retained_chart2d_set_range(second, {-4, 8, -7, 7}),
+                "multi-chart panel setup failed");
+
+        tc_chart2d_layout previous_layout{}, layout{};
+        tc_plot_range2d previous_range{}, first_range{}, second_range{};
+        require(tc_retained_chart2d_layout(first, &previous_layout) &&
+                    tc_retained_chart2d_range(first, &previous_range),
+                "failed to snapshot initial chart frame");
+        require(tc_retained_multi_chart2d_set_viewport(chart.get(), {100, 200, 320, 240}, 1) &&
+                    tc_retained_multi_chart2d_set_shared_x(chart.get(), -3, 9),
+                "changing multi-chart viewport or shared X range failed");
+        require(tc_retained_chart2d_layout(first, &layout) && tc_retained_chart2d_range(first, &first_range) &&
+                    tc_retained_chart2d_range(second, &second_range),
+                "failed to snapshot new chart frame");
+        require(previous_layout.viewport.x == 5 && previous_layout.pixel_scale == 1.5f && previous_range.x_min == -4 &&
+                    layout.viewport.x == 100 && layout.pixel_scale == 1 && layout.revision != previous_layout.revision,
+                "initial and updated chart frame snapshots must retain their respective values");
+        require(first_range.x_min == -3 && first_range.x_max == 9 && second_range.x_min == -3 &&
+                    second_range.x_max == 9 && first_range.y_min == -2 && first_range.y_max == 6 &&
+                    second_range.y_min == -7 && second_range.y_max == 7,
+                "shared X range must update both panels while preserving each Y range");
+    }
+
     int run(tgfx::BackendType backend) {
         if (!tgfx::backend_is_compiled(backend))
             return 77;
         tcplot::GpuHost host(TCPLOT_TEST_FONT, backend);
+        verify_shared_x(host);
         auto theme = tc_retained_chart2d_default_theme();
         auto* chart = tc_retained_chart2d_create(&host, {37, 23, 900, 620}, {0, 6, -2, 4}, TCPLOT_TEST_FONT, 1, &theme);
         require(chart != nullptr, "chart creation failed");

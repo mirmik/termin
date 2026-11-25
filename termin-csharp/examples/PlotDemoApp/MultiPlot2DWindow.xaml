@@ -7,6 +7,6 @@
         Background="#181820"
         WindowStartupLocation="CenterScreen">
     <Grid>
-        <local:MultiPlot2DControl x:Name="Plot" PanelCount="3" MsaaSamples="4"/>
+        <local:MultiPlot2DControl x:Name="Plot" PanelCount="3"/>
     </Grid>
 </Window>

@@ -35,11 +35,8 @@
 #include <termin/render/render_task.hpp>
 
 #include "tcplot/gpu_host.hpp"
-#include "tcplot/engine3d.hpp"
 #include "tcplot/plot_scene3d_render_item_source.hpp"
 #include "tcplot/retained_chart3d.h"
-#include "tcplot/retained_chart2d.h"
-#include "tcplot/retained_scene_renderer2d.h"
 
 #include "../src/plot_scene3d_chart_chrome.hpp"
 #include "../src/orbit_camera_state.hpp"
@@ -48,6 +45,10 @@
 extern "C" {
 #include <render/tc_pass.h>
 #include <tgfx/resources/tc_shader_registry.h>
+}
+
+namespace tcplot::tests {
+    void test_retained_chart2d_colors_d3d11(GpuHost& host);
 }
 
 namespace {
@@ -275,63 +276,6 @@ namespace {
         }
     }
 
-    void test_retained_chart2d_colors_d3d11(tcplot::GpuHost& host) {
-        using ChartOwner = std::unique_ptr<tc_retained_chart2d, decltype(&tc_retained_chart2d_destroy)>;
-        using RendererOwner = std::unique_ptr<tc_retained_scene_renderer2d,
-            decltype(&tc_retained_scene_renderer2d_destroy)>;
-        constexpr uint32_t width = 240, height = 180;
-        auto theme = tc_retained_chart2d_default_theme();
-        theme.background_color = {0.3f, 0.4f, 0.6f, 1};
-        theme.plot_background_color = {0.05f, 0.07f, 0.09f, 1};
-        const tc_plot_color2d authored{0.7f, 0.2f, 0.5f, 1};
-        const double x[] = {0.2, 0.8}, y[] = {0.5, 0.5}, scalar[] = {0.5, 0.5};
-        for (int mode = 0; mode < 4; ++mode) {
-            ChartOwner chart(tc_retained_chart2d_create(&host, {0, 0, width, height}, {0, 1, 0, 1},
-                "ui://default-font", 1, &theme), tc_retained_chart2d_destroy);
-            require(chart != nullptr, "failed to create Chart2D color fixture");
-            const auto scene = tc_retained_chart2d_scene(chart.get());
-            require(tc_visual_scene_item_set_visible(scene,
-                        tc_retained_chart2d_part_handle(chart.get(), TC_CHART2D_PART_GRID), false) &&
-                    tc_visual_scene_item_set_visible(scene,
-                        tc_retained_chart2d_part_handle(chart.get(), TC_CHART2D_PART_CHROME_ROOT), false),
-                    "failed to isolate Chart2D series colors");
-            tc_chart_series_handle2d series{};
-            if (mode == 2) {
-                series = tc_retained_chart2d_add_named_scatter(chart.get(), "", false, x, y, 1, {authored, 18});
-            } else {
-                tc_plot_line_style_state2d style{authored, mode == 0 ? 1.0f : 8.0f,
-                    mode == 1 ? TC_PLOT_LINE_STYLE_DASH_2D : TC_PLOT_LINE_STYLE_SOLID_2D, 8, 4,
-                    mode == 3 ? TC_PLOT_COLORMAP_GRAYSCALE_2D : TC_PLOT_COLORMAP_SOLID_2D, false, 0, 1};
-                series = tc_retained_chart2d_add_named_line(chart.get(), "", false, x, y,
-                    mode == 3 ? scalar : nullptr, 2, style);
-            }
-            require(tc_retained_chart2d_series_is_valid(chart.get(), series), "failed to add Chart2D color series");
-            RendererOwner renderer(tc_retained_scene_renderer2d_create(&host, scene), tc_retained_scene_renderer2d_destroy);
-            require(renderer && tc_retained_scene_renderer2d_set_msaa_samples(renderer.get(), 1),
-                    "failed to create Chart2D color renderer");
-            const auto texture = tc_retained_scene_renderer2d_render(renderer.get(), width, height);
-            require(texture != 0, "failed to render Chart2D color fixture");
-            const auto pixels = read_pixels(host, texture, width, height);
-            const auto background = termin::srgb_to_linear(termin::SrgbColor{0.3f, 0.4f, 0.6f, 1});
-            const size_t corner = (2 * width + 2) * 4;
-            require(std::abs(pixels[corner] - background.r) < 1.5f / 255 &&
-                        std::abs(pixels[corner + 1] - background.g) < 1.5f / 255 &&
-                        std::abs(pixels[corner + 2] - background.b) < 1.5f / 255,
-                    "Chart2D authored theme fill must render into a linear target");
-            const auto expected = termin::srgb_to_linear(mode == 3 ? termin::SrgbColor{0.5f, 0.5f, 0.5f, 1}
-                : termin::SrgbColor{authored.r, authored.g, authored.b, authored.a});
-            size_t matching_pixels = 0;
-            for (size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
-                if (std::abs(pixels[pixel] - expected.r) < 1.5f / 255 &&
-                    std::abs(pixels[pixel + 1] - expected.g) < 1.5f / 255 &&
-                    std::abs(pixels[pixel + 2] - expected.b) < 1.5f / 255)
-                    ++matching_pixels;
-            }
-            require(matching_pixels > 10,
-                    "thin/styled line, scatter and colormap must decode authored RGB exactly once");
-        }
-    }
-
     void write_capture_image(const std::filesystem::path& path,
                              const std::vector<float>& pixels, uint32_t width, uint32_t height) {
         std::ofstream output(path, std::ios::binary);
@@ -419,50 +363,6 @@ namespace {
                                     pixels, image_width, image_height);
         };
 
-        // A nonzero legacy viewport checks that the shared canvas honors its host's origin.
-        constexpr uint32_t origin_x = 48, origin_y = 32;
-        constexpr uint32_t target_width = width + 2 * origin_x, target_height = height + 2 * origin_y;
-        struct LegacyTarget {
-            tcplot::GpuHost& host;
-            tgfx::TextureHandle color{}, depth{};
-            ~LegacyTarget() {
-                host.device().destroy(color);
-                host.device().destroy(depth);
-            }
-        } target{host};
-        tgfx::TextureDesc desc;
-        desc.width = target_width;
-        desc.height = target_height;
-        desc.format = tgfx::PixelFormat::RGBA8_UNorm;
-        desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
-        target.color = host.device().create_texture(desc);
-        desc.format = tgfx::PixelFormat::D32F;
-        desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
-        target.depth = host.device().create_texture(desc);
-        require(target.color.id && target.depth.id, "failed to allocate legacy Cartesian offscreen target");
-        tcplot::PlotEngine3D legacy;
-        legacy.set_viewport(origin_x, origin_y, width, height);
-        legacy.data.x_label = "X Axis";
-        legacy.data.y_label = "Y Axis";
-        legacy.data.z_label = "Z Axis";
-        legacy.surface(x, y, z, rows, columns, {{}, tcplot::SurfaceColorMap::Viridis});
-        require(legacy.set_surface_grid(0, {true, 2, 2, {0.1f, 0.1f, 0.1f, 1}, 1}),
-                "failed to configure legacy surface grid");
-        legacy.plot(hx, hy, hz, {{tcplot::SrgbColor{0.1f, 0.65f, 1, 1}}, 1.5});
-        legacy.scatter(sx, sy, sz, {{tcplot::SrgbColor{1, 0.9f, 0.1f, 1}}, 5});
-        const auto render_legacy = [&](uint32_t viewport_x, uint32_t viewport_y) {
-            auto& context = host.ctx();
-            const auto clear = termin::srgb_to_linear(termin::SrgbColor{0.08f, 0.09f, 0.11f, 1});
-            context.begin_frame();
-            context.begin_pass(target.color, target.depth, &clear, 1.0f, true);
-            context.set_viewport(viewport_x, viewport_y, width, height);
-            legacy.set_viewport(viewport_x, viewport_y, width, height);
-            const bool rendered = legacy.render(&context, &host.font());
-            context.end_pass();
-            context.end_frame();
-            require(rendered, "legacy Cartesian offscreen render failed");
-            return read_pixels(host, target.color.id, target_width, target_height);
-        };
         tc_orbit_camera3d_state camera{};
         require(tc_retained_chart3d_get_camera(chart.get(), &camera), "failed to read Cartesian pixel camera");
         camera.target_x = camera.target_y = 0;
@@ -492,59 +392,6 @@ namespace {
                     "Cartesian axis labels must contribute visible pixels in every tested camera view");
             grid_style.labels_visible = 1;
             require(tc_retained_chart3d_grid_set_style(chart.get(), grid, &grid_style), "failed to restore Cartesian labels");
-            if (mode >= 2)
-                continue;
-            tcplot::detail::apply_camera_state(legacy.camera, camera);
-            legacy.show_labels = true;
-            const auto legacy_labeled = render_legacy(origin_x, origin_y);
-            capture(std::string("legacy-") + modes[mode], legacy_labeled, target_width, target_height);
-            legacy.show_labels = false;
-            const auto legacy_hidden = render_legacy(origin_x, origin_y);
-            require(count_changed_pixels(legacy_labeled, legacy_hidden) > 20,
-                    "legacy Cartesian plot must render shared screen-space labels");
-            for (uint32_t py = 0; py < target_height; ++py) {
-                for (uint32_t px = 0; px < target_width; ++px) {
-                    if (px >= origin_x && px < origin_x + width && py >= origin_y && py < origin_y + height)
-                        continue;
-                    const size_t index = (static_cast<size_t>(py) * target_width + px) * 4;
-                    for (size_t channel = 0; channel < 3; ++channel)
-                        require(legacy_labeled[index + channel] == legacy_hidden[index + channel],
-                                "legacy labels must stay inside the nonzero viewport rectangle");
-                }
-            }
-            legacy.show_labels = true;
-            const auto zero_labeled = render_legacy(0, 0);
-            legacy.show_labels = false;
-            const auto zero_hidden = render_legacy(0, 0);
-            size_t zero_count = 0, translated_count = 0, mismatches = 0;
-            const auto text_pixel = [](const std::vector<float>& labeled,
-                                       const std::vector<float>& hidden, size_t index) {
-                return std::abs(labeled[index] - hidden[index]) > 0.01f ||
-                    std::abs(labeled[index + 1] - hidden[index + 1]) > 0.01f ||
-                    std::abs(labeled[index + 2] - hidden[index + 2]) > 0.01f;
-            };
-            for (uint32_t py = 0; py < height; ++py) {
-                for (uint32_t px = 0; px < width; ++px) {
-                    const size_t zero_index = (static_cast<size_t>(py) * target_width + px) * 4;
-                    const size_t translated_index =
-                        (static_cast<size_t>(py + origin_y) * target_width + px + origin_x) * 4;
-                    const bool zero = text_pixel(zero_labeled, zero_hidden, zero_index);
-                    const bool translated = text_pixel(legacy_labeled, legacy_hidden, translated_index);
-                    zero_count += zero;
-                    translated_count += translated;
-                    mismatches += zero != translated;
-                }
-            }
-            // Integer viewport translation should preserve glyph coverage. Allow
-            // a few antialiased edge pixels to cross the comparison threshold.
-            const size_t tolerance = std::max<size_t>(12, zero_count / 200);
-            if (mismatches > tolerance) {
-                std::fprintf(stderr, "legacy label translation (%s): zero=%zu translated=%zu mismatches=%zu\n",
-                             modes[mode], zero_count, translated_count, mismatches);
-            }
-            require(zero_count > 20 && mismatches <= tolerance,
-                    "viewport translation must preserve the complete legacy label pixel mask");
-            legacy.set_viewport(origin_x, origin_y, width, height);
         }
     }
 
@@ -1039,23 +886,12 @@ namespace {
                     state.projection_type == TC_CAMERA_PROJECTION3D_PERSPECTIVE,
                 "reset must restore perspective projection");
 
-        tcplot::PlotEngine3D engine;
-        engine.set_viewport(0, 0, 800, 600);
-        engine.plot({0, 0}, {-6, 0}, {0, 0});
-        engine.camera.target = {0, 0, 0};
-        engine.camera.azimuth = engine.camera.elevation = 0;
-        engine.camera.distance = 5;
-        engine.camera.near_clip = 0.1;
-        engine.camera.far_clip = 10;
-        engine.camera.projection_type = termin::CameraProjection::Orthographic;
-        engine.camera.ortho_size = 2;
-        const auto picked = engine.pick(400, 300);
-        require(picked && picked->y == 0, "orthographic picking must ignore points behind the camera");
-        const auto grabbed = engine.camera.target;
-        require(engine.on_mouse_down(400, 300, tcbase::MouseButton::MIDDLE), "orthographic pan must begin");
-        engine.on_mouse_move(510, 365);
-        engine.on_mouse_up(510, 365, tcbase::MouseButton::MIDDLE);
-        const auto screen = engine.camera.try_project_world_point(grabbed, {0, 0, 800, 600});
+        auto camera = tcplot::detail::camera_from_state(zoomed);
+        const termin::Rect2 viewport{0, 0, 800, 600};
+        const auto grabbed = camera.target;
+        const auto gesture = camera.begin_pan({400, 300}, viewport);
+        require(gesture && camera.pan(*gesture, {510, 365}), "orthographic pan failed");
+        const auto screen = camera.try_project_world_point(grabbed, viewport);
         require(screen && std::abs(screen->screen.x - 510) < 1.0e-8 &&
                     std::abs(screen->screen.y - 365) < 1.0e-8,
                 "orthographic pan must keep the grabbed world point beneath the pointer");
@@ -1506,7 +1342,7 @@ int main(int argc, char** argv) {
             tcplot::GpuHost d3d_host(TCPLOT_TEST_FONT, tgfx::BackendType::D3D11);
             test_spherical_chart_d3d11(d3d_host);
             test_background_color_d3d11(d3d_host);
-            test_retained_chart2d_colors_d3d11(d3d_host);
+            tcplot::tests::test_retained_chart2d_colors_d3d11(d3d_host);
             std::printf("spherical Chart3D D3D11 pixels and retained updates test passed\n");
             return 0;
         }

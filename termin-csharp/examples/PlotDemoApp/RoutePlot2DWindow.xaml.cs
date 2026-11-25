@@ -33,28 +33,25 @@ public partial class RoutePlot2DWindow : Window
             double zMin = trueZ.Min();
             double zMax = trueZ.Max();
 
-            Plot.View.set_title("Route visualization");
-            Plot.View.set_x_label("X, m");
-            Plot.View.set_y_label("Y, m");
+            Chart2D chart = Plot.Chart;
+            chart.TitleText = "Route visualization";
+            chart.XAxisText = "X, m";
+            chart.YAxisText = "Y, m";
 
-            Plot.PlotColormap(trueX, trueY, trueZ, SurfaceColorMap.Viridis,
-                zMin, zMax, thickness: 3.0, label: "true trajectory by Z",
-                colormapReversed: true);
+            chart.AddLineSeries("true trajectory by Z", trueX, trueY, trueZ,
+                new PlotLineSeriesStyle2D(new PlotSrgbColor2D(1, 1, 1),
+                    thicknessPx: 3, colorMap: PlotColorMap2D.Viridis,
+                    colorMapReversed: true, scalarMin: zMin, scalarMax: zMax));
 
-            Plot.Plot(navX, navY,
-                0.0f, 0.47f, 0.83f, 1.0f,
-                thickness: 2.0,
-                label: "navigation");
-            Plot.SetLineStyle(1, LineStyle.Dash, dashPx: 12.0f, gapPx: 7.0f);
+            chart.AddLineSeries("navigation", navX, navY,
+                style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(0, 0.47f, 0.83f),
+                    thicknessPx: 2, lineStyle: PlotLineStyle2D.Dash, dashPx: 12, gapPx: 7));
 
-            Plot.Scatter(new[] { trueX[0] }, new[] { trueY[0] },
-                0.0f, 1.0f, 0.0f, 1.0f,
-                size: 12.0,
-                label: "start");
-            Plot.Scatter(new[] { trueX[^1] }, new[] { trueY[^1] },
-                1.0f, 0.0f, 0.0f, 1.0f,
-                size: 12.0,
-                label: "finish");
+            chart.AddScatterSeries("start", new[] { trueX[0] }, new[] { trueY[0] },
+                new PlotScatterSeriesStyle2D(new PlotSrgbColor2D(0, 1, 0), diameterPx: 12));
+            chart.AddScatterSeries("finish", new[] { trueX[^1] }, new[] { trueY[^1] },
+                new PlotScatterSeriesStyle2D(new PlotSrgbColor2D(1, 0, 0), diameterPx: 12));
+            chart.Fit();
         };
     }
 }

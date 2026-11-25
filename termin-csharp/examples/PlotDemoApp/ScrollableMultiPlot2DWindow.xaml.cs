@@ -2,16 +2,17 @@ using System;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
+using Termin.Native;
 
 namespace PlotDemoApp;
 
 // 20 stacked panels on a virtual canvas taller than the window, with
-// a WPF ScrollBar driving the native view's scroll_offset. Exercises
+// a WPF ScrollBar driving the retained chart's scroll offset. Exercises
 // virtualisation + MSAA + append in a realistic "Alliance dashboard"
 // shape.
 public partial class ScrollableMultiPlot2DWindow : Window
 {
-    private readonly int[] _seriesIdx;
+    private readonly ChartLineSeries2D[] _series = new ChartLineSeries2D[ChannelNames.Length];
 
     private readonly DispatcherTimer _timer;
     private readonly Stopwatch _clock = new();
@@ -20,8 +21,6 @@ public partial class ScrollableMultiPlot2DWindow : Window
     public ScrollableMultiPlot2DWindow()
     {
         InitializeComponent();
-
-        _seriesIdx = new int[20];
 
         _timer = new DispatcherTimer(DispatcherPriority.Render)
         {
@@ -65,25 +64,21 @@ public partial class ScrollableMultiPlot2DWindow : Window
 
     private void OnNativeReady(object? sender, EventArgs e)
     {
-        // Seed each series with one sample; AppendToLine grows them live.
+        // Seed each series with one sample before streaming starts.
         var seedX = new[] { 0.0 };
         var seedY = new[] { 0.0 };
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < _series.Length; i++)
         {
             // Cycle through hues so stacked panels stay visually distinct.
             float hue = (i * 0.137f) % 1.0f;
             (float r, float g, float b) = HsvToRgb(hue, 0.65f, 1.0f);
-            // Add the line FIRST so the engine can colour the title
-            // from the first series on the very first render.
-            _seriesIdx[i] = Plot.Plot(panel: i, x: seedX, y: seedY,
-                                       r: r, g: g, b: b, a: 1.0f,
-                                       thickness: 1.5, label: ChannelNames[i]);
-            Plot.SetPanelTitle(i, ChannelNames[i]);
-            Plot.SetPanelYLabel(i, "");
+            Chart2D chart = Plot.Chart.Panels[i].Chart;
+            chart.TitleText = ChannelNames[i];
+            _series[i] = chart.AddLineSeries(ChannelNames[i], seedX, seedY,
+                style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(r, g, b)),
+                showInLegend: false);
         }
-        Plot.SetXLabel("t, s");
-
-        Plot.SetAutoscroll(true, 10.0);
+        Plot.Chart.Panels[^1].Chart.XAxisText = "t, s";
 
         _clock.Start();
         _timer.Start();
@@ -99,7 +94,7 @@ public partial class ScrollableMultiPlot2DWindow : Window
 
         // 20 different signals so each panel shows something unique.
         var ys = new double[batch];
-        for (int p = 0; p < 20; p++)
+        for (int p = 0; p < _series.Length; p++)
         {
             double freq = 0.3 + p * 0.17;
             double phase = p * 0.5;
@@ -110,8 +105,9 @@ public partial class ScrollableMultiPlot2DWindow : Window
                 double noise = (_rng.NextDouble() - 0.5) * 0.15;
                 ys[i] = baseSig + noise + p * 0.001;
             }
-            Plot.AppendToLine(panel: p, series: _seriesIdx[p], x: xs, y: ys);
+            _series[p].Append(xs, ys);
         }
+        Plot.UpdateAfterAppend(xs[^1]);
     }
 
     private static (float, float, float) HsvToRgb(float h, float s, float v)

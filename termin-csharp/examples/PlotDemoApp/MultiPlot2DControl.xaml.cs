@@ -1,359 +1,157 @@
 using System;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using Termin.Native;
 using Termin.Wpf;
 
 namespace PlotDemoApp;
 
-// WPF host for tcplot's PlotView2DMulti. Owns the D3D11 host,
-// constructs the native view on first Loaded, forwards WPF mouse
-// events, and exposes thin Plot/AppendToLine helpers to the window.
 public partial class MultiPlot2DControl : UserControl, IDisposable
 {
-    private PlotView2DMulti? _view;
-    private bool _renderingSubscribed;
-    private bool _initialized;
-    private bool _disposed;
+    private const double WindowSeconds = 10;
+    private MultiChart2D? _chart;
+    private MultiChart2DWpfInteraction? _interaction;
     private bool _hostLeaseHeld;
+    private bool _disposed;
+    private bool _followLatest = true;
+    private double _latestX;
+    private bool _synchronizingScrollBar;
 
-    // Set this before the control is first loaded. Changing it later
-    // has no effect.
     public int PanelCount { get; set; } = 3;
+    public double PanelHeight { get; set; }
 
-    // Optional explicit TTF path. Null → auto-pick via
-    // Plot3DControl.FindSystemFont (segoeui on Windows). Handy when
-    // you want to pin the font regardless of the host OS's defaults.
-    public string? FontPath { get; set; }
-
-    // Fixed panel height for virtualised scrolling. 0 (default) keeps
-    // the classic "divide render height evenly" behaviour. Set once
-    // before data starts flowing; changing later requires re-layout
-    // which happens on the next render() anyway.
-    public static readonly DependencyProperty PanelHeightProperty =
-        DependencyProperty.Register(
-            nameof(PanelHeight), typeof(double), typeof(MultiPlot2DControl),
-            new PropertyMetadata(0.0, OnPanelHeightChanged));
-    public double PanelHeight
-    {
-        get => (double)GetValue(PanelHeightProperty);
-        set => SetValue(PanelHeightProperty, value);
-    }
-    private static void OnPanelHeightChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        var self = (MultiPlot2DControl)d;
-        if (self._view != null)
-        {
-            self._view.set_panel_height((float)(double)e.NewValue);
-            self.UpdateMaxScroll();
-        }
-    }
-
-    // Virtual scroll offset in pixels. Bind this to a WPF ScrollBar.Value.
     public static readonly DependencyProperty ScrollOffsetProperty =
         DependencyProperty.Register(
             nameof(ScrollOffset), typeof(double), typeof(MultiPlot2DControl),
             new PropertyMetadata(0.0, OnScrollOffsetChanged));
+
     public double ScrollOffset
     {
         get => (double)GetValue(ScrollOffsetProperty);
         set => SetValue(ScrollOffsetProperty, value);
     }
-    private static void OnScrollOffsetChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        var self = (MultiPlot2DControl)d;
-        self._view?.set_scroll_offset((float)(double)e.NewValue);
-    }
 
-    // Read-only: the max scroll offset, updated whenever the control's
-    // height or panel layout changes. Binds naturally to ScrollBar.Maximum.
     private static readonly DependencyPropertyKey MaxScrollPropertyKey =
         DependencyProperty.RegisterReadOnly(
             nameof(MaxScroll), typeof(double), typeof(MultiPlot2DControl),
             new PropertyMetadata(0.0));
+
     public static readonly DependencyProperty MaxScrollProperty =
         MaxScrollPropertyKey.DependencyProperty;
+
     public double MaxScroll => (double)GetValue(MaxScrollProperty);
 
-    // MSAA sample count for the shared offscreen attachment (1 / 2 / 4 / 8).
-    // If set after the native view is initialised, the change is
-    // propagated immediately; ensure_offscreen_ will reallocate on the
-    // next render.
-    private int _msaaSamples = 4;
-    public int MsaaSamples
-    {
-        get => _msaaSamples;
-        set
-        {
-            _msaaSamples = Math.Max(1, value);
-            if (_view != null) _view.set_msaa_samples(_msaaSamples);
-        }
-    }
+    public MultiChart2D Chart => _chart ??
+        throw new InvalidOperationException("The retained multi-chart is not initialized.");
 
     public event EventHandler? NativeInitialized;
-
-    public PlotView2DMulti View
-    {
-        get
-        {
-            if (_view == null)
-            {
-                throw new InvalidOperationException(
-                    "MultiPlot2DControl: native view not initialised yet");
-            }
-            return _view;
-        }
-    }
-
-    public bool IsNativeInitialized => _initialized;
 
     public MultiPlot2DControl()
     {
         InitializeComponent();
-
-        CompositionTarget.Rendering += OnRender;
-        _renderingSubscribed = true;
-
+        Loaded += OnLoaded;
         Unloaded += OnUnloaded;
-        SizeChanged += OnSizeChanged;
-
-        RenderHost.FramebufferMouseDown  += OnFramebufferMouseDown;
-        RenderHost.FramebufferMouseMove  += OnFramebufferMouseMove;
-        RenderHost.FramebufferMouseUp    += OnFramebufferMouseUp;
-        RenderHost.FramebufferMouseWheel += OnFramebufferMouseWheel;
-        RenderHost.Focusable = true;
     }
 
-    public int Plot(int panel,
-                    double[] x, double[] y,
-                    float r = 1f, float g = 1f, float b = 1f, float a = 1f,
-                    double thickness = 1.5, string label = "")
+    internal void UpdateAfterAppend(double latestX)
     {
-        return View.add_line(panel, x, y, (uint)x.Length,
-                             r, g, b, a, thickness, label);
-    }
-
-    public void AppendToLine(int panel, int series,
-                              double[] x, double[] y)
-    {
-        View.append_to_line(panel, series, x, y, (uint)x.Length);
-    }
-
-    public void SetAutoscroll(bool on, double window)
-        => View.set_autoscroll(on, window);
-
-    public void SetPanelTitle(int panel, string title)
-        => View.set_panel_title(panel, title);
-
-    public void SetPanelYLabel(int panel, string label)
-        => View.set_panel_y_label(panel, label);
-
-    public void SetXLabel(string label)
-        => View.set_x_label(label);
-
-    private void InitializeNative()
-    {
-        if (_initialized) return;
-
-        TerminCore.InitFull();
-
-        string ttfPath;
-        if (!string.IsNullOrEmpty(FontPath) && File.Exists(FontPath))
+        if (_followLatest)
         {
-            ttfPath = FontPath;
+            _latestX = latestX;
+            Chart.SetSharedX(latestX - WindowSeconds, latestX);
         }
-        else
-        {
-            ttfPath = Plot3DControl.FindSystemFont()
-                ?? throw new InvalidOperationException(
-                    "No system TTF font found for MultiPlot2DControl.");
-        }
-        System.Diagnostics.Debug.WriteLine(
-            $"MultiPlot2DControl: loading font {ttfPath}");
+        SceneHost.RequestRender();
+    }
 
-        var host = Tgfx2Host.Acquire(ttfPath);
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        GpuHost host = Tgfx2Host.Acquire(App.FindSystemFont());
+        _hostLeaseHeld = true;
         try
         {
-            _view = new PlotView2DMulti(host, PanelCount);
-            _hostLeaseHeld = true;
+            float pixelScale = (float)VisualTreeHelper.GetDpi(this).DpiScaleX;
+            _chart = new MultiChart2D(
+                host, SceneHost.RenderHost.FramebufferWidth, SceneHost.RenderHost.FramebufferHeight,
+                PanelCount, new PlotRange2D(-WindowSeconds, 0, -1.15, 1.15),
+                panelHeight: (float)PanelHeight * pixelScale, pixelScale: pixelScale);
+
+            SceneHost.FramebufferChanged += OnFramebufferChanged;
+            SceneHost.RenderFailed += App.LogRenderFailure;
+            SceneHost.Attach(host, _chart.Scene);
+            _interaction = new MultiChart2DWpfInteraction(SceneHost, _chart);
+            _interaction.Navigated += OnNavigated;
+            _interaction.Scrolled += (_, _) => SynchronizeScrollBar();
+            NativeInitialized?.Invoke(this, EventArgs.Empty);
         }
         catch
         {
-            Tgfx2Host.Release();
+            Dispose();
             throw;
         }
-        _view.set_msaa_samples(_msaaSamples);
-        if (PanelHeight > 0)
-        {
-            _view.set_panel_height((float)PanelHeight);
-            _view.set_scroll_offset((float)ScrollOffset);
-            UpdateMaxScroll();
-        }
-        _initialized = true;
-        NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnRender(object? sender, EventArgs e)
+    private void OnFramebufferChanged(
+        object? sender, RetainedSceneFramebufferChangedEventArgs e)
     {
-        if (!_initialized)
-        {
-            InitializeNative();
-        }
-        if (!_initialized || _view == null) return;
-
-        var w = Math.Max(1, RenderHost.FramebufferWidth);
-        var h = Math.Max(1, RenderHost.FramebufferHeight);
-
-        // Apply coalesced pan from the latest MouseMove before rendering.
-        if (_hasPendingPan && _dragging)
-        {
-            _view.on_mouse_move(_pendingPanX, _pendingPanY);
-            _hasPendingPan = false;
-        }
-
-        uint colorTex = _view.render_to_texture_handle_id(w, h);
-        _ = RenderHost.Present(colorTex, w, h);
+        Chart.Resize(e.Width, e.Height, e.PixelScale);
+        Chart.SetPanelLayout((float)PanelHeight * e.PixelScale);
+        SynchronizeScrollBar();
     }
 
-    // WPF MouseMove fires at the mouse's polling rate (often 500-1000 Hz
-    // on gaming mice). Every event that crosses into native code costs a
-    // P/Invoke + SWIG marshalling round-trip on the UI thread; when
-    // hovering without a drag we have nothing useful to do there, so
-    // skip the round-trip entirely. _dragging tracks whether a button
-    // that the native engine cares about (middle, for pan) is held.
-    private bool _dragging;
-
-    // Pan coalesced to render tick. Sending a native on_mouse_move per
-    // Win32 MouseMove amplifies input-routing cost through the visual
-    // tree. We record the latest position on each event and apply it
-    // exactly once per OnRender frame.
-    private float _pendingPanX;
-    private float _pendingPanY;
-    private bool  _hasPendingPan;
-
-    private void OnFramebufferMouseDown(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
+    private void OnNavigated(object? sender, MultiChartNavigatedEventArgs2D e)
     {
-        if (_view == null) return;
-        RenderHost.FocusNativeWindow();
-        _view.on_mouse_down(e.X, e.Y, e.Button);
-        if (e.Button == 2)
+        if (Math.Abs(e.Range.XMin - (_latestX - WindowSeconds)) > 1e-12 ||
+            Math.Abs(e.Range.XMax - _latestX) > 1e-12)
+            _followLatest = false;
+    }
+
+    private static void OnScrollOffsetChanged(
+        DependencyObject sender, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (MultiPlot2DControl)sender;
+        if (control._chart is null || control._synchronizingScrollBar)
+            return;
+
+        float scale = control._chart.Snapshot.PixelScale;
+        control._chart.ScrollOffset = (float)(double)e.NewValue * scale;
+        control.SceneHost.RequestRender();
+    }
+
+    private void SynchronizeScrollBar()
+    {
+        MultiChartSnapshot2D snapshot = Chart.Snapshot;
+        _synchronizingScrollBar = true;
+        try
         {
-            _dragging = true;
+            SetValue(MaxScrollPropertyKey, (double)snapshot.MaximumScrollOffset / snapshot.PixelScale);
+            SetCurrentValue(ScrollOffsetProperty, (double)snapshot.ScrollOffset / snapshot.PixelScale);
         }
-        e.Handled = true;
-    }
-
-    private void OnFramebufferMouseMove(object? sender, Tgfx2D3D11MouseMoveEventArgs e)
-    {
-        if (_view == null || !_dragging) return;
-        _pendingPanX = e.X;
-        _pendingPanY = e.Y;
-        _hasPendingPan = true;
-    }
-
-    private void OnFramebufferMouseUp(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
-    {
-        if (_view == null) return;
-        _view.on_mouse_up(e.X, e.Y, e.Button);
-        if (e.Button == 2)
+        finally
         {
-            _dragging = false;
+            _synchronizingScrollBar = false;
         }
-        e.Handled = true;
     }
 
-    private void OnFramebufferMouseWheel(object? sender, Tgfx2D3D11MouseWheelEventArgs e)
-    {
-        if (_view == null) return;
-        // In virtualised/scrollable mode, plain wheel scrolls the list
-        // and Ctrl+wheel zooms the X axis - matches the ubiquitous
-        // "document vs. content" mousewheel convention. Classic (non-
-        // virtualised) mode still zooms unconditionally.
-        bool scrollable = PanelHeight > 0 && MaxScroll > 0;
-        bool wantZoom = !scrollable
-            || (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-        if (wantZoom)
-        {
-            float dy = e.Delta > 0 ? 1f : -1f;
-            // Ctrl held -> zoom X only (shared-X dashboard convention).
-            // Plain wheel in non-scrollable mode zooms both axes as before.
-            bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-            if (ctrl)
-                _view.on_mouse_wheel_x(e.X, e.Y, dy);
-            else
-                _view.on_mouse_wheel(e.X, e.Y, dy);
-        }
-        else
-        {
-            // One wheel notch is roughly one third of a panel. Tuned so
-            // flicking the wheel moves the viewport at a readable pace
-            // instead of jumping by whole panels per tick.
-            double step = Math.Max(PanelHeight * 0.33, 24.0);
-            double delta = -Math.Sign(e.Delta) * step;
-            double next = ScrollOffset + delta;
-            if (next < 0) next = 0;
-            if (next > MaxScroll) next = MaxScroll;
-            ScrollOffset = next;
-        }
-        e.Handled = true;
-    }
-
-    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        UpdateMaxScroll();
-    }
-
-    private void OnUnloaded(object sender, RoutedEventArgs e)
-    {
-        Dispose();
-    }
+    private void OnUnloaded(object sender, RoutedEventArgs e) => Dispose();
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         Dispatcher.VerifyAccess();
         _disposed = true;
-
+        Loaded -= OnLoaded;
         Unloaded -= OnUnloaded;
-        SizeChanged -= OnSizeChanged;
-        if (_renderingSubscribed)
-        {
-            CompositionTarget.Rendering -= OnRender;
-            _renderingSubscribed = false;
-        }
-
-        RenderHost.FramebufferMouseDown  -= OnFramebufferMouseDown;
-        RenderHost.FramebufferMouseMove  -= OnFramebufferMouseMove;
-        RenderHost.FramebufferMouseUp    -= OnFramebufferMouseUp;
-        RenderHost.FramebufferMouseWheel -= OnFramebufferMouseWheel;
-
-        RenderHost.ReleaseNativeResources();
-
-        _view?.release_gpu();
-        _view?.Dispose();
-        _view = null;
+        _interaction?.Dispose();
+        SceneHost.Dispose();
+        _chart?.Dispose();
+        _chart = null;
         if (_hostLeaseHeld)
         {
             Tgfx2Host.Release();
             _hostLeaseHeld = false;
         }
-
-        _initialized = false;
-    }
-
-    // Recompute max scroll from the current native total_virtual_height
-    // and the control's actual on-screen height. Called on resize and
-    // whenever PanelHeight changes.
-    private void UpdateMaxScroll()
-    {
-        if (_view == null) return;
-        double total = _view.total_virtual_height();
-        double visible = Math.Max(1.0, ActualHeight);
-        double max = Math.Max(0.0, total - visible);
-        SetValue(MaxScrollPropertyKey, max);
-        if (ScrollOffset > max) ScrollOffset = max;
     }
 }

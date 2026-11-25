@@ -14,10 +14,9 @@ scene-neutral `termin_render_core`. Retained plot annotations использую
 - [termin-graphics](../../termin-graphics/docs/index.md)
 - [tcplot-gui-native](../../tcplot-gui-native/README.md)
 
-Текущий `PlotEngine2D` пока остаётся native composer, но его grid/layout и
-series rendering уже вынесены в публичные retained parts и общие utilities.
-Целевая архитектура собирает эти части в общей `TcVisualScene`, чтобы C# владел
-композицией и layout-политикой, а тяжёлые series items рисовались нативно.
+`RetainedChart2D` и `RetainedMultiChart2D` собирают графики в публичной
+`TcVisualScene`. Native composer вычисляет layout и проекцию, а потребитель
+получает доступ к осям, сетке, сериям, легенде и слоям аннотаций.
 
 ## Основные области
 
@@ -44,15 +43,14 @@ target_link_libraries(my_plot PRIVATE tcplot::tcplot)
 `termin-nodegraph`. Сам `tcplot` при этом не зависит от UI: вся integration
 policy остаётся в leaf bridge.
 
-`PlotEngine2D::plot_frame()` возвращает immutable `PlotFrame2D`: detached
-snapshot viewport, plot area, data range, clip и прямого/обратного
-data-to-pixel преобразования. Снимок не меняется после последующих pan, zoom,
-resize или синхронизации общей оси X.
+`tc_retained_chart2d_projection()` возвращает handle проекции чарта.
+Её detached snapshot включает viewport, plot area, data range и clip.
+Преобразования между данными и пикселями доступны через `PlotProjection2D`.
 
 `PlotProjection2D` — thread-confined generation-checked native projection,
 принадлежащая одной `TcVisualScene`. Она хранит компактные viewport, plot area,
 clip, data range и pixel scale, обновляется транзакционно и выдаёт immutable
-snapshot с revision. Будущие retained series/grid items используют один этот
+snapshot с revision. Retained series/grid items используют один этот
 контракт: pan, zoom и resize не требуют переносить проецированные массивы или
 draw-команды через языковую границу. Создание и уничтожение projection явные;
 projection следует уничтожать до либо сразу после owner scene.
@@ -112,8 +110,6 @@ line/scatter overlays. Прямой `PlotHeatmapItemRef2D` доступен дл
 transform, opacity, viewport и axis-aligned clip без копирования series
 geometry. Для retained batches произвольный geometric clip сейчас явно
 отклоняется; plot-area rectangle использует быстрый scissor contract.
-`PlotEngine2D` вызывает те же `Plot*SeriesGpu2D`, отдельного legacy renderer
-больше нет.
 
 `RetainedChart3D` владеет `PlotScene3DRenderItemSource`, доступным C++ consumer
 через `plot_scene3d_render_item_source()`. Он публикует immutable surface,
@@ -134,17 +130,14 @@ encoders загружают stream через общий transient vertex ring �
 `termin::RenderEngine`. Geometry pass сохраняет порядок surface/grid/scatter,
 а следующий inplace chrome pass рисует tick и axis labels из того же immutable
 frame snapshot. Color/depth/MSAA attachments приходят через
-`RenderTargetContext`; ручного begin/end frame/pass lifecycle и per-item
-`PlotEngine3D` в retained chart больше нет.
+`RenderTargetContext` общего render pipeline.
 
-Декартовы `RetainedChart3D` и legacy `PlotEngine3D` используют общий расчёт
-координатной сетки: три дальние грани образуют открытый со стороны камеры
+В декартовом `RetainedChart3D` три дальние грани сетки образуют открытый со стороны камеры
 координатный объём. При вращении или панорамировании грани выбираются заново;
 поддерживаются перспективная и ортографическая камеры и масштабы осей.
 Линии сетки строятся только по числовым делениям, без отдельной внешней рамки.
 Совпадающие линии соседних граней рисуются один раз.
-Все линии используют grid RGBA; отдельные цветные декартовы
-оси удалены. `PlotEngine3D::set_grid_style()` принимает только цвет сетки.
+Все линии декартовой сетки используют один grid RGBA.
 Цвета осей в `tc_grid_item3d_style` относятся к сферическим угловым/радиальным шкалам.
 Числа размещаются горизонтально за проекцией внешних рёбер с отступом в
 пикселях. Названия осей находятся во втором внешнем ряду. Шаг числовых подписей
@@ -158,8 +151,7 @@ value-only layout boundary. Tick spacing и font size задаются в logica
 и масштабируются через `pixel_scale`; возвращаемые ranges, values, labels и
 text metrics не содержат borrowed backend pointers. Пересчитывать ticks нужно
 при изменении range, plot-area extent или pixel scale; text metrics — при
-изменении текста, font, logical size или pixel scale. `PlotEngine2D` использует
-эти же utilities как reference path.
+изменении текста, font, logical size или pixel scale.
 
 C ABI `tc_plot_layout2d.h` экспортирует fit, detached tick values и UTF-8
 formatting без переноса layout policy в native composer. C# слой
@@ -169,7 +161,7 @@ formatting без переноса layout policy в native composer. C# слой
 `GpuHost`/`FontAtlas`, который будет рисовать подписи; managed-код не получает
 font или backend pointer.
 
-`PlotAnnotationLayer2D` принадлежит plot engine и хранит semantic annotations
+`PlotAnnotationLayer2D` используется native UI виджетом `Plot2D` и хранит semantic annotations
 через generation handles. Одна annotation может проецироваться в несколько
 visual items с независимыми фазами `Underlay`, `Overlay`, `Chrome` и clipping
 к plot area либо viewport. Поддерживаются data anchors, series-point
@@ -190,8 +182,8 @@ Python package:
 import termin.plot
 ```
 
-Пакет экспортирует toolkit-neutral `PlotEngine2D`, `PlotEngine3D` и
-`RetainedChart3D`; он не импортирует и не реэкспортирует UI widgets. Python
+Пакет экспортирует toolkit-neutral `RetainedChart3D`, типы данных, палитры и
+состояние камеры. Python
 адаптеры `Plot2D` и `Plot3D` принадлежат отдельному пакету
 `termin.plot.gui_native`. Примеры их создания и встраивания в native UI document
 приведены в [README моста](../../tcplot-gui-native/README.md).
@@ -199,13 +191,9 @@ import termin.plot
 [graphics profile showcase](../../../examples/graphics-showcase/README.md) и
 покрывает line/scatter/surface, colormap и композицию графиков внутри nodegraph.
 
-`PlotEngine2D.create_data_marker()` returns a value-only
-`PlotAnnotationHandle`. Marker updates, snapshots, destruction, snapping and
-semantic action callbacks all validate the complete
-`layer_id/index/generation` identity. `take_annotation_action()` provides the
-same actions as a polling queue for hosts that do not use callbacks. Python
-callback exceptions are logged at the native boundary and propagated to the
-caller.
+`Plot2D.create_data_marker()` возвращает value-only `PlotAnnotationHandle`.
+Виджет управляет проекцией, перетаскиванием, snapping к линии и закрытием
+подписи. `annotation_anchor_pixel()` возвращает текущую позицию маркера.
 
 ## Python examples
 
@@ -214,20 +202,12 @@ belonged to the removed `tcgui` adapter. Every entry point uses the installed
 graphics SDK, `termin.window`, and `termin-gui-native`:
 
 ```bash
-sdk/bin/termin_python tcplot/examples/demo_sin.py
-sdk/bin/termin_python tcplot/examples/demo_scatter.py
-sdk/bin/termin_python tcplot/examples/demo_multi.py
-sdk/bin/termin_python tcplot/examples/demo_marker.py
-sdk/bin/termin_python tcplot/examples/demo_3d_helix.py
-sdk/bin/termin_python tcplot/examples/demo_3d_surface.py
+examples=graphics/tcplot/examples
+sdk/bin/termin_python --termin-site "$examples" "$examples/demo_sin.py"
 ```
 
-The examples cover multiple line families, retained scatter, side-by-side
-plots, draggable marker annotations, 3D line/scatter composition, surface
-colormaps, a screen-space colorbar, wireframe overlay, shading and axis scale.
+The same command runs `demo_scatter.py`, `demo_multi.py`, `demo_marker.py`,
+`demo_3d_helix.py` and `demo_3d_surface.py`. These cover scatter, side-by-side
+plots, draggable markers, 3D lines, surface colormaps, a colorbar, wireframe,
+shading and axis scale.
 Set `TCPLOT_EXAMPLE_SECONDS` to a positive value to bound a window smoke.
-
-`annotation_anchor_pixel()` exposes the current projected anchor for overlay
-composition and synthetic input without duplicating plot margin or DPI math.
-No Python annotation or graphic-item wrapper owns the engine, layer or native
-item.

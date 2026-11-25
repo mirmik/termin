@@ -11,9 +11,8 @@ contains the six restored plotting scenarios, renders both widgets
 independently, and embeds them into nodegraph bodies; this README keeps the
 smaller API snippets close to the bridge itself.
 
-Python consumers import `Plot2D` and `Plot3D` from `termin.plot.gui_native`, not
-from `termin.plot`. The core package intentionally contains only engines, retained
-chart primitives, data types and camera math.
+Python consumers import `Plot2D` and `Plot3D` from `termin.plot.gui_native`.
+`termin.plot` provides retained chart primitives, data types and camera math.
 
 The widget runtime type is `termin.gui.Plot2D`. It owns a `TcVisualScene`, a
 plot projection, grid and retained line-series items, then appends that retained

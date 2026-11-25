@@ -5,6 +5,8 @@
 > This document records the retained-primitives vertical slice. The standard
 > single/multi-panel composer and layout now belong to native `tcplot`; C# is a
 > thin projection over the same public `TcVisualScene2D` parts.
+> The transitional `PlotEngine2D`, `PlotView2D` and `PlotView2DMulti` APIs were
+> removed in #1104. The status and migration below describe the original slice.
 
 ## Status
 

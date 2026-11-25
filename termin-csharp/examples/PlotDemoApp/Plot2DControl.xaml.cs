@@ -9,209 +9,113 @@ namespace PlotDemoApp;
 
 public partial class Plot2DControl : UserControl, IDisposable
 {
-    private PlotView2D? _view;
-    private bool _renderingSubscribed;
-    private bool _initialized;
-    private bool _disposed;
+    private Chart2D? _chart;
+    private Chart2DWpfInteraction? _interaction;
     private bool _hostLeaseHeld;
+    private bool _disposed;
     private bool _smokeBootstrapPresented;
-    private long _renderAttempts;
-    private long _successfulPresents;
+    private int _frameWidth;
+    private int _frameHeight;
 
-    // Only set by the multi-host smoke: exercise tiny startup textures even
-    // when WPF happens to complete layout before its first rendering callback.
     internal int SmokeBootstrapSize { get; set; }
     internal bool HasPresentedCurrentSize =>
-        PresentedWidth == RenderHost.FramebufferWidth &&
-        PresentedHeight == RenderHost.FramebufferHeight &&
+        _smokeBootstrapPresented &&
+        PresentedWidth == SceneHost.RenderHost.FramebufferWidth &&
+        PresentedHeight == SceneHost.RenderHost.FramebufferHeight &&
         PresentedFramesAtSize >= 2;
     internal int PresentedWidth { get; private set; }
     internal int PresentedHeight { get; private set; }
     internal int PresentedFramesAtSize { get; private set; }
     internal string SmokeRenderDiagnostics =>
-        $"framebuffer={RenderHost.FramebufferWidth}x{RenderHost.FramebufferHeight} " +
+        $"framebuffer={_frameWidth}x{_frameHeight} " +
         $"presented={PresentedWidth}x{PresentedHeight} framesAtSize={PresentedFramesAtSize} " +
-        $"attempts={_renderAttempts} successfulPresents={_successfulPresents} " +
-        $"bootstrapPresented={_smokeBootstrapPresented} initialized={_initialized} disposed={_disposed}";
+        $"bootstrapPresented={_smokeBootstrapPresented} disposed={_disposed}";
 
     public Plot2DControl()
     {
         InitializeComponent();
-
-        CompositionTarget.Rendering += OnRender;
-        _renderingSubscribed = true;
-
+        Loaded += OnLoaded;
         Unloaded += OnUnloaded;
-
-        RenderHost.FramebufferMouseDown  += OnFramebufferMouseDown;
-        RenderHost.FramebufferMouseMove  += OnFramebufferMouseMove;
-        RenderHost.FramebufferMouseUp    += OnFramebufferMouseUp;
-        RenderHost.FramebufferMouseWheel += OnFramebufferMouseWheel;
-        RenderHost.Focusable = true;
     }
 
-    public PlotView2D View
-    {
-        get
-        {
-            if (_view == null)
-            {
-                throw new InvalidOperationException(
-                    "Plot2DControl: native view not initialised yet");
-            }
-            return _view;
-        }
-    }
+    public Chart2D Chart => _chart ??
+        throw new InvalidOperationException("The retained 2D chart is not initialized.");
 
-    public bool IsNativeInitialized => _initialized;
     public event EventHandler? NativeInitialized;
 
-    public void Plot(double[] x, double[] y,
-                     float r = 1f, float g = 1f, float b = 1f, float a = 1f,
-                     double thickness = 1.5, string label = "")
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        View.plot(x, y, (uint)x.Length, r, g, b, a, thickness, label);
-    }
-
-    public void PlotColormap(double[] x, double[] y, double[] scalar,
-                             SurfaceColorMap colormap = SurfaceColorMap.Jet,
-                             double scalarMin = 0.0, double scalarMax = 1.0,
-                             double thickness = 1.5, string label = "",
-                             bool colormapReversed = false)
-    {
-        View.plot_colormap(x, y, scalar, (uint)x.Length, colormap,
-            scalarMin, scalarMax, thickness, label, colormapReversed);
-    }
-
-    public void Scatter(double[] x, double[] y,
-                        float r = 1f, float g = 1f, float b = 1f, float a = 1f,
-                        double size = 4.0, string label = "")
-    {
-        View.scatter(x, y, (uint)x.Length, r, g, b, a, size, label);
-    }
-
-    public void SetLineStyle(int series, LineStyle style,
-                             float dashPx = 8.0f, float gapPx = 5.0f)
-    {
-        View.set_line_style(series, style, dashPx, gapPx);
-    }
-
-    private void InitializeNative()
-    {
-        if (_initialized) return;
-
-        TerminCore.InitFull();
-
-        var ttfPath = Plot3DControl.FindSystemFont()
-            ?? throw new InvalidOperationException(
-                "No system TTF font found for Plot2DControl.");
-
-        var host = Tgfx2Host.Acquire(ttfPath);
+        Loaded -= OnLoaded;
+        GpuHost host = Tgfx2Host.Acquire(App.FindSystemFont());
+        _hostLeaseHeld = true;
         try
         {
-            _view = new PlotView2D(host);
-            _hostLeaseHeld = true;
+            _chart = new Chart2D(host, 1, 1, new PlotRange2D(0, 1, -1, 1));
+            SceneHost.FramebufferChanged += OnFramebufferChanged;
+            SceneHost.RenderFailed += App.LogRenderFailure;
+            if (SmokeBootstrapSize > 0)
+            {
+                DpiScale dpi = VisualTreeHelper.GetDpi(this);
+                // Framebuffer dimensions are rounded up to physical pixels.
+                Width = (SmokeBootstrapSize - 0.25) / dpi.DpiScaleX;
+                Height = (SmokeBootstrapSize - 0.25) / dpi.DpiScaleY;
+                SceneHost.ContinuousRendering = true;
+                SceneHost.FrameRendered += OnSmokeFrameRendered;
+            }
+            SceneHost.Attach(host, _chart.Scene);
+            _interaction = new Chart2DWpfInteraction(SceneHost, _chart);
+            NativeInitialized?.Invoke(this, EventArgs.Empty);
         }
         catch
         {
-            Tgfx2Host.Release();
+            Dispose();
             throw;
         }
-        _initialized = true;
-        NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnRender(object? sender, EventArgs e)
+    private void OnFramebufferChanged(
+        object? sender, RetainedSceneFramebufferChangedEventArgs e)
     {
-        ++_renderAttempts;
-        if (!_initialized)
-        {
-            InitializeNative();
-        }
-        if (!_initialized || _view == null) return;
-
-        var w = Math.Max(1, RenderHost.FramebufferWidth);
-        var h = Math.Max(1, RenderHost.FramebufferHeight);
-        bool bootstrap = SmokeBootstrapSize > 0 && !_smokeBootstrapPresented;
-        if (bootstrap)
-            w = h = SmokeBootstrapSize;
-        uint colorTex = _view.render_to_texture_handle_id(w, h);
-        if (RenderHost.Present(colorTex, w, h))
-        {
-            ++_successfulPresents;
-            PresentedFramesAtSize = PresentedWidth == w && PresentedHeight == h
-                ? PresentedFramesAtSize + 1 : 1;
-            PresentedWidth = w;
-            PresentedHeight = h;
-            if (bootstrap)
-            {
-                _smokeBootstrapPresented = true;
-                Console.WriteLine($"PLOT_2D_HOST_BOOTSTRAP {w}x{h}");
-            }
-        }
+        _frameWidth = e.Width;
+        _frameHeight = e.Height;
+        Chart.Resize(e.Width, e.Height, e.PixelScale);
     }
 
-    private void OnFramebufferMouseDown(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
+    private void OnSmokeFrameRendered(
+        object? sender, RetainedSceneFrameRenderedEventArgs e)
     {
-        if (_view == null) return;
-        RenderHost.FocusNativeWindow();
-        _view.on_mouse_down(e.X, e.Y, e.Button);
-        e.Handled = true;
+        PresentedFramesAtSize = PresentedWidth == _frameWidth && PresentedHeight == _frameHeight
+            ? PresentedFramesAtSize + 1 : 1;
+        PresentedWidth = _frameWidth;
+        PresentedHeight = _frameHeight;
+        if (_smokeBootstrapPresented ||
+            PresentedWidth != SmokeBootstrapSize || PresentedHeight != SmokeBootstrapSize)
+            return;
+
+        _smokeBootstrapPresented = true;
+        Console.WriteLine($"PLOT_2D_HOST_BOOTSTRAP {PresentedWidth}x{PresentedHeight}");
+        ClearValue(WidthProperty);
+        ClearValue(HeightProperty);
     }
 
-    private void OnFramebufferMouseMove(object? sender, Tgfx2D3D11MouseMoveEventArgs e)
-    {
-        if (_view == null) return;
-        _view.on_mouse_move(e.X, e.Y);
-    }
-
-    private void OnFramebufferMouseUp(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
-    {
-        if (_view == null) return;
-        _view.on_mouse_up(e.X, e.Y, e.Button);
-        e.Handled = true;
-    }
-
-    private void OnFramebufferMouseWheel(object? sender, Tgfx2D3D11MouseWheelEventArgs e)
-    {
-        if (_view == null) return;
-        _view.on_mouse_wheel(e.X, e.Y, e.Delta > 0 ? 1f : -1f);
-        e.Handled = true;
-    }
-
-    private void OnUnloaded(object sender, RoutedEventArgs e)
-    {
-        Dispose();
-    }
+    private void OnUnloaded(object sender, RoutedEventArgs e) => Dispose();
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         Dispatcher.VerifyAccess();
         _disposed = true;
-
+        Loaded -= OnLoaded;
         Unloaded -= OnUnloaded;
-        if (_renderingSubscribed)
-        {
-            CompositionTarget.Rendering -= OnRender;
-            _renderingSubscribed = false;
-        }
-
-        RenderHost.FramebufferMouseDown  -= OnFramebufferMouseDown;
-        RenderHost.FramebufferMouseMove  -= OnFramebufferMouseMove;
-        RenderHost.FramebufferMouseUp    -= OnFramebufferMouseUp;
-        RenderHost.FramebufferMouseWheel -= OnFramebufferMouseWheel;
-
-        RenderHost.ReleaseNativeResources();
-
-        _view?.release_gpu();
-        _view?.Dispose();
-        _view = null;
+        _interaction?.Dispose();
+        SceneHost.Dispose();
+        _chart?.Dispose();
+        _chart = null;
         if (_hostLeaseHeld)
         {
             Tgfx2Host.Release();
             _hostLeaseHeld = false;
         }
-        _initialized = false;
     }
 }

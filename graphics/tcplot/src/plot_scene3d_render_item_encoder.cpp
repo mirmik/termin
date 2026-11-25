@@ -270,9 +270,7 @@ namespace tcplot {
             context.set_depth_write(style.wireframe == 0);
             context.set_depth_test(style.wireframe == 0);
             context.set_depth_func(tgfx::CompareOp::Less);
-            // Preserve PlotEngine3D's current contract: filled surfaces are
-            // opaque; wireframe lines blend over the already rendered chart
-            // geometry.
+            // Wireframe lines blend over the already rendered chart geometry.
             context.set_blend(style.wireframe != 0);
             context.draw_transient_arrays(data.draw_vertices.data(),
                                           static_cast<uint32_t>(data.draw_vertices.size() * sizeof(float)),

@@ -316,6 +316,14 @@ namespace tcplot_bindings {
     } // namespace
 
     void bind_retained_chart3d(nb::module_& m) {
+        nb::enum_<tcplot::SurfaceColorMap>(m, "SurfaceColorMap")
+            .value("Jet", tcplot::SurfaceColorMap::Jet)
+            .value("Viridis", tcplot::SurfaceColorMap::Viridis)
+            .value("Plasma", tcplot::SurfaceColorMap::Plasma)
+            .value("Grayscale", tcplot::SurfaceColorMap::Grayscale)
+            .value("CoolWarm", tcplot::SurfaceColorMap::CoolWarm)
+            .value("Solid", tcplot::SurfaceColorMap::Solid);
+
         nb::class_<tc_orbit_camera3d_state>(m, "OrbitCameraState3D")
             .def(nb::init<>())
             .def_rw("target_x", &tc_orbit_camera3d_state::target_x)

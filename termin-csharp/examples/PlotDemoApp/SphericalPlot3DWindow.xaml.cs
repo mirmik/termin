@@ -31,9 +31,7 @@ public partial class SphericalPlot3DWindow : Window
     {
         InitializeComponent();
 
-        string fontPath = Plot3DControl.FindSystemFont()
-            ?? throw new InvalidOperationException(
-                "No system TTF font found for the spherical plot demo.");
+        string fontPath = App.FindSystemFont();
         _gpuHost = Tgfx2Host.Acquire(fontPath, BackendType.D3D11);
         RetainedChart3D? chart = null;
         try

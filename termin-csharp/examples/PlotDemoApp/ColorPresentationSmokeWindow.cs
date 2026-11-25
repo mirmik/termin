@@ -39,8 +39,7 @@ internal sealed class ColorPresentationSmokeWindow : Window
         Width = 960;
         Height = 360;
         Background = Brushes.Magenta;
-        string font = Plot3DControl.FindSystemFont()
-            ?? throw new InvalidOperationException("No system TTF font for color presentation smoke.");
+        string font = App.FindSystemFont();
         _gpu = Tgfx2Host.Acquire(font, BackendType.D3D11);
         try
         {

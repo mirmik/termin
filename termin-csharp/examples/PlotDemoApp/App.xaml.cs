@@ -1,10 +1,42 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Termin.Wpf;
 
 namespace PlotDemoApp;
 
 public partial class App : Application
 {
+    internal static string FindSystemFont()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var fontsDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                "Fonts");
+            foreach (var name in new[] { "segoeui.ttf", "arial.ttf", "tahoma.ttf" })
+            {
+                var p = Path.Combine(fontsDir, name);
+                if (File.Exists(p)) return p;
+            }
+        }
+        else
+        {
+            foreach (var p in new[] {
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                "/System/Library/Fonts/Helvetica.ttc",
+            })
+            {
+                if (File.Exists(p)) return p;
+            }
+        }
+        throw new InvalidOperationException("No system TTF font found for PlotDemoApp.");
+    }
+
+    internal static void LogRenderFailure(
+        object? sender, RetainedSceneRenderFailedEventArgs e) => Console.Error.WriteLine(e.Error);
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);

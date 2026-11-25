@@ -143,23 +143,6 @@ namespace tcplot {
         bool dragging = false;
     };
 
-    // Detached, value-only forms used by foreign-language bindings.
-    struct PlotDataMarkerBindingSnapshot2D {
-        bool available = false;
-        PlotAnnotationHandle annotation;
-        double x = 0.0;
-        double y = 0.0;
-        std::string text;
-        bool hovered = false;
-        bool dragging = false;
-    };
-
-    struct PlotAnnotationActionPoll2D {
-        bool available = false;
-        PlotAnnotationHandle annotation;
-        std::string action;
-    };
-
     class TCPLOT_API PlotAnnotationLayer2D final {
     public:
         using SnapHook = std::function<PlotPoint2D(const PlotPoint2D&)>;
@@ -198,12 +181,6 @@ namespace tcplot {
         // frame.plot_area().
         bool route_pointer(const PlotFrame2D& frame, const termin::visual::PointerEvent2D& event);
         bool hit_test(const PlotFrame2D& frame, float x, float y) const;
-
-        void render_phase(PlotRenderPhase2D phase,
-                          const PlotFrame2D& frame,
-                          tgfx::RenderContext2& context,
-                          tgfx::FontAtlas* font);
-        void release_gpu_resources();
 
         const termin::visual::TcVisualScene& visual_scene(PlotAnnotationPhase2D phase, PlotAnnotationClip2D clip) const;
 

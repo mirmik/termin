@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <exception>
 #include <filesystem>
+#include <memory>
 #include <system_error>
 #include <vector>
 
@@ -11,7 +12,8 @@
 #include <tgfx2/tc_shader_bridge.hpp>
 
 #include "tcplot/gpu_host.hpp"
-#include "tcplot/plot_view2d.hpp"
+#include "tcplot/retained_chart2d.h"
+#include "tcplot/retained_scene_renderer2d.h"
 
 namespace {
 
@@ -40,9 +42,19 @@ int main() {
         termin::tgfx2_set_shader_dev_compile_enabled(true);
 
         tcplot::GpuHost host(TCPLOT_TEST_FONT, tgfx::BackendType::Vulkan);
-        tcplot::PlotView2D view(host);
-        view.set_msaa_samples(1);
-        view.set_view(0.0, 100.0, -1.2, 1.2);
+        constexpr int width = 1280;
+        constexpr int height = 720;
+        std::unique_ptr<tc_retained_chart2d, decltype(&tc_retained_chart2d_destroy)> chart(
+            tc_retained_chart2d_create(
+                &host, {0, 0, width, height}, {0.0, 100.0, -1.2, 1.2}, "ui://default-font", 1, nullptr),
+            tc_retained_chart2d_destroy);
+        if (!chart)
+            return 1;
+        std::unique_ptr<tc_retained_scene_renderer2d, decltype(&tc_retained_scene_renderer2d_destroy)> renderer(
+            tc_retained_scene_renderer2d_create(&host, tc_retained_chart2d_scene(chart.get())),
+            tc_retained_scene_renderer2d_destroy);
+        if (!renderer || !tc_retained_scene_renderer2d_set_msaa_samples(renderer.get(), 1))
+            return 1;
 
         constexpr std::size_t count = 100000;
         std::vector<double> x(count);
@@ -53,21 +65,27 @@ int main() {
             line_y[index] = std::sin(x[index] * 0.2);
             scatter_y[index] = std::cos(x[index] * 0.2);
         }
-        view.plot({x.data(), line_y.data(), count},
-                  tcplot::LinePlotOptions{{tcplot::SrgbColor{0.1f, 0.6f, 0.9f, 1.0f}}, 1.5, "100k line"});
-        view.scatter({x.data(), scatter_y.data(), count},
-                     tcplot::ScatterPlotOptions{{tcplot::SrgbColor{0.9f, 0.3f, 0.2f, 0.7f}}, 3.0, "100k scatter"});
+        const tc_plot_line_style_state2d line_style{
+            {0.1f, 0.6f, 0.9f, 1.0f}, 1.5f, TC_PLOT_LINE_STYLE_SOLID_2D, 8, 5, TC_PLOT_COLORMAP_SOLID_2D, false, 0, 1};
+        const tc_plot_scatter_style_state2d scatter_style{{0.9f, 0.3f, 0.2f, 0.7f}, 3.0f};
+        const auto line = tc_retained_chart2d_add_named_line(
+            chart.get(), "100k line", true, x.data(), line_y.data(), nullptr, count, line_style);
+        const auto scatter = tc_retained_chart2d_add_named_scatter(
+            chart.get(), "100k scatter", true, x.data(), scatter_y.data(), count, scatter_style);
+        if (!tc_retained_chart2d_series_is_valid(chart.get(), line) ||
+            !tc_retained_chart2d_series_is_valid(chart.get(), scatter)) {
+            std::fprintf(stderr, "failed to create retained series for performance test\n");
+            return 1;
+        }
 
-        constexpr int width = 1280;
-        constexpr int height = 720;
-        if (!view.render_to_texture(width, height))
+        if (!tc_retained_scene_renderer2d_render(renderer.get(), width, height))
             return 1;
         host.device().wait_idle();
 
         const auto start = std::chrono::steady_clock::now();
         constexpr int measured_frames = 5;
         for (int frame = 0; frame < measured_frames; ++frame) {
-            if (!view.render_to_texture(width, height))
+            if (!tc_retained_scene_renderer2d_render(renderer.get(), width, height))
                 return 1;
         }
         host.device().wait_idle();
@@ -78,7 +96,7 @@ int main() {
                     "1280x720, %.3f ms/frame\n",
                     per_frame);
 
-        // This gate intentionally includes texture allocation and GPU wait.
+        // This gate includes scene publication, draw submission and GPU wait.
         // The pre-migration scatter path emitted 100k Canvas circles per
         // frame; the retained path must remain comfortably interactive.
         return per_frame <= 250.0 ? 0 : 1;

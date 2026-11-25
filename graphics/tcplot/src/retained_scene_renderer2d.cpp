@@ -18,6 +18,7 @@
 #include <tgfx2/render_context.hpp>
 
 #include "tcplot/gpu_host.hpp"
+#include "tcplot/plot_annotations2d.hpp"
 
 namespace {
 
@@ -35,7 +36,7 @@ namespace {
             : font_(&font) {}
 
         std::optional<tgfx::FontHandle> resolve_font(std::string_view uri) override {
-            if (uri == kDefaultFontUri) {
+            if (uri == kDefaultFontUri || uri == tcplot::kPlotDefaultFontResource2D) {
                 return tgfx::FontHandle{1};
             }
             tc::Log::error("RetainedSceneRenderer2D: unresolved font resource '%s'", std::string(uri).c_str());

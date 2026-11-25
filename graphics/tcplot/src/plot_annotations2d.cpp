@@ -7,16 +7,12 @@
 #include <deque>
 #include <exception>
 #include <limits>
-#include <stdexcept>
 #include <utility>
 
 #include <tcbase/tc_log.hpp>
 #include <termin/geom/affine2.hpp>
 #include <termin_visual_scene/builtin_items2d.hpp>
 #include <termin_visual_scene/scene_render2d.hpp>
-#include <tgfx2/canvas2d_renderer.hpp>
-#include <tgfx2/font_atlas.hpp>
-#include <tgfx2/render_context.hpp>
 
 namespace tcplot {
     namespace {
@@ -109,19 +105,6 @@ namespace tcplot {
                 anchor);
         }
 
-        PlotAnnotationPhase2D annotation_phase(PlotRenderPhase2D phase) {
-            switch (phase) {
-            case PlotRenderPhase2D::AnnotationUnderlay:
-                return PlotAnnotationPhase2D::Underlay;
-            case PlotRenderPhase2D::AnnotationOverlay:
-                return PlotAnnotationPhase2D::Overlay;
-            case PlotRenderPhase2D::UnclippedChrome:
-                return PlotAnnotationPhase2D::Chrome;
-            default:
-                throw std::logic_error("render phase does not contain plot annotations");
-            }
-        }
-
     } // namespace
 
     struct PlotAnnotationLayer2D::Impl {
@@ -150,35 +133,6 @@ namespace tcplot {
             std::optional<MarkerRuntime> marker;
         };
 
-        class Resources final : public termin::visual::SceneRenderResourceResolver2D,
-                                public tgfx::DrawResourceResolver2D {
-        public:
-            tgfx::FontAtlas* font = nullptr;
-
-            std::optional<tgfx::FontHandle> resolve_font(std::string_view uri) override {
-                if (uri != kPlotDefaultFontResource2D || !font) {
-                    tc::Log::error("PlotAnnotationLayer2D: unresolved font resource '%s'", std::string(uri).c_str());
-                    return std::nullopt;
-                }
-                return tgfx::FontHandle{1};
-            }
-
-            std::optional<tgfx::TextureHandle> resolve_image(std::string_view uri) override {
-                tc::Log::error("PlotAnnotationLayer2D: unresolved image resource '%s'", std::string(uri).c_str());
-                return std::nullopt;
-            }
-
-            std::optional<termin::visual::ResolvedCustomBatch2D> resolve_custom_batch(std::string_view key,
-                                                                                      termin::Bounds2f) override {
-                tc::Log::error("PlotAnnotationLayer2D: unresolved custom batch '%s'", std::string(key).c_str());
-                return std::nullopt;
-            }
-
-            tgfx::FontAtlas* resolve_font(tgfx::FontHandle handle) override {
-                return handle.id == 1 ? font : nullptr;
-            }
-        };
-
         struct Bucket {
             Bucket()
                 : scene(tc_visual_scene_create()) {}
@@ -194,9 +148,6 @@ namespace tcplot {
         std::vector<std::uint32_t> free_indices;
         std::deque<PlotAnnotationAction2D> pending_actions;
         std::array<Bucket, kBucketCount> buckets;
-        tgfx::Canvas2DRenderer canvas;
-        Resources resources;
-
         Record* resolve(PlotAnnotationHandle handle) {
             if (handle.layer_id != id || handle.index >= records.size()) {
                 return nullptr;
@@ -775,47 +726,6 @@ namespace tcplot {
             }
         }
         return false;
-    }
-
-    void PlotAnnotationLayer2D::render_phase(PlotRenderPhase2D phase,
-                                             const PlotFrame2D& frame,
-                                             tgfx::RenderContext2& context,
-                                             tgfx::FontAtlas* font) {
-        if (phase != PlotRenderPhase2D::AnnotationUnderlay && phase != PlotRenderPhase2D::AnnotationOverlay &&
-            phase != PlotRenderPhase2D::UnclippedChrome) {
-            return;
-        }
-        const PlotAnnotationPhase2D annotation = annotation_phase(phase);
-        impl_->resources.font = font;
-
-        for (const PlotAnnotationClip2D clip : {PlotAnnotationClip2D::PlotArea, PlotAnnotationClip2D::Viewport}) {
-            Impl::Bucket& bucket = impl_->buckets[bucket_index(annotation, clip)];
-            if (bucket.scene.size() == 0)
-                continue;
-            const PlotRect2D& viewport = frame.viewport();
-            impl_->canvas.set_default_font(font);
-            impl_->canvas.begin(context,
-                                static_cast<int>(viewport.x()),
-                                static_cast<int>(viewport.y()),
-                                static_cast<int>(viewport.width()),
-                                static_cast<int>(viewport.height()));
-            const PlotRect2D& scissor = clip == PlotAnnotationClip2D::PlotArea ? frame.clip_rect() : frame.viewport();
-            context.set_scissor(static_cast<int>(scissor.x()),
-                                static_cast<int>(scissor.y()),
-                                static_cast<int>(scissor.width()),
-                                static_cast<int>(scissor.height()));
-            tgfx::DrawList2DBuilder builder;
-            const bool painted = bucket.scene.paint(builder, impl_->resources);
-            const auto draw_list = painted ? builder.freeze() : std::nullopt;
-            if (!draw_list || !impl_->canvas.execute(*draw_list, impl_->resources)) {
-                tc::Log::error("PlotAnnotationLayer2D: DrawList2D execution failed");
-            }
-            impl_->canvas.end();
-        }
-    }
-
-    void PlotAnnotationLayer2D::release_gpu_resources() {
-        impl_->canvas.release_gpu();
     }
 
     const termin::visual::TcVisualScene& PlotAnnotationLayer2D::visual_scene(PlotAnnotationPhase2D phase,

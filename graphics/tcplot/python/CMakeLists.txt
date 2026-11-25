@@ -9,7 +9,6 @@ set(TCPLOT_PYTHON_BINDING_SOURCES
     bindings/colors_and_data_bindings.cpp
     bindings/camera_bindings.cpp
     bindings/annotation_bindings.cpp
-    bindings/engine_bindings.cpp
     bindings/retained_chart3d_bindings.cpp
 )
 

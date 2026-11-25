@@ -14,11 +14,12 @@ public partial class ScaledPlot3DWindow : Window
 
     private void Populate()
     {
-        Plot.View.set_msaa_samples(8);
-        Plot.SetAxisLabels("time, us", "angle, deg", "20log10|S|");
-        Plot.SetAxisScale(1_000_000f, 1.0f, 40.0f);
-        Plot.SetSurfaceShading(true, 0.42f);
-        Plot.SetSurfaceLightDir(-0.4f, -0.6f, 0.7f);
+        RetainedChart3D chart = Plot.Chart;
+        chart.MsaaSamples = 8;
+        chart.SetAxisLabels("time, us", "angle, deg", "20log10|S|");
+        chart.SetAxisScale(1_000_000f, 1, 40);
+        chart.SetSurfaceShading(true, 0.42f);
+        chart.SetLightDirection(-0.4f, -0.6f, 0.7f);
 
         const uint rows = 72;
         const uint cols = 96;
@@ -45,16 +46,13 @@ public partial class ScaledPlot3DWindow : Window
             }
         }
 
-        Plot.SurfaceColormap(x, y, z, rows, cols,
-                             SurfaceColorMap.Plasma,
-                             0f, 0f, 0f, 1f,
-                             wireframe: false,
-                             label: "scaled-time-surface");
-        Plot.SetSurfaceGrid(0, visible: true,
-                            rowStep: 8, colStep: 12,
-                            0.04f, 0.04f, 0.04f, 0.72f,
-                            widthPx: 2.5f);
+        chart.Scene.AddSurface(x, y, z, rows, cols,
+            new SurfaceItemStyle3D(
+                colorMap: PlotColorMap3D.Plasma,
+                surfaceGridVisible: true, surfaceGridRowStep: 8, surfaceGridColumnStep: 12,
+                surfaceGridR: 0.04f, surfaceGridG: 0.04f, surfaceGridB: 0.04f,
+                surfaceGridA: 0.72f, surfaceGridWidthPx: 2.5f));
 
-        Plot.View.fit_camera();
+        chart.Camera.Fit();
     }
 }

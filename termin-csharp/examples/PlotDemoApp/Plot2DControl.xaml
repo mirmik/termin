@@ -2,8 +2,6 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:terminWpf="clr-namespace:Termin.Wpf;assembly=Termin.Wpf">
-    <Grid Background="Black">
-        <terminWpf:Tgfx2D3D11ImageHost x:Name="RenderHost"/>
-    </Grid>
+    <terminWpf:RetainedScene2DHost x:Name="SceneHost" Background="Black"
+                                   ContinuousRendering="False"/>
 </UserControl>
-

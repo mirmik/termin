@@ -7,7 +7,6 @@
 
 #include <termin_visual_scene/builtin_items2d.hpp>
 
-#include "tcplot/engine2d.hpp"
 #include "tcplot/plot_annotations2d.hpp"
 
 namespace {
@@ -231,6 +230,13 @@ int main() {
     marker.text = "peak 10.0";
     const auto marker_handle = marker_layer.create_data_marker(marker);
     assert(marker_handle);
+    {
+        PlotAnnotationLayer2D other_layer;
+        assert(other_layer.create_data_marker(marker));
+        assert(!other_layer.update_data_marker(*marker_handle, marker));
+        assert(!other_layer.data_marker_snapshot(*marker_handle));
+        assert(!other_layer.destroy(*marker_handle));
+    }
     marker_layer.project(frame, data);
     const auto marker_annotation = marker_layer.snapshot(*marker_handle);
     assert(marker_annotation);
@@ -325,15 +331,30 @@ int main() {
     while (marker_layer.take_action()) {
         // Discard earlier activation events before checking close ordering.
     }
-    assert(marker_layer.set_action_handler(*marker_handle, [&](const PlotAnnotationAction2D& action) {
-        if (action.action == "close")
-            ++close_actions;
-    }));
     const auto close_projection = marker_layer.snapshot(*marker_handle)->projected_graphics[4];
     const auto& close_scene = marker_layer.visual_scene(close_projection.phase, close_projection.clip);
     const auto& close_item =
         projected_item(marker_layer, close_projection.phase, close_projection.clip, close_projection.item);
     const termin::Vec2f close_point = close_scene.world_transform(close_item).transform_point({0.0f, 0.0f});
+    assert(marker_layer.set_action_handler(
+        *marker_handle, [](const PlotAnnotationAction2D&) { throw std::runtime_error("marker callback failed"); }));
+    assert(marker_layer.route_pointer(panned, {24, PointerEventKind2D::Down, close_point, 0}));
+    bool callback_failed = false;
+    try {
+        marker_layer.route_pointer(panned, {24, PointerEventKind2D::Up, close_point, 0});
+    } catch (const std::runtime_error& error) {
+        callback_failed = std::string(error.what()) == "marker callback failed";
+    }
+    assert(callback_failed);
+    assert(marker_layer.data_marker_snapshot(*marker_handle));
+    const auto failed_close_action = marker_layer.take_action();
+    assert(failed_close_action && failed_close_action->annotation == *marker_handle &&
+           failed_close_action->action == "close");
+
+    assert(marker_layer.set_action_handler(*marker_handle, [&](const PlotAnnotationAction2D& action) {
+        if (action.action == "close")
+            ++close_actions;
+    }));
     assert(marker_layer.route_pointer(panned, {22, PointerEventKind2D::Down, close_point, 0}));
     assert(marker_layer.route_pointer(panned, {22, PointerEventKind2D::Up, close_point, 0}));
     assert(close_actions == 1);
@@ -343,6 +364,7 @@ int main() {
     assert(close_action->action == "close");
     assert(!marker_layer.take_action());
     assert(!marker_layer.data_marker_snapshot(*marker_handle));
+    assert(!marker_layer.destroy(*marker_handle));
 
     PlotDataMarker2D clipped_marker;
     clipped_marker.data_position = {-0.2, 10.0};
@@ -382,41 +404,6 @@ int main() {
     invalid_marker.callout_width = 100.0f;
     invalid_marker.text_color.r = std::numeric_limits<float>::infinity();
     assert(!marker_layer.create_data_marker(invalid_marker));
-
-    // Engine-level routing distinguishes annotation consumption from plot
-    // navigation so multi-panel hosts do not broadcast a fake zoom.
-    PlotEngine2D engine;
-    engine.set_viewport(0.0f, 0.0f, 400.0f, 300.0f);
-    engine.set_view(0.0, 10.0, 0.0, 10.0);
-    const auto engine_annotation = engine.annotations().create({
-        DataAnchor2D{5.0, 5.0},
-        target_visual(),
-    });
-    assert(engine_annotation);
-    const PlotFrame2D engine_frame = engine.plot_frame();
-    engine.annotations().project(engine_frame, engine.data);
-    const PlotPixelPoint2D engine_anchor = projected(engine.annotations(), *engine_annotation);
-    double x0, x1, y0, y1;
-    engine.get_view(x0, x1, y0, y1);
-    assert(engine.on_mouse_wheel_result(engine_anchor.x, engine_anchor.y, 1.0f) == PlotInputResult2D::Annotation);
-    double ax0, ax1, ay0, ay1;
-    engine.get_view(ax0, ax1, ay0, ay1);
-    assert(near(x0, ax0) && near(x1, ax1));
-    assert(near(y0, ay0) && near(y1, ay1));
-
-    const PlotPixelPoint2D empty = engine_frame.data_to_pixel(8.0, 8.0);
-    assert(engine.on_mouse_wheel_result(empty.x, empty.y, 1.0f) == PlotInputResult2D::Navigation);
-    engine.get_view(ax0, ax1, ay0, ay1);
-    assert(!near(x0, ax0) && !near(y0, ay0));
-
-    // A navigation capture keeps ownership while crossing an annotation;
-    // hover alone must not interrupt middle-button panning.
-    const double pan_x0 = ax0;
-    assert(engine.on_mouse_down(empty.x, empty.y, tcbase::MouseButton::MIDDLE));
-    engine.on_mouse_move(engine_anchor.x, engine_anchor.y);
-    engine.on_mouse_up(engine_anchor.x, engine_anchor.y, tcbase::MouseButton::MIDDLE);
-    engine.get_view(ax0, ax1, ay0, ay1);
-    assert(!near(pan_x0, ax0));
 
     return 0;
 }

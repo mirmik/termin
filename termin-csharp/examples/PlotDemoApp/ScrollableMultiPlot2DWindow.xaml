@@ -15,9 +15,7 @@
         <local:MultiPlot2DControl x:Name="Plot"
                                   Grid.Column="0"
                                   PanelCount="20"
-                                  PanelHeight="160"
-                                  MsaaSamples="4"
-                                  FontPath="C:\Windows\Fonts\segoeui.ttf"/>
+                                  PanelHeight="160"/>
 
         <ScrollBar x:Name="Scroll"
                    Grid.Column="1"

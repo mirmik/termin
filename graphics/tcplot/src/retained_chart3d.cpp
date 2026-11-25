@@ -500,9 +500,12 @@ namespace {
             if (count < 2) {
                 throw std::invalid_argument("retained line requires at least two points");
             }
-            slot->x = copy_values(x, count);
-            slot->y = copy_values(y, count);
-            slot->z = copy_values(z, count);
+            std::vector<double> copied_x = copy_values(x, count);
+            std::vector<double> copied_y = copy_values(y, count);
+            std::vector<double> copied_z = copy_values(z, count);
+            slot->x = std::move(copied_x);
+            slot->y = std::move(copied_y);
+            slot->z = std::move(copied_z);
             ++slot->geometry_revision;
             ++slot->render_revision;
             slot->gpu_revision = 0;

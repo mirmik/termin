@@ -2,18 +2,18 @@ using System;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
+using Termin.Native;
 
 namespace PlotDemoApp;
 
-// Smoke test for PlotView2DMulti + engine2d persistent VBO path.
 // Three stacked panels share one X axis; each panel is fed by a
 // different signal that keeps appending in real time. Autoscroll
 // keeps the last 10 seconds on screen.
 public partial class MultiPlot2DWindow : Window
 {
-    private int _sinIdx;
-    private int _cosIdx;
-    private int _noiseIdx;
+    private ChartLineSeries2D _sin = null!;
+    private ChartLineSeries2D _cos = null!;
+    private ChartLineSeries2D _noise = null!;
 
     private readonly DispatcherTimer _timer;
     private readonly Stopwatch _clock = new();
@@ -39,26 +39,28 @@ public partial class MultiPlot2DWindow : Window
 
     private void OnNativeReady(object? sender, EventArgs e)
     {
-        Plot.SetPanelTitle(0, "sin(t)");
-        Plot.SetPanelTitle(1, "cos(0.7·t)");
-        Plot.SetPanelTitle(2, "noise");
-        Plot.SetPanelYLabel(0, "amplitude");
-        Plot.SetPanelYLabel(1, "amplitude");
-        Plot.SetPanelYLabel(2, "value");
-        Plot.SetXLabel("t, s");
+        Chart2D sinChart = Plot.Chart.Panels[0].Chart;
+        Chart2D cosChart = Plot.Chart.Panels[1].Chart;
+        Chart2D noiseChart = Plot.Chart.Panels[2].Chart;
+        sinChart.TitleText = "sin(t)";
+        cosChart.TitleText = "cos(0.7·t)";
+        noiseChart.TitleText = "noise";
+        sinChart.YAxisText = "amplitude";
+        cosChart.YAxisText = "amplitude";
+        noiseChart.YAxisText = "value";
+        noiseChart.XAxisText = "t, s";
 
-        // Seed each series with one point; AppendToLine grows them live.
-        _sinIdx   = Plot.Plot(panel: 0, x: new[] { 0.0 }, y: new[] { 0.0 },
-                              r: 0.3f, g: 0.8f, b: 1.0f, a: 1.0f,
-                              thickness: 1.5, label: "sin");
-        _cosIdx   = Plot.Plot(panel: 1, x: new[] { 0.0 }, y: new[] { 1.0 },
-                              r: 1.0f, g: 0.6f, b: 0.2f, a: 1.0f,
-                              thickness: 1.5, label: "cos");
-        _noiseIdx = Plot.Plot(panel: 2, x: new[] { 0.0 }, y: new[] { 0.0 },
-                              r: 0.9f, g: 0.9f, b: 0.3f, a: 1.0f,
-                              thickness: 1.5, label: "noise");
-
-        Plot.SetAutoscroll(true, 10.0);
+        var seedX = new[] { 0.0 };
+        var zero = new[] { 0.0 };
+        _sin = sinChart.AddLineSeries("sin", seedX, zero,
+            style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(0.3f, 0.8f, 1)),
+            showInLegend: false);
+        _cos = cosChart.AddLineSeries("cos", seedX, new[] { 1.0 },
+            style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(1, 0.6f, 0.2f)),
+            showInLegend: false);
+        _noise = noiseChart.AddLineSeries("noise", seedX, zero,
+            style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(0.9f, 0.9f, 0.3f)),
+            showInLegend: false);
 
         _clock.Start();
         _timer.Start();
@@ -84,8 +86,9 @@ public partial class MultiPlot2DWindow : Window
             noiseY[i] = (_rng.NextDouble() - 0.5) * 2.0;
         }
 
-        Plot.AppendToLine(panel: 0, series: _sinIdx,   x: xs, y: sinY);
-        Plot.AppendToLine(panel: 1, series: _cosIdx,   x: xs, y: cosY);
-        Plot.AppendToLine(panel: 2, series: _noiseIdx, x: xs, y: noiseY);
+        _sin.Append(xs, sinY);
+        _cos.Append(xs, cosY);
+        _noise.Append(xs, noiseY);
+        Plot.UpdateAfterAppend(xs[^1]);
     }
 }

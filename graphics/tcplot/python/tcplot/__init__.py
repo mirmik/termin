@@ -1,4 +1,4 @@
-"""Toolkit-neutral plotting engines and retained chart primitives.
+"""Toolkit-neutral retained chart primitives.
 
 All rendering, camera math and mesh building lives in the native ``tcplot``
 library bound through :mod:`termin.plot._plot_native`. Ready-made Termin UI
@@ -6,6 +6,7 @@ widgets are provided by the optional :mod:`termin.plot.gui_native` package; the
 core package deliberately does not import a UI toolkit.
 """
 from termin_nanobind.runtime import preload_sdk_libs
+from termin.base._base_native import MouseButton
 
 # Bring our native dependencies into the Windows DLL search path
 # before importing the extension module. tcplot depends transitively
@@ -24,18 +25,14 @@ from termin.plot._plot_native import (
     OrbitCamera,
     CameraProjection,
     OrbitCameraState3D,
-    PickResult3D,
     PlotAnnotationHandle,
     PlotAnnotationAction2D,
     PlotDataMarker2D,
     PlotDataMarkerSnapshot2D,
-    PlotEngine2D,
-    PlotEngine3D,
     RetainedChart3D,
     PlotAxis3D,
     PlotItem3DHandle,
     SurfaceColorMap,
-    MouseButton,
 )
 
 # DEFAULT_COLORS retained for legacy callers; materialise once from the
@@ -44,8 +41,6 @@ from termin.plot._plot_native import (
 DEFAULT_COLORS = list(default_colors())
 
 __all__ = [
-    "PlotEngine2D",
-    "PlotEngine3D",
     "RetainedChart3D",
     "PlotAxis3D",
     "PlotItem3DHandle",
@@ -56,7 +51,6 @@ __all__ = [
     "OrbitCamera",
     "CameraProjection",
     "OrbitCameraState3D",
-    "PickResult3D",
     "PlotAnnotationHandle",
     "PlotAnnotationAction2D",
     "PlotDataMarker2D",

@@ -142,13 +142,11 @@ SONAME for direct graphics calls. This lets a project reference or published
 application share the graphics domain loaded by the SWIG bridge even when
 MSBuild copies the native library aliases into separate files.
 
-Both `full` and `plot-d3d11` profiles expose `PlotView2D` data markers.
-`create_data_marker`, `update_data_marker`, `data_marker_snapshot`,
-`destroy_annotation` and `take_annotation_action` exchange value-only
-`PlotAnnotationHandle`, detached snapshot and polling-action objects. Managed
-handle disposal releases only the SWIG value copy; the native view remains the
-sole annotation owner. Cross-view and stale handles fail safely through the
-complete layer/index/generation identity.
+Both `full` and `plot-d3d11` expose `Chart2D`, `MultiChart2D`, and
+`RetainedChart3D`. For 2D annotations, attach graphic items to
+`Chart2D.Annotations` and use the chart's projection and scene pointer events.
+See [2D chart customization](tcplot-customization.md) and
+[3D chart customization](tcplot-3d-customization.md).
 
 `Termin.Wpf` is Windows-only and multitargets `netcoreapp3.1` plus `net8.0-windows` through the WindowsDesktop SDK. The Windows SDK drop writes framework-specific managed assemblies under `sdk/csharp/lib/<tfm>/`; flat `sdk/csharp/lib/*.dll` copies are kept for legacy consumers and use the `netcoreapp3.1` WPF assembly. The Linux `build-sdk-csharp.sh` stage builds and packages `Termin.Native` plus Linux native `.so` runtime artifacts, but intentionally does not build `Termin.Wpf`.
 

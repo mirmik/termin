@@ -192,17 +192,19 @@ chart-owned chrome renderer; public handles и C# API при этом не из�
 - [ ] Исключить полный O(all points) scan там, где нужен spatial index.
 - [ ] Маршрутизировать WPF/termin-gui input через общий controller contract.
 
-## Этап 5. Compatibility cutover
+## Этап 5. Переход на RetainedChart3D
 
-- [ ] Перевести `PlotView3D` на `RetainedChart3D` compatibility facade.
+В #1352 принято прямое удаление переходного API.
+
 - [x] Перевести Python `Plot3D` и `tcplot/examples/demo_3d_*` на detached
   `RetainedChart3D`: данные принимаются до появления GPU, а canonical
   `GraphicsHost` и font atlas присоединяются лениво при первом render.
 - [x] Добавить отдельный C# `RetainedChart3DWpfExample`.
-- [ ] Перевести оставшиеся C# `PlotDemoApp` 3D examples вместе с legacy
-  `PlotView3D` facade.
-- [ ] Сопоставить surface colormap, grid, shading, marker and axis scaling.
-- [ ] Удалить legacy global dirty mesh state and index-based surface mutation.
+- [x] Перевести оставшиеся 3D-примеры `PlotDemoApp` на `RetainedChart3D` и
+  `RetainedChart3DHost`, включая линию траектории, поверхность и точки.
+- [x] Удалить `PlotView3D`, `PlotEngine3D`, их биндинги и index-based mutation.
+- Удалён выбор ближайшей точки в демо через старый API. Retained picking
+  отслеживается в #1351.
 
 ## Проверка
 

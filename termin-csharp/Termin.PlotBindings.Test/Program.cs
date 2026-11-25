@@ -14,7 +14,7 @@ static void TestVisualTextDescriptorLayout()
         throw new InvalidOperationException("Visual text descriptor does not match the native ABI.");
 }
 
-static void TestPlotViewsAfterShaderArtifactChange(GpuHost host)
+static void TestRetainedChartsAfterShaderArtifactChange(GpuHost host)
 {
     const string artifactRootVariable = "TERMIN_SHADER_ARTIFACT_ROOT";
     ShaderRuntime.ConfigureFromAssemblyDirectory();
@@ -24,67 +24,97 @@ static void TestPlotViewsAfterShaderArtifactChange(GpuHost host)
     double[] y = { 0, 1, -1, 0 };
     double[] z = { 0, 0.5, 1, 2 };
 
-    void Populate2D(PlotView2D view)
+    void Populate2D(Chart2D chart)
     {
-        view.plot(x, y, (uint)x.Length, 0.2f, 0.6f, 1, 1, 2, "solid");
-        view.plot(x, z, (uint)x.Length, 1, 0.5f, 0.2f, 1, 2, "dashed");
-        if (!view.set_line_style(1, LineStyle.Dash))
-            throw new InvalidOperationException("Failed to configure the dashed regression series.");
-        view.scatter(x, y, (uint)x.Length, 0.2f, 1, 0.2f, 1, 7, "scatter");
-        view.fit();
+        chart.AddLine(x, y,
+            style: new PlotLineSeriesStyle2D(new PlotSrgbColor2D(0.2f, 0.6f, 1), 2));
+        chart.AddLine(x, z,
+            style: new PlotLineSeriesStyle2D(
+                new PlotSrgbColor2D(1, 0.5f, 0.2f), 2, PlotLineStyle2D.Dash));
+        chart.AddScatter(x, y,
+            new PlotScatterSeriesStyle2D(new PlotSrgbColor2D(0.2f, 1, 0.2f), 7));
+        chart.Fit();
     }
 
-    void Populate3D(PlotView3D view)
+    void Populate3D(RetainedChart3D chart)
     {
-        view.plot(x, y, z, (uint)x.Length, 0.2f, 0.6f, 1, 1, 2, "line");
-        view.scatter(x, y, z, (uint)x.Length, 0.2f, 1, 0.2f, 1, 7, "scatter");
-        view.surface(new[] { 0.0, 1.0, 0.0, 1.0 },
+        chart.Scene.AddLine(x, y, z, new LineItemStyle3D(0.2f, 0.6f, 1, thickness: 2));
+        chart.Scene.AddScatter(x, y, z, new ScatterItemStyle3D(0.2f, 1, 0.2f, size: 7));
+        chart.Scene.AddSurface(new[] { 0.0, 1.0, 0.0, 1.0 },
             new[] { 0.0, 0.0, 1.0, 1.0 }, z,
-            2, 2, 0.2f, 0.5f, 0.8f, 1, false, "surface before first framebuffer");
-        view.fit_camera();
+            2, 2, new SurfaceItemStyle3D(0.2f, 0.5f, 0.8f, colorMap: PlotColorMap3D.Solid));
+        chart.Camera.Fit();
     }
 
-    using var first = new PlotView2D(host);
-    using var second = new PlotView2D(host);
-    using var original3D = new PlotView3D(host);
+    var range = new PlotRange2D(0, 3, -1, 2);
+    using var first = new Chart2D(host, 640, 480, range);
+    using var second = new Chart2D(host, 640, 480, range);
+    using var firstRenderer = new RetainedSceneRenderer2D(host, first.Scene);
+    using var secondRenderer = new RetainedSceneRenderer2D(host, second.Scene);
+    using var original3D = new RetainedChart3D(host);
     Populate2D(first);
     Populate2D(second);
     Populate3D(original3D);
-    if (original3D.render_to_texture_handle_id(1, 1) == 0)
-        throw new InvalidOperationException("3D surface bootstrap at 1x1 failed.");
-    if (first.render_to_texture_handle_id(640, 480) == 0 ||
-        second.render_to_texture_handle_id(640, 480) == 0 ||
-        original3D.render_to_texture_handle_id(640, 480) == 0)
-        throw new InvalidOperationException("Initial shared-device plot render failed.");
+    original3D.RenderToTextureHandleId(1, 1);
+    firstRenderer.RenderToTextureHandleId(640, 480);
+    secondRenderer.RenderToTextureHandleId(640, 480);
+    original3D.RenderToTextureHandleId(640, 480);
 
     try
     {
         // Different resolver setting, same installed artifacts. A newly
-        // rendered view retires the device's old cached shader handles before
+        // rendered chart retires the device's old cached shader handles before
         // the existing renderers get their next frame.
         Environment.SetEnvironmentVariable(artifactRootVariable,
             originalRoot + Path.DirectorySeparatorChar + ".");
         ShaderRuntime.ConfigureFromAssemblyDirectory();
-        using var fresh = new PlotView2D(host);
-        using var fresh3D = new PlotView3D(host);
+        using var fresh = new Chart2D(host, 640, 480, range);
+        using var freshRenderer = new RetainedSceneRenderer2D(host, fresh.Scene);
+        using var fresh3D = new RetainedChart3D(host);
         Populate2D(fresh);
         Populate3D(fresh3D);
-        if (fresh3D.render_to_texture_handle_id(2, 2) == 0)
-            throw new InvalidOperationException("3D surface bootstrap at 2x2 failed.");
-        if (fresh.render_to_texture_handle_id(640, 480) == 0 ||
-            fresh3D.render_to_texture_handle_id(640, 480) == 0)
-            throw new InvalidOperationException("Fresh plot render after shader reconfiguration failed.");
-        if (first.render_to_texture_handle_id(640, 480) == 0 ||
-            second.render_to_texture_handle_id(640, 480) == 0 ||
-            original3D.render_to_texture_handle_id(640, 480) == 0)
-            throw new InvalidOperationException("Existing plot render after shader reconfiguration failed.");
+        fresh3D.RenderToTextureHandleId(2, 2);
+        freshRenderer.RenderToTextureHandleId(640, 480);
+        fresh3D.RenderToTextureHandleId(640, 480);
+        firstRenderer.RenderToTextureHandleId(640, 480);
+        secondRenderer.RenderToTextureHandleId(640, 480);
+        original3D.RenderToTextureHandleId(640, 480);
     }
     finally
     {
         Environment.SetEnvironmentVariable(artifactRootVariable, originalRoot);
         ShaderRuntime.ConfigureFromAssemblyDirectory();
     }
-    Console.WriteLine("PLOT_SHADER_RECONFIGURE_OK existing 2D solid/dashed/scatter and 3D surface plots rendered after tiny bootstrap, resize and shared-device invalidation");
+    Console.WriteLine("PLOT_SHADER_RECONFIGURE_OK existing 2D and 3D charts rendered after tiny bootstrap, resize and shared-device invalidation");
+}
+
+static void TestRetainedFirstFrames(GpuHost host)
+{
+    var range = new PlotRange2D(0, 2, 0, 1);
+    using var first = new Chart2D(host, 1, 1, range);
+    using var second = new Chart2D(host, 1, 1, range);
+    using var third = new Chart2D(host, 1, 1, range);
+    foreach (Chart2D chart in new[] { first, second, third })
+    {
+        chart.AddLine(new[] { 0.0, 1.0, 2.0 }, new[] { 0.0, 1.0, 0.0 });
+        chart.TitleText = "S_C: I / Q / magnitude";
+        chart.XAxisText = "t, s";
+        chart.YAxisText = "model units";
+        chart.Fit();
+    }
+
+    using var firstRenderer = new RetainedSceneRenderer2D(host, first.Scene) { MsaaSamples = 4 };
+    using var secondRenderer = new RetainedSceneRenderer2D(host, second.Scene) { MsaaSamples = 4 };
+    using var thirdRenderer = new RetainedSceneRenderer2D(host, third.Scene) { MsaaSamples = 4 };
+    var renderers = new[] { firstRenderer, secondRenderer, thirdRenderer };
+    foreach (RetainedSceneRenderer2D renderer in renderers)
+        renderer.RenderToTextureHandleId(1, 1);
+
+    first.Resize(640, 480);
+    second.Resize(640, 480);
+    third.Resize(640, 480);
+    foreach (RetainedSceneRenderer2D renderer in renderers)
+        renderer.RenderToTextureHandleId(640, 480);
 }
 
 static void TestRetainedVisualSceneFactories()
@@ -489,6 +519,45 @@ static void TestManagedChartComposition(GpuHost host)
             "Managed series removal did not destroy its native item.");
 }
 
+static void TestRetainedChartAnnotations(GpuHost host)
+{
+    var range = new PlotRange2D(0, 10, 0, 10);
+    using var chart = new Chart2D(host, 400, 300, range);
+    using var otherChart = new Chart2D(host, 400, 300, range);
+    using var renderer = new RetainedSceneRenderer2D(host, chart.Scene);
+    const string font = "ui://default-font";
+    var color = new VisualSrgbColor(1, 1, 1);
+    var anchor = chart.Projection.DataToVisual(new PlotPoint2D(5, 5));
+    var annotation = TextItemRef2D.Create(
+        chart.Scene, "managed annotation", font,
+        new VisualVec2f(anchor.X, anchor.Y), 12, color,
+        new VisualBounds2f(anchor.X, anchor.Y, anchor.X + 120, anchor.Y + 14),
+        parent: chart.Annotations);
+
+    if (!annotation.IsValid || annotation.Parent?.Handle != chart.Annotations.Handle ||
+        annotation.SetParent(otherChart.Annotations))
+        throw new InvalidOperationException("Chart annotation ownership is invalid.");
+    if (!chart.Interaction.Wheel(anchor.X, anchor.Y, 1) ||
+        chart.Range.XMax - chart.Range.XMin >= range.XMax - range.XMin)
+        throw new InvalidOperationException("Retained chart did not zoom at the annotation.");
+
+    var next = chart.Projection.DataToVisual(new PlotPoint2D(4, 6));
+    var origin = new VisualVec2f(next.X, next.Y);
+    var bounds = new VisualBounds2f(next.X, next.Y, next.X + 60, next.Y + 14);
+    annotation.Set("updated", font, origin, 12, color, bounds);
+    if (!annotation.TryGetLocalBounds(out var actualBounds) ||
+        actualBounds.X0 != bounds.X0 || actualBounds.Y0 != bounds.Y0 ||
+        actualBounds.X1 != bounds.X1 || actualBounds.Y1 != bounds.Y1)
+        throw new InvalidOperationException("Retained chart annotation did not update.");
+    renderer.RenderToTextureHandleId(400, 300);
+
+    if (!annotation.Destroy() || annotation.IsValid || chart.Annotations.ChildCount != 0)
+        throw new InvalidOperationException("Destroyed annotation remained in the chart.");
+    RequireThrows<InvalidOperationException>(
+        () => annotation.Set("stale", font, origin, 12, color, bounds),
+        "A stale chart annotation accepted an update.");
+}
+
 static void RequireThrows<TException>(System.Action action, string message)
     where TException : Exception
 {
@@ -501,6 +570,55 @@ static void RequireThrows<TException>(System.Action action, string message)
         return;
     }
     throw new InvalidOperationException(message);
+}
+
+static void TestRetainedLine3D(GpuHost host)
+{
+    using var chart = new RetainedChart3D(host);
+    double[] x = { 0, 1, 2 };
+    double[] y = { 0, 1, 0 };
+    double[] z = { 0, 1, 2 };
+    double[] invalidZ = { 0, 1, double.NaN };
+    var line = chart.Scene.AddLine(x, y, z);
+    var initial = line.Snapshot;
+    if (initial.Kind != PlotItemKind3D.Line || line.Style.Thickness != 1.5f)
+        throw new InvalidOperationException("Retained 3D line defaults are incorrect.");
+
+    var style = new LineItemStyle3D(0.15f, 0.55f, 0.8f, 0.9f, 2.5f);
+    line.Style = style;
+    line.SetData(x, y, new[] { 1.0, 0.0, 1.0 });
+    var updated = line.Snapshot;
+    var actualStyle = line.Style;
+    if (actualStyle.ColorR != style.ColorR || actualStyle.ColorG != style.ColorG ||
+        actualStyle.ColorB != style.ColorB || actualStyle.ColorA != style.ColorA ||
+        actualStyle.Thickness != style.Thickness ||
+        updated.GeometryRevision <= initial.GeometryRevision ||
+        updated.StyleRevision <= initial.StyleRevision)
+        throw new InvalidOperationException("Retained 3D line updates did not reach the native item.");
+
+    chart.Camera.Fit();
+    chart.RenderToTextureHandleId(480, 360);
+    var rendered = line.Snapshot;
+    if (rendered.GpuRevision == 0)
+        throw new InvalidOperationException("Retained 3D line did not render.");
+
+    chart.Camera.Fit();
+    var camera = chart.Camera.State;
+    nuint itemCount = chart.Scene.Count;
+    RequireThrows<InvalidOperationException>(
+        () => chart.Scene.AddLine(x, y, invalidZ),
+        "A retained 3D line accepted non-finite coordinates.");
+    if (chart.Scene.Count != itemCount || !chart.Camera.State.Equals(camera))
+        throw new InvalidOperationException("Rejecting a new line changed the chart.");
+    RequireThrows<InvalidOperationException>(
+        () => line.SetData(new[] { 100.0, 110.0, 120.0 }, y, invalidZ),
+        "A retained 3D line accepted non-finite coordinates on update.");
+    chart.Camera.Fit();
+    if (!line.Snapshot.Equals(rendered) || !chart.Camera.State.Equals(camera))
+        throw new InvalidOperationException("Rejecting a line update changed the chart.");
+
+    if (!line.Destroy() || line.IsValid)
+        throw new InvalidOperationException("Retained 3D line render or destruction failed.");
 }
 
 static void TestSphericalChart(GpuHost host)
@@ -882,20 +1000,6 @@ static void TestChart3DCamera(GpuHost host)
             throw new InvalidOperationException("Reset must restore perspective and request rendering.");
     }
 
-    using var legacy = new PlotView3D(host);
-    legacy.scatter(new[] { -1.0, 1.0 }, new[] { -2.0, 2.0 }, new[] { -3.0, 3.0 }, 2,
-        1, 0.5f, 0.2f, 1, 5, "camera bindings");
-    using var camera = legacy.camera();
-    camera.projection_type = CameraProjection.Orthographic;
-    camera.ortho_size = 8;
-    if (camera.projection_type != CameraProjection.Orthographic || camera.ortho_size != 8)
-        throw new InvalidOperationException("Legacy orthographic camera fields did not round trip.");
-    camera.set_isometric();
-    legacy.fit_camera();
-    if (camera.projection_type != CameraProjection.Orthographic ||
-        Math.Abs(camera.elevation - Math.Asin(1 / Math.Sqrt(3))) > 1e-12 ||
-        legacy.render_to_texture_handle_id(480, 360) == 0)
-        throw new InvalidOperationException("Legacy isometric camera binding failed.");
     Console.WriteLine("CHART3D_CAMERA_OK ABI, round-trip, isometric preset, zoom, fit, reset and render invalidation");
 }
 
@@ -903,21 +1007,6 @@ TestVisualTextDescriptorLayout();
 TestRetainedVisualSceneFactories();
 TestRetainedPlotItems();
 TestRetainedHeatmapItems();
-
-// This test is deliberately GPU-independent. It verifies the detached values
-// at runtime and compiles every PlotView2D annotation operation used by a
-// managed host. Native interaction semantics are covered by tcplot tests.
-using var stale = new PlotAnnotationHandle();
-if (stale.valid())
-    throw new InvalidOperationException("A default annotation handle is valid");
-
-using var snapshot = new PlotDataMarkerBindingSnapshot2D();
-if (snapshot.available)
-    throw new InvalidOperationException("A default marker snapshot is available");
-
-using var action = new PlotAnnotationActionPoll2D();
-if (action.available)
-    throw new InvalidOperationException("A default annotation action is available");
 
 var shareDir = Environment.GetEnvironmentVariable(
     "TERMIN_CSHARP_SDK_SHARE_DIR");
@@ -928,86 +1017,17 @@ var fontPath = Path.Combine(shareDir, "fonts", "DroidSans.ttf");
 if (!File.Exists(fontPath))
     throw new FileNotFoundException("SDK test font is missing", fontPath);
 
-if (!OperatingSystem.IsWindows())
-{
-    using var host = new GpuHost(fontPath, BackendType.Vulkan);
-    TestManagedChartComposition(host);
-    TestSphericalChart(host);
-    TestAxisDisplaySettings(host);
-    TestChart3DBackgroundColor(host);
-    TestChart3DCamera(host);
-}
-else
-{
-    using var host = new GpuHost(fontPath, BackendType.D3D11);
-    TestPlotViewsAfterShaderArtifactChange(host);
-    TestManagedChartComposition(host);
-    TestSphericalChart(host);
-    TestAxisDisplaySettings(host);
-    TestChart3DBackgroundColor(host);
-    TestChart3DCamera(host);
-    using (var firstFrameView = new PlotView2D(host))
-    using (var secondFrameView = new PlotView2D(host))
-    using (var thirdFrameView = new PlotView2D(host))
-    {
-        PlotView2D[] views = { firstFrameView, secondFrameView, thirdFrameView };
-        double[] x = { 0.0, 1.0, 2.0 };
-        double[] y = { 0.0, 1.0, 0.0 };
-        foreach (PlotView2D frameView in views)
-        {
-            frameView.set_msaa_samples(4);
-            frameView.clear();
-            frameView.plot(x, y, (uint)x.Length, 1f, 0f, 0f, 1f, 1.5, "first frame");
-            frameView.set_title("S_C: I / Q / magnitude");
-            frameView.set_x_label("t, s");
-            frameView.set_y_label("model units");
-            frameView.fit();
-        }
-        foreach (PlotView2D frameView in views)
-        {
-            if (frameView.render_to_texture_handle_id(1, 1) == 0)
-                throw new InvalidOperationException("PlotView2D failed to render first-frame 1x1 texture.");
-        }
-        foreach (PlotView2D frameView in views)
-        {
-            if (frameView.render_to_texture_handle_id(640, 480) == 0)
-                throw new InvalidOperationException("PlotView2D failed to render resized texture.");
-        }
-    }
-    using var view = new PlotView2D(host);
-    using var otherView = new PlotView2D(host);
-    view.set_view(0.0, 10.0, 0.0, 10.0);
-
-    using var marker = view.create_data_marker(5.0, 5.0, "managed marker");
-    if (!marker.valid())
-        throw new InvalidOperationException("Marker creation failed");
-    if (!view.update_data_marker(marker, 5.0, 5.0, "updated"))
-        throw new InvalidOperationException("Marker update failed");
-    using (var current = view.data_marker_snapshot(marker))
-    {
-        if (!current.available || current.text != "updated")
-            throw new InvalidOperationException("Marker snapshot is incorrect");
-    }
-    if (otherView.update_data_marker(marker, 1.0, 1.0, "foreign"))
-        throw new InvalidOperationException("Cross-view handle was accepted");
-
-    _ = view.render_to_texture_id(400, 300);
-    if (!view.on_mouse_down(230.5f, 146.0f, 0))
-        throw new InvalidOperationException("Marker did not consume pointer down");
-    view.on_mouse_up(230.5f, 146.0f, 0);
-    using (var activated = view.take_annotation_action())
-    {
-        if (!activated.available || activated.action != "activate")
-            throw new InvalidOperationException("Marker action was not delivered");
-    }
-
-    if (!view.destroy_annotation(marker))
-        throw new InvalidOperationException("Marker destruction failed");
-    if (view.update_data_marker(marker, 1.0, 1.0, "stale"))
-        throw new InvalidOperationException("Stale marker update succeeded");
-    using var staleSnapshot = view.data_marker_snapshot(marker);
-    if (staleSnapshot.available || view.destroy_annotation(marker))
-        throw new InvalidOperationException("Stale marker handle was accepted");
-}
+using var host = new GpuHost(fontPath,
+    OperatingSystem.IsWindows() ? BackendType.D3D11 : BackendType.Vulkan);
+if (OperatingSystem.IsWindows())
+    TestRetainedChartsAfterShaderArtifactChange(host);
+TestManagedChartComposition(host);
+TestRetainedChartAnnotations(host);
+TestRetainedFirstFrames(host);
+TestRetainedLine3D(host);
+TestSphericalChart(host);
+TestAxisDisplaySettings(host);
+TestChart3DBackgroundColor(host);
+TestChart3DCamera(host);
 
 Console.WriteLine("Retained plots, Chart3D display settings and background, spherical Chart3D and annotation bindings passed.");

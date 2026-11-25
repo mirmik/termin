@@ -44,8 +44,7 @@ public sealed partial class Heatmap2DWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildControls();
 
-        string font = Plot3DControl.FindSystemFont()
-            ?? throw new InvalidOperationException("No system TTF font for the heatmap demo.");
+        string font = App.FindSystemFont();
         _gpu = Tgfx2Host.Acquire(font, BackendType.D3D11);
         try
         {

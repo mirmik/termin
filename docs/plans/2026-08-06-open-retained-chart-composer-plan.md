@@ -428,13 +428,14 @@ Alliance.
 
 ### Этап 8. Legacy facade cutover
 
-- [ ] Перевести `PlotView2D` на `RetainedChart2D` как временный compatibility
-  facade.
-- [ ] Перевести `PlotView2DMulti` на `RetainedMultiChart2D`.
-- [ ] Убедиться, что facade не создаёт второй scene/layout/renderer.
-- [ ] Мигрировать first-party examples и tests на новый public model.
-- [ ] После migration window удалить hidden-layout setter surface,
-  `PlotEngine2D` composition ownership и старые facade types.
+В #1104 принято прямое удаление переходного API.
+
+- [x] Перевести WPF-примеры и тесты на `Chart2D`, `MultiChart2D` и публичную
+  retained scene.
+- [x] Удалить `PlotEngine2D`, `PlotView2D`, `PlotView2DMulti` и связанные
+  биндинги и pipeline hooks.
+- [x] Сохранить общие projection, layout, series и annotation primitives,
+  используемые retained charts и виджетом `termin.gui.Plot2D`.
 
 ### Этап 9. Alliance reference migration
 

@@ -24,6 +24,7 @@ public enum PlotItemKind3D : uint
     Surface = 1,
     Scatter = 2,
     Grid = 3,
+    Line = 4,
 }
 
 public enum PlotColorMap3D : uint
@@ -188,6 +189,32 @@ public readonly struct ScatterItemStyle3D
         ColorB = colorB;
         ColorA = colorA;
         Size = size;
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public readonly struct LineItemStyle3D
+{
+    public LineItemStyle3D() : this(colorR: 0.12f) {}
+
+    public readonly float ColorR;
+    public readonly float ColorG;
+    public readonly float ColorB;
+    public readonly float ColorA;
+    public readonly float Thickness;
+
+    public LineItemStyle3D(
+        float colorR = 0.12f,
+        float colorG = 0.47f,
+        float colorB = 0.71f,
+        float colorA = 1,
+        float thickness = 1.5f)
+    {
+        ColorR = colorR;
+        ColorG = colorG;
+        ColorB = colorB;
+        ColorA = colorA;
+        Thickness = thickness;
     }
 }
 
@@ -530,6 +557,44 @@ public sealed class ScatterItemRef3D : PlotItemRef3D
     }
 }
 
+public sealed class LineItemRef3D : PlotItemRef3D
+{
+    internal LineItemRef3D(
+        RetainedChart3D chart,
+        PlotItemHandle3D handle) : base(chart, handle) {}
+
+    public LineItemStyle3D Style
+    {
+        get
+        {
+            ThrowIfStale();
+            if (RetainedChart3DNative.LineGetStyle(
+                    Chart.NativeHandle, Handle, out var style) == 0)
+                throw new InvalidOperationException(
+                    "Failed to read retained line style.");
+            return style;
+        }
+        set
+        {
+            ThrowIfStale();
+            if (RetainedChart3DNative.LineSetStyle(
+                    Chart.NativeHandle, Handle, ref value) == 0)
+                throw new InvalidOperationException(
+                    "Failed to update retained line style. See native log.");
+        }
+    }
+
+    public void SetData(double[] x, double[] y, double[] z)
+    {
+        PlotScene3D.ValidateLineData(x, y, z);
+        ThrowIfStale();
+        if (RetainedChart3DNative.LineSetData(
+                Chart.NativeHandle, Handle, x, y, z, (nuint)x.Length) == 0)
+            throw new InvalidOperationException(
+                "Failed to update retained line data. See native log.");
+    }
+}
+
 public sealed class GridItemRef3D : PlotItemRef3D
 {
     internal GridItemRef3D(
@@ -655,6 +720,20 @@ public sealed class PlotScene3D
             _chart, RequireHandle(handle, "scatter"));
     }
 
+    public LineItemRef3D AddLine(
+        double[] x,
+        double[] y,
+        double[] z,
+        LineItemStyle3D? style = null)
+    {
+        ValidateLineData(x, y, z);
+        _chart.ThrowIfDisposed();
+        var resolved = style ?? new LineItemStyle3D();
+        var handle = RetainedChart3DNative.AddLine(
+            _chart.NativeHandle, x, y, z, (nuint)x.Length, ref resolved);
+        return new LineItemRef3D(_chart, RequireHandle(handle, "line"));
+    }
+
     public GridItemRef3D AddGrid(GridItemStyle3D? style = null)
     {
         _chart.ThrowIfDisposed();
@@ -713,6 +792,13 @@ public sealed class PlotScene3D
         if (x.Length != y.Length || x.Length != z.Length)
             throw new ArgumentException(
                 "Retained 3D item arrays must have equal lengths.");
+    }
+
+    internal static void ValidateLineData(double[] x, double[] y, double[] z)
+    {
+        ValidateEqualArrays(x, y, z);
+        if (x.Length < 2)
+            throw new ArgumentException("Line data requires at least two points.");
     }
 }
 
@@ -1239,6 +1325,36 @@ internal static class RetainedChart3DNative
         IntPtr chart,
         PlotItemHandle3D scatter,
         out ScatterItemStyle3D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_add_line")]
+    internal static extern PlotItemHandle3D AddLine(
+        IntPtr chart,
+        [In] double[] x,
+        [In] double[] y,
+        [In] double[] z,
+        nuint count,
+        ref LineItemStyle3D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_line_set_data")]
+    internal static extern int LineSetData(
+        IntPtr chart,
+        PlotItemHandle3D line,
+        [In] double[] x,
+        [In] double[] y,
+        [In] double[] z,
+        nuint count);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_line_set_style")]
+    internal static extern int LineSetStyle(
+        IntPtr chart,
+        PlotItemHandle3D line,
+        ref LineItemStyle3D style);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart3d_line_get_style")]
+    internal static extern int LineGetStyle(
+        IntPtr chart,
+        PlotItemHandle3D line,
+        out LineItemStyle3D style);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_add_grid")]
     internal static extern PlotItemHandle3D AddGrid(
