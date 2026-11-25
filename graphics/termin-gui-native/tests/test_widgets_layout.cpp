@@ -196,6 +196,54 @@ namespace termin_gui_native_test {
         tc_ui_document_destroy(document_handle);
     }
 
+    void test_box_layout_forgets_detached_child_placements() {
+        const auto document_handle = tc_ui_document_create();
+        TcDocument document(document_handle);
+        DocumentBuilder ui(document);
+        auto& root = ui.make_root<BoxLayout>(Orientation::Horizontal, "root");
+        auto& other = ui.make<BoxLayout>(Orientation::Horizontal, "other");
+        auto& anchor = ui.make<Spacer>(tc_ui_size{8.0f, 6.0f});
+        auto& reordered = ui.make<Spacer>(tc_ui_size{8.0f, 6.0f});
+
+        root.add_fixed_child(anchor, 24.0f);
+        root.add_fixed_child(reordered, 12.0f);
+        assert(root.insert_child(0, reordered));
+        assert(root.items().size() == 2);
+        document.layout_roots({0.0f, 0.0f, 100.0f, 20.0f});
+        assert(near(reordered.bounds().x, 0.0f) && near(reordered.bounds().width, 12.0f));
+        assert(near(anchor.bounds().x, 12.0f) && near(anchor.bounds().width, 24.0f));
+        assert(root.remove_child(reordered));
+        assert(root.items().size() == 1);
+        assert(!root.set_child_extent_limits(reordered.handle(), 0.0f, 100.0f));
+
+        for (int iteration = 0; iteration < 32; ++iteration) {
+            auto& child = ui.make<BoxLayout>(Orientation::Vertical, "replacement");
+            auto& descendant = ui.make<Spacer>(tc_ui_size{8.0f, 6.0f});
+            child.add_preferred_child(descendant);
+            const auto child_handle = child.handle();
+            const auto descendant_handle = descendant.handle();
+
+            root.add_fixed_child(child, 32.0f);
+            assert(root.items().size() == 2);
+            assert(child.detach());
+            assert(root.items().size() == 1);
+            root.add_fixed_child(child, 40.0f);
+
+            other.add_flex_child(child, 2.0f);
+            assert(root.items().size() == 1);
+            assert(other.items().size() == 1 && other.items().front().flex == 2.0f);
+            other.clear_dirty(TC_WIDGET_DIRTY_MASK);
+            assert(tc_ui_document_destroy_widget_recursive(document_handle, child_handle));
+            assert(!tc_ui_document_is_alive(document_handle, descendant_handle));
+            assert(other.items().empty());
+            assert(other.has_dirty_flags(TC_WIDGET_DIRTY_LAYOUT | TC_WIDGET_DIRTY_PAINT));
+        }
+
+        assert(tc_widget_handle_eq(root.items().front().handle, anchor.handle()));
+        assert(root.items().front().fixed_extent == 24.0f);
+        tc_ui_document_destroy(document_handle);
+    }
+
     void test_hstack_vstack_wrappers_use_expected_orientation() {
         tc_ui_document_handle document_handle = tc_ui_document_create();
         TcDocument document(document_handle);

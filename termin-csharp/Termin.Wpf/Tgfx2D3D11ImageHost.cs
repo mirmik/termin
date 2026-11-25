@@ -168,6 +168,7 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         {
             if (TerminCore.Tgfx2PresentD3D11D3DImageBridge(_bridge, sourceTextureHandle) == 0)
             {
+                _hasPresentedFrame = false;
                 Trace($"native present failed frame={_presentCount} bridge=0x{_bridge.ToInt64():X} src={sourceTextureHandle} size={width}x{height}");
                 return false;
             }

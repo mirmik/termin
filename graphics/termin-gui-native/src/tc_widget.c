@@ -904,7 +904,8 @@ bool tc_widget_insert_child(tc_widget* parent, size_t index, tc_widget* child) {
             tc_log_error("[termin-gui-native] inconsistent same-parent child link");
             return false;
         }
-        tc_ui_internal_remove_child_at(parent, old_index);
+        /* Reordering keeps the child and its placement in the same parent. */
+        tc_ui_internal_remove_child_at(parent, old_index, false);
     } else if (child->parent) {
         if (!tc_ui_internal_detach_widget(child)) {
             return false;

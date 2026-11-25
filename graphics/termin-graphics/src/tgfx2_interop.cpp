@@ -4,7 +4,7 @@
 
 #ifdef _WIN32
 #include <d3d9.h>
-#include <dxgi.h>
+#include <dxgi1_2.h>
 #include <tgfx2/d3d11/d3d11_render_device.hpp>
 #include <tgfx2/d3d11/d3d11_swapchain.hpp>
 #include <windows.h>
@@ -185,7 +185,19 @@ namespace {
         D3D11D3DImageBridge(tgfx::D3D11RenderDevice& device, uint32_t width, uint32_t height)
             : device_(device),
               d3d9_runtime_(shared_d3d9_image_runtime()) {
-            resize(width, height);
+            const HRESULT hr = device_.native_device()->QueryInterface(IID_PPV_ARGS(dxgi_device_.GetAddressOf()));
+            if (FAILED(hr)) {
+                tgfx2_log_hresult("D3D11D3DImageBridge::QueryInterface(IDXGIDevice2)", hr);
+                throw std::runtime_error("D3D11D3DImageBridge: DXGI completion events unavailable");
+            }
+            completion_event_.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+            if (!completion_event_) {
+                tc_log(TC_LOG_ERROR, "D3D11D3DImageBridge::CreateEventW failed: error=%lu", GetLastError());
+                throw std::runtime_error("D3D11D3DImageBridge: failed to create completion event");
+            }
+            if (!resize(width, height)) {
+                throw std::runtime_error("D3D11D3DImageBridge: failed to create shared surface");
+            }
         }
 
         ~D3D11D3DImageBridge() {
@@ -301,6 +313,8 @@ namespace {
                 tc_log(TC_LOG_ERROR, "D3D11D3DImageBridge::present: invalid source or shared texture");
                 return false;
             }
+            if (completion_pending_ && !wait_for_completion(0))
+                return false;
 
             const tgfx::TextureDesc src_desc = device_.texture_desc(source);
             if (src_desc.width != width_ || src_desc.height != height_) {
@@ -355,8 +369,18 @@ namespace {
             // plot renderers. Keep the bridge from leaking its blit shaders,
             // resource bindings, and render-target state into the next WPF plot.
             device_.reset_state();
-            device_.wait_idle();
-            return true;
+
+            // Flush the D3D11 commands and wait for the shared D3D9 surface
+            // to be ready before WPF marks it dirty. Polling an event query
+            // in wait_idle() can stall the UI thread on the software adapter.
+            const HRESULT hr = dxgi_device_->EnqueueSetEvent(completion_event_.get());
+            if (FAILED(hr)) {
+                tgfx2_log_hresult("D3D11D3DImageBridge::EnqueueSetEvent", hr);
+                return false;
+            }
+            completion_pending_ = true;
+            constexpr DWORD max_present_wait_ms = 250;
+            return wait_for_completion(max_present_wait_ms);
         }
 
         IDirect3DSurface9* surface() const {
@@ -364,6 +388,27 @@ namespace {
         }
 
     private:
+        bool wait_for_completion(DWORD timeout_ms) {
+            const DWORD result = WaitForSingleObject(completion_event_.get(), timeout_ms);
+            if (result == WAIT_OBJECT_0) {
+                completion_pending_ = false;
+                const HRESULT removal = device_.native_device()->GetDeviceRemovedReason();
+                if (FAILED(removal)) {
+                    tgfx2_log_hresult("D3D11D3DImageBridge: graphics device removed", removal);
+                    return false;
+                }
+                return true;
+            }
+            if (result != WAIT_TIMEOUT) {
+                tc_log(TC_LOG_ERROR, "D3D11D3DImageBridge: completion wait failed: error=%lu", GetLastError());
+            } else if (timeout_ms != 0) {
+                tc_log(TC_LOG_ERROR,
+                       "D3D11D3DImageBridge: shared surface %ux%u still busy after %lu ms",
+                       width_, height_, timeout_ms);
+            }
+            return false;
+        }
+
         void release_shared_resources() {
             if (shared_texture_handle_) {
                 device_.destroy(shared_texture_handle_);
@@ -376,6 +421,9 @@ namespace {
 
         tgfx::D3D11RenderDevice& device_;
         std::shared_ptr<D3D9ImageRuntime> d3d9_runtime_;
+        Microsoft::WRL::ComPtr<IDXGIDevice2> dxgi_device_;
+        std::unique_ptr<void, decltype(&CloseHandle)> completion_event_{nullptr, CloseHandle};
+        bool completion_pending_ = false;
         Microsoft::WRL::ComPtr<IDirect3DTexture9> d3d9_texture_;
         Microsoft::WRL::ComPtr<IDirect3DSurface9> d3d9_surface_;
         Microsoft::WRL::ComPtr<ID3D11Texture2D> d3d11_texture_;

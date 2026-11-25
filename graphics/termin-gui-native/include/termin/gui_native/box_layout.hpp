@@ -19,6 +19,9 @@ namespace termin::gui_native {
         float corner_radius_ = 0.0f;
         std::vector<LayoutItem> items_;
 
+        static void on_child_removed(tc_widget* parent, tc_widget_handle child);
+        void forget_child_placement(tc_widget_handle handle);
+
     public:
         explicit BoxLayout(Orientation orientation, const char* debug_name = nullptr);
         BoxLayout& set_orientation(Orientation orientation);

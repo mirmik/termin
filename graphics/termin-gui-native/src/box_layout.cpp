@@ -1,5 +1,7 @@
 #include "widgets_internal.hpp"
 
+#include "tc_ui_document_internal.h"
+
 namespace termin::gui_native {
     using namespace detail;
     namespace {
@@ -93,6 +95,16 @@ namespace termin::gui_native {
         add_child(handle, LayoutPolicy::Stretch);
     }
 
+    void BoxLayout::on_child_removed(tc_widget* parent, tc_widget_handle child) {
+        auto* box = static_cast<BoxLayout*>(static_cast<Widget*>(parent->body));
+        box->forget_child_placement(child);
+        box->mark_dirty(TC_WIDGET_DIRTY_LAYOUT | TC_WIDGET_DIRTY_PAINT);
+    }
+
+    void BoxLayout::forget_child_placement(tc_widget_handle handle) {
+        std::erase_if(items_, [handle](const LayoutItem& existing) { return tc_widget_handle_eq(existing.handle, handle); });
+    }
+
     void BoxLayout::add_child(tc_widget_handle handle, LayoutPolicy policy, float value) {
         if (tc_widget_handle_is_invalid(handle)) {
             tc_log_error("[termin-gui-native] cannot add invalid child handle to BoxLayout");
@@ -102,11 +114,15 @@ namespace termin::gui_native {
         if (!attach_child(c_widget(), handle, SIZE_MAX, "BoxLayout::add_child")) {
             return;
         }
-        items_.erase(std::remove_if(
-                         items_.begin(),
-                         items_.end(),
-                         [handle](const LayoutItem& existing) { return tc_widget_handle_eq(existing.handle, handle); }),
-                     items_.end());
+        tc_widget* child = tc_ui_document_resolve_widget(document(), handle);
+        if (!child || tc_widget_parent(child) != c_widget()) {
+            tc_log_error("[termin-gui-native] BoxLayout child detached during attachment");
+            return;
+        }
+        if (items_.empty() && !tc_ui_internal_set_child_removed_callback(c_widget(), &BoxLayout::on_child_removed)) {
+            return;
+        }
+        forget_child_placement(handle);
 
         LayoutItem item{};
         item.handle = handle;

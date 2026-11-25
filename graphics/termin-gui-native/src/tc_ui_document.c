@@ -549,7 +549,18 @@ size_t tc_ui_internal_find_child_index(const tc_widget* parent, const tc_widget*
     return SIZE_MAX;
 }
 
-void tc_ui_internal_remove_child_at(tc_widget* parent, size_t index) {
+bool tc_ui_internal_set_child_removed_callback(tc_widget* parent, tc_ui_child_removed_fn callback) {
+    tc_ui_document* document = tc_ui_internal_resolve_document(parent->document);
+    tc_widget_slot* slot = tc_ui_internal_resolve_slot(document, parent->handle);
+    if (!slot || slot->destroying || slot->widget != parent) {
+        tc_log_error("[termin-gui-native] cannot register child removal callback for stale widget");
+        return false;
+    }
+    slot->child_removed = callback;
+    return true;
+}
+
+void tc_ui_internal_remove_child_at(tc_widget* parent, size_t index, bool detaching) {
     tc_widget* child;
     if (!parent || index >= parent->child_count) {
         return;
@@ -563,6 +574,13 @@ void tc_ui_internal_remove_child_at(tc_widget* parent, size_t index) {
     parent->child_count -= 1;
     if (child && child->parent == parent) {
         child->parent = NULL;
+        if (detaching) {
+            tc_ui_document* document = tc_ui_internal_resolve_document(parent->document);
+            const tc_widget_slot* slot = tc_ui_internal_resolve_slot_const(document, parent->handle);
+            if (slot && slot->widget == parent && slot->child_removed) {
+                slot->child_removed(parent, child->handle);
+            }
+        }
     }
 }
 
@@ -578,7 +596,7 @@ bool tc_ui_internal_detach_widget(tc_widget* widget) {
         widget->parent = NULL;
         return false;
     }
-    tc_ui_internal_remove_child_at(widget->parent, index);
+    tc_ui_internal_remove_child_at(widget->parent, index, true);
     return true;
 }
 
@@ -691,7 +709,7 @@ static bool destroy_widget_inner(tc_ui_document* document, tc_widget_handle hand
             tc_widget* child = widget->children[widget->child_count - 1];
             if (!child || child->parent != widget || !tc_ui_document_handle_eq(child->document, document->handle)) {
                 tc_log_error("[termin-gui-native] invalid canonical child link during recursive destroy");
-                tc_ui_internal_remove_child_at(widget, widget->child_count - 1);
+                tc_ui_internal_remove_child_at(widget, widget->child_count - 1, true);
                 ok = false;
                 continue;
             }
@@ -708,7 +726,7 @@ static bool destroy_widget_inner(tc_ui_document* document, tc_widget_handle hand
         }
     } else {
         while (widget->child_count > 0) {
-            tc_ui_internal_remove_child_at(widget, widget->child_count - 1);
+            tc_ui_internal_remove_child_at(widget, widget->child_count - 1, true);
         }
     }
 
@@ -740,6 +758,7 @@ static bool destroy_widget_inner(tc_ui_document* document, tc_widget_handle hand
     tc_widget_deinit_unowned(widget);
 
     slot->widget = NULL;
+    slot->child_removed = NULL;
     slot->destroying = false;
     slot->generation += 1;
     if (slot->generation == 0) {

@@ -10,6 +10,7 @@ int main() {
     test_unowned_widget_metadata_lifecycle();
     test_dirty_flags_track_layout_paint_and_state_changes();
     test_box_layout_child_policies_allocate_primary_axis();
+    test_box_layout_forgets_detached_child_placements();
     test_hstack_vstack_wrappers_use_expected_orientation();
     test_grid_layout_tracks_spans_and_hit_test();
     test_box_grid_and_scroll_remeasure_width_dependent_children();

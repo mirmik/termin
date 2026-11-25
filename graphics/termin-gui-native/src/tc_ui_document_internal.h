@@ -13,8 +13,12 @@
 #define TC_UI_INTERNAL __attribute__((visibility("hidden")))
 #endif
 
+/* Maintain parent-owned state after detachment. Callbacks must not mutate the widget tree. */
+typedef void (*tc_ui_child_removed_fn)(tc_widget* parent, tc_widget_handle child);
+
 typedef struct tc_widget_slot {
     tc_widget* widget;
+    tc_ui_child_removed_fn child_removed;
     uint32_t generation;
     bool destroying;
 } tc_widget_slot;
@@ -110,7 +114,8 @@ TC_UI_INTERNAL const tc_widget_slot* tc_ui_internal_resolve_slot_const(const tc_
                                                                        tc_widget_handle handle);
 TC_UI_INTERNAL bool tc_ui_internal_widget_is_live_pointer(const tc_widget* widget);
 TC_UI_INTERNAL size_t tc_ui_internal_find_child_index(const tc_widget* parent, const tc_widget* child);
-TC_UI_INTERNAL void tc_ui_internal_remove_child_at(tc_widget* parent, size_t index);
+TC_UI_INTERNAL bool tc_ui_internal_set_child_removed_callback(tc_widget* parent, tc_ui_child_removed_fn callback);
+TC_UI_INTERNAL void tc_ui_internal_remove_child_at(tc_widget* parent, size_t index, bool detaching);
 TC_UI_INTERNAL bool tc_ui_internal_detach_widget(tc_widget* widget);
 TC_UI_INTERNAL void tc_ui_internal_remove_root_references(tc_ui_document* document, tc_widget_handle handle);
 TC_UI_INTERNAL size_t tc_ui_internal_find_overlay_index(const tc_ui_document* document, tc_widget_handle handle);
