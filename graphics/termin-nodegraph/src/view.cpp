@@ -84,6 +84,20 @@ namespace termin::nodegraph {
     } // namespace
 
     struct NodeGraphView::Impl {
+        class RootWidget final : public gui_native::SceneView {
+        public:
+            RootWidget(termin::visual::TcVisualScene scene, Impl& owner)
+                : SceneView(scene), owner_(owner) {}
+
+            void on_destroy(tc_ui_document_handle document) override {
+                SceneView::on_destroy(document);
+                owner_.close(false);
+            }
+
+        private:
+            Impl& owner_;
+        };
+
         struct ParameterWidget {
             NodeHandle node;
             std::string node_id;
@@ -98,7 +112,6 @@ namespace termin::nodegraph {
         };
 
         gui_native::TcDocument document;
-        std::shared_ptr<const PresentationPolicy> presentation;
         BodyContentProvider body_content_provider;
         NodeGraphProjection projection;
         gui_native::SceneView* view = nullptr;
@@ -108,6 +121,8 @@ namespace termin::nodegraph {
         GraphChangedCallback graph_changed_callback;
         ParameterChangedCallback parameter_changed_callback;
         ContextRequestedCallback context_requested_callback;
+        ClosedCallback closed_callback;
+        bool defer_projection_change = false;
         bool is_closed = false;
 
         Impl(gui_native::TcDocument owner_document,
@@ -115,12 +130,8 @@ namespace termin::nodegraph {
              std::shared_ptr<const PresentationPolicy> owner_presentation,
              BodyContentProvider provider)
             : document(owner_document),
-              presentation(std::move(owner_presentation)),
               body_content_provider(std::move(provider)),
-              projection(graph, presentation, true) {
-            if (!presentation)
-                presentation = std::make_shared<DefaultPresentationPolicy>();
-        }
+              projection(graph, std::move(owner_presentation), true) {}
 
         ~Impl() {
             close();
@@ -135,7 +146,7 @@ namespace termin::nodegraph {
                 throw std::invalid_argument("NodeGraphView requires a valid document and graph");
             try {
                 gui_native::DocumentBuilder builder(document);
-                view = &builder.make<gui_native::SceneView>(termin::visual::TcVisualScene{projection.scene()});
+                view = &builder.make<RootWidget>(termin::visual::TcVisualScene{projection.scene()}, *this);
                 view->set_stable_id("nodegraph.native-view");
                 view->set_preferred_size({900.0f, 650.0f});
                 view->set_scene_colors(
@@ -146,8 +157,10 @@ namespace termin::nodegraph {
                     return found == body_widgets.end() ? std::nullopt : std::optional(found->second.content.layout);
                 });
                 projection.set_request_render_callback([this] { request_render(); });
-                projection.set_graph_changed_callback(
-                    [this](std::uint64_t revision) { notify_graph_changed(revision); });
+                projection.set_graph_changed_callback([this](std::uint64_t revision) {
+                    if (!defer_projection_change)
+                        notify_graph_changed(revision);
+                });
                 projection.set_context_requested_callback([this](float x, float y, std::optional<SemanticHit> hit) {
                     if (context_requested_callback)
                         context_requested_callback(x, y, std::move(hit));
@@ -236,19 +249,20 @@ namespace termin::nodegraph {
             body_widgets.clear();
         }
 
-        bool validate_body(const Node& node, const NodeBodyContent& content) const {
-            if (tc_widget_handle_is_invalid(content.widget) || !valid_layout(content.layout, node.width) ||
-                !document.valid() || !tc_ui_document_is_alive(document.handle(), content.widget)) {
-                tc::Log::error("[termin-nodegraph/view] body provider returned invalid content for '%s'",
-                               node.id.c_str());
+        bool accepts_body_widget(tc_widget_handle handle) const {
+            const auto owner = document.handle();
+            if (!tc_ui_document_is_alive(owner, handle) || tc_widget_handle_eq(view->handle(), handle))
                 return false;
+            const tc_widget* widget = tc_ui_document_resolve_widget_const(owner, handle);
+            if (widget == nullptr || widget->parent != nullptr)
+                return false;
+            for (std::size_t i = 0; i < tc_ui_document_root_count(owner); ++i) {
+                if (tc_widget_handle_eq(tc_ui_document_root_at(owner, i), handle))
+                    return false;
             }
-            const tc_widget* widget = tc_ui_document_resolve_widget_const(document.handle(), content.widget);
-            if (widget == nullptr || !tc_ui_document_handle_eq(widget->document, document.handle()) ||
-                widget->parent != nullptr) {
-                tc::Log::error("[termin-nodegraph/view] body widget for '%s' must be parentless in the owning document",
-                               node.id.c_str());
-                return false;
+            for (std::size_t i = 0; i < tc_ui_document_overlay_count(owner); ++i) {
+                if (tc_widget_handle_eq(tc_ui_document_overlay_at(owner, i), handle))
+                    return false;
             }
             return true;
         }
@@ -259,14 +273,21 @@ namespace termin::nodegraph {
                 return false;
             std::set<std::string> live_ids;
             std::set<std::pair<std::uint32_t, std::uint32_t>> claimed;
+            for (const auto& [id, entry] : body_widgets) {
+                (void)id;
+                const auto widget = entry.content.widget;
+                claimed.emplace(widget.index, widget.generation);
+            }
             for (const Node& node : graph->nodes()) {
                 live_ids.insert(node.id);
                 auto found = body_widgets.find(node.id);
                 if (found != body_widgets.end()) {
-                    if (!validate_body(node, found->second.content))
+                    if (!accepts_body_widget(found->second.content.widget) ||
+                        !valid_layout(found->second.content.layout, node.width)) {
+                        tc::Log::error("[termin-nodegraph/view] retained body became invalid for '%s'", node.id.c_str());
                         return false;
+                    }
                     found->second.node = node.handle;
-                    claimed.insert({found->second.content.widget.index, found->second.content.widget.generation});
                     if (found->second.content.update) {
                         try {
                             found->second.content.update(node);
@@ -297,14 +318,19 @@ namespace termin::nodegraph {
                 }
                 if (!content)
                     continue;
-                if (!validate_body(node, *content)) {
-                    if (document.valid() && tc_ui_document_is_alive(document.handle(), content->widget))
-                        tc_ui_document_destroy_widget_recursive(document.handle(), content->widget);
+                if (!accepts_body_widget(content->widget)) {
+                    tc::Log::error("[termin-nodegraph/view] body widget for '%s' must be detached in the owning document",
+                                   node.id.c_str());
                     return false;
                 }
                 const auto widget_key = std::pair{content->widget.index, content->widget.generation};
                 if (!claimed.insert(widget_key).second) {
                     tc::Log::error("[termin-nodegraph/view] body provider reused a widget for '%s'", node.id.c_str());
+                    return false;
+                }
+                if (!valid_layout(content->layout, node.width)) {
+                    tc::Log::error("[termin-nodegraph/view] invalid body layout for '%s'", node.id.c_str());
+                    tc_ui_document_destroy_widget_recursive(document.handle(), content->widget);
                     return false;
                 }
                 body_widgets.emplace(node.id, BodyWidget{node.handle, node.id, std::move(*content)});
@@ -470,7 +496,11 @@ namespace termin::nodegraph {
         bool refresh_after_projection_rebuild() {
             clear_portals();
             destroy_parameter_widgets();
-            return prepare_body_widgets() && attach_portals();
+            if (prepare_body_widgets() && attach_portals())
+                return true;
+            clear_portals();
+            destroy_parameter_widgets();
+            return false;
         }
 
         bool set_parameter(NodeHandle node_handle, const std::string& name, tc::trent value) {
@@ -497,61 +527,78 @@ namespace termin::nodegraph {
             return true;
         }
 
+        template <typename Input> bool dispatch_structural_input(Input&& input) {
+            const auto* before_graph = projection.graph();
+            const std::uint64_t before = before_graph ? before_graph->revision() : 0;
+            const bool handled = [&] {
+                struct RestoreNotification {
+                    bool& deferred;
+                    bool prior;
+                    ~RestoreNotification() { deferred = prior; }
+                };
+                RestoreNotification restore{defer_projection_change, std::exchange(defer_projection_change, true)};
+                return input();
+            }();
+            if (const auto* graph = projection.graph(); graph && graph->revision() != before) {
+                if (!refresh_after_projection_rebuild())
+                    tc::Log::error("[termin-nodegraph/view] failed to restore portals after editing graph topology");
+                notify_graph_changed(graph->revision());
+            }
+            return handled;
+        }
+
         bool pointer(tc_ui_point world, const tc_ui_pointer_event& event) {
             if (!open() || event.type == TC_UI_POINTER_WHEEL || event.type == TC_UI_POINTER_ENTER ||
                 event.type == TC_UI_POINTER_LEAVE)
                 return false;
             if (projection.graph() && projection.graph()->revision() != projection.projected_revision() && !rebuild())
                 return false;
-            const bool completing_connection = event.type == TC_UI_POINTER_UP && projection.pending_connection();
-            const std::uint64_t before = projection.graph() ? projection.graph()->revision() : 0;
-            const bool handled = projection.pointer(
-                {pointer_phase(event.type), pointer_button(event.button), world.x, world.y, view->zoom()});
-            if (completing_connection && projection.graph() && projection.graph()->revision() != before &&
-                !refresh_after_projection_rebuild()) {
-                tc::Log::error("[termin-nodegraph/view] failed to restore portals after connecting nodes");
-            }
-            return handled;
+            const PointerInput input{
+                pointer_phase(event.type), pointer_button(event.button), world.x, world.y, view->zoom()};
+            if (event.type == TC_UI_POINTER_UP && projection.pending_connection())
+                return dispatch_structural_input([&] { return projection.pointer(input); });
+            return projection.pointer(input);
         }
 
         bool key(const tc_ui_key_event& event) {
             if (!open() || event.type != TC_UI_KEY_DOWN || event.key != TC_UI_KEY_DELETE)
                 return false;
-            const std::uint64_t before = projection.graph() ? projection.graph()->revision() : 0;
-            const bool removed = projection.delete_selection();
-            if (removed && projection.graph() && projection.graph()->revision() != before &&
-                !refresh_after_projection_rebuild()) {
-                tc::Log::error("[termin-nodegraph/view] failed to restore portals after deleting selection");
-            }
-            return removed;
+            return dispatch_structural_input([this] { return projection.delete_selection(); });
         }
 
-        void close() noexcept {
+        void close(bool destroy_root = true) noexcept {
             if (is_closed)
                 return;
             is_closed = true;
-            if (document.valid() && view && tc_ui_document_is_alive(document.handle(), view->handle())) {
-                view->set_pointer_handler({});
-                view->set_key_handler({});
-                clear_portals();
-                destroy_parameter_widgets();
-                destroy_body_widgets();
-                const tc_widget_handle root = view->handle();
-                view = nullptr;
+            gui_native::SceneView* live_view = std::exchange(view, nullptr);
+            const tc_widget_handle root = live_view && destroy_root ? live_view->handle() : tc_widget_handle_invalid();
+            if (document.valid() && tc_ui_document_is_alive(document.handle(), root)) {
+                live_view->set_pointer_handler({});
+                live_view->set_key_handler({});
+                live_view->clear_widget_portals();
+            }
+            destroy_parameter_widgets();
+            destroy_body_widgets();
+            if (document.valid() && tc_ui_document_is_alive(document.handle(), root)) {
                 if (!tc_ui_document_destroy_widget_recursive(document.handle(), root))
                     tc::Log::error("[termin-nodegraph/view] failed to destroy root widget");
-            } else {
-                view = nullptr;
-                parameter_widgets.clear();
-                body_widgets.clear();
             }
             projection.close();
-            presentation.reset();
             body_content_provider = {};
             request_render_callback = {};
             graph_changed_callback = {};
             parameter_changed_callback = {};
             context_requested_callback = {};
+            auto callback = std::move(closed_callback);
+            if (!callback)
+                return;
+            try {
+                callback();
+            } catch (const std::exception& error) {
+                tc::Log::error(error, "[termin-nodegraph/view] closed callback failed");
+            } catch (...) {
+                tc::Log::error("[termin-nodegraph/view] closed callback failed: unknown exception");
+            }
         }
     };
 
@@ -601,6 +648,8 @@ namespace termin::nodegraph {
             tc::Log::error("[termin-nodegraph/view] cannot install an invalid graph");
             return false;
         }
+        if (graph == impl_->projection.graph())
+            return impl_->rebuild();
         impl_->clear_portals();
         impl_->destroy_parameter_widgets();
         impl_->destroy_body_widgets();
@@ -659,6 +708,11 @@ namespace termin::nodegraph {
     void NodeGraphView::set_context_requested_callback(ContextRequestedCallback callback) {
         if (impl_)
             impl_->context_requested_callback = std::move(callback);
+    }
+
+    void NodeGraphView::set_closed_callback(ClosedCallback callback) {
+        if (!closed())
+            impl_->closed_callback = std::move(callback);
     }
 
 } // namespace termin::nodegraph

@@ -293,6 +293,7 @@ namespace termin::nodegraph {
             body_layout_provider = {};
             projected_revision = 0;
             is_closed = true;
+            policy.reset();
         }
 
         void notify_render() const noexcept {

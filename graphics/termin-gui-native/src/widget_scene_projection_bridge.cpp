@@ -117,7 +117,9 @@ namespace termin::gui_native {
     }
 
     void WidgetSceneProjectionBridge::detach_target(tc_widget_handle target) const {
-        if (!tc_ui_document_is_valid(document_) || tc_widget_handle_is_invalid(host_))
+        // During native destruction, the document has already detached the
+        // children and the destroying host no longer resolves as a live widget.
+        if (!tc_ui_document_is_alive(document_, host_) || !tc_ui_document_is_alive(document_, target))
             return;
         tc_widget* host = tc_ui_document_resolve_widget(document_, host_);
         tc_widget* widget = tc_ui_document_resolve_widget(document_, target);

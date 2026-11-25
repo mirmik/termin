@@ -8,6 +8,10 @@
 #include <tcbase/tc_value.h>
 #include <termin/nodegraph/graph.hpp>
 
+#ifdef TERMIN_NODEGRAPH_PYTHON_UI
+#include "nodegraph_view_bindings.hpp"
+#endif
+
 namespace nb = nanobind;
 using namespace nb::literals;
 namespace ng = termin::nodegraph;
@@ -89,6 +93,7 @@ namespace {
     class PythonValidator final : public ng::ConnectionValidator {
     public:
         bool accepts(const ng::ConnectionProposal& proposal) const override {
+            nb::gil_scoped_acquire gil;
             if (validator_.is_none())
                 return proposal.source_type == "any" || proposal.destination_type == "any" ||
                        proposal.source_type == proposal.destination_type;
@@ -117,6 +122,10 @@ namespace {
         uint64_t revision() const {
             return graph_.revision();
         }
+
+#ifdef TERMIN_NODEGRAPH_PYTHON_UI
+        ng::Graph& graph() { return graph_; }
+#endif
 
         void set_validator(nb::object validator) {
             validator_->set(std::move(validator));
@@ -380,6 +389,18 @@ namespace {
 
 } // namespace
 
+#ifdef TERMIN_NODEGRAPH_PYTHON_UI
+namespace termin::nodegraph::python_bindings {
+    Graph& unwrap_graph(nb::handle owner) {
+        return nb::cast<NativeGraph&>(owner).graph();
+    }
+
+    nb::object copy_value(const tc_value& value) {
+        return value_to_python(value);
+    }
+}
+#endif
+
 NB_MODULE(_nodegraph_native, module) {
     module.doc() = "Native Termin nodegraph core binding";
     nb::class_<NativeGraph>(module, "NativeGraph")
@@ -405,4 +426,7 @@ NB_MODULE(_nodegraph_native, module) {
         .def("move_group", &NativeGraph::move_group)
         .def("set_group_data", &NativeGraph::set_group_data)
         .def("set_data", &NativeGraph::set_data);
+#ifdef TERMIN_NODEGRAPH_PYTHON_UI
+    termin::nodegraph::python_bindings::bind_view(module);
+#endif
 }

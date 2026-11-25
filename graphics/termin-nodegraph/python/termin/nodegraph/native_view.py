@@ -28,6 +28,7 @@ from termin.visual_scene import (
     tc_visual_scene_destroy,
 )
 
+from termin.nodegraph.body import NodeBodyContent, NodeBodyContentProvider, NodeBodyLayout
 from termin.nodegraph.controller import GraphController
 from termin.nodegraph.model import Edge, Graph, Node
 
@@ -60,30 +61,6 @@ _SOCKET_COLORS = {
     "flow": SrgbColor(0.88, 0.88, 0.90, 1.0),
     "any": SrgbColor(0.68, 0.68, 0.70, 1.0),
 }
-
-
-@dataclass(frozen=True)
-class NodeBodyLayout:
-    """Layout requested for a node body widget, in graph world units."""
-
-    height: float
-    inset_left: float = 8.0
-    inset_right: float = 8.0
-    inset_top: float = 8.0
-    inset_bottom: float = 8.0
-    gap_before: float = 7.0
-
-
-@dataclass(frozen=True)
-class NodeBodyContent:
-    """A native widget whose lifetime is transferred to the graph view."""
-
-    widget: object
-    layout: NodeBodyLayout
-    update: Callable[[Node], None] | None = None
-
-
-NodeBodyContentProvider = Callable[[TcDocument, Node], NodeBodyContent | None]
 
 
 def _color(value: SrgbColor) -> SrgbColor:

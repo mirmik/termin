@@ -2,6 +2,7 @@
 #include <cmath>
 #include <memory>
 #include <limits>
+#include <stdexcept>
 #include <string>
 
 #include <termin/gui_native/checkbox.hpp>
@@ -156,10 +157,150 @@ namespace {
         tc_ui_document_destroy(document_handle);
     }
 
+    void test_external_teardown(bool destroy_document) {
+        const auto handle = tc_ui_document_create();
+        ui::TcDocument document{handle};
+        const auto metrics = tc_ui_presentation_metrics_identity({900.0f, 650.0f});
+        assert(tc_ui_document_set_presentation_metrics(handle, &metrics));
+        ui::DocumentBuilder builder(document);
+        const auto unrelated = builder.make_root<ui::Label>("Other root").handle();
+        ng::Graph graph;
+        const auto node = graph.create_node(editable_node("external"));
+        assert(node);
+        auto policy = std::make_shared<StyledPresentation>();
+        const std::weak_ptr<StyledPresentation> policy_lifetime = policy;
+        auto held_by_callbacks = std::make_shared<int>(1);
+        const std::weak_ptr<int> callback_lifetime = held_by_callbacks;
+        ng::NodeGraphView view(document, &graph, std::move(policy), [held_by_callbacks](ui::TcDocument owner, const ng::Node&) {
+            ui::DocumentBuilder body(owner);
+            ng::NodeBodyContent content;
+            content.widget = body.make<ui::Label>("Body").handle();
+            content.layout.height = 32.0f;
+            content.update = [held_by_callbacks](const ng::Node&) {};
+            return std::optional(std::move(content));
+        });
+        view.set_graph_changed_callback([held_by_callbacks](std::uint64_t) {});
+        held_by_callbacks.reset();
+        int closed_count = 0;
+        view.set_closed_callback([&] {
+            assert(view.closed());
+            assert(view.graph() == nullptr && view.scene_view() == nullptr);
+            assert(policy_lifetime.expired() && callback_lifetime.expired());
+            ++closed_count;
+        });
+        assert(document.add_root(*view.scene_view()));
+        document.layout_roots({0.0f, 0.0f, 900.0f, 650.0f});
+        const auto root = view.root_widget();
+        const auto param = view.parameter_widget(node.value, "enabled");
+        const auto body = view.body_widget(node.value);
+        const auto scene = view.projection()->scene();
+        assert(tc_ui_document_is_alive(handle, root));
+        assert(tc_ui_document_is_alive(handle, param));
+        assert(tc_ui_document_is_alive(handle, body));
+
+        if (destroy_document) {
+            tc_ui_document_destroy(handle);
+        } else {
+            assert(tc_ui_document_destroy_widget(handle, root));
+            assert(tc_ui_document_is_alive(handle, unrelated));
+            assert(tc_ui_document_live_widget_count(handle) == 1);
+        }
+        assert(view.closed() && closed_count == 1);
+        assert(tc_widget_handle_is_invalid(view.root_widget()));
+        assert(!tc_ui_document_is_alive(handle, root));
+        assert(!tc_ui_document_is_alive(handle, param));
+        assert(!tc_ui_document_is_alive(handle, body));
+        assert(!termin::visual::TcVisualScene{scene}.valid());
+        view.close();
+        assert(closed_count == 1);
+        if (!destroy_document)
+            tc_ui_document_destroy(handle);
+    }
+
+    void test_body_provider_cannot_consume_document_root() {
+        const auto handle = tc_ui_document_create();
+        ui::TcDocument document{handle};
+        ui::DocumentBuilder builder(document);
+        const auto unrelated = builder.make_root<ui::Label>("Other root").handle();
+        ng::Graph graph;
+        assert(graph.create_node(editable_node("invalid-body")));
+        try {
+            ng::NodeGraphView view(document, &graph, {}, [unrelated](ui::TcDocument, const ng::Node&) {
+                ng::NodeBodyContent content;
+                content.widget = unrelated;
+                content.layout.height = 32.0f;
+                return std::optional(content);
+            });
+            assert(false);
+        } catch (const std::runtime_error&) {
+            assert(tc_ui_document_is_alive(handle, unrelated));
+            assert(tc_ui_document_live_widget_count(handle) == 1);
+        }
+        tc_ui_document_destroy(handle);
+    }
+
+    void test_structural_notification_sees_rebuilt_portals() {
+        const auto handle = tc_ui_document_create();
+        ui::TcDocument document{handle};
+        const auto metrics = tc_ui_presentation_metrics_identity({900.0f, 650.0f});
+        assert(tc_ui_document_set_presentation_metrics(handle, &metrics));
+        ng::Graph graph;
+        auto output = editable_node("output");
+        output.x = -280.0f;
+        output.outputs.push_back({"out", "value", false});
+        auto input = editable_node("input");
+        input.x = 80.0f;
+        input.inputs.push_back({"in", "value", false});
+        const auto from = graph.create_node(output);
+        const auto to = graph.create_node(input);
+        assert(from && to);
+        ng::NodeGraphView view(document, &graph);
+        assert(document.add_root(*view.scene_view()));
+        document.layout_roots({0.0f, 0.0f, 900.0f, 650.0f});
+        auto previous = view.parameter_widget(to.value, "enabled");
+        assert(tc_ui_document_is_alive(handle, previous));
+        int notifications = 0;
+        view.set_graph_changed_callback([&](std::uint64_t revision) {
+            ++notifications;
+            assert(revision == graph.revision());
+            assert(revision == view.projection()->projected_revision());
+            assert(!tc_ui_document_is_alive(handle, previous));
+            const auto current = view.parameter_widget(to.value, "enabled");
+            if (notifications == 1) {
+                assert(graph.edges().size() == 1);
+                assert(tc_ui_document_is_alive(handle, current));
+                previous = current;
+            } else {
+                assert(!graph.node(to.value) && graph.edges().empty());
+                assert(tc_widget_handle_is_invalid(current));
+            }
+        });
+        const auto dispatch = [&](tc_ui_pointer_event_type type, tc_ui_point world) {
+            const auto screen = view.scene_view()->world_to_screen(world);
+            const tc_ui_pointer_event event{type, screen.x, screen.y, 0, 1, 0, 0, 0, TC_UI_POINTER_CANCEL_EXPLICIT};
+            assert(document.dispatch_pointer_event(event) == TC_UI_EVENT_HANDLED);
+        };
+        constexpr float socket_y = 36.0f;
+        dispatch(TC_UI_POINTER_DOWN, {output.x + output.width, output.y + socket_y});
+        dispatch(TC_UI_POINTER_UP, {input.x, input.y + socket_y});
+        assert(notifications == 1);
+        dispatch(TC_UI_POINTER_DOWN, {input.x + 30.0f, input.y + 10.0f});
+        dispatch(TC_UI_POINTER_UP, {input.x + 30.0f, input.y + 10.0f});
+        const tc_ui_key_event remove{TC_UI_KEY_DOWN, TC_UI_KEY_DELETE, 0, 0, false};
+        assert(document.dispatch_key_event(remove) == TC_UI_EVENT_HANDLED);
+        assert(notifications == 2);
+        view.close();
+        tc_ui_document_destroy(handle);
+    }
+
 } // namespace
 
 int main() {
     test_exact_numeric_parameters();
+    test_external_teardown(false);
+    test_external_teardown(true);
+    test_body_provider_cannot_consume_document_root();
+    test_structural_notification_sees_rebuilt_portals();
     const tc_ui_document_handle document_handle = tc_ui_document_create();
     assert(!tc_ui_document_handle_is_invalid(document_handle));
     ui::TcDocument document{document_handle};
@@ -281,6 +422,9 @@ int main() {
     assert(!tc_ui_document_is_alive(document_handle, old_enabled));
     assert(!tc_widget_handle_is_invalid(view.parameter_widget(created.value, "enabled")));
     assert(view.body_widget(created.value).index == body_handle.index);
+    assert(view.set_graph(&graph));
+    assert(body_created == 1 && body_updated == 2);
+    assert(tc_widget_handle_eq(view.body_widget(created.value), body_handle));
 
     ng::Graph replacement;
     const auto replacement_node = replacement.create_node(editable_node("replacement"));

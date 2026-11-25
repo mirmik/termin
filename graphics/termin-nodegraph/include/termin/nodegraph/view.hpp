@@ -29,6 +29,7 @@ namespace termin::nodegraph {
         using ContextRequestedCallback = NodeGraphProjection::ContextRequestedCallback;
         using BodyContentProvider =
             std::function<std::optional<NodeBodyContent>(gui_native::TcDocument document, const Node& node)>;
+        using ClosedCallback = std::function<void()>;
 
         NodeGraphView(gui_native::TcDocument document,
                       Graph* graph,
@@ -61,6 +62,9 @@ namespace termin::nodegraph {
         void set_graph_changed_callback(GraphChangedCallback callback);
         void set_parameter_changed_callback(ParameterChangedCallback callback);
         void set_context_requested_callback(ContextRequestedCallback callback);
+        // Called once after view state is released, including when the document
+        // destroys the root externally.
+        void set_closed_callback(ClosedCallback callback);
 
     private:
         struct Impl;

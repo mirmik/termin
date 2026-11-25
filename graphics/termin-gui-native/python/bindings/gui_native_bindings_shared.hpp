@@ -14,6 +14,7 @@
 #include <tcbase/tc_log.h>
 #include <termin/gui_native/builtin_widget_registration.hpp>
 #include <termin/gui_native/draw_list_renderer.hpp>
+#include <termin/gui_native/python_widget_handle.hpp>
 #include <termin/gui_native/tc_document.hpp>
 #include <termin/gui_native/tc_ui_document.h>
 #include <termin/gui_native/widgets.hpp>
@@ -78,10 +79,6 @@ namespace termin::gui_native::python_bindings {
         PaintContext& operator=(const PaintContext&) = delete;
 
         tc_ui_paint_context* get() const;
-    };
-
-    struct WidgetHandle {
-        tc_widget_handle handle = tc_widget_handle_invalid();
     };
 
     enum class StyleField : uint64_t {

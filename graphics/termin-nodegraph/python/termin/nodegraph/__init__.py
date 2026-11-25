@@ -2,10 +2,14 @@
 
 import logging
 
-from termin.nodegraph.controller import ConnectResult, GraphController
-from termin.nodegraph.io import graph_from_dict, graph_to_dict, load_graph_json, save_graph_json
-from termin.nodegraph.model import Edge, Graph, Group, Node, Socket
-from termin.nodegraph.schema import (
+from termin_nanobind.runtime import preload_sdk_libs
+
+preload_sdk_libs("termin_base", "termin_nodegraph_core")
+
+from termin.nodegraph.controller import ConnectResult, GraphController  # noqa: E402
+from termin.nodegraph.io import graph_from_dict, graph_to_dict, load_graph_json, save_graph_json  # noqa: E402
+from termin.nodegraph.model import Edge, Graph, Group, Node, Socket  # noqa: E402
+from termin.nodegraph.schema import (  # noqa: E402
     ConnectionValidator,
     DictSchemaProvider,
     DefaultConnectionValidator,

@@ -87,6 +87,60 @@ save_graph_json(graph, "graph.json")
 graph2 = load_graph_json("graph.json")
 ```
 
+## C++ view from Python
+
+`termin.nodegraph.cpp_view.CppNodeGraphView` uses the same C++ view as native
+and WPF callers. It shares the existing graph with `GraphController` and
+registers its widgets in the caller's `TcDocument`. The full and graphics
+SDK profiles include the bridge. Core-only builds expose the graph API.
+
+```python
+from termin.nodegraph.cpp_view import CppNodeGraphView
+
+view = CppNodeGraphView(
+    document,
+    ctrl,
+    on_graph_changed=lambda revision: print(revision),
+    on_param_changed=lambda node, name, value: print(node.id, name, value),
+)
+document.add_root(view.root_handle)
+# The host supplies presentation metrics, layout, paint and input dispatch.
+```
+
+`parameter_widget(node_id, name)` and `body_widget(node_id)` resolve to
+document-owned widget references. `world_to_screen` and `screen_to_world`
+convert between graph units and document coordinates after layout. The context
+callback receives a dictionary with `kind`, `world_x`, `world_y` and the
+applicable semantic IDs. For sockets it also includes `socket_name` and
+`socket_direction` (`input` or `output`).
+
+`sync()` updates the projection when the controller graph revision changes.
+`rebuild()` also refreshes presentation and preserves live body widgets for
+the same graph. `set_graph(graph)` switches the controller and view
+together and applies the controller's validator to the replacement. Call
+`close()` on the document thread to remove the view. Its document keeps
+the bridge alive even if Python drops its reference. Destroying the native
+root or its document also closes the view and releases callback
+registrations. Defer rebuild, graph replacement, and view, widget or
+document destruction until input or presentation callbacks return.
+If projection of a replacement fails, the view closes and the controller
+keeps the replacement graph.
+
+Pass optional presentation callbacks when creating the view:
+
+- `node_palette(node)` returns any of `body`, `title`, `border`, `text` as
+  four sRGB components in the range 0 to 1.
+- `socket_color(node, socket, direction)` and
+  `socket_label(node, socket, direction)` supply a color or display label.
+  Connections use the original socket ID.
+- `parameter_editors(node)` returns dictionaries with a required `name` and
+  optional `label`, `kind` (`auto`, `bool`, `enum`, `int`, `float`, `text`),
+  `min`, `max`, `step`, `decimals`, `choices` (stored value and display label
+  pairs) and native `style`. Returning `None` uses the native defaults.
+- `body_content_provider(document, node)` returns `NodeBodyContent` with an
+  unattached `WidgetRef` from that document, a `NodeBodyLayout`, and an
+  optional update callback. The view owns the widget after acceptance.
+
 ## Interactive native example
 
 The installed-SDK acceptance coverage, including Plot2D and Plot3D node body
