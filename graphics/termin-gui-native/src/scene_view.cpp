@@ -356,12 +356,13 @@ namespace termin::gui_native {
             invalidate_scene();
             return TC_UI_EVENT_HANDLED;
         }
-        if (event->type == TC_UI_POINTER_WHEEL && detail::rect_contains(bounds(), event->x, event->y)) {
+        if (navigation_enabled_ && event->type == TC_UI_POINTER_WHEEL &&
+            detail::rect_contains(bounds(), event->x, event->y)) {
             const float factor = event->wheel_y > 0.0f ? zoom_factor_ : 1.0f / zoom_factor_;
             set_zoom(zoom_ * factor, {event->x, event->y});
             return TC_UI_EVENT_HANDLED;
         }
-        if (event->type == TC_UI_POINTER_DOWN &&
+        if (navigation_enabled_ && event->type == TC_UI_POINTER_DOWN &&
             event->button == tcbase::mouse_button_value(tcbase::MouseButton::MIDDLE) &&
             detail::rect_contains(bounds(), event->x, event->y)) {
             panning_ = true;

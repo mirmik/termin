@@ -34,6 +34,7 @@ namespace termin::gui_native {
         float max_zoom_ = 4.0f;
         float zoom_factor_ = 1.15f;
         tc_ui_point offset_{};
+        bool navigation_enabled_ = true;
         bool show_grid_ = true;
         float grid_step_ = 40.0f;
         SrgbColor background_{0.10f, 0.11f, 0.13f, 1.0f};
@@ -77,6 +78,11 @@ namespace termin::gui_native {
             return offset_;
         }
         void set_offset(tc_ui_point offset);
+        // Controls the view's own pan and zoom gestures independently of its
+        // domain pointer handler and the document's capture routing.
+        void set_navigation_enabled(bool enabled) {
+            navigation_enabled_ = enabled;
+        }
         bool show_grid() const {
             return show_grid_;
         }

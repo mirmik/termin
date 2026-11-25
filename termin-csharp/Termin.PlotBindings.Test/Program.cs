@@ -1021,6 +1021,7 @@ using var host = new GpuHost(fontPath,
     OperatingSystem.IsWindows() ? BackendType.D3D11 : BackendType.Vulkan);
 if (OperatingSystem.IsWindows())
     TestRetainedChartsAfterShaderArtifactChange(host);
+NativeWidgetBindingChecks.Run(host, fontPath);
 TestManagedChartComposition(host);
 TestRetainedChartAnnotations(host);
 TestRetainedFirstFrames(host);

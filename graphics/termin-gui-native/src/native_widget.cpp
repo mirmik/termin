@@ -20,6 +20,12 @@ namespace termin::gui_native {
     NativeWidget::NativeWidget(const char* debug_name)
         : Widget(&VTABLE, debug_name) {}
 
+    NativeWidget* NativeWidget::from_widget(tc_widget* widget) {
+        if (!widget || widget->vtable != &VTABLE || widget->native_language != TC_LANGUAGE_CXX)
+            return nullptr;
+        return static_cast<NativeWidget*>(static_cast<Widget*>(widget->body));
+    }
+
     tc_ui_style NativeWidget::computed_style(tc_ui_document_handle document, uint32_t extra_state_flags) const {
         tc_ui_style style{};
         if (!tc_ui_document_resolve_style(document, c_widget(), extra_state_flags, &style)) {

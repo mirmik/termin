@@ -80,6 +80,16 @@ public partial class App : Application
             return;
         }
 
+        if (e.Args.Contains("--smoke-native-chart-document", StringComparer.OrdinalIgnoreCase))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var chartWindow = new NativeChartDocumentWindow();
+            MainWindow = chartWindow;
+            chartWindow.Show();
+            chartWindow.StartSmoke();
+            return;
+        }
+
         bool smoke = e.Args.Any(arg => arg.StartsWith("--smoke-", StringComparison.OrdinalIgnoreCase));
         Window window = SmokeWindow(e.Args) ?? new MainWindow();
 

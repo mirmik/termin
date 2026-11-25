@@ -115,3 +115,40 @@ sceneHost.RequestRender();
 Профили SDK `full` и `plot-d3d11` предоставляют один и тот же retained API.
 Примеры XY-маршрута с цветовой шкалой, набора панелей и тепловой карты
 доступны в `examples/PlotDemoApp`.
+
+## График и виджеты в одном native-документе
+
+Откройте **Open 2D chart with native UI controls** в меню `PlotDemoApp`.
+`NativeChartDocumentWindow` собирает общий `NativeUiDocument` из
+`NativeBoxLayout`, `NativeButton`, `NativeLabel` и `NativeSceneView`.
+Добавьте `root.Handle` в документ через `AddRoot`, затем подключите документ
+к `NativeDocumentHost`. Native-дерево управляет layout, фокусом и захватом
+мыши, а один WPF-хост выводит весь документ через D3D11.
+
+`NativeSceneView` заимствует `chart.Scene`. В `LayoutPrepared` берите
+логические размеры из `view.Bounds` и передавайте их в `chart.Resize` с
+`pixelScale: 1`. Плотность экрана применяет renderer документа. Для
+панорамирования и масштабирования отключите `NavigationEnabled` у виджета
+и передайте события `PointerHandler` в `chart.Interaction`. Координаты
+события локальны для сцены. Обрабатывайте `Cancel`, чтобы сбросить drag при
+потере захвата.
+
+`NativeButton.Clicked` срабатывает при активации мышью или клавиатурой.
+Обработчик может изменить данные или видимость серии, обновить `NativeLabel`
+и вызвать `host.RequestRender()`. Изменение дерева, повторную отправку ввода
+и закрытие окна планируйте после возврата из обработчика. Документ владеет
+виджетами, в том числе снятыми с layout. При закрытии освободите WPF-хост,
+затем документ, график и GPU-хост в этом порядке.
+
+Чтобы добавить новый тип виджета в C#, используйте ту же схему. Экспортируйте
+фабрику, которая регистрирует существующий native-виджет в документе и
+возвращает `tc_widget_ref`. Специфичные для типа C-функции проверяют тип при
+разрешении этого дескриптора. В C# обёртка наследует `NativeWidgetRef`, а
+native-подписка освобождает свой контекст при отключении или уничтожении
+виджета.
+
+Проверку WPF/D3D11 можно запустить отдельно на Windows:
+
+```powershell
+dotnet run --project termin-csharp/examples/PlotDemoApp/PlotDemoApp.csproj -- --smoke-native-chart-document
+```

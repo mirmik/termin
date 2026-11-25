@@ -63,6 +63,7 @@ add_library(termin_gui_native ${TERMIN_GUI_NATIVE_LIBRARY_TYPE}
     src/tc_ui_serialization.c
     src/tc_widget.c
     src/tc_widget_registry.c
+    src/widget_bindings_c_api.cpp
     src/builtin_widget_registration.cpp
     src/uiscript.cpp
     src/ui_document_asset.cpp

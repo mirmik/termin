@@ -155,6 +155,18 @@ public sealed class NativeDocumentRenderer : IDisposable
     public uint RenderToTextureHandleId(int width, int height, float densityScale = 1)
     {
         SetMetrics(width, height, densityScale);
+        return RenderToTextureHandleId();
+    }
+    /// <summary>Prepares logical widget bounds using the current presentation metrics.</summary>
+    public void PrepareLayout()
+    {
+        VerifyAccess();
+        Check(NativeDocumentRendererInterop.PrepareLayout(_handle), "prepare layout");
+    }
+    /// <summary>Renders using the current framebuffer metrics.</summary>
+    public uint RenderToTextureHandleId()
+    {
+        VerifyAccess();
         Check(NativeDocumentRendererInterop.Render(_handle, out uint texture), "render");
         ThrowIfCallbackFailed();
         return texture;
@@ -209,11 +221,12 @@ public sealed class NativeDocumentRenderer : IDisposable
             throw new InvalidOperationException("A native document platform callback failed. See error log.", error);
         }
     }
-    private void VerifyAccess()
+    /// <summary>Checks the creating thread, borrowed lifetimes and callback reentry.</summary>
+    public void VerifyAccess()
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(NativeDocumentRenderer));
-        _document.VerifyAccess();
+        _document.VerifyOutsideWidgetCallback();
         if (GpuHost.getCPtr(_host).Handle == IntPtr.Zero)
             throw new ObjectDisposedException(nameof(GpuHost));
         if (_callbackDepth != 0)
@@ -345,6 +358,7 @@ internal static class NativeDocumentRendererInterop
     [DllImport(Dll, EntryPoint = "tc_document_renderer_create", CallingConvention = CallingConvention.Cdecl)] internal static extern NativeUiHandle Create(NativeUiHandle document, IntPtr graphics, ref Config config);
     [DllImport(Dll, EntryPoint = "tc_document_renderer_destroy", CallingConvention = CallingConvention.Cdecl)][return: MarshalAs(UnmanagedType.I1)] internal static extern bool Destroy(NativeUiHandle renderer);
     [DllImport(Dll, EntryPoint = "tc_document_renderer_set_metrics", CallingConvention = CallingConvention.Cdecl)][return: MarshalAs(UnmanagedType.I1)] internal static extern bool SetMetrics(NativeUiHandle renderer, int width, int height, float density);
+    [DllImport(Dll, EntryPoint = "tc_document_renderer_prepare_layout", CallingConvention = CallingConvention.Cdecl)][return: MarshalAs(UnmanagedType.I1)] internal static extern bool PrepareLayout(NativeUiHandle renderer);
     [DllImport(Dll, EntryPoint = "tc_document_renderer_render", CallingConvention = CallingConvention.Cdecl)][return: MarshalAs(UnmanagedType.I1)] internal static extern bool Render(NativeUiHandle renderer, out uint texture);
     [DllImport(Dll, EntryPoint = "tc_document_renderer_dispatch_pointer", CallingConvention = CallingConvention.Cdecl)][return: MarshalAs(UnmanagedType.I1)] internal static extern bool DispatchPointer(NativeUiHandle renderer, ref NativeUiPointerEvent pointer, out int result);
     [DllImport(Dll, EntryPoint = "tc_document_renderer_dispatch_key", CallingConvention = CallingConvention.Cdecl)][return: MarshalAs(UnmanagedType.I1)] internal static extern bool DispatchKey(NativeUiHandle renderer, ref NativeUiKeyEvent key, out int result);

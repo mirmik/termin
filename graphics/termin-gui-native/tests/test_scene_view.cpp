@@ -1,4 +1,9 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include <termin/gui_native/tc_document.hpp>
+#include <termin/gui_native/widget_bindings_c_api.h>
 #include <termin/gui_native/widgets.hpp>
 
 #include <cassert>
@@ -7,6 +12,7 @@
 #include <memory>
 #include <vector>
 
+#include <tcbase/input_enums.hpp>
 #include <termin_visual_scene/builtin_items2d.hpp>
 #include <termin_visual_scene/interaction2d.hpp>
 
@@ -272,6 +278,155 @@ namespace {
         tc_visual_scene_destroy(scene_handle);
     }
 
+    struct CallbackCounters {
+        int calls = 0;
+        int releases = 0;
+        int wheels = 0;
+        int cancels = 0;
+        float x = 0.0f;
+        float y = 0.0f;
+    };
+
+    void record_click(void* data) {
+        ++static_cast<CallbackCounters*>(data)->calls;
+    }
+
+    void release_callback(void* data) {
+        ++static_cast<CallbackCounters*>(data)->releases;
+    }
+
+    bool record_pointer(void* data, float x, float y, const tc_ui_pointer_event* event) {
+        auto& counters = *static_cast<CallbackCounters*>(data);
+        ++counters.calls;
+        if (event->type == TC_UI_POINTER_CANCEL) {
+            ++counters.cancels;
+            return true;
+        }
+        if (event->type != TC_UI_POINTER_WHEEL)
+            return event->type == TC_UI_POINTER_DOWN;
+        ++counters.wheels;
+        counters.x = x;
+        counters.y = y;
+        return true;
+    }
+
+    bool measure_text(void*, const char*, size_t length, float size, tc_ui_text_metrics* metrics) {
+        *metrics = {static_cast<float>(length) * size * 0.5f, size, size * 0.8f, size * 0.2f, size * 1.2f};
+        return true;
+    }
+
+    void test_typed_widget_bindings() {
+        CallbackCounters clicks, pointer, replacement, rejected;
+        const auto document = tc_ui_document_create();
+        const auto metrics = tc_ui_presentation_metrics_identity({640, 320});
+        assert(tc_ui_document_set_presentation_metrics(document, &metrics));
+        tc_ui_document_set_text_measurer(document, measure_text, nullptr);
+        const auto other_document = tc_ui_document_create();
+        const auto scene = tc_visual_scene_create();
+        const auto box = tc_ui_box_create(document, TC_UI_BOX_VERTICAL);
+        const auto button = tc_ui_button_create(document, "Action");
+        const auto label = tc_ui_label_create(document, "Value");
+        const auto view = tc_ui_scene_view_create(document, scene);
+        const auto foreign_button = tc_ui_button_create(other_document, "Other");
+        assert(tc_ui_widget_ref_is_alive(box) && tc_ui_widget_ref_is_alive(button) &&
+               tc_ui_widget_ref_is_alive(label) && tc_ui_widget_ref_is_alive(view));
+        assert(!tc_ui_box_add_child(box, foreign_button, TC_UI_BOX_CHILD_FIXED, 40));
+        assert(!tc_ui_box_add_child(box, box, TC_UI_BOX_CHILD_FIXED, 40));
+        assert(!tc_ui_widget_ref_is_alive(tc_ui_scene_view_create(document, tc_visual_scene_handle_invalid())));
+        assert(tc_ui_document_live_widget_count(document) == 4);
+        assert(tc_ui_document_live_widget_count(other_document) == 1);
+        assert(!tc_ui_button_set_text(label, "Wrong widget"));
+        tc_widget custom{};
+        tc_widget_init_unowned(&custom, nullptr, TC_LANGUAGE_CXX, &custom);
+        const auto custom_handle = tc_ui_document_attach_borrowed_widget(document, &custom);
+        assert(tc_ui_widget_ref_is_alive({document, custom_handle}));
+        assert(!tc_ui_button_set_text({document, custom_handle}, "Incompatible C++ body"));
+        assert(tc_ui_document_destroy_widget(document, custom_handle));
+        tc_widget_deinit_unowned(&custom);
+        assert(tc_ui_label_set_text(label, "Chart value"));
+        assert(tc_ui_button_set_text(button, "Fit"));
+        assert(tc_ui_box_set_spacing(box, 4));
+
+        assert(tc_ui_box_add_child(box, button, TC_UI_BOX_CHILD_FIXED, 40));
+        assert(tc_ui_box_add_child(box, label, TC_UI_BOX_CHILD_FIXED, 24));
+        assert(tc_ui_box_add_child(box, view, TC_UI_BOX_CHILD_FLEX, 1));
+        assert(tc_ui_widget_ref_remove_child(box, label));
+        assert(tc_ui_widget_ref_is_alive(label));
+        assert(tc_ui_box_add_child(box, label, TC_UI_BOX_CHILD_FIXED, 24));
+        assert(tc_ui_document_add_root(document, box.handle));
+        assert(tc_ui_widget_ref_set_enabled(button, false));
+        bool flag = true;
+        assert(tc_ui_widget_ref_get_enabled(button, &flag) && !flag);
+        assert(tc_ui_widget_ref_set_enabled(button, true));
+        assert(tc_ui_widget_ref_set_visible(label, false));
+        assert(tc_ui_widget_ref_get_visible(label, &flag) && !flag);
+        assert(tc_ui_widget_ref_set_visible(label, true));
+        assert(tc_ui_scene_view_set_grid_visible(view, false));
+        assert(tc_ui_scene_view_set_navigation_enabled(view, false));
+
+        assert(tc_ui_button_connect_clicked(label, record_click, &rejected, release_callback) == 0);
+        assert(rejected.releases == 1);
+        const size_t connection = tc_ui_button_connect_clicked(button, record_click, &clicks, release_callback);
+        assert(connection != 0 && clicks.releases == 0);
+        assert(tc_ui_scene_view_set_pointer_handler(view, record_pointer, &pointer, release_callback));
+        tc_ui_document_layout_roots(document, {0, 0, 640, 320});
+        tc_ui_rect bounds{};
+        assert(tc_ui_widget_ref_get_bounds(view, &bounds) && bounds.width == 640 && bounds.height > 200);
+        auto* draw_list = tc_ui_draw_list_create();
+        auto* context = tc_ui_paint_context_create(draw_list);
+        tc_ui_document_paint_roots(document, context);
+        assert(clicks.calls == 0 && pointer.calls == 0);
+        tc_ui_paint_context_destroy(context);
+        tc_ui_draw_list_destroy(draw_list);
+
+        assert(tc_ui_document_set_focus(document, button.handle));
+        tc_ui_key_event key{};
+        key.key = TC_UI_KEY_SPACE;
+        key.type = TC_UI_KEY_DOWN;
+        assert(tc_ui_document_dispatch_key_event(document, &key) == TC_UI_EVENT_HANDLED);
+        key.type = TC_UI_KEY_UP;
+        assert(tc_ui_document_dispatch_key_event(document, &key) == TC_UI_EVENT_HANDLED);
+        assert(clicks.calls == 1);
+        assert(tc_ui_button_disconnect_clicked(button, connection));
+        assert(clicks.releases == 1);
+
+        tc_ui_pointer_event wheel{};
+        wheel.type = TC_UI_POINTER_WHEEL;
+        wheel.x = bounds.x + 20;
+        wheel.y = bounds.y + 10;
+        wheel.wheel_y = 1;
+        assert(tc_ui_document_dispatch_pointer_event(document, &wheel) == TC_UI_EVENT_HANDLED);
+        assert(pointer.wheels == 1 && pointer.x == 20 && pointer.y == 10);
+        tc_ui_pointer_event down{};
+        down.type = TC_UI_POINTER_DOWN;
+        down.button = tcbase::mouse_button_value(tcbase::MouseButton::LEFT);
+        down.x = wheel.x;
+        down.y = wheel.y;
+        assert(tc_ui_document_dispatch_pointer_event(document, &down) == TC_UI_EVENT_HANDLED);
+        assert(tc_widget_handle_eq(tc_ui_document_pointer_capture(document), view.handle));
+        assert(tc_ui_widget_ref_set_visible(view, false));
+        assert(pointer.cancels == 1);
+        assert(tc_widget_handle_is_invalid(tc_ui_document_pointer_capture(document)));
+        assert(tc_ui_widget_ref_set_visible(view, true));
+        assert(tc_ui_scene_view_set_pointer_handler(view, record_pointer, &replacement, release_callback));
+        assert(pointer.releases == 1 && replacement.releases == 0);
+        assert(tc_ui_scene_view_set_pointer_handler(view, nullptr, nullptr, nullptr));
+        assert(replacement.releases == 1);
+        assert(tc_ui_document_dispatch_pointer_event(document, &wheel) == TC_UI_EVENT_IGNORED);
+
+        assert(tc_ui_scene_view_set_pointer_handler(view, record_pointer, &replacement, release_callback));
+        assert(tc_ui_widget_ref_destroy(box));
+        assert(replacement.releases == 2 && clicks.releases == 1);
+        assert(!tc_ui_widget_ref_is_alive(view) && !tc_ui_widget_ref_is_alive(button));
+        assert(tc_visual_scene_is_valid(scene));
+        assert(!tc_ui_button_set_text(button, "Stale"));
+        assert(tc_ui_button_connect_clicked(foreign_button, record_click, &clicks, release_callback) != 0);
+        tc_ui_document_destroy(other_document);
+        assert(clicks.releases == 2);
+        tc_ui_document_destroy(document);
+        tc_visual_scene_destroy(scene);
+    }
+
 } // namespace
 
 int main() {
@@ -279,5 +434,6 @@ int main() {
     test_view_transform_forwarding_pan_zoom_and_draw_list_bridge();
     test_widget_portal_has_separate_document_lifetime();
     test_widget_portal_uses_scene_paint_and_hit_order();
+    test_typed_widget_bindings();
     return EXIT_SUCCESS;
 }

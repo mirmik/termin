@@ -29,6 +29,11 @@ public partial class MainWindow : Window
         new Plot2DWindow().Show();
     }
 
+    private void OnOpenNativeChartDocument(object sender, RoutedEventArgs e)
+    {
+        new NativeChartDocumentWindow().Show();
+    }
+
     private void OnOpenRoute2D(object sender, RoutedEventArgs e)
     {
         new RoutePlot2DWindow().Show();

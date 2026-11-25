@@ -82,7 +82,7 @@ $demoOutput = Join-Path $RepoRoot "build\plot-demo-smoke\bin\"
 if ($LASTEXITCODE -ne 0) { throw "PlotDemoApp build failed with exit code $LASTEXITCODE" }
 $env:TERMIN_PLOT_DEMO_CAPTURE_DIR = $logRoot
 $demoExecutable = Join-Path $demoOutput "Release\net8.0-windows\PlotDemoApp.exe"
-foreach ($demoMode in @("axis-display", "color-presentation", "2d-hosts-1x1", "2d-hosts-2x2", "heatmap2d")) {
+foreach ($demoMode in @("axis-display", "color-presentation", "2d-hosts-1x1", "2d-hosts-2x2", "heatmap2d", "native-chart-document")) {
     $demoProcess = Start-Process -FilePath $demoExecutable -ArgumentList "--smoke-$demoMode" -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") `
         -RedirectStandardError (Join-Path $logRoot "plot-demo-$demoMode.stderr.log")
@@ -102,6 +102,10 @@ foreach ($demoMode in @("axis-display", "color-presentation", "2d-hosts-1x1", "2
     if ($demoMode -eq "heatmap2d" -and
         -not (Select-String -Path (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") -Pattern "HEATMAP_SMOKE_OK" -Quiet)) {
         throw "PlotDemoApp heatmap smoke did not complete its pixel checks. See build/logs/plot-demo-heatmap2d.*.log"
+    }
+    if ($demoMode -eq "native-chart-document" -and
+        -not (Select-String -Path (Join-Path $logRoot "plot-demo-$demoMode.stdout.log") -Pattern "NATIVE_CHART_DOCUMENT_SMOKE_OK" -Quiet)) {
+        throw "PlotDemoApp native chart document smoke did not complete. See build/logs/plot-demo-native-chart-document.*.log"
     }
     Write-Host "PlotDemoApp $demoMode WPF smoke passed."
 }

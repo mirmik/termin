@@ -237,6 +237,17 @@ bool tc_document_renderer_render(tc_document_renderer_handle handle, uint32_t* o
     });
 }
 
+bool tc_document_renderer_prepare_layout(tc_document_renderer_handle handle) {
+    return access(handle, [&](Entry& entry) {
+        const auto document = entry.renderer->document();
+        tc_ui_rect layout{};
+        if (!entry.renderer->sync_presentation_metrics() || !document.presentation_layout_rect(layout))
+            throw std::runtime_error("native document renderer could not prepare a presentation layout");
+        document.layout_roots(layout);
+        return true;
+    });
+}
+
 bool tc_document_renderer_dispatch_pointer(
     tc_document_renderer_handle handle, const tc_ui_pointer_event* event, tc_ui_event_result* out_result) {
     if (out_result)

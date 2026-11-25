@@ -148,6 +148,11 @@ Both `full` and `plot-d3d11` expose `Chart2D`, `MultiChart2D`, and
 See [2D chart customization](tcplot-customization.md) and
 [3D chart customization](tcplot-3d-customization.md).
 
+To place native buttons, labels and a chart in one WPF document, use
+`NativeBoxLayout`, `NativeButton`, `NativeLabel` and `NativeSceneView` with
+`NativeDocumentHost`. The [native chart document example](tcplot-customization.md#график-и-виджеты-в-одном-native-документе)
+shows how to share layout, input and rendering across the widgets.
+
 `Termin.Wpf` is Windows-only and multitargets `netcoreapp3.1` plus `net8.0-windows` through the WindowsDesktop SDK. The Windows SDK drop writes framework-specific managed assemblies under `sdk/csharp/lib/<tfm>/`; flat `sdk/csharp/lib/*.dll` copies are kept for legacy consumers and use the `netcoreapp3.1` WPF assembly. The Linux `build-sdk-csharp.sh` stage builds and packages `Termin.Native` plus Linux native `.so` runtime artifacts, but intentionally does not build `Termin.Wpf`.
 
 WPF scene hosts use the full D3D11-only SDK:

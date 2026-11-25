@@ -56,6 +56,8 @@ public sealed class NativeUiDocument : IDisposable
     private readonly int _thread = Thread.CurrentThread.ManagedThreadId;
     private NativeUiHandle _handle;
     private int _borrowers;
+    private int _widgetCallbackDepth;
+    private Exception? _widgetCallbackError;
     private readonly List<System.Action> _callbackChecks = new();
     private bool _disposed;
 
@@ -108,16 +110,18 @@ public sealed class NativeUiDocument : IDisposable
 
     public void AddRoot(NativeWidgetHandle widget)
     {
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         if (!ReferenceEquals(widget.Owner, this) || !NativeUiDocumentInterop.AddRoot(_handle, widget.Raw))
             throw new ArgumentException("Root widget must be alive in this document. See native log.", nameof(widget));
+        ThrowPendingCallbackExceptions();
     }
 
     public void RemoveRoot(NativeWidgetHandle widget)
     {
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         if (!ReferenceEquals(widget.Owner, this) || !NativeUiDocumentInterop.RemoveRoot(_handle, widget.Raw))
             throw new ArgumentException("Widget is not a root of this document. See native log.", nameof(widget));
+        ThrowPendingCallbackExceptions();
     }
 
     public bool IsAlive(NativeWidgetHandle widget)
@@ -126,9 +130,17 @@ public sealed class NativeUiDocument : IDisposable
         return ReferenceEquals(widget.Owner, this) && NativeUiDocumentInterop.IsAlive(_handle, widget.Raw);
     }
 
+    /// <summary>Resolve a live widget to its common document-owned operations.</summary>
+    public NativeWidgetRef ResolveWidget(NativeWidgetHandle widget)
+    {
+        if (!IsAlive(widget))
+            throw new ArgumentException("Widget must be alive in this document.", nameof(widget));
+        return new NativeWidgetRef(this, new NativeWidgetRefInterop(_handle, widget.Raw));
+    }
+
     public void Focus(NativeWidgetHandle widget)
     {
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         if (!ReferenceEquals(widget.Owner, this) || !NativeUiDocumentInterop.SetFocus(_handle, widget.Raw))
             throw new ArgumentException("Focused widget must be alive and focusable in this document. See native log.", nameof(widget));
         ThrowPendingCallbackExceptions();
@@ -137,7 +149,7 @@ public sealed class NativeUiDocument : IDisposable
     /// <summary>Low-level document input for headless hosts; a renderer supplies platform services.</summary>
     public bool DispatchKey(NativeUiKeyEvent key)
     {
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         bool handled = NativeUiDocumentInterop.DispatchKey(_handle, ref key) != 0;
         ThrowPendingCallbackExceptions();
         return handled;
@@ -145,7 +157,7 @@ public sealed class NativeUiDocument : IDisposable
 
     public bool DispatchPointer(NativeUiPointerEvent pointer)
     {
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         bool handled = NativeUiDocumentInterop.DispatchPointer(_handle, ref pointer) != 0;
         ThrowPendingCallbackExceptions();
         return handled;
@@ -153,7 +165,7 @@ public sealed class NativeUiDocument : IDisposable
 
     public bool DispatchText(string text)
     {
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         if (text is null)
             throw new ArgumentNullException(nameof(text));
         if (text.IndexOf('\0') >= 0)
@@ -166,7 +178,7 @@ public sealed class NativeUiDocument : IDisposable
 
     public void LayoutRoots(NativeUiRect viewport)
     {
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         if (!(viewport.Width > 0) || !(viewport.Height > 0) ||
             float.IsInfinity(viewport.Width) || float.IsInfinity(viewport.Height))
             throw new ArgumentOutOfRangeException(nameof(viewport));
@@ -181,9 +193,37 @@ public sealed class NativeUiDocument : IDisposable
             throw new ObjectDisposedException(nameof(NativeUiDocument));
     }
 
-    internal void AcquireBorrower()
+    internal bool IsDisposed => _disposed;
+
+    internal void VerifyOutsideWidgetCallback()
     {
         VerifyAccess();
+        if (_widgetCallbackDepth != 0)
+            throw new InvalidOperationException("Defer document dispatch, layout and widget lifetime changes until the input callback returns.");
+    }
+
+    internal T RunWidgetCallback<T>(Func<T> callback, T failure)
+    {
+        ++_widgetCallbackDepth;
+        try
+        {
+            return callback();
+        }
+        catch (Exception error)
+        {
+            _widgetCallbackError ??= error;
+            Console.Error.WriteLine($"[Termin.Native.Widget] Managed input callback failed: {error}");
+            return failure;
+        }
+        finally
+        {
+            --_widgetCallbackDepth;
+        }
+    }
+
+    internal void AcquireBorrower()
+    {
+        VerifyOutsideWidgetCallback();
         checked
         {
             ++_borrowers;
@@ -206,6 +246,11 @@ public sealed class NativeUiDocument : IDisposable
     }
     internal void ThrowPendingCallbackExceptions()
     {
+        if (_widgetCallbackError is Exception error)
+        {
+            _widgetCallbackError = null;
+            throw new InvalidOperationException("A native widget input callback failed. See error log.", error);
+        }
         foreach (System.Action check in _callbackChecks)
             check();
     }
@@ -214,12 +259,13 @@ public sealed class NativeUiDocument : IDisposable
     {
         if (_disposed)
             return;
-        VerifyAccess();
+        VerifyOutsideWidgetCallback();
         if (_borrowers != 0)
             throw new InvalidOperationException("Dispose native document views and renderers before their document.");
         NativeUiDocumentInterop.Destroy(_handle);
         _disposed = true;
         GC.SuppressFinalize(this);
+        ThrowPendingCallbackExceptions();
     }
 }
 

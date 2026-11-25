@@ -44,6 +44,9 @@ TERMIN_GUI_NATIVE_RENDERER_API bool tc_document_renderer_destroy(tc_document_ren
 TERMIN_GUI_NATIVE_RENDERER_API bool tc_document_renderer_is_valid(tc_document_renderer_handle renderer);
 TERMIN_GUI_NATIVE_RENDERER_API bool tc_document_renderer_set_metrics(
     tc_document_renderer_handle renderer, int32_t width, int32_t height, float density_scale);
+/* Lay out the document using the current presentation metrics. Hosts can read
+ * logical widget bounds and synchronize borrowed scene geometry before render. */
+TERMIN_GUI_NATIVE_RENDERER_API bool tc_document_renderer_prepare_layout(tc_document_renderer_handle renderer);
 /* Returns a borrowed RGBA16F DisplayLinear texture ID, valid on the borrowed
  * graphics device until resize/next render/destroy. Presentation must apply the
  * normal DisplayLinear -> output transfer (e.g. the D3DImage presenter). */

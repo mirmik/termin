@@ -13,6 +13,7 @@ namespace termin::gui_native {
     public:
         explicit NativeWidget(const char* debug_name = nullptr);
         ~NativeWidget() override = default;
+        static NativeWidget* from_widget(tc_widget* widget);
         tc_ui_rect bounds() const {
             return tc_widget_bounds(c_widget());
         }

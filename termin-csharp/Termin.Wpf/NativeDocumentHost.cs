@@ -73,6 +73,8 @@ public sealed class NativeDocumentHost : Grid, IDisposable, INativeDocumentPlatf
         }
     }
     public event EventHandler<NativeDocumentRenderFailedEventArgs>? RenderFailed;
+    /// <summary>Runs between native layout and painting. Use it to size borrowed scene content.</summary>
+    public event EventHandler? LayoutPrepared;
     public event EventHandler? FrameRendered;
 
     public void Attach(GpuHost host, NativeUiDocument document, string fontPath)
@@ -88,6 +90,7 @@ public sealed class NativeDocumentHost : Grid, IDisposable, INativeDocumentPlatf
     public void Detach()
     {
         VerifyHostAccess();
+        _renderer?.VerifyAccess();
         UnsubscribeRendering();
         // Release the WPF backbuffer reference before destroying native targets.
         _renderHost.ReleaseNativeResources();
@@ -126,17 +129,30 @@ public sealed class NativeDocumentHost : Grid, IDisposable, INativeDocumentPlatf
     public void RenderFrame()
     {
         VerifyHostAccess();
-        if (_renderer is null)
+        NativeDocumentRenderer? renderer = _renderer;
+        if (renderer is null)
             return;
         _width = Math.Max(1, _renderHost.FramebufferWidth);
         _height = Math.Max(1, _renderHost.FramebufferHeight);
         _density = (float)VisualTreeHelper.GetDpi(_renderHost).DpiScaleX;
         _renderRequested = false;
-        uint texture = _renderer.RenderToTextureHandleId(_width, _height, _density);
+        renderer.SetMetrics(_width, _height, _density);
+        var layoutPrepared = LayoutPrepared;
+        if (layoutPrepared is not null)
+        {
+            renderer.PrepareLayout();
+            layoutPrepared(this, EventArgs.Empty);
+            if (!ReferenceEquals(renderer, _renderer))
+                return;
+        }
+        uint texture = renderer.RenderToTextureHandleId();
         // A temporarily unavailable WPF front buffer will be retried on the
         // next composition frame, without changing native document ownership.
         if (!_renderHost.Present(texture, _width, _height))
+        {
             _renderRequested = true;
+            return;
+        }
         FrameRendered?.Invoke(this, EventArgs.Empty);
     }
 

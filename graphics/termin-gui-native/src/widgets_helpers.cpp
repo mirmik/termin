@@ -335,10 +335,7 @@ namespace termin::gui_native::detail {
     }
 
     NativeWidget* native_widget_body(tc_widget* widget) {
-        if (!widget || widget->native_language != TC_LANGUAGE_CXX || !widget->body) {
-            return nullptr;
-        }
-        return dynamic_cast<NativeWidget*>(static_cast<Widget*>(widget->body));
+        return NativeWidget::from_widget(widget);
     }
 
     void layout_widget(tc_widget* widget, tc_ui_document_handle document, tc_ui_rect rect) {
