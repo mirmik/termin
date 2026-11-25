@@ -19,6 +19,7 @@
 #include "tcplot/plot_layout2d.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include "termin/render/color_pass.hpp"
+#include "termin/render/annotation_pass.hpp"
 #include "termin/render/present_pass.hpp"
 #include "termin/render/depth_pass.hpp"
 #include "termin/render/ground_grid_pass.hpp"
@@ -187,6 +188,7 @@ CSHARP_COMPONENT_OWNER_REF(termin::RotatorComponent)
 CSHARP_COMPONENT_OWNER_REF(termin::ActuatorComponent)
 
 // Apply to pass classes
+CSHARP_PASS_OWNER_REF(termin::AnnotationPass)
 CSHARP_PASS_OWNER_REF(termin::ColorPass)
 CSHARP_PASS_OWNER_REF(termin::PresentToScreenPass)
 CSHARP_PASS_OWNER_REF(termin::DepthPass)
@@ -633,6 +635,9 @@ struct ResourceSpec {
     ResourceSpec();
 
     %extend {
+        void set_clear_linear_color(float r, float g, float b, float a) {
+            $self->clear_color = termin::LinearColor{r, g, b, a};
+        }
         void set_format(const std::string& format) {
             if (format.empty())
                 $self->format.reset();
@@ -907,6 +912,13 @@ public:
 // ============================================================================
 // ColorPass - main color rendering pass
 // ============================================================================
+
+class AnnotationPass {
+public:
+    AnnotationPass(const std::string& input = "color", const std::string& output = "annotated");
+    bool set_scene(unsigned int index, unsigned int generation, float pixels_per_dip);
+    tc_pass* tc_pass_ptr();
+};
 
 class ColorPass {
 public:

@@ -41,6 +41,10 @@ reference under `ref/net8.0` and each platform's implementation under
 assembly and native files for the target RID. The transitive MSBuild
 target copies the shader files and font to `share/termin`.
 
+To test a change from a local feed under its own package identity, pass
+`-- --prerelease-version 0.5.5-preview.1` to `task package:engine:nuget`.
+Use the resulting file with `task test:engine:nuget -- --package <file>`.
+
 ## Gate and release
 
 Run `task test:engine:nuget` on both platforms with the exact same

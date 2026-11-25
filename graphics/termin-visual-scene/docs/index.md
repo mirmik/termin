@@ -84,9 +84,9 @@ ancestors skip their subtree. Disabled items still paint with
 `effective_enabled = false`, allowing the consumer to choose their appearance.
 
 The C++ `ScenePaintSink3D` in `paint3d.hpp` is the adapter seam for an external
-`RenderItemSource` or immediate-renderer collector. Camera projection and
-render-engine integration remain outside this package; `termin-visual-scene`
-does not depend on `tc_scene` or `termin-render-core`.
+`RenderItemSource` or immediate-renderer collector. The host supplies the
+projection and owns GPU resources. The annotation geometry helper uses that
+projection to produce a colored triangle stream.
 
 ### Built-in 3D items
 
@@ -115,6 +115,46 @@ destroyed. Built-in draw packet structures therefore contain non-trivial C++
 objects: a protocol adapter must cast the borrowed packet to its declared type
 and copy-construct the packet or its resource handle. It must never preserve or
 byte-copy the raw payload storage after `submit` returns.
+
+### Screen-space 3D annotations
+
+Create a retained annotation item with `tc_visual_annotation_item3d_create`
+in `tc_visual_annotation3d.h`. Its line and arrow ends, marker centers and
+convex quad corners live in item-local 3D coordinates. The pen width,
+marker radius and maximum arrowhead length are in device-independent pixels.
+The camera and device scale come from each view at draw time.
+
+`tc_visual_annotation_item3d_set` validates and copies an ordered command
+array. Each command carries straight-alpha sRGB color packed as
+`0xRRGGBBAA`. Layer a filled disc, a stroked ring and a smaller disc at one
+anchor for a selection marker. Submit a translucent quad before its outline
+to keep the contour visible.
+
+The C packet for `termin.visual.annotation.v1` borrows its command array
+during submission. A deferred sink copies the array. Native `SceneView3D`
+draws the packet at its position in scene order with depth writes and depth
+testing disabled. Use `SceneView3D::invalidate_scene()` after editing items
+in an on-demand view.
+
+In a C# engine viewport, create a `Termin.Native.VisualAnnotationScene`
+and an `AnnotationPass` on the render thread. Give the pass the input
+color resource and a new output name. Export the latter from the pipeline.
+After an opaque mesh pass this overlays annotations on the mesh image.
+An annotation-only viewport can use a cleared color resource directly.
+
+```csharp
+annotations.SetCommands(new[] {
+    VisualAnnotation3D.Line(start, end, 0x54D7D4FF, widthDip: 2),
+    VisualAnnotation3D.Ring(start, 0xC996FFFF, radiusDip: 6, widthDip: 1.5f)
+});
+annotations.Bind(annotationPass, framebufferPixelsPerDip);
+```
+
+`CreateBatch()` appends another retained item. Updating that batch leaves
+the earlier items in place, which lets a moving probe reuse the grid and
+scan path. Rebind the display scale after DPI or render-resolution changes.
+The pass borrows the scene. Keep both alive while the pipeline uses them
+and destroy the pipeline before disposing the managed pass and scene.
 
 The module is deliberately modeled after the native widget object model:
 

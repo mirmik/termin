@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import zipfile
@@ -169,12 +170,19 @@ def _licenses(repo: Path) -> dict[str, bytes]:
     }
 
 
-def pack(repo: Path, stages: dict[str, Path], destination: Path) -> Path:
-    version = public_version()
+def is_prerelease_version(version: str) -> bool:
+    return re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*", version) is not None
+
+
+def pack(repo: Path, stages: dict[str, Path], destination: Path, *, prerelease_version: str | None = None) -> Path:
+    sdk_version = public_version()
+    if prerelease_version is not None and not is_prerelease_version(prerelease_version):
+        raise EngineNugetError(f"Invalid NuGet prerelease version: {prerelease_version}")
+    version = prerelease_version or sdk_version
     payload: dict[str, bytes] = {}
     inputs, shaders = [], []
     for rid in BACKENDS:
-        manifest, files = _read_stage(stages[rid], rid, version)
+        manifest, files = _read_stage(stages[rid], rid, sdk_version)
         shaders.append(json.loads(files.pop(SHADERS)))
         # Earlier SDKs installed a different font with the same filename.
         files.pop(SDK_FONT, None)

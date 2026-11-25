@@ -7,12 +7,46 @@
 #include <string>
 #include <vector>
 
+#include "termin_visual_scene/annotation_geometry3d.hpp"
 #include "termin_visual_scene/items/group_item3d.hpp"
 #include "termin_visual_scene/items/point_cloud_item3d.hpp"
 #include "termin_visual_scene/items/primitive_item3d.hpp"
 #include "termin_visual_scene/items/static_mesh_item3d.hpp"
 
 namespace {
+
+    void test_annotation_projection() {
+        const auto project = [](const tc_visual_annotation3d& command, float dpi) {
+            std::vector<float> vertices;
+            termin::visual::append_annotation_triangles(vertices, {&command, 1}, tc_affine3d_identity(),
+                                                        termin::Mat44::identity(), 200, 100, dpi);
+            return vertices;
+        };
+        tc_visual_annotation3d line{};
+        line.kind = TC_VISUAL_ANNOTATION_LINE;
+        line.rgba = 0xFF000080;
+        line.points[0][0] = -1;
+        line.points[0][2] = -1;
+        line.points[1][0] = 1;
+        line.points[1][2] = 1;
+        line.width_dip = 2;
+        for (float dpi : {1.f, 2.f}) {
+            const auto vertices = project(line, dpi);
+            assert(!vertices.empty());
+            float max_y_px = 0, peak_alpha = 0;
+            for (size_t i = 0; i < vertices.size(); i += 7) {
+                // The negative-Z half of the segment was clipped.
+                assert(vertices[i] >= 0 && vertices[i] <= 1);
+                max_y_px = std::max(max_y_px, vertices[i + 1] * 50);
+                assert(vertices[i + 3] == 1 && vertices[i + 4] == 0 && vertices[i + 5] == 0);
+                peak_alpha = std::max(peak_alpha, vertices[i + 6]);
+            }
+            assert(std::abs(max_y_px - (dpi + 0.5f)) < 1e-5f);
+            assert(std::abs(peak_alpha - 128.f / 255.f) < 1e-5f);
+        }
+        line.points[1][2] = -0.5f;
+        assert(project(line, 1).empty());
+    }
 
     bool close(double left, double right) {
         return std::abs(left - right) < 1.0e-9;
@@ -129,6 +163,7 @@ namespace {
 } // namespace
 
 int main() {
+    test_annotation_projection();
     using termin::Affine3d;
     using termin::visual::GroupItem3D;
     using termin::visual::PointCloudItem3D;

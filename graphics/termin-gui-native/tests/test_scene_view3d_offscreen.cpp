@@ -9,6 +9,7 @@
 
 #include <termin/camera/orbit_camera.hpp>
 #include <termin_visual_scene/items/static_mesh_item3d.hpp>
+#include <termin_visual_scene/tc_visual_annotation3d.h>
 #include <tgfx2/device_factory.hpp>
 
 namespace {
@@ -94,7 +95,7 @@ int main() {
         auto* view = new termin::gui_native::SceneView3D(scene);
         composition.document().adopt(view);
         composition.document().add_root(*view);
-        const termin::OrbitCamera camera = preview_camera();
+        termin::OrbitCamera camera = preview_camera();
         int provider_calls = 0;
         view->set_camera_provider([&camera, &provider_calls](termin::gui_native::ViewportSurfaceSize size)
                                       -> std::optional<termin::gui_native::SceneView3DCamera> {
@@ -211,6 +212,31 @@ int main() {
         if (composition.pump_input() != 2 || actions != 1) {
             std::fprintf(stderr, "SceneView3D did not route the headless click to its item\n");
             return 1;
+        }
+        const tc_visual_item3d_handle marker = tc_visual_annotation_item3d_create(scene_handle);
+        const tc_visual_annotation3d disc{.kind = TC_VISUAL_ANNOTATION_DISC,
+                                          .rgba = 0xff00ffff,
+                                          .points = {{static_cast<float>(camera.target.x),
+                                                      static_cast<float>(camera.target.y),
+                                                      static_cast<float>(camera.target.z)}},
+                                          .radius_dip = 6.0f};
+        if (!tc_visual_annotation_item3d_set(scene_handle, marker, &disc, 1))
+            return 1;
+        for (const double distance : {5.0, 30.0}) {
+            camera.distance = distance;
+            view->invalidate_scene();
+            if (!composition.render_frame())
+                return 1;
+            const auto marked = composition.read_frame_rgba_float();
+            const auto magenta = [&](int x, int y) {
+                const auto index = (static_cast<std::size_t>(y) * 64 + x) * 4;
+                return marked[index] > 0.75f && marked[index + 1] < 0.25f && marked[index + 2] > 0.75f;
+            };
+            if (!magenta(32, 32) || !magenta(36, 32) || magenta(40, 32)) {
+                std::fprintf(
+                    stderr, "SceneView3D disc has incorrect position, color or radius at distance %g\n", distance);
+                return 1;
+            }
         }
         if (!scene.destroy(*item)) {
             std::fprintf(stderr, "failed to destroy SceneView3D textured item\n");

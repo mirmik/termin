@@ -17,6 +17,7 @@
 
 #include <termin/camera/screen_ray.hpp>
 #include <termin/geom/mat44.hpp>
+#include <termin_visual_scene/annotation_geometry3d.hpp>
 #include <termin_visual_scene/items/item3d_packets.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/descriptors.hpp>
@@ -128,13 +129,13 @@ namespace termin::gui_native {
             return std::memcmp(&left, &right, sizeof(SceneView3DCamera)) == 0;
         }
 
-        ViewportSurfaceSize pixel_size(tc_ui_rect rect) {
+        ViewportSurfaceSize pixel_size(tc_ui_rect rect, float density) {
             if (!std::isfinite(rect.width) || !std::isfinite(rect.height) || rect.width <= 0.0f ||
                 rect.height <= 0.0f) {
                 return {};
             }
-            const double width = std::round(static_cast<double>(rect.width));
-            const double height = std::round(static_cast<double>(rect.height));
+            const double width = std::round(static_cast<double>(rect.width) * density);
+            const double height = std::round(static_cast<double>(rect.height) * density);
             if (width <= 0.0 || height <= 0.0) {
                 return {};
             }
@@ -161,6 +162,7 @@ namespace termin::gui_native {
             termin::visual::PrimitiveDrawPacket3D primitive;
             termin::visual::StaticMeshDrawPacket3D mesh;
             termin::visual::PointCloudDrawPacket3D point_cloud;
+            std::vector<tc_visual_annotation3d> annotations;
         };
 
         class CollectingSink final : public termin::visual::ScenePaintSink3D {
@@ -192,6 +194,16 @@ namespace termin::gui_native {
                            submission.packet.payload_size == sizeof(draw.point_cloud)) {
                     draw.point_cloud =
                         *static_cast<const termin::visual::PointCloudDrawPacket3D*>(submission.packet.payload);
+                } else if (draw.protocol == TC_VISUAL_ANNOTATION_PROTOCOL_3D &&
+                           submission.packet.payload_size == sizeof(tc_visual_annotation_packet3d)) {
+                    const auto& packet = *static_cast<const tc_visual_annotation_packet3d*>(submission.packet.payload);
+                    if (packet.count) {
+                        if (!packet.commands) {
+                            tc_log_error("[termin-gui-native] SceneView3D received a null annotation array");
+                            return false;
+                        }
+                        draw.annotations.assign(packet.commands, packet.commands + packet.count);
+                    }
                 } else {
                     tc_log_error("[termin-gui-native] SceneView3D has no renderer for protocol '%s'",
                                  submission.packet.protocol);
@@ -570,7 +582,7 @@ namespace termin::gui_native {
     }
 
     bool SceneView3D::sync_framebuffer_size() {
-        const ViewportSurfaceSize next = pixel_size(bounds());
+        const ViewportSurfaceSize next = pixel_size(bounds(), density_scale_);
         if (next == requested_size_)
             return false;
         requested_size_ = next;
@@ -955,7 +967,12 @@ namespace termin::gui_native {
         return false;
     }
 
-    void SceneView3D::prepare_render(tgfx::RenderContext2& context, tgfx::FontAtlas&, float) {
+    void SceneView3D::prepare_render(tgfx::RenderContext2& context, tgfx::FontAtlas&, float density_scale) {
+        if (density_scale_ != density_scale) {
+            density_scale_ = density_scale;
+            sync_framebuffer_size();
+            render_dirty_ = true;
+        }
         if (requested_size_.width <= 0 || requested_size_.height <= 0 || !update_camera_from_provider())
             return;
         RenderState& state = *render_state_;
@@ -1030,7 +1047,18 @@ namespace termin::gui_native {
             cache.used = false;
 
         for (const CollectedDraw& draw : sink.draws) {
-            if (draw.protocol == termin::visual::PrimitiveDrawProtocol3D && draw.primitive.geometry) {
+            if (draw.protocol == TC_VISUAL_ANNOTATION_PROTOCOL_3D) {
+                context.set_polygon_mode(tgfx::PolygonMode::Fill);
+                state.immediate.begin();
+                termin::visual::append_annotation_triangles(state.immediate.tri_vertices,
+                                                            {draw.annotations.data(), draw.annotations.size()},
+                                                            draw.world_from_local,
+                                                            view_projection,
+                                                            view.viewport_width,
+                                                            view.viewport_height,
+                                                            density_scale);
+                state.immediate.flush(&context, termin::Mat44::identity(), termin::Mat44::identity(), false, true);
+            } else if (draw.protocol == termin::visual::PrimitiveDrawProtocol3D && draw.primitive.geometry) {
                 context.set_polygon_mode(tgfx::PolygonMode::Fill);
                 const auto& geometry = *draw.primitive.geometry;
                 state.immediate.begin();

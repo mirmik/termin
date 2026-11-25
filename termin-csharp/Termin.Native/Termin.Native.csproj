@@ -25,6 +25,7 @@
   <ItemGroup Condition="'$(TerminCsharpProfile)' == 'plot-d3d11'">
     <Compile Remove="D3D11OffscreenDisplay.cs" />
     <Compile Remove="OffscreenDisplay.cs" />
+    <Compile Remove="VisualAnnotationScene.cs" />
     <Compile Remove="ComponentRef.cs" />
     <Compile Remove="CSharpComponent.cs" />
     <Compile Remove="CSharpComponentRuntime.cs" />

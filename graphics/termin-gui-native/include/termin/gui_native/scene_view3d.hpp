@@ -88,6 +88,7 @@ namespace termin::gui_native {
         termin::visual::SceneInteraction3D interaction_;
         std::unique_ptr<RenderState> render_state_;
         ViewportSurfaceSize requested_size_{};
+        float density_scale_ = 1.0f;
         termin::LinearColor clear_color_{0.06f, 0.07f, 0.09f, 1.0f};
         SceneView3DShadingMode shading_mode_ = SceneView3DShadingMode::Flat;
         bool wireframe_enabled_ = false;

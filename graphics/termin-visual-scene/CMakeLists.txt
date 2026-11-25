@@ -41,6 +41,8 @@ add_library(termin_visual_scene ${_TERMIN_VISUAL_SCENE_LIBRARY_TYPE}
     src/tc_visual_scene.c
     src/tc_visual_item3d.c
     src/tc_visual_scene3d.c
+    src/tc_visual_annotation3d.c
+    src/annotation_geometry3d.cpp
     src/tc_visual_scene_item2d.cpp
     src/tc_builtin_items2d.cpp
     src/graphic_item2d.cpp

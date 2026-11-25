@@ -1,7 +1,9 @@
 #include <assert.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
+#include "termin_visual_scene/tc_visual_annotation3d.h"
 #include "termin_visual_scene/tc_visual_scene3d.h"
 
 typedef struct test_item3d {
@@ -41,7 +43,58 @@ static test_item3d* make_item(int* deletes) {
     return result;
 }
 
+static bool begin_batch(const tc_visual_view3d* view, void* data) {
+    (void)view;
+    *(size_t*)data = 0;
+    return true;
+}
+
+static bool collect_annotations(const tc_visual_draw_submission3d* submission, void* data) {
+    assert(strcmp(submission->packet.protocol, TC_VISUAL_ANNOTATION_PROTOCOL_3D) == 0);
+    assert(submission->packet.payload_size == sizeof(tc_visual_annotation_packet3d));
+    const tc_visual_annotation_packet3d* batch = submission->packet.payload;
+    assert(batch->count == 2);
+    assert(batch->commands[0].kind == TC_VISUAL_ANNOTATION_ARROW);
+    assert(batch->commands[0].head_dip == 8);
+    assert(batch->commands[1].kind == TC_VISUAL_ANNOTATION_RING);
+    assert(batch->commands[1].radius_dip == 6);
+    *(size_t*)data += batch->count;
+    return true;
+}
+
+static bool end_batch(void* data) {
+    (void)data;
+    return true;
+}
+
+static void abort_batch(void* data) {
+    (void)data;
+    assert(0 && "annotation batch aborted");
+}
+
+static void test_annotations(void) {
+    tc_visual_scene3d_handle scene = tc_visual_scene3d_create();
+    tc_visual_item3d_handle item = tc_visual_annotation_item3d_create(scene);
+    assert(!tc_visual_item3d_handle_is_invalid(item));
+    tc_visual_annotation3d commands[] = {
+        {.kind = TC_VISUAL_ANNOTATION_ARROW, .width_dip = 2, .head_dip = 8},
+        {.kind = TC_VISUAL_ANNOTATION_RING, .width_dip = 1.5f, .radius_dip = 6},
+    };
+    assert(tc_visual_annotation_item3d_set(scene, item, commands, 2));
+    commands[1].radius_dip = NAN;
+    assert(!tc_visual_annotation_item3d_set(scene, item, commands, 2));
+    size_t count = 0;
+    tc_visual_view3d view = {.viewport_width = 32, .viewport_height = 32};
+    tc_visual_draw_sink3d sink = {begin_batch, collect_annotations, end_batch, abort_batch, &count};
+    assert(tc_visual_scene3d_paint(scene, &view, &sink) && count == 2);
+    assert(tc_visual_annotation_item3d_set(scene, item, NULL, 0));
+    assert(tc_visual_scene3d_paint(scene, &view, &sink) && count == 0);
+    tc_visual_scene3d_destroy(scene);
+    assert(!tc_visual_annotation_item3d_set(scene, item, NULL, 0));
+}
+
 int main(void) {
+    test_annotations();
     int deletes = 0;
     tc_visual_scene3d_handle scene = tc_visual_scene3d_create();
     assert(tc_visual_scene3d_is_valid(scene));

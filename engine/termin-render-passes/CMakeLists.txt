@@ -53,10 +53,12 @@ else()
     find_package(termin_lighting REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_visual_scene termin_visual_scene::termin_visual_scene)
     termin_require_package(
         termin_gui_native
         termin_gui_native::document_renderer)
 else()
+    find_package(termin_visual_scene REQUIRED)
     find_package(termin_gui_native REQUIRED)
 endif()
 if(COMMAND termin_require_package)
@@ -71,6 +73,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 
 set(TERMIN_RENDER_PASSES_SOURCES
+    src/annotation_pass.cpp
     src/termin_render_passes_version.c
     src/bootstrap.cpp
     src/bloom_pass.cpp
@@ -97,6 +100,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
 
 if(TERMIN_RENDER_PASSES_CORE_ONLY)
     set(TERMIN_RENDER_PASSES_SOURCES
+        src/annotation_pass.cpp
         src/termin_render_passes_version.c
         src/bootstrap_core.cpp
         src/color_pass.cpp
@@ -116,6 +120,7 @@ if(TERMIN_RENDER_PASSES_CORE_ONLY)
 endif()
 
 set(TERMIN_RENDER_PASSES_HEADERS
+    include/termin/render/annotation_pass.hpp
     include/termin/render_passes/export.h
     include/termin/render_passes/termin_render_passes.h
     include/termin/render_passes/version.h
@@ -168,6 +173,7 @@ target_include_directories(termin_render_passes
 )
 target_compile_features(termin_render_passes PUBLIC cxx_std_20)
 target_link_libraries(termin_render_passes PUBLIC
+    termin_visual_scene::termin_visual_scene
     tcbase::termin_base
     tgfx::termin_graphics
     tgfx::termin_graphics2

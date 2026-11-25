@@ -15,7 +15,7 @@ import zipfile
 
 from .engine_nuget_product import (
     BACKENDS, FRAMEWORK, MANAGED, PACKAGE_ID, PACKAGE_MANIFEST, SHARE,
-    EngineNugetError, digest, json_bytes,
+    EngineNugetError, digest, is_prerelease_version, json_bytes,
 )
 from .graphics_nuget_publish import (
     ArchiveMember, GraphicsNugetReleaseCandidate, NugetPackageCandidate,
@@ -32,10 +32,13 @@ FRAMEWORK_DEPENDENT = (
 )
 
 
-def _manifest(package: Path) -> tuple[dict, str]:
+def _manifest(package: Path, *, allow_prerelease: bool = False) -> tuple[dict, str]:
     with zipfile.ZipFile(package) as archive:
         manifest = json.loads(archive.read(PACKAGE_MANIFEST))
-        if manifest["kind"] != "termin-engine-nuget" or manifest["version"] != public_version():
+        version = manifest["version"]
+        if manifest["kind"] != "termin-engine-nuget" or not (
+            version == public_version() or allow_prerelease and is_prerelease_version(version)
+        ):
             raise EngineNugetError(f"Unexpected product or version in {package}")
         if {stage["rid"]: stage["backend"] for stage in manifest["inputs"]} != BACKENDS:
             raise EngineNugetError(f"{package} is missing one of the supported native runtimes")
@@ -107,7 +110,7 @@ def _isolated_environment(repo: Path) -> dict[str, str]:
 
 def smoke_candidate(repo: Path, package: Path, work: Path, rid: str,
                     dependency_source: str, *, build_only: bool, run_only: bool) -> None:
-    manifest, package_hash = _manifest(package)
+    manifest, package_hash = _manifest(package, allow_prerelease=True)
     work.mkdir(parents=True, exist_ok=True)
     locator = work / "build.json"
     report = work / "report.json"

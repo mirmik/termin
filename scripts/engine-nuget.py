@@ -28,6 +28,7 @@ def main():
     pack.add_argument("--linux-stage", type=Path, default=default_root / "linux-x64.zip")
     pack.add_argument("--windows-stage", type=Path, default=default_root / "win-x64.zip")
     pack.add_argument("--destination", type=Path, default=REPO / "dist/engine-nuget")
+    pack.add_argument("--prerelease-version", help="Distinct NuGet version for a local preview, e.g. 0.5.5-preview.1.")
 
     smoke = commands.add_parser("smoke", help="Build and run an external PackageReference consumer.")
     smoke.add_argument("--package", type=Path, default=REPO / "dist/engine-nuget" / f"{product.PACKAGE_ID}.{product.public_version()}.nupkg")
@@ -52,7 +53,7 @@ def main():
                               (args.output or default_root / f"{args.rid}.zip").resolve())
         elif args.command == "pack":
             product.pack(REPO, {"linux-x64": args.linux_stage, "win-x64": args.windows_stage},
-                         args.destination.resolve())
+                         args.destination.resolve(), prerelease_version=args.prerelease_version)
         elif args.command == "smoke":
             from termin_build.engine_nuget_gate import smoke_candidate
             if host_rid is None or platform.machine().lower() not in {"amd64", "x86_64"}:

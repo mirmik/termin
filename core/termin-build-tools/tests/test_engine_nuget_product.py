@@ -4,11 +4,17 @@ import subprocess
 
 import pytest
 
-from termin_build.engine_nuget_product import _combine_shaders, EngineNugetError
+from termin_build.engine_nuget_product import _combine_shaders, EngineNugetError, pack
 from termin_build.graphics_nuget_product import PackageDefinition, compose_package
 
 
 REPO = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize("version", ["0.5.5", "../0.5.5-dev", "0.5.5-"])
+def test_local_candidate_requires_prerelease_version(tmp_path, version):
+    with pytest.raises(EngineNugetError, match="Invalid NuGet prerelease version"):
+        pack(REPO, {}, tmp_path, prerelease_version=version)
 
 
 def test_merge_refuses_different_shader_catalogs():
