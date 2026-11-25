@@ -66,6 +66,12 @@ tasks:
     cmds:
       - '{{if eq OS "windows"}}powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-relocated-sdk.ps1 {{.CLI_ARGS}}{{else}}./scripts/smoke-relocated-sdk {{.CLI_ARGS}}{{end}}'
 
+  smoke:avalonia-positioner:
+    desc: Verify an embedded Termin 3D scene in Avalonia against the full installed SDK
+    platforms: [linux, windows]
+    cmds:
+      - '{{if eq OS "windows"}}python{{else}}python3{{end}} ./scripts/smoke-avalonia-positioner.py {{.CLI_ARGS}}'
+
   smoke:present-order:
     desc: Show immutable frame serials for external presentation-order capture
     platforms: [linux]

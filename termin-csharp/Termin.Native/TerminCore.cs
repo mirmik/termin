@@ -452,10 +452,10 @@ public static class TerminCore
     // Vertex Layout
     // ========================================================================
 
-    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_init")]
+    [DllImport(MESH_DLL, EntryPoint = "tgfx_vertex_layout_init")]
     public static extern void VertexLayoutInit(ref TcVertexLayout layout);
 
-    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_add", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tgfx_vertex_layout_add", CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool VertexLayoutAdd(
         ref TcVertexLayout layout,
@@ -465,16 +465,16 @@ public static class TerminCore
         byte location
     );
 
-    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos")]
+    [DllImport(MESH_DLL, EntryPoint = "tgfx_vertex_layout_pos")]
     public static extern TcVertexLayout VertexLayoutPos();
 
-    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos_normal")]
+    [DllImport(MESH_DLL, EntryPoint = "tgfx_vertex_layout_pos_normal")]
     public static extern TcVertexLayout VertexLayoutPosNormal();
 
-    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv")]
+    [DllImport(MESH_DLL, EntryPoint = "tgfx_vertex_layout_pos_normal_uv")]
     public static extern TcVertexLayout VertexLayoutPosNormalUv();
 
-    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv_color")]
+    [DllImport(MESH_DLL, EntryPoint = "tgfx_vertex_layout_pos_normal_uv_color")]
     public static extern TcVertexLayout VertexLayoutPosNormalUvColor();
 
     // ========================================================================

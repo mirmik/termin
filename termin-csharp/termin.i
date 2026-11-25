@@ -631,11 +631,26 @@ struct ResourceSpec {
     float scale;
 
     ResourceSpec();
+
+    %extend {
+        void set_format(const std::string& format) {
+            if (format.empty())
+                $self->format.reset();
+            else
+                $self->format = format;
+        }
+    }
 };
 
 // ============================================================================
 // RenderPipeline - manages passes and FBO resources
 // ============================================================================
+
+enum class ColorContent {
+    SceneLinear = 0,
+    DisplayLinear = 1,
+    DisplaySRGB = 2,
+};
 
 class RenderPipeline {
 public:
@@ -661,6 +676,9 @@ public:
     size_t spec_count() const;
     const ResourceSpec* get_spec_at(size_t index) const;
 
+    void set_color_export(const std::string& resource, ColorContent content,
+                          const std::string& viewport_name = "");
+
     // Access tc_pipeline pointer (for viewport binding)
     tc_pipeline* ptr();
 
@@ -669,6 +687,9 @@ public:
 
     // Check if valid
     bool is_valid() const;
+
+    // Destroy a pipeline created in the native pool.
+    void destroy();
 };
 
 // ============================================================================
