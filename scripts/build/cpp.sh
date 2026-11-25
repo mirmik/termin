@@ -20,11 +20,13 @@ CCACHE_MODE="on"
 UNITY_MODE="off"
 PCH_MODE="on"
 SDK_PROFILE="full"
+SHADER_ARTIFACT_TARGETS=""
 CMAKE_GENERATOR_NAME="${CMAKE_GENERATOR_NAME:-${TERMIN_CMAKE_GENERATOR:-}}"
 
 for arg in "$@"; do
     case "$arg" in
         --profile=*)   SDK_PROFILE="${arg#--profile=}" ;;
+        --shader-artifacts=*) SHADER_ARTIFACT_TARGETS="${arg#--shader-artifacts=}" ;;
         --debug|-d)    BUILD_TYPE="Debug" ;;
         --clean|-c)    CLEAN=1 ;;
         --no-parallel) NO_PARALLEL=1 ;;
@@ -62,6 +64,7 @@ for arg in "$@"; do
             echo "  --no-opengl       Disable OpenGL backend; keep Vulkan render/editor targets"
             echo "  --opengl          Enable desktop OpenGL targets (default)"
             echo "  --profile=NAME    SDK graph profile: full (default), graphics, or core"
+            echo "  --shader-artifacts=TARGETS    Compile the requested built-in shader backends (semicolon-separated)"
             echo "  --help, -h        Show this help"
             echo ""
             echo "Environment:"
@@ -109,7 +112,10 @@ case "$OPENGL_MODE" in
     on)  TERMIN_ENABLE_OPENGL=ON ;;
 esac
 
-if [[ "$TERMIN_ENABLE_OPENGL" == "ON" ]]; then
+if [[ -n "$SHADER_ARTIFACT_TARGETS" ]]; then
+    TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS=ON
+    TERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS="$SHADER_ARTIFACT_TARGETS"
+elif [[ "$TERMIN_ENABLE_OPENGL" == "ON" ]]; then
     TERMIN_BUILD_BUILTIN_SHADER_ARTIFACTS=ON
     if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]]; then
         TERMIN_BUILTIN_SHADER_ARTIFACT_TARGETS="d3d11;opengl330"

@@ -1,29 +1,46 @@
 #include "termin/platform/offscreen_render_surface.hpp"
 
-#include <algorithm>
+#include <exception>
+#include <limits>
 #include <new>
+#include <vector>
 
+#include "geom/tc_color.h"
 #include "render/tc_display.h"
 #include "render/tc_render_surface.h"
 #include "tgfx/tgfx2_interop.h"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/handles.hpp"
+#include "tgfx2/i_command_list.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
     namespace {
 
+        bool read_error(const char* message) {
+            tc::Log::error("tc_display_read_offscreen_bgra_current: %s", message);
+            return false;
+        }
+
+        uint8_t srgb_byte(float value) {
+            if (!(value > 0.0f))
+                return 0;
+            if (value >= 1.0f)
+                return 255;
+            return static_cast<uint8_t>(value * 255.0f + 0.5f);
+        }
+
         class OffscreenRenderSurface {
         public:
             OffscreenRenderSurface(tgfx::IRenderDevice* device, int width, int height)
                 : device_(device),
-                  width_(std::max(1, width)),
-                  height_(std::max(1, height)) {
+                  width_(width),
+                  height_(height) {
                 tc_render_surface_init(&surface_, &s_vtable, &delete_storage);
                 surface_.body = this;
-                allocate_texture();
+                color_tex_ = allocate_texture(width, height);
             }
 
             ~OffscreenRenderSurface() = default;
@@ -35,24 +52,32 @@ namespace termin {
                 return device_ && color_tex_;
             }
 
+            static OffscreenRenderSurface* get(tc_display_handle display) {
+                auto* surface = tc_display_get_surface(display);
+                return surface && surface->vtable == &s_vtable ? from_surface(surface) : nullptr;
+            }
+
+            bool read_bgra(tgfx::IRenderDevice* device,
+                           int width,
+                           int height,
+                           uint8_t* destination,
+                           size_t row_stride,
+                           size_t destination_size);
+
         private:
             tgfx::IRenderDevice* device_ = nullptr;
             tc_render_surface surface_{};
             tgfx::TextureHandle color_tex_{};
             int width_ = 0;
             int height_ = 0;
+            std::vector<float> readback_;
 
             static const tc_render_surface_vtable s_vtable;
 
-            void allocate_texture() {
-                if (!device_) {
-                    tc::Log::error("OffscreenRenderSurface::allocate_texture: device is null");
-                    return;
-                }
-
+            tgfx::TextureHandle allocate_texture(int width, int height) {
                 tgfx::TextureDesc color_desc;
-                color_desc.width = static_cast<uint32_t>(width_);
-                color_desc.height = static_cast<uint32_t>(height_);
+                color_desc.width = static_cast<uint32_t>(width);
+                color_desc.height = static_cast<uint32_t>(height);
                 // An offscreen display is a compositing boundary, not an encoded
                 // presentation surface. Preserve DisplayLinear precision until
                 // the eventual physical sink performs its output transform.
@@ -61,11 +86,7 @@ namespace termin {
                 color_desc.format = tgfx::PixelFormat::RGBA16F;
                 color_desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::ColorAttachment |
                                    tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
-                color_tex_ = device_->create_texture(color_desc);
-
-                if (!color_tex_) {
-                    tc::Log::error("OffscreenRenderSurface: texture allocation failed");
-                }
+                return device_->create_texture(color_desc);
             }
 
             void release_texture() {
@@ -85,12 +106,13 @@ namespace termin {
                     return false;
                 if (width == width_ && height == height_)
                     return true;
+                auto replacement = allocate_texture(width, height);
+                if (!replacement)
+                    return false;
                 release_texture();
+                color_tex_ = replacement;
                 width_ = width;
                 height_ = height;
-                allocate_texture();
-                if (!is_valid())
-                    return false;
                 tc_render_surface_notify_resize(&surface_, width_, height_);
                 return true;
             }
@@ -109,7 +131,14 @@ namespace termin {
 
             static bool resize_surface(tc_render_surface* surface, int width, int height) {
                 OffscreenRenderSurface* self = from_surface(surface);
-                return self && self->resize(width, height);
+                try {
+                    return self && self->resize(width, height);
+                } catch (const std::exception& error) {
+                    tc::Log::error("OffscreenRenderSurface::resize: %s", error.what());
+                } catch (...) {
+                    tc::Log::error("OffscreenRenderSurface::resize: unexpected error");
+                }
+                return false;
             }
 
             static uint32_t get_color_texture_id(tc_render_surface* surface) {
@@ -135,6 +164,61 @@ namespace termin {
             }
         };
 
+        bool OffscreenRenderSurface::read_bgra(tgfx::IRenderDevice* device,
+                                               int width,
+                                               int height,
+                                               uint8_t* destination,
+                                               size_t row_stride,
+                                               size_t destination_size) {
+            if (!device || device != device_ || !color_tex_)
+                return read_error("display has no output in the active graphics domain");
+            if (width <= 0 || height <= 0 || width != width_ || height != height_ || !destination)
+                return read_error("destination and matching positive dimensions are required");
+
+            const auto columns = static_cast<size_t>(width);
+            const auto rows = static_cast<size_t>(height);
+            constexpr auto max_size = std::numeric_limits<size_t>::max();
+            if (columns > max_size / 4)
+                return read_error("row size overflows");
+            const size_t row_bytes = columns * 4;
+            if (row_stride < row_bytes || rows - 1 > (max_size - row_bytes) / row_stride ||
+                destination_size < (rows - 1) * row_stride + row_bytes)
+                return read_error("destination buffer or row stride is too small");
+            if (rows > max_size / sizeof(float) / row_bytes)
+                return read_error("readback size overflows");
+
+            const auto backend = device->backend_type();
+            if (backend != tgfx::BackendType::D3D11 && backend != tgfx::BackendType::Vulkan)
+                return read_error("offscreen readback requires D3D11 or Vulkan");
+
+            readback_.resize(rows * row_bytes);
+            if (backend == tgfx::BackendType::Vulkan) {
+                // The display composite records a transfer after the scene's draw submission.
+                // Submit it before synchronous readback uses its own command buffer.
+                auto commands = device->create_command_list();
+                if (!commands)
+                    return read_error("could not create the Vulkan display submission");
+                commands->begin();
+                commands->end();
+                device->submit(*commands);
+            }
+            if (!device->read_texture_rgba_float(color_tex_, readback_.data()))
+                return read_error("graphics device could not read the display texture");
+
+            for (size_t y = 0; y < rows; ++y) {
+                const float* source = readback_.data() + y * row_bytes;
+                uint8_t* pixel = destination + y * row_stride;
+                for (size_t x = 0; x < columns; ++x, source += 4, pixel += 4) {
+                    const tc_srgb_color srgb = tc_linear_to_srgb({source[0], source[1], source[2], 1.0f});
+                    pixel[0] = srgb_byte(srgb.b);
+                    pixel[1] = srgb_byte(srgb.g);
+                    pixel[2] = srgb_byte(srgb.r);
+                    pixel[3] = 255;
+                }
+            }
+            return true;
+        }
+
         const tc_render_surface_vtable OffscreenRenderSurface::s_vtable = {
             .get_size = &OffscreenRenderSurface::get_size,
             .resize = &OffscreenRenderSurface::resize_surface,
@@ -142,6 +226,20 @@ namespace termin {
             .get_graphics_domain_key = &OffscreenRenderSurface::get_graphics_domain_key,
             .destroy = &OffscreenRenderSurface::destroy,
         };
+
+        tc_display_handle create_host_offscreen_display(tgfx::IRenderDevice* device,
+                                                        int width,
+                                                        int height,
+                                                        const char* name) {
+            try {
+                return create_offscreen_display(device, width, height, name);
+            } catch (const std::exception& error) {
+                tc::Log::error("create_offscreen_display: %s", error.what());
+            } catch (...) {
+                tc::Log::error("create_offscreen_display: unexpected error");
+            }
+            return TC_DISPLAY_HANDLE_INVALID;
+        }
 
     } // namespace
 
@@ -169,8 +267,12 @@ namespace termin {
 
 } // namespace termin
 
+extern "C" tc_display_handle tc_display_new_offscreen_current(int width, int height, const char* name) {
+    return termin::create_host_offscreen_display(tgfx::get_tgfx2_device(), width, height, name);
+}
+
 extern "C" tc_display_handle tc_display_new_d3d11_offscreen_current(int width, int height, const char* name) {
-    auto* device = static_cast<tgfx::IRenderDevice*>(tgfx2_interop_get_device());
+    auto* device = tgfx::get_tgfx2_device();
     if (!device) {
         tc::Log::error("tc_display_new_d3d11_offscreen_current: GraphicsHost has not claimed a tgfx2 device");
         return TC_DISPLAY_HANDLE_INVALID;
@@ -179,5 +281,24 @@ extern "C" tc_display_handle tc_display_new_d3d11_offscreen_current(int width, i
         tc::Log::error("tc_display_new_d3d11_offscreen_current: the current tgfx2 device is not D3D11");
         return TC_DISPLAY_HANDLE_INVALID;
     }
-    return termin::create_offscreen_display(device, width, height, name);
+    return termin::create_host_offscreen_display(device, width, height, name);
+}
+
+extern "C" bool tc_display_read_offscreen_bgra_current(tc_display_handle display,
+                                                       int width,
+                                                       int height,
+                                                       uint8_t* destination,
+                                                       size_t row_stride,
+                                                       size_t destination_size) {
+    auto* surface = termin::OffscreenRenderSurface::get(display);
+    if (!surface)
+        return termin::read_error("display does not own a live offscreen surface");
+
+    try {
+        return surface->read_bgra(tgfx::get_tgfx2_device(), width, height, destination, row_stride, destination_size);
+    } catch (const std::exception& error) {
+        return termin::read_error(error.what());
+    } catch (...) {
+        return termin::read_error("unexpected error");
+    }
 }

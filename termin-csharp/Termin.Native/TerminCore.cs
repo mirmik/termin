@@ -11,13 +11,13 @@ public static class TerminCore
     const string DLL = "termin_bootstrap";
     const string BASE_DLL = "termin_base";
     const string SCENE_DLL = "termin_scene";
-    const string MESH_DLL = "termin_mesh";
-    const string GRAPHICS_DLL = "termin_graphics";
+    const string MESH_DLL = NativeLibraryNames.Mesh;
+    const string GRAPHICS_DLL = NativeLibraryNames.Graphics;
     const string TGFX2_DLL = NativeLibraryNames.Graphics2;
     const string RENDER_DLL = "termin_render";
     const string DISPLAY_DLL = "termin_display";
     const string INSPECT_DLL = "termin_inspect";
-    const string COLLISION_DLL = "termin_collision";
+    const string COLLISION_DLL = NativeLibraryNames.Collision;
 
     // ========================================================================
     // Library Initialization
@@ -822,11 +822,27 @@ public static class TerminCore
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new", CharSet = CharSet.Ansi)]
     public static extern TcDisplayHandle DisplayNew(string name, IntPtr surface);
 
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new_offscreen_current", CallingConvention = CallingConvention.Cdecl)]
+    public static extern TcDisplayHandle DisplayNewOffscreenCurrent(
+        int width,
+        int height,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? name);
+
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new_d3d11_offscreen_current", CharSet = CharSet.Ansi)]
     public static extern TcDisplayHandle DisplayNewD3D11OffscreenCurrent(
         int width,
         int height,
         string name);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_read_offscreen_bgra_current", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool DisplayReadOffscreenBgraCurrent(
+        TcDisplayHandle display,
+        int width,
+        int height,
+        IntPtr destination,
+        nuint rowStride,
+        nuint destinationSize);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_free")]
     [return: MarshalAs(UnmanagedType.U1)]

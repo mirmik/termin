@@ -617,7 +617,7 @@ install(DIRECTORY include/
 )
 
 install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Bin/DroidSans.ttf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/recastnavigation/RecastDemo/Contrib/imgui/misc/fonts/DroidSans.ttf"
     DESTINATION share/termin/fonts
 )
 

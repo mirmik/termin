@@ -290,7 +290,7 @@ internal sealed partial class PositionerWindow : Window
             _scene.SetPose(_azimuth.Value, _height.Value);
             _scene.SetCamera(_orbit, _elevation, _distance);
             using (var frame = _bitmap.Lock())
-                _scene.Render(frame.Address, frame.RowBytes);
+                _scene.Render(frame.Address, frame.RowBytes, checked((nuint)frame.RowBytes * (nuint)size.Height));
             _viewport.InvalidateVisual();
         }
         finally

@@ -75,15 +75,3 @@ foreach(_dependency IN LISTS _resolved_dependencies)
         file(COPY "${_dependency}" DESTINATION "${RUNTIME_DIR}")
     endif()
 endforeach()
-
-# The installed termin_bootstrap target cannot expose its private Python link
-# through the exported CMake graph. Keep the Python ABI DLLs version-agnostic
-# and copy them only for profiles that actually contain bootstrap.
-if(EXISTS "${RUNTIME_DIR}/termin_bootstrap.dll")
-    file(GLOB _python_runtime_dlls "${SDK_BIN_DIR}/python*t.dll")
-    if(NOT _python_runtime_dlls)
-        message(FATAL_ERROR
-            "termin_bootstrap.dll is present, but no python*t.dll runtime was found in ${SDK_BIN_DIR}")
-    endif()
-    file(COPY ${_python_runtime_dlls} DESTINATION "${RUNTIME_DIR}")
-endif()

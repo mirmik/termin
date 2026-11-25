@@ -1,6 +1,6 @@
 using System;
+using System.IO;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Termin.Native;
 
 namespace AvaloniaPositioner;
@@ -12,7 +12,7 @@ internal sealed class PositionerScene : IDisposable
     private RenderingManager? _renderer;
     private RenderEngine? _renderEngine;
     private RenderPipeline? _pipeline;
-    private TcDisplayHandle _display = TcDisplayHandle.Invalid;
+    private OffscreenDisplay? _display;
     private TcViewportHandle _viewport = TcViewportHandle.Invalid;
     private TcRenderTargetHandle _target = TcRenderTargetHandle.Invalid;
     private tc_display_handle? _displayRef;
@@ -22,16 +22,13 @@ internal sealed class PositionerScene : IDisposable
     private bool _runtimeInitialized;
     private bool _hostAcquired;
     private bool _disposed;
-    private float[] _linear = Array.Empty<float>();
-    private int _width;
-    private int _height;
 
     public PositionerScene(int width, int height)
     {
         try
         {
             string font = Environment.GetEnvironmentVariable("TERMIN_POSITIONER_FONT")
-                ?? throw new InvalidOperationException("Set TERMIN_POSITIONER_FONT to the installed SDK font.");
+                ?? Path.Combine(AppContext.BaseDirectory, "share", "termin", "fonts", "DroidSans.ttf");
             var backend = OperatingSystem.IsWindows() ? BackendType.D3D11 : BackendType.Vulkan;
             TerminCore.InitFull();
             _runtimeInitialized = true;
@@ -64,10 +61,10 @@ internal sealed class PositionerScene : IDisposable
             colorPass.AttachTo(_pipeline);
             _pipeline.set_color_export("color", ColorContent.DisplayLinear);
 
-            _display = CreateOffscreenDisplay(width, height);
+            _display = new OffscreenDisplay(width, height, "Avalonia positioner");
             _viewport = TerminCore.ViewportNew("Positioner", _scene.Handle);
             _target = TerminCore.RenderTargetNew("Positioner");
-            if (!_display.IsValid || !_viewport.IsValid || !_target.IsValid)
+            if (!_viewport.IsValid || !_target.IsValid)
                 throw new InvalidOperationException("Termin could not create the offscreen viewport.");
             TerminCore.ViewportSetRect(_viewport, 0, 0, 1, 1);
             TerminCore.RenderTargetSetScene(_target, _scene.Handle);
@@ -77,11 +74,10 @@ internal sealed class PositionerScene : IDisposable
             TerminCore.RenderTargetSetDynamicResolution(_target, true);
             TerminCore.RenderTargetSetEnabled(_target, true);
             TerminCore.ViewportSetRenderTarget(_viewport, _target);
-            TerminCore.DisplayAddViewport(_display, _viewport);
-            _displayRef = SwigHelpers.ToSwigDisplayHandle(_display);
+            TerminCore.DisplayAddViewport(_display.Handle, _viewport);
+            _displayRef = SwigHelpers.ToSwigDisplayHandle(_display.Handle);
             _renderer.add_display(_displayRef);
 
-            SetSize(width, height);
             SetPose(0, 0);
             SetCamera(-45, 27, 5.8);
             Console.WriteLine($"AVALONIA_POSITIONER_BACKEND {backend}");
@@ -111,33 +107,13 @@ internal sealed class PositionerScene : IDisposable
         _camera.Position = new Vector3(0, 0, 1.08f) - forward * (float)distanceMeters;
     }
 
-    public void Resize(int width, int height)
-    {
-        if (width == _width && height == _height)
-            return;
-        if (!TerminCore.DisplayResize(_display, width, height))
-            throw new InvalidOperationException($"Termin could not resize the display to {width}x{height}.");
-        SetSize(width, height);
-    }
+    public void Resize(int width, int height) => _display!.Resize(width, height);
 
-    private void SetSize(int width, int height)
-    {
-        _linear = new float[checked(width * height * 4)];
-        _width = width;
-        _height = height;
-    }
-
-    public unsafe void Render(IntPtr address, int rowBytes)
+    public void Render(IntPtr address, int rowBytes, nuint bufferBytes)
     {
         _scene!.Entities.UpdateTransforms();
         _renderer!.render_display(_displayRef);
-        fixed (float* linear = _linear)
-        {
-            nuint capacity = checked((nuint)rowBytes * (nuint)_height);
-            if (ReadBgra(_display, _width, _height, linear, (nuint)_linear.Length, address,
-                capacity, (nuint)rowBytes) == 0)
-                throw new InvalidOperationException("Termin could not read the rendered frame.");
-        }
+        _display!.ReadBgra(address, rowBytes, bufferBytes);
     }
 
     private void BuildPositioner(EntityPool entities)
@@ -266,14 +242,13 @@ internal sealed class PositionerScene : IDisposable
             _renderer?.remove_display(_displayRef);
             _displayRef.Dispose();
         }
-        if (_display.IsValid && _viewport.IsValid)
-            TerminCore.DisplayRemoveViewport(_display, _viewport);
+        if (_display is not null && _viewport.IsValid)
+            TerminCore.DisplayRemoveViewport(_display.Handle, _viewport);
         if (_viewport.IsValid)
             TerminCore.ViewportFree(_viewport);
         if (_target.IsValid)
             TerminCore.RenderTargetFree(_target);
-        if (_display.IsValid)
-            TerminCore.DisplayFree(_display);
+        _display?.Dispose();
         _pipeline?.destroy();
         _pipeline?.Dispose();
         _scene?.Dispose();
@@ -301,13 +276,4 @@ internal sealed class PositionerScene : IDisposable
             swigCMemOwn = false;
         }
     }
-
-    [DllImport("termin_avalonia_positioner_probe", EntryPoint = "positioner_create_offscreen_display",
-        CallingConvention = CallingConvention.Cdecl)]
-    private static extern TcDisplayHandle CreateOffscreenDisplay(int width, int height);
-
-    [DllImport("termin_avalonia_positioner_probe", EntryPoint = "positioner_read_bgra",
-        CallingConvention = CallingConvention.Cdecl)]
-    private static extern unsafe int ReadBgra(TcDisplayHandle display, int width, int height,
-        float* rgba, nuint rgbaCount, IntPtr bgra, nuint bufferBytes, nuint rowBytes);
 }

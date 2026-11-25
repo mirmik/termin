@@ -124,7 +124,7 @@ public sealed class RetainedSceneRenderer2D : IDisposable
 
 internal static class RetainedSceneRendererNative
 {
-    private const string Dll = "tcplot";
+    private const string Dll = NativeLibraryNames.Plot;
 
     [DllImport(Dll, EntryPoint = "tc_retained_scene_renderer2d_create")]
     internal static extern IntPtr Create(

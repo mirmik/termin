@@ -13,7 +13,7 @@ public static class TerminOpenGL
         ShaderRuntime.ConfigureFromAssemblyDirectory();
     }
 
-    const string DLL = "termin_graphics";
+    const string DLL = NativeLibraryNames.Graphics;
 
     /// <summary>
     /// Initialize OpenGL backend.

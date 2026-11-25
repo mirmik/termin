@@ -828,7 +828,7 @@ public static class RetainedPlotLayout2D
 
 internal static class RetainedPlotNative
 {
-    private const string Dll = "tcplot";
+    private const string Dll = NativeLibraryNames.Plot;
 
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct AxisTicksDescriptor

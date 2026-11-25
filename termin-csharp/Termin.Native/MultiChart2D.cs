@@ -413,7 +413,7 @@ public sealed class MultiChart2D : IDisposable
 
 internal static class MultiChart2DNative
 {
-    private const string Dll = "tcplot";
+    private const string Dll = NativeLibraryNames.Plot;
 
     [DllImport(Dll, EntryPoint = "tc_retained_multi_chart2d_create")]
     internal static extern IntPtr Create(

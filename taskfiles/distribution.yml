@@ -64,3 +64,28 @@ tasks:
     platforms: [windows]
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/publish/graphics-nuget.ps1 {{.CLI_ARGS}}
+
+
+  stage:engine:nuget:
+    desc: Stage a full native and C# SDK for the Termin.Engine NuGet runtime
+    platforms: [linux, windows]
+    cmds:
+      - '{{if eq OS "windows"}}python{{else}}python3{{end}} ./scripts/engine-nuget.py stage {{.CLI_ARGS}}'
+
+  package:engine:nuget:
+    desc: Compose Termin.Engine with Linux x64 Vulkan and Windows x64 D3D11
+    platforms: [linux, windows]
+    cmds:
+      - '{{if eq OS "windows"}}python{{else}}python3{{end}} ./scripts/engine-nuget.py pack {{.CLI_ARGS}}'
+
+  test:engine:nuget:
+    desc: Verify Termin.Engine from an external PackageReference consumer
+    platforms: [linux, windows]
+    cmds:
+      - '{{if eq OS "windows"}}python{{else}}python3{{end}} ./scripts/engine-nuget.py smoke {{.CLI_ARGS}}'
+
+  publish:engine:nuget:
+    desc: Check or upload the Termin.Engine package verified on both operating systems
+    platforms: [linux, windows]
+    cmds:
+      - '{{if eq OS "windows"}}python{{else}}python3{{end}} ./scripts/engine-nuget.py publish {{.CLI_ARGS}}'

@@ -580,10 +580,8 @@ def publish_release(
             "--upload requires NUGET_API_KEY in the process environment"
         )
 
-    print(
-        f"Validated gated Termin Graphics NuGet {candidate.version} candidate "
-        f"from {candidate.source_revision}."
-    )
+    names = ", ".join(package.package_id for package in candidate.packages)
+    print(f"Validated gated NuGet {candidate.version} candidate for {names} from {candidate.source_revision}.")
     for package in candidate.packages:
         evidence = _remote_evidence(client, package)
         remote_state = "matching" if evidence is not None else "absent"
@@ -652,7 +650,7 @@ def publish_release(
                 f"NuGet did not expose matching {package.package_id} {package.version} "
                 f"after upload{detail}"
             )
-    print("Publication complete; both remote packages match the gated candidate.")
+    print("Publication complete; remote NuGet contents match the gated candidate.")
 
 
 def main() -> int:

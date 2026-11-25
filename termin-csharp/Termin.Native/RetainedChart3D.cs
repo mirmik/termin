@@ -1210,7 +1210,7 @@ public sealed class RetainedChart3D : IDisposable
 
 internal static class RetainedChart3DNative
 {
-    private const string Dll = "tcplot";
+    private const string Dll = NativeLibraryNames.Plot;
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart3d_create")]
     internal static extern IntPtr Create(IntPtr gpuHost);

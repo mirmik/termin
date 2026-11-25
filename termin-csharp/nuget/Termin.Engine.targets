@@ -1,0 +1,19 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)../../share/termin/**/*"
+             Link="share/termin/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="ValidateTerminEngineRuntime" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <_TerminPlotProfile Include="@(PackageDependencies)"
+                         Condition="'%(PackageDependencies.Identity)' == 'Termin.Graphics' Or '%(PackageDependencies.Identity)' == 'Termin.Graphics.Wpf'" />
+    </ItemGroup>
+    <Error Condition="'@(_TerminPlotProfile)' != ''" Code="TERMIN001"
+           Text="Termin.Engine and Termin.Graphics (including Termin.Graphics.Wpf) provide incompatible Termin.Native profiles. Remove the conflicting package or the dependency that introduces it." />
+    <Error Condition="'$(RuntimeIdentifier)' != '' And '$(RuntimeIdentifier)' != 'win-x64' And '$(RuntimeIdentifier)' != 'linux-x64'" Code="TERMIN002"
+           Text="Termin.Engine supports win-x64 and linux-x64. RuntimeIdentifier '$(RuntimeIdentifier)' is unsupported." />
+  </Target>
+</Project>

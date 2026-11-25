@@ -10,7 +10,7 @@ in meters. Drag to orbit, scroll to zoom, or start the 33 ms scan.
 
 Use an SDK from this checkout with the full C# profile and built-in shader
 artifacts. Use Windows x64 with D3D11 or Linux x64 with Vulkan. The sample build
-also needs .NET 8, CMake, Python 3.10+, and the platform C++ toolchain.
+also needs .NET 8 and Python 3.10+.
 
 | Platform | SDK build |
 | --- | --- |
@@ -42,12 +42,12 @@ the interactive desktop with `--run-only`.
   `DisplayLinear` color export. The pipeline uses the target's RGBA16F format
   through `ResourceSpec.set_format("render_target")`. D3D11 requires matching
   formats for this copy.
-- The sample's small native bridge creates an offscreen display on the active
-  device and reads the composed frame. It submits the display composite before
-  readback on Vulkan, converts linear RGB to sRGB, and writes opaque BGRA8888
-  into the caller's buffer in top-to-bottom row order. The Avalonia host locks a
-  `WriteableBitmap`, supplies its native pointer and row stride, unlocks it and
-  invalidates the `Image`.
+- `Termin.Native.OffscreenDisplay` creates a display on the active device.
+  `ReadBgra` submits the display composite before readback on Vulkan,
+  converts linear RGB to sRGB, and writes opaque BGRA8888 into the caller's
+  buffer in top-to-bottom row order. The Avalonia host locks a
+  `WriteableBitmap`, supplies its native pointer, row stride and buffer size,
+  unlocks it and invalidates the `Image`.
 - Render and resize on the UI thread in this sample. Size both the output and
   bitmap in physical pixels. Unregister the display and free its viewport,
   target and pipeline before releasing the graphics host. The sample owns the
@@ -56,9 +56,8 @@ the interactive desktop with `--run-only`.
 
 The development runner loads the full managed binding and matching native
 libraries, shader resources and font from an installed SDK. The published
-Windows plot package covers the `plot-d3d11` profile. The supported offscreen
-C/C# API is tracked in #3910 and the app-local full runtime for both RIDs is
-tracked in #3911.
+Windows plot package covers the `plot-d3d11` profile. The app-local full runtime
+for both RIDs is tracked in #3911.
 
 ## Smoke evidence
 
@@ -66,7 +65,8 @@ The smoke checks the carriage's world position and the pixels rendered by
 Avalonia after a 90° parent turn, a 1 m lift and a camera orbit. It also checks
 resize and closing and reopening the window. The scan measures the UI-thread
 time to render, copy and update the bitmap for 32 frames with a 33 ms scheduling
-interval at 686 × 556 pixels.
+interval at 686 × 556 pixels. The initial two-platform smoke measured these
+baselines before readback moved into the SDK.
 
 | Environment | p50 | p95 |
 | --- | ---: | ---: |

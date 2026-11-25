@@ -63,14 +63,6 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
 
     termin_csharp_require_package(termin_mesh tmesh::termin_mesh)
     termin_csharp_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
-    set(_termin_csharp_graphics2_import "termin_graphics2")
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        # MSBuild may materialize ELF symlinks as distinct files. P/Invoke
-        # must request the same SONAME that the SWIG bridge dependencies use.
-        set(_termin_csharp_graphics2_import "$<TARGET_SONAME_FILE_NAME:tgfx::termin_graphics2>")
-    endif()
-    file(GENERATE OUTPUT "${_termin_csharp_generated_dir}/NativeLibraryNames.cs"
-        CONTENT "namespace Termin.Native;\ninternal static class NativeLibraryNames\n{\n    internal const string Graphics2 = \"${_termin_csharp_graphics2_import}\";\n}\n")
     termin_csharp_require_package(termin_visual_scene termin_visual_scene::termin_visual_scene)
     termin_csharp_require_package(tcplot tcplot::tcplot)
     termin_csharp_require_package(termin_gui_native termin_gui_native::termin_gui_native termin_gui_native::document_renderer)
@@ -101,6 +93,29 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         termin_csharp_require_package(termin_render_core termin_render_core::termin_render_core)
         termin_csharp_require_package(termin_render_passes termin_render_passes::termin_render_passes)
     endif()
+
+    function(termin_csharp_native_library_name managed_name name target)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            # NuGet/MSBuild materializes ELF symlinks as distinct files. Use
+            # the imported SONAME to share native registries with the engine.
+            set(name "$<TARGET_SONAME_FILE_NAME:${target}>")
+        endif()
+        string(APPEND _termin_csharp_native_library_names
+            "    internal const string ${managed_name} = \"${name}\";\n")
+        set(_termin_csharp_native_library_names "${_termin_csharp_native_library_names}" PARENT_SCOPE)
+    endfunction()
+
+    set(_termin_csharp_native_library_names "")
+    termin_csharp_native_library_name(Graphics termin_graphics tgfx::termin_graphics)
+    termin_csharp_native_library_name(Graphics2 termin_graphics2 tgfx::termin_graphics2)
+    termin_csharp_native_library_name(Mesh termin_mesh tmesh::termin_mesh)
+    termin_csharp_native_library_name(Plot tcplot tcplot::tcplot)
+    if(TERMIN_CSHARP_PROFILE STREQUAL "full")
+        termin_csharp_native_library_name(Collision termin_collision termin_collision::termin_collision)
+    endif()
+    file(GENERATE OUTPUT "${_termin_csharp_generated_dir}/NativeLibraryNames.cs"
+        CONTENT "namespace Termin.Native;\ninternal static class NativeLibraryNames\n{\n${_termin_csharp_native_library_names}}\n")
+
     if(NOT DEFINED TERMIN_CSHARP_ENABLE_OPENGL)
         if(DEFINED _termin_graphics_enable_opengl)
             set(TERMIN_CSHARP_ENABLE_OPENGL ${_termin_graphics_enable_opengl} CACHE BOOL "Expose OpenGL APIs in C# bindings")

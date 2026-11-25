@@ -180,7 +180,7 @@ public sealed class PlotHeatmapItemRef2D : GraphicItemRef2D
 
 internal static class PlotHeatmapNative
 {
-    private const string Dll = "tcplot";
+    private const string Dll = NativeLibraryNames.Plot;
 
     [DllImport(Dll, EntryPoint = "tc_plot_heatmap_item2d_create")]
     internal static extern GraphicItemHandle2D Create(

@@ -26,9 +26,23 @@ extern "C" {
 // ============================================================================
 
 TERMIN_DISPLAY_API tc_display_handle tc_display_new(const char* name, tc_render_surface* surface);
-// Creates a display-owned offscreen render surface on the process-wide tgfx2
-// device. The device must have been claimed by GraphicsHost before this call.
+// Create a display-owned DisplayLinear surface on the active tgfx2 device.
+// Initialize the display pool and acquire the graphics host before creating it.
+// Create, render, read, resize and free on the rendering thread. Remove the
+// display from its rendering manager and free it before releasing the device.
+TERMIN_DISPLAY_API tc_display_handle tc_display_new_offscreen_current(int width, int height, const char* name);
+// D3D11-only constructor for native texture sharing callers.
 TERMIN_DISPLAY_API tc_display_handle tc_display_new_d3d11_offscreen_current(int width, int height, const char* name);
+// Synchronously copy a rendered offscreen display on the active D3D11 or Vulkan
+// device as opaque, sRGB BGRA8888 in top-left row order. Width and height must
+// match the display. Destination size must include at least the last pixel;
+// row padding is untouched. Render before reading and again after each resize.
+TERMIN_DISPLAY_API bool tc_display_read_offscreen_bgra_current(tc_display_handle display,
+                                                              int width,
+                                                              int height,
+                                                              uint8_t* destination,
+                                                              size_t row_stride,
+                                                              size_t destination_size);
 TERMIN_DISPLAY_API bool tc_display_free(tc_display_handle display);
 
 // ============================================================================

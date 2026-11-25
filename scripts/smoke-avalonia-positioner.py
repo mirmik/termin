@@ -27,7 +27,6 @@ def main():
     sample = repo / "termin-csharp" / "examples" / "AvaloniaPositioner"
     build = repo / "build" / "avalonia-positioner"
     app = build / "app"
-    native_build = build / "native"
     sdk_native = sdk / "csharp" / "runtimes" / ("win-x64" if windows else "linux-x64") / "native"
     binding = sdk_native / ("termin.dll" if windows else "termin.so")
     share = sdk / "share" / "termin"
@@ -39,18 +38,10 @@ def main():
 
     if not args.run_only:
         subprocess.run(
-            ["cmake", "-S", sample / "native", "-B", native_build,
-             f"-DCMAKE_PREFIX_PATH={sdk}", "-DCMAKE_BUILD_TYPE=Release"],
-            check=True,
-        )
-        subprocess.run(["cmake", "--build", native_build, "--config", "Release"], check=True)
-        subprocess.run(
             ["dotnet", "build", sample / "AvaloniaPositioner.csproj",
              "-c", "Release", f"-p:TerminSdkRoot={sdk}", "-o", app],
             check=True,
         )
-        shim = "termin_avalonia_positioner_probe.dll" if windows else "libtermin_avalonia_positioner_probe.so"
-        shutil.copy2(native_build / "Release" / shim, app)
         shutil.copy2(binding, app)
 
     if not args.build_only:

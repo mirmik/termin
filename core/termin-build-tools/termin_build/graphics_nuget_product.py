@@ -68,6 +68,7 @@ class PackageDefinition:
     target_frameworks: tuple[str, ...]
     dependencies: tuple[tuple[str, str], ...]
     payloads: dict[str, bytes]
+    tags: str = "termin graphics native d3d11 wpf windows"
 
 
 def _require_object(value: object, context: str) -> dict[str, object]:
@@ -383,6 +384,7 @@ def _nuspec(
         groups.append("      </group>")
     dependencies = "\n".join(["", "    <dependencies>", *groups, "    </dependencies>"])
     package_id = escape(definition.package_id)
+    repository_commit = f"commit={quoteattr(source_revision)} " if source_revision else ""
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">\n'
@@ -397,9 +399,9 @@ def _nuspec(
         "    <readme>README.md</readme>\n"
         f"    <projectUrl>{escape(PACKAGE_PROJECT_URL)}</projectUrl>\n"
         f"    <description>{escape(definition.description)}</description>\n"
-        "    <tags>termin graphics native d3d11 wpf windows</tags>\n"
+        f"    <tags>{escape(definition.tags)}</tags>\n"
         f"    <repository type=\"git\" url={quoteattr(PACKAGE_REPOSITORY_URL)} "
-        f"commit={quoteattr(source_revision)} />"
+        f"{repository_commit}/>"
         f"{dependencies}\n"
         "  </metadata>\n"
         "</package>\n"
@@ -415,7 +417,7 @@ def _core_properties(definition: PackageDefinition, version: str) -> bytes:
         f"  <dc:description>{escape(definition.description)}</dc:description>\n"
         f"  <dc:identifier>{escape(definition.package_id)}</dc:identifier>\n"
         f"  <version>{escape(version)}</version>\n"
-        "  <keywords>termin graphics native d3d11 wpf windows</keywords>\n"
+        f"  <keywords>{escape(definition.tags)}</keywords>\n"
         "  <lastModifiedBy>termin-build-tools</lastModifiedBy>\n"
         "</coreProperties>\n"
     ).encode("utf-8")

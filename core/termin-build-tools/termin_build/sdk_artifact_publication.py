@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -20,6 +18,7 @@ from .artifact_manifest import (
 from .python_abi import PythonAbiIdentity
 from .sdk_capabilities import write_desktop_capabilities
 from .sdk_native_artifacts import (
+    elf_dynamic_entries,
     find_installed_artifact as _find_installed_artifact,
     find_native_artifact as _find_native_artifact,
     pe_import_dependencies as _pe_import_dependencies,
@@ -31,36 +30,7 @@ from .sdk_python_layout import _is_windows
 def _native_runtime_dependencies(binary: Path) -> list[str]:
     if _is_windows():
         return _pe_import_dependencies(binary)
-    env = os.environ.copy()
-    env["LC_ALL"] = "C"
-    env["LANGUAGE"] = "C"
-    try:
-        result = subprocess.run(
-            ["readelf", "-d", str(binary)],
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-        )
-    except OSError as error:
-        raise RuntimeError(f"failed to execute readelf for {binary}: {error}") from error
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip()
-        if not detail:
-            detail = f"exit code {result.returncode}"
-        raise RuntimeError(f"readelf failed for {binary}: {detail}")
-    dependencies = []
-    for line in result.stdout.splitlines():
-        if "(NEEDED)" not in line:
-            continue
-        opening = line.rfind("[")
-        closing = line.find("]", opening + 1)
-        if opening < 0 or closing < 0:
-            raise RuntimeError(f"readelf returned an unrecognized NEEDED entry for {binary}: {line.strip()}")
-        dependency = line[opening + 1 : closing]
-        dependencies.append(dependency)
-    return dependencies
+    return elf_dynamic_entries(binary).get("NEEDED", [])
 
 
 def write_artifacts(

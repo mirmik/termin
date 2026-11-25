@@ -998,7 +998,7 @@ public sealed class Chart2D : IDisposable
 
 internal static class Chart2DNative
 {
-    private const string Dll = "tcplot";
+    private const string Dll = NativeLibraryNames.Plot;
 
     [StructLayout(LayoutKind.Sequential)]
     internal readonly struct Theme
