@@ -32,6 +32,35 @@ sceneHost.RequestRender();
 рендерят on-demand по `RequestRender()` и автоматически реагируют на resize,
 DPI и пользовательскую навигацию.
 
+## Две шкалы Y
+
+На одном `Chart2D` линейные серии могут использовать разные шкалы Y при общей
+оси X. Шкалу серии задаёт первый аргумент `AddLineSeries`. Вызов без этого
+аргумента использует левую шкалу. Правая появляется при назначении ей серии
+или при установке её диапазона или подписи.
+
+```csharp
+double[] x = { 0, 1, 2 };
+using var chart = new Chart2D(host, 960, 540, new PlotRange2D(0, 2, -60, 0));
+chart.YAxisText = "Amplitude [dB]";
+chart.SetYAxisRange(ChartYAxis2D.Right, -180, 180);
+chart.RightYAxisText = "Phase [°]";
+chart.AddLineSeries("Amplitude", x, new[] { -55.0, -30.0, -10.0 });
+chart.AddLineSeries(ChartYAxis2D.Right, "Phase", x, new[] { 120.0, 0.0, -140.0 });
+```
+
+`Range` и `Projection` читают общий X и левый Y. Диапазон конкретной шкалы
+возвращает `GetYAxisRange`, а `series.Item.Projection` переводит координаты
+этой серии в пиксели. `Fit` подбирает общий X по всем видимым сериям и каждый
+Y по видимым сериям этой шкалы. В двухосевом режиме шкала без видимых данных
+сохраняет заданный диапазон. Горизонтальные линии сетки идут по левой шкале.
+Перетаскивание и обычное колесо меняют обе шкалы относительно положения
+курсора, Ctrl+колесо меняет общий X. У программных `PanBy` и `ZoomAt`
+координаты Y по-прежнему относятся к левой шкале.
+
+Интерактивный пример с кнопкой Fit находится в
+`examples/RetainedChartWpfExample`.
+
 ## Тепловая карта на равномерной сетке
 
 `Chart2D.AddHeatmapSeries` добавляет native retained heatmap под сеткой,

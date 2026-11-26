@@ -82,35 +82,40 @@ public partial class MainWindow : Window
 
     private static Chart2D CreateChart(GpuHost host)
     {
-        const int pointCount = 20_000;
-        double[] x = Enumerable.Range(0, pointCount)
-            .Select(index => index * 4 * Math.PI / (pointCount - 1))
-            .ToArray();
-
+        double[] x = { 0, 1, 2 };
         var chart = new Chart2D(
             host,
             960,
             540,
-            new PlotRange2D(0, 4 * Math.PI, -1.35, 1.35));
-        chart.TitleText = "C# retained chart + WPF portal";
-        chart.XAxisText = "phase";
-        chart.YAxisText = "signal";
+            new PlotRange2D(0, 2, -60, 0));
+        chart.TitleText = "Amplitude and phase";
+        chart.XAxisText = "Measurement";
+        chart.YAxisText = "Amplitude [dB]";
+        chart.SetYAxisRange(ChartYAxis2D.Right, -180, 180);
+        chart.RightYAxisText = "Phase [°]";
         chart.AddLineSeries(
-            "sin(x)",
+            "Amplitude",
             x,
-            x.Select(value => Math.Sin(value)).ToArray(),
+            new[] { -55.0, -30.0, -10.0 },
             style: new PlotLineSeriesStyle2D(
                 new PlotSrgbColor2D(0.20f, 0.72f, 1.0f),
                 thicknessPx: 2.2f));
         chart.AddLineSeries(
-            "0.45 cos(2.3x)",
+            ChartYAxis2D.Right,
+            "Phase",
             x,
-            x.Select(value => 0.45 * Math.Cos(2.3 * value)).ToArray(),
+            new[] { 120.0, 0.0, -140.0 },
             style: new PlotLineSeriesStyle2D(
                 new PlotSrgbColor2D(1.0f, 0.48f, 0.22f),
                 thicknessPx: 1.5f,
                 lineStyle: PlotLineStyle2D.Dash));
         return chart;
+    }
+
+    private void OnFitClick(object sender, RoutedEventArgs e)
+    {
+        _chart.Fit();
+        SceneHost.RequestRender();
     }
 
     private void OnFramebufferChanged(

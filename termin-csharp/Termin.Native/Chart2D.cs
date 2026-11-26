@@ -69,6 +69,10 @@ internal enum ChartPartKind2D
     YAxisLabel,
     LegendRoot,
     OverlayRoot,
+    RightYAxisRoot,
+    RightYAxis,
+    RightYTickLabelsRoot,
+    RightYAxisLabel,
 }
 
 /// <summary>
@@ -144,6 +148,12 @@ public sealed class ChartInteraction2D
         _chart.Wheel(x, y, steps, xOnly);
 
     public void Cancel() => _chart.CancelInteraction();
+}
+
+public enum ChartYAxis2D
+{
+    Left,
+    Right,
 }
 
 public enum ChartSeriesKind2D
@@ -331,6 +341,7 @@ public sealed class Chart2D : IDisposable
     private string _title = string.Empty;
     private string _xLabel = string.Empty;
     private string _yLabel = string.Empty;
+    private string _rightYLabel = string.Empty;
 
     public Chart2D(
         GpuHost host,
@@ -465,8 +476,10 @@ public sealed class Chart2D : IDisposable
     public GroupItemRef2D Chrome { get; private set; } = null!;
     public GroupItemRef2D XAxisRoot { get; private set; } = null!;
     public GroupItemRef2D YAxisRoot { get; private set; } = null!;
+    public GroupItemRef2D? RightYAxisRoot => GetOptionalGroup(ChartPartKind2D.RightYAxisRoot);
     public GroupItemRef2D XTickLabels { get; private set; } = null!;
     public GroupItemRef2D YTickLabels { get; private set; } = null!;
+    public GroupItemRef2D? RightYTickLabels => GetOptionalGroup(ChartPartKind2D.RightYTickLabelsRoot);
     public GroupItemRef2D Legend { get; private set; } = null!;
     public GroupItemRef2D Overlay { get; private set; } = null!;
     public ChartPart2D<RectItemRef2D> Background { get; private set; } = null!;
@@ -474,9 +487,11 @@ public sealed class Chart2D : IDisposable
     public ChartPart2D<PlotGridItemRef2D> Grid { get; private set; } = null!;
     public ChartPart2D<PathItemRef2D> XAxis { get; private set; } = null!;
     public ChartPart2D<PathItemRef2D> YAxis { get; private set; } = null!;
+    public ChartPart2D<PathItemRef2D> RightYAxis { get; private set; } = null!;
     public ChartPart2D<TextItemRef2D> Title { get; private set; } = null!;
     public ChartPart2D<TextItemRef2D> XAxisLabel { get; private set; } = null!;
     public ChartPart2D<TextItemRef2D> YAxisLabel { get; private set; } = null!;
+    public ChartPart2D<TextItemRef2D> RightYAxisLabel { get; private set; } = null!;
     public string FontUri { get; }
     public Chart2DTheme Theme { get; private set; }
     public IReadOnlyList<PlotLineSeriesItemRef2D> Lines => _lines;
@@ -543,6 +558,19 @@ public sealed class Chart2D : IDisposable
         }
     }
 
+    /// <summary>Setting this label enables the right Y axis.</summary>
+    public string RightYAxisText
+    {
+        get => _rightYLabel;
+        set
+        {
+            ThrowIfDisposed();
+            string resolved = value ?? string.Empty;
+            Require(Chart2DNative.SetRightYAxisLabel(_native, resolved));
+            _rightYLabel = resolved;
+        }
+    }
+
     public PlotLineSeriesItemRef2D AddLine(
         double[] x,
         double[] y,
@@ -592,6 +620,16 @@ public sealed class Chart2D : IDisposable
         double[] y,
         double[]? scalar = null,
         PlotLineSeriesStyle2D? style = null,
+        bool showInLegend = true) =>
+        AddLineSeries(ChartYAxis2D.Left, name, x, y, scalar, style, showInLegend);
+
+    public ChartLineSeries2D AddLineSeries(
+        ChartYAxis2D axis,
+        string name,
+        double[] x,
+        double[] y,
+        double[]? scalar = null,
+        PlotLineSeriesStyle2D? style = null,
         bool showInLegend = true)
     {
         ValidateLineData(x, y, scalar);
@@ -604,7 +642,8 @@ public sealed class Chart2D : IDisposable
             y,
             scalar,
             (nuint)x.Length,
-            style ?? PlotLineSeriesStyle2D.Default);
+            style ?? PlotLineSeriesStyle2D.Default,
+            axis);
         var series = new ChartLineSeries2D(
             this, RequireSeriesHandle(handle));
         _semanticSeries.Add(series);
@@ -689,6 +728,21 @@ public sealed class Chart2D : IDisposable
     {
         ThrowIfDisposed();
         Require(Chart2DNative.SetRange(_native, range));
+    }
+
+    /// <summary>Returns the vertical range of the selected axis in data units.</summary>
+    public (double Minimum, double Maximum) GetYAxisRange(ChartYAxis2D axis)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.GetYAxisRange(_native, axis, out double minimum, out double maximum));
+        return (minimum, maximum);
+    }
+
+    /// <summary>Sets the selected Y range and enables the right axis when selected.</summary>
+    public void SetYAxisRange(ChartYAxis2D axis, double minimum, double maximum)
+    {
+        ThrowIfDisposed();
+        Require(Chart2DNative.SetYAxisRange(_native, axis, minimum, maximum));
     }
 
     public void Fit(double paddingFraction = 0.05)
@@ -801,11 +855,14 @@ public sealed class Chart2D : IDisposable
         Grid = Part(ChartPartKind2D.Grid, PlotGridItemRef2D.Cast);
         XAxis = Part(ChartPartKind2D.XAxis, PathItemRef2D.Cast);
         YAxis = Part(ChartPartKind2D.YAxis, PathItemRef2D.Cast);
+        RightYAxis = Part(ChartPartKind2D.RightYAxis, PathItemRef2D.Cast);
         Title = Part(ChartPartKind2D.Title, TextItemRef2D.Cast);
         XAxisLabel = Part(
             ChartPartKind2D.XAxisLabel, TextItemRef2D.Cast);
         YAxisLabel = Part(
             ChartPartKind2D.YAxisLabel, TextItemRef2D.Cast);
+        RightYAxisLabel = Part(
+            ChartPartKind2D.RightYAxisLabel, TextItemRef2D.Cast);
     }
 
     internal GraphicItemHandle2D GetPartHandle(ChartPartKind2D kind)
@@ -953,6 +1010,14 @@ public sealed class Chart2D : IDisposable
             Scene.NativeHandle,
             RequireHandle(Chart2DNative.PartHandle(_native, kind))));
 
+    private GroupItemRef2D? GetOptionalGroup(ChartPartKind2D kind)
+    {
+        GraphicItemHandle2D handle = GetPartHandle(kind);
+        return handle.IsValid
+            ? GroupItemRef2D.Cast(new GraphicItemRef2D(Scene.NativeHandle, handle))
+            : null;
+    }
+
     private ChartPart2D<T> Part<T>(
         ChartPartKind2D kind,
         Func<GraphicItemRef2D, T> cast)
@@ -1098,6 +1163,16 @@ internal static class Chart2DNative
     [return: MarshalAs(UnmanagedType.I1)]
     internal static extern bool SetRange(IntPtr chart, PlotRange2D range);
 
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_y_axis_range")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool GetYAxisRange(
+        IntPtr chart, ChartYAxis2D axis, out double minimum, out double maximum);
+
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_y_axis_range")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetYAxisRange(
+        IntPtr chart, ChartYAxis2D axis, double minimum, double maximum);
+
     [DllImport(Dll, EntryPoint = "tc_retained_chart2d_fit")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static extern bool Fit(IntPtr chart, double paddingFraction);
@@ -1167,6 +1242,12 @@ internal static class Chart2DNative
         IntPtr chart,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
 
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_set_right_y_axis_label")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SetRightYAxisLabel(
+        IntPtr chart,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+
     [DllImport(Dll, EntryPoint = "tc_retained_chart2d_replace_part")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static extern bool ReplacePart(
@@ -1203,7 +1284,7 @@ internal static class Chart2DNative
         IntPtr chart,
         GraphicItemHandle2D series);
 
-    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_named_line")]
+    [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_named_line_on_axis")]
     internal static extern ChartSeriesHandle2D AddNamedLine(
         IntPtr chart,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
@@ -1212,7 +1293,8 @@ internal static class Chart2DNative
         double[] y,
         double[]? scalar,
         nuint count,
-        PlotLineSeriesStyle2D style);
+        PlotLineSeriesStyle2D style,
+        ChartYAxis2D axis);
 
     [DllImport(Dll, EntryPoint = "tc_retained_chart2d_add_named_scatter")]
     internal static extern ChartSeriesHandle2D AddNamedScatter(

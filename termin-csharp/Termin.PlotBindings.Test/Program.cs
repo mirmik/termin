@@ -117,6 +117,73 @@ static void TestRetainedFirstFrames(GpuHost host)
         renderer.RenderToTextureHandleId(640, 480);
 }
 
+static void TestDualYAxis(GpuHost host)
+{
+    using var chart = new Chart2D(host, 900, 600, new PlotRange2D(0, 2, -60, 0));
+    double[] x = { 0, 1, 2 };
+    chart.YAxisText = "Amplitude [dB]";
+    var amplitude = chart.AddLineSeries("Amplitude", x, new[] { -55.0, -30.0, -10.0 });
+    if (chart.RightYAxisRoot is not null ||
+        !amplitude.Item.Projection.DataToVisual(new PlotPoint2D(1, -30))
+            .Equals(chart.Projection.DataToVisual(new PlotPoint2D(1, -30))))
+        throw new InvalidOperationException("The default chart must use only its left Y axis.");
+
+    chart.SetYAxisRange(ChartYAxis2D.Right, -180, 180);
+    chart.RightYAxisText = "Phase [°]";
+    var phase = chart.AddLineSeries(ChartYAxis2D.Right, "Phase", x, new[] { 120.0, 0.0, -140.0 });
+    using var left = amplitude.Item.Projection;
+    using var right = phase.Item.Projection;
+    var amplitudePoint = new PlotPoint2D(1, -30);
+    var phasePoint = new PlotPoint2D(1, 0);
+    var center = left.DataToVisual(amplitudePoint);
+    var area = chart.Layout.PlotArea;
+    if (!center.Equals(right.DataToVisual(phasePoint)) ||
+        Math.Abs(center.Y - (area.Y + area.Height / 2)) > 0.01f ||
+        chart.RightYAxis.Item?.Visible != true || chart.RightYAxisLabel.Item?.Visible != true ||
+        !phase.TryNearest(center.X, center.Y, 0.1f, out var nearest) || nearest.Index != 1)
+        throw new InvalidOperationException("The phase and amplitude midpoints must coincide and use visible axes.");
+
+    chart.SetYAxisRange(ChartYAxis2D.Right, -0.00123456, 180);
+    var shiftedPhase = right.DataToVisual(phasePoint);
+    if (!center.Equals(left.DataToVisual(amplitudePoint)) ||
+        shiftedPhase.X != center.X || Math.Abs(shiftedPhase.Y - center.Y) < 1)
+        throw new InvalidOperationException("Setting the right Y range must move only the phase curve.");
+
+    var rightRange = chart.GetYAxisRange(ChartYAxis2D.Right);
+    if (!chart.Interaction.Wheel(center.X, center.Y, 1, xOnly: true) ||
+        chart.Range.XMax >= 2 || chart.GetYAxisRange(ChartYAxis2D.Right) != rightRange ||
+        !chart.Interaction.PointerDown(center.X, center.Y, 2) ||
+        !chart.Interaction.PointerMove(center.X + 30, center.Y) ||
+        !chart.Interaction.PointerUp(center.X + 30, center.Y, 2))
+        throw new InvalidOperationException("Shared X navigation failed.");
+    var pannedLeft = left.DataToVisual(amplitudePoint);
+    var pannedRight = right.DataToVisual(phasePoint);
+    if (Math.Abs(pannedLeft.X - center.X - 30) > 0.01f || pannedLeft.X != pannedRight.X ||
+        chart.GetYAxisRange(ChartYAxis2D.Left) != (-60.0, 0.0) ||
+        chart.GetYAxisRange(ChartYAxis2D.Right) != rightRange)
+        throw new InvalidOperationException("Both projections must pan together with their Y ranges preserved.");
+
+    phase.SetData(new[] { 0.0, 1.0, 3.0 }, new[] { 120.0, 0.0, -140.0 });
+    chart.AddLineSeries(ChartYAxis2D.Right, "Hidden", new[] { -10.0, 20.0 }, new[] { -900.0, 1000.0 })
+        .Visible = false;
+    chart.Resize(800, 550, 1.25f);
+    chart.Fit(0);
+    if (chart.Range.XMin != 0 || chart.Range.XMax != 3 ||
+        chart.GetYAxisRange(ChartYAxis2D.Left) != (-55.0, -10.0) ||
+        chart.GetYAxisRange(ChartYAxis2D.Right) != (-140.0, 120.0) ||
+        left.DataToVisual(amplitudePoint).X != right.DataToVisual(phasePoint).X)
+        throw new InvalidOperationException("Fit must use one X range and independent visible Y bounds after resize.");
+
+    using var single = new Chart2D(host, 800, 550, new PlotRange2D(0, 1, 0, 1));
+    single.AddLine(x, new[] { -10.0, 1.0, 4.0 });
+    single.Fit(0);
+    if (single.RightYAxisRoot is not null || single.Range.XMax != 2 ||
+        single.GetYAxisRange(ChartYAxis2D.Left) != (-10.0, 4.0))
+        throw new InvalidOperationException("One-axis Fit must preserve its original behavior.");
+
+    Console.WriteLine("CHART2D_DUAL_Y_OK independent scales, nearest point, shared X, resize and visible-data Fit");
+}
+
 static void TestRetainedVisualSceneFactories()
 {
     var scene = new TcVisualScene2D();
@@ -1023,6 +1090,7 @@ if (OperatingSystem.IsWindows())
     TestRetainedChartsAfterShaderArtifactChange(host);
 NativeWidgetBindingChecks.Run(host, fontPath);
 TestManagedChartComposition(host);
+TestDualYAxis(host);
 TestRetainedChartAnnotations(host);
 TestRetainedFirstFrames(host);
 TestRetainedLine3D(host);
