@@ -34,7 +34,8 @@ internal sealed class PositionerApp : Application
             if (smoke)
             {
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-                Dispatcher.UIThread.Post(() => RunSmoke(desktop));
+                bool verifyLineRenderer = desktop.Args?.Contains("--verify-line-renderer", StringComparer.Ordinal) == true;
+                Dispatcher.UIThread.Post(() => RunSmoke(desktop, verifyLineRenderer));
             }
             else
             {
@@ -48,14 +49,14 @@ internal sealed class PositionerApp : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static async void RunSmoke(IClassicDesktopStyleApplicationLifetime desktop)
+    private static async void RunSmoke(IClassicDesktopStyleApplicationLifetime desktop, bool verifyLineRenderer)
     {
         PositionerWindow? window = null;
         try
         {
             window = new PositionerWindow(Console.Error.WriteLine);
             window.Show();
-            await window.VerifySmokeAsync();
+            await window.VerifySmokeAsync(verifyLineRenderer);
             window.Close();
             window.VerifyClosed();
 

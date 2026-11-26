@@ -31,6 +31,12 @@ ELF binaries use `$ORIGIN` in the package. The primary SDK files and
 versioned names required by ELF consumers are included. Installed SDK
 files are untouched by relocation.
 
+Each stage also compiles the default `LineRenderer` variant for `ColorPass`.
+The native staging tool obtains the variant from the same shader planner used
+by a live draw and builds both stages and their layout files in a temporary
+directory. Keep the SDK build's Slang toolchain available while staging, plus
+FXC on Windows. The package carries the resulting bytecode and layouts.
+
 Copy both stage archives to `build/engine-nuget/` on the packaging host.
 They must correspond to the same source revision. Compose the package with
 `task package:engine:nuget`. The composer validates staged hashes,
@@ -56,6 +62,8 @@ an unrelated directory. On Linux a headless builder can use
 `--run-only` after `--` to split Windows SSH build and desktop execution.
 An offline build can add `--dependency-source <feed>` for Avalonia and its
 dependencies.
+The gate also draws a default `LineRenderer` and checks the resulting pixels
+with the packaged shaders.
 
 Copy the Windows `build/engine-nuget/gate-win-x64/report.json` to the
 release host. The release command checks both pass reports against the

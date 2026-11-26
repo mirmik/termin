@@ -12,7 +12,7 @@ namespace AvaloniaPositioner;
 
 internal sealed partial class PositionerWindow
 {
-    internal async Task VerifySmokeAsync()
+    internal async Task VerifySmokeAsync(bool verifyLineRenderer)
     {
         await WaitForAsync(ViewportHasFrame, "the first frame");
         var initial = CaptureFrame("initial");
@@ -54,6 +54,13 @@ internal sealed partial class PositionerWindow
         Console.WriteLine($"AVALONIA_POSITIONER_RESIZED {beforeResize.Width}x{beforeResize.Height} -> {resized.Size.Width}x{resized.Size.Height}");
 
         await MeasureScanAsync();
+
+        if (verifyLineRenderer)
+        {
+            SetCamera(DefaultOrbit, DefaultElevation, DefaultDistance);
+            var size = _bitmap!.PixelSize;
+            _scene.VerifyLineRenderer(size.Width, size.Height);
+        }
     }
 
     internal async Task VerifyReopenedAsync()

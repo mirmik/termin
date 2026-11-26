@@ -52,6 +52,44 @@ def _asset(root: Path, name: str) -> bytes:
     return path.read_bytes()
 
 
+def _compile_shader_variants(sdk: Path, backend: str) -> tuple[dict[str, bytes], list[dict]]:
+    executable_suffix = ".exe" if backend == "d3d11" else ""
+    generator = sdk / "bin" / f"termin_compile_engine_shader_variants{executable_suffix}"
+    compiler = sdk / "bin" / f"termin_shaderc{executable_suffix}"
+    for tool in (generator, compiler):
+        if not tool.is_file():
+            raise EngineNugetError(f"Missing SDK shader build tool: {tool}")
+
+    # Compile in a fresh root so arbitrary SDK or developer cache artifacts
+    # cannot satisfy the package's required variant stages.
+    with tempfile.TemporaryDirectory(prefix="termin-engine-variants-") as temporary:
+        root = Path(temporary)
+        subprocess.run([generator, backend, sdk / SHARE / "builtin_shaders", root, compiler], check=True)
+
+        suffixes = {"vertex": ".vs.cso", "fragment": ".ps.cso"} if backend == "d3d11" else {
+            "vertex": ".vert.spv", "fragment": ".frag.spv",
+        }
+        payload, artifacts = {}, []
+        variants_by_stage = {}
+        for stage, suffix in suffixes.items():
+            variants_by_stage[stage] = set()
+            for file in sorted((root / "shaders" / backend).glob(f"shv_*{suffix}")):
+                uuid = file.name.removesuffix(suffix)
+                variants_by_stage[stage].add(uuid)
+                path = file.relative_to(root).as_posix()
+                layout = path + ".layout.json"
+                bytecode, reflection = _asset(root, path), _asset(root, layout)
+                if not bytecode or not reflection:
+                    raise EngineNugetError(f"Empty {backend} shader variant stage or layout: {path}")
+                payload[SHARE + path] = bytecode
+                payload[SHARE + layout] = reflection
+                artifacts.append({"uuid": uuid, "stage": stage, "target": backend, "path": path,
+                                  "sha256": digest(bytecode), "layout": layout, "layout_sha256": digest(reflection)})
+        if not variants_by_stage["vertex"] or variants_by_stage["vertex"] != variants_by_stage["fragment"]:
+            raise EngineNugetError(f"Missing or incomplete {backend} material shader variants")
+    return payload, artifacts
+
+
 def _shader_payload(sdk: Path, backend: str) -> dict[str, bytes]:
     manifest = json.loads(_asset(sdk, SHADERS))
     if manifest["schema_version"] != 1 or backend not in manifest["targets"]:
@@ -81,9 +119,12 @@ def _shader_payload(sdk: Path, backend: str) -> dict[str, bytes]:
         if path.is_file():
             name = path.relative_to(sdk).as_posix()
             payload[name] = _asset(sdk, name)
+    variant_payload, variant_artifacts = _compile_shader_variants(sdk, backend)
+    payload.update(variant_payload)
+    artifacts_by_path = {item["path"]: item for item in [*relevant, *variant_artifacts]}
     payload[SHADERS] = json_bytes({
         **manifest, "catalog_sha256": digest(payload[catalog_name]),
-        "targets": [backend], "artifacts": relevant,
+        "targets": [backend], "artifacts": list(artifacts_by_path.values()),
     })
     return payload
 

@@ -353,6 +353,17 @@ if(TERMIN_BOOTSTRAP_HAS_TCPLOT_GUI_NATIVE)
     target_link_libraries(termin_bootstrap PUBLIC tcplot_gui_native::tcplot_gui_native)
 endif()
 
+if(NOT TERMIN_BOOTSTRAP_MINIMAL_ONLY AND NOT TERMIN_BOOTSTRAP_RENDER_ONLY
+   AND NOT CMAKE_CROSSCOMPILING AND (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+    add_executable(termin_compile_engine_shader_variants tools/compile_engine_shader_variants.cpp)
+    target_link_libraries(termin_compile_engine_shader_variants PRIVATE termin_bootstrap)
+    set_target_properties(termin_compile_engine_shader_variants PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    termin_set_rpath_tool(termin_compile_engine_shader_variants)
+    install(TARGETS termin_compile_engine_shader_variants RUNTIME DESTINATION bin)
+endif()
+
 if(TERMIN_BUILD_PYTHON)
     target_link_libraries(termin_bootstrap
         PUBLIC

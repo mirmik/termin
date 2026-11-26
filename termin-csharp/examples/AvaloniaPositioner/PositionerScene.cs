@@ -117,6 +117,54 @@ internal sealed class PositionerScene : IDisposable
         _display!.ReadBgra(address, rowBytes, bufferBytes);
     }
 
+    internal unsafe void VerifyLineRenderer(int width, int height)
+    {
+        int rowBytes = checked(width * 4);
+        var before = new byte[checked(rowBytes * height)];
+        var after = new byte[before.Length];
+        fixed (byte* pixels = before)
+            Render((IntPtr)pixels, rowBytes, (nuint)before.Length);
+
+        var line = _scene!.Entities.CreateEntity("Default line smoke").AddComponentByName("LineRenderer");
+        if (!line.IsValid)
+            throw new InvalidOperationException("Termin could not create the default LineRenderer.");
+        line.SetField("width", 0.07f);
+        var points = TerminCore.ValueListNew();
+        try
+        {
+            AppendPoint(ref points, -0.6, 0.0, 2.5);
+            AppendPoint(ref points, 0.6, 0.0, 2.5);
+            TerminCore.ComponentInspectSet(line.Ptr, "points", points, IntPtr.Zero);
+        }
+        finally
+        {
+            TerminCore.ValueFree(ref points);
+        }
+
+        fixed (byte* pixels = after)
+            Render((IntPtr)pixels, rowBytes, (nuint)after.Length);
+
+        int linePixels = 0;
+        for (int i = 0; i < after.Length; i += 4)
+        {
+            if (after[i] > 150 && after[i + 1] > 150 && after[i + 2] > 150 &&
+                after[i] - before[i] > 32 && after[i + 1] - before[i + 1] > 32 && after[i + 2] - before[i + 2] > 32)
+                linePixels++;
+        }
+        if (linePixels < 10)
+            throw new InvalidOperationException($"Expected visible LineRenderer pixels, found {linePixels}.");
+        Console.WriteLine($"AVALONIA_POSITIONER_LINE_PIXELS {linePixels}");
+    }
+
+    private static void AppendPoint(ref TcValue points, double x, double y, double z)
+    {
+        var point = TerminCore.ValueListNew();
+        TerminCore.ValueListPush(ref point, TerminCore.ValueDouble(x));
+        TerminCore.ValueListPush(ref point, TerminCore.ValueDouble(y));
+        TerminCore.ValueListPush(ref point, TerminCore.ValueDouble(z));
+        TerminCore.ValueListPush(ref points, point);
+    }
+
     private void BuildPositioner(EntityPool entities)
     {
         var shader = TerminCore.Tgfx2RegisterBuiltinShader("termin-runtime-default-color");

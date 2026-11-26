@@ -24,6 +24,7 @@ from .graphics_nuget_publish import (
 from .versioning import public_version
 
 SMOKE_MARKER = "AVALONIA_POSITIONER_SMOKE_OK"
+LINE_SMOKE_MARKER = "AVALONIA_POSITIONER_LINE_PIXELS "
 PROJECT = "AvaloniaPositioner.csproj"
 REPORT_KIND = "termin-engine-nuget-consumer"
 FRAMEWORK_DEPENDENT = (
@@ -157,14 +158,15 @@ def smoke_candidate(repo: Path, package: Path, work: Path, rid: str,
     expected = _output_files(manifest, rid, output)
     with tempfile.TemporaryDirectory(prefix="termin-engine-run-") as unrelated:
         result = subprocess.run(
-            ["dotnet", output / "AvaloniaPositioner.dll", "--smoke"],
+            ["dotnet", output / "AvaloniaPositioner.dll", "--smoke", "--verify-line-renderer"],
             cwd=unrelated, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             timeout=120, check=False,
         )
     (work / "smoke.log").write_text(result.stdout, encoding="utf-8")
     print(result.stdout, end="")
     backend = f"AVALONIA_POSITIONER_BACKEND {'D3D11' if rid == 'win-x64' else 'Vulkan'}"
-    if result.returncode != 0 or SMOKE_MARKER not in result.stdout or backend not in result.stdout:
+    if (result.returncode != 0 or SMOKE_MARKER not in result.stdout or
+            LINE_SMOKE_MARKER not in result.stdout or backend not in result.stdout):
         raise EngineNugetError(f"{rid} Avalonia consumer failed, exit code {result.returncode}")
     report.write_bytes(json_bytes({
         "kind": REPORT_KIND, "version": manifest["version"], "rid": rid,
