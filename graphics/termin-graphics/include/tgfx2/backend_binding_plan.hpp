@@ -84,10 +84,23 @@ namespace tgfx {
         BackendDescriptorKind descriptor_kind = BackendDescriptorKind::None;
     };
 
+    enum class D3D11SamplerMode : uint8_t {
+        MatchTexture,
+        Explicit,
+        None,
+    };
+
     struct D3D11RegisterPlacement {
         D3D11RegisterClass register_class = D3D11RegisterClass::None;
         uint32_t register_index = 0;
         bool scalar_sampler_for_texture_array = false;
+        D3D11SamplerMode sampler_mode = D3D11SamplerMode::MatchTexture;
+        uint8_t sampler_register_index = 0;
+
+        uint32_t sampler_slot(uint32_t array_element) const {
+            const uint32_t base = sampler_mode == D3D11SamplerMode::Explicit ? sampler_register_index : register_index;
+            return scalar_sampler_for_texture_array ? base : base + array_element;
+        }
     };
 
     struct OpenGLBindingPlacement {

@@ -60,6 +60,10 @@ static bool tc_shader_upsert_resource_binding(tc_shader* shader, const tc_shader
         if (!binding->has_d3d11_placement && previous.has_d3d11_placement) {
             shader->resource_bindings[existing].has_d3d11_placement = 1;
             shader->resource_bindings[existing].d3d11 = previous.d3d11;
+            shader->resource_bindings[existing].d3d11_scalar_sampler_for_texture_array =
+                previous.d3d11_scalar_sampler_for_texture_array;
+            shader->resource_bindings[existing].d3d11_sampler_mode = previous.d3d11_sampler_mode;
+            shader->resource_bindings[existing].d3d11_sampler_register_index = previous.d3d11_sampler_register_index;
         }
         if (!binding->has_webgpu_placement && previous.has_webgpu_placement) {
             shader->resource_bindings[existing].has_webgpu_placement = 1;

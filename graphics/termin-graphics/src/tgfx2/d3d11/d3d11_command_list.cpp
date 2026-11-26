@@ -24,14 +24,6 @@ namespace tgfx {
             return static_cast<UINT>(binding.slot.placement.d3d11.register_index + binding.value.array_element);
         }
 
-        UINT d3d11_sampler_slot_for_sampled_texture(const BoundResourceBinding& binding) {
-            const UINT base = static_cast<UINT>(binding.slot.placement.d3d11.register_index);
-            if (binding.slot.placement.d3d11.scalar_sampler_for_texture_array) {
-                return base;
-            }
-            return static_cast<UINT>(base + binding.value.array_element);
-        }
-
         bool validate_d3d11_placement(const BoundResourceBinding& binding,
                                       D3D11RegisterClass expected,
                                       const char* kind_name) {
@@ -154,7 +146,10 @@ namespace tgfx {
             }
             D3D11Texture* tex = device_.get_texture(binding.value.texture);
             set_shader_resource(stage_mask, slot, tex ? tex->srv.Get() : nullptr);
-            const UINT sampler_slot = d3d11_sampler_slot_for_sampled_texture(binding);
+            if (binding.slot.placement.d3d11.sampler_mode == D3D11SamplerMode::None) {
+                break;
+            }
+            const UINT sampler_slot = binding.slot.placement.d3d11.sampler_slot(binding.value.array_element);
             if (!validate_d3d11_slot(
                     binding, sampler_slot, D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT, "sampled texture sampler")) {
                 break;

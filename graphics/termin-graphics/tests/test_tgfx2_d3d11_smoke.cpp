@@ -767,10 +767,13 @@ int main() {
                                          "    return o;\n"
                                          "}\n";
         const char* textured_ps_source =
-            "Texture2D albedo_texture : register(t0);\n"
-            "SamplerState albedo_sampler : register(s0);\n"
+            "Texture2D albedo_texture : register(t22);\n"
+            "Texture2D split_texture : register(t7);\n"
+            "SamplerState albedo_sampler : register(s7);\n"
             "float4 main() : SV_Target0 {\n"
-            "    return albedo_texture.SampleLevel(albedo_sampler, float2(0.5, 0.5), 1.0);\n"
+            "    float4 center = albedo_texture.SampleLevel(albedo_sampler, float2(0.5, 0.5), 1.0);\n"
+            "    float border_alpha = albedo_texture.SampleLevel(albedo_sampler, float2(-2.0, 0.5), 1.0).a;\n"
+            "    return split_texture.Load(int3(0, 0, 0)).a > 0.0 ? center * border_alpha : 0.0;\n"
             "}\n";
         if (!compile_hlsl_to_file(textured_vs_source, "vs_5_0", textured_vs_path) ||
             !compile_hlsl_to_file(textured_ps_source, "ps_5_0", textured_ps_path)) {
@@ -909,24 +912,34 @@ int main() {
             return 1;
         }
 
-        auto sampler = device->create_sampler(tgfx::SamplerDesc{});
+        // The opaque border makes a missing or incorrectly bound sampler visible in the readback.
+        tgfx::SamplerDesc sampler_desc;
+        sampler_desc.address_u = tgfx::AddressMode::ClampToBorder;
+        auto sampler = device->create_sampler(sampler_desc);
         tgfx::BoundResourceBinding sampled_texture;
         sampled_texture.slot.kind = tgfx::ShaderResourceKind::Texture;
         sampled_texture.slot.scope = tgfx::ShaderResourceScope::Material;
         sampled_texture.slot.stage_mask = TC_SHADER_STAGE_FRAGMENT;
         sampled_texture.slot.placement.kind = tgfx::BackendPlacementKind::D3D11Register;
         sampled_texture.slot.placement.d3d11.register_class = tgfx::D3D11RegisterClass::T;
-        sampled_texture.slot.placement.d3d11.register_index = 0;
+        sampled_texture.slot.placement.d3d11.register_index = 22;
+        sampled_texture.slot.placement.d3d11.sampler_mode = tgfx::D3D11SamplerMode::Explicit;
+        sampled_texture.slot.placement.d3d11.sampler_register_index = 7;
         sampled_texture.slot.debug_name = "u_texture";
         sampled_texture.value.kind = tgfx::BoundResourceKind::SampledTexture;
         sampled_texture.value.texture = texture_gpu;
         sampled_texture.value.sampler = sampler;
         const auto create_texture_resource_set = [&](tgfx::TextureHandle texture_handle) {
-            tgfx::BoundResourceBinding binding = sampled_texture;
-            binding.value.texture = texture_handle;
+            std::array<tgfx::BoundResourceBinding, 2> bindings{sampled_texture, sampled_texture};
+            bindings[0].value.texture = texture_handle;
+            // Binding t7 after t22/s7 must preserve the sampler already bound at s7.
+            bindings[1].slot.debug_name = "split_texture";
+            bindings[1].slot.placement.d3d11.register_index = 7;
+            bindings[1].slot.placement.d3d11.sampler_mode = tgfx::D3D11SamplerMode::None;
+            bindings[1].value.sampler = {};
             tgfx::BoundResourceSetStorage storage;
             storage.set_resource_layout_token(device->pipeline_resource_layout_token(textured_pipeline));
-            storage.append_group(tgfx::ShaderResourceScope::Material, true, &binding, 1);
+            storage.append_group(tgfx::ShaderResourceScope::Material, true, bindings.data(), 2);
             return device->create_bound_resource_set(storage.view());
         };
         auto resource_set = create_texture_resource_set(texture_gpu);

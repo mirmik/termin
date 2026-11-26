@@ -17,6 +17,8 @@ namespace termin_shaderc::internal {
         std::string slang_glsl_symbol;
         std::string d3d11_register_class;
         uint32_t d3d11_register_index = 0;
+        uint32_t d3d11_register_count = 1;
+        uint32_t d3d11_sampler_register_index = 0;
         uint32_t set = 0;
         uint32_t binding = 0;
         uint32_t stage_mask = 0;
@@ -50,7 +52,6 @@ namespace termin_shaderc::internal {
     std::string regex_escape(const std::string& value);
     bool is_identifier_char(char ch);
     uint32_t stage_mask_for_stage(const std::string& stage);
-    void assign_d3d11_register_placement(std::vector<ShaderResourceBinding>& resources);
     void assign_missing_resource_scopes(std::vector<ShaderResourceBinding>& resources);
     void apply_default_resource_scope(std::vector<ShaderResourceBinding>& resources, const std::string& default_scope);
     void normalize_scope_first_binding_slots(std::vector<ShaderResourceBinding>& resources,

@@ -290,6 +290,16 @@ namespace tgfx {
             entry.placement.kind = BackendPlacementKind::D3D11Register;
             entry.placement.d3d11.register_class = register_class;
             entry.placement.d3d11.register_index = binding.d3d11.register_index;
+            if (binding.d3d11_sampler_mode == TC_SHADER_D3D11_SAMPLER_NONE) {
+                entry.placement.d3d11.sampler_mode = D3D11SamplerMode::None;
+            } else if (binding.d3d11_sampler_mode == TC_SHADER_D3D11_SAMPLER_EXPLICIT) {
+                if (entry.resource.kind != ShaderResourceKind::Texture || binding.d3d11_sampler_register_index >= 16) {
+                    set_error(error, "shader resource " + resource_label(binding) + " has invalid D3D11 sampler register");
+                    return false;
+                }
+                entry.placement.d3d11.sampler_mode = D3D11SamplerMode::Explicit;
+                entry.placement.d3d11.sampler_register_index = static_cast<uint8_t>(binding.d3d11_sampler_register_index);
+            }
             entry.placement.d3d11.scalar_sampler_for_texture_array =
                 binding.d3d11_scalar_sampler_for_texture_array != 0;
             return true;

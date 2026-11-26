@@ -520,6 +520,7 @@ if(NOT ANDROID AND NOT EMSCRIPTEN)
     add_executable(termin_shaderc
         tools/termin_shaderc.cpp
         tools/termin_shaderc/compiler_support.cpp
+        tools/termin_shaderc/d3d11_reflection.cpp
         tools/termin_shaderc/file_io.cpp
         tools/termin_shaderc/backend_patchers.cpp
         tools/termin_shaderc/cli.cpp

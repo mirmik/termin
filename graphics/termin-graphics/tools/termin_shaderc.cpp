@@ -1,6 +1,7 @@
 #include "termin_shaderc/backend_patchers.hpp"
 #include "termin_shaderc/cli.hpp"
 #include "termin_shaderc/compiler_support.hpp"
+#include "termin_shaderc/d3d11_reflection.hpp"
 #include "termin_shaderc/glsl_cross_compiler.hpp"
 
 #ifdef TERMIN_SHADERC_HAS_SHADERC
@@ -24,6 +25,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -90,24 +92,54 @@ namespace termin_shaderc::internal {
         return {};
     }
 
-    void assign_d3d11_register_placement(std::vector<ShaderResourceBinding>& resources) {
+    static bool assign_d3d11_register_placement(std::vector<ShaderResourceBinding>& resources,
+                                                const CompileOptions& options,
+                                                const std::vector<std::string>& common_slang_args,
+                                                const std::filesystem::path& reflection_path,
+                                                const std::string& slangc) {
+        std::unordered_map<std::string, uint32_t> unresolved;
+        for (const auto& resource : resources) {
+            if (resource.d3d11_register_count == 0)
+                unresolved.emplace(resource.name, 0);
+        }
+        if (!unresolved.empty() &&
+            !collect_d3d11_program_array_counts(options, common_slang_args, reflection_path, slangc, unresolved))
+            return false;
+
         uint32_t next_constant_buffer = 0;
         uint32_t next_texture = 0;
         uint32_t next_sampler = 0;
         uint32_t next_unordered_access = 0;
 
         for (ShaderResourceBinding& resource : resources) {
+            if (resource.d3d11_register_count == 0)
+                resource.d3d11_register_count = unresolved.at(resource.name);
+            const uint32_t count = resource.d3d11_register_count;
+            if (count == 0 || count > 128) {
+                std::cerr << "termin_shaderc: invalid D3D11 resource array size " << count << " for '" << resource.name
+                          << "'\n";
+                return false;
+            }
             resource.d3d11_register_class = d3d11_register_class_for_kind(resource.kind);
             if (resource.d3d11_register_class == "b") {
-                resource.d3d11_register_index = next_constant_buffer++;
+                resource.d3d11_register_index = next_constant_buffer;
+                next_constant_buffer += count;
             } else if (resource.d3d11_register_class == "t") {
-                resource.d3d11_register_index = next_texture++;
+                resource.d3d11_register_index = next_texture;
+                next_texture += count;
+                if (resource.slang_combined_texture) {
+                    resource.d3d11_sampler_register_index = next_sampler;
+                    next_sampler += resource.d3d11_scalar_sampler_for_texture_array ? 1 : count;
+                }
             } else if (resource.d3d11_register_class == "s") {
-                resource.d3d11_register_index = next_sampler++;
+                resource.d3d11_register_index = next_sampler;
+                next_sampler += count;
             } else if (resource.d3d11_register_class == "u") {
-                resource.d3d11_register_index = next_unordered_access++;
+                resource.d3d11_register_index = next_unordered_access;
+                next_unordered_access += count;
             }
         }
+        return true;
     }
 
     static const char* d3d11_profile_for_stage(const std::string& stage) {
@@ -406,6 +438,8 @@ namespace termin_shaderc::internal {
                 existing.slang_split_texture = existing.slang_split_texture || binding.slang_split_texture;
                 existing.slang_separate_sampler = existing.slang_separate_sampler || binding.slang_separate_sampler;
                 existing.slang_storage_texture = existing.slang_storage_texture || binding.slang_storage_texture;
+                if (binding.d3d11_register_count != 1)
+                    existing.d3d11_register_count = binding.d3d11_register_count;
                 existing.d3d11_scalar_sampler_for_texture_array =
                     existing.d3d11_scalar_sampler_for_texture_array || binding.d3d11_scalar_sampler_for_texture_array;
                 return;
@@ -803,6 +837,7 @@ namespace termin_shaderc::internal {
         }
 
         if (type_kind == "array") {
+            trent_uint_field(*type, "elementCount", out_binding.d3d11_register_count);
             const nos::trent* element_type = trent_dict_get(*type, "elementType");
             std::string element_kind;
             if (!element_type || !element_type->is_dict() || !trent_string_field(*element_type, "kind", element_kind) ||
@@ -914,6 +949,16 @@ namespace termin_shaderc::internal {
             if (!slang_resource_kind_from_parameter(parameter, binding_kind, binding)) {
                 continue;
             }
+            if (options.target == "d3d11" && binding.kind == "constant_buffer") {
+                // Slang reports the end of the last field. D3D11 allocates
+                // complete 16-byte constant registers, including the tail.
+                if (binding.size > 65536u) {
+                    std::cerr << "termin_shaderc: D3D11 constant buffer '" << name << "' exceeds 64 KiB\n";
+                    out_ok = false;
+                    return {};
+                }
+                binding.size = (binding.size + 15u) & ~15u;
+            }
             bool scope_ok = true;
             std::optional<std::string> explicit_scope = slang_scope_attribute_from_parameter(parameter, name, scope_ok);
             if (!scope_ok) {
@@ -970,19 +1015,23 @@ namespace termin_shaderc::internal {
                 append_unique_resource(resources, std::move(binding));
             }
             static const std::regex bare_resource_re(
-                R"REGEX((?:\[\[\s*(?:TerminScope|Scope)\s*\(\s*"([^"]+)"\s*\)\s*\]\]\s*)?(?:(?:public|extern|static|uniform)\s+)*\b(Sampler(?:(?:[123]D|Cube)(?:Array|Shadow)?|State|ComparisonState)|(?:RW)?Texture(?:1D|2D|3D|Cube|Buffer)[A-Za-z0-9_<>, \t]*|StructuredBuffer\s*<[^>]+>|RWStructuredBuffer\s*<[^>]+>|ByteAddressBuffer|RWByteAddressBuffer)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]+\]\s*)*(?::\s*register\s*\(\s*([tus])([0-9]+)\s*,\s*space([0-9]+)\s*\))?\s*;)REGEX");
+                R"REGEX((?:\[\[\s*(?:TerminScope|Scope)\s*\(\s*"([^"]+)"\s*\)\s*\]\]\s*)?(?:(?:public|extern|static|uniform)\s+)*\b(Sampler(?:(?:[123]D|Cube)(?:Array|Shadow)?|State|ComparisonState)|(?:RW)?Texture(?:1D|2D|3D|Cube|Buffer)[A-Za-z0-9_<>, \t]*|StructuredBuffer\s*<[^>]+>|RWStructuredBuffer\s*<[^>]+>|ByteAddressBuffer|RWByteAddressBuffer)\s+([A-Za-z_][A-Za-z0-9_]*)\s*((?:\[[^\]]*\]\s*)*)(?::\s*register\s*\(\s*([tus])([0-9]+)\s*,\s*space([0-9]+)\s*\))?\s*;)REGEX");
             for (std::sregex_iterator it(source.begin(), source.end(), bare_resource_re), end; it != end; ++it) {
                 const std::smatch& match = *it;
                 ShaderResourceBinding binding;
                 const std::string scope = match[1].str();
                 const std::string type = match[2].str();
                 binding.name = match[3].str();
+                if (match[4].length() != 0) {
+                    binding.d3d11_register_count = 0; // Slang resolves constant expressions and target defines.
+                    binding.d3d11_scalar_sampler_for_texture_array = type.ends_with("Shadow");
+                }
                 if (!scope.empty() && is_valid_explicit_resource_scope(scope)) {
                     binding.scope = scope;
                 }
-                if (match[5].matched && match[6].matched) {
-                    binding.binding = static_cast<uint32_t>(std::stoul(match[5].str()));
-                    binding.set = static_cast<uint32_t>(std::stoul(match[6].str()));
+                if (match[6].matched && match[7].matched) {
+                    binding.binding = static_cast<uint32_t>(std::stoul(match[6].str()));
+                    binding.set = static_cast<uint32_t>(std::stoul(match[7].str()));
                 }
                 if (type == "SamplerState" || type == "SamplerComparisonState") {
                     binding.kind = "sampler";
@@ -1122,10 +1171,15 @@ namespace termin_shaderc::internal {
 
     static bool assign_program_resource_placement(const CompileOptions& options,
                                                   const std::vector<std::string>& include_dirs,
+                                                  const std::vector<std::string>& common_slang_args,
+                                                  const std::filesystem::path& reflection_path,
+                                                  const std::string& slangc,
                                                   std::vector<ShaderResourceBinding>& stage_resources) {
         constexpr uint32_t kD3D11PushConstantRegister = 13;
+        const bool is_d3d11 = options.target == "d3d11";
         if (options.program_sources.empty()) {
-            return true;
+            return !is_d3d11 || assign_d3d11_register_placement(
+                                    stage_resources, options, common_slang_args, reflection_path, slangc);
         }
 
         std::vector<ShaderResourceBinding> program_resources;
@@ -1158,12 +1212,10 @@ namespace termin_shaderc::internal {
                   [](const ShaderResourceBinding& a, const ShaderResourceBinding& b) {
                       return std::tie(a.binding, a.kind, a.name) < std::tie(b.binding, b.kind, b.name);
                   });
-        const bool is_d3d11 = options.target == "d3d11";
         if (is_d3d11) {
-            assign_d3d11_register_placement(program_resources);
-        }
-
-        if (is_d3d11) {
+            if (!assign_d3d11_register_placement(
+                    program_resources, options, common_slang_args, reflection_path, slangc))
+                return false;
             for (const ShaderResourceBinding& program_resource : program_resources) {
                 if (program_resource.d3d11_register_class == "b" &&
                     program_resource.d3d11_register_index >= kD3D11PushConstantRegister) {
@@ -1199,6 +1251,8 @@ namespace termin_shaderc::internal {
             if (is_d3d11) {
                 stage_resource.d3d11_register_class = placement->d3d11_register_class;
                 stage_resource.d3d11_register_index = placement->d3d11_register_index;
+                stage_resource.d3d11_sampler_register_index = placement->d3d11_sampler_register_index;
+                stage_resource.d3d11_register_count = placement->d3d11_register_count;
             }
         }
         return true;
@@ -1238,9 +1292,6 @@ namespace termin_shaderc::internal {
         assign_missing_resource_scopes(resources);
         apply_default_resource_scope(resources, options.default_scope);
         normalize_scope_first_binding_slots(resources, options.language == "slang", options.target);
-        if (options.target == "d3d11") {
-            assign_d3d11_register_placement(resources);
-        }
         if (options.language == "slang" && options.target == "vulkan") {
             for (const ShaderResourceBinding& resource : resources) {
                 if (resource.slang_split_texture || resource.slang_separate_sampler) {
@@ -1349,6 +1400,12 @@ namespace termin_shaderc::internal {
             if (options.target == "d3d11") {
                 out << ", \"d3d11\": {" << "\"register_class\": \"" << json_escape(binding.d3d11_register_class)
                     << "\", " << "\"register_index\": " << binding.d3d11_register_index;
+                if (binding.kind == "texture" && !binding.slang_combined_texture) {
+                    out << ", \"sampler_register_index\": null";
+                } else if (binding.slang_combined_texture &&
+                           binding.d3d11_sampler_register_index != binding.d3d11_register_index) {
+                    out << ", \"sampler_register_index\": " << binding.d3d11_sampler_register_index;
+                }
                 if (binding.d3d11_scalar_sampler_for_texture_array) {
                     out << ", \"scalar_sampler_for_texture_array\": true";
                 }
@@ -1594,13 +1651,7 @@ namespace termin_shaderc::internal {
         const std::vector<ShaderResourceBinding> declared_slang_resources =
             is_d3d11 ? collect_declared_slang_resource_bindings(source, options, include_dirs)
                      : std::vector<ShaderResourceBinding>{};
-        std::vector<std::string> args = {
-            *slangc,
-            options.input,
-            "-entry",
-            options.entry,
-            "-stage",
-            slang_stage,
+        std::vector<std::string> common_slang_args = {
             "-target",
             slang_target,
             native_clip_y_up_define,
@@ -1610,10 +1661,12 @@ namespace termin_shaderc::internal {
             *matrix_layout_arg,
         };
         for (const std::string& include_dir : include_dirs) {
-            args.insert(args.end(), {"-I", include_dir});
+            common_slang_args.insert(common_slang_args.end(), {"-I", include_dir});
         }
+        common_slang_args.insert(common_slang_args.end(), extra_args.begin(), extra_args.end());
+        std::vector<std::string> args = {*slangc, options.input, "-entry", options.entry, "-stage", slang_stage};
+        args.insert(args.end(), common_slang_args.begin(), common_slang_args.end());
         args.insert(args.end(), {"-reflection-json", reflection_path.string()});
-        args.insert(args.end(), extra_args.begin(), extra_args.end());
         args.insert(args.end(), {"-o", slang_output_path.string()});
 
         int rc = run_command(args);
@@ -1655,7 +1708,8 @@ namespace termin_shaderc::internal {
             return false;
         }
         const bool constrained_gl = options.target == "opengl330" || options.target == "webgl2";
-        if (constrained_gl && !assign_program_resource_placement(options, include_dirs, resources)) {
+        if (constrained_gl && !assign_program_resource_placement(
+                                  options, include_dirs, common_slang_args, reflection_path, *slangc, resources)) {
             std::error_code ec;
             std::filesystem::remove(reflection_path, ec);
             std::filesystem::remove(options.output, ec);
@@ -1674,7 +1728,8 @@ namespace termin_shaderc::internal {
                 std::filesystem::remove(reflection_path, ec);
                 return false;
             }
-            if (!assign_program_resource_placement(options, include_dirs, resources)) {
+            if (!assign_program_resource_placement(
+                    options, include_dirs, common_slang_args, reflection_path, *slangc, resources)) {
                 std::error_code ec;
                 std::filesystem::remove(options.output, ec);
                 std::filesystem::remove(options.output + ".layout.json", ec);

@@ -736,6 +736,20 @@ namespace termin {
                 resource.has_d3d11_placement = 1;
                 resource.d3d11.register_class = register_class;
                 resource.d3d11.register_index = register_index;
+                if (const nos::trent* sampler = trent_dict_get(*d3d11, "sampler_register_index")) {
+                    if (kind != TC_SHADER_RESOURCE_TEXTURE) {
+                        return false;
+                    }
+                    if (sampler->is_nil()) {
+                        resource.d3d11_sampler_mode = TC_SHADER_D3D11_SAMPLER_NONE;
+                    } else if (trent_uint_field(*d3d11,
+                                                "sampler_register_index",
+                                                resource.d3d11_sampler_register_index)) {
+                        resource.d3d11_sampler_mode = TC_SHADER_D3D11_SAMPLER_EXPLICIT;
+                    } else {
+                        return false;
+                    }
+                }
                 bool scalar_sampler_for_texture_array = false;
                 if (trent_bool_field(*d3d11, "scalar_sampler_for_texture_array", scalar_sampler_for_texture_array)) {
                     resource.d3d11_scalar_sampler_for_texture_array = scalar_sampler_for_texture_array ? 1 : 0;
@@ -799,6 +813,14 @@ namespace termin {
         return true;
     }
 
+    static int64_t d3d11_texture_sampler_base(const tc_shader_resource_binding& binding) {
+        if (binding.kind != TC_SHADER_RESOURCE_TEXTURE || binding.d3d11_sampler_mode == TC_SHADER_D3D11_SAMPLER_NONE)
+            return -1;
+        return binding.d3d11_sampler_mode == TC_SHADER_D3D11_SAMPLER_EXPLICIT
+                   ? binding.d3d11_sampler_register_index
+                   : binding.d3d11.register_index;
+    }
+
     static void merge_shader_resource_binding(std::vector<tc_shader_resource_binding>& bindings,
                                               const tc_shader_resource_binding& incoming) {
         auto clone_binding = [](const tc_shader_resource_binding& src) {
@@ -851,20 +873,27 @@ namespace termin {
                 const uint8_t previous_d3d11_scalar_sampler_for_texture_array =
                     existing.d3d11_scalar_sampler_for_texture_array;
                 const tc_shader_d3d11_placement previous_d3d11 = existing.d3d11;
+                const uint8_t previous_sampler_mode = existing.d3d11_sampler_mode;
+                const uint32_t previous_sampler_index = existing.d3d11_sampler_register_index;
+                const auto previous_sampler_base = d3d11_texture_sampler_base(existing);
+                const auto incoming_sampler_base = d3d11_texture_sampler_base(incoming);
                 const uint8_t previous_has_webgpu_placement = existing.has_webgpu_placement;
                 const tc_shader_webgpu_placement previous_webgpu = existing.webgpu;
                 if (previous_has_d3d11_placement && incoming.has_d3d11_placement &&
                     (previous_d3d11.register_class != incoming.d3d11.register_class ||
-                     previous_d3d11.register_index != incoming.d3d11.register_index)) {
+                     previous_d3d11.register_index != incoming.d3d11.register_index ||
+                     previous_sampler_base != incoming_sampler_base)) {
                     tc_log(TC_LOG_WARN,
                            "merge_shader_resource_binding: '%s' has conflicting "
-                           "D3D11 placements — existing class=%u register=%u vs "
-                           "incoming class=%u register=%u (stages 0x%x | 0x%x); keeping incoming",
+                           "D3D11 placements — existing class=%u register=%u sampler=%lld vs "
+                           "incoming class=%u register=%u sampler=%lld (stages 0x%x | 0x%x); keeping incoming",
                            incoming.name,
                            previous_d3d11.register_class,
                            previous_d3d11.register_index,
+                           static_cast<long long>(previous_sampler_base),
                            incoming.d3d11.register_class,
                            incoming.d3d11.register_index,
+                           static_cast<long long>(incoming_sampler_base),
                            existing.stage_mask,
                            incoming.stage_mask);
                 }
@@ -876,6 +905,8 @@ namespace termin {
                 if (!incoming.has_d3d11_placement && previous_has_d3d11_placement) {
                     existing.has_d3d11_placement = 1;
                     existing.d3d11 = previous_d3d11;
+                    existing.d3d11_sampler_mode = previous_sampler_mode;
+                    existing.d3d11_sampler_register_index = previous_sampler_index;
                 }
                 if (previous_d3d11_scalar_sampler_for_texture_array) {
                     existing.d3d11_scalar_sampler_for_texture_array = 1;

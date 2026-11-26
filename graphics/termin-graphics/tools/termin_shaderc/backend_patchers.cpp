@@ -554,11 +554,12 @@ namespace termin_shaderc::internal {
         const char register_class = resource.d3d11_register_class[0];
         const uint32_t register_index = resource.d3d11_register_index;
 
-        auto patch_any_symbol = [&](const std::vector<std::string>& symbols, char cls, bool required) -> bool {
+        auto patch_any_symbol =
+            [&](const std::vector<std::string>& symbols, char cls, uint32_t index, bool required) -> bool {
             bool any_found = false;
             for (const std::string& symbol : symbols) {
                 bool found = false;
-                if (!patch_slang_d3d11_hlsl_symbol_register(hlsl, symbol, cls, register_index, changed, found)) {
+                if (!patch_slang_d3d11_hlsl_symbol_register(hlsl, symbol, cls, index, changed, found)) {
                     return false;
                 }
                 any_found = any_found || found;
@@ -574,20 +575,25 @@ namespace termin_shaderc::internal {
         if (resource.kind == "texture") {
             const bool texture_found_in_hlsl = hlsl.find(resource.name + "_texture_0") != std::string::npos ||
                                                hlsl.find(resource.name + "_0") != std::string::npos;
-            if (!patch_any_symbol(
-                    {resource.name + "_texture_0", resource.name + "_0"}, register_class, texture_found_in_hlsl)) {
+            if (!patch_any_symbol({resource.name + "_texture_0", resource.name + "_0"},
+                                  register_class,
+                                  register_index,
+                                  texture_found_in_hlsl)) {
                 return false;
             }
             if (resource.slang_combined_texture) {
                 const bool sampler_found_in_hlsl = hlsl.find(resource.name + "_sampler_0") != std::string::npos;
-                if (!patch_any_symbol({resource.name + "_sampler_0"}, 's', sampler_found_in_hlsl)) {
+                if (!patch_any_symbol({resource.name + "_sampler_0"},
+                                      's',
+                                      resource.d3d11_sampler_register_index,
+                                      sampler_found_in_hlsl)) {
                     return false;
                 }
             }
             return true;
         }
 
-        return patch_any_symbol({resource.name + "_0", resource.name}, register_class, false);
+        return patch_any_symbol({resource.name + "_0", resource.name}, register_class, register_index, false);
     }
 
     struct D3D11HlslResourceDecl {
@@ -600,6 +606,7 @@ namespace termin_shaderc::internal {
         bool is_texture = false;
         bool is_storage_texture = false;
         bool is_array = false;
+        uint32_t register_count = 1;
         bool is_comparison_sampler = false;
     };
 
@@ -670,9 +677,18 @@ namespace termin_shaderc::internal {
         if (prefix.empty()) {
             return std::nullopt;
         }
-        const bool is_array = prefix.rfind('[') != std::string::npos;
-        const size_t array_pos = prefix.rfind('[');
+        const size_t array_pos = prefix.find('[');
+        D3D11HlslResourceDecl decl;
         if (array_pos != std::string::npos) {
+            decl.is_array = true;
+            // Slang normally emits [int(N)] for a resolved array extent.
+            // Leave other expressions to its reflection data.
+            static const std::regex extent_re(R"(\[\s*(?:int\(\s*)?([0-9]{1,9})\s*\)?\s*\])");
+            const std::string dimensions = prefix.substr(array_pos);
+            std::smatch extent;
+            decl.register_count = std::regex_match(dimensions, extent, extent_re)
+                                      ? static_cast<uint32_t>(std::stoul(extent[1].str()))
+                                      : 0;
             prefix = trim_copy(prefix.substr(0, array_pos));
         }
         const size_t symbol_begin = prefix.find_last_of(" \t");
@@ -681,7 +697,6 @@ namespace termin_shaderc::internal {
         }
         const std::string symbol = prefix.substr(symbol_begin + 1);
 
-        D3D11HlslResourceDecl decl;
         decl.symbol = symbol;
         decl.resource_name = d3d11_hlsl_resource_name_from_symbol(symbol);
         decl.register_class = register_class;
@@ -690,7 +705,6 @@ namespace termin_shaderc::internal {
                           prefix.find("SamplerComparisonState") != std::string::npos;
         decl.is_texture = prefix.find("Texture") != std::string::npos;
         decl.is_storage_texture = prefix.find("RWTexture") != std::string::npos;
-        decl.is_array = is_array;
         decl.is_comparison_sampler = prefix.find("SamplerComparisonState") != std::string::npos;
         if (prefix.rfind("cbuffer ", 0) == 0) {
             decl.kind = "constant_buffer";
@@ -757,18 +771,31 @@ namespace termin_shaderc::internal {
                                                     const std::vector<ShaderResourceBinding>& declared_resources,
                                                     const std::string& hlsl,
                                                     uint32_t stage_mask) {
-        const std::vector<D3D11HlslResourceDecl> decls = collect_d3d11_hlsl_resource_decls(hlsl);
-        for (ShaderResourceBinding& binding : resources) {
-            if (binding.kind == "texture" &&
-                d3d11_hlsl_has_comparison_sampler_array_for_resource(decls, binding.name)) {
-                binding.d3d11_scalar_sampler_for_texture_array = true;
+        auto decls = collect_d3d11_hlsl_resource_decls(hlsl);
+        for (auto& decl : decls) {
+            // A separate resource can itself be named e.g. tile_sampler.
+            // Prefer its declared name over stripping a combined-sampler suffix.
+            if (decl.symbol.ends_with("_0")) {
+                const auto name = decl.symbol.substr(0, decl.symbol.size() - 2);
+                if (find_declared_d3d11_hlsl_resource(declared_resources, name, decl.kind))
+                    decl.resource_name = name;
             }
         }
         for (const D3D11HlslResourceDecl& decl : decls) {
             if (decl.is_sampler && d3d11_hlsl_has_decl_for_resource(decls, decl.resource_name, false)) {
                 continue;
             }
-            if (has_resource_named(resources, decl.resource_name)) {
+            const auto existing = std::find_if(resources.begin(), resources.end(), [&](const auto& binding) {
+                return binding.name == decl.resource_name;
+            });
+            const bool combined =
+                decl.kind == "texture" && d3d11_hlsl_has_decl_for_resource(decls, decl.resource_name, true);
+            const bool comparison_array =
+                combined && d3d11_hlsl_has_comparison_sampler_array_for_resource(decls, decl.resource_name);
+            if (existing != resources.end()) {
+                existing->d3d11_register_count = decl.register_count;
+                existing->d3d11_scalar_sampler_for_texture_array = comparison_array;
+                existing->slang_combined_texture |= combined;
                 continue;
             }
 
@@ -788,11 +815,9 @@ namespace termin_shaderc::internal {
             binding.set = 0;
             binding.d3d11_register_class.clear();
             binding.d3d11_register_index = 0;
-            binding.slang_combined_texture =
-                decl.kind == "texture" && d3d11_hlsl_has_decl_for_resource(decls, decl.resource_name, true);
-            binding.d3d11_scalar_sampler_for_texture_array =
-                decl.kind == "texture" &&
-                d3d11_hlsl_has_comparison_sampler_array_for_resource(decls, decl.resource_name);
+            binding.d3d11_register_count = decl.register_count;
+            binding.slang_combined_texture |= combined;
+            binding.d3d11_scalar_sampler_for_texture_array = comparison_array;
             binding.slang_split_texture = decl.kind == "texture" && !binding.slang_combined_texture;
             binding.slang_separate_sampler = decl.kind == "sampler";
             binding.slang_storage_texture = decl.kind == "storage_texture";
@@ -813,7 +838,6 @@ namespace termin_shaderc::internal {
         assign_missing_resource_scopes(resources);
         apply_default_resource_scope(resources, options.default_scope);
         normalize_scope_first_binding_slots(resources, options.language == "slang", options.target);
-        assign_d3d11_register_placement(resources);
         return true;
     }
 

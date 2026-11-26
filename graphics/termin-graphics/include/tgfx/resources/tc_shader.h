@@ -109,6 +109,12 @@ typedef enum tc_shader_d3d11_register_class {
     TC_SHADER_D3D11_REGISTER_U = 4,
 } tc_shader_d3d11_register_class;
 
+typedef enum tc_shader_d3d11_sampler_mode {
+    TC_SHADER_D3D11_SAMPLER_MATCH_TEXTURE = 0,
+    TC_SHADER_D3D11_SAMPLER_EXPLICIT = 1,
+    TC_SHADER_D3D11_SAMPLER_NONE = 2,
+} tc_shader_d3d11_sampler_mode;
+
 // Engine-reserved resource names. These names are part of the Termin shader
 // interface; backend set/binding numbers are runtime metadata and should not
 // be authored into Slang sources long-term.
@@ -158,11 +164,13 @@ typedef struct tc_shader_resource_binding {
     uint8_t has_d3d11_placement;
     uint8_t d3d11_scalar_sampler_for_texture_array;
     uint8_t has_webgpu_placement;
-    uint8_t _resource_binding_reserved;
+    uint8_t d3d11_sampler_mode; // tc_shader_d3d11_sampler_mode
     tc_shader_d3d11_placement d3d11;
     tc_shader_webgpu_placement webgpu;
     tc_shader_resource_field* fields;
     uint32_t field_count;
+    // Combined texture's s-register base for TC_SHADER_D3D11_SAMPLER_EXPLICIT.
+    uint32_t d3d11_sampler_register_index;
 } tc_shader_resource_binding;
 
 // ============================================================================

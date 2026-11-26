@@ -721,6 +721,9 @@ namespace tgfx {
         return a.kind == b.kind && a.vulkan.set == b.vulkan.set && a.vulkan.binding == b.vulkan.binding &&
                a.vulkan.descriptor_kind == b.vulkan.descriptor_kind &&
                a.d3d11.register_class == b.d3d11.register_class && a.d3d11.register_index == b.d3d11.register_index &&
+               a.d3d11.sampler_mode == b.d3d11.sampler_mode &&
+               a.d3d11.sampler_register_index == b.d3d11.sampler_register_index &&
+               a.d3d11.scalar_sampler_for_texture_array == b.d3d11.scalar_sampler_for_texture_array &&
                a.opengl.binding_class == b.opengl.binding_class && a.opengl.binding_point == b.opengl.binding_point &&
                a.opengl.texture_unit == b.opengl.texture_unit &&
                a.webgpu.group == b.webgpu.group && a.webgpu.binding == b.webgpu.binding;
