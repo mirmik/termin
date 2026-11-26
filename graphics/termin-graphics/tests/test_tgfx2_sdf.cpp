@@ -49,12 +49,39 @@ namespace {
         check(glyph.advance_px > 0.0f, label);
     }
 
+    void check_glyph_offsets(tgfx::FontAtlas& font, float size, float expected_en, float expected_j) {
+        // U+043D (Cyrillic small en) has a positive ink bearing in Droid Sans.
+        // Lowercase j overhangs the pen to the left.
+        const char* run = "\xd0\xbdj\xd0\xbdj ";
+        font.ensure_glyphs(run, size);
+        const auto en = font.get_glyph(0x043d, size);
+        const auto j = font.get_glyph('j', size);
+        const auto space = font.get_glyph(' ', size);
+        check(en && j && space, "spacing probe glyphs should be present");
+        if (!en || !j || !space)
+            return;
+        check(en->offset_x_px == expected_en, "en quad should retain its horizontal offset");
+        check(j->offset_x_px == expected_j, "j quad should retain its left overhang");
+        check(space->width_px == 0 && space->advance_px > 0, "space should advance without ink");
+        const float expected_width = 2 * (en->advance_px + j->advance_px) + space->advance_px;
+        check(std::abs(font.measure_text(run, size).width - expected_width) < 1e-4f,
+              "repeated glyphs should advance independently of their quad offsets");
+    }
+
 } // namespace
 
 int main() {
     // Load font.
     const char* font_path = TGFX2_TEST_FONT_PATH;
     tgfx::FontAtlas font(font_path, 14);
+    // Bitmap box origins are 2 and -1 oversampled texels at 14 px;
+    // the 2x box prefilter shifts the quad by another -0.25 display px.
+    check_glyph_offsets(font, 14.0f, 0.75f, -0.75f);
+    // At the 64 px SDF reference size, ink begins at +4 and -2.
+    // The quad also includes spread texels to the left of that ink.
+    const float spread = static_cast<float>(font.sdf_spread());
+    check_glyph_offsets(font, 64.0f, 4 - spread, -2 - spread);
+    check_glyph_offsets(font, 48.0f, 0.75f * (4 - spread), 0.75f * (-2 - spread));
     printf("Font loaded: %s\n", font_path);
     printf("SDF config: enabled=%d threshold=%d ref=%d spread=%d\n",
            font.sdf_enabled(),

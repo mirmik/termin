@@ -749,7 +749,7 @@ namespace tgfx {
                             const auto glyph = font->get_glyph(codepoint, display_size_px);
                             if (!glyph)
                                 continue;
-                            const float x0 = cursor_x;
+                            const float x0 = cursor_x + glyph->offset_x_px / raster_scale;
                             const float x1 = x0 + glyph->width_px / raster_scale;
                             const float y0 = start_y - spread;
                             const float y1 = y0 + glyph->height_px / raster_scale;

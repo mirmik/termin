@@ -214,13 +214,7 @@ namespace tgfx {
             break;
         }
 
-        // Snap the text origin to the nearest integer pixel so the first
-        // glyph's left edge lands on a texel boundary. Without this a
-        // fractional start (common after anchor math, DPI scaling, or
-        // caller-side sub-pixel layout) spreads every glyph across two
-        // columns via bilinear filtering — the dominant cause of the
-        // "mыло" / ghosting look on small text. The cursor itself
-        // accumulates in float below so kerning / advance don't drift.
+        // Align the run as a whole. Preserve fractional advances within it.
         start_x = std::floor(start_x + 0.5f);
         start_y = std::floor(start_y + 0.5f);
 
@@ -324,12 +318,7 @@ namespace tgfx {
             const float char_w = gi->width_px;
             const float char_h = gi->height_px;
 
-            // Snap the quad's left edge to an integer pixel; keep the
-            // width as-is so the glyph shape isn't distorted by rounding
-            // both edges (that produces uneven widths across neighbours).
-            // cursor_x continues to accumulate in float — round-to-draw
-            // doesn't feed back into the advance chain.
-            const float px0 = std::floor(cursor_x + 0.5f);
+            const float px0 = cursor_x + gi->offset_x_px;
             const float px1 = px0 + char_w;
             // SDF glyph cells include `spread` pixels above and below the
             // line-height cell. Shift the quad up by that spread so the

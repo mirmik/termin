@@ -10,7 +10,7 @@
 //   - Every lookup takes `display_px` — the pixel height the caller
 //     intends to render at. The atlas quantises this to an integer px
 //     and either hits a cached bake or produces a fresh one.
-//   - GlyphInfo metrics (width_px / height_px / advance_px) are in
+//   - GlyphInfo metrics (offset, size and advance) are in
 //     DISPLAY pixels at the requested size, ready for the renderer to
 //     use directly (no `* scale` multiplication needed).
 //   - Each size bakes its own cell layout: cell height = ascent +
@@ -67,6 +67,9 @@ namespace tgfx {
             // sidebearings, and is the *only* sensible value for zero-ink
             // glyphs like space.
             float advance_px = 0.0f;
+            // Signed distance from the pen to the stored quad's left edge,
+            // including bitmap filter phase or SDF padding.
+            float offset_x_px = 0.0f;
         };
 
         // Minimum quantised size. Requests below this are clamped — stb

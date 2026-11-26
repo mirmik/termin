@@ -205,8 +205,8 @@ namespace tgfx {
             const float char_w = gi->width_px * glyph_scale;
             const float char_h = gi->height_px * glyph_scale;
 
-            const float left = cursor_x;
-            const float right = cursor_x + char_w;
+            const float left = cursor_x + gi->offset_x_px * glyph_scale;
+            const float right = left + char_w;
             const float top = ascent;
             const float bottom = ascent - char_h;
 

@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
@@ -77,7 +78,8 @@ namespace {
                      float size,
                      float bitmap_coverage_gamma,
                      std::optional<float> coverage_gamma,
-                     std::vector<float>& pixels) {
+                     std::vector<float>& pixels,
+                     std::string_view text = "Small UI text") {
         const termin::LinearColor black{0.0f, 0.0f, 0.0f, 1.0f};
         tgfx::Text2DRenderer renderer(&font);
         renderer.set_bitmap_coverage_gamma(bitmap_coverage_gamma);
@@ -91,7 +93,7 @@ namespace {
         context.set_blend_func(tgfx::BlendFactor::SrcAlpha, tgfx::BlendFactor::OneMinusSrcAlpha);
         context.set_cull(tgfx::CullMode::None);
         renderer.begin(&context, static_cast<int>(kWidth), static_cast<int>(kHeight));
-        renderer.draw("Small UI text",
+        renderer.draw(text,
                       tgfx::Text2DRenderer::DrawOptions{
                           .x = 4.0f,
                           .y = 4.0f,
@@ -108,6 +110,38 @@ namespace {
         const bool read = device.read_texture_rgba_float(target, pixels.data());
         renderer.release_gpu();
         return read;
+    }
+
+    bool check_bitmap_spacing(const std::vector<float>& pixels, const tgfx::FontAtlas& font) {
+        const auto coverage = [&](int x, int y) { return pixels[4 * (y * kWidth + x)]; };
+        // In "Фронт волны" at (4,4), the two stems of лн flank x=63.
+        for (int y = 10; y <= 14; ++y) {
+            if (coverage(63, y) > 0.02f || coverage(62, y) < 0.08f || coverage(64, y) < 0.08f) {
+                std::fprintf(stderr, "Missing gap between Cyrillic stems at (63,%d)\n", y);
+                return false;
+            }
+        }
+
+        // Measure the two following isolated copies of н by their ink centroids.
+        // Rounding the pen at each glyph would make their separation an integer.
+        const auto centroid = [&](int left, int right) {
+            double mass = 0, moment = 0;
+            for (int y = 0; y < static_cast<int>(kHeight); ++y) {
+                for (int x = left; x < right; ++x) {
+                    const float ink = coverage(x, y);
+                    mass += ink;
+                    moment += x * ink;
+                }
+            }
+            return mass > 0 ? moment / mass : -1.0;
+        };
+        const double first = centroid(82, 92), second = centroid(92, 103);
+        const float advance = font.measure_text("\xd0\xbd ", 14).width;
+        if (first < 0 || second < 0 || std::abs(second - first - advance) > 0.25) {
+            std::fprintf(stderr, "Repeated glyphs at %.2f and %.2f should be %.2f px apart\n", first, second, advance);
+            return false;
+        }
+        return true;
     }
 
     bool render_canvas_per_call_font(tgfx::IRenderDevice& device,
@@ -259,19 +293,30 @@ namespace {
         const bool canvas_per_call_contract =
             canvas_per_call_read && canvas_per_call.solid_pixels + canvas_per_call.partial_pixels >= 8;
 
+        std::vector<float> spacing_pixels;
+        // UTF-8 "Фронт волны н н" on every compiler's execution character set.
+        constexpr auto spacing_text = "\xd0\xa4\xd1\x80\xd0\xbe\xd0\xbd\xd1\x82 "
+                                      "\xd0\xb2\xd0\xbe\xd0\xbb\xd0\xbd\xd1\x8b \xd0\xbd \xd0\xbd";
+        const bool spacing_ok = render_text(*device, context, target, font, 14.0f,
+                                             tgfx::Text2DRenderer::kDefaultBitmapCoverageGamma,
+                                             std::nullopt, spacing_pixels, spacing_text) &&
+                                check_bitmap_spacing(spacing_pixels, font);
+
         font.release_gpu();
         device->destroy(target);
         std::error_code error;
         std::filesystem::remove_all(artifact_root, error);
         if (!bitmap_contract || !heading_neutral || !heading_override_literal || !sdf_unchanged ||
-            !canvas_per_call_contract) {
+            !canvas_per_call_contract || !spacing_ok) {
             std::fprintf(stderr,
-                         "Text coverage contract failed: bitmap=%d heading=%d override=%d sdf=%d canvas-per-call=%d\n",
+                         "Text coverage contract failed: bitmap=%d heading=%d override=%d sdf=%d canvas-per-call=%d "
+                         "spacing=%d\n",
                          bitmap_contract,
                          heading_neutral,
                          heading_override_literal,
                          sdf_unchanged,
-                         canvas_per_call_contract);
+                         canvas_per_call_contract,
+                         spacing_ok);
             return 1;
         }
         return 0;

@@ -233,11 +233,7 @@ namespace tgfx {
         // non-integer display position. ImGui default. Vertical stays at
         // 1× — doubling the atlas vertically is rarely worth it.
         //
-        // Side-effect: stb's box prefilter phase-shifts the apparent
-        // glyph position by -(K-1)/(2K) = -0.25 display px (for K=2). We
-        // don't compensate — it's a uniform shift across every glyph, so
-        // relative alignment inside a text run is preserved, and 0.25 px
-        // is below perceptual threshold.
+        // Place the filtered bitmap using stb's matching oversample shift.
         constexpr int kOversampleX = 2;
 
         int glyph_idx = stbtt_FindGlyphIndex(&impl_->font, static_cast<int>(codepoint));
@@ -315,6 +311,7 @@ namespace tgfx {
         g.width_px = static_cast<float>(stored_w) / static_cast<float>(kOversampleX);
         g.height_px = static_cast<float>(gh_cell);
         g.advance_px = advance_px;
+        g.offset_x_px = static_cast<float>(x0) / kOversampleX + stbtt__oversample_shift(kOversampleX);
         glyphs_[key] = g;
 
         dirty_ = true;
@@ -434,11 +431,11 @@ namespace tgfx {
         g.v0 = static_cast<float>(cell.y) / static_cast<float>(kSdfAtlasDim);
         g.u1 = static_cast<float>(cell.x + stored_w) / static_cast<float>(kSdfAtlasDim);
         g.v1 = static_cast<float>(cell.y + stored_h) / static_cast<float>(kSdfAtlasDim);
-        // Store reference-size metrics. Caller scales to display_px via:
-        //   width_display = width_px * display_px / reference_px
+        // get_glyph() scales all reference-size metrics to display pixels.
         g.width_px = static_cast<float>(stored_w);
         g.height_px = static_cast<float>(stored_h);
         g.advance_px = advance_ref;
+        g.offset_x_px = static_cast<float>(x0 - spread);
         sdf_glyphs_[codepoint] = g;
 
         sdf_dirty_ = true;
@@ -660,6 +657,7 @@ namespace tgfx {
             scaled.width_px = g.width_px * s;
             scaled.height_px = g.height_px * s;
             scaled.advance_px = g.advance_px * s;
+            scaled.offset_x_px = g.offset_x_px * s;
             return scaled;
         }
 
