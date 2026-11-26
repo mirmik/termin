@@ -119,8 +119,8 @@ base/builder image identity, версии Python, audit provenance и SHA-256 в
 в PyPI намеренно не является частью build task.
 
 Единая публичная версия всех Termin distributions хранится в
-`build-system/version.toml`. Текущий выпуск использует `0.5.2`; локальные SDK
-wheel’ы по-прежнему получают отдельный PEP 440 suffix `+sdk<native_build_id>`.
+`build-system/version.toml`. Локальные SDK wheel’ы получают отдельный
+суффикс PEP 440 `+sdk<native_build_id>`.
 Graphics публикуется одним PyPI project `termin-graphics` и содержит всю
 замкнутую внутреннюю dependency graph. Выпуск состоит ровно из двух файлов:
 `cp314` и `cp314t`. Внутреннее имя distribution, владеющего import-пакетом
