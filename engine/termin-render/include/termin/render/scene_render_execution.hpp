@@ -31,6 +31,7 @@ namespace termin {
                                     const std::string& default_render_target = "",
                                     const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests = {},
                                     StaticMeshBatchCache* batches = nullptr,
-                                    const FrameGraphSchedule* schedule = nullptr);
+                                    const FrameGraphSchedule* schedule = nullptr,
+                                    tgfx::RenderContextFrameScope* backend_frame = nullptr);
 
 } // namespace termin

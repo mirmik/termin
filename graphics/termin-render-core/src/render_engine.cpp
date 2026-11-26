@@ -320,8 +320,12 @@ namespace termin {
         ensure_tgfx2();
         tgfx::IRenderDevice* device = tgfx2_device();
         tgfx::RenderContext2* ctx2 = tgfx2_ctx();
-        if (!device) {
-            tc::Log::error("RenderEngine::execute_pipeline: tgfx2 device unavailable");
+        if (!device || !ctx2) {
+            tc::Log::error("RenderEngine::execute_pipeline: tgfx2 context unavailable");
+            return false;
+        }
+        if (ctx2->in_pass()) {
+            tc::Log::error("RenderEngine::execute_pipeline: supplied context has an active raster pass");
             return false;
         }
         if (render_target_contexts.empty()) {
@@ -744,11 +748,10 @@ namespace termin {
         tc_profiler_end_section();
         allocate_ms = timing_ms(allocate_begin, RenderTimingClock::now());
 
-        const bool owns_tgfx2_frame = ctx2 && !ctx2->in_frame();
         const auto begin_frame_begin = RenderTimingClock::now();
-        if (owns_tgfx2_frame) {
-            ctx2->begin_frame();
-        }
+        tgfx::RenderContextFrameScope standalone_frame;
+        auto& frame = execution.backend_frame ? *execution.backend_frame : standalone_frame;
+        frame.begin(*ctx2);
         begin_frame_ms = timing_ms(begin_frame_begin, RenderTimingClock::now());
 
         // Assemble per-resource tgfx2 texture maps from the pool. Native
@@ -1894,9 +1897,7 @@ namespace termin {
         }
 
         const auto end_frame_begin = RenderTimingClock::now();
-        if (owns_tgfx2_frame) {
-            ctx2->end_frame();
-        }
+        standalone_frame.finish();
         end_frame_ms = timing_ms(end_frame_begin, RenderTimingClock::now());
 
         if (collect_render_timing) {

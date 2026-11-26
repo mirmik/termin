@@ -12,6 +12,7 @@
 #include <termin/entity/entity.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/render/render_lifecycle.hpp>
+#include <termin/render/frame_graph_capture.hpp>
 #include <termin/render/scene_render_execution.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 
@@ -34,6 +35,7 @@ extern "C" {
 
 #include <algorithm>
 #include <tcbase/profiler_scope.hpp>
+#include <tgfx2/render_context.hpp>
 
 namespace termin {
 
@@ -1041,9 +1043,15 @@ namespace termin {
             std::string default_context;
         };
         struct PlannedRenderContext {
+            struct CompletedCapture {
+                RenderExecutionInfo execution;
+                std::vector<FrameGraphCaptureRequest*> requests;
+            };
             RenderingManager* manager;
             std::vector<tc_scene_handle> prepared_scenes;
             std::vector<std::unique_ptr<PreparedOutput>> outputs;
+            tgfx::RenderContextFrameScope backend_frame;
+            std::vector<CompletedCapture> completed_captures;
 
             RenderExecutionInfo describe(const rendering_manager_detail::OffscreenRenderJob* job) const {
                 RenderExecutionInfo execution{.scene = job->scene, .pipeline = job->pipeline, .targets = {}};
@@ -1057,9 +1065,25 @@ namespace termin {
                 }
                 return execution;
             }
-        } planned_context{this, {}, {}};
 
-        offscreen_planner_->execute(
+            void finish_captures(bool submitted) {
+                for (auto& capture : completed_captures) {
+                    if (!submitted) {
+                        for (auto* request : capture.requests) {
+                            request->status = FrameGraphCaptureRequestStatus::ResourceUnavailable;
+                            if (request->capture)
+                                request->capture->reset_capture();
+                            if (request->depth_capture)
+                                request->depth_capture->reset_capture();
+                        }
+                    }
+                    manager->finish_render_execution(capture.execution, capture.requests);
+                }
+            }
+        } planned_context{this, {}, {}, {}, {}};
+
+        const auto execute_offscreen_jobs = [&] {
+            offscreen_planner_->execute(
             topology_,
             only_display,
             [](void* user_data, const rendering_manager_detail::OffscreenRenderJob* job,
@@ -1106,7 +1130,7 @@ namespace termin {
                 RenderPipeline pipeline(job->pipeline);
                 return termin::render_scene_pipeline_offscreen(*manager->render_engine(), pipeline, job->scene, contexts,
                     internal_entities, lights, default_context, execution.captures, &manager->static_mesh_batches_,
-                    &execution.schedule);
+                    &execution.schedule, &planned->backend_frame);
             },
             &planned_context,
             nullptr,
@@ -1184,9 +1208,21 @@ namespace termin {
                 [](void* data, const rendering_manager_detail::OffscreenRenderJob* job,
                    const std::vector<FrameGraphCaptureRequest*>& captures) {
                     auto& planned = *static_cast<PlannedRenderContext*>(data);
-                    planned.manager->finish_render_execution(planned.describe(job), captures);
+                    planned.completed_captures.push_back({planned.describe(job), captures});
                 },
             });
+        };
+        try {
+            const tc::ProfilerScope scope("Offscreen backend batch");
+            execute_offscreen_jobs();
+            planned_context.backend_frame.finish();
+        } catch (...) {
+            tc_log(TC_LOG_ERROR, "[RenderingManager] offscreen backend batch failed");
+            offscreen_planner_->invalidate_outputs();
+            planned_context.finish_captures(false);
+            throw;
+        }
+        planned_context.finish_captures(true);
     }
 
     void RenderingManager::render_render_target_tree_offscreen(tc_render_target_handle rt) {
@@ -1473,9 +1509,11 @@ namespace termin {
         const FrameGraphSchedule schedule = select_frame_graph_schedule(render_pipeline, graph, capture_requests);
         request.schedule = &schedule;
         if (schedule.valid && rendering_manager_detail::bind_render_target_context_resources(request)) {
+            tgfx::RenderContextFrameScope backend_frame;
             termin::render_scene_pipeline_offscreen(*engine, render_pipeline, scene, contexts,
                 internal_entities_by_context, lights, default_context, capture_requests, &static_mesh_batches_,
-                &schedule);
+                &schedule, &backend_frame);
+            backend_frame.finish();
         }
         finish_render_execution(execution, capture_requests);
     }

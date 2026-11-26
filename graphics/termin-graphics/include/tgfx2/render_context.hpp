@@ -33,6 +33,7 @@
 #include "tgfx2/render_state.hpp"
 #include "tgfx2/tgfx2_api.h"
 #include "tgfx2/vertex_layout.hpp"
+#include <termin/geom/bounds2.hpp>
 
 // Forward declaration for C-level shader type (global namespace, extern "C").
 struct tc_shader;
@@ -200,6 +201,7 @@ namespace tgfx {
         void clear_pending_binding_buckets();
         bool any_dirty_binding_scope() const;
         void reset_cached_vertex_buffers();
+        void release_frame_resources();
         void prepare_strip_index_format(bool indexed, IndexType index_type = IndexType::Uint32);
         void ensure_cached_vertex_buffer_slots(uint32_t count);
         static BoundResourceBinding* find_planned_binding(std::vector<BoundResourceBinding>& bindings,
@@ -242,6 +244,7 @@ namespace tgfx {
         bool in_frame() const {
             return cmd_ != nullptr;
         }
+        bool in_pass() const { return in_pass_; }
 
         // --- Render pass ---
         // Begin render pass with color attachment (and optional depth).
@@ -424,6 +427,7 @@ namespace tgfx {
 
         // --- Blit ---
         void blit(TextureHandle src, TextureHandle dst);
+        void blit_region(TextureHandle src, TextureHandle dst, termin::Bounds2i src_rect, termin::Bounds2i dst_rect);
 
         // --- Access ---
         IRenderDevice& device() {
@@ -449,6 +453,22 @@ namespace tgfx {
         // still be active on the command list.
         bool flush_pipeline();
         void flush_resource_set();
+    };
+
+    // Lazily owns a frame when the caller supplies an idle context. A frame
+    // already opened by the host is borrowed and remains open at finish().
+    class TGFX2_TYPE_API RenderContextFrameScope {
+    public:
+        RenderContextFrameScope() = default;
+        ~RenderContextFrameScope() noexcept;
+        RenderContextFrameScope(const RenderContextFrameScope&) = delete;
+        RenderContextFrameScope& operator=(const RenderContextFrameScope&) = delete;
+
+        void begin(RenderContext2& context);
+        void finish();
+
+    private:
+        RenderContext2* owned_context_ = nullptr;
     };
 
 } // namespace tgfx

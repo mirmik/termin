@@ -466,6 +466,7 @@ namespace tgfx {
 
         struct SubmitStats {
             uint64_t submits = 0;
+            uint64_t command_buffers = 0;
             std::chrono::steady_clock::time_point window_start = std::chrono::steady_clock::now();
             double fence_wait_us = 0.0;
             double readback_cleanup_us = 0.0;
@@ -473,6 +474,9 @@ namespace tgfx {
             double descriptor_cleanup_us = 0.0;
         };
         SubmitStats submit_stats_;
+
+        void blit_to_texture_impl(VkCommandBuffer command_buffer, TextureHandle dst, TextureHandle src,
+                                  termin::Bounds2i src_rect, termin::Bounds2i dst_rect);
 
         // tc_texture / tc_mesh per-device resource caches. Keyed by
         // tc_resource_header::pool_index. Replace the former file-scope
@@ -568,6 +572,8 @@ namespace tgfx {
                              termin::Bounds2i dst_rect) override;
 
         void clear_texture(TextureHandle dst, termin::LinearColor color, termin::Bounds2i viewport) override;
+        void record_blit_to_texture(ICommandList& commands, TextureHandle dst, TextureHandle src,
+                                    termin::Bounds2i src_rect, termin::Bounds2i dst_rect) override;
 
         // Internal access for command list
         VkDevice device() const {

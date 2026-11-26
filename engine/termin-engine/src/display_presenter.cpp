@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <tgfx2/i_render_device.hpp>
+#include <tgfx2/render_context.hpp>
 
 extern "C" {
 #include "render/tc_render_surface.h"
@@ -19,7 +20,6 @@ extern "C" {
 namespace termin::rendering_manager_detail {
 
     bool present_display(RenderingManager& manager, tc_display_handle display) {
-        (void)manager;
         if (!tc_display_alive(display))
             return false;
         bool profile = tc_profiler_enabled();
@@ -62,10 +62,38 @@ namespace termin::rendering_manager_detail {
             return false;
         }
         tgfx::TextureHandle display_color_tex{display_color_texture_id};
+        auto* context = engine->tgfx2_ctx();
+        const bool record_in_host_frame = context && context->in_frame() &&
+                                          dev->backend_type() == tgfx::BackendType::Vulkan;
+        if (context && context->in_pass()) {
+            tc_log(TC_LOG_ERROR, "[RenderingManager] cannot composite a display inside a host raster pass");
+            if (profile)
+                tc_profiler_end_section();
+            return false;
+        }
 
         if (profile)
             tc_profiler_begin_section("Present Clear");
-        dev->clear_texture(display_color_tex, LinearColor{0.1f, 0.1f, 0.1f, 1.0f}, Bounds2i::from_size(width, height));
+        const LinearColor clear_color{0.1f, 0.1f, 0.1f, 1.0f};
+        if (record_in_host_frame) {
+            tgfx::RenderPassDesc pass;
+            tgfx::ColorAttachmentDesc attachment;
+            attachment.texture = display_color_tex;
+            attachment.load = tgfx::LoadOp::Clear;
+            attachment.clear_color = clear_color;
+            pass.colors.push_back(attachment);
+            if (!context->begin_pass(pass)) {
+                tc_log(TC_LOG_ERROR, "[RenderingManager] cannot clear the display in the host frame");
+                if (profile) {
+                    tc_profiler_end_section();
+                    tc_profiler_end_section();
+                }
+                return false;
+            }
+            context->end_pass();
+        } else {
+            dev->clear_texture(display_color_tex, clear_color, Bounds2i::from_size(width, height));
+        }
         if (profile)
             tc_profiler_end_section();
 
@@ -116,8 +144,12 @@ namespace termin::rendering_manager_detail {
             int px, py, pw, ph;
             tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
-            dev->blit_to_texture(
-                display_color_tex, src_color, Bounds2i::from_size(src_w, src_h), Bounds2i{px, py, px + pw, py + ph});
+            const Bounds2i source = Bounds2i::from_size(src_w, src_h);
+            const Bounds2i destination{px, py, px + pw, py + ph};
+            if (record_in_host_frame)
+                context->blit_region(src_color, display_color_tex, source, destination);
+            else
+                dev->blit_to_texture(display_color_tex, src_color, source, destination);
         }
         if (profile)
             tc_profiler_end_section();

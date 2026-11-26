@@ -27,6 +27,7 @@ extern "C" {
 namespace tgfx {
     class IRenderDevice;
     class RenderContext2;
+    class RenderContextFrameScope;
     class GraphicsHost;
 } // namespace tgfx
 
@@ -93,6 +94,9 @@ namespace termin {
         std::vector<std::string> required_resources;
         // Optional selection already used to resolve this execution's inputs.
         const FrameGraphSchedule* schedule = nullptr;
+        // Batch owner for managed offscreen work. Standalone callers can use
+        // an already open context or a frame scoped to this execution.
+        tgfx::RenderContextFrameScope* backend_frame = nullptr;
     };
 
     class RENDER_CORE_API RenderEngine {

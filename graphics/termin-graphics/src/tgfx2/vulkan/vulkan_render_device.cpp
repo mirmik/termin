@@ -1427,6 +1427,7 @@ namespace tgfx {
 
         if (stats_enabled) {
             ++submit_stats_.submits;
+            submit_stats_.command_buffers += cb_count;
         }
 
         const auto now = stats_enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
@@ -1455,7 +1456,7 @@ namespace tgfx {
             uint64_t pipe_rp_us = g_pipeline_renderpass_us.exchange(0, std::memory_order_relaxed);
             uint64_t pipe_create_us = g_pipeline_create_us.exchange(0, std::memory_order_relaxed);
             tc_log(TC_LOG_INFO,
-                   "[tgfx2-vulkan] submit stats: submits=%llu draws=%llu render_passes=%llu "
+                   "[tgfx2-vulkan] submit stats: submits=%llu command_buffers=%llu draws=%llu render_passes=%llu "
                    "attachment_resolves=%llu "
                    "pipelines=%llu pipeline_cache_hit=%llu pipeline_cache_miss=%llu "
                    "new_vertex_layouts=%llu resource_sets=%llu ring_descriptor_hits=%llu descriptor_updates=%llu bind_pipeline=%llu "
@@ -1464,6 +1465,7 @@ namespace tgfx {
                    "readback_cleanup_ms=%.3f destroy_cleanup_ms=%.3f "
                    "descriptor_cleanup_ms=%.3f",
                    static_cast<unsigned long long>(submit_stats_.submits),
+                   static_cast<unsigned long long>(submit_stats_.command_buffers),
                    static_cast<unsigned long long>(draws),
                    static_cast<unsigned long long>(render_passes),
                    static_cast<unsigned long long>(attachment_resolves),
@@ -1498,6 +1500,7 @@ namespace tgfx {
                        static_cast<double>(pipe_create_us) / 1000.0);
             }
             submit_stats_.submits = 0;
+            submit_stats_.command_buffers = 0;
             submit_stats_.fence_wait_us = 0.0;
             submit_stats_.readback_cleanup_us = 0.0;
             submit_stats_.destroy_cleanup_us = 0.0;
@@ -1770,6 +1773,18 @@ namespace tgfx {
                                              TextureHandle src_handle,
                                              termin::Bounds2i src_rect,
                                              termin::Bounds2i dst_rect) {
+        blit_to_texture_impl(VK_NULL_HANDLE, dst_handle, src_handle, src_rect, dst_rect);
+    }
+
+    void VulkanRenderDevice::record_blit_to_texture(ICommandList& commands, TextureHandle dst, TextureHandle src,
+                                                    termin::Bounds2i src_rect, termin::Bounds2i dst_rect) {
+        auto& vk_commands = static_cast<VulkanCommandList&>(commands);
+        blit_to_texture_impl(vk_commands.command_buffer(), dst, src, src_rect, dst_rect);
+    }
+
+    void VulkanRenderDevice::blit_to_texture_impl(VkCommandBuffer command_buffer, TextureHandle dst_handle,
+                                                 TextureHandle src_handle, termin::Bounds2i src_rect,
+                                                 termin::Bounds2i dst_rect) {
         auto* src = textures_.get(src_handle.id);
         auto* dst = textures_.get(dst_handle.id);
         if (!src || !dst)
@@ -1832,7 +1847,7 @@ namespace tgfx {
         bool msaa_resolve = src->desc.sample_count > 1 && dst->desc.sample_count == 1;
         bool msaa_copy = src->desc.sample_count > 1 && dst->desc.sample_count == src->desc.sample_count;
 
-        execute_immediate([&](VkCommandBuffer cb) {
+        const auto record = [&](VkCommandBuffer cb) {
             transition_image_layout(cb,
                                     src->image,
                                     prev_src,
@@ -1941,7 +1956,11 @@ namespace tgfx {
                                     dst->desc.array_layers);
             src->current_layout = final_src;
             dst->current_layout = final_dst;
-        });
+        };
+        if (command_buffer)
+            record(command_buffer);
+        else
+            execute_immediate(record);
     }
 
     void VulkanRenderDevice::clear_texture(TextureHandle dst_handle, termin::LinearColor color, termin::Bounds2i viewport) {
