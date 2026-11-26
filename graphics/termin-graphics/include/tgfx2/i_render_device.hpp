@@ -328,6 +328,12 @@ namespace tgfx {
             throw std::runtime_error("blit_to_texture: not supported on this backend");
         }
 
+        // Record an ordered color blit into an already open command list.
+        virtual void record_blit_to_texture(ICommandList&, TextureHandle, TextureHandle,
+                                            termin::Bounds2i, termin::Bounds2i) {
+            throw std::runtime_error("record_blit_to_texture: not supported on this backend");
+        }
+
         // Clear mip 0 of a ColorAttachment texture (all array layers) to color.
         // The half-open rect uses top-left coordinates and is clipped to the
         // texture extent. Empty/reversed rects are no-ops. Pixels outside the

@@ -2,6 +2,7 @@
 // render_context.cpp - Mid-level rendering abstraction over tgfx2.
 #include "tgfx2/render_context.hpp"
 #include "tcbase/tc_log.h"
+#include "tcbase/profiler_scope.hpp"
 #include "tgfx2/engine_shader_catalog.hpp"
 #include "tgfx2/i_command_list.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -15,6 +16,7 @@ extern "C" {
 #include <algorithm>
 #include <cstring>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -129,42 +131,59 @@ namespace tgfx {
     // ============================================================================
 
     void RenderContext2::begin_frame() {
+        const tc::ProfilerScope scope("RenderContext2::begin_frame");
+        if (in_frame()) {
+            tc_log(TC_LOG_ERROR, "RenderContext2::begin_frame: a frame is already active");
+            throw std::logic_error("render frame already active");
+        }
         uniform_upload_cache_.clear();
         uniform_upload_cache_bytes_ = 0;
         derived_data_cache_.clear();
-        cmd_ = device_.create_command_list();
-        cmd_->begin();
+        auto command_list = device_.create_command_list();
+        if (!command_list) {
+            tc_log(TC_LOG_ERROR, "RenderContext2::begin_frame: could not create a command list");
+            throw std::runtime_error("could not create render command list");
+        }
+        command_list->begin();
         const tc_frame_profile* profiler_frame = tc_profiler_current_frame();
         if (profiler_frame && device_.capabilities().supports_timestamp_queries) {
-            cmd_->begin_gpu_frame_timing(profiler_frame->frame_number);
+            command_list->begin_gpu_frame_timing(profiler_frame->frame_number);
         }
+        cmd_ = std::move(command_list);
     }
 
     void RenderContext2::end_frame() {
-        const bool profile = tc_profiler_enabled();
-        if (in_pass_) {
-            end_pass();
+        const tc::ProfilerScope scope("RenderContext2::end_frame");
+        if (!cmd_) {
+            tc_log(TC_LOG_ERROR, "RenderContext2::end_frame: no active frame");
+            throw std::logic_error("no active render frame");
         }
-        if (profile)
-            tc_profiler_begin_section("RenderContext2::end_frame");
-        if (profile)
-            tc_profiler_begin_section("RenderContext2::submit");
-        cmd_->end_gpu_frame_timing();
-        cmd_->end();
-        device_.submit(*cmd_);
+        try {
+            if (in_pass_)
+                end_pass();
+            const tc::ProfilerScope submit("RenderContext2::submit");
+            cmd_->end_gpu_frame_timing();
+            cmd_->end();
+            device_.submit(*cmd_);
+        } catch (...) {
+            cmd_.reset();
+            in_pass_ = false;
+            release_frame_resources();
+            throw;
+        }
         cmd_.reset();
-        uniform_upload_cache_.clear();
-        uniform_upload_cache_bytes_ = 0;
-        derived_data_cache_.clear();
+        release_frame_resources();
         GpuFrameTiming gpu_timing;
         while (device_.take_completed_gpu_frame_timing(gpu_timing)) {
             tc_profiler_publish_gpu_frame_timing(static_cast<int>(gpu_timing.frame_number), gpu_timing.duration_ms);
         }
-        if (profile)
-            tc_profiler_end_section();
+    }
 
-        if (profile)
-            tc_profiler_begin_section("RenderContext2::destroy_transients");
+    void RenderContext2::release_frame_resources() {
+        const tc::ProfilerScope scope("RenderContext2::destroy_transients");
+        uniform_upload_cache_.clear();
+        uniform_upload_cache_bytes_ = 0;
+        derived_data_cache_.clear();
         if (current_resource_set_) {
             device_.destroy(current_resource_set_);
             current_resource_set_ = {};
@@ -185,10 +204,32 @@ namespace tgfx {
         deferred_destroy_textures_.clear();
         deferred_destroy_buffers_.clear();
         deferred_destroy_resource_sets_.clear();
-        if (profile)
-            tc_profiler_end_section();
-        if (profile)
-            tc_profiler_end_section();
+    }
+
+    RenderContextFrameScope::~RenderContextFrameScope() noexcept {
+        try {
+            finish();
+        } catch (const std::exception& error) {
+            tc_log(TC_LOG_ERROR, "RenderContextFrameScope: closing frame failed: %s", error.what());
+        } catch (...) {
+            tc_log(TC_LOG_ERROR, "RenderContextFrameScope: closing frame failed");
+        }
+    }
+
+    void RenderContextFrameScope::begin(RenderContext2& context) {
+        if (context.in_pass() || (owned_context_ && owned_context_ != &context)) {
+            tc_log(TC_LOG_ERROR, "RenderContextFrameScope: cannot record into the supplied context");
+            throw std::logic_error("incompatible render context for frame scope");
+        }
+        if (!context.in_frame()) {
+            context.begin_frame();
+            owned_context_ = &context;
+        }
+    }
+
+    void RenderContextFrameScope::finish() {
+        if (auto* context = std::exchange(owned_context_, nullptr))
+            context->end_frame();
     }
 
     // ============================================================================
@@ -1716,6 +1757,15 @@ namespace tgfx {
 
     void RenderContext2::blit(TextureHandle src, TextureHandle dst) {
         cmd_->copy_texture(src, dst);
+    }
+
+    void RenderContext2::blit_region(TextureHandle src, TextureHandle dst,
+                                     termin::Bounds2i src_rect, termin::Bounds2i dst_rect) {
+        if (!in_frame() || in_pass()) {
+            tc_log(TC_LOG_ERROR, "RenderContext2::blit_region: requires a frame outside a raster pass");
+            return;
+        }
+        device_.record_blit_to_texture(*cmd_, dst, src, src_rect, dst_rect);
     }
 
 } // namespace tgfx

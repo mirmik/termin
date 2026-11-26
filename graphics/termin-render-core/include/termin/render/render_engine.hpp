@@ -27,6 +27,7 @@ extern "C" {
 namespace tgfx {
     class IRenderDevice;
     class RenderContext2;
+    class RenderContextFrameScope;
     class GraphicsHost;
 } // namespace tgfx
 
@@ -34,6 +35,7 @@ namespace termin {
 
     class ShaderArtifactResolver;
     struct FrameGraphCaptureRequest;
+    struct FrameGraphSchedule;
 
     struct RenderPipelineCacheStats {
         uint64_t hit_count = 0;
@@ -88,6 +90,13 @@ namespace termin {
         std::unordered_map<std::string, RenderExecutionTarget> targets;
         std::string default_render_target;
         std::vector<FrameGraphCaptureRequest*> debug_capture_requests;
+        // Non-color graph results the caller will observe after execution.
+        std::vector<std::string> required_resources;
+        // Optional selection already used to resolve this execution's inputs.
+        const FrameGraphSchedule* schedule = nullptr;
+        // Batch owner for managed offscreen work. Standalone callers can use
+        // an already open context or a frame scoped to this execution.
+        tgfx::RenderContextFrameScope* backend_frame = nullptr;
     };
 
     class RENDER_CORE_API RenderEngine {
@@ -122,7 +131,7 @@ namespace termin {
         RenderEngine();
         ~RenderEngine();
 
-        void execute_pipeline(const RenderExecution& execution);
+        bool execute_pipeline(const RenderExecution& execution);
     };
 
 } // namespace termin

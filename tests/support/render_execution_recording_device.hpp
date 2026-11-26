@@ -22,6 +22,8 @@ namespace termin::test {
         std::vector<std::pair<tgfx::TextureHandle, tgfx::TextureDesc>> created_textures;
         std::vector<std::pair<tgfx::TextureHandle, tgfx::TextureHandle>> texture_copies;
         uint32_t framebuffer_local_barriers = 0;
+        uint32_t command_lists = 0;
+        uint32_t submits = 0;
     };
 
     class ExecutionRecordingCommandList final : public tgfx::ICommandList {
@@ -128,9 +130,10 @@ namespace termin::test {
             return it == texture_descs_.end() ? tgfx::TextureDesc{} : it->second;
         }
         std::unique_ptr<tgfx::ICommandList> create_command_list(tgfx::QueueType = tgfx::QueueType::Graphics) override {
+            ++state.command_lists;
             return std::make_unique<ExecutionRecordingCommandList>(state);
         }
-        void submit(tgfx::ICommandList&) override {}
+        void submit(tgfx::ICommandList&) override { ++state.submits; }
         void present() override {}
 
     private:

@@ -1,5 +1,6 @@
 // tc_display.c - Display implementation
 #include "render/tc_display.h"
+#include "core/tc_scene.h"
 #include "tc_display_input_router_internal.h"
 #include "tc_input_event.h"
 #include <math.h>
@@ -28,6 +29,13 @@ typedef struct tc_display {
 static tc_pool g_display_pool;
 static tc_pool_generation_epoch g_display_generation_epoch;
 static bool g_display_pool_initialized = false;
+
+static void tc_display_request_frame(const tc_display* display) {
+    for (tc_viewport_handle viewport = display->first_viewport; tc_viewport_handle_valid(viewport);
+         viewport = tc_viewport_get_display_next(viewport)) {
+        tc_scene_request_frame(tc_viewport_get_scene(viewport));
+    }
+}
 
 // ============================================================================
 // Helper Functions
@@ -279,8 +287,10 @@ bool tc_display_get_editor_only(tc_display_handle handle) {
 
 void tc_display_set_enabled(tc_display_handle handle, bool enabled) {
     tc_display* display = tc_display_get_alive(handle, "tc_display_set_enabled");
-    if (display)
+    if (display && display->enabled != enabled) {
         display->enabled = enabled;
+        tc_display_request_frame(display);
+    }
 }
 
 bool tc_display_get_enabled(tc_display_handle handle) {
@@ -333,6 +343,7 @@ bool tc_display_set_surface(tc_display_handle handle, tc_render_surface* surface
     if (previous && !tc_display_destroy_owned_surface(handle, previous, "tc_display_set_surface")) {
         tc_log(TC_LOG_ERROR, "[tc_display_set_surface] failed to destroy replaced owned surface");
     }
+    tc_display_request_frame(display);
     return true;
 }
 
@@ -565,6 +576,7 @@ void tc_display_add_viewport(tc_display_handle handle, tc_viewport_handle viewpo
     int width, height;
     tc_display_get_size(handle, &width, &height);
     tc_viewport_update_pixel_rect(viewport, width, height);
+    tc_scene_request_frame(tc_viewport_get_scene(viewport));
 }
 
 void tc_display_remove_viewport(tc_display_handle handle, tc_viewport_handle viewport) {
@@ -606,6 +618,7 @@ void tc_display_remove_viewport(tc_display_handle handle, tc_viewport_handle vie
     tc_viewport_set_display_prev(viewport, TC_VIEWPORT_HANDLE_INVALID);
     tc_viewport_set_display_next(viewport, TC_VIEWPORT_HANDLE_INVALID);
     display->viewport_count--;
+    tc_scene_request_frame(tc_viewport_get_scene(viewport));
 }
 
 size_t tc_display_get_viewport_count(tc_display_handle handle) {
@@ -714,4 +727,7 @@ void tc_display_on_surface_resize(tc_render_surface* surface, int width, int hei
     if (callback_surface != surface)
         return;
     tc_display_update_all_pixel_rects(surface->attached_display);
+    const tc_display* display = tc_display_get_alive(surface->attached_display, "tc_display_on_surface_resize");
+    if (display)
+        tc_display_request_frame(display);
 }

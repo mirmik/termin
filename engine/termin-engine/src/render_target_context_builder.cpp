@@ -3,6 +3,7 @@
 #include "pipeline_texture_ref.hpp"
 #include "rendering_manager_utils.hpp"
 #include "termin/render/camera_capability.hpp"
+#include "termin/render/frame_graph_schedule.hpp"
 #include "termin/render/render_camera.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -84,7 +85,8 @@ namespace termin::rendering_manager_detail {
     static void fill_external_textures_from_render_target(RenderTargetContext& ctx,
                                                           tc_render_target_handle rt,
                                                           tgfx::IRenderDevice& device,
-                                                          const std::vector<tc_render_target_handle>& render_targets) {
+                                                          const std::vector<tc_render_target_handle>& render_targets,
+                                                          const FrameGraphSchedule* schedule) {
         const tc_value* params = tc_render_target_get_pipeline_params(rt);
         if (!params || params->type != TC_VALUE_DICT) {
             return;
@@ -93,7 +95,8 @@ namespace termin::rendering_manager_detail {
         for (size_t i = 0; i < params->data.dict.count; i++) {
             const char* slot = params->data.dict.entries[i].key;
             tc_value* value = params->data.dict.entries[i].value;
-            if (!slot || slot[0] == '\0' || !value || value->type != TC_VALUE_STRING) {
+            if (!slot || slot[0] == '\0' || !value || value->type != TC_VALUE_STRING ||
+                (schedule && !schedule->resources.contains(slot))) {
                 continue;
             }
 
@@ -186,7 +189,8 @@ namespace termin::rendering_manager_detail {
                     if (existing_contexts.contains(name)) {
                         continue;
                     }
-                    fill_external_textures_from_render_target(context, rt, *device, request.managed_render_targets);
+                    fill_external_textures_from_render_target(context, rt, *device, request.managed_render_targets,
+                                                              request.schedule);
                     fill_material_texture_sources(context,
                                                   tc_render_target_get_scene(rt),
                                                   *device,
@@ -263,7 +267,8 @@ namespace termin::rendering_manager_detail {
                 context.output_color.texture = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_color_texture(request.rt));
                 context.output_depth_tex = wrap_tc_texture_as_tgfx2(*device, tc_render_target_get_depth_texture(request.rt));
             }
-            fill_external_textures_from_render_target(context, request.rt, *device, request.managed_render_targets);
+            fill_external_textures_from_render_target(context, request.rt, *device, request.managed_render_targets,
+                                                      request.schedule);
             context.material_texture_sources.clear();
             fill_material_texture_sources(context, tc_render_target_get_scene(request.rt), *device,
                                           request.managed_render_targets);

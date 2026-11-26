@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <termin/render/render_engine.hpp>
+#include <termin/render/frame_graph_schedule.hpp>
 #include <tgfx2/graphics_host.hpp>
 #include <tgfx2/i_render_device.hpp>
 
@@ -96,17 +97,20 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     manager.set_render_engine(&engine);
 
     tc_render_target_handle panel = tc_render_target_new("PanelTexture");
+    tc_render_target_handle unused = tc_render_target_new("UnusedTexture");
     tc_render_target_handle xr = tc_render_target_new("Headset");
     REQUIRE(tc_render_target_handle_valid(panel));
+    REQUIRE(tc_render_target_handle_valid(unused));
     REQUIRE(tc_render_target_handle_valid(xr));
     tc_render_target_set_kind(xr, TC_RENDER_TARGET_XR_STEREO);
 
     tc_value params = tc_value_dict_new();
     tc_value_dict_set(&params, "PANEL_COLOR", tc_value_string("PanelTexture"));
+    tc_value_dict_set(&params, "UNUSED_COLOR", tc_value_string("UnusedTexture"));
     tc_render_target_set_pipeline_params(xr, &params);
     tc_value_free(&params);
 
-    std::vector<tc_render_target_handle> managed_targets{panel, xr};
+    std::vector<tc_render_target_handle> managed_targets{panel, unused, xr};
     std::unordered_map<int, termin::RenderTargetContextProvider> providers;
     size_t provider_calls = 0;
     providers.emplace(TC_RENDER_TARGET_XR_STEREO,
@@ -129,6 +133,8 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     std::unordered_map<std::string, tc_entity_handle> internal_entities_by_context;
     std::string default_context;
     const std::string base_context;
+    termin::FrameGraphSchedule schedule;
+    schedule.resources.insert("PANEL_COLOR");
 
     termin::rendering_manager_detail::RenderTargetContextBuildRequest request{
         manager,
@@ -145,12 +151,15 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
         internal_entities_by_context,
         default_context,
         false,
+        &schedule,
     };
     REQUIRE(termin::rendering_manager_detail::build_render_target_contexts(request));
     REQUIRE_EQ(contexts.size(), 1u);
     REQUIRE(contexts.contains("Stereo"));
     const termin::RenderTargetContext& context = contexts.at("Stereo");
     CHECK(context.external_textures.at("XR_MULTIVIEW_TARGET") == tgfx::TextureHandle{7});
+    CHECK(!context.external_textures.contains("UNUSED_COLOR"));
+    CHECK(!tc_texture_is_valid(tc_render_target_get_color_texture(unused)));
     CHECK(!context.external_textures.contains("PANEL_COLOR"));
     CHECK(context.material_texture_sources.empty());
     // View/provider preparation precedes DFS. Dependency textures become
@@ -160,6 +169,8 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     REQUIRE(termin::rendering_manager_detail::bind_render_target_context_resources(request));
     CHECK_EQ(provider_calls, 1u);
     CHECK(context.external_textures.at("XR_MULTIVIEW_TARGET") == tgfx::TextureHandle{7});
+    CHECK(!context.external_textures.contains("UNUSED_COLOR"));
+    CHECK(!tc_texture_is_valid(tc_render_target_get_color_texture(unused)));
 
     tc_texture* panel_texture = tc_texture_get(tc_render_target_get_color_texture(panel));
     REQUIRE(panel_texture != nullptr);
@@ -175,6 +186,7 @@ TEST_CASE("Special render target providers inherit named pipeline textures") {
     CHECK(panel_source->texture == tgfx::TextureHandle{panel_texture->header.pool_index + 100u});
 
     tc_render_target_free(xr);
+    tc_render_target_free(unused);
     tc_render_target_free(panel);
     host->close();
     tc_texture_shutdown();

@@ -1,6 +1,7 @@
 // tc_viewport.c - Viewport implementation using pool with generational indices
 #include "render/tc_viewport.h"
 #include "core/tc_component.h"
+#include "core/tc_scene.h"
 #include "render/tc_render_target.h"
 #include "render/tc_viewport_pool.h"
 #include <stdlib.h>
@@ -214,6 +215,7 @@ void tc_viewport_set_name(tc_viewport_handle h, const char* name) {
     if (!vp)
         return;
     tc_viewport_strset(&vp->name, name);
+    tc_render_target_request_render(vp->render_target);
 }
 
 const char* tc_viewport_get_name(tc_viewport_handle h) {
@@ -225,10 +227,13 @@ void tc_viewport_set_rect(tc_viewport_handle h, float x, float y, float w, float
     tc_viewport* vp = viewport_get_alive(h);
     if (!vp)
         return;
+    if (vp->rect[0] == x && vp->rect[1] == y && vp->rect[2] == w && vp->rect[3] == height)
+        return;
     vp->rect[0] = x;
     vp->rect[1] = y;
     vp->rect[2] = w;
     vp->rect[3] = height;
+    tc_scene_request_frame(vp->scene);
 }
 
 void tc_viewport_get_rect(tc_viewport_handle h, float* x, float* y, float* w, float* height) {
@@ -249,10 +254,13 @@ void tc_viewport_set_pixel_rect(tc_viewport_handle h, int px, int py, int pw, in
     tc_viewport* vp = viewport_get_alive(h);
     if (!vp)
         return;
+    if (vp->pixel_rect[0] == px && vp->pixel_rect[1] == py && vp->pixel_rect[2] == pw && vp->pixel_rect[3] == ph)
+        return;
     vp->pixel_rect[0] = px;
     vp->pixel_rect[1] = py;
     vp->pixel_rect[2] = pw;
     vp->pixel_rect[3] = ph;
+    tc_scene_request_frame(vp->scene);
 }
 
 void tc_viewport_get_pixel_rect(tc_viewport_handle h, int* px, int* py, int* pw, int* ph) {
@@ -271,9 +279,10 @@ void tc_viewport_get_pixel_rect(tc_viewport_handle h, int* px, int* py, int* pw,
 
 void tc_viewport_set_depth(tc_viewport_handle h, int depth) {
     tc_viewport* vp = viewport_get_alive(h);
-    if (!vp)
+    if (!vp || vp->depth == depth)
         return;
     vp->depth = depth;
+    tc_scene_request_frame(vp->scene);
 }
 
 int tc_viewport_get_depth(tc_viewport_handle h) {
@@ -301,9 +310,10 @@ uint64_t tc_viewport_get_layer_mask(tc_viewport_handle h) {
 
 void tc_viewport_set_enabled(tc_viewport_handle h, bool enabled) {
     tc_viewport* vp = viewport_get_alive(h);
-    if (!vp)
+    if (!vp || vp->enabled == enabled)
         return;
     vp->enabled = enabled;
+    tc_scene_request_frame(vp->scene);
 }
 
 bool tc_viewport_get_enabled(tc_viewport_handle h) {
@@ -332,6 +342,7 @@ void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle
     tc_viewport* vp = viewport_get_alive(h);
     if (!vp)
         return;
+    const bool changed = !tc_render_target_handle_eq(vp->render_target, rt);
     vp->render_target = rt;
     // Sync viewport's authoritative scene to the new render target
     if (tc_render_target_handle_valid(rt)) {
@@ -339,6 +350,10 @@ void tc_viewport_set_render_target(tc_viewport_handle h, tc_render_target_handle
         if (tc_scene_handle_valid(vp_scene)) {
             tc_render_target_set_scene(rt, vp_scene);
         }
+    }
+    if (changed) {
+        tc_render_target_request_render(rt);
+        tc_scene_request_frame(vp->scene);
     }
 }
 
@@ -447,9 +462,10 @@ void tc_viewport_update_pixel_rect(tc_viewport_handle h, int display_width, int 
 
 void tc_viewport_set_internal_entities(tc_viewport_handle h, tc_entity_handle ent) {
     tc_viewport* vp = viewport_get_alive(h);
-    if (!vp)
+    if (!vp || tc_entity_handle_eq(vp->internal_entities, ent))
         return;
     vp->internal_entities = ent;
+    tc_render_target_request_render(vp->render_target);
 }
 
 tc_entity_handle tc_viewport_get_internal_entities(tc_viewport_handle h) {

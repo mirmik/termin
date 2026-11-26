@@ -22,6 +22,7 @@ struct tc_pipeline {
     void* render_cache;
     void (*render_cache_destructor)(void*);
     bool dirty;
+    uint64_t render_revision;
 };
 
 // Create a mutable runtime-only collection. It has no canonical template;
@@ -59,6 +60,7 @@ TC_API void tc_pipeline_set_name(tc_pipeline_handle h, const char* name);
 TC_API void* tc_pipeline_get_render_cache(tc_pipeline_handle h);
 TC_API void tc_pipeline_set_render_cache(tc_pipeline_handle h, void* cache, void (*destructor)(void*));
 TC_API bool tc_pipeline_is_dirty(tc_pipeline_handle h);
+TC_API uint64_t tc_pipeline_render_revision(tc_pipeline_handle h);
 TC_API void tc_pipeline_mark_dirty(tc_pipeline_handle h);
 TC_API void tc_pipeline_clear_dirty(tc_pipeline_handle h);
 TC_API struct tc_frame_graph* tc_pipeline_get_frame_graph(tc_pipeline_handle h);

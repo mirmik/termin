@@ -1,9 +1,14 @@
 #include "render_frame_planner.hpp"
+#include "termin/render/frame_graph_capture.hpp"
+#include "termin/render/frame_pass.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
+#include "termin/scene/scene_manager.hpp"
 
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <set>
 
 extern "C" {
 #include "core/tc_drawable_capability.h"
@@ -25,9 +30,11 @@ extern "C" {
 namespace {
 
     using termin::RenderTopology;
+    using termin::rendering_manager_detail::OffscreenRenderCacheOptions;
     using termin::rendering_manager_detail::OffscreenRenderDemand;
     using termin::rendering_manager_detail::OffscreenRenderDiagnostic;
     using termin::rendering_manager_detail::OffscreenRenderDiagnosticKind;
+    using termin::rendering_manager_detail::OffscreenRenderExecution;
     using termin::rendering_manager_detail::OffscreenRenderJob;
     using termin::rendering_manager_detail::OffscreenRenderJobKind;
     using termin::rendering_manager_detail::OffscreenRenderPlanner;
@@ -47,6 +54,26 @@ namespace {
         size_t job_count = 0;
         OffscreenRenderDiagnostic diagnostics[16]{};
         size_t diagnostic_count = 0;
+        tc_render_target_handle capture_target = TC_RENDER_TARGET_HANDLE_INVALID;
+        termin::FrameGraphCaptureRequest* capture = nullptr;
+        size_t finished_captures = 0;
+    };
+
+    class TestPass final : public termin::CxxFramePass {
+    public:
+        TestPass(std::set<const char*> reads, const char* output, bool side_effect = false)
+            : reads_(std::move(reads)), output_(output) {
+            tc_pass_set_side_effect(tc_pass_ptr(), side_effect);
+        }
+
+        std::set<const char*> compute_reads() const override { return reads_; }
+        std::set<const char*> compute_writes() const override {
+            return output_ ? std::set{output_} : std::set<const char*>{};
+        }
+
+    private:
+        std::set<const char*> reads_;
+        const char* output_;
     };
 
     struct FixedSurface {
@@ -206,6 +233,11 @@ namespace {
             return result;
         }
         result.pipeline = tc_pipeline_create_from_template(result.pipeline_template);
+        if (external_slot_count != 0) {
+            auto* pass = new TestPass(std::set<const char*>(external_slots, external_slots + external_slot_count),
+                                      nullptr, true);
+            termin::RenderPipeline(result.pipeline).add_pass(pass->tc_pass_ptr());
+        }
         return result;
     }
 
@@ -226,10 +258,13 @@ namespace {
         tc_value_free(&dict);
     }
 
-    void record_job(void* user_data, const OffscreenRenderJob* job) {
+    bool record_job(void* user_data, const OffscreenRenderJob* job, const OffscreenRenderExecution& execution) {
         Recorder* recorder = static_cast<Recorder*>(user_data);
         if (recorder->job_count < 16)
             recorder->jobs[recorder->job_count++] = *job;
+        for (auto* capture : execution.captures)
+            capture->status = termin::FrameGraphCaptureRequestStatus::Captured;
+        return true;
     }
 
     void record_diagnostic(void* user_data, const OffscreenRenderDiagnostic* diagnostic) {
@@ -272,11 +307,214 @@ namespace {
                       Recorder& recorder,
                       tc_display_handle only_display = TC_DISPLAY_HANDLE_INVALID,
                       const OffscreenRenderDemand* demands = nullptr,
-                      size_t demand_count = 0) {
+                      size_t demand_count = 0,
+                      const OffscreenRenderCacheOptions* cache = nullptr) {
         recorder.job_count = 0;
         recorder.diagnostic_count = 0;
-        return planner.execute(
-            topology, only_display, record_job, &recorder, record_diagnostic, &recorder, demands, demand_count);
+        return planner.execute(topology, only_display, record_job, &recorder, record_diagnostic, &recorder,
+            demands, demand_count, nullptr, nullptr, cache,
+            {
+                [](void* data, const OffscreenRenderJob* job, std::vector<termin::FrameGraphCaptureRequest*>& captures) {
+                    auto& recorded = *static_cast<Recorder*>(data);
+                    if (recorded.capture && tc_render_target_handle_eq(job->render_target, recorded.capture_target)) {
+                        recorded.capture->status = termin::FrameGraphCaptureRequestStatus::Pending;
+                        captures.push_back(recorded.capture);
+                    }
+                },
+                [](void* data, const OffscreenRenderJob*, const std::vector<termin::FrameGraphCaptureRequest*>&) {
+                    ++static_cast<Recorder*>(data)->finished_captures;
+                },
+            });
+    }
+
+    bool verify_independent_outputs(tc_pipeline_handle pipeline) {
+        termin::SceneManager manager;
+        RenderTopology topology;
+        const char* names[] = {"A", "B"};
+        tc_scene_handle scenes[2];
+        tc_render_target_handle targets[2];
+        tc_viewport_handle viewports[2];
+        tc_display_handle displays[2];
+        for (int i = 0; i < 2; ++i) {
+            scenes[i] = manager.create_scene(termin::SceneKey(names[i], termin::SceneRole::Authoring));
+            targets[i] = tc_render_target_new(names[i]);
+            viewports[i] = tc_viewport_new(names[i], scenes[i]);
+            displays[i] = tc_display_new(names[i], nullptr);
+            tc_render_target_set_scene(targets[i], scenes[i]);
+            tc_render_target_set_pipeline(targets[i], pipeline);
+            tc_viewport_set_render_target(viewports[i], targets[i]);
+            tc_display_add_viewport(displays[i], viewports[i]);
+            if (!topology.register_render_target(targets[i]) ||
+                !topology.register_viewport(scenes[i], viewports[i], displays[i])) {
+                std::fprintf(stderr, "could not register independent scene outputs\n");
+                return false;
+            }
+        }
+        OffscreenRenderPlanner planner;
+        OffscreenRenderCacheOptions cache;
+        Recorder recorder;
+        const auto plan = [&](size_t count, tc_render_target_handle only = TC_RENDER_TARGET_HANDLE_INVALID) {
+            return execute_plan(planner, topology, recorder, TC_DISPLAY_HANDLE_INVALID, nullptr, 0, &cache) &&
+                   recorder.job_count == count &&
+                   (!tc_render_target_handle_valid(only) || find_target_job(recorder, only));
+        };
+        if (!manager.tick(0.0) || !plan(2) || !plan(0)) {
+            std::fprintf(stderr, "caching did not preserve the initial outputs\n");
+            return false;
+        }
+        tc_scene_request_render(scenes[0]);
+        if (!manager.tick(0.0) || manager.render_all_requested_this_tick() || !plan(1, targets[0])) {
+            std::fprintf(stderr, "invalidation of one scene also selected an unrelated output\n");
+            return false;
+        }
+        tc_scene_set_mode(scenes[0], TC_SCENE_MODE_PLAY);
+        if (!manager.tick(0.0) || !plan(1, targets[0]) || !manager.tick(0.0) || !plan(1, targets[0])) {
+            std::fprintf(stderr, "PLAY did not limit continuous rendering to the playing scene\n");
+            return false;
+        }
+        tc_scene_set_mode(scenes[0], TC_SCENE_MODE_STOP);
+        if (!manager.tick(0.0) || !plan(1, targets[0])) {
+            std::fprintf(stderr, "stopping a scene did not update its last output\n");
+            return false;
+        }
+        tc_display_set_enabled(displays[1], false);
+        if (!manager.tick(0.0) || !plan(0))
+            return false;
+        tc_display_set_enabled(displays[1], true);
+        if (!manager.tick(0.0) || !plan(0)) {
+            std::fprintf(stderr, "showing an unchanged display rerendered its cached output\n");
+            return false;
+        }
+        tc_display_set_enabled(displays[1], false);
+        tc_render_target_set_width(targets[1], 320);
+        if (!manager.tick(0.0) || !plan(0)) {
+            std::fprintf(stderr, "a hidden target scheduled unrelated render work\n");
+            return false;
+        }
+        tc_display_set_enabled(displays[1], true);
+        if (!manager.tick(0.0) || !plan(1, targets[1])) {
+            std::fprintf(stderr, "a resized hidden target did not refresh after becoming visible\n");
+            return false;
+        }
+        manager.request_render();
+        if (!manager.tick(0.0) || !manager.render_all_requested_this_tick()) {
+            std::fprintf(stderr, "explicit global invalidation was lost\n");
+            return false;
+        }
+        cache.force = true;
+        if (!plan(2)) {
+            std::fprintf(stderr, "forced render omitted a visible output\n");
+            return false;
+        }
+        for (int i = 0; i < 2; ++i) {
+            topology.unregister_viewport(viewports[i]);
+            tc_display_remove_viewport(displays[i], viewports[i]);
+            topology.unregister_render_target(targets[i]);
+            tc_viewport_free(viewports[i]);
+            tc_display_free(displays[i]);
+            tc_render_target_free(targets[i]);
+        }
+        return true;
+    }
+
+    bool verify_capture_dependencies(tc_pipeline_handle producer_pipeline) {
+        using namespace termin;
+        RenderTopology topology;
+        const auto scene = tc_scene_new_named("capture-dependency-test");
+        RenderPipeline pipeline("capture-consumer");
+        pipeline.add_pass((new TestPass({}, "visible"))->tc_pass_ptr());
+        pipeline.add_pass((new TestPass({"feed"}, "preview"))->tc_pass_ptr());
+        pipeline.set_color_export("visible", ColorContent::DisplayLinear);
+        const auto producer = tc_render_target_new("CaptureSource");
+        const auto consumer = tc_render_target_new("CaptureConsumer");
+        tc_render_target_set_scene(producer, scene);
+        tc_render_target_set_scene(consumer, scene);
+        tc_render_target_set_pipeline(producer, producer_pipeline);
+        tc_render_target_set_pipeline(consumer, pipeline.handle());
+        const Param params[] = {{"feed", "CaptureSource"}};
+        set_params(consumer, params, 1);
+        const auto viewport = tc_viewport_new("capture", scene);
+        const auto display = tc_display_new("capture", nullptr);
+        tc_viewport_set_render_target(viewport, consumer);
+        tc_display_add_viewport(display, viewport);
+        if (!topology.register_render_target(producer) || !topology.register_render_target(consumer) ||
+            !topology.register_viewport(scene, viewport, display)) {
+            std::fprintf(stderr, "could not register capture dependency targets\n");
+            return false;
+        }
+
+        OffscreenRenderPlanner planner;
+        OffscreenRenderCacheOptions cache;
+        Recorder recorder;
+        const OffscreenRenderDemand demand{viewport, consumer};
+        const auto frame = [&] {
+            return execute_plan(planner, topology, recorder, TC_DISPLAY_HANDLE_INVALID,
+                recorder.capture ? &demand : nullptr, recorder.capture ? 1 : 0, &cache);
+        };
+        const auto producer_rendered_first = [&] {
+            return recorder.job_count == 2 && target_job_index(recorder, producer) == 0 &&
+                   target_job_index(recorder, consumer) == 1;
+        };
+        tc_render_target_set_enabled(producer, false);
+        if (!frame() || recorder.job_count != 1 || !find_target_job(recorder, consumer)) {
+            std::fprintf(stderr, "ordinary render used a disabled producer from a pruned branch\n");
+            return false;
+        }
+
+        FrameGraphCapture image;
+        FrameGraphCaptureRequest capture{.resource = "preview", .capture = &image};
+        recorder.capture_target = consumer;
+        recorder.capture = &capture;
+        if (frame() || !contains_diagnostic(recorder, OffscreenRenderDiagnosticKind::DisabledDependency) ||
+            recorder.finished_captures != 1 || capture.status != FrameGraphCaptureRequestStatus::ResourceUnavailable) {
+            std::fprintf(stderr, "capture did not surface its disabled producer failure\n");
+            return false;
+        }
+        tc_render_target_set_enabled(producer, true);
+        if (!frame() || !producer_rendered_first() || capture.status != FrameGraphCaptureRequestStatus::Captured) {
+            std::fprintf(stderr, "capture did not schedule its newly reachable producer first\n");
+            return false;
+        }
+        if (!frame() || recorder.job_count != 1 || !find_target_job(recorder, consumer)) {
+            std::fprintf(stderr, "capture did not reuse its clean producer\n");
+            return false;
+        }
+        tc_render_target_request_render(producer);
+        if (!frame() || !producer_rendered_first()) {
+            std::fprintf(stderr, "capture did not refresh its changed producer\n");
+            return false;
+        }
+        recorder.capture = nullptr;
+        tc_render_target_set_enabled(producer, false);
+        if (!frame() || recorder.job_count != 1 || !find_target_job(recorder, consumer)) {
+            std::fprintf(stderr, "unpin retained the producer from capture\n");
+            return false;
+        }
+        tc_render_target_set_enabled(producer, true);
+        if (!frame() || recorder.job_count != 0) {
+            std::fprintf(stderr, "a change to a former capture source invalidated the ordinary consumer\n");
+            return false;
+        }
+
+        pipeline.set_color_export("preview", ColorContent::DisplayLinear);
+        // The debugger can rebuild the structural graph before this frame.
+        tc_pipeline_get_frame_graph(pipeline.handle());
+        if (!frame() || !producer_rendered_first()) {
+            std::fprintf(stderr, "pipeline edit did not invalidate the cached set of dependencies\n");
+            return false;
+        }
+
+        topology.unregister_viewport(viewport);
+        tc_display_remove_viewport(display, viewport);
+        topology.unregister_render_target(consumer);
+        topology.unregister_render_target(producer);
+        tc_viewport_free(viewport);
+        tc_display_free(display);
+        tc_render_target_free(consumer);
+        tc_render_target_free(producer);
+        pipeline.destroy();
+        tc_scene_free(scene);
+        return true;
     }
 
     struct SelectionContext {
@@ -354,6 +592,10 @@ int main() {
     TestPipeline cycle_pipeline = make_pipeline("render-frame-planner-cycle", "CycleProducer", cycle_slots, 1);
     if (!tc_pipeline_handle_valid(producer_pipeline.pipeline) ||
         !tc_pipeline_handle_valid(consumer_pipeline.pipeline) || !tc_pipeline_handle_valid(cycle_pipeline.pipeline))
+        return 1;
+
+    if (!verify_independent_outputs(producer_pipeline.pipeline) ||
+        !verify_capture_dependencies(producer_pipeline.pipeline))
         return 1;
 
     RenderTopology topology;
@@ -441,6 +683,39 @@ int main() {
     if (!execute_plan(planner, topology, recorder, active_display) || recorder.job_count != 2 ||
         target_job_index(recorder, producer) >= target_job_index(recorder, consumer)) {
         std::fprintf(stderr, "selected-display plan lost dependency closure\n");
+        return 1;
+    }
+
+    OffscreenRenderCacheOptions cache;
+    const auto cached_plan = [&]() {
+        return execute_plan(planner, topology, recorder, TC_DISPLAY_HANDLE_INVALID, nullptr, 0, &cache);
+    };
+    if (!cached_plan() || recorder.job_count != 2 || !cached_plan() || recorder.job_count != 0) {
+        std::fprintf(stderr, "unchanged output dependency closure was rebuilt\n");
+        return 1;
+    }
+    tc_render_target_request_render(consumer);
+    if (!cached_plan() || recorder.job_count != 1 || !find_target_job(recorder, consumer)) {
+        std::fprintf(stderr, "dirty consumer did not reuse its initialized producer\n");
+        return 1;
+    }
+    tc_render_target_request_render(producer);
+    if (!cached_plan() || recorder.job_count != 2 ||
+        target_job_index(recorder, producer) >= target_job_index(recorder, consumer)) {
+        std::fprintf(stderr, "dirty producer did not refresh its visible consumer in dependency order\n");
+        return 1;
+    }
+    tc_display_set_enabled(active_display, false);
+    tc_render_target_request_render(producer);
+    const OffscreenRenderDemand producer_demand{TC_VIEWPORT_HANDLE_INVALID, producer};
+    if (!execute_plan(planner, topology, recorder, TC_DISPLAY_HANDLE_INVALID, &producer_demand, 1, &cache) ||
+        recorder.job_count != 1 || !find_target_job(recorder, producer)) {
+        std::fprintf(stderr, "explicit demand did not refresh the hidden producer independently\n");
+        return 1;
+    }
+    tc_display_set_enabled(active_display, true);
+    if (!cached_plan() || recorder.job_count != 1 || !find_target_job(recorder, consumer)) {
+        std::fprintf(stderr, "consumer lost its invalidation while hidden\n");
         return 1;
     }
 

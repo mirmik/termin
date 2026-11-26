@@ -2,6 +2,7 @@
 #pragma once
 
 #include <memory>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -110,6 +111,7 @@ namespace termin {
         void mark_dirty();
 
         std::vector<ResourceSpec> collect_specs() const;
+        std::vector<ResourceSpec> collect_specs(std::span<tc_pass* const> passes) const;
 
         // Render cache (lazy-created in pool)
         PipelineRenderCache& cache();

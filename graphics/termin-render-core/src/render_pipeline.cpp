@@ -226,10 +226,12 @@ namespace termin {
 
     void RenderPipeline::add_spec(const ResourceSpec& spec) {
         cache().specs.push_back(spec);
+        mark_dirty();
     }
 
     void RenderPipeline::clear_specs() {
         cache().specs.clear();
+        mark_dirty();
     }
 
     size_t RenderPipeline::spec_count() const {
@@ -293,29 +295,35 @@ namespace termin {
 
     // -- Collect specs --
 
-    std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
-        std::vector<ResourceSpec> result;
-        result.insert(result.end(), specs().begin(), specs().end());
-
-        size_t count = tc_pipeline_pass_count(handle_);
-        for (size_t i = 0; i < count; i++) {
-            tc_pass* pass = tc_pipeline_get_pass_at(handle_, i);
-            if (pass && pass->enabled) {
-                const size_t pass_spec_count = tc_pass_get_resource_specs(pass, nullptr, 0);
-                std::vector<ResourceSpec> pass_specs(pass_spec_count);
-                const size_t actual = tc_pass_get_resource_specs(pass, pass_specs.data(), pass_specs.size());
-                if (actual != pass_spec_count) {
-                    tc::Log::error("RenderPipeline::collect_specs: pass '%s' changed its resource "
-                                   "spec count during collection (%zu -> %zu)",
-                                   pass->pass_name ? pass->pass_name : "<unnamed>",
-                                   pass_spec_count,
-                                   actual);
-                    continue;
-                }
-                result.insert(result.end(), pass_specs.begin(), pass_specs.end());
-            }
+    static void append_pass_specs(std::vector<ResourceSpec>& result, tc_pass* pass) {
+        if (!pass || !pass->enabled)
+            return;
+        const size_t count = tc_pass_get_resource_specs(pass, nullptr, 0);
+        if (count == 0)
+            return;
+        const size_t offset = result.size();
+        result.resize(offset + count);
+        const size_t actual = tc_pass_get_resource_specs(pass, result.data() + offset, count);
+        if (actual != count) {
+            tc::Log::error("RenderPipeline::collect_specs: pass '%s' changed its resource "
+                           "spec count during collection (%zu -> %zu)",
+                           pass->pass_name ? pass->pass_name : "<unnamed>", count, actual);
+            result.resize(offset);
         }
+    }
 
+    std::vector<ResourceSpec> RenderPipeline::collect_specs() const {
+        std::vector<ResourceSpec> result = specs();
+        const size_t count = pass_count();
+        for (size_t i = 0; i < count; ++i)
+            append_pass_specs(result, tc_pipeline_get_pass_at(handle_, i));
+        return result;
+    }
+
+    std::vector<ResourceSpec> RenderPipeline::collect_specs(std::span<tc_pass* const> passes) const {
+        std::vector<ResourceSpec> result = specs();
+        for (tc_pass* pass : passes)
+            append_pass_specs(result, pass);
         return result;
     }
 

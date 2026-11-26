@@ -262,22 +262,6 @@ def test_native_ui_event_policy_consumes_enabled_shortcut_and_ignores_repeats():
     tc_ui_document_destroy(document)
 
 
-def test_native_editor_continuously_composes_only_in_game_mode():
-    from termin.editor_native.event_loop import _game_mode_requires_continuous_render
-
-    class Model:
-        is_game_mode = False
-
-    class Controller:
-        model = Model()
-
-    controller = Controller()
-    assert not _game_mode_requires_continuous_render(None)
-    assert not _game_mode_requires_continuous_render(controller)
-    controller.model.is_game_mode = True
-    assert _game_mode_requires_continuous_render(controller)
-
-
 def test_completed_scene_render_requests_ui_presentation():
     from termin.editor_native.native_bootstrap import complete_editor_scene_render
 

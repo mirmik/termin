@@ -1,5 +1,6 @@
 #include <inspect/tc_inspect_pass_adapter.h>
 #include <render/tc_pass.h>
+#include <render/tc_pipeline.h>
 #include <termin/render/frame_pass.hpp>
 
 extern "C" {
@@ -44,5 +45,6 @@ void tc_pass_inspect_set(tc_pass* p, const char* path, tc_value value, void* con
         return;
 
     tc_inspect_set(obj, type_name, path, value, context);
+    tc_pipeline_mark_dirty(p->owner_pipeline);
 }
 }

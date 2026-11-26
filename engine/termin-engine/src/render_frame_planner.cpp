@@ -1,18 +1,21 @@
 #include "render_frame_planner.hpp"
 
 #include "pipeline_texture_ref.hpp"
+#include "termin/render/frame_graph_capture.hpp"
+#include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <new>
+#include <unordered_map>
 #include <vector>
 
 extern "C" {
-#include "render/tc_pipeline_template_registry.h"
 #include "render/tc_render_surface.h"
 #include "tgfx/resources/tc_material_registry.h"
 #include <tcbase/tc_log.h>
@@ -36,9 +39,33 @@ namespace termin::rendering_manager_detail {
             uint32_t job = INVALID_JOB_INDEX;
         };
 
-        bool starts_with_external(const char* resource_type) {
-            return resource_type && std::strncmp(resource_type, "external", 8) == 0;
+        uint64_t target_key(tc_render_target_handle target) {
+            return (static_cast<uint64_t>(target.generation) << 32) | target.index;
         }
+
+        struct OutputStamp {
+            uint64_t target;
+            uint64_t revision;
+            bool enabled;
+
+            bool operator==(const OutputStamp&) const = default;
+        };
+
+        OutputStamp output_stamp(tc_render_target_handle target) {
+            return {target_key(target), tc_render_target_render_revision(target), tc_render_target_get_enabled(target)};
+        }
+
+        struct CachedJob {
+            tc_scene_handle scene;
+            tc_pipeline_handle pipeline;
+            tc_viewport_handle viewport;
+            uint64_t scene_revision;
+            uint64_t pipeline_revision;
+            std::vector<OutputStamp> outputs;
+            std::vector<tc_render_target_handle> dependencies;
+            bool invalidated = false;
+            uint64_t content_revision = 0;
+        };
 
         const char* target_name(tc_render_target_handle target) {
             const char* name = tc_render_target_get_name(target);
@@ -81,14 +108,21 @@ namespace termin::rendering_manager_detail {
         std::vector<uint8_t> roots;
         std::vector<uint8_t> states;
         std::vector<uint32_t> stack;
-        std::vector<const char*> pass_reads;
         // Frame-local edges: retain capacity, index ranges survive nested DFS.
         std::vector<tc_render_target_handle> dependency_edges;
+        std::unordered_map<uint64_t, CachedJob> cached_jobs;
+        std::vector<uint64_t> cache_keys;
+        std::vector<const char*> dirty_reasons;
+        std::vector<std::vector<uint32_t>> consumers;
+        std::vector<uint32_t> dirty_jobs;
+        const OffscreenRenderCacheOptions* cache_options = nullptr;
+        uint64_t content_revision = 0;
         OffscreenMaterialDependencyCallback material_callback = nullptr;
         void* material_user_data = nullptr;
 
         const RenderTopology* topology = nullptr;
         OffscreenRenderJobCallback job_callback = nullptr;
+        OffscreenRenderCaptureCallbacks capture_callbacks;
         void* job_user_data = nullptr;
         OffscreenRenderDiagnosticCallback diagnostic_callback = nullptr;
         void* diagnostic_user_data = nullptr;
@@ -174,38 +208,78 @@ namespace termin::rendering_manager_detail {
                                                       : TC_RENDER_TARGET_HANDLE_INVALID;
         }
 
-        bool pipeline_uses_external_slot(tc_pipeline_handle pipeline, const char* slot) {
-            if (!tc_pipeline_handle_valid(pipeline) || !slot || slot[0] == '\0')
-                return false;
+        uint64_t cache_key(const OffscreenRenderJob& job) const {
+            for (size_t i = 0; i < output_count(job); ++i) {
+                const auto target = output_at(job, i);
+                if (tc_render_target_alive(target))
+                    return target_key(target);
+            }
+            return target_key(TC_RENDER_TARGET_HANDLE_INVALID);
+        }
 
-            const tc_pipeline_template* pipeline_template =
-                tc_pipeline_template_get(tc_pipeline_get_template(pipeline));
-            if (pipeline_template) {
-                for (uint32_t i = 0; i < pipeline_template->resource_count; ++i) {
-                    const tc_pipeline_template_resource_desc& resource = pipeline_template->resources[i];
-                    if (resource.name && std::strcmp(resource.name, slot) == 0 &&
-                        starts_with_external(resource.resource_type)) {
-                        return true;
+        const char* invalidation_reason(const OffscreenRenderJob& job, const CachedJob& cached) const {
+            if (!tc_scene_handle_eq(job.scene, cached.scene) ||
+                !tc_pipeline_handle_eq(job.pipeline, cached.pipeline) ||
+                !tc_viewport_handle_eq(job.viewport, cached.viewport) ||
+                tc_pipeline_render_revision(job.pipeline) != cached.pipeline_revision ||
+                output_count(job) != cached.outputs.size()) {
+                return "pipeline or attachment change";
+            }
+            if (tc_scene_get_mode(job.scene) == TC_SCENE_MODE_PLAY)
+                return "scene playback";
+            if (tc_scene_render_revision(job.scene) != cached.scene_revision)
+                return "scene request";
+            for (size_t i = 0; i < cached.outputs.size(); ++i) {
+                const auto target = output_at(job, i);
+                if (!(output_stamp(target) == cached.outputs[i]))
+                    return "target request";
+                if (cached.outputs[i].enabled &&
+                     (tc_render_target_get_kind(target) != TC_RENDER_TARGET_TEXTURE_2D ||
+                      (cache_options->has_output && !cache_options->has_output(target)))) {
+                    return "missing or transient output";
+                }
+            }
+            return cached.invalidated ? "pending dependency change" : nullptr;
+        }
+
+        void mark_dirty(uint32_t index, const char* reason) {
+            if (!dirty_reasons[index]) {
+                dirty_reasons[index] = reason;
+                dirty_jobs.push_back(index);
+            }
+        }
+
+        void select_dirty_jobs() {
+            if (cache_options->force)
+                cached_jobs.clear();
+            cache_keys.resize(jobs.size());
+            dirty_reasons.assign(jobs.size(), nullptr);
+            consumers.resize(jobs.size());
+            for (auto& edges : consumers)
+                edges.clear();
+            dirty_jobs.clear();
+            for (uint32_t i = 0; i < jobs.size(); ++i) {
+                const auto key = cache_key(jobs[i]);
+                cache_keys[i] = key;
+                const auto cached = cached_jobs.find(key);
+                if (cached == cached_jobs.end()) {
+                    mark_dirty(i, cache_options->force ? "global request" : "initial output");
+                    continue;
+                }
+                if (const char* reason = invalidation_reason(jobs[i], cached->second))
+                    mark_dirty(i, reason);
+                for (const auto dependency : cached->second.dependencies) {
+                    const uint32_t producer = producer_for(dependency);
+                    if (producer == INVALID_JOB_INDEX || !tc_render_target_get_enabled(dependency)) {
+                        mark_dirty(i, "missing or disabled dependency");
+                    } else {
+                        consumers[producer].push_back(i);
                     }
                 }
-                return false;
             }
-
-            const size_t pass_count = tc_pipeline_pass_count(pipeline);
-            for (size_t pass_index = 0; pass_index < pass_count; ++pass_index) {
-                tc_pass* pass = tc_pipeline_get_pass_at(pipeline, pass_index);
-                if (!pass || !pass->enabled)
-                    continue;
-                const size_t read_count = tc_pass_get_reads(pass, nullptr, 0);
-                pass_reads.resize(read_count);
-                const size_t actual = tc_pass_get_reads(pass, pass_reads.data(), read_count);
-                const size_t available = actual < read_count ? actual : read_count;
-                for (size_t i = 0; i < available; ++i) {
-                    if (pass_reads[i] && std::strcmp(pass_reads[i], slot) == 0)
-                        return true;
-                }
-            }
-            return false;
+            std::erase_if(cached_jobs, [this](const auto& entry) {
+                return std::find(cache_keys.begin(), cache_keys.end(), entry.first) == cache_keys.end();
+            });
         }
 
         tc_render_target_handle find_scene_render_target(tc_scene_handle scene, const char* name) const {
@@ -302,11 +376,30 @@ namespace termin::rendering_manager_detail {
             }
         }
 
+        void collect_pipeline_dependencies(tc_render_target_handle output, const FrameGraphSchedule& schedule) {
+            const tc_value* params = tc_render_target_get_pipeline_params(output);
+            if (!params || params->type != TC_VALUE_DICT)
+                return;
+            for (size_t i = 0; i < params->data.dict.count; ++i) {
+                const char* slot = params->data.dict.entries[i].key;
+                const tc_value* value = params->data.dict.entries[i].value;
+                if (!slot || !value || value->type != TC_VALUE_STRING || !schedule.resources.contains(slot))
+                    continue;
+                const PipelineTextureRef ref = classify_pipeline_texture_ref(value->data.s,
+                    tc_render_target_get_scene(output), topology->managed_render_target_data(),
+                    topology->managed_render_target_count());
+                if (ref.kind == PipelineTextureRefKind::RenderTarget)
+                    dependency_edges.push_back(ref.render_target);
+            }
+        }
+
         bool visit(uint32_t index) {
             if (states[index] == VISIT_COMPLETE)
                 return true;
             if (states[index] == VISIT_FAILED)
                 return false;
+            if (cache_options && !dirty_reasons[index])
+                return true;
             if (states[index] == VISIT_VISITING) {
                 size_t cycle_begin = 0;
                 while (cycle_begin < stack.size() && stack[cycle_begin] != index)
@@ -325,48 +418,93 @@ namespace termin::rendering_manager_detail {
             stack.push_back(index);
             bool valid = true;
             const OffscreenRenderJob& consumer = jobs[index];
+            static const bool trace = std::getenv("TERMIN_TRACE_RENDER_SCHEDULER") != nullptr;
+            if (cache_options && trace) {
+                tc_log(TC_LOG_INFO, "[RenderScheduler] %s '%s' (scene %u:%u, pipeline %u:%u): %s",
+                       roots[index] ? "root" : "producer", target_name(output_at(consumer, 0)),
+                       consumer.scene.index, consumer.scene.generation,
+                       consumer.pipeline.index, consumer.pipeline.generation, dirty_reasons[index]);
+            }
             const size_t edge_begin = dependency_edges.size();
             const size_t outputs = output_count(consumer);
+            CachedJob next{consumer.scene, consumer.pipeline, consumer.viewport,
+                           tc_scene_render_revision(consumer.scene), 0, {}, {}};
+            if (cache_options) {
+                next.outputs.reserve(outputs);
+                for (size_t i = 0; i < outputs; ++i)
+                    next.outputs.push_back(output_stamp(output_at(consumer, i)));
+            }
             for (size_t output_index = 0; output_index < outputs; ++output_index) {
                 const tc_render_target_handle output = output_at(consumer, output_index);
-                if (!tc_render_target_handle_valid(output))
-                    continue;
-                const tc_value* params = tc_render_target_get_pipeline_params(output);
-                const size_t param_count = params && params->type == TC_VALUE_DICT ? params->data.dict.count : 0;
-                for (size_t param_index = 0; param_index < param_count; ++param_index) {
-                    const char* slot = params->data.dict.entries[param_index].key;
-                    const tc_value* value = params->data.dict.entries[param_index].value;
-                    if (!slot || !value || value->type != TC_VALUE_STRING ||
-                        !pipeline_uses_external_slot(consumer.pipeline, slot)) {
-                        continue;
-                    }
-                    const PipelineTextureRef ref =
-                        classify_pipeline_texture_ref(value->data.s,
-                                                      tc_render_target_get_scene(output),
-                                                      topology->managed_render_target_data(),
-                                                      topology->managed_render_target_count());
-                    if (ref.kind != PipelineTextureRefKind::RenderTarget)
-                        continue;
-                    dependency_edges.push_back(ref.render_target);
-                }
-                if (tc_render_target_get_enabled(output))
+                if (tc_render_target_alive(output) && tc_render_target_get_enabled(output))
                     collect_material_dependencies(output, index, valid);
             }
+
+            OffscreenRenderExecution execution;
+            if (valid) {
+                if (capture_callbacks.prepare)
+                    capture_callbacks.prepare(job_user_data, &consumer, execution.captures);
+                RenderPipeline pipeline(consumer.pipeline);
+                tc_frame_graph* graph = tc_pipeline_get_frame_graph(consumer.pipeline);
+                if (!graph || tc_frame_graph_get_error(graph) != TC_FG_OK) {
+                    log_job("cannot select frame graph for", consumer);
+                    if (const char* error = tc_frame_graph_get_error_message(graph))
+                        tc_log(TC_LOG_ERROR, "[RenderingManager] %s", error);
+                    valid = false;
+                } else {
+                    execution.schedule = select_frame_graph_schedule(pipeline, graph, execution.captures);
+                    valid = execution.schedule.valid;
+                    next.pipeline_revision = execution.schedule.pipeline_revision;
+                }
+            }
+            if (valid) {
+                for (size_t i = 0; i < outputs; ++i) {
+                    const auto output = output_at(consumer, i);
+                    if (tc_render_target_alive(output) && tc_render_target_get_enabled(output))
+                        collect_pipeline_dependencies(output, execution.schedule);
+                }
+            }
             const size_t edge_end = dependency_edges.size();
-            for (size_t edge = edge_begin; edge < edge_end; ++edge) {
-                // Copy before recursion: nested enumeration can grow the vector.
-                const auto dependency = dependency_edges[edge];
-                visit_render_target_dependency(dependency, index, valid);
+            if (valid) {
+                for (size_t edge = edge_begin; edge < edge_end; ++edge) {
+                    // Copy before recursion: nested enumeration can grow the vector.
+                    const auto dependency = dependency_edges[edge];
+                    visit_render_target_dependency(dependency, index, valid);
+                }
             }
             stack.pop_back();
 
-            if (!valid || states[index] == VISIT_FAILED) {
+            if (valid && !execution.schedule.matches(consumer.pipeline)) {
+                log_job("pipeline changed while resolving dependencies for", consumer);
+                valid = false;
+            }
+            valid = valid && states[index] != VISIT_FAILED;
+            if (valid && job_callback)
+                valid = job_callback(job_user_data, &consumer, execution);
+            if (!execution.captures.empty() && capture_callbacks.finish) {
+                for (auto* capture : execution.captures) {
+                    if (capture && capture->status == FrameGraphCaptureRequestStatus::Pending)
+                        capture->status = FrameGraphCaptureRequestStatus::ResourceUnavailable;
+                }
+                capture_callbacks.finish(job_user_data, &consumer, execution.captures);
+            }
+            if (!valid) {
                 states[index] = VISIT_FAILED;
+                had_error = true;
+                if (cache_options)
+                    cached_jobs.erase(cache_keys[index]);
                 return false;
             }
             states[index] = VISIT_COMPLETE;
-            if (job_callback)
-                job_callback(job_user_data, &jobs[index]);
+            if (cache_options) {
+                // A capture can add temporary reads. Publish its output but
+                // derive the next ordinary frame's edges from a fresh schedule.
+                next.invalidated = !execution.captures.empty();
+                if (!next.invalidated)
+                    next.dependencies.assign(dependency_edges.begin() + edge_begin, dependency_edges.begin() + edge_end);
+                next.content_revision = ++content_revision;
+                cached_jobs.insert_or_assign(cache_keys[index], std::move(next));
+            }
             return true;
         }
 
@@ -379,7 +517,9 @@ namespace termin::rendering_manager_detail {
                      const OffscreenRenderDemand* demands,
                      size_t demand_count,
                      OffscreenMaterialDependencyCallback materials,
-                     void* materials_user_data) {
+                     void* materials_user_data,
+                     const OffscreenRenderCacheOptions* cache,
+                     OffscreenRenderCaptureCallbacks captures) {
             topology = &source_topology;
             job_callback = callback;
             job_user_data = callback_user_data;
@@ -388,6 +528,8 @@ namespace termin::rendering_manager_detail {
             had_error = false;
             material_callback = materials;
             material_user_data = materials_user_data;
+            cache_options = cache;
+            capture_callbacks = captures;
             jobs.clear();
             producers.clear();
             dependency_edges.clear();
@@ -451,16 +593,17 @@ namespace termin::rendering_manager_detail {
 
                 const bool selected_display =
                     !tc_display_handle_valid(only_display) || tc_display_handle_eq(attachment->display, only_display);
-                if (!selected_display || !tc_display_alive(attachment->display) ||
-                    !tc_display_get_enabled(attachment->display) || !tc_viewport_get_enabled(attachment->viewport) ||
-                    !tc_render_target_get_enabled(target)) {
-                    continue;
+                const bool is_root = selected_display && tc_display_alive(attachment->display) &&
+                    tc_display_get_enabled(attachment->display) && tc_viewport_get_enabled(attachment->viewport) &&
+                    tc_render_target_get_enabled(target);
+                auto& job = jobs[producer];
+                if (job.kind == OffscreenRenderJobKind::RenderTarget && (is_root || cache_options) &&
+                    (!tc_viewport_handle_valid(job.viewport) || (is_root && !roots[producer]))) {
+                    // Keep the viewport context for cached producers while their display is hidden.
+                    job.viewport = attachment->viewport;
                 }
-                roots[producer] = 1;
-                if (jobs[producer].kind == OffscreenRenderJobKind::RenderTarget &&
-                    !tc_viewport_handle_valid(jobs[producer].viewport)) {
-                    jobs[producer].viewport = attachment->viewport;
-                }
+                if (is_root)
+                    roots[producer] = 1;
             }
 
             for (size_t i = 0; i < demand_count; ++i) {
@@ -485,6 +628,25 @@ namespace termin::rendering_manager_detail {
                 }
             }
 
+            if (cache_options) {
+                select_dirty_jobs();
+                for (size_t i = 0; i < demand_count; ++i) {
+                    const uint32_t producer = producer_for(demands[i].render_target);
+                    if (producer != INVALID_JOB_INDEX && roots[producer])
+                        mark_dirty(producer, "explicit output demand");
+                }
+                for (size_t i = 0; i < dirty_jobs.size(); ++i) {
+                    for (const uint32_t consumer : consumers[dirty_jobs[i]])
+                        mark_dirty(consumer, "producer invalidation");
+                }
+                // Hidden consumers stay stale even if their producer refreshes
+                // in this frame and is clean by the time they become visible.
+                for (const uint32_t job : dirty_jobs) {
+                    const auto cached = cached_jobs.find(cache_keys[job]);
+                    if (cached != cached_jobs.end())
+                        cached->second.invalidated = true;
+                }
+            }
             for (uint32_t i = 0; i < jobs.size(); ++i) {
                 if (roots[i])
                     visit(i);
@@ -513,7 +675,9 @@ namespace termin::rendering_manager_detail {
                                          const OffscreenRenderDemand* demands,
                                          size_t demand_count,
                                          OffscreenMaterialDependencyCallback material_callback,
-                                         void* material_user_data) {
+                                         void* material_user_data,
+                                         const OffscreenRenderCacheOptions* cache_options,
+                                         OffscreenRenderCaptureCallbacks capture_callbacks) {
         if (!impl_)
             return false;
         try {
@@ -526,7 +690,9 @@ namespace termin::rendering_manager_detail {
                                   demands,
                                   demand_count,
                                   material_callback,
-                                  material_user_data);
+                                  material_user_data,
+                                  cache_options,
+                                  capture_callbacks);
         } catch (const std::bad_alloc&) {
             tc_log(TC_LOG_ERROR, "[RenderingManager] offscreen planner scratch allocation failed");
             if (diagnostic_callback) {
@@ -535,6 +701,21 @@ namespace termin::rendering_manager_detail {
             }
             return false;
         }
+    }
+
+    void OffscreenRenderPlanner::invalidate_outputs() {
+        if (impl_)
+            impl_->cached_jobs.clear();
+    }
+
+    uint64_t OffscreenRenderPlanner::output_revision(tc_render_target_handle target) const {
+        if (!impl_)
+            return 0;
+        const uint32_t producer = impl_->producer_for(target);
+        if (producer == INVALID_JOB_INDEX || producer >= impl_->cache_keys.size())
+            return 0;
+        const auto cached = impl_->cached_jobs.find(impl_->cache_keys[producer]);
+        return cached == impl_->cached_jobs.end() ? 0 : cached->second.content_revision;
     }
 
     void update_viewport_rects(const RenderTopology& topology,

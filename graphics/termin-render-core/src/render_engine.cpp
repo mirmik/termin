@@ -21,6 +21,7 @@
 #include "termin/render/execute_context.hpp"
 #include "termin/render/frame_graph_capture.hpp"
 #include "termin/render/frame_graph_resource_registry.hpp"
+#include "termin/render/frame_graph_schedule.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx/tgfx2_interop.h"
 #include "tgfx2/device_factory.hpp"
@@ -135,30 +136,6 @@ namespace termin {
         return ctx.begin_multiview_pass(pass);
     }
 
-    using PassDependencyCollector = size_t (*)(tc_pass*, const char**, size_t);
-
-    static std::vector<const char*> collect_pass_dependencies(tc_pass* pass, PassDependencyCollector collect) {
-        size_t count = collect(pass, nullptr, 0);
-        std::vector<const char*> values;
-        while (count > 0) {
-            values.resize(count);
-            size_t actual = collect(pass, values.data(), count);
-            if (actual <= count) {
-                values.resize(actual);
-                return values;
-            }
-            count = actual;
-        }
-        return values;
-    }
-
-    static std::vector<const char*> collect_canonical_resources(tc_frame_graph* fg) {
-        std::vector<const char*> values(tc_frame_graph_get_canonical_resources(fg, nullptr, 0));
-        size_t count = tc_frame_graph_get_canonical_resources(fg, values.data(), values.size());
-        values.resize(count);
-        return values;
-    }
-
     static std::vector<const char*> collect_alias_group(tc_frame_graph* fg, const char* canonical) {
         std::vector<const char*> values(tc_frame_graph_get_alias_group(fg, canonical, nullptr, 0));
         size_t count = tc_frame_graph_get_alias_group(fg, canonical, values.data(), values.size());
@@ -168,18 +145,6 @@ namespace termin {
 
     static double timing_ms(RenderTimingClock::time_point begin, RenderTimingClock::time_point end) {
         return std::chrono::duration<double, std::milli>(end - begin).count();
-    }
-
-    static bool is_external_color_output(const char* name) {
-        return name && (strcmp(name, "OUTPUT") == 0 || strcmp(name, "DISPLAY") == 0 || strcmp(name, "RT_COLOR") == 0);
-    }
-
-    static bool is_external_depth_output(const char* name) {
-        return name && strcmp(name, "RT_DEPTH") == 0;
-    }
-
-    static bool is_external_output_resource(const char* name) {
-        return is_external_color_output(name) || is_external_depth_output(name);
     }
 
     using ExternalResourcePredicate = bool (*)(const char*);
@@ -330,10 +295,10 @@ namespace termin {
         }
     }
 
-    void RenderEngine::execute_pipeline(const RenderExecution& execution) {
+    bool RenderEngine::execute_pipeline(const RenderExecution& execution) {
         if (!execution.pipeline || !execution.pipeline->is_valid()) {
             tc::Log::error("RenderEngine::execute_pipeline: pipeline is null");
-            return;
+            return false;
         }
         RenderPipeline& pipeline = *execution.pipeline;
         const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests = execution.debug_capture_requests;
@@ -343,25 +308,29 @@ namespace termin {
         for (const auto& [name, target] : execution.targets) {
             if (!target.context) {
                 tc::Log::error("RenderEngine::execute_pipeline: target '%s' has no RenderTargetContext", name.c_str());
-                return;
+                return false;
             }
             if (!target.render_items || !target.render_items->valid()) {
                 tc::Log::error("RenderEngine::execute_pipeline: target '%s' has no published RenderItemSnapshot",
                                name.c_str());
-                return;
+                return false;
             }
             render_target_contexts.emplace(name, *target.context);
         }
         ensure_tgfx2();
         tgfx::IRenderDevice* device = tgfx2_device();
         tgfx::RenderContext2* ctx2 = tgfx2_ctx();
-        if (!device) {
-            tc::Log::error("RenderEngine::execute_pipeline: tgfx2 device unavailable");
-            return;
+        if (!device || !ctx2) {
+            tc::Log::error("RenderEngine::execute_pipeline: tgfx2 context unavailable");
+            return false;
+        }
+        if (ctx2->in_pass()) {
+            tc::Log::error("RenderEngine::execute_pipeline: supplied context has an active raster pass");
+            return false;
         }
         if (render_target_contexts.empty()) {
             tc::Log::error("RenderEngine::execute_pipeline: no render target contexts");
-            return;
+            return false;
         }
 
         const bool collect_render_timing = render_engine_timing_enabled();
@@ -390,20 +359,31 @@ namespace termin {
 
         tc_profiler_begin_section("Get Frame Graph");
         const auto frame_graph_begin = RenderTimingClock::now();
+        if (execution.schedule && !execution.schedule->matches(pipeline.handle())) {
+            tc_profiler_end_section();
+            tc::Log::error("RenderEngine::execute_pipeline: pipeline changed after frame graph selection");
+            return false;
+        }
         tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline.handle());
         if (!fg) {
             tc_profiler_end_section();
             tc::Log::error("RenderEngine::execute_pipeline: failed to get frame graph");
-            return;
+            return false;
         }
 
         if (tc_frame_graph_get_error(fg) != TC_FG_OK) {
             tc::Log::error("RenderEngine::execute_pipeline: frame graph error: %s",
                            tc_frame_graph_get_error_message(fg));
             tc_profiler_end_section();
-            return;
+            return false;
         }
+        const FrameGraphSchedule local_schedule = execution.schedule
+            ? FrameGraphSchedule{}
+            : select_frame_graph_schedule(pipeline, fg, debug_capture_requests, execution.required_resources);
+        const FrameGraphSchedule& schedule = execution.schedule ? *execution.schedule : local_schedule;
         tc_profiler_end_section();
+        if (!schedule.valid)
+            return false;
         frame_graph_ms = timing_ms(frame_graph_begin, RenderTimingClock::now());
 
         // Bring up tgfx2 stack BEFORE FBO allocation so FBOPool::ensure can
@@ -412,7 +392,11 @@ namespace termin {
 
         tc_profiler_begin_section("Collect Specs");
         const auto specs_begin = RenderTimingClock::now();
-        auto specs = pipeline.collect_specs();
+        std::array<tc_pass*, TC_FRAME_GRAPH_MAX_PASSES> selected_passes;
+        for (size_t i = 0; i < schedule.count; ++i)
+            selected_passes[i] = tc_frame_graph_schedule_at(fg, schedule.order[i]);
+        auto specs = pipeline.collect_specs(std::span(selected_passes.data(), schedule.count));
+        std::erase_if(specs, [&](const ResourceSpec& spec) { return !schedule.resources.contains(spec.resource); });
 
         std::unordered_map<std::string, ResourceSpec> spec_map;
         for (const auto& spec : specs) {
@@ -460,7 +444,7 @@ namespace termin {
             return nullptr;
         };
 
-        std::vector<const char*> canonical_names = collect_canonical_resources(fg);
+        const auto& canonical_names = schedule.canonical_resources;
         const size_t canon_count = canonical_names.size();
         std::unordered_map<std::string, ResolvedResourceExtent> resolved_resource_extents;
         resolved_resource_extents.reserve(canon_count);
@@ -481,7 +465,7 @@ namespace termin {
                 resolve_resource_extent(canon, spec, render_target_contexts, default_rt_ctx);
             if (!extent) {
                 tc_profiler_end_section();
-                return;
+                return false;
             }
             resolved_resource_extents.emplace(canon, *extent);
         }
@@ -641,7 +625,7 @@ namespace termin {
                     if (!pipeline_cache.texture_pool.ensure(*device, canon, texture_desc)) {
                         tc::Log::error("RenderEngine::execute_pipeline: failed to allocate color_texture '%s'", canon);
                         tc_profiler_end_section();
-                        return;
+                        return false;
                     }
                 }
 
@@ -669,7 +653,7 @@ namespace termin {
                 if (!pipeline_cache.texture_pool.ensure(*device, canon, texture_desc)) {
                     tc::Log::error("RenderEngine::execute_pipeline: failed to allocate depth_texture '%s'", canon);
                     tc_profiler_end_section();
-                    return;
+                    return false;
                 }
 
                 std::vector<const char*> aliases = collect_alias_group(fg, canon);
@@ -688,7 +672,7 @@ namespace termin {
                     tc::Log::error("RenderEngine::execute_pipeline: non-texture resource '%s' has no ResourceSpec",
                                    canon);
                     tc_profiler_end_section();
-                    return;
+                    return false;
                 }
                 auto& resource = pipeline_cache.frame_graph_resources[canon];
                 if (resource) {
@@ -705,7 +689,7 @@ namespace termin {
                                    canon,
                                    resource_type.c_str());
                     tc_profiler_end_section();
-                    return;
+                    return false;
                 }
                 std::vector<const char*> aliases = collect_alias_group(fg, canon);
                 size_t alias_count = aliases.size();
@@ -750,7 +734,7 @@ namespace termin {
             if (!fbo_pool.ensure_native(*device, canon, target_desc, direct_color)) {
                 tc::Log::error("RenderEngine::execute_pipeline: failed to allocate fbo '%s'", canon);
                 tc_profiler_end_section();
-                return;
+                return false;
             }
             (void)filter;
 
@@ -764,13 +748,10 @@ namespace termin {
         tc_profiler_end_section();
         allocate_ms = timing_ms(allocate_begin, RenderTimingClock::now());
 
-        size_t schedule_count = tc_frame_graph_schedule_count(fg);
-
-        const bool owns_tgfx2_frame = ctx2 && !ctx2->in_frame();
         const auto begin_frame_begin = RenderTimingClock::now();
-        if (owns_tgfx2_frame) {
-            ctx2->begin_frame();
-        }
+        tgfx::RenderContextFrameScope standalone_frame;
+        auto& frame = execution.backend_frame ? *execution.backend_frame : standalone_frame;
+        frame.begin(*ctx2);
         begin_frame_ms = timing_ms(begin_frame_begin, RenderTimingClock::now());
 
         // Assemble per-resource tgfx2 texture maps from the pool. Native
@@ -821,7 +802,7 @@ namespace termin {
             }
 
             for (const auto& [view_name, view] : pipeline_cache.resource_views) {
-                if (is_external_output_resource(view.parent.c_str())) {
+                if (!schedule.resources.contains(view_name) || is_external_output_resource(view.parent.c_str())) {
                     continue;
                 }
                 if (view.attachment == AttachmentKind::Color) {
@@ -847,6 +828,8 @@ namespace termin {
             }
 
             for (const auto& [fbo_name, composition] : pipeline_cache.fbo_compositions) {
+                if (!schedule.resources.contains(fbo_name))
+                    continue;
                 auto composition_input_is_external = [&](const std::string& name) {
                     if (is_external_output_resource(name.c_str())) {
                         return true;
@@ -906,6 +889,7 @@ namespace termin {
             ColorOutputBindingPlan plan;
         };
         std::vector<PreparedColorOutputBinding> color_output_bindings;
+        bool completed = true;
         color_output_bindings.reserve(pipeline.color_exports().size());
         for (const PipelineColorExport& color_export : pipeline.color_exports()) {
             auto target_it = color_export.viewport_name.empty() ? default_it
@@ -914,12 +898,14 @@ namespace termin {
                 tc::Log::error("RenderEngine: color export '%s' refers to unknown target '%s'",
                                color_export.resource.c_str(),
                                color_export.viewport_name.c_str());
+                completed = false;
                 continue;
             }
             const tgfx::TextureHandle target = target_it->second.output_color.texture;
             if (!target) {
                 tc::Log::error("RenderEngine: color export '%s' has no physical target texture",
                                color_export.resource.c_str());
+                completed = false;
                 continue;
             }
 
@@ -938,6 +924,7 @@ namespace termin {
             if (!source) {
                 tc::Log::error("RenderEngine: color export resource '%s' is unavailable",
                                color_export.resource.c_str());
+                completed = false;
                 continue;
             }
 
@@ -949,6 +936,7 @@ namespace termin {
             if (!plan.valid) {
                 tc::Log::error("RenderEngine: refusing to bind scene-linear export '%s' to an SDR color target",
                                color_export.resource.c_str());
+                completed = false;
                 color_output_bindings.push_back(
                     {color_export, canonical_resource, storage_resource, source, target, plan});
                 continue;
@@ -979,32 +967,10 @@ namespace termin {
             tex2_resources[binding.export_desc.resource] = binding.target;
         }
 
-        std::vector<size_t> debug_capture_boundaries(debug_capture_requests.size(), static_cast<size_t>(-1));
-        for (size_t request_index = 0; request_index < debug_capture_requests.size(); ++request_index) {
-            FrameGraphCaptureRequest* request = debug_capture_requests[request_index];
-            if (!request)
-                continue;
-            request->status = FrameGraphCaptureRequestStatus::Pending;
-            if (request->kind != FrameGraphCaptureRequestKind::Resource || request->paused ||
-                request->resource.empty() || !request->capture) {
-                continue;
-            }
-            const char* selected_canonical = tc_frame_graph_canonical_resource(fg, request->resource.c_str());
-            const std::string selected = selected_canonical ? selected_canonical : request->resource;
-            for (size_t pass_index = 0; pass_index < schedule_count; ++pass_index) {
-                tc_pass* scheduled = tc_frame_graph_schedule_at(fg, pass_index);
-                if (!scheduled || !scheduled->enabled || scheduled->passthrough)
-                    continue;
-                const std::vector<const char*> writes = collect_pass_dependencies(scheduled, tc_pass_get_writes);
-                for (const char* write : writes) {
-                    if (!write)
-                        continue;
-                    const char* write_canonical = tc_frame_graph_canonical_resource(fg, write);
-                    if (selected == (write_canonical ? write_canonical : write)) {
-                        debug_capture_boundaries[request_index] = pass_index;
-                    }
-                }
-            }
+        const auto& debug_capture_boundaries = schedule.capture_writers;
+        for (FrameGraphCaptureRequest* request : debug_capture_requests) {
+            if (request && !request->paused)
+                request->status = FrameGraphCaptureRequestStatus::Pending;
         }
 
         auto capture_debug_resource = [&](FrameGraphCaptureRequest& request, const RenderTargetContext& rt_ctx) {
@@ -1113,19 +1079,6 @@ namespace termin {
             }
         };
 
-        // Resources without a writer in this schedule are external/read-only and
-        // already exist after execution-resource assembly.
-        for (size_t request_index = 0; request_index < debug_capture_requests.size(); ++request_index) {
-            FrameGraphCaptureRequest* request = debug_capture_requests[request_index];
-            if (!request || request->kind != FrameGraphCaptureRequestKind::Resource || request->paused ||
-                request->resource.empty() || !request->capture) {
-                continue;
-            }
-            if (debug_capture_boundaries[request_index] == static_cast<size_t>(-1)) {
-                capture_debug_resource(*request, default_rt_ctx);
-            }
-        }
-
         struct PreparedPass {
             size_t schedule_index = 0;
             tc_pass* pass = nullptr;
@@ -1160,8 +1113,9 @@ namespace termin {
             prepared.render_target = &rt_ctx;
             const RenderExecutionTarget& execution_target = execution.targets.at(rt_it->first);
 
-            std::vector<const char*> reads = collect_pass_dependencies(pass, tc_pass_get_reads);
-            std::vector<const char*> writes = collect_pass_dependencies(pass, tc_pass_get_writes);
+            const auto pass_resources = tc_frame_graph_resources_at(fg, i);
+            const std::span reads(pass_resources.reads, pass_resources.read_count);
+            const std::span writes(pass_resources.writes, pass_resources.write_count);
 
             Tex2Map pass_tex2_reads;
             Tex2Map pass_tex2_writes;
@@ -1366,8 +1320,8 @@ namespace termin {
 
         tc_profiler_begin_section("Prepare Passes");
         std::vector<PreparedPass> prepared_passes;
-        prepared_passes.reserve(schedule_count);
-        for (size_t i = 0; i < schedule_count; ++i) {
+        prepared_passes.reserve(schedule.count);
+        for (size_t i : schedule.indices()) {
             tc_pass* pass = tc_frame_graph_schedule_at(fg, i);
             if (!pass || !pass->enabled || pass->passthrough)
                 continue;
@@ -1680,6 +1634,16 @@ namespace termin {
         tc_profiler_end_section();
         clear_resources_ms = timing_ms(clear_resources_begin, RenderTimingClock::now());
 
+        // A graph input has no pass writer. Read it after initialization and
+        // before an in-place pass can overwrite its physical storage.
+        for (size_t i = 0; i < debug_capture_requests.size(); ++i) {
+            auto* request = debug_capture_requests[i];
+            if (request && request->kind == FrameGraphCaptureRequestKind::Resource && !request->paused &&
+                !request->resource.empty() && request->capture && debug_capture_boundaries[i] == SIZE_MAX) {
+                capture_debug_resource(*request, default_rt_ctx);
+            }
+        }
+
         const auto texture_is_read_after = [&](tgfx::TextureHandle texture, size_t first_later_pass) {
             if (!texture)
                 return false;
@@ -1914,6 +1878,7 @@ namespace termin {
                 tc::Log::error("RenderEngine: color export '%s' binding failed: %s",
                                binding.export_desc.resource.c_str(),
                                error.what());
+                completed = false;
             }
         }
 
@@ -1932,9 +1897,7 @@ namespace termin {
         }
 
         const auto end_frame_begin = RenderTimingClock::now();
-        if (owns_tgfx2_frame) {
-            ctx2->end_frame();
-        }
+        standalone_frame.finish();
         end_frame_ms = timing_ms(end_frame_begin, RenderTimingClock::now());
 
         if (collect_render_timing) {
@@ -1964,6 +1927,7 @@ namespace termin {
             }
             maybe_report_render_engine_timing();
         }
+        return completed;
     }
 
 } // namespace termin

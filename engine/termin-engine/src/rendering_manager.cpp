@@ -12,6 +12,7 @@
 #include <termin/entity/entity.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/render/render_lifecycle.hpp>
+#include <termin/render/frame_graph_capture.hpp>
 #include <termin/render/scene_render_execution.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 
@@ -29,10 +30,12 @@ extern "C" {
 #include "tc_profiler.h"
 #include "tc_viewport_config.h"
 #include <tcbase/tc_log.h>
+#include <tgfx/resources/tc_texture_registry.h>
 }
 
 #include <algorithm>
 #include <tcbase/profiler_scope.hpp>
+#include <tgfx2/render_context.hpp>
 
 namespace termin {
 
@@ -41,6 +44,7 @@ namespace termin {
         display_registry_ = std::make_unique<rendering_manager_detail::RenderDisplayRegistry>();
         render_states_ = std::make_unique<rendering_manager_detail::RenderStateStore>();
         offscreen_planner_ = std::make_unique<rendering_manager_detail::OffscreenRenderPlanner>();
+        presentation_cache_ = std::make_unique<rendering_manager_detail::DisplayPresentationCache>();
     }
 
     RenderingManager::~RenderingManager() {
@@ -52,6 +56,8 @@ namespace termin {
     // ============================================================================
 
     void RenderingManager::set_render_engine(RenderEngine* engine) {
+        offscreen_planner_->invalidate_outputs();
+        presentation_cache_->clear();
         render_engine_ = engine;
         owned_render_engine_.reset(); // Release owned engine if any
     }
@@ -371,6 +377,7 @@ namespace termin {
     }
 
     void RenderingManager::remove_display(tc_display_handle display) {
+        presentation_cache_->invalidate(display);
         display_registry_->remove_display(
             display,
             [this](tc_viewport_handle viewport) {
@@ -394,6 +401,7 @@ namespace termin {
     }
 
     void RenderingManager::remove_editor_display(tc_display_handle display) {
+        presentation_cache_->invalidate(display);
         display_registry_->remove_editor_display(display, [this](tc_viewport_handle viewport) {
             unregister_viewport_attachment(viewport);
             remove_viewport_state(viewport);
@@ -401,13 +409,16 @@ namespace termin {
     }
 
     bool RenderingManager::try_auto_remove_display(tc_display_handle display) {
-        return display_registry_->try_auto_remove_display(
+        const bool removed = display_registry_->try_auto_remove_display(
             display,
             [this](tc_viewport_handle viewport) {
                 unregister_viewport_attachment(viewport);
                 remove_viewport_state(viewport);
             },
             display_removed_callback_);
+        if (removed)
+            presentation_cache_->invalidate(display);
+        return removed;
     }
 
     tc_input_manager* RenderingManager::display_input_endpoint(tc_display_handle display) {
@@ -937,6 +948,27 @@ namespace termin {
         }
     }
 
+    void RenderingManager::render_pending(bool force) {
+        if (!render_engine()) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] render_pending: no render engine");
+            return;
+        }
+        const rendering_manager_detail::OffscreenRenderCacheOptions cache{
+            force, [](tc_render_target_handle target) {
+                return tc_texture_is_valid(tc_render_target_get_color_texture(target));
+            }};
+        {
+            const tc::ProfilerScope scope("Render pending outputs");
+            render_planned_offscreen(TC_DISPLAY_HANDLE_INVALID, TC_RENDER_TARGET_HANDLE_INVALID, &cache);
+        }
+        if (force)
+            presentation_cache_->clear();
+        for (const auto display : display_registry_->displays())
+            presentation_cache_->present_pending(*this, *offscreen_planner_, display);
+        for (const auto display : display_registry_->editor_displays())
+            presentation_cache_->present_pending(*this, *offscreen_planner_, display);
+    }
+
     void RenderingManager::render_all_offscreen() {
         RenderEngine* engine = render_engine();
         if (!engine) {
@@ -978,7 +1010,10 @@ namespace termin {
     }
 
     void RenderingManager::render_planned_offscreen(tc_display_handle only_display,
-                                                    tc_render_target_handle requested_target) {
+                                                    tc_render_target_handle requested_target,
+                                                    const rendering_manager_detail::OffscreenRenderCacheOptions* cache) {
+        if (!cache)
+            offscreen_planner_->invalidate_outputs();
         std::vector<RenderExecutionTargetId> requested_targets;
         for (const RenderExecutionObserver* observer : render_execution_observers_) {
             if (observer)
@@ -1000,6 +1035,7 @@ namespace termin {
         rendering_manager_detail::sync_viewport_render_target_resolutions(
             topology_, only_display, demands.data(), demands.size());
         struct PreparedOutput {
+            const rendering_manager_detail::OffscreenRenderJob* job;
             tc_render_target_handle target;
             tc_viewport_handle viewport;
             std::unordered_map<std::string, RenderTargetContext> contexts;
@@ -1007,34 +1043,58 @@ namespace termin {
             std::string default_context;
         };
         struct PlannedRenderContext {
+            struct CompletedCapture {
+                RenderExecutionInfo execution;
+                std::vector<FrameGraphCaptureRequest*> requests;
+            };
             RenderingManager* manager;
             std::vector<tc_scene_handle> prepared_scenes;
             std::vector<std::unique_ptr<PreparedOutput>> outputs;
-        } planned_context{this, {}, {}};
+            tgfx::RenderContextFrameScope backend_frame;
+            std::vector<CompletedCapture> completed_captures;
 
-        offscreen_planner_->execute(
+            RenderExecutionInfo describe(const rendering_manager_detail::OffscreenRenderJob* job) const {
+                RenderExecutionInfo execution{.scene = job->scene, .pipeline = job->pipeline, .targets = {}};
+                for (const auto& output : outputs) {
+                    if (output->job != job)
+                        continue;
+                    execution.targets.push_back({tc_viewport_handle_valid(output->viewport)
+                                                     ? RenderExecutionTargetKind::Viewport
+                                                     : RenderExecutionTargetKind::RenderTarget,
+                                                 output->viewport, output->target});
+                }
+                return execution;
+            }
+
+            void finish_captures(bool submitted) {
+                for (auto& capture : completed_captures) {
+                    if (!submitted) {
+                        for (auto* request : capture.requests) {
+                            request->status = FrameGraphCaptureRequestStatus::ResourceUnavailable;
+                            if (request->capture)
+                                request->capture->reset_capture();
+                            if (request->depth_capture)
+                                request->depth_capture->reset_capture();
+                        }
+                    }
+                    manager->finish_render_execution(capture.execution, capture.requests);
+                }
+            }
+        } planned_context{this, {}, {}, {}, {}};
+
+        const auto execute_offscreen_jobs = [&] {
+            offscreen_planner_->execute(
             topology_,
             only_display,
-            [](void* user_data, const rendering_manager_detail::OffscreenRenderJob* planned_job) {
+            [](void* user_data, const rendering_manager_detail::OffscreenRenderJob* job,
+               const rendering_manager_detail::OffscreenRenderExecution& execution) {
                 PlannedRenderContext* planned = static_cast<PlannedRenderContext*>(user_data);
                 RenderingManager* manager = planned->manager;
-                const rendering_manager_detail::OffscreenRenderJob& job = *planned_job;
                 std::unordered_map<std::string, RenderTargetContext> contexts;
                 SceneInternalEntityMap internal_entities;
                 std::string default_context;
-                RenderExecutionInfo execution{.scene = job.scene, .pipeline = job.pipeline, .targets = {}};
                 for (auto& prepared : planned->outputs) {
-                    bool belongs = tc_render_target_handle_eq(prepared->target, job.render_target);
-                    if (job.kind == rendering_manager_detail::OffscreenRenderJobKind::ScenePipeline) {
-                        belongs = false;
-                        for (size_t i = 0; i < manager->topology_.pipeline_target_count(job.scene, job.pipeline); ++i) {
-                            const auto viewport = manager->topology_.pipeline_target_viewport_at(job.scene, job.pipeline, i);
-                            if (tc_viewport_handle_valid(viewport) &&
-                                tc_render_target_handle_eq(tc_viewport_get_render_target(viewport), prepared->target))
-                                belongs = true;
-                        }
-                    }
-                    if (!belongs)
+                    if (prepared->job != job)
                         continue;
                     // Views/providers were prepared before graph traversal. GPU
                     // bindings are resolved now, after dependency producers ran.
@@ -1043,30 +1103,34 @@ namespace termin {
                         TC_ENTITY_HANDLE_INVALID, tc_render_target_get_width(prepared->target),
                         tc_render_target_get_height(prepared->target), manager->topology_.managed_render_targets(),
                         manager->render_target_context_providers_, manager->missing_render_target_provider_warnings_,
-                        prepared->contexts, prepared->internal_entities, prepared->default_context};
+                        prepared->contexts, prepared->internal_entities, prepared->default_context, true,
+                        &execution.schedule};
                     if (!rendering_manager_detail::bind_render_target_context_resources(request))
-                        return;
+                        return false;
+                    if (tc_render_target_get_kind(prepared->target) == TC_RENDER_TARGET_TEXTURE_2D &&
+                        std::any_of(prepared->contexts.begin(), prepared->contexts.end(), [](const auto& entry) {
+                            return !entry.second.output_color.texture || !entry.second.output_depth_tex;
+                        })) {
+                        tc_log(TC_LOG_ERROR, "[RenderingManager] could not allocate attachments for target '%s'",
+                               tc_render_target_get_name(prepared->target));
+                        return false;
+                    }
                     contexts.merge(prepared->contexts);
                     internal_entities.merge(prepared->internal_entities);
                     if (!prepared->contexts.empty()) {
                         tc_log(TC_LOG_ERROR, "[RenderingManager] duplicate prepared context name in render job");
-                        return;
+                        return false;
                     }
                     if (default_context.empty())
                         default_context = prepared->default_context;
-                    execution.targets.push_back({tc_viewport_handle_valid(prepared->viewport)
-                                                     ? RenderExecutionTargetKind::Viewport
-                                                     : RenderExecutionTargetKind::RenderTarget,
-                                                 prepared->viewport, prepared->target});
                 }
                 if (contexts.empty())
-                    return;
-                const auto lights = manager->collect_lights(job.scene);
-                RenderPipeline pipeline(job.pipeline);
-                const auto captures = manager->prepare_render_execution(execution);
-                termin::render_scene_pipeline_offscreen(*manager->render_engine(), pipeline, job.scene, contexts,
-                    internal_entities, lights, default_context, captures, &manager->static_mesh_batches_);
-                manager->finish_render_execution(execution, captures);
+                    return false;
+                const auto lights = manager->collect_lights(job->scene);
+                RenderPipeline pipeline(job->pipeline);
+                return termin::render_scene_pipeline_offscreen(*manager->render_engine(), pipeline, job->scene, contexts,
+                    internal_entities, lights, default_context, execution.captures, &manager->static_mesh_batches_,
+                    &execution.schedule, &planned->backend_frame);
             },
             &planned_context,
             nullptr,
@@ -1087,6 +1151,7 @@ namespace termin {
                     planned.prepared_scenes.push_back(job->scene);
                 }
                 auto prepared_output = std::make_unique<PreparedOutput>();
+                prepared_output->job = job;
                 prepared_output->target = output;
                 prepared_output->viewport = job->viewport;
                 if (job->kind == rendering_manager_detail::OffscreenRenderJobKind::ScenePipeline) {
@@ -1109,7 +1174,8 @@ namespace termin {
                     manager.topology_.managed_render_targets(), manager.render_target_context_providers_,
                     manager.missing_render_target_provider_warnings_, prepared_output->contexts,
                     prepared_output->internal_entities, prepared_output->default_context, false};
-                if (!rendering_manager_detail::build_render_target_contexts(build_request)) {
+                if (!rendering_manager_detail::build_render_target_contexts(build_request) ||
+                    prepared_output->contexts.empty()) {
                     // A target with no usable view has no execution/geometry.
                     return true;
                 }
@@ -1130,7 +1196,33 @@ namespace termin {
                 planned.outputs.push_back(std::move(prepared_output));
                 return ok;
             },
-            &planned_context);
+            &planned_context,
+            cache,
+            {
+                [](void* data, const rendering_manager_detail::OffscreenRenderJob* job,
+                   std::vector<FrameGraphCaptureRequest*>& captures) {
+                    auto& planned = *static_cast<PlannedRenderContext*>(data);
+                    if (!planned.manager->render_execution_observers_.empty())
+                        captures = planned.manager->prepare_render_execution(planned.describe(job));
+                },
+                [](void* data, const rendering_manager_detail::OffscreenRenderJob* job,
+                   const std::vector<FrameGraphCaptureRequest*>& captures) {
+                    auto& planned = *static_cast<PlannedRenderContext*>(data);
+                    planned.completed_captures.push_back({planned.describe(job), captures});
+                },
+            });
+        };
+        try {
+            const tc::ProfilerScope scope("Offscreen backend batch");
+            execute_offscreen_jobs();
+            planned_context.backend_frame.finish();
+        } catch (...) {
+            tc_log(TC_LOG_ERROR, "[RenderingManager] offscreen backend batch failed");
+            offscreen_planner_->invalidate_outputs();
+            planned_context.finish_captures(false);
+            throw;
+        }
+        planned_context.finish_captures(true);
     }
 
     void RenderingManager::render_render_target_tree_offscreen(tc_render_target_handle rt) {
@@ -1354,6 +1446,7 @@ namespace termin {
     }
 
     void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
+        offscreen_planner_->invalidate_outputs();
         if (!tc_render_target_handle_valid(rt))
             return;
         if (!tc_render_target_get_enabled(rt))
@@ -1387,12 +1480,15 @@ namespace termin {
         std::unordered_map<std::string, RenderTargetContext> contexts;
         SceneInternalEntityMap internal_entities_by_context;
         std::string default_context;
-        if (!build_render_target_contexts(
-                rt, name, TC_ENTITY_HANDLE_INVALID, w, h, contexts, internal_entities_by_context, default_context)) {
+        RenderEngine* engine = render_engine();
+        rendering_manager_detail::RenderTargetContextBuildRequest request{
+            *this, engine, rt, name, TC_ENTITY_HANDLE_INVALID, w, h, topology_.managed_render_targets(),
+            render_target_context_providers_, missing_render_target_provider_warnings_, contexts,
+            internal_entities_by_context, default_context, false};
+        if (!rendering_manager_detail::build_render_target_contexts(request)) {
             return;
         }
 
-        RenderEngine* engine = render_engine();
         const RenderExecutionInfo execution{
             .scene = scene,
             .pipeline = pipeline,
@@ -1403,14 +1499,22 @@ namespace termin {
             }},
         };
         const std::vector<FrameGraphCaptureRequest*> capture_requests = prepare_render_execution(execution);
-        termin::render_scene_pipeline_offscreen(*engine,
-                                                render_pipeline,
-                                                scene,
-                                                contexts,
-                                                internal_entities_by_context,
-                                                lights,
-                                                default_context,
-                                                capture_requests, &static_mesh_batches_);
+        tc_frame_graph* graph = tc_pipeline_get_frame_graph(pipeline);
+        if (!graph || tc_frame_graph_get_error(graph) != TC_FG_OK) {
+            const char* error = graph ? tc_frame_graph_get_error_message(graph) : "unavailable";
+            tc_log(TC_LOG_ERROR, "[RenderingManager] frame graph for '%s': %s", name.c_str(), error);
+            finish_render_execution(execution, capture_requests);
+            return;
+        }
+        const FrameGraphSchedule schedule = select_frame_graph_schedule(render_pipeline, graph, capture_requests);
+        request.schedule = &schedule;
+        if (schedule.valid && rendering_manager_detail::bind_render_target_context_resources(request)) {
+            tgfx::RenderContextFrameScope backend_frame;
+            termin::render_scene_pipeline_offscreen(*engine, render_pipeline, scene, contexts,
+                internal_entities_by_context, lights, default_context, capture_requests, &static_mesh_batches_,
+                &schedule, &backend_frame);
+            backend_frame.finish();
+        }
         finish_render_execution(execution, capture_requests);
     }
 
@@ -1428,6 +1532,7 @@ namespace termin {
     }
 
     void RenderingManager::present_display(tc_display_handle display) {
+        presentation_cache_->invalidate(display);
         rendering_manager_detail::present_display(*this, display);
     }
 
@@ -1495,6 +1600,8 @@ namespace termin {
     // ============================================================================
 
     void RenderingManager::shutdown() {
+        offscreen_planner_->invalidate_outputs();
+        presentation_cache_->clear();
         if (render_states_) {
             render_states_->clear_all();
         }

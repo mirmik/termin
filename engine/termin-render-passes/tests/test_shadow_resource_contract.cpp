@@ -116,6 +116,7 @@ TEST_CASE("ShadowPass receives and reuses its registered generic resource") {
     target.name = "ShadowResourceTarget";
     target.render_rect = {0, 0, 1, 1};
     termin::RenderExecution execution;
+    execution.required_resources = {"shadow_maps"};
     execution.pipeline = &pipeline;
     execution.targets.emplace(target.name,
                               termin::RenderExecutionTarget{

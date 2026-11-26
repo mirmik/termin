@@ -84,6 +84,8 @@ struct tc_pass {
     char* pass_name;
     bool enabled;
     bool passthrough;
+    // The pass updates observable state outside its declared graph resources.
+    bool side_effect;
     char* viewport_name;
     tc_pass_kind kind;
     tc_language native_language;
@@ -99,6 +101,7 @@ static inline void tc_pass_init_unowned(tc_pass* p, const tc_pass_vtable* vtable
     p->pass_name = NULL;
     p->enabled = true;
     p->passthrough = false;
+    p->side_effect = false;
     p->viewport_name = NULL;
     p->kind = TC_NATIVE_PASS;
     p->native_language = TC_LANGUAGE_CXX;
@@ -227,6 +230,7 @@ TC_API void tc_pass_delete_unowned(tc_pass* p);
 TC_API void tc_pass_set_name(tc_pass* p, const char* name);
 TC_API void tc_pass_set_enabled(tc_pass* p, bool enabled);
 TC_API void tc_pass_set_passthrough(tc_pass* p, bool passthrough);
+TC_API void tc_pass_set_side_effect(tc_pass* p, bool side_effect);
 TC_API void tc_pass_set_viewport_name(tc_pass* p, const char* viewport_name);
 
 typedef bool (*tc_pass_prepare_unload_fn)(const char* type_name, void* context, void* user_data);

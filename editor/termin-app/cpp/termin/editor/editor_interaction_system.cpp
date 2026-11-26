@@ -122,6 +122,7 @@ namespace termin {
         _transform_gizmo.size = 1.5f;
         _transform_gizmo.visible = false;
         _transform_gizmo.on_transform_changed = [this]() {
+            _transform_gizmo.target().scene().request_render();
             _request_update();
         };
         _transform_gizmo.on_drag_end = [this](const GeneralPose3& old_pose, const GeneralPose3& new_pose) {

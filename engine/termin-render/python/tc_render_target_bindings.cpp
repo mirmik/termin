@@ -34,6 +34,7 @@ void bind_tc_render_target(nb::module_& m) {
         .def_rw("generation", &tc_render_target_handle::generation)
         .def_prop_ro("valid", [](const tc_render_target_handle& h) { return tc_render_target_handle_valid(h); })
         .def_prop_ro("alive", [](const tc_render_target_handle& h) { return tc_render_target_alive(h); })
+        .def("request_render", &tc_render_target_request_render)
         .def_prop_rw(
             "name",
             [](const tc_render_target_handle& h) -> std::string {

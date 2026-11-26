@@ -34,6 +34,7 @@ set(TERMIN_RENDER_CORE_SOURCES
     src/frame_uniforms.cpp
     src/frame_graph_capture.cpp
     src/frame_graph_resource_registry.cpp
+    src/frame_graph_schedule.cpp
     src/execute_context.cpp
     src/graph_alias_pass.cpp
     src/material_pipeline.cpp

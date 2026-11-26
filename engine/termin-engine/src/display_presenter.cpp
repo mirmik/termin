@@ -1,4 +1,5 @@
 #include "display_presenter.hpp"
+#include "render_frame_planner.hpp"
 
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -6,6 +7,7 @@
 #include <vector>
 
 #include <tgfx2/i_render_device.hpp>
+#include <tgfx2/render_context.hpp>
 
 extern "C" {
 #include "render/tc_render_surface.h"
@@ -17,10 +19,9 @@ extern "C" {
 
 namespace termin::rendering_manager_detail {
 
-    void present_display(RenderingManager& manager, tc_display_handle display) {
-        (void)manager;
+    bool present_display(RenderingManager& manager, tc_display_handle display) {
         if (!tc_display_alive(display))
-            return;
+            return false;
         bool profile = tc_profiler_enabled();
         if (profile)
             tc_profiler_begin_section("Present Display");
@@ -30,7 +31,7 @@ namespace termin::rendering_manager_detail {
             tc_log(TC_LOG_WARN, "[RenderingManager] present_display: surface is null");
             if (profile)
                 tc_profiler_end_section();
-            return;
+            return false;
         }
 
         int width, height;
@@ -38,7 +39,7 @@ namespace termin::rendering_manager_detail {
         if (width <= 0 || height <= 0) {
             if (profile)
                 tc_profiler_end_section();
-            return;
+            return false;
         }
 
         RenderEngine* engine = manager.render_engine();
@@ -50,7 +51,7 @@ namespace termin::rendering_manager_detail {
             tc_log(TC_LOG_WARN, "[RenderingManager] present_display: tgfx2 device not available");
             if (profile)
                 tc_profiler_end_section();
-            return;
+            return false;
         }
 
         uint32_t display_color_texture_id = 0;
@@ -58,13 +59,41 @@ namespace termin::rendering_manager_detail {
             tc_log(TC_LOG_ERROR, "[RenderingManager] present_display: invalid render surface output");
             if (profile)
                 tc_profiler_end_section();
-            return;
+            return false;
         }
         tgfx::TextureHandle display_color_tex{display_color_texture_id};
+        auto* context = engine->tgfx2_ctx();
+        const bool record_in_host_frame = context && context->in_frame() &&
+                                          dev->backend_type() == tgfx::BackendType::Vulkan;
+        if (context && context->in_pass()) {
+            tc_log(TC_LOG_ERROR, "[RenderingManager] cannot composite a display inside a host raster pass");
+            if (profile)
+                tc_profiler_end_section();
+            return false;
+        }
 
         if (profile)
             tc_profiler_begin_section("Present Clear");
-        dev->clear_texture(display_color_tex, LinearColor{0.1f, 0.1f, 0.1f, 1.0f}, Bounds2i::from_size(width, height));
+        const LinearColor clear_color{0.1f, 0.1f, 0.1f, 1.0f};
+        if (record_in_host_frame) {
+            tgfx::RenderPassDesc pass;
+            tgfx::ColorAttachmentDesc attachment;
+            attachment.texture = display_color_tex;
+            attachment.load = tgfx::LoadOp::Clear;
+            attachment.clear_color = clear_color;
+            pass.colors.push_back(attachment);
+            if (!context->begin_pass(pass)) {
+                tc_log(TC_LOG_ERROR, "[RenderingManager] cannot clear the display in the host frame");
+                if (profile) {
+                    tc_profiler_end_section();
+                    tc_profiler_end_section();
+                }
+                return false;
+            }
+            context->end_pass();
+        } else {
+            dev->clear_texture(display_color_tex, clear_color, Bounds2i::from_size(width, height));
+        }
         if (profile)
             tc_profiler_end_section();
 
@@ -115,14 +144,72 @@ namespace termin::rendering_manager_detail {
             int px, py, pw, ph;
             tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
-            dev->blit_to_texture(
-                display_color_tex, src_color, Bounds2i::from_size(src_w, src_h), Bounds2i{px, py, px + pw, py + ph});
+            const Bounds2i source = Bounds2i::from_size(src_w, src_h);
+            const Bounds2i destination{px, py, px + pw, py + ph};
+            if (record_in_host_frame)
+                context->blit_region(src_color, display_color_tex, source, destination);
+            else
+                dev->blit_to_texture(display_color_tex, src_color, source, destination);
         }
         if (profile)
             tc_profiler_end_section();
 
         if (profile)
             tc_profiler_end_section();
+        return true;
+    }
+
+    namespace {
+        template <typename Handle>
+        uint64_t handle_key(Handle handle) {
+            return (static_cast<uint64_t>(handle.generation) << 32) | handle.index;
+        }
+    }
+
+    void DisplayPresentationCache::present_pending(RenderingManager& manager,
+                                                   const OffscreenRenderPlanner& planner,
+                                                   tc_display_handle display) {
+        if (!tc_display_alive(display) || !tc_display_get_enabled(display)) {
+            invalidate(display);
+            return;
+        }
+        tc_render_surface* surface = tc_display_get_surface(display);
+        if (!surface) {
+            invalidate(display);
+            return;
+        }
+        current_.surface = surface;
+        current_.texture = tc_render_surface_get_color_texture_id(surface);
+        tc_render_surface_get_size(surface, &current_.width, &current_.height);
+        current_.viewports.clear();
+        for (auto viewport = tc_display_get_first_viewport(display); tc_viewport_handle_valid(viewport);
+             viewport = tc_viewport_get_display_next(viewport)) {
+            const auto target = tc_viewport_get_render_target(viewport);
+            if (!tc_viewport_get_enabled(viewport) || !tc_render_target_get_enabled(target))
+                continue;
+            ViewportState state{handle_key(viewport), handle_key(target), planner.output_revision(target), {},
+                                tc_viewport_get_depth(viewport)};
+            tc_viewport_get_pixel_rect(viewport, &state.rect[0], &state.rect[1], &state.rect[2], &state.rect[3]);
+            current_.viewports.push_back(state);
+        }
+        const auto key = handle_key(display);
+        auto previous = presentations_.find(key);
+        if (previous != presentations_.end() && previous->second == current_)
+            return;
+        if (present_display(manager, display)) {
+            current_.texture = tc_render_surface_get_color_texture_id(surface);
+            std::swap(presentations_[key], current_);
+        } else {
+            invalidate(display);
+        }
+    }
+
+    void DisplayPresentationCache::invalidate(tc_display_handle display) {
+        presentations_.erase(handle_key(display));
+    }
+
+    void DisplayPresentationCache::clear() {
+        presentations_.clear();
     }
 
 } // namespace termin::rendering_manager_detail

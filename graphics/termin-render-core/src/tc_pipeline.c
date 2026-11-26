@@ -175,6 +175,7 @@ static tc_pipeline_handle pipeline_pool_alloc_with_template(const char* name,
     p->render_cache = NULL;
     p->render_cache_destructor = NULL;
     p->dirty = true;
+    p->render_revision = 1;
 
     tc_pipeline_handle h = {
         pool_handle.index,
@@ -321,7 +322,7 @@ bool tc_pipeline_adopt_pass(tc_pipeline_handle h, tc_pass* pass, tc_pass_deleter
     pass->deleter = deleter;
     p->passes[p->pass_count++] = pass;
     p->pass_deleters[p->pass_count - 1] = deleter;
-    p->dirty = true;
+    tc_pipeline_mark_dirty(h);
     return true;
 }
 
@@ -362,7 +363,7 @@ bool tc_pipeline_adopt_pass_before(tc_pipeline_handle h, tc_pass* pass, tc_pass_
         p->passes[0] = pass;
         p->pass_deleters[0] = deleter;
         p->pass_count++;
-        p->dirty = true;
+        tc_pipeline_mark_dirty(h);
         return true;
     }
 
@@ -373,7 +374,7 @@ bool tc_pipeline_adopt_pass_before(tc_pipeline_handle h, tc_pass* pass, tc_pass_
     p->passes[insert_idx] = pass;
     p->pass_deleters[insert_idx] = deleter;
     p->pass_count++;
-    p->dirty = true;
+    tc_pipeline_mark_dirty(h);
     return true;
 }
 
@@ -436,7 +437,7 @@ bool tc_pipeline_move_pass_before(tc_pipeline_handle h, tc_pass* pass, tc_pass* 
     pipeline->passes[destination] = pass;
     pipeline->pass_deleters[destination] = deleter;
     pipeline->pass_count++;
-    pipeline->dirty = true;
+    tc_pipeline_mark_dirty(h);
     return true;
 }
 
@@ -459,7 +460,7 @@ void tc_pipeline_remove_pass(tc_pipeline_handle h, tc_pass* pass) {
     tc_pass_deleter deleter = p->pass_deleters[idx];
     memmove(&p->pass_deleters[idx], &p->pass_deleters[idx + 1], (p->pass_count - idx - 1) * sizeof(tc_pass_deleter));
     p->pass_count--;
-    p->dirty = true;
+    tc_pipeline_mark_dirty(h);
     destroy_owned_pass(pass, deleter);
 }
 
@@ -485,7 +486,7 @@ size_t tc_pipeline_remove_passes_by_name(tc_pipeline_handle h, const char* name)
     }
 
     if (removed_count > 0) {
-        p->dirty = true;
+        tc_pipeline_mark_dirty(h);
     }
 
     return removed_count;
@@ -548,7 +549,7 @@ bool tc_pipeline_exchange_pass_at_checked(tc_pipeline_handle h,
     replacement->deleter = replacement_deleter;
     pipeline->passes[index] = replacement;
     pipeline->pass_deleters[index] = replacement_deleter;
-    pipeline->dirty = true;
+    tc_pipeline_mark_dirty(h);
     return true;
 }
 
@@ -693,10 +694,15 @@ bool tc_pipeline_is_dirty(tc_pipeline_handle h) {
     return PIPELINES[h.index].dirty;
 }
 
+uint64_t tc_pipeline_render_revision(tc_pipeline_handle h) {
+    return pipeline_handle_alive(h) ? PIPELINES[h.index].render_revision : 0;
+}
+
 void tc_pipeline_mark_dirty(tc_pipeline_handle h) {
     if (!pipeline_handle_alive(h))
         return;
     PIPELINES[h.index].dirty = true;
+    ++PIPELINES[h.index].render_revision;
 }
 
 void tc_pipeline_clear_dirty(tc_pipeline_handle h) {

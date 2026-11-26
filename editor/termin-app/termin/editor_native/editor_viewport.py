@@ -89,7 +89,7 @@ class NativeEditorViewport:
         device,
         rendering_manager,
         scene,
-        request_render: Callable[[], None],
+        request_ui_render: Callable[[], None],
     ) -> "NativeEditorViewport":
         """Create and connect the complete editor viewport runtime chain."""
 
@@ -116,6 +116,15 @@ class NativeEditorViewport:
         attachment = None
         interaction = None
         registered_display = False
+
+        def request_viewport_render() -> None:
+            viewport = attachment.viewport if attachment is not None else None
+            if viewport is not None:
+                target = viewport.render_target
+                if target is not None:
+                    target.request_render()
+            request_ui_render()
+
         try:
             display = Display.offscreen(
                 device,
@@ -134,7 +143,7 @@ class NativeEditorViewport:
                 rendering_controller=None,
                 rendering_manager=rendering_manager,
                 make_editor_pipeline=make_editor_pipeline,
-                request_render=request_render,
+                request_render=request_viewport_render,
             )
             attachment.attach(scene, restore_state=False)
             viewport = attachment.viewport
@@ -176,7 +185,7 @@ class NativeEditorViewport:
             interaction=interaction,
             input_manager=input_manager,
             rendering_manager=rendering_manager,
-            request_render=request_render,
+            request_render=request_viewport_render,
         )
         runtime._resize_connection = widget.connect_before_resize(runtime._on_before_resize)
         try:
@@ -213,6 +222,9 @@ class NativeEditorViewport:
         if (camera is not None and camera.enabled and camera.active_in_editor
                 and camera.entity is not None and camera.entity.enabled):
             camera.update(dt)
+
+    def request_render(self) -> None:
+        self._request_render()
 
     @property
     def overlay_names(self) -> tuple[str, ...]:

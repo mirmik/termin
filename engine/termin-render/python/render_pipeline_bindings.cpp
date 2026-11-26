@@ -104,6 +104,8 @@ namespace termin {
                 raw->enabled = nb::cast<bool>(data["enabled"]);
             if (data.contains("passthrough"))
                 raw->passthrough = nb::cast<bool>(data["passthrough"]);
+            if (data.contains("side_effect"))
+                raw->side_effect = nb::cast<bool>(data["side_effect"]);
             if (data.contains("viewport_name") && !data["viewport_name"].is_none()) {
                 tc_pass_set_viewport_name(raw, nb::cast<std::string>(data["viewport_name"]).c_str());
             }
@@ -746,6 +748,9 @@ namespace termin {
                                     }
                                     if (pass_data.contains("passthrough")) {
                                         native_ref.set_passthrough(nb::cast<bool>(pass_data["passthrough"]));
+                                    }
+                                    if (pass_data.contains("side_effect")) {
+                                        native_ref.set_side_effect(nb::cast<bool>(pass_data["side_effect"]));
                                     }
                                     if (pass_data.contains("viewport_name") && !pass_data["viewport_name"].is_none()) {
                                         native_ref.set_viewport_name(nb::cast<std::string>(pass_data["viewport_name"]));

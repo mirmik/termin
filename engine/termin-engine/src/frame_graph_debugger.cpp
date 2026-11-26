@@ -2,6 +2,7 @@
 #include "tcbase/tc_value_trent.hpp"
 #include "tcbase/trent/json.h"
 #include "termin/render/frame_pass.hpp"
+#include "termin/render/frame_graph_schedule.hpp"
 #include "termin/render/tc_pass.hpp"
 #include "tgfx2/pixel_format_utils.hpp"
 
@@ -452,65 +453,83 @@ namespace termin {
             tc_pass* pass = pipeline.get_pass_at(index);
             if (!pass)
                 continue;
-            result.push_back(make_pass_info(pipeline, pass));
+            auto info = make_pass_info(pipeline, pass);
+            info.schedule_reason = !info.enabled ? "disabled" : info.passthrough ? "passthrough" : "unused output";
+            result.push_back(std::move(info));
+        }
+        tc_frame_graph* graph = tc_pipeline_get_frame_graph(pipeline.handle());
+        if (!graph || tc_frame_graph_get_error(graph) != TC_FG_OK)
+            return result;
+        FrameGraphCaptureRequest request = capture_request_;
+        FrameGraphCaptureRequest* capture = &request;
+        const auto captures = request_active_ ? std::span(&capture, 1) : std::span<FrameGraphCaptureRequest*>{};
+        const FrameGraphSchedule schedule = select_frame_graph_schedule(pipeline, graph, captures);
+        size_t execution_index = 0;
+        for (size_t index : schedule.indices()) {
+            const tc_pass* pass = tc_frame_graph_schedule_at(graph, index);
+            auto info = std::find_if(result.begin(), result.end(), [&](const auto& entry) {
+                return pipeline.get_pass_at(entry.index) == pass;
+            });
+            if (info != result.end() && !info->passthrough) {
+                info->schedule_index = execution_index++;
+                info->schedule_reason = frame_graph_pass_reason_name(schedule.reasons[index]);
+            }
         }
         return result;
     }
 
     std::vector<FrameGraphDebuggerPassInfo> FrameGraphDebugger::schedule() const {
-        RenderPipeline pipeline(resolved_pipeline_);
-        std::vector<FrameGraphDebuggerPassInfo> result;
-        if (!pipeline.is_valid())
-            return result;
-        tc_frame_graph* graph = tc_pipeline_get_frame_graph(pipeline.handle());
-        if (!graph || tc_frame_graph_get_error(graph) != TC_FG_OK)
-            return result;
-        const size_t count = tc_frame_graph_schedule_count(graph);
-        result.reserve(count);
-        for (size_t index = 0; index < count; ++index) {
-            tc_pass* pass = tc_frame_graph_schedule_at(graph, index);
-            if (pass)
-                result.push_back(make_pass_info(pipeline, pass));
-        }
+        auto result = passes();
+        std::erase_if(result, [](const auto& pass) { return !pass.schedule_index; });
+        std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
+            return a.schedule_index < b.schedule_index;
+        });
         return result;
     }
 
     std::vector<std::string> FrameGraphDebugger::resources() const {
-        const std::vector<FrameGraphDebuggerPassInfo> ordered = schedule();
-        std::set<std::string> written;
-        for (const auto& pass : ordered) {
-            written.insert(pass.writes.begin(), pass.writes.end());
-        }
-        written.erase("DISPLAY");
-
-        std::vector<std::string> result;
-        std::set<std::string> seen;
-        for (const auto& pass : ordered) {
-            for (const std::string& read : pass.reads) {
-                if (read != "DISPLAY" && !written.count(read) && seen.insert(read).second) {
-                    result.push_back(read);
-                }
-            }
-        }
-        for (const auto& pass : ordered) {
-            for (const std::string& write : pass.writes) {
-                if (write != "DISPLAY" && seen.insert(write).second) {
-                    result.push_back(write);
-                }
-            }
-        }
-        if (!result.empty())
-            return result;
-
         RenderPipeline pipeline(resolved_pipeline_);
+        std::vector<std::string> result;
         if (!pipeline.is_valid())
             return result;
-        for (const ResourceSpec& spec : pipeline.collect_specs()) {
-            if (spec.resource != "DISPLAY" && seen.insert(spec.resource).second) {
-                result.push_back(spec.resource);
+
+        tc_frame_graph* graph = tc_pipeline_get_frame_graph(pipeline.handle());
+        const size_t count = tc_frame_graph_schedule_count(graph);
+        std::set<std::string> written;
+        for (size_t i = 0; i < count; ++i) {
+            const auto pass = tc_frame_graph_resources_at(graph, i);
+            for (size_t j = 0; j < pass.write_count; ++j)
+                written.insert(pass.writes[j]);
+        }
+
+        std::set<std::string> seen;
+        const auto add = [&](const std::string& name) {
+            if (!name.empty() && seen.insert(name).second)
+                result.push_back(name);
+        };
+        for (size_t i = 0; i < count; ++i) {
+            const auto pass = tc_frame_graph_resources_at(graph, i);
+            for (size_t j = 0; j < pass.read_count; ++j) {
+                if (!written.contains(pass.reads[j]))
+                    add(pass.reads[j]);
             }
         }
-        std::sort(result.begin(), result.end());
+        for (size_t i = 0; i < count; ++i) {
+            const auto pass = tc_frame_graph_resources_at(graph, i);
+            for (size_t j = 0; j < pass.write_count; ++j)
+                add(pass.writes[j]);
+        }
+
+        const size_t declared_begin = result.size();
+        for (const auto& spec : pipeline.specs())
+            add(spec.resource);
+        for (const auto& output : pipeline.color_exports())
+            add(output.resource);
+        for (const auto& [name, _] : pipeline.cache().resource_views)
+            add(name);
+        for (const auto& [name, _] : pipeline.cache().fbo_compositions)
+            add(name);
+        std::sort(result.begin() + declared_begin, result.end());
         return result;
     }
 
@@ -564,7 +583,7 @@ namespace termin {
     std::string FrameGraphDebugger::format_writer_pass() const {
         if (selected_resource_.empty())
             return {};
-        for (const auto& pass : schedule()) {
+        for (const auto& pass : passes()) {
             if (contains(pass.writes, selected_resource_))
                 return "<- " + pass.name;
         }
@@ -572,7 +591,7 @@ namespace termin {
     }
 
     std::string FrameGraphDebugger::format_pipeline_info() const {
-        const auto ordered = schedule();
+        const auto ordered = passes();
         if (ordered.empty())
             return "<i>Pipeline is empty</i>";
         std::ostringstream out;
@@ -585,7 +604,10 @@ namespace termin {
             const bool writer = !selected_resource_.empty() && contains(pass.writes, selected_resource_);
             if (writer)
                 out << "<span style='color: #50fa7b; font-weight: bold;'>* ";
-            out << pass.name << ": {";
+            out << pass.name << " [";
+            if (pass.schedule_index)
+                out << *pass.schedule_index + 1 << ", ";
+            out << pass.schedule_reason << "]: {";
             for (size_t i = 0; i < pass.reads.size(); ++i) {
                 if (i)
                     out << ", ";

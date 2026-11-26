@@ -255,7 +255,19 @@ def _compose_native_editor(
     debug_menu = shell.menu_route("debug")
     help_menu = shell.menu_route("help")
 
+    active_scene = [None]
+
+    def request_editor_frame() -> None:
+        engine.scene_manager.request_frame()
+        host.request_render_update()
+
     def request_editor_render() -> None:
+        scene = active_scene[0]
+        if scene is not None:
+            scene.request_render()
+        host.request_render_update()
+
+    def request_shared_resource_render() -> None:
         engine.scene_manager.request_render()
         host.request_render_update()
 
@@ -382,7 +394,7 @@ def _compose_native_editor(
         return Rect(0.0, 0.0, float(width), float(height))
 
     initial_scene = None if no_scene else create_scene(name="default")
-    active_scene = [initial_scene]
+    active_scene[0] = initial_scene
 
     def current_scene():
         return active_scene[0]
@@ -600,8 +612,8 @@ def _compose_native_editor(
     )
     material_inspector = build_native_material_inspector(
         host.document,
-        MaterialInspectorController(resource_manager, changed=request_editor_render),
-        request_render=request_editor_render,
+        MaterialInspectorController(resource_manager, changed=request_shared_resource_render),
+        request_render=request_editor_frame,
         resource_catalog=inspector_resource_catalog,
         show_color_dialog=dialog_service.show_color,
         show_texture_preview=host.register_image_preview,
@@ -609,8 +621,8 @@ def _compose_native_editor(
     texture_inspector, mesh_inspector, glb_inspector = build_native_resource_inspectors(
         host.document,
         resource_manager=resource_manager,
-        request_render=request_editor_render,
-        changed=request_editor_render,
+        request_render=request_editor_frame,
+        changed=request_shared_resource_render,
         show_texture_preview=host.register_image_preview,
     )
 
@@ -685,7 +697,7 @@ def _compose_native_editor(
                 obj,
                 active_tools=extension_context.active_viewport_tools,
             )
-        request_editor_render()
+        host.request_render_update()
 
     scene_hierarchy_controller = SceneHierarchyController(
         initial_scene,
@@ -899,7 +911,8 @@ def _compose_native_editor(
                 device=host.device,
                 rendering_manager=engine.rendering_manager,
                 scene=initial_scene,
-                request_render=request_editor_render,
+                request_render=request_editor_frame,
+                request_ui_render=host.request_render_update,
                 render_only_active_display=settings_snapshot.render_only_active_display,
             ),
             cleanup=lambda: display_workspace.close(),
@@ -912,10 +925,10 @@ def _compose_native_editor(
 
         def on_viewport_selection_changed(entity: object) -> None:
             scene_tree.select_object(entity if entity.valid() else None)
-            request_editor_render()
+            native_viewport.request_render()
 
         def on_viewport_hover_changed(_entity: object) -> None:
-            request_editor_render()
+            native_viewport.request_render()
 
         def on_viewport_transform_end(old_pose: object, new_pose: object) -> None:
             from termin.editor_core.editor_commands import TransformEditCommand
@@ -1077,7 +1090,7 @@ def _compose_native_editor(
         cleanup=lambda: spacemouse.close(),
     )
     if native_viewport is not None:
-        spacemouse.open(native_viewport.attachment, request_editor_render)
+        spacemouse.open(native_viewport.attachment, native_viewport.request_render)
     spacemouse_settings_dialog = workspace_stage.own(
         "SpaceMouse settings dialog",
         build_native_spacemouse_settings_dialog(
@@ -1487,14 +1500,14 @@ def _compose_native_editor(
 
     framegraph_debugger_service = EditorFramegraphDebuggerService(
         rendering_manager=engine.rendering_manager,
-        on_request_update=request_editor_render,
+        on_request_update=request_editor_frame,
     )
     framegraph_debugger = project_stage.own(
         "framegraph debugger",
         build_native_framegraph_debugger(
             window_manager,
             framegraph_debugger_service.debugger,
-            request_render=request_editor_render,
+            request_render=request_editor_frame,
         ),
         cleanup=lambda: framegraph_debugger.close(),
     )
@@ -1511,7 +1524,7 @@ def _compose_native_editor(
     def on_resource_reloaded(name: str, kind: str) -> None:
         _logger.info("Native editor reloaded %s resource: %s", kind, name)
         window_manager.service_platform_events()
-        request_editor_render()
+        request_shared_resource_render()
 
     project_file_watcher, component_file_processor = create_editor_project_file_watcher(
         resource_manager,
@@ -1980,7 +1993,6 @@ def _compose_native_editor(
         profiler_panel=profiler_panel,
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
-        request_editor_render=request_editor_render,
         window=window,
         frame_limit=composition_config.frame_limit,
         editor_viewport=native_viewport,

@@ -306,6 +306,7 @@ namespace termin {
                  "Update all scenes based on their mode. Returns true if render "
                  "needed.")
             .def("request_render", &SceneManager::request_render, "Request render on next tick.")
+            .def("request_frame", &SceneManager::request_frame, "Schedule a frame for pending render work.")
             .def("consume_render_request",
                  &SceneManager::consume_render_request,
                  "Consume and return render request flag.")

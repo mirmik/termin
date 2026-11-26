@@ -207,6 +207,7 @@ namespace {
             pipeline_handle = tc_pipeline_create("RemotePipeline");
             pipeline.emplace(pipeline_handle);
             pipeline->add_pass((new ProbePass())->tc_pass_ptr());
+            pipeline->set_color_export("probe_color", termin::ColorContent::DisplayLinear);
             tc_render_target_set_pipeline(target, pipeline_handle);
             viewport = tc_viewport_new("RemoteViewport", scene);
             tc_viewport_set_render_target(viewport, target);

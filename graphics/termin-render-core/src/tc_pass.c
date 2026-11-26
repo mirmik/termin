@@ -130,20 +130,42 @@ void tc_pass_set_name(tc_pass* p, const char* name) {
 }
 
 void tc_pass_set_enabled(tc_pass* p, bool enabled) {
-    if (p)
+    if (p && p->enabled != enabled) {
         p->enabled = enabled;
+        tc_pipeline_mark_dirty(p->owner_pipeline);
+    }
 }
 
 void tc_pass_set_passthrough(tc_pass* p, bool passthrough) {
-    if (p)
+    if (p && p->passthrough != passthrough) {
         p->passthrough = passthrough;
+        tc_pipeline_mark_dirty(p->owner_pipeline);
+    }
+}
+
+void tc_pass_set_side_effect(tc_pass* p, bool side_effect) {
+    if (p && p->side_effect != side_effect) {
+        p->side_effect = side_effect;
+        tc_pipeline_mark_dirty(p->owner_pipeline);
+    }
 }
 
 void tc_pass_set_viewport_name(tc_pass* p, const char* viewport_name) {
     if (!p)
         return;
+    if (viewport_name && !viewport_name[0])
+        viewport_name = NULL;
+    if (p->viewport_name == viewport_name ||
+        (p->viewport_name && viewport_name && strcmp(p->viewport_name, viewport_name) == 0))
+        return;
+    char* name = viewport_name ? tc_strdup(viewport_name) : NULL;
+    if (viewport_name && !name) {
+        tc_log_error("[tc_pass] could not copy viewport name");
+        return;
+    }
     free(p->viewport_name);
-    p->viewport_name = viewport_name && viewport_name[0] ? tc_strdup(viewport_name) : NULL;
+    p->viewport_name = name;
+    tc_pipeline_mark_dirty(p->owner_pipeline);
 }
 
 void tc_pass_delete_unowned(tc_pass* p) {

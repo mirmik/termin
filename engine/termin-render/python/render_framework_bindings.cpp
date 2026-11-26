@@ -436,7 +436,11 @@ namespace termin {
             .def_prop_rw(
                 "passthrough",
                 [](CxxFramePass& p) { return p._c.passthrough; },
-                [](CxxFramePass& p, bool v) { p._c.passthrough = v; })
+                [](CxxFramePass& p, bool v) { tc_pass_set_passthrough(&p._c, v); })
+            .def_prop_rw(
+                "side_effect",
+                [](CxxFramePass& p) { return p._c.side_effect; },
+                [](CxxFramePass& p, bool v) { tc_pass_set_side_effect(&p._c, v); })
             .def_prop_rw(
                 "viewport_name",
                 [](CxxFramePass& p) { return p.get_viewport_name(); },

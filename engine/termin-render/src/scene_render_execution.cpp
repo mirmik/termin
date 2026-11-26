@@ -7,7 +7,7 @@
 
 namespace termin {
 
-    void
+    bool
     render_scene_pipeline_offscreen(RenderEngine& engine,
                                     RenderPipeline& pipeline,
                                     tc_scene_handle scene,
@@ -16,15 +16,17 @@ namespace termin {
                                     const std::vector<Light>& lights,
                                     const std::string& default_render_target,
                                     const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests,
-                                    StaticMeshBatchCache* batches) {
+                                    StaticMeshBatchCache* batches,
+                                    const FrameGraphSchedule* schedule,
+                                    tgfx::RenderContextFrameScope* backend_frame) {
         const tc::ProfilerScope scope("Scene render execution");
         if (!tc_scene_handle_valid(scene)) {
             tc::Log::error("render_scene_pipeline_offscreen: invalid scene handle");
-            return;
+            return false;
         }
         if (render_target_contexts.empty()) {
             tc::Log::error("render_scene_pipeline_offscreen: no render target contexts");
-            return;
+            return false;
         }
 
         const size_t target_count = render_target_contexts.size();
@@ -39,6 +41,8 @@ namespace termin {
         execution.targets.reserve(target_count);
         execution.default_render_target = default_render_target;
         execution.debug_capture_requests = debug_capture_requests;
+        execution.schedule = schedule;
+        execution.backend_frame = backend_frame;
 
         size_t target_index = 0;
         for (const auto& [name, target] : render_target_contexts) {
@@ -61,7 +65,7 @@ namespace termin {
             if (!item_source.publish(snapshots[target_index], source_request)) {
                 tc::Log::error("render_scene_pipeline_offscreen: failed to publish RenderItem snapshot for target '%s'",
                                name.c_str());
-                return;
+                return false;
             }
 
             capabilities.emplace_back();
@@ -75,7 +79,7 @@ namespace termin {
             ++target_index;
         }
 
-        engine.execute_pipeline(execution);
+        return engine.execute_pipeline(execution);
     }
 
 } // namespace termin

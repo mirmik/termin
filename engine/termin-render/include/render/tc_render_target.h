@@ -29,6 +29,10 @@ TC_API tc_render_target_handle tc_render_target_new(const char* name);
 TC_API void tc_render_target_free(tc_render_target_handle h);
 TC_API bool tc_render_target_alive(tc_render_target_handle h);
 
+// Invalidate only this output and wake its owning scene's loop.
+TC_API void tc_render_target_request_render(tc_render_target_handle h);
+TC_API uint64_t tc_render_target_render_revision(tc_render_target_handle h);
+
 TC_API bool tc_render_target_kind_from_string(const char* name, tc_render_target_kind* out_kind);
 TC_API const char* tc_render_target_kind_to_string(tc_render_target_kind kind);
 TC_API void tc_render_target_set_kind(tc_render_target_handle h, tc_render_target_kind kind);
