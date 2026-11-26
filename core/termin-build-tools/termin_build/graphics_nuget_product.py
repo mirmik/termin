@@ -24,7 +24,7 @@ LOCK_RELATIVE_PATH = Path("build-system/graphics-nuget-lock.json")
 README_RELATIVE_PATH = Path("termin-csharp/NUGET_README.md")
 PRODUCT_MANIFEST = "termin-graphics-nuget-product.json"
 PRODUCT_MANIFEST_KIND = "termin-graphics-nuget-product"
-PRODUCT_MANIFEST_SCHEMA = 2
+PRODUCT_MANIFEST_SCHEMA = 3
 PACKAGE_REPOSITORY_URL = "https://github.com/mirmik/termin.git"
 PACKAGE_PROJECT_URL = "https://github.com/mirmik/termin"
 PACKAGE_AUTHORS = "Termin contributors"
@@ -50,7 +50,6 @@ class GraphicsNugetLock:
     runtime_framework: str
     csharp_profile: str
     runtime_package: str
-    wpf_package: str
     runtime_assembly: Path
     wpf_assemblies: dict[str, Path]
     native_runtime_root: Path
@@ -110,7 +109,7 @@ def load_lock(repo_root: Path) -> GraphicsNugetLock:
         raise GraphicsNugetProductError(f"NuGet product lock does not exist: {path}") from error
     except json.JSONDecodeError as error:
         raise GraphicsNugetProductError(f"invalid NuGet product lock {path}: {error}") from error
-    if root.get("schema") != 2:
+    if root.get("schema") != 3:
         raise GraphicsNugetProductError(
             f"unsupported NuGet product lock schema {root.get('schema')!r}"
         )
@@ -156,7 +155,6 @@ def load_lock(repo_root: Path) -> GraphicsNugetLock:
             root.get("csharp_profile"), f"{path}: csharp_profile"
         ),
         runtime_package=_require_string(packages.get("runtime"), f"{path}: packages.runtime"),
-        wpf_package=_require_string(packages.get("wpf"), f"{path}: packages.wpf"),
         runtime_assembly=_relative_path(
             assemblies.get("runtime"), f"{path}: managed_assemblies.runtime"
         ),
@@ -185,9 +183,9 @@ def load_lock(repo_root: Path) -> GraphicsNugetLock:
         raise GraphicsNugetProductError(
             "the initial Graphics NuGet contract must use the plot-d3d11 profile"
         )
-    if lock.target_framework not in lock.wpf_assemblies:
+    if set(lock.wpf_assemblies) != {"netcoreapp3.1", lock.target_framework}:
         raise GraphicsNugetProductError(
-            f"missing WPF assembly for primary framework {lock.target_framework}"
+            f"WPF assembly map must supply netcoreapp3.1 and {lock.target_framework}"
         )
     required_names = {name.casefold() for name in lock.required_native_libraries}
     forbidden_names = {name.casefold() for name in lock.forbidden_native_libraries}
@@ -240,7 +238,7 @@ def _tree_files(root: Path, context: str) -> list[Path]:
 def _collect_sdk_inputs(
     sdk_prefix: Path,
     lock: GraphicsNugetLock,
-) -> tuple[dict[str, bytes], dict[str, bytes], list[dict[str, object]]]:
+) -> tuple[dict[str, bytes], list[dict[str, object]]]:
     input_records: list[dict[str, object]] = []
 
     def read_input(relative: Path, context: str) -> bytes:
@@ -259,10 +257,8 @@ def _collect_sdk_inputs(
             lock.runtime_assembly, "runtime managed assembly"
         )
     }
-    wpf_payloads = {
-        f"lib/{tfm}/Termin.Wpf.dll": read_input(source, f"{tfm} WPF managed assembly")
-        for tfm, source in lock.wpf_assemblies.items()
-    }
+    for tfm, source in lock.wpf_assemblies.items():
+        runtime_payloads[f"wpf/{tfm}/Termin.Wpf.dll"] = read_input(source, f"{tfm} WPF managed assembly")
 
     native_root = sdk_prefix / lock.native_runtime_root
     native_files = _tree_files(native_root, "native runtime")
@@ -325,7 +321,7 @@ def _collect_sdk_inputs(
         runtime_payloads[f"share/termin/{tree_relative.as_posix()}"] = read_input(
             sdk_relative, "shader resource"
         )
-    return runtime_payloads, wpf_payloads, sorted(input_records, key=lambda item: item["path"])
+    return runtime_payloads, sorted(input_records, key=lambda item: item["path"])
 
 
 def _license_payloads(
@@ -352,7 +348,7 @@ def _license_payloads(
     return payloads, records
 
 
-def _targets_payload() -> bytes:
+def _targets_payload(lock: GraphicsNugetLock) -> bytes:
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
@@ -361,6 +357,16 @@ def _targets_payload() -> bytes:
         '             Link="share\\termin\\%(RecursiveDir)%(Filename)%(Extension)"\n'
         '             CopyToOutputDirectory="PreserveNewest"\n'
         '             CopyToPublishDirectory="PreserveNewest" Visible="false" />\n'
+        "  </ItemGroup>\n"
+        '  <PropertyGroup Condition="\'$(UseWPF)\' == \'true\' and \'$(TargetFrameworkIdentifier)\' == \'.NETCoreApp\'">\n'
+        '    <_TerminGraphicsWpfFramework Condition="$([MSBuild]::VersionGreaterThanOrEquals(\'$(TargetFrameworkVersion)\', \'3.1\'))">netcoreapp3.1</_TerminGraphicsWpfFramework>\n'
+        '    <_TerminGraphicsWpfFramework Condition="$([MSBuild]::VersionGreaterThanOrEquals(\'$(TargetFrameworkVersion)\', \'8.0\'))">'
+        f'{escape(lock.target_framework)}</_TerminGraphicsWpfFramework>\n'
+        "  </PropertyGroup>\n"
+        '  <ItemGroup Condition="\'$(_TerminGraphicsWpfFramework)\' != \'\'">\n'
+        '    <Reference Include="Termin.Wpf"\n'
+        '               HintPath="$(MSBuildThisFileDirectory)..\\..\\wpf\\$(_TerminGraphicsWpfFramework)\\Termin.Wpf.dll"\n'
+        '               Private="true" />\n'
         "  </ItemGroup>\n"
         "</Project>\n"
     ).encode("utf-8")
@@ -680,39 +686,27 @@ def build_product(
     if not source_revision:
         raise GraphicsNugetProductError("source revision must not be empty")
 
-    runtime_payloads, wpf_payloads, input_records = _collect_sdk_inputs(
-        sdk_prefix, lock
-    )
+    runtime_payloads, input_records = _collect_sdk_inputs(sdk_prefix, lock)
     licenses, license_records = _license_payloads(repo_root, lock)
     readme = _read_regular_file(
         repo_root / README_RELATIVE_PATH, "NuGet package README"
     ).replace(b"{{TERMIN_VERSION}}", version.encode("ascii"))
-    common_payloads = {**licenses, "README.md": readme}
-    runtime_payloads.update(common_payloads)
-    wpf_payloads.update(common_payloads)
+    runtime_payloads.update(licenses)
+    runtime_payloads["README.md"] = readme
     runtime_payloads[
         f"buildTransitive/{lock.runtime_framework}/{lock.runtime_package}.targets"
-    ] = _targets_payload()
+    ] = _targets_payload(lock)
     termin_license = next(
         record["package_path"]
         for record in license_records
         if record["name"] == "Termin"
     )
-    definitions = (
-        PackageDefinition(
-            package_id=lock.runtime_package,
-            description="Windows x64 D3D11 runtime and C# bindings for Termin Graphics.",
-            target_frameworks=(lock.runtime_framework,),
-            dependencies=(),
-            payloads=runtime_payloads,
-        ),
-        PackageDefinition(
-            package_id=lock.wpf_package,
-            description="WPF hosts for the Termin Graphics Windows D3D11 runtime.",
-            target_frameworks=tuple(lock.wpf_assemblies),
-            dependencies=((lock.runtime_package, f"[{version}]"),),
-            payloads=wpf_payloads,
-        ),
+    definition = PackageDefinition(
+        package_id=lock.runtime_package,
+        description="Windows x64 D3D11 runtime, C# bindings, and WPF hosts for Termin Graphics.",
+        target_frameworks=(lock.runtime_framework,),
+        dependencies=(),
+        payloads=runtime_payloads,
     )
 
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -721,37 +715,18 @@ def build_product(
     ) as temporary:
         candidate = Path(temporary) / "candidate"
         candidate.mkdir()
-        package_records: list[dict[str, object]] = []
-        for definition in definitions:
-            package = compose_package(
-                definition,
-                candidate,
-                version=version,
-                source_revision=source_revision,
-                license_path=termin_license,
-            )
-            dependency = definition.dependencies[0] if definition.dependencies else None
-            _validate_nuspec(
-                package,
-                package_id=definition.package_id,
-                version=version,
-                dependency=dependency,
-                target_frameworks=definition.target_frameworks,
-            )
-            package_records.append(
-                {
-                    "id": definition.package_id,
-                    "target_frameworks": list(definition.target_frameworks),
-                    "filename": package.name,
-                    "sha256": _sha256_file(package),
-                    "size": package.stat().st_size,
-                    "dependencies": [
-                        {"id": package_id, "version": version_range}
-                        for package_id, version_range in definition.dependencies
-                    ],
-                    "archive_files": _archive_records(package),
-                }
-            )
+        package = compose_package(
+            definition, candidate, version=version, source_revision=source_revision, license_path=termin_license
+        )
+        package_record = {
+            "id": definition.package_id,
+            "target_frameworks": list(definition.target_frameworks),
+            "filename": package.name,
+            "sha256": _sha256_file(package),
+            "size": package.stat().st_size,
+            "dependencies": [],
+            "archive_files": _archive_records(package),
+        }
         manifest = {
             "schema": PRODUCT_MANIFEST_SCHEMA,
             "manifest_kind": PRODUCT_MANIFEST_KIND,
@@ -768,8 +743,8 @@ def build_product(
             },
             "inputs": input_records,
             "release_licenses": license_records,
-            "packages": package_records,
-            "package_count": len(package_records),
+            "packages": [package_record],
+            "package_count": 1,
         }
         (candidate / PRODUCT_MANIFEST).write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -817,70 +792,44 @@ def validate_candidate(repo_root: Path, candidate: Path) -> dict[str, object]:
     packages = manifest.get("packages")
     if not isinstance(packages, list) or manifest.get("package_count") != len(packages):
         raise GraphicsNugetProductError("NuGet candidate package count mismatch")
-    expected_packages = {
-        lock.runtime_package: [],
-        lock.wpf_package: [
-            {"id": lock.runtime_package, "version": f"[{version}]"}
-        ],
-    }
-    actual_package_ids = [
-        _require_string(
-            _require_object(package, f"packages[{index}]").get("id"),
-            f"packages[{index}].id",
-        )
-        for index, package in enumerate(packages)
-    ]
-    if len(packages) != len(expected_packages) or set(actual_package_ids) != set(
-        expected_packages
-    ):
+    if len(packages) != 1:
         raise GraphicsNugetProductError(
-            "NuGet candidate package identity set mismatch: "
-            f"expected={sorted(expected_packages)}, actual={sorted(actual_package_ids)}"
+            f"NuGet candidate must contain one package, got {len(packages)}"
         )
-    expected_names: set[str] = set()
-    for index, raw_package in enumerate(packages):
-        package = _require_object(raw_package, f"packages[{index}]")
-        package_id = _require_string(package.get("id"), f"packages[{index}].id")
-        filename = _require_string(package.get("filename"), f"packages[{index}].filename")
-        expected_filename = f"{package_id}.{version}.nupkg"
-        if PurePosixPath(filename).name != filename or filename != expected_filename:
-            raise GraphicsNugetProductError(
-                f"unexpected NuGet package filename in manifest: {filename!r}"
-            )
-        dependencies = package.get("dependencies")
-        target_frameworks = (
-            tuple(lock.wpf_assemblies) if package_id == lock.wpf_package else (lock.runtime_framework,)
+    package = _require_object(packages[0], "packages[0]")
+    package_id = _require_string(package.get("id"), "packages[0].id")
+    if package_id != lock.runtime_package:
+        raise GraphicsNugetProductError(
+            f"NuGet candidate package identity mismatch: expected {lock.runtime_package}, got {package_id}"
         )
-        if package.get("target_frameworks") != list(target_frameworks):
-            raise GraphicsNugetProductError(f"NuGet candidate framework mismatch for {package_id}")
-        if dependencies != expected_packages[package_id]:
-            raise GraphicsNugetProductError(
-                f"NuGet candidate dependency mismatch for {package_id}: {dependencies!r}"
-            )
-        if filename in expected_names:
-            raise GraphicsNugetProductError(f"duplicate package filename in manifest: {filename}")
-        expected_names.add(filename)
-        path = candidate / filename
-        if path.is_symlink() or not path.is_file():
-            raise GraphicsNugetProductError(f"manifest-declared package is missing: {path}")
-        if package.get("sha256") != _sha256_file(path):
-            raise GraphicsNugetProductError(f"NuGet package hash mismatch: {filename}")
-        if package.get("archive_files") != _archive_records(path):
-            raise GraphicsNugetProductError(
-                f"NuGet package archive manifest mismatch: {filename}"
-            )
-        expected_dependency = (
-            (lock.runtime_package, f"[{version}]")
-            if package_id == lock.wpf_package
-            else None
-        )
-        _validate_nuspec(
-            path,
-            package_id=package_id,
-            version=version,
-            dependency=expected_dependency,
-            target_frameworks=target_frameworks,
-        )
+    filename = _require_string(package.get("filename"), "packages[0].filename")
+    if PurePosixPath(filename).name != filename or filename != f"{package_id}.{version}.nupkg":
+        raise GraphicsNugetProductError(f"unexpected NuGet package filename in manifest: {filename!r}")
+    if package.get("target_frameworks") != [lock.runtime_framework]:
+        raise GraphicsNugetProductError(f"NuGet candidate framework mismatch for {package_id}")
+    if package.get("dependencies") != []:
+        raise GraphicsNugetProductError(f"NuGet candidate dependency mismatch for {package_id}")
+    path = candidate / filename
+    if path.is_symlink() or not path.is_file():
+        raise GraphicsNugetProductError(f"manifest-declared package is missing: {path}")
+    if package.get("sha256") != _sha256_file(path):
+        raise GraphicsNugetProductError(f"NuGet package hash mismatch: {filename}")
+    archive_files = _archive_records(path)
+    if package.get("archive_files") != archive_files:
+        raise GraphicsNugetProductError(f"NuGet package archive manifest mismatch: {filename}")
+    managed_paths = {
+        f"lib/{lock.runtime_framework}/Termin.Native.dll",
+        *(f"wpf/{tfm}/Termin.Wpf.dll" for tfm in lock.wpf_assemblies),
+    }
+    actual_managed_paths = {
+        record["path"] for record in archive_files
+        if str(record["path"]).startswith(("lib/", "ref/", "wpf/"))
+    }
+    if actual_managed_paths != managed_paths:
+        raise GraphicsNugetProductError("NuGet candidate managed assembly layout mismatch")
+    _validate_nuspec(
+        path, package_id=package_id, version=version, dependency=None, target_frameworks=(lock.runtime_framework,)
+    )
     candidate_entries = [
         path for path in candidate.iterdir() if path.name != PRODUCT_MANIFEST
     ]
@@ -892,11 +841,11 @@ def validate_candidate(repo_root: Path, candidate: Path) -> dict[str, object]:
             "NuGet candidate contains non-file entries: " + ", ".join(invalid_entries)
         )
     actual_names = {path.name for path in candidate_entries}
-    if actual_names != expected_names:
+    if actual_names != {filename}:
         raise GraphicsNugetProductError(
             "NuGet candidate file set mismatch; "
-            f"missing={sorted(expected_names - actual_names)}, "
-            f"undeclared={sorted(actual_names - expected_names)}"
+            f"missing={sorted({filename} - actual_names)}, "
+            f"undeclared={sorted(actual_names - {filename})}"
         )
     return manifest
 

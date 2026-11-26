@@ -94,7 +94,7 @@ def test_lock_matches_plot_d3d11_runtime_closure() -> None:
     )
 
 
-def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> None:
+def test_builds_single_package_candidate_with_exact_metadata(tmp_path: Path) -> None:
     candidate = _build(tmp_path)
     manifest = validate_candidate(REPO_ROOT, candidate)
 
@@ -109,16 +109,15 @@ def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> Non
         "dirty": False,
     }
     packages = {package["id"]: package for package in manifest["packages"]}
-    assert set(packages) == {"Termin.Graphics", "Termin.Graphics.Wpf"}
+    assert set(packages) == {"Termin.Graphics"}
     assert packages["Termin.Graphics"]["dependencies"] == []
-    assert packages["Termin.Graphics.Wpf"]["dependencies"] == [
-        {"id": "Termin.Graphics", "version": f"[{VERSION}]"}
-    ]
 
     runtime_package = candidate / packages["Termin.Graphics"]["filename"]
     with zipfile.ZipFile(runtime_package) as archive:
         names = set(archive.namelist())
         assert "lib/netstandard2.1/Termin.Native.dll" in names
+        for tfm in ("netcoreapp3.1", "net8.0-windows7.0"):
+            assert archive.read(f"wpf/{tfm}/Termin.Wpf.dll") == tfm.encode("ascii")
         assert {
             f"runtimes/win-x64/native/{name}"
             for name in PLOT_D3D11_RUNTIME_LIBRARIES
@@ -144,19 +143,6 @@ def test_builds_two_package_candidate_with_exact_metadata(tmp_path: Path) -> Non
         assert "<readme>README.md</readme>" in nuspec
         assert f'commit="{SOURCE_REVISION}"' in nuspec
         assert "{{TERMIN_VERSION}}" not in archive.read("README.md").decode("utf-8")
-
-    wpf_package = candidate / packages["Termin.Graphics.Wpf"]["filename"]
-    with zipfile.ZipFile(wpf_package) as archive:
-        names = set(archive.namelist())
-        assert "lib/net8.0-windows7.0/Termin.Wpf.dll" in names
-        for tfm in ("netcoreapp3.1", "net8.0-windows7.0"):
-            assert archive.read(f"lib/{tfm}/Termin.Wpf.dll") == tfm.encode("ascii")
-        assert not any(name.startswith("runtimes/") for name in names)
-        nuspec = archive.read("Termin.Graphics.Wpf.nuspec").decode("utf-8")
-        assert f'id="Termin.Graphics" version="[{VERSION}]"' in nuspec
-        assert 'targetFramework="net8.0-windows7.0"' in nuspec
-        assert "<licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>" in nuspec
-
 
 def test_candidate_bytes_are_deterministic(tmp_path: Path) -> None:
     sdk_prefix = _synthetic_sdk(tmp_path)
@@ -249,13 +235,14 @@ def test_rejects_missing_or_wrong_file_license_compatibility_url(
 
 
 @pytest.mark.skipif(shutil.which("dotnet") is None, reason="dotnet is not installed")
-@pytest.mark.parametrize("tfm,package_id", [
-    ("netstandard2.1", "Termin.Graphics"),
-    ("netcoreapp3.1", "Termin.Graphics.Wpf"),
-    ("net8.0-windows7.0", "Termin.Graphics.Wpf"),
+@pytest.mark.parametrize("tfm,wpf_tfm", [
+    ("netstandard2.1", None),
+    ("net8.0-windows7.0", None),
+    ("netcoreapp3.1", "netcoreapp3.1"),
+    ("net8.0-windows7.0", "net8.0-windows7.0"),
 ])
 def test_dotnet_selects_managed_assets_for_each_framework(
-    tmp_path: Path, tfm: str, package_id: str,
+    tmp_path: Path, tfm: str, wpf_tfm: str | None,
 ) -> None:
     candidate = _build(tmp_path)
     project = tmp_path / "consumer" / "Consumer.csproj"
@@ -264,10 +251,12 @@ def test_dotnet_selects_managed_assets_for_each_framework(
         f"""<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>{tfm}</TargetFramework>
+    <UseWPF>{str(wpf_tfm is not None).lower()}</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="{package_id}" Version="{VERSION}" />
+    <PackageReference Include="Termin.Graphics" Version="[{VERSION}]" />
   </ItemGroup>
 </Project>
 """,
@@ -305,15 +294,24 @@ def test_dotnet_selects_managed_assets_for_each_framework(
         (project.parent / "obj/project.assets.json").read_text(encoding="utf-8")
     )
     (packages_by_name,) = assets["targets"].values()
+    assert set(packages_by_name) == {f"Termin.Graphics/{VERSION}"}
     runtime = packages_by_name[f"Termin.Graphics/{VERSION}"]
-    assert "lib/netstandard2.1/Termin.Native.dll" in runtime["compile"]
+    assert set(runtime["compile"]) == {"lib/netstandard2.1/Termin.Native.dll"}
     assert "buildTransitive/netstandard2.1/Termin.Graphics.targets" in runtime["build"]
     assert "runtimes/win-x64/native/termin_graphics2.dll" in runtime["runtimeTargets"]
-    if package_id == "Termin.Graphics.Wpf":
-        wpf = packages_by_name[f"Termin.Graphics.Wpf/{VERSION}"]
-        assert f"lib/{tfm}/Termin.Wpf.dll" in wpf["compile"]
+    result = subprocess.run(
+        ["dotnet", "msbuild", str(project), "-getItem:Reference"],
+        text=True, capture_output=True, env=environment, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    references = json.loads(result.stdout)["Items"]["Reference"]
+    wpf_references = [item for item in references if item["Identity"] == "Termin.Wpf"]
+    if wpf_tfm is None:
+        assert not wpf_references
     else:
-        assert f"Termin.Graphics.Wpf/{VERSION}" not in packages_by_name
+        (wpf_reference,) = wpf_references
+        expected = packages / "termin.graphics" / VERSION / "wpf" / wpf_tfm / "Termin.Wpf.dll"
+        assert Path(wpf_reference["HintPath"]).resolve() == expected.resolve()
 
 
 def test_rejects_missing_required_native_library(tmp_path: Path) -> None:
@@ -396,5 +394,5 @@ def test_candidate_validation_rejects_manifest_contract_mutation(
         encoding="utf-8",
     )
 
-    with pytest.raises(GraphicsNugetProductError, match="package identity set mismatch"):
+    with pytest.raises(GraphicsNugetProductError, match="package identity mismatch"):
         validate_candidate(REPO_ROOT, candidate)

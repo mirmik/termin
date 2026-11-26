@@ -50,7 +50,7 @@ def _output_payloads(lock: GraphicsNugetLock) -> dict[str, bytes]:
 def _manifest(lock: GraphicsNugetLock, payloads: dict[str, bytes]) -> dict[str, object]:
     archive_paths = {
         "Termin.Native.dll": f"lib/{lock.runtime_framework}/Termin.Native.dll",
-        "Termin.Wpf.dll": f"lib/{lock.target_framework}/Termin.Wpf.dll",
+        "Termin.Wpf.dll": f"wpf/{lock.target_framework}/Termin.Wpf.dll",
     }
     archive_paths.update(
         {
@@ -65,28 +65,23 @@ def _manifest(lock: GraphicsNugetLock, payloads: dict[str, bytes]) -> dict[str, 
             if path.startswith("share/termin/")
         }
     )
-    runtime_files = []
-    wpf_files = []
-    for output_path, payload in payloads.items():
-        record = {
+    archive_files = [
+        {
             "path": archive_paths[output_path],
             "sha256": _sha256(payload),
             "size": len(payload),
         }
-        if output_path == "Termin.Wpf.dll":
-            wpf_files.append(record)
-        else:
-            runtime_files.append(record)
+        for output_path, payload in payloads.items()
+    ]
     legacy_payload = b"legacy managed WPF"
-    wpf_files.append({
-        "path": "lib/netcoreapp3.1/Termin.Wpf.dll",
+    archive_files.append({
+        "path": "wpf/netcoreapp3.1/Termin.Wpf.dll",
         "sha256": _sha256(legacy_payload),
         "size": len(legacy_payload),
     })
     return {
         "packages": [
-            {"id": lock.runtime_package, "archive_files": runtime_files},
-            {"id": lock.wpf_package, "archive_files": wpf_files},
+            {"id": lock.runtime_package, "archive_files": archive_files},
         ]
     }
 
@@ -111,7 +106,7 @@ def test_consumer_project_is_deterministic_and_package_reference_only() -> None:
     assert f"<RuntimeIdentifier>{lock.runtime_identifier}</RuntimeIdentifier>" in project
     assert "<PlatformTarget>x64</PlatformTarget>" in project
     assert "<TreatWarningsAsErrors>true</TreatWarningsAsErrors>" in project
-    assert f'<PackageReference Include="{lock.wpf_package}"' in project
+    assert f'<PackageReference Include="{lock.runtime_package}" Version="[{public_version()}]" />' in project
     assert "ProjectReference" not in project
     assert "HintPath" not in project
     assert "TerminSdkRoot" not in project
@@ -212,7 +207,7 @@ def test_output_validation_records_exact_candidate_hashes(tmp_path: Path) -> Non
         validate_consumer_output(tmp_path, lock, manifest, "netcoreapp3.1")
     (tmp_path / "Termin.Wpf.dll").write_bytes(b"legacy managed WPF")
     legacy = validate_consumer_output(tmp_path, lock, manifest, "netcoreapp3.1")
-    assert any(record["package_path"] == "lib/netcoreapp3.1/Termin.Wpf.dll" for record in legacy)
+    assert any(record["package_path"] == "wpf/netcoreapp3.1/Termin.Wpf.dll" for record in legacy)
 
 
 def test_output_validation_accepts_nested_native_layout(tmp_path: Path) -> None:

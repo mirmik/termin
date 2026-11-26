@@ -232,6 +232,7 @@ def _validate_gate_report(
         "runtime_identifier": manifest.get("runtime_identifier"),
         "target_framework": manifest.get("target_framework"),
         "base_compile_asset": f"lib/{runtime_framework}/Termin.Native.dll",
+        "non_wpf_windows_compile_asset": f"lib/{runtime_framework}/Termin.Native.dll",
         "failure": None,
     }
     actual_header = {key: report.get(key) for key in expected_header}
@@ -318,43 +319,31 @@ def validate_release_candidate(
     _validate_gate_report(
         evidence_root, manifest_path, manifest, set(lock.wpf_assemblies), lock.runtime_framework
     )
-    package_order = (lock.runtime_package, lock.wpf_package)
-    raw_packages = {
-        _require_string(package.get("id"), "candidate package id"): package
-        for package in (
-            _require_object(raw, "candidate package")
-            for raw in _require_array(manifest.get("packages"), "candidate packages")
+    package_id = lock.runtime_package
+    (raw_package,) = _require_array(manifest.get("packages"), "candidate packages")
+    package = _require_object(raw_package, "candidate package")
+    filename = _require_string(package.get("filename"), f"{package_id} filename")
+    path = candidate_root / filename
+    digest = _require_sha256(package.get("sha256"), f"{package_id} SHA-256")
+    size = _require_size(package.get("size"), f"{package_id} size")
+    if path.stat().st_size != size:
+        raise GraphicsNugetPublishError(
+            f"NuGet package size mismatch for {filename}: expected {size}, got {path.stat().st_size}"
         )
-    }
-    packages: list[NugetPackageCandidate] = []
-    for package_id in package_order:
-        package = raw_packages[package_id]
-        filename = _require_string(package.get("filename"), f"{package_id} filename")
-        path = candidate_root / filename
-        digest = _require_sha256(package.get("sha256"), f"{package_id} SHA-256")
-        size = _require_size(package.get("size"), f"{package_id} size")
-        if path.stat().st_size != size:
-            raise GraphicsNugetPublishError(
-                f"NuGet package size mismatch for {filename}: expected {size}, "
-                f"got {path.stat().st_size}"
-            )
-        _validate_package_provenance(path, package_id, revision)
-        packages.append(
-            NugetPackageCandidate(
-                package_id=package_id,
-                version=version,
-                path=path,
-                sha256=digest,
-                size=size,
-                archive_members=_archive_members(package.get("archive_files"), package_id),
-            )
-        )
+    _validate_package_provenance(path, package_id, revision)
     return GraphicsNugetReleaseCandidate(
         root=candidate_root,
         evidence_root=evidence_root,
         version=version,
         source_revision=revision,
-        packages=tuple(packages),
+        packages=(NugetPackageCandidate(
+            package_id=package_id,
+            version=version,
+            path=path,
+            sha256=digest,
+            size=size,
+            archive_members=_archive_members(package.get("archive_files"), package_id),
+        ),),
     )
 
 
@@ -665,7 +654,7 @@ def main() -> int:
     parser.add_argument(
         "--upload",
         action="store_true",
-        help="perform the irreversible, ordered NuGet uploads",
+        help="upload the verified Graphics package to NuGet.org",
     )
     parser.add_argument(
         "--confirm-version",

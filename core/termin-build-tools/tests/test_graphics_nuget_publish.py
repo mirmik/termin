@@ -62,6 +62,7 @@ def _write_evidence(candidate: Path, evidence: Path) -> None:
         "runtime_identifier": manifest["runtime_identifier"],
         "target_framework": manifest["target_framework"],
         "base_compile_asset": f"lib/{load_lock(REPO_ROOT).runtime_framework}/Termin.Native.dll",
+        "non_wpf_windows_compile_asset": f"lib/{load_lock(REPO_ROOT).runtime_framework}/Termin.Native.dll",
         "candidate_manifest": {
             "filename": "candidate-manifest.json",
             "sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
@@ -176,10 +177,7 @@ def test_validates_candidate_bound_to_passed_gate(tmp_path: Path) -> None:
 
     assert release.version == public_version()
     assert release.source_revision == REVISION
-    assert [package.package_id for package in release.packages] == [
-        "Termin.Graphics",
-        "Termin.Graphics.Wpf",
-    ]
+    assert [package.package_id for package in release.packages] == ["Termin.Graphics"]
 
 
 def test_rejects_failed_gate(tmp_path: Path) -> None:
@@ -322,7 +320,7 @@ def test_push_error_preserves_server_reason_and_redacts_api_key(tmp_path: Path) 
     assert "[redacted]" in str(failure.value)
 
 
-def test_dry_run_prints_ordered_plan_without_push(
+def test_dry_run_prints_plan_without_push(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -333,14 +331,12 @@ def test_dry_run_prints_ordered_plan_without_push(
     publish_release(release, client=client, upload=False)
 
     output = capsys.readouterr().out
-    assert output.index(f"Termin.Graphics {release.version}") < output.index(
-        f"Termin.Graphics.Wpf {release.version}"
-    )
+    assert f"Termin.Graphics {release.version}" in output
     assert "action=would upload" in output
     assert client.pushes == []
 
 
-def test_publish_reports_acceptance_and_waits_for_each_download(
+def test_publish_reports_acceptance_and_waits_for_download(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     candidate, evidence = _candidate(tmp_path)
@@ -366,7 +362,7 @@ def test_publish_reports_acceptance_and_waits_for_each_download(
         sleep=lambda _seconds: None,
     )
 
-    assert client.pushes == ["Termin.Graphics", "Termin.Graphics.Wpf"]
+    assert client.pushes == ["Termin.Graphics"]
     output = capsys.readouterr().out
     for package in release.packages:
         accepted = output.index(f"NuGet accepted {package.path.name}")
@@ -407,7 +403,7 @@ def test_uncertain_push_logs_original_error_before_reconciliation(
     )
 
 
-def test_rejected_push_stops_without_waiting_or_uploading_wpf(tmp_path: Path) -> None:
+def test_rejected_push_stops_without_waiting(tmp_path: Path) -> None:
     candidate, evidence = _candidate(tmp_path)
     release = validate_release_candidate(REPO_ROOT, candidate, evidence)
 
@@ -429,7 +425,7 @@ def test_rejected_push_stops_without_waiting_or_uploading_wpf(tmp_path: Path) ->
     assert client.pushes == ["Termin.Graphics"]
 
 
-def test_partial_publication_resumes_with_only_wpf(tmp_path: Path) -> None:
+def test_rerun_skips_upload_for_matching_remote_package(tmp_path: Path) -> None:
     candidate, evidence = _candidate(tmp_path)
     release = validate_release_candidate(REPO_ROOT, candidate, evidence)
     runtime = release.packages[0]
@@ -447,16 +443,16 @@ def test_partial_publication_resumes_with_only_wpf(tmp_path: Path) -> None:
         sleep=lambda _seconds: None,
     )
 
-    assert client.pushes == ["Termin.Graphics.Wpf"]
+    assert client.pushes == []
 
 
-def test_preflight_remote_conflict_blocks_all_uploads(tmp_path: Path) -> None:
+def test_preflight_remote_conflict_blocks_upload(tmp_path: Path) -> None:
     candidate, evidence = _candidate(tmp_path)
     release = validate_release_candidate(REPO_ROOT, candidate, evidence)
-    wpf = release.packages[1]
+    package = release.packages[0]
     client = FakeNugetClient(
         release,
-        {wpf.package_id: _mutate_first_member(wpf.path.read_bytes())},
+        {package.package_id: _mutate_first_member(package.path.read_bytes())},
     )
 
     with pytest.raises(GraphicsNugetPublishError, match="content differs"):
