@@ -416,6 +416,7 @@ namespace termin {
                          })
             .def_prop_rw("enabled", &TcPassRef::enabled, &TcPassRef::set_enabled)
             .def_prop_rw("passthrough", &TcPassRef::passthrough, &TcPassRef::set_passthrough)
+            .def_prop_rw("side_effect", &TcPassRef::side_effect, &TcPassRef::set_side_effect)
             .def("is_inplace", &TcPassRef::is_inplace)
             .def_prop_ro("inplace", &TcPassRef::is_inplace)
             .def_prop_ro("reads",
@@ -576,6 +577,7 @@ namespace termin {
                      result["pass_name"] = self.pass_name();
                      result["enabled"] = p->enabled;
                      result["passthrough"] = p->passthrough;
+                     result["side_effect"] = p->side_effect;
                      result["viewport_name"] = p->viewport_name ? std::string(p->viewport_name) : std::string();
                      result["data"] = data;
                      return result;
@@ -699,6 +701,7 @@ namespace termin {
             .def_prop_ro("type_name", &TcPass::type_name)
             .def_prop_rw("enabled", &TcPass::enabled, &TcPass::set_enabled)
             .def_prop_rw("passthrough", &TcPass::passthrough, &TcPass::set_passthrough)
+            .def_prop_rw("side_effect", &TcPass::side_effect, &TcPass::set_side_effect)
             .def("is_inplace", &TcPass::is_inplace);
 
         m.def(

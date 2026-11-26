@@ -134,6 +134,7 @@ namespace termin {
             tc_pass_set_name(unknown_tc, pass->pass_name);
             tc_pass_set_enabled(unknown_tc, pass->enabled);
             tc_pass_set_passthrough(unknown_tc, pass->passthrough);
+            unknown_tc->side_effect = pass->side_effect;
             tc_pass_set_viewport_name(unknown_tc, pass->viewport_name);
 
             if (!replacement) {
@@ -181,6 +182,7 @@ namespace termin {
             tc_pass_set_name(restored, pass->pass_name);
             tc_pass_set_enabled(restored, pass->enabled);
             tc_pass_set_passthrough(restored, pass->passthrough);
+            restored->side_effect = pass->side_effect;
             tc_pass_set_viewport_name(restored, pass->viewport_name);
             if (!tc_pipeline_replace_pass_at(pipeline, index, restored, restored->deleter)) {
                 tc_pass_delete_unowned(restored);

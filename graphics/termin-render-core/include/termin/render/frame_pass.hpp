@@ -167,7 +167,7 @@ namespace termin {
             return _c.enabled;
         }
         void enabled_set(bool v) {
-            _c.enabled = v;
+            tc_pass_set_enabled(&_c, v);
         }
 
         std::string viewport_name_get() const {

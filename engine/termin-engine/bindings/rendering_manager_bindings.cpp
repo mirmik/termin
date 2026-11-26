@@ -773,6 +773,8 @@ namespace termin {
             .def_ro("type", &FrameGraphDebuggerPassInfo::type)
             .def_ro("enabled", &FrameGraphDebuggerPassInfo::enabled)
             .def_ro("passthrough", &FrameGraphDebuggerPassInfo::passthrough)
+            .def_ro("schedule_index", &FrameGraphDebuggerPassInfo::schedule_index)
+            .def_ro("schedule_reason", &FrameGraphDebuggerPassInfo::schedule_reason)
             .def_ro("reads", &FrameGraphDebuggerPassInfo::reads)
             .def_ro("writes", &FrameGraphDebuggerPassInfo::writes)
             .def_ro("internal_symbols", &FrameGraphDebuggerPassInfo::internal_symbols)

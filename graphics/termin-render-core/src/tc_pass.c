@@ -130,8 +130,10 @@ void tc_pass_set_name(tc_pass* p, const char* name) {
 }
 
 void tc_pass_set_enabled(tc_pass* p, bool enabled) {
-    if (p)
+    if (p && p->enabled != enabled) {
         p->enabled = enabled;
+        tc_pipeline_mark_dirty(p->owner_pipeline);
+    }
 }
 
 void tc_pass_set_passthrough(tc_pass* p, bool passthrough) {

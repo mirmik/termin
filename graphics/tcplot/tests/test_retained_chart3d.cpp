@@ -1249,6 +1249,7 @@ namespace {
     public:
         PlotSnapshotProbe() {
             pass_name_set(kPlotSnapshotProbeType);
+            tc_pass_ptr()->side_effect = true;
             link_to_type_registry(kPlotSnapshotProbeType);
         }
 

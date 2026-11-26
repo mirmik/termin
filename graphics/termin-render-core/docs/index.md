@@ -29,6 +29,21 @@ Framegraph resources are described by `FrameGraphResourceTypeDescriptor`.
 Unknown resource kinds and invalid contracts are logged validation errors;
 they do not silently become framebuffer resources.
 
+## Framegraph execution
+
+Each execution follows dependencies from color exports, writes to caller-owned
+attachments (`OUTPUT`, `DISPLAY`, `RT_COLOR`, `RT_DEPTH`), and passes that set
+`tc_pass::side_effect`. Hosts can include other outputs in
+`RenderExecution::required_resources`. The resulting schedule determines which
+passes run and which graph resources receive allocations or clears.
+
+In-place aliases share storage and keep logical versions. Reads select the
+producer of their version. A reader and an in-place write are ordered when
+both are scheduled. A debugger capture adds the selected resource version or
+internal-symbol pass as a root for the captured execution. Framegraph Debugger
+lists all passes with their schedule position and the reason for inclusion or
+omission.
+
 ## Related contracts
 
 - [Pipeline template identity](architecture/pipeline-template.md)

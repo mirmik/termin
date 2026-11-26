@@ -438,6 +438,10 @@ namespace termin {
                 [](CxxFramePass& p) { return p._c.passthrough; },
                 [](CxxFramePass& p, bool v) { p._c.passthrough = v; })
             .def_prop_rw(
+                "side_effect",
+                [](CxxFramePass& p) { return p._c.side_effect; },
+                [](CxxFramePass& p, bool v) { p._c.side_effect = v; })
+            .def_prop_rw(
                 "viewport_name",
                 [](CxxFramePass& p) { return p.get_viewport_name(); },
                 [](CxxFramePass& p, const std::string& n) { p.set_viewport_name(n); })

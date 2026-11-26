@@ -4,13 +4,16 @@ GUARD_TEST_MAIN();
 
 #include <termin/render/builtin_passes.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render/frame_graph_capture.hpp>
 #include <termin/render/frame_graph_resource_registry.hpp>
+#include <termin/render/frame_graph_schedule.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/render_engine.hpp>
 #include <termin/render/render_item_source.hpp>
 #include <tgfx2/graphics_host.hpp>
 #include "render_execution_recording_device.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <set>
@@ -26,6 +29,32 @@ extern "C" {
 }
 
 namespace {
+
+    class ScheduleProbe final : public termin::CxxFramePass {
+    public:
+        ScheduleProbe(const char* name, std::vector<std::string>& executed,
+                      const char* read = nullptr, const char* write = nullptr, bool inplace = false)
+            : executed_(executed), read_(read), write_(write), inplace_(inplace) {
+            pass_name_set(name);
+        }
+
+        std::set<const char*> compute_reads() const override { return read_ ? std::set{read_} : std::set<const char*>{}; }
+        std::set<const char*> compute_writes() const override { return write_ ? std::set{write_} : std::set<const char*>{}; }
+
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+            if (inplace_)
+                return {{read_, write_}};
+            return {};
+        }
+
+        void execute(termin::ExecuteContext&) override { executed_.push_back(pass_name_get()); }
+
+    private:
+        std::vector<std::string>& executed_;
+        const char* read_;
+        const char* write_;
+        bool inplace_;
+    };
 
     constexpr const char* kProbeType = "GenericRenderExecutionProbe";
     bool g_executed = false;
@@ -44,6 +73,7 @@ namespace {
     public:
         GenericExecutionProbe() {
             pass_name_set("GenericExecutionProbe");
+            tc_pass_ptr()->side_effect = true;
             link_to_type_registry(kProbeType);
         }
 
@@ -374,6 +404,7 @@ namespace {
     public:
         ExplicitTextureReadProbe() {
             pass_name_set("ExplicitTextureReadProbe");
+            tc_pass_ptr()->side_effect = true;
         }
 
         std::set<const char*> compute_reads() const override {
@@ -853,6 +884,7 @@ TEST_CASE("external composed attachment clears follow each consuming viewport") 
         explicit ExternalReadProbe(const std::string& target) {
             pass_name_set(target);
             viewport_name_set(target);
+            tc_pass_ptr()->side_effect = true;
         }
         std::set<const char*> compute_reads() const override {
             return {"external_composed"};
@@ -1103,6 +1135,7 @@ TEST_CASE("resource extent rejects an unknown named target explicitly") {
     target.name = "DefaultTarget";
     target.render_rect = {0, 0, 1920, 1080};
     termin::RenderExecution execution;
+    execution.required_resources = {"orphan_color"};
     execution.pipeline = &pipeline;
     execution.default_render_target = target.name;
     execution.targets.emplace(target.name,
@@ -1475,6 +1508,7 @@ TEST_CASE("generic execution allocates and binds registered non-texture resource
     target.name = "GenericResourceTarget";
     target.render_rect = {0, 0, 1, 1};
     termin::RenderExecution execution;
+    execution.required_resources = {"test_resource_alias"};
     execution.pipeline = &pipeline;
     execution.default_render_target = target.name;
     execution.targets.emplace(target.name,
@@ -1515,6 +1549,7 @@ TEST_CASE("adjacent compatible raster passes record inside one physical scope") 
     target.name = "RasterFusionTarget";
     target.render_rect = {0, 0, 16, 16};
     termin::RenderExecution execution;
+    execution.required_resources = {"raster_target_2"};
     execution.pipeline = &pipeline;
     execution.default_render_target = target.name;
     execution.targets.emplace(target.name,
@@ -1551,6 +1586,7 @@ TEST_CASE("compatible raster clear metadata becomes the physical scope load oper
     target.name = "RasterDeferredClearTarget";
     target.render_rect = {0, 0, 16, 16};
     termin::RenderExecution execution;
+    execution.required_resources = {"clear_target"};
     execution.pipeline = &pipeline;
     execution.default_render_target = target.name;
     execution.targets.emplace(target.name,
@@ -1598,6 +1634,7 @@ TEST_CASE("resource read before raster write keeps the standalone clear") {
     target.name = "RasterReadBeforeClearTarget";
     target.render_rect = {0, 0, 16, 16};
     termin::RenderExecution execution;
+    execution.required_resources = {"clear_target_after_raster"};
     execution.pipeline = &pipeline;
     execution.default_render_target = target.name;
     execution.targets.emplace(target.name,
@@ -1640,6 +1677,7 @@ TEST_CASE("fused logical raster boundary records the requested attachment barrie
     target.name = "RasterFusionBarrierTarget";
     target.render_rect = {0, 0, 16, 16};
     termin::RenderExecution execution;
+    execution.required_resources = {"raster_target_2"};
     execution.pipeline = &pipeline;
     execution.default_render_target = target.name;
     execution.targets.emplace(target.name,
@@ -1674,6 +1712,7 @@ TEST_CASE("compatible resolve is absorbed into the fused raster scope") {
     target.name = "RasterResolveFusionTarget";
     target.render_rect = {0, 0, 16, 16};
     termin::RenderExecution execution;
+    execution.required_resources = {"resolved_target"};
     execution.pipeline = &pipeline;
     execution.default_render_target = target.name;
     execution.targets.emplace(target.name,
@@ -1763,6 +1802,7 @@ TEST_CASE("generic execution rejects an unknown serialized resource kind") {
     target.name = "UnknownResourceTarget";
     target.render_rect = {0, 0, 1, 1};
     termin::RenderExecution execution;
+    execution.required_resources = {"unknown_resource"};
     execution.pipeline = &pipeline;
     execution.targets.emplace(target.name,
                               termin::RenderExecutionTarget{
@@ -1779,5 +1819,105 @@ TEST_CASE("generic execution rejects an unknown serialized resource kind") {
     tc_log_set_callback(nullptr);
     CHECK(g_error_log.find("unknown_resource") != std::string::npos);
     CHECK(g_error_log.find("unknown_resource_type") != std::string::npos);
+    pipeline.destroy();
+}
+
+TEST_CASE("reachable outputs and debug pins select execution and allocation") {
+    using namespace termin;
+    std::vector<std::string> executed;
+    RenderPipeline pipeline("schedule-test");
+    const auto add = [&](const char* name, const char* read, const char* write, bool inplace = false) {
+        tc_pass* pass = (new ScheduleProbe(name, executed, read, write, inplace))->tc_pass_ptr();
+        pipeline.add_pass(pass);
+        return pass;
+    };
+    add("base", nullptr, "base");
+    add("display", "base", "final", true);
+    add("unused-reader", "base", "debug-only");
+    add("unrelated", nullptr, "unrelated");
+    add("auxiliary", nullptr, "auxiliary");
+    add("observable", "auxiliary", nullptr)->side_effect = true;
+    add("caller-output", nullptr, "RT_DEPTH");
+    pipeline.set_color_export("final", ColorContent::DisplayLinear);
+
+    auto device = std::make_unique<ExecutionRecordingDevice>();
+    tgfx::TextureDesc desc;
+    desc.width = 8;
+    desc.height = 8;
+    desc.format = tgfx::PixelFormat::RGBA16F;
+    desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopyDst;
+    RenderTargetContext target;
+    target.name = "display";
+    target.render_rect = {0, 0, 8, 8};
+    target.output_color.texture = device->create_texture(desc);
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
+    RenderItemSnapshot snapshot;
+    publish_empty_snapshot(snapshot);
+    RenderExecution execution;
+    execution.pipeline = &pipeline;
+    execution.targets.emplace(target.name, RenderExecutionTarget{&target, &snapshot});
+    RenderEngine engine;
+    engine.set_graphics_host(*host);
+
+    auto* graph = tc_pipeline_get_frame_graph(pipeline.handle());
+    const size_t base = tc_frame_graph_writer_index(graph, "base");
+    const size_t display = tc_frame_graph_writer_index(graph, "final");
+    const size_t unused = tc_frame_graph_writer_index(graph, "debug-only");
+    const size_t caller_output = tc_frame_graph_writer_index(graph, "RT_DEPTH");
+    const auto ordinary = select_frame_graph_schedule(pipeline, graph);
+    CHECK(ordinary.reasons[base] == FrameGraphPassReason::Dependency);
+    CHECK(ordinary.reasons[display] == FrameGraphPassReason::ColorExport);
+    CHECK(ordinary.reasons[unused] == FrameGraphPassReason::Unreachable);
+    CHECK(ordinary.reasons[caller_output] == FrameGraphPassReason::ExternalOutput);
+    CHECK(ordinary.count == 5);
+
+    REQUIRE(engine.execute_pipeline(execution));
+    CHECK(executed == (std::vector<std::string>{"base", "auxiliary", "caller-output", "observable", "display"}));
+    CHECK_FALSE(pipeline.get_color_tex2("debug-only"));
+    CHECK_FALSE(pipeline.get_color_tex2("unrelated"));
+
+    FrameGraphCapture capture;
+    FrameGraphCapture alias_capture;
+    FrameGraphCaptureRequest debug{.resource = "debug-only", .capture = &capture};
+    FrameGraphCaptureRequest original{.resource = "base", .capture = &alias_capture};
+    execution.debug_capture_requests = {&debug, &original};
+    const auto pinned = select_frame_graph_schedule(pipeline, graph, execution.debug_capture_requests);
+    CHECK(pinned.reasons[unused] == FrameGraphPassReason::Capture);
+    CHECK(pinned.capture_writers[0] == unused);
+    CHECK(pinned.capture_writers[1] == base);
+    executed.clear();
+    REQUIRE(engine.execute_pipeline(execution));
+    CHECK(debug.status == FrameGraphCaptureRequestStatus::Captured);
+    CHECK(original.status == FrameGraphCaptureRequestStatus::Captured);
+    CHECK(pipeline.get_color_tex2("debug-only"));
+    CHECK_FALSE(pipeline.get_color_tex2("unrelated"));
+    const auto reader = std::find(executed.begin(), executed.end(), "unused-reader");
+    REQUIRE(reader != executed.end());
+    CHECK(reader < std::find(executed.begin(), executed.end(), "display"));
+
+    debug.paused = true;
+    executed.clear();
+    REQUIRE(engine.execute_pipeline(execution));
+    CHECK(std::find(executed.begin(), executed.end(), "unused-reader") == executed.end());
+    pipeline.destroy();
+}
+
+TEST_CASE("a requested attachment view retains and orders its backing producer") {
+    using namespace termin;
+    std::vector<std::string> executed;
+    RenderPipeline pipeline("attachment-schedule-test");
+    auto* consumer = (new ScheduleProbe("consumer", executed, "source.color", "result"))->tc_pass_ptr();
+    auto* producer = (new ScheduleProbe("producer", executed, nullptr, "source"))->tc_pass_ptr();
+    pipeline.add_pass(consumer);
+    pipeline.add_pass(producer);
+    pipeline.cache().resource_views.emplace("source.color", ResourceView{"source", AttachmentKind::Color});
+    const std::vector<std::string> required{"result"};
+    auto* graph = tc_pipeline_get_frame_graph(pipeline.handle());
+    const auto schedule = select_frame_graph_schedule(pipeline, graph, {}, required);
+    REQUIRE(schedule.count == 2);
+    CHECK(tc_frame_graph_schedule_at(graph, schedule.order[0]) == producer);
+    CHECK(tc_frame_graph_schedule_at(graph, schedule.order[1]) == consumer);
+    CHECK(schedule.resources.contains("source"));
+    CHECK(schedule.resources.contains("source.color"));
     pipeline.destroy();
 }

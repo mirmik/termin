@@ -40,6 +40,8 @@ namespace termin {
         std::string type;
         bool enabled = true;
         bool passthrough = false;
+        std::optional<size_t> schedule_index;
+        std::string schedule_reason;
         std::vector<std::string> reads;
         std::vector<std::string> writes;
         std::vector<std::string> internal_symbols;

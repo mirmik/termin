@@ -388,6 +388,8 @@ def _native_pass_details(
             "is_placeholder": frame_pass.type == "UnknownPass",
             "reads": list(frame_pass.reads),
             "writes": list(frame_pass.writes),
+            "schedule_index": frame_pass.schedule_index,
+            "schedule_reason": frame_pass.schedule_reason,
             "internal_symbols": symbols,
             "has_internal_symbols": bool(symbols),
         }

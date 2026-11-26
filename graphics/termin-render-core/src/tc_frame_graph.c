@@ -10,8 +10,6 @@
 #define tc_strdup strdup
 #endif
 
-#define MAX_PASSES 128
-
 typedef struct {
     char* name;
     char* canonical;
@@ -21,6 +19,7 @@ typedef struct {
 typedef struct {
     tc_pass* pass;
     int index;
+    size_t schedule_index;
     int in_degree;
     bool is_inplace;
     const char** reads;
@@ -38,9 +37,9 @@ struct tc_frame_graph {
     tc_fg_resource* resources;
     size_t resource_count;
     size_t resource_capacity;
-    tc_fg_node nodes[MAX_PASSES];
+    tc_fg_node nodes[TC_FRAME_GRAPH_MAX_PASSES];
     size_t node_count;
-    tc_pass** schedule;
+    int schedule[TC_FRAME_GRAPH_MAX_PASSES];
     size_t schedule_count;
     tc_frame_graph_error error;
     char error_message[512];
@@ -159,7 +158,7 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
             continue;
         }
 
-        if (pass_index >= MAX_PASSES) {
+        if (pass_index >= TC_FRAME_GRAPH_MAX_PASSES) {
             snprintf(fg->error_message, sizeof(fg->error_message), "Too many passes in pipeline");
             fg->error = TC_FG_ERROR_LIMIT;
             return false;
@@ -189,6 +188,7 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
             if (!res) {
                 return false;
             }
+            node->writes[i] = res->name;
 
             if (res->writer_index >= 0) {
                 snprintf(fg->error_message,
@@ -206,15 +206,23 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
             return false;
         }
         for (size_t i = 0; i < node->read_count; i++) {
-            if (!get_or_create_resource(fg, node->reads[i])) {
+            tc_fg_resource* res = get_or_create_resource(fg, node->reads[i]);
+            if (!res) {
                 return false;
             }
+            node->reads[i] = res->name;
         }
 
         if (!collect_pass_dependencies(fg, pass, tc_pass_get_inplace_aliases, 2, &node->aliases, &node->alias_count)) {
             return false;
         }
         node->is_inplace = node->alias_count > 0;
+        for (size_t i = 0; i < node->alias_count * 2; ++i) {
+            tc_fg_resource* res = get_or_create_resource(fg, node->aliases[i]);
+            if (!res)
+                return false;
+            node->aliases[i] = res->name;
+        }
 
         pass_index++;
     }
@@ -229,15 +237,8 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
                 const char* read_name = node->aliases[j * 2];
                 const char* write_name = node->aliases[j * 2 + 1];
 
-                tc_fg_resource* read_res = get_or_create_resource(fg, read_name);
-                if (!read_res) {
-                    return false;
-                }
-                tc_fg_resource* write_res = get_or_create_resource(fg, write_name);
-                if (!write_res) {
-                    return false;
-                }
-                read_res = find_resource(fg, read_name);
+                tc_fg_resource* read_res = find_resource(fg, read_name);
+                tc_fg_resource* write_res = find_resource(fg, write_name);
 
                 if (read_res && write_res) {
                     if (strcmp(write_res->canonical, read_res->canonical) != 0) {
@@ -315,20 +316,11 @@ static bool build_dependency_graph(tc_frame_graph* fg, tc_pipeline_handle pipeli
 }
 
 static bool topological_sort(tc_frame_graph* fg) {
-    fg->schedule = fg->node_count ? (tc_pass**)malloc(fg->node_count * sizeof(tc_pass*)) : NULL;
     fg->schedule_count = 0;
 
-    int* in_degree = fg->node_count ? (int*)malloc(fg->node_count * sizeof(int)) : NULL;
-    int* queue_normal = fg->node_count ? (int*)malloc(fg->node_count * sizeof(int)) : NULL;
-    int* queue_inplace = fg->node_count ? (int*)malloc(fg->node_count * sizeof(int)) : NULL;
-    if (fg->node_count && (!fg->schedule || !in_degree || !queue_normal || !queue_inplace)) {
-        free(in_degree);
-        free(queue_normal);
-        free(queue_inplace);
-        snprintf(fg->error_message, sizeof(fg->error_message), "Failed to allocate frame graph schedule storage");
-        fg->error = TC_FG_ERROR_ALLOCATION;
-        return false;
-    }
+    int in_degree[TC_FRAME_GRAPH_MAX_PASSES];
+    int queue_normal[TC_FRAME_GRAPH_MAX_PASSES];
+    int queue_inplace[TC_FRAME_GRAPH_MAX_PASSES];
     for (size_t i = 0; i < fg->node_count; i++) {
         in_degree[i] = fg->nodes[i].in_degree;
     }
@@ -362,9 +354,9 @@ static bool topological_sort(tc_frame_graph* fg) {
             idx = queue_inplace[qi_head++];
         }
 
-        fg->schedule[fg->schedule_count++] = fg->nodes[idx].pass;
-
         tc_fg_node* node = &fg->nodes[idx];
+        node->schedule_index = fg->schedule_count;
+        fg->schedule[fg->schedule_count++] = idx;
         for (size_t i = 0; i < node->dependent_count; i++) {
             int dep_idx = node->dependents[i];
             in_degree[dep_idx]--;
@@ -388,10 +380,6 @@ static bool topological_sort(tc_frame_graph* fg) {
     }
 
 cleanup:
-    free(in_degree);
-    free(queue_normal);
-    free(queue_inplace);
-
     if (queue_overflow) {
         snprintf(fg->error_message, sizeof(fg->error_message), "Frame graph topological queue overflow");
         fg->error = TC_FG_ERROR_LIMIT;
@@ -442,7 +430,6 @@ void tc_frame_graph_destroy(tc_frame_graph* fg) {
         free(fg->nodes[i].aliases);
         free(fg->nodes[i].dependents);
     }
-    free(fg->schedule);
     free(fg);
 }
 
@@ -460,7 +447,8 @@ size_t tc_frame_graph_get_schedule(tc_frame_graph* fg, tc_pass** out_passes, siz
     if (!fg || !out_passes || fg->error != TC_FG_OK)
         return 0;
     size_t count = fg->schedule_count < max_count ? fg->schedule_count : max_count;
-    memcpy(out_passes, fg->schedule, count * sizeof(tc_pass*));
+    for (size_t i = 0; i < count; ++i)
+        out_passes[i] = fg->nodes[fg->schedule[i]].pass;
     return count;
 }
 
@@ -471,7 +459,35 @@ size_t tc_frame_graph_schedule_count(tc_frame_graph* fg) {
 tc_pass* tc_frame_graph_schedule_at(tc_frame_graph* fg, size_t index) {
     if (!fg || fg->error != TC_FG_OK || index >= fg->schedule_count)
         return NULL;
-    return fg->schedule[index];
+    return fg->nodes[fg->schedule[index]].pass;
+}
+
+tc_frame_graph_pass_resources tc_frame_graph_resources_at(tc_frame_graph* fg, size_t index) {
+    if (!fg || fg->error != TC_FG_OK || index >= fg->schedule_count)
+        return (tc_frame_graph_pass_resources){0};
+    const tc_fg_node* node = &fg->nodes[fg->schedule[index]];
+    return (tc_frame_graph_pass_resources){
+        node->reads, node->read_count, node->writes, node->write_count, node->aliases, node->alias_count};
+}
+
+size_t tc_frame_graph_writer_index(tc_frame_graph* fg, const char* resource) {
+    if (!fg || fg->error != TC_FG_OK || !resource || !resource[0])
+        return SIZE_MAX;
+    tc_fg_resource* res = find_resource(fg, resource);
+    return res && res->writer_index >= 0 ? fg->nodes[res->writer_index].schedule_index : SIZE_MAX;
+}
+
+bool tc_frame_graph_has_resource(tc_frame_graph* fg, const char* resource) {
+    return fg && resource && find_resource(fg, resource) != NULL;
+}
+
+size_t tc_frame_graph_get_dependents(tc_frame_graph* fg, size_t index, size_t* out, size_t capacity) {
+    if (!fg || fg->error != TC_FG_OK || index >= fg->schedule_count)
+        return 0;
+    const tc_fg_node* node = &fg->nodes[fg->schedule[index]];
+    for (size_t i = 0; out && i < node->dependent_count && i < capacity; ++i)
+        out[i] = fg->nodes[node->dependents[i]].schedule_index;
+    return node->dependent_count;
 }
 
 const char* tc_frame_graph_canonical_resource(tc_frame_graph* fg, const char* name) {
@@ -536,7 +552,7 @@ void tc_frame_graph_dump(tc_frame_graph* fg) {
 
     tc_log(TC_LOG_INFO, "[tc_frame_graph] Schedule (%zu passes):", fg->schedule_count);
     for (size_t i = 0; i < fg->schedule_count; i++) {
-        tc_pass* p = fg->schedule[i];
+        tc_pass* p = tc_frame_graph_schedule_at(fg, i);
         tc_log(TC_LOG_INFO,
                "  %zu: %s (%s)%s",
                i,

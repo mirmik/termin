@@ -88,6 +88,8 @@ namespace termin {
         std::unordered_map<std::string, RenderExecutionTarget> targets;
         std::string default_render_target;
         std::vector<FrameGraphCaptureRequest*> debug_capture_requests;
+        // Non-color graph results the caller will observe after execution.
+        std::vector<std::string> required_resources;
     };
 
     class RENDER_CORE_API RenderEngine {

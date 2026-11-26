@@ -48,8 +48,7 @@ namespace termin {
             return _c ? _c->enabled : true;
         }
         void set_enabled(bool v) {
-            if (_c)
-                _c->enabled = v;
+            tc_pass_set_enabled(_c, v);
         }
 
         bool passthrough() const {
@@ -58,6 +57,14 @@ namespace termin {
         void set_passthrough(bool v) {
             if (_c)
                 _c->passthrough = v;
+        }
+
+        bool side_effect() const {
+            return _c && _c->side_effect;
+        }
+        void set_side_effect(bool v) {
+            if (_c)
+                _c->side_effect = v;
         }
 
         std::string type_name() const {
@@ -145,6 +152,13 @@ namespace termin {
         }
         void set_passthrough(bool v) {
             ref().set_passthrough(v);
+        }
+
+        bool side_effect() const {
+            return ref().side_effect();
+        }
+        void set_side_effect(bool v) {
+            ref().set_side_effect(v);
         }
 
         std::string type_name() const {
