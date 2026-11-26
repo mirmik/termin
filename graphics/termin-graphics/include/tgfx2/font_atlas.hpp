@@ -1,32 +1,6 @@
-// font_atlas.hpp - Dynamic TTF font atlas for tgfx2.
-//
-// Single grayscale (R8) atlas, default 2048x2048. Glyphs are baked on
-// demand per requested display size via stb_truetype and packed into
-// shelves. The atlas is backed by one tgfx::TextureHandle; new glyphs
-// set a dirty flag and the next ensure_texture() call re-uploads the
-// full image.
-//
-// Sizing model (unlike the previous single-rasterise-size design):
-//   - Every lookup takes `display_px` — the pixel height the caller
-//     intends to render at. The atlas quantises this to an integer px
-//     and either hits a cached bake or produces a fresh one.
-//   - GlyphInfo metrics (offset, size and advance) are in
-//     DISPLAY pixels at the requested size, ready for the renderer to
-//     use directly (no `* scale` multiplication needed).
-//   - Each size bakes its own cell layout: cell height = ascent +
-//     descent at that size, glyph bitmap placed at (0, ascent + y0).
-//
-// Why this shape survives a future switch to SDF / MSDF:
-//   - Renderer always asks for metrics at `display_px` — the atlas is
-//     responsible for producing them, however it wants to internally.
-//   - Bitmap backend: per-size bake → native metrics per entry.
-//   - SDF backend: single bake at a reference size → metrics computed
-//     on the fly as `font_units * display_px / reference_size`.
-//   - Same GlyphInfo shape, same call pattern; renderer unchanged.
-//
-// Measurement uses typographic advance (stbtt_GetGlyphHMetrics), not
-// ink-bbox width — kept from the previous design. UI layouts /
-// tcplot that expect space glyphs to occupy real width keep working.
+// FontAtlas packs glyph masks into R8 textures. Screen-space bitmap runs
+// are shaped in em pixels and rasterised at the requested pixel phase.
+// The codepoint API used by world-space and SDF text takes line-height pixels.
 #pragma once
 
 #include <cstdint>
@@ -39,6 +13,7 @@
 
 #include <termin/geom/size2.hpp>
 
+#include "tgfx2/font_size.hpp"
 #include "tgfx2/handles.hpp"
 #include "tgfx2/tgfx2_api.h"
 
@@ -51,6 +26,15 @@ namespace tgfx {
     public:
         // Pixel (width, height) returned by measure_text.
         using Size2f = termin::Size2f;
+
+        struct LineMetrics {
+            float ascent;
+            float descent;
+            float height() const { return ascent + descent; }
+        };
+
+        // Baseline and full line box in physical pixels, including fractional DPI scales.
+        LineMetrics screen_line_metrics(float line_px) const;
 
         // Glyph info, populated lazily by ensure_glyph(cp, display_px).
         // All metrics are in DISPLAY pixels at the baked size — renderer
@@ -71,6 +55,27 @@ namespace tgfx {
             // including bitmap filter phase or SDF padding.
             float offset_x_px = 0.0f;
         };
+
+        // A horizontal, single-direction run. Glyph origins are in screen
+        // pixels relative to the left edge and the baseline, positive Y down.
+        struct BitmapRunGlyph {
+            uint32_t glyph_id;
+            float x_px;
+            float y_px;
+        };
+        struct BitmapTextRun {
+            std::vector<BitmapRunGlyph> glyphs;
+            float width_px = 0.0f;
+            float height_px = 0.0f;
+            float ascent_px = 0.0f;
+        };
+        struct BitmapGlyph {
+            float u0 = 0.0f, v0 = 0.0f, u1 = 0.0f, v1 = 0.0f;
+            float width_px = 0.0f, height_px = 0.0f;
+            // Signed offsets of the ink rectangle from the integer origin.
+            float offset_x_px = 0.0f, offset_y_px = 0.0f;
+        };
+        static constexpr unsigned kBitmapPhaseCount = 4;
 
         // Minimum quantised size. Requests below this are clamped — stb
         // can't rasterise meaningfully smaller than this anyway, and it
@@ -112,7 +117,7 @@ namespace tgfx {
         // TTF / stb_truetype state (opaque here to keep stb_truetype.h
         // out of the public include surface).
         struct Impl;
-        Impl* impl_ = nullptr;
+        std::unique_ptr<Impl> impl_;
 
         // Size used for preload warm-up and as the "default" for Python
         // property accessors that don't take a size argument.
@@ -168,7 +173,7 @@ namespace tgfx {
         // typical-sized UI text doesn't stall). Other sizes populate
         // lazily on demand. 2048x2048 R8 atlas by default.
         //
-        // Throws std::runtime_error on file I/O or stbtt_InitFont failure.
+        // Throws std::runtime_error if the font cannot be opened or parsed.
         FontAtlas(const std::string& ttf_path,
                   int default_preload_size_px = 14,
                   int atlas_width = 2048,
@@ -177,6 +182,18 @@ namespace tgfx {
 
         FontAtlas(const FontAtlas&) = delete;
         FontAtlas& operator=(const FontAtlas&) = delete;
+
+        // Shape a UTF-8 run at a typographic em size. Measurement and draw
+        // share the same design advances, kerning, substitutions and offsets.
+        BitmapTextRun layout_bitmap_text(std::string_view text_utf8, float em_px) const;
+        float em_from_line_height(float line_height_px) const;
+        float line_height_from_em(float em_px) const;
+        Size2f
+        measure_screen_text(std::string_view text_utf8, float size, FontSizeUnit unit = FontSizeUnit::LineHeight);
+
+        // Bake or reuse a hinted glyph at phase / kBitmapPhaseCount pixels.
+        // Complete the run's lookups before calling ensure_texture().
+        std::optional<BitmapGlyph> bitmap_glyph(uint32_t glyph_id, float em_px, unsigned phase);
 
         // Rasterise one codepoint at the requested display size. Returns
         // true if the glyph was newly added (caller's signal that a GPU

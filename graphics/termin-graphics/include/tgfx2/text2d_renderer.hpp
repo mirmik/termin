@@ -7,7 +7,7 @@
 // Usage:
 //   Text2DRenderer t2d(font);            // optional font
 //   t2d.begin(ctx, viewport_w, viewport_h); // shader is compiled lazily
-//   t2d.draw("hello", 20, 40, 1,1,1,1, 14, Anchor::Left);
+//   t2d.draw("hello", {.x = 20, .y = 40, .size = 14}, FontSizeUnit::Em);
 //   t2d.end();
 //
 // Design mirrors the Python reference implementation:
@@ -15,7 +15,7 @@
 //     survive state changes from interleaved callers (e.g. UIRenderer
 //     drawing a rect between two draw_text calls),
 //   - missing glyphs are rasterised on demand and re-uploaded,
-//   - measurement / scaling use the FontAtlas's ink-width semantics.
+//   - bitmap text uses the shaped glyph positions from FontAtlas.
 #pragma once
 
 #include <cstdint>
@@ -27,6 +27,7 @@
 #include <termin/geom/vec2.hpp>
 
 #include "tgfx2/handles.hpp"
+#include "tgfx2/font_size.hpp"
 #include "tgfx2/tgfx2_api.h"
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
@@ -50,7 +51,7 @@ namespace tgfx {
         // edge pixels from looking heavier than the rasterised outline. SDF
         // text is intentionally unaffected: it is used for larger display
         // sizes where the unadjusted result already has the intended weight.
-        static constexpr float kDefaultBitmapCoverageGamma = 1.5f;
+        static constexpr float kDefaultBitmapCoverageGamma = 1.25f;
 
         enum class Anchor : uint8_t {
             Left,
@@ -85,7 +86,8 @@ namespace tgfx {
         RenderContext2* ctx_ = nullptr;
         FontAtlas* font_ = nullptr;
         float proj_[16]{};
-        float bitmap_coverage_gamma_ = kDefaultBitmapCoverageGamma;
+        // Zero selects the calibrated foreground-dependent UI policy.
+        float bitmap_coverage_gamma_ = 0.0f;
 
     public:
         explicit Text2DRenderer(FontAtlas* font = nullptr);
@@ -100,13 +102,14 @@ namespace tgfx {
         void begin(RenderContext2* ctx, int viewport_w, int viewport_h, FontAtlas* font = nullptr);
 
         // Draw a UTF-8 string anchored at pixel (x, y). Color components
-        // in [0, 1]. `size` is the display pixel height (glyphs are
-        // scaled from the atlas rasterise size). Anchor selects whether
+        // in [0, 1]. Size is in physical pixels, measured by line height
+        // or by typographic em according to size_unit. Anchor selects whether
         // (x, y) is the left, centre or right of the text box (top-aligned
         // on Y for Left/Right, center for Center).
         // `font` overrides the retained font for this draw only. This keeps
         // callers that mix atlases explicit without changing the next draw.
         void draw(std::string_view text_utf8, const DrawOptions& options, FontAtlas* font = nullptr);
+        void draw(std::string_view text_utf8, const DrawOptions& options, FontSizeUnit size_unit, FontAtlas* font = nullptr);
 
         // Draw caller-prepared glyph triangles. This is used by DrawList2D after
         // affine transformation and CPU geometric clipping. The caller must have
@@ -135,7 +138,7 @@ namespace tgfx {
         // 24 px. Zero and non-finite values are rejected.
         void set_bitmap_coverage_gamma(float gamma);
         float bitmap_coverage_gamma() const {
-            return bitmap_coverage_gamma_;
+            return bitmap_coverage_gamma_ > 0.0f ? bitmap_coverage_gamma_ : kDefaultBitmapCoverageGamma;
         }
 
         // Current font atlas (may be null).

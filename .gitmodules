@@ -47,3 +47,9 @@
 [submodule "termin-thirdparty/spirv-cross"]
 	path = termin-thirdparty/spirv-cross
 	url = https://github.com/KhronosGroup/SPIRV-Cross.git
+[submodule "termin-thirdparty/freetype"]
+	path = termin-thirdparty/freetype
+	url = https://github.com/freetype/freetype.git
+[submodule "termin-thirdparty/harfbuzz"]
+	path = termin-thirdparty/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz.git

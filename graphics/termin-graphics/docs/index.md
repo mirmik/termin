@@ -29,6 +29,32 @@ Set `TERMIN_GRAPHICS_EXAMPLE_SECONDS` to a positive value for a bounded window
 smoke. These tutorials require an SDL-enabled `graphics` or `full` SDK; they do
 not use PySDL2 or the engine-level `termin-display` package.
 
+## Экранный текст
+
+`Text2DRenderer` и `Canvas2DRenderer` принимают типографский размер через
+`tgfx::FontSizeUnit::Em`. Для совпадения с надписью в оконном интерфейсе
+умножьте размер в DIP на число пикселей буфера на DIP. Например, для текста
+12 DIP при масштабе 150% передайте 18 em-пикселей. У вызовов без явных единиц
+размер по-прежнему задаёт высоту строки. Измерять ширину для выравнивания
+можно до первого кадра тем же шрифтом и в тех же единицах.
+
+```cpp
+const auto unit = tgfx::FontSizeUnit::Em;
+const float size = 12.0f * framebuffer_pixels_per_dip;
+const auto bounds = font.measure_screen_text(label, size, unit);
+renderer.draw(label, {.x = left, .y = top, .size = size}, unit);
+```
+
+В командах `DrawList2D` размер хранится в единицах высоты строки. Если
+приложение задаёт кегль в em, передайте `font.line_height_from_em(em)`
+в `DrawList2DBuilder::text`, используя шрифт записываемой команды.
+
+В режиме bitmap HarfBuzz размещает глифы, а FreeType растеризует их с
+хинтингом. При выводе один к одному атлас выбирает маску с ближайшим
+горизонтальным сдвигом в четверть пикселя. Маски создаются по требованию.
+Для мелкого текста тон полупокрытых пикселей зависит от цвета надписи.
+Параметр `coverage_gamma` при отрисовке задаёт показатель степени явно.
+
 ## Границы
 
 В этот модуль должны попадать GPU abstractions и utilities, которые не знают о frame graph, editor UI или конкретной application domain.

@@ -451,11 +451,15 @@ def build_resource_wheel(
         f"{PRODUCT_IMPORT}/bin/termin_shaderc",
         _shader_compiler_path(sdk_prefix),
     )
-    _add_payload(
-        payloads,
-        f"{dist_info}/licenses/SDL2/LICENSE.txt",
-        sdk_prefix / "share" / "licenses" / "SDL2" / "LICENSE.txt",
+    license_paths = (
+        "SDL2/LICENSE.txt",
+        "FreeType/FTL.TXT",
+        "FreeType-NOTICE/FreeType-NOTICE.txt",
+        "HarfBuzz/COPYING",
+        "HarfBuzz-MS-USE/COPYING",
     )
+    for relative in license_paths:
+        _add_payload(payloads, f"{dist_info}/licenses/{relative}", sdk_prefix / "share/licenses" / relative)
     sdk_native_library_names = sorted(
         {
             dependency["name"]
@@ -481,6 +485,7 @@ def build_resource_wheel(
         f"Requires-Dist: {name}=={required_version}\n"
         for name, required_version in sorted(requirements)
     )
+    license_lines = "".join(f"License-File: licenses/{relative}\n" for relative in license_paths)
     payloads[f"{dist_info}/METADATA"] = (
         (
             "Metadata-Version: 2.3\n"
@@ -488,7 +493,7 @@ def build_resource_wheel(
             f"Version: {version}\n"
             "Summary: Standalone runtime resources for the Termin Graphics profile\n"
             "Requires-Python: >=3.14\n"
-            "License-File: licenses/SDL2/LICENSE.txt\n"
+            f"{license_lines}"
             f"{requirement_lines}\n"
         ).encode("utf-8"),
         0o644,

@@ -89,6 +89,10 @@ def test_resource_wheel_owns_precompiled_assets_and_shader_compiler(
         ("share/termin/builtin_shaders/catalog.json", b"{}"),
         ("share/termin/shaders/vulkan/example.vert.spv", b"spirv"),
         ("share/licenses/SDL2/LICENSE.txt", b"SDL license"),
+        ("share/licenses/FreeType/FTL.TXT", b"FreeType license"),
+        ("share/licenses/FreeType-NOTICE/FreeType-NOTICE.txt", b"FreeType notices"),
+        ("share/licenses/HarfBuzz/COPYING", b"HarfBuzz license"),
+        ("share/licenses/HarfBuzz-MS-USE/COPYING", b"MS USE license"),
     ):
         path = sdk_prefix / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,6 +147,8 @@ def test_resource_wheel_owns_precompiled_assets_and_shader_compiler(
         assert "Requires-Dist: numpy==2.0" in metadata
         assert "Requires-Dist: PyYAML==6.0" in metadata
         assert "License-File: licenses/SDL2/LICENSE.txt" in metadata
+        assert any(name.endswith(".dist-info/licenses/FreeType/FTL.TXT") for name in names)
+        assert "License-File: licenses/HarfBuzz/COPYING" in metadata
         assert "License-File: licenses/Slang/LICENSE" not in metadata
 
 

@@ -66,8 +66,7 @@ namespace {
         float left, top, right, bottom;
     };
     Cell text_cell(tgfx::FontAtlas& font, const tgfx::DrawText2D& text) {
-        font.ensure_glyphs(text.text, text.size_px);
-        const auto measured = font.measure_text(text.text, text.size_px);
+        const auto measured = font.measure_screen_text(text.text, text.size_px);
         float left = text.origin.x, top = text.origin.y;
         // This is the Canvas text renderer's anchor contract: Center shifts by
         // half nominal size vertically, Left/Right start at the line-cell top.
@@ -76,7 +75,7 @@ namespace {
             top -= text.size_px * 0.5f;
         } else if (text.anchor == tgfx::TextAnchor2D::Right)
             left -= measured.width;
-        return {left, top, left + measured.width, top + font.line_height_px(text.size_px)};
+        return {left, top, left + measured.width, top + measured.height};
     }
     bool inside(Cell cell, const termin::Rect2f& bounds) {
         constexpr float epsilon = 0.1f;

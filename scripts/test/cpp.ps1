@@ -271,6 +271,8 @@ Write-Host "Jobs:        $BuildJobs"
 Write-Host ""
 
 $requiredSubmodules = @(
+    "termin-thirdparty/freetype",
+    "termin-thirdparty/harfbuzz",
     "termin-thirdparty/manifold",
     "termin-thirdparty/clipper2",
     "termin-thirdparty/guard",

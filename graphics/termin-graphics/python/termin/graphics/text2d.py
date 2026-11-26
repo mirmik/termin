@@ -7,6 +7,6 @@ working; new code may import directly from ``termin.graphics._graphics_native``.
 """
 from __future__ import annotations
 
-from termin.graphics._graphics_native import Text2DRenderer
+from termin.graphics._graphics_native import FontSizeUnit, Text2DRenderer
 
-__all__ = ["Text2DRenderer"]
+__all__ = ["FontSizeUnit", "Text2DRenderer"]

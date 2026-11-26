@@ -242,6 +242,9 @@ if [[ -n "$CMAKE_GENERATOR_NAME" && ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
     cmake_args+=(-G "$CMAKE_GENERATOR_NAME")
 fi
 
+PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools" python3 -m termin_build.sdk --repo-root "$SCRIPT_DIR" \
+    ensure-submodules termin-thirdparty/freetype termin-thirdparty/harfbuzz
+
 cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" "${cmake_args[@]}" \
     -DCMAKE_TOOLCHAIN_FILE="$ANDROID_TOOLCHAIN_FILE" \
     -DANDROID_ABI="$ANDROID_ABI_VALUE" \

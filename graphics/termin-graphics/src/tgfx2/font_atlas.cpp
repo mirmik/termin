@@ -1,20 +1,3 @@
-// font_atlas.cpp - stb_truetype-backed implementation of tgfx::FontAtlas.
-//
-// Size-aware layout: every glyph is baked per requested display size
-// and cached under key (codepoint, px_size). See header for the
-// architectural rationale (same GlyphInfo shape works for a future
-// SDF backend — caller always asks "glyph at display_px", atlas
-// produces display-px metrics however it wants internally).
-//
-// Per-size bake produces its own cell height (ascent + descent at
-// that size) so baseline alignment is consistent within one size.
-// Mixing sizes in one draw call is fine — each glyph's quad uses its
-// own `height_px` and advance, and the renderer positions them by the
-// caller-provided baseline.
-//
-// Horizontal oversampling (×2) + stb's box prefilter carried over
-// from the previous design; see kOversampleX comment in ensure_glyph.
-
 #include "tgfx2/font_atlas.hpp"
 
 #include <algorithm>
@@ -22,8 +5,14 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <hb-ot.h>
+#include <hb.h>
 
 extern "C" {
 #include <tc_profiler.h>
@@ -73,6 +62,9 @@ namespace tgfx {
                 throw std::runtime_error("FontAtlas: cannot open " + path);
             }
             auto size = f.tellg();
+            if (size <= 0 || size > std::numeric_limits<int>::max()) {
+                throw std::runtime_error("FontAtlas: unsupported font file size for " + path);
+            }
             f.seekg(0, std::ios::beg);
             std::vector<uint8_t> bytes(static_cast<size_t>(size));
             if (size > 0 && !f.read(reinterpret_cast<char*>(bytes.data()), size)) {
@@ -83,16 +75,28 @@ namespace tgfx {
 
     } // namespace
 
-    // -- Impl: owns the stb_truetype state so we can keep the stb header
-    // out of the public surface.
     struct FontAtlas::Impl {
         std::vector<uint8_t> ttf_bytes;
         stbtt_fontinfo font{};
+        FT_Library ft_library = nullptr;
+        FT_Face ft_face = nullptr;
+        FT_F26Dot6 current_em = 0;
+        hb_font_t* shaping_font = nullptr;
+        std::unordered_map<uint64_t, BitmapGlyph> screen_glyphs;
         // Font vmetrics in font-design units. We stash them here so each
         // per-size metrics resolution is a cheap multiply without touching
         // stb again.
         int ascent_u = 0;
         int descent_u = 0; // stb convention: negative
+
+        ~Impl() {
+            if (shaping_font)
+                hb_font_destroy(shaping_font);
+            if (ft_face)
+                FT_Done_Face(ft_face);
+            if (ft_library)
+                FT_Done_FreeType(ft_library);
+        }
     };
 
     // ---------------------------------------------------------------------------
@@ -135,30 +139,62 @@ namespace tgfx {
     // ---------------------------------------------------------------------------
 
     FontAtlas::FontAtlas(const std::string& ttf_path, int default_preload_size_px, int atlas_width, int atlas_height)
-        : default_preload_size_(default_preload_size_px),
+        : impl_(std::make_unique<Impl>()),
+          default_preload_size_(default_preload_size_px),
           atlas_w_(atlas_width),
           atlas_h_(atlas_height),
           atlas_(static_cast<size_t>(atlas_width) * static_cast<size_t>(atlas_height), 0u),
           sdf_atlas_(static_cast<size_t>(kSdfAtlasDim) * static_cast<size_t>(kSdfAtlasDim), 0u) {
-        impl_ = new Impl();
         impl_->ttf_bytes = read_file_bytes(ttf_path);
 
         int offset = stbtt_GetFontOffsetForIndex(impl_->ttf_bytes.data(), 0);
         if (offset < 0) {
-            delete impl_;
-            impl_ = nullptr;
             throw std::runtime_error("FontAtlas: no font at index 0 in " + ttf_path);
         }
         if (!stbtt_InitFont(&impl_->font, impl_->ttf_bytes.data(), offset)) {
-            delete impl_;
-            impl_ = nullptr;
             throw std::runtime_error("FontAtlas: stbtt_InitFont failed for " + ttf_path);
         }
+
+        const auto& bytes = impl_->ttf_bytes;
+        FT_Error error = FT_Init_FreeType(&impl_->ft_library);
+        if (!error)
+            error = FT_New_Memory_Face(
+                impl_->ft_library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &impl_->ft_face);
+        if (error || !impl_->ft_face->units_per_EM) {
+            tc_log(TC_LOG_ERROR,
+                   "[FontAtlas] FreeType cannot open scalable face in %s (error %d)",
+                   ttf_path.c_str(),
+                   error);
+            throw std::runtime_error("FontAtlas: invalid scalable face in " + ttf_path);
+        }
+        hb_blob_t* blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()),
+                                         static_cast<unsigned>(bytes.size()),
+                                         HB_MEMORY_MODE_READONLY,
+                                         nullptr,
+                                         nullptr);
+        hb_face_t* face = hb_face_create(blob, 0);
+        hb_blob_destroy(blob);
+        impl_->shaping_font = hb_font_create(face);
+        hb_face_destroy(face);
+        if (impl_->shaping_font == hb_font_get_empty() ||
+            !hb_face_get_glyph_count(hb_font_get_face(impl_->shaping_font))) {
+            tc_log(TC_LOG_ERROR, "[FontAtlas] HarfBuzz cannot open %s", ttf_path.c_str());
+            throw std::runtime_error("FontAtlas: cannot create shaping font for " + ttf_path);
+        }
+        hb_ot_font_set_funcs(impl_->shaping_font);
+        // Keep HarfBuzz positions in design units, independent of the hinted
+        // FreeType slot used to fill each bitmap phase.
+        const int upem = impl_->ft_face->units_per_EM;
+        hb_font_set_scale(impl_->shaping_font, upem, upem);
 
         // Stash vmetrics in font-design units; every per-size resolution
         // scales from here.
         int line_gap_u = 0;
         stbtt_GetFontVMetrics(&impl_->font, &impl_->ascent_u, &impl_->descent_u, &line_gap_u);
+        if (impl_->ascent_u <= impl_->descent_u) {
+            tc_log(TC_LOG_ERROR, "[FontAtlas] invalid vertical metrics in %s", ttf_path.c_str());
+            throw std::runtime_error("FontAtlas: invalid vertical metrics in " + ttf_path);
+        }
 
         // Warm up the preload character set at the default bitmap size so
         // the first real frame of "typical" UI text doesn't stall on
@@ -188,15 +224,154 @@ namespace tgfx {
         // Best-effort GPU release. The device lifetime token prevents a late
         // atlas destructor from dereferencing a device that is already gone.
         release_gpu();
-        delete impl_;
-        impl_ = nullptr;
     }
 
     // ---------------------------------------------------------------------------
     // Glyph rasterisation
     // ---------------------------------------------------------------------------
 
+    float FontAtlas::em_from_line_height(float line_height_px) const {
+        return line_height_px * impl_->ft_face->units_per_EM / (impl_->ascent_u - impl_->descent_u);
+    }
+
+    float FontAtlas::line_height_from_em(float em_px) const {
+        return em_px * (impl_->ascent_u - impl_->descent_u) / impl_->ft_face->units_per_EM;
+    }
+
+    FontAtlas::LineMetrics FontAtlas::screen_line_metrics(float line_px) const {
+        if (!std::isfinite(line_px) || line_px <= 0.0f)
+            return {};
+        if (is_sdf_size(line_px)) {
+            const auto& metrics = metrics_for_(sdf_reference_px_);
+            const float scale = line_px / sdf_reference_px_;
+            return {metrics.ascent_px * scale, metrics.descent_px * scale};
+        }
+        const float ascent = line_px * impl_->ascent_u / (impl_->ascent_u - impl_->descent_u);
+        return {ascent, line_px - ascent};
+    }
+
+    FontAtlas::BitmapTextRun FontAtlas::layout_bitmap_text(std::string_view text_utf8, float em_px) const {
+        BitmapTextRun run{};
+        if (text_utf8.empty() || !std::isfinite(em_px) || em_px <= 0.0f)
+            return run;
+        if (text_utf8.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+            tc_log(TC_LOG_ERROR, "[FontAtlas] text exceeds HarfBuzz buffer length");
+            return run;
+        }
+        std::unique_ptr<hb_buffer_t, decltype(&hb_buffer_destroy)> buffer(hb_buffer_create(), hb_buffer_destroy);
+        const int length = static_cast<int>(text_utf8.size());
+        hb_buffer_add_utf8(buffer.get(), text_utf8.data(), length, 0, length);
+        hb_buffer_guess_segment_properties(buffer.get());
+        hb_shape(impl_->shaping_font, buffer.get(), nullptr, 0);
+        if (!hb_buffer_allocation_successful(buffer.get())) {
+            tc_log(TC_LOG_ERROR, "[FontAtlas] HarfBuzz could not allocate a glyph run");
+            throw std::bad_alloc();
+        }
+
+        unsigned count = 0;
+        const auto* infos = hb_buffer_get_glyph_infos(buffer.get(), &count);
+        const auto* positions = hb_buffer_get_glyph_positions(buffer.get(), nullptr);
+        const double scale = static_cast<double>(em_px) / impl_->ft_face->units_per_EM;
+        int64_t pen_x = 0, pen_y = 0;
+        run.glyphs.reserve(count);
+        for (unsigned i = 0; i < count; ++i) {
+            run.glyphs.push_back({infos[i].codepoint,
+                                  static_cast<float>((pen_x + positions[i].x_offset) * scale),
+                                  static_cast<float>(-(pen_y + positions[i].y_offset) * scale)});
+            pen_x += positions[i].x_advance;
+            pen_y += positions[i].y_advance;
+        }
+        run.width_px = static_cast<float>(pen_x * scale);
+        run.ascent_px = static_cast<float>(impl_->ascent_u * scale);
+        run.height_px = line_height_from_em(em_px);
+        return run;
+    }
+
+    FontAtlas::Size2f FontAtlas::measure_screen_text(std::string_view text_utf8, float size, FontSizeUnit unit) {
+        if (text_utf8.empty() || !std::isfinite(size) || size <= 0.0f)
+            return {};
+        const float line_px = unit == FontSizeUnit::Em ? line_height_from_em(size) : size;
+        if (is_sdf_size(line_px)) {
+            ensure_glyphs(text_utf8, line_px);
+            return {measure_text(text_utf8, line_px).width, screen_line_metrics(line_px).height()};
+        }
+        const float em_px = unit == FontSizeUnit::Em ? size : em_from_line_height(size);
+        const auto run = layout_bitmap_text(text_utf8, em_px);
+        return {run.width_px, run.height_px};
+    }
+
+    std::optional<FontAtlas::BitmapGlyph> FontAtlas::bitmap_glyph(uint32_t glyph_id, float em_px, unsigned phase) {
+        // FreeType requests sizes in 26.6 units, with a 16-bit ppem limit.
+        if (phase >= kBitmapPhaseCount || !std::isfinite(em_px) || em_px <= 0.0f || em_px > 65535.0f)
+            return std::nullopt;
+        const FT_F26Dot6 em = std::max(1L, std::lround(em_px * 64.0f));
+        const uint64_t key =
+            (static_cast<uint64_t>(glyph_id) << 32) | (static_cast<uint32_t>(em) * kBitmapPhaseCount + phase);
+        const auto cached = impl_->screen_glyphs.find(key);
+        if (cached != impl_->screen_glyphs.end())
+            return cached->second;
+
+        const auto face = impl_->ft_face;
+        if (em != impl_->current_em) {
+            const FT_Error error = FT_Set_Char_Size(face, 0, em, 72, 72);
+            if (error) {
+                tc_log(TC_LOG_ERROR, "[FontAtlas] FreeType rejected em size %.3f (error %d)", em_px, error);
+                return std::nullopt;
+            }
+            impl_->current_em = em;
+        }
+        FT_Vector delta{static_cast<FT_Pos>(phase * (64 / kBitmapPhaseCount)), 0};
+        FT_Set_Transform(face, nullptr, &delta);
+        const FT_Error error =
+            FT_Load_Glyph(face, glyph_id, FT_LOAD_NO_BITMAP | FT_LOAD_RENDER | FT_LOAD_TARGET_NORMAL);
+        if (error) {
+            tc_log(TC_LOG_ERROR,
+                   "[FontAtlas] FreeType could not rasterise glyph %u at %.3f em px (error %d)",
+                   glyph_id,
+                   em_px,
+                   error);
+            return std::nullopt;
+        }
+        const FT_Bitmap& bitmap = face->glyph->bitmap;
+        BitmapGlyph glyph{};
+        if (bitmap.width && bitmap.rows) {
+            if (bitmap.pixel_mode != FT_PIXEL_MODE_GRAY || bitmap.num_grays != 256) {
+                tc_log(TC_LOG_ERROR, "[FontAtlas] expected 8-bit grayscale bitmap for glyph %u", glyph_id);
+                return std::nullopt;
+            }
+            const int w = static_cast<int>(bitmap.width), h = static_cast<int>(bitmap.rows);
+            const auto cell = pack_(w + 2, h + 2);
+            if (cell.x < 0) {
+                tc_log(TC_LOG_WARN, "[FontAtlas] atlas full for glyph %u at %.3f em px", glyph_id, em_px);
+                return std::nullopt;
+            }
+            // Keep the complete ink rectangle, including bearings and marks
+            // that extend beyond the font's logical line cell.
+            const uint8_t* src = bitmap.buffer;
+            if (bitmap.pitch < 0)
+                src -= static_cast<ptrdiff_t>(h - 1) * bitmap.pitch;
+            for (int row = 0; row < h; ++row) {
+                std::memcpy(atlas_.data() + static_cast<size_t>(cell.y + row) * atlas_w_ + cell.x,
+                            src + static_cast<ptrdiff_t>(row) * bitmap.pitch,
+                            w);
+            }
+            glyph.u0 = static_cast<float>(cell.x) / atlas_w_;
+            glyph.u1 = static_cast<float>(cell.x + w) / atlas_w_;
+            glyph.v0 = static_cast<float>(cell.y) / atlas_h_;
+            glyph.v1 = static_cast<float>(cell.y + h) / atlas_h_;
+            glyph.width_px = static_cast<float>(w);
+            glyph.height_px = static_cast<float>(h);
+            glyph.offset_x_px = static_cast<float>(face->glyph->bitmap_left);
+            glyph.offset_y_px = static_cast<float>(-face->glyph->bitmap_top);
+            dirty_ = true;
+        }
+        impl_->screen_glyphs.emplace(key, glyph);
+        return glyph;
+    }
+
     FontAtlas::PackedCell FontAtlas::pack_(int cell_w, int cell_h) {
+        if (cell_w > atlas_w_ || cell_h > atlas_h_)
+            return {-1, -1};
         if (shelf_x_ + cell_w > atlas_w_) {
             shelf_y_ += shelf_h_;
             shelf_x_ = 0;

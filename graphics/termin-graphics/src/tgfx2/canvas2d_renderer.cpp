@@ -10,7 +10,7 @@
 #include <iterator>
 #include <type_traits>
 
-#include "internal/utf8_decode.hpp"
+#include "internal/screen_text_geometry.hpp"
 #include "tgfx2/enums.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/render_context.hpp"
@@ -324,6 +324,21 @@ namespace tgfx {
             }
         }
 
+        void append_clipped_triangle(const DrawTriangle2D& triangle,
+                                     const std::vector<ClipMesh2D>& clips,
+                                     const NativeClip2D& native_clip,
+                                     std::vector<DrawVertex2D>& result) {
+            if (clips.empty()) {
+                result.insert(result.end(), triangle.begin(), triangle.end());
+            } else if (!native_clip.unsupported && native_clip.has_rect) {
+                append_rect_clipped(triangle, native_clip.rect, result);
+            } else {
+                for (const auto& fragment : apply_clips(triangle, clips)) {
+                    result.insert(result.end(), fragment.begin(), fragment.end());
+                }
+            }
+        }
+
         std::vector<DrawVertex2D> flatten_and_clip(std::span<const DrawTriangle2D> triangles,
                                                    const std::vector<ClipMesh2D>& clips,
                                                    const NativeClip2D& native_clip) {
@@ -331,18 +346,7 @@ namespace tgfx {
             std::vector<DrawVertex2D> result;
             result.reserve(triangles.size() * 3);
             for (const auto& triangle : triangles) {
-                if (clips.empty()) {
-                    result.insert(result.end(), triangle.begin(), triangle.end());
-                    continue;
-                }
-                if (!native_clip.unsupported && native_clip.has_rect) {
-                    append_rect_clipped(triangle, native_clip.rect, result);
-                    continue;
-                }
-                const auto fragments = apply_clips(triangle, clips);
-                for (const auto& fragment : fragments) {
-                    result.insert(result.end(), fragment.begin(), fragment.end());
-                }
+                append_clipped_triangle(triangle, clips, native_clip, result);
             }
             return result;
         }
@@ -721,60 +725,41 @@ namespace tgfx {
                             tc::Log::error("[Canvas2DRenderer] text has invalid display font size");
                             return false;
                         }
-                        font->ensure_glyphs(value.text, display_size_px, ctx_);
-                        const float text_width = font->measure_text(value.text, display_size_px).width / raster_scale;
-                        float start_x = value.origin.x;
-                        if (value.anchor == TextAnchor2D::Center) {
-                            start_x -= text_width * 0.5f;
-                        } else if (value.anchor == TextAnchor2D::Right) {
-                            start_x -= text_width;
+                        const internal::ScreenFontSize size{*font, display_size_px, FontSizeUnit::LineHeight};
+                        const auto origin = transform.transform_point(value.origin);
+                        // The mask is baked at the largest screen scale already.
+                        // Only the remaining affine transform applies to its geometry.
+                        const termin::Affine2f raster_to_screen{
+                            transform.m00 / raster_scale, transform.m01 / raster_scale,
+                            transform.m10 / raster_scale, transform.m11 / raster_scale, origin.x, origin.y};
+                        auto text_vertices = internal::screen_text_vertices(
+                            *font, value.text, size, raster_to_screen, value.anchor, value.vertical_anchor, false);
+                        if (!clips.empty()) {
+                            tc::ProfilerScope profile("Canvas CPU Clipping");
+                            std::vector<DrawVertex2D> clipped;
+                            clipped.reserve(text_vertices.size());
+                            for (std::size_t i = 0; i < text_vertices.size(); i += 3) {
+                                DrawTriangle2D triangle;
+                                for (std::size_t j = 0; j < triangle.size(); ++j) {
+                                    triangle[j] = {text_vertices[i + j].position, text_vertices[i + j].uv};
+                                }
+                                append_clipped_triangle(triangle, clips, native_clips.back(), clipped);
+                            }
+                            text_vertices.clear();
+                            text_vertices.reserve(clipped.size());
+                            for (const auto& vertex : clipped)
+                                text_vertices.push_back({vertex.position, vertex.uv});
                         }
-                        const bool sdf = font->is_sdf_size(display_size_px);
-                        const float atlas_size_px = sdf ? static_cast<float>(font->sdf_reference_px()) : display_size_px;
-                        const float atlas_scale = display_size_px / atlas_size_px;
-                        float start_y = value.origin.y;
-                        if (value.vertical_anchor == TextVerticalAnchor2D::Center) {
-                            const float line_height = font->line_height_px(atlas_size_px) * atlas_scale / raster_scale;
-                            start_y -= line_height * 0.5f;
-                        } else if (value.vertical_anchor == TextVerticalAnchor2D::Default &&
-                                   value.anchor == TextAnchor2D::Center) {
-                            start_y -= display_size_px * 0.5f / raster_scale;
-                        }
-                        const float spread = sdf ? font->sdf_spread() * atlas_scale / raster_scale : 0.0f;
-                        ClipMesh2D triangles;
-                        float cursor_x = start_x;
-                        std::size_t byte_index = 0;
-                        while (byte_index < value.text.size()) {
-                            const std::uint32_t codepoint = internal::utf8_decode(value.text, byte_index);
-                            const auto glyph = font->get_glyph(codepoint, display_size_px);
-                            if (!glyph)
-                                continue;
-                            const float x0 = cursor_x + glyph->offset_x_px / raster_scale;
-                            const float x1 = x0 + glyph->width_px / raster_scale;
-                            const float y0 = start_y - spread;
-                            const float y1 = y0 + glyph->height_px / raster_scale;
-                            const DrawVertex2D a{transform.transform_point({x0, y0}), {glyph->u0, glyph->v0}};
-                            const DrawVertex2D b{transform.transform_point({x0, y1}), {glyph->u0, glyph->v1}};
-                            const DrawVertex2D c{transform.transform_point({x1, y1}), {glyph->u1, glyph->v1}};
-                            const DrawVertex2D d{transform.transform_point({x1, y0}), {glyph->u1, glyph->v0}};
-                            triangles.push_back({{a, b, c}});
-                            triangles.push_back({{a, c, d}});
-                            cursor_x += glyph->advance_px / raster_scale;
-                        }
-                        const auto clipped = flatten_and_clip(triangles, clips, native_clips.back());
-                        if (clipped.empty())
+                        if (text_vertices.empty())
                             return true;
-                        flush_();
-                        std::vector<Text2DVertex> text_vertices;
-                        text_vertices.reserve(clipped.size());
-                        for (const auto& vertex : clipped) {
-                            text_vertices.push_back({{vertex.position.x - static_cast<float>(viewport_x_),
-                                                      vertex.position.y - static_cast<float>(viewport_y_)},
-                                                     vertex.uv});
+                        for (auto& vertex : text_vertices) {
+                            vertex.position.x -= static_cast<float>(viewport_x_);
+                            vertex.position.y -= static_cast<float>(viewport_y_);
                         }
+                        flush_();
                         text2d_.draw_mesh_linear(text_vertices,
                                                  with_opacity(value.color, opacities.back()),
-                                                 display_size_px,
+                                                 size.line_px,
                                                  font,
                                                  value.coverage_gamma);
                         return true;
@@ -1061,6 +1046,18 @@ namespace tgfx {
                                      FontAtlas* font,
                                      Text2DRenderer::Anchor anchor,
                                      std::optional<float> coverage_gamma) {
+        draw_text(text, x, y, size_px, color, font, anchor, coverage_gamma, FontSizeUnit::LineHeight);
+    }
+
+    void Canvas2DRenderer::draw_text(std::string_view text,
+                                     float x,
+                                     float y,
+                                     float size_px,
+                                     CanvasSrgbColor color,
+                                     FontAtlas* font,
+                                     Text2DRenderer::Anchor anchor,
+                                     std::optional<float> coverage_gamma,
+                                     FontSizeUnit size_unit) {
         if (ctx_ == nullptr || text.empty())
             return;
         FontAtlas* active_font = font ? font : default_font_;
@@ -1077,15 +1074,20 @@ namespace tgfx {
                          .anchor = anchor,
                          .coverage_gamma = coverage_gamma,
                      },
+                     size_unit,
                      active_font);
     }
 
     FontAtlas::Size2f Canvas2DRenderer::measure_text(std::string_view text, float size_px, FontAtlas* font) const {
+        return measure_text(text, size_px, font, FontSizeUnit::LineHeight);
+    }
+
+    FontAtlas::Size2f Canvas2DRenderer::measure_text(std::string_view text, float size_px, FontAtlas* font,
+                                                     FontSizeUnit size_unit) const {
         FontAtlas* active_font = font ? font : default_font_;
         if (active_font == nullptr || text.empty())
             return {};
-        active_font->ensure_glyphs(text, size_px);
-        return active_font->measure_text(text, size_px);
+        return active_font->measure_screen_text(text, size_px, size_unit);
     }
 
     void Canvas2DRenderer::release_gpu() {

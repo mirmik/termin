@@ -68,12 +68,76 @@ namespace {
               "repeated glyphs should advance independently of their quad offsets");
     }
 
+    double ink_center_x(const tgfx::FontAtlas& font, const tgfx::FontAtlas::BitmapGlyph& glyph) {
+        const int atlas_x = std::lround(glyph.u0 * font.atlas_width());
+        const int atlas_y = std::lround(glyph.v0 * font.atlas_height());
+        double mass = 0, moment = 0;
+        for (int y = 0; y < glyph.height_px; ++y) {
+            for (int x = 0; x < glyph.width_px; ++x) {
+                const int ink = font.cpu_atlas_data()[(atlas_y + y) * font.atlas_width() + atlas_x + x];
+                mass += ink;
+                moment += (glyph.offset_x_px + x) * ink;
+            }
+        }
+        return mass > 0 ? moment / mass : -1;
+    }
+
+    void check_shaped_bitmap_text(tgfx::FontAtlas& font) {
+        constexpr float em = 16.0f;
+        const auto pair = font.layout_bitmap_text("To", em);
+        const auto t = font.layout_bitmap_text("T", em);
+        const auto o = font.layout_bitmap_text("o", em);
+        // The fixture's kern table specifies -123 design units for To.
+        const float expected_kerning = -123.0f * em / 2048.0f;
+        check(std::abs(pair.width_px - t.width_px - o.width_px - expected_kerning) < 0.04f,
+              "To should include its pair kerning in the measured advance");
+        const auto decomposed = font.layout_bitmap_text("e\xcc\x81", em);
+        const auto composed = font.layout_bitmap_text("\xc3\xa9", em);
+        check(composed.glyphs.size() == 1 && decomposed.glyphs.size() == 1 &&
+                  decomposed.glyphs[0].glyph_id == composed.glyphs[0].glyph_id &&
+                  decomposed.width_px == composed.width_px,
+              "composed and decomposed e acute should shape to the same glyph in Droid Sans");
+
+        constexpr auto en_space_en = "\xd0\xbd \xd0\xbd";
+        const auto repeated = font.layout_bitmap_text(en_space_en, em);
+        check(repeated.glyphs.size() == 3, "UTF-8 en space en should shape to three glyphs");
+        if (repeated.glyphs.size() != 3)
+            return;
+        const auto en = font.layout_bitmap_text("\xd0\xbd", em);
+        const auto space = font.layout_bitmap_text(" ", em);
+        const auto& first = repeated.glyphs.front();
+        const auto& last = repeated.glyphs.back();
+        check(first.glyph_id == last.glyph_id && first.glyph_id != 0, "both en glyphs should resolve in the font");
+        check(space.width_px > 0 && std::abs(last.x_px - first.x_px - en.width_px - space.width_px) < 0.04f,
+              "the second en should follow the design advances including the space");
+        check(std::abs(repeated.width_px - 2 * en.width_px - space.width_px) < 0.04f,
+              "the run width should include the final en advance");
+        const auto measured = font.measure_screen_text(en_space_en, em, tgfx::FontSizeUnit::Em);
+        const auto legacy_units = font.measure_screen_text(en_space_en, font.line_height_from_em(em));
+        check(measured.width == repeated.width_px && measured.height == repeated.height_px,
+              "screen measurement should use the same shaped run as rendering");
+        check(std::abs(legacy_units.width - measured.width) < 0.05f,
+              "equivalent em and line-height sizes should produce the same advance");
+
+        const auto left = font.bitmap_glyph(first.glyph_id, em, 0);
+        const auto right = font.bitmap_glyph(first.glyph_id, em, 3);
+        const auto cached = font.bitmap_glyph(last.glyph_id, em, 0);
+        check(left && right && cached, "phase variants should fit in the bitmap atlas");
+        if (!left || !right || !cached)
+            return;
+        check(left->u0 == cached->u0 && left->v0 == cached->v0, "the same glyph and phase should reuse its atlas cell");
+        const double shift = ink_center_x(font, *right) - ink_center_x(font, *left);
+        check(std::abs(shift - 0.75) < 0.12,
+              "phase 3 should shift the actual raster coverage by three quarters of a pixel");
+    }
+
 } // namespace
 
 int main() {
     // Load font.
     const char* font_path = TGFX2_TEST_FONT_PATH;
     tgfx::FontAtlas font(font_path, 14);
+    check_shaped_bitmap_text(font);
     // Bitmap box origins are 2 and -1 oversampled texels at 14 px;
     // the 2x box prefilter shifts the quad by another -0.25 display px.
     check_glyph_offsets(font, 14.0f, 0.75f, -0.75f);

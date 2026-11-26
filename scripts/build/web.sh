@@ -84,6 +84,9 @@ if [[ -z "$HOST_WGSL_VALIDATOR" || ! -x "$HOST_WGSL_VALIDATOR" ]]; then
     exit 1
 fi
 
+PYTHONPATH="$SCRIPT_DIR/core/termin-build-tools" python3 -m termin_build.sdk --repo-root "$SCRIPT_DIR" \
+    ensure-submodules termin-thirdparty/freetype termin-thirdparty/harfbuzz
+
 TERMIN_SLANGC="$HOST_SLANGC" TERMIN_WGSL_VALIDATOR="$HOST_WGSL_VALIDATOR" \
 cmake -S "$SCRIPT_DIR" -B "$HOST_BUILD_DIR" -G "Unix Makefiles" \
     -DCMAKE_BUILD_TYPE=Release \

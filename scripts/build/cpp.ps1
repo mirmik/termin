@@ -181,6 +181,9 @@ $requiredSubmodules = if ($Profile -eq "graphics") {
         "termin-thirdparty/recastnavigation"
     )
 }
+if ($Profile -ne "core") {
+    $requiredSubmodules += "termin-thirdparty/freetype", "termin-thirdparty/harfbuzz"
+}
 if ($TerminEnableVulkan -eq "ON") {
     $requiredSubmodules += "termin-thirdparty/vulkan-memory-allocator"
 }

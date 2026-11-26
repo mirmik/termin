@@ -108,14 +108,14 @@ namespace tcplot {
             return std::nullopt;
         }
         try {
-            font.ensure_glyphs(text, physical_size);
-            const auto measured = font.measure_text(text, physical_size);
+            const auto measured = font.measure_screen_text(text, physical_size);
+            const auto line = font.screen_line_metrics(physical_size);
             return PlotTextMetrics2D{
                 measured.width,
                 measured.height,
-                static_cast<float>(font.ascent_px(physical_size)),
-                static_cast<float>(font.descent_px(physical_size)),
-                static_cast<float>(font.line_height_px(physical_size)),
+                line.ascent,
+                line.descent,
+                line.height(),
             };
         } catch (const std::exception& error) {
             tc::Log::error("measure_plot_text2d failed: %s", error.what());

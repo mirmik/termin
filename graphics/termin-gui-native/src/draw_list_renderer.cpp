@@ -303,13 +303,13 @@ namespace termin::gui_native {
             return false;
         }
         const std::string_view text(text_utf8 ? text_utf8 : "", text_byte_length);
-        self->owned_font_->ensure_glyphs(text, font_size);
-        const tgfx::FontAtlas::Size2f measured = self->owned_font_->measure_text(text, font_size);
+        const tgfx::FontAtlas::Size2f measured = self->owned_font_->measure_screen_text(text, font_size);
+        const auto line = self->owned_font_->screen_line_metrics(font_size);
         out_metrics->width = measured.width;
         out_metrics->height = measured.height;
-        out_metrics->ascent = static_cast<float>(self->owned_font_->ascent_px(font_size));
-        out_metrics->descent = static_cast<float>(self->owned_font_->descent_px(font_size));
-        out_metrics->line_height = static_cast<float>(self->owned_font_->line_height_px(font_size));
+        out_metrics->ascent = line.ascent;
+        out_metrics->descent = line.descent;
+        out_metrics->line_height = line.height();
         return true;
     }
 

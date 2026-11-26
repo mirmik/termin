@@ -71,21 +71,29 @@ namespace {
         return sample;
     }
 
+    struct TextStyle {
+        float x = 4.0f;
+        tgfx::FontSizeUnit unit = tgfx::FontSizeUnit::LineHeight;
+        termin::SrgbColor color = termin::SrgbColor::white();
+        termin::LinearColor background{0, 0, 0, 1};
+    };
+
     bool render_text(tgfx::IRenderDevice& device,
                      tgfx::RenderContext2& context,
                      tgfx::TextureHandle target,
                      tgfx::FontAtlas& font,
                      float size,
-                     float bitmap_coverage_gamma,
+                     std::optional<float> bitmap_coverage_gamma,
                      std::optional<float> coverage_gamma,
                      std::vector<float>& pixels,
-                     std::string_view text = "Small UI text") {
-        const termin::LinearColor black{0.0f, 0.0f, 0.0f, 1.0f};
+                     std::string_view text = "Small UI text",
+                     TextStyle style = {}) {
         tgfx::Text2DRenderer renderer(&font);
-        renderer.set_bitmap_coverage_gamma(bitmap_coverage_gamma);
+        if (bitmap_coverage_gamma)
+            renderer.set_bitmap_coverage_gamma(*bitmap_coverage_gamma);
 
         context.begin_frame();
-        context.begin_pass(target, {}, &black, 1.0f, false);
+        context.begin_pass(target, {}, &style.background, 1.0f, false);
         context.set_viewport(0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight));
         context.set_depth_test(false);
         context.set_depth_write(false);
@@ -95,12 +103,13 @@ namespace {
         renderer.begin(&context, static_cast<int>(kWidth), static_cast<int>(kHeight));
         renderer.draw(text,
                       tgfx::Text2DRenderer::DrawOptions{
-                          .x = 4.0f,
+                          .x = style.x,
                           .y = 4.0f,
-                          .color = termin::SrgbColor::white(),
+                          .color = style.color,
                           .size = size,
                           .coverage_gamma = coverage_gamma,
-                      });
+                      },
+                      style.unit);
         renderer.end();
         context.end_pass();
         context.end_frame();
@@ -110,6 +119,79 @@ namespace {
         const bool read = device.read_texture_rgba_float(target, pixels.data());
         renderer.release_gpu();
         return read;
+    }
+
+    bool check_automatic_coverage(tgfx::IRenderDevice& device,
+                                  tgfx::RenderContext2& context,
+                                  tgfx::TextureHandle target,
+                                  tgfx::FontAtlas& font,
+                                  const std::vector<float>& linear_mask) {
+        const TextStyle dark_ink{.color = {0, 0, 0, 1}, .background = {1, 1, 1, 1}};
+        const TextStyle cyan_ink{.color = {0.4f, 0.8f, 0.85f, 1.0f}};
+        std::vector<float> dark, cyan;
+        if (!render_text(device, context, target, font, 14, {}, {}, dark, "Small UI text", dark_ink) ||
+            !render_text(device, context, target, font, 14, {}, {}, cyan, "Small UI text", cyan_ink))
+            return false;
+
+        // Compare matching edge pixels. Normalize the green channel to get
+        // the effective coverage after compositing each foreground color.
+        const float green = termin::srgb_to_linear(cyan_ink.color).g;
+        int edges = 0;
+        for (size_t i = 1; i < linear_mask.size(); i += 4) {
+            const float mask = linear_mask[i];
+            if (mask < 0.25f || mask > 0.75f)
+                continue;
+            if (1.0f - dark[i] <= mask + 0.01f || cyan[i] / green >= mask - 0.01f)
+                return false;
+            ++edges;
+        }
+        return edges > 0;
+    }
+
+    bool check_draw_list_phases(tgfx::IRenderDevice& device,
+                                tgfx::RenderContext2& context,
+                                tgfx::TextureHandle target,
+                                tgfx::FontAtlas& font) {
+        struct Resolver : tgfx::DrawResourceResolver2D {
+            tgfx::FontAtlas& font;
+            explicit Resolver(tgfx::FontAtlas& f)
+                : font(f) {}
+            tgfx::FontAtlas* resolve_font(tgfx::FontHandle) override {
+                return &font;
+            }
+        } resources(font);
+        constexpr auto text = "jTo \xd0\xbd \xd0\xbd";
+        // A negative fractional origin exercises phase selection around zero.
+        const TextStyle style{.x = -0.25f, .unit = tgfx::FontSizeUnit::Em};
+        std::vector<float> direct;
+        if (!render_text(device, context, target, font, 12, {}, 1, direct, text, style))
+            return false;
+        tgfx::DrawList2DBuilder builder;
+        if (!builder.text(text,
+                          {style.x, 4},
+                          font.line_height_from_em(12),
+                          {1, 1, 1, 1},
+                          {1},
+                          tgfx::TextAnchor2D::Left,
+                          1.0f,
+                          tgfx::TextVerticalAnchor2D::Default))
+            return false;
+        auto list = builder.freeze();
+        if (!list)
+            return false;
+        tgfx::Canvas2DRenderer canvas;
+        context.begin_frame();
+        context.begin_pass(target, {}, &style.background, 1.0f, false);
+        canvas.begin(context, kWidth, kHeight);
+        const bool executed = canvas.execute(*list, resources);
+        canvas.end();
+        context.end_pass();
+        context.end_frame();
+        device.wait_idle();
+        std::vector<float> pixels(direct.size());
+        const bool read = device.read_texture_rgba_float(target, pixels.data());
+        canvas.release_gpu();
+        return executed && read && measure(direct).partial_pixels > 0 && direct == pixels;
     }
 
     bool check_bitmap_spacing(const std::vector<float>& pixels, const tgfx::FontAtlas& font) {
@@ -136,7 +218,7 @@ namespace {
             return mass > 0 ? moment / mass : -1.0;
         };
         const double first = centroid(82, 92), second = centroid(92, 103);
-        const float advance = font.measure_text("\xd0\xbd ", 14).width;
+        const float advance = font.layout_bitmap_text("\xd0\xbd ", font.em_from_line_height(14)).width_px;
         if (first < 0 || second < 0 || std::abs(second - first - advance) > 0.25) {
             std::fprintf(stderr, "Repeated glyphs at %.2f and %.2f should be %.2f px apart\n", first, second, advance);
             return false;
@@ -301,22 +383,27 @@ namespace {
                                              tgfx::Text2DRenderer::kDefaultBitmapCoverageGamma,
                                              std::nullopt, spacing_pixels, spacing_text) &&
                                 check_bitmap_spacing(spacing_pixels, font);
+        const bool automatic_ok =
+            bitmap_read && check_automatic_coverage(*device, context, target, font, bitmap_linear);
+        const bool draw_list_ok = check_draw_list_phases(*device, context, target, font);
 
         font.release_gpu();
         device->destroy(target);
         std::error_code error;
         std::filesystem::remove_all(artifact_root, error);
         if (!bitmap_contract || !heading_neutral || !heading_override_literal || !sdf_unchanged ||
-            !canvas_per_call_contract || !spacing_ok) {
+            !canvas_per_call_contract || !spacing_ok || !automatic_ok || !draw_list_ok) {
             std::fprintf(stderr,
                          "Text coverage contract failed: bitmap=%d heading=%d override=%d sdf=%d canvas-per-call=%d "
-                         "spacing=%d\n",
+                         "spacing=%d automatic=%d draw-list=%d\n",
                          bitmap_contract,
                          heading_neutral,
                          heading_override_literal,
                          sdf_unchanged,
                          canvas_per_call_contract,
-                         spacing_ok);
+                         spacing_ok,
+                         automatic_ok,
+                         draw_list_ok);
             return 1;
         }
         return 0;

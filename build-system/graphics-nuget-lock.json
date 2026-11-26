@@ -59,6 +59,10 @@
   "release_licenses": [
     {"name": "Termin", "path": "LICENSE"},
     {"name": "zlib", "path": "termin-thirdparty/zlib/LICENSE"},
+    {"name": "FreeType", "path": "termin-thirdparty/freetype/docs/FTL.TXT"},
+    {"name": "FreeType-NOTICE", "path": "termin-thirdparty/FreeType-NOTICE.txt"},
+    {"name": "HarfBuzz", "path": "termin-thirdparty/harfbuzz/COPYING"},
+    {"name": "HarfBuzz-MS-USE", "path": "termin-thirdparty/harfbuzz/src/ms-use/COPYING"},
     {"name": "libpng", "path": "termin-thirdparty/libpng/LICENSE"},
     {"name": "libjpeg-turbo", "path": "termin-thirdparty/libjpeg-turbo/LICENSE.md"},
     {"name": "libwebp", "path": "termin-thirdparty/libwebp/COPYING"},

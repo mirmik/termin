@@ -6,6 +6,11 @@ files are intentionally tracked in-tree.
 
 Current contents:
 
+- `freetype`: FreeType 2.14.1, commit `526ec5c47b9ebccc4754c85ac0c0cdf7c85a5e9b`.
+  Portions of this software are copyright © 2025 The FreeType Project
+  (www.freetype.org). All rights reserved. Distributed under the FreeType License.
+- `harfbuzz`: HarfBuzz 11.5.1, commit `7497c4147469fd4102a7229222586ad5c743c5a1`,
+  Old MIT license. The text renderer uses its portable OpenType shaper.
 - `manifold`: Manifold v3.4.1, commit `31afd71d17c7a94cfaeada83f657d7b42628ead6`, Apache-2.0.
 - `clipper2`: Clipper2 commit `f9c5eb6e14a59f6f5d65fbfb3564519a561cf4fd`, Boost Software License 1.0.
 - `guard`: lightweight C/C++ test framework used by Termin native tests, commit `082b3d9c7eb26e27d95f8c5e9a2ef79d371813e5`.

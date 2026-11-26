@@ -93,6 +93,8 @@ namespace tgfx {
     struct DrawText2D {
         std::string text;
         termin::Vec2f origin{};
+        // Ascender-to-descender height in local pixels. Producers specifying
+        // a typographic em use FontAtlas::line_height_from_em before recording.
         float size_px = 14.0f;
         termin::LinearColor color{1.0f, 1.0f, 1.0f, 1.0f};
         FontHandle font{};

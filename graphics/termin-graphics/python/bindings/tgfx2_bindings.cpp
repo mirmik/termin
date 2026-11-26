@@ -1127,6 +1127,10 @@ namespace tgfx_bindings {
         // interface shape (ensure_glyphs / ensure_texture / measure_text)
         // — with RenderContext2 references in place of the prior
         // Tgfx2Context holder.
+        nb::enum_<tgfx::FontSizeUnit>(m, "FontSizeUnit")
+            .value("LineHeight", tgfx::FontSizeUnit::LineHeight)
+            .value("Em", tgfx::FontSizeUnit::Em);
+
         nb::class_<tgfx::FontAtlas::Size2f>(m, "FontMeasure")
             .def_ro("width", &tgfx::FontAtlas::Size2f::width)
             .def_ro("height", &tgfx::FontAtlas::Size2f::height);
@@ -1163,6 +1167,15 @@ namespace tgfx_bindings {
                 },
                 nb::arg("text"),
                 nb::arg("size") = 14.0f)
+            .def(
+                "measure_screen_text",
+                [](tgfx::FontAtlas& self, const std::string& text, float size, tgfx::FontSizeUnit size_unit) {
+                    const auto measured = self.measure_screen_text(text, size, size_unit);
+                    return nb::make_tuple(measured.width, measured.height);
+                },
+                nb::arg("text"),
+                nb::arg("size") = 14.0f,
+                nb::arg("size_unit") = tgfx::FontSizeUnit::LineHeight)
 
             // Create or refresh the GPU atlas texture. Returns the cached
             // Tgfx2TextureHandle (same handle across calls with the same
@@ -1382,7 +1395,8 @@ namespace tgfx_bindings {
                                         std::optional<tgfx::CanvasSrgbColor> color,
                                         tgfx::FontAtlas* font,
                                         nb::object anchor,
-                                        std::optional<float> coverage_gamma) {
+                                        std::optional<float> coverage_gamma,
+                                        tgfx::FontSizeUnit size_unit) {
                     self.draw_text(text,
                                    x,
                                    y,
@@ -1390,7 +1404,8 @@ namespace tgfx_bindings {
                                    color.value_or(tgfx::CanvasSrgbColor{1, 1, 1, 1}),
                                    font,
                                    resolve_text2d_anchor(anchor),
-                                   coverage_gamma);
+                                   coverage_gamma,
+                                   size_unit);
                 },
                 nb::arg("text"),
                 nb::arg("x"),
@@ -1400,16 +1415,19 @@ namespace tgfx_bindings {
                 nb::arg("font").none() = nb::none(),
                 nb::arg("anchor") = "left",
                 nb::arg("coverage_gamma").none() = nb::none(),
+                nb::arg("size_unit") = tgfx::FontSizeUnit::LineHeight,
                 nb::keep_alive<1, 7>())
             .def(
                 "measure_text",
-                [](tgfx::Canvas2DRenderer& self, const std::string& text, float size_px, tgfx::FontAtlas* font) {
-                    auto m = self.measure_text(text, size_px, font);
+                [](tgfx::Canvas2DRenderer& self, const std::string& text, float size_px,
+                   tgfx::FontAtlas* font, tgfx::FontSizeUnit size_unit) {
+                    auto m = self.measure_text(text, size_px, font, size_unit);
                     return std::make_tuple(m.width, m.height);
                 },
                 nb::arg("text"),
                 nb::arg("size_px") = 14.0f,
-                nb::arg("font").none() = nb::none())
+                nb::arg("font").none() = nb::none(),
+                nb::arg("size_unit") = tgfx::FontSizeUnit::LineHeight)
             .def("set_default_font",
                  &tgfx::Canvas2DRenderer::set_default_font,
                  nb::arg("font").none() = nb::none(),
@@ -1445,7 +1463,8 @@ namespace tgfx_bindings {
                                         termin::SrgbColor color,
                                         float size,
                                         nb::object anchor,
-                                        std::optional<float> coverage_gamma) {
+                                        std::optional<float> coverage_gamma,
+                                        tgfx::FontSizeUnit size_unit) {
                     self.draw(text,
                               tgfx::Text2DRenderer::DrawOptions{
                                   .x = x,
@@ -1454,7 +1473,8 @@ namespace tgfx_bindings {
                                   .size = size,
                                   .anchor = resolve_text2d_anchor(anchor),
                                   .coverage_gamma = coverage_gamma,
-                              });
+                              },
+                              size_unit);
                 },
                 nb::arg("text"),
                 nb::arg("x"),
@@ -1462,18 +1482,20 @@ namespace tgfx_bindings {
                 nb::arg("color") = termin::SrgbColor::white(),
                 nb::arg("size") = 14.0f,
                 nb::arg("anchor") = "left",
-                nb::arg("coverage_gamma").none() = nb::none())
+                nb::arg("coverage_gamma").none() = nb::none(),
+                nb::arg("size_unit") = tgfx::FontSizeUnit::LineHeight)
 
             .def(
                 "measure",
-                [](tgfx::Text2DRenderer& self, const std::string& text, float size) {
+                [](tgfx::Text2DRenderer& self, const std::string& text, float size, tgfx::FontSizeUnit size_unit) {
                     if (!self.font())
                         return std::make_tuple(0.0f, 0.0f);
-                    auto m = self.font()->measure_text(text, size);
+                    auto m = self.font()->measure_screen_text(text, size, size_unit);
                     return std::make_tuple(m.width, m.height);
                 },
                 nb::arg("text"),
-                nb::arg("size") = 14.0f)
+                nb::arg("size") = 14.0f,
+                nb::arg("size_unit") = tgfx::FontSizeUnit::LineHeight)
 
             .def("end", &tgfx::Text2DRenderer::end)
             .def("release_gpu", &tgfx::Text2DRenderer::release_gpu);

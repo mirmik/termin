@@ -349,6 +349,8 @@ if(TGFX2_ENABLE_WEBGPU)
 endif()
 
 add_library(termin_graphics2 ${_TGFX_LIBRARY_TYPE} ${TGFX2_SOURCES})
+include(TerminFontLibraries)
+termin_link_font_libraries(termin_graphics2)
 if(COMMAND termin_add_alias_if_missing)
     termin_add_alias_if_missing(tgfx::termin_graphics2 termin_graphics2)
 endif()

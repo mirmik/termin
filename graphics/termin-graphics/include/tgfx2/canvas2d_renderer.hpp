@@ -141,7 +141,17 @@ namespace tgfx {
                        FontAtlas* font = nullptr,
                        Text2DRenderer::Anchor anchor = Text2DRenderer::Anchor::Left,
                        std::optional<float> coverage_gamma = std::nullopt);
+        void draw_text(std::string_view text,
+                       float x,
+                       float y,
+                       float size_px,
+                       CanvasSrgbColor color,
+                       FontAtlas* font,
+                       Text2DRenderer::Anchor anchor,
+                       std::optional<float> coverage_gamma,
+                       FontSizeUnit size_unit);
         FontAtlas::Size2f measure_text(std::string_view text, float size_px, FontAtlas* font = nullptr) const;
+        FontAtlas::Size2f measure_text(std::string_view text, float size_px, FontAtlas* font, FontSizeUnit size_unit) const;
 
         void set_default_font(FontAtlas* font) {
             default_font_ = font;
