@@ -2,6 +2,7 @@
 #include <termin/render/color_pass.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/render_engine.hpp>
 #include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/scene_render_services.hpp>
 #include <termin/tc_scene.hpp>
@@ -16,6 +17,7 @@
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/device_factory.hpp>
+#include <tgfx2/graphics_host.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/pipeline_cache.hpp>
 #include <tgfx2/render_context.hpp>
@@ -26,6 +28,7 @@ extern "C" {
 }
 
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -42,6 +45,13 @@ namespace {
     constexpr uint32_t kHeight = 64;
 
     std::string captured_environment_lighting_error;
+    bool conflicting_color_clears = false;
+
+    void capture_color_clear_conflict(tc_log_level level, const char* message) {
+        if (level == TC_LOG_ERROR && message && std::strstr(message, "conflicting color clears")) {
+            conflicting_color_clears = true;
+        }
+    }
 
     void capture_environment_lighting_error(tc_log_level level, const char* message) {
         if (level == TC_LOG_ERROR && message && std::strstr(message, "environment lighting")) {
@@ -295,6 +305,67 @@ FragmentOutput fs_main(FragmentInput input) {
         return scene;
     }
 
+    bool verify_pipeline_color_clear(tgfx::GraphicsHost& host, tgfx::TextureHandle output) {
+        auto scene = termin::TcSceneRef::create("color-pass-empty-scene");
+        termin::TcSceneRenderItemSource item_source(scene.handle());
+        termin::RenderItemSnapshot snapshot;
+        if (!scene.valid() || !item_source.publish(snapshot, {})) {
+            std::fprintf(stderr, "Failed to publish empty scene for the pipeline clear check\n");
+            scene.destroy();
+            return false;
+        }
+        const termin::SceneRenderServices scene_services(scene);
+        termin::RenderExecutionCapabilities capabilities;
+        capabilities.add(scene_services);
+
+        termin::RenderTargetContext target;
+        target.name = "ColorPassClearTarget";
+        target.render_rect = {0, 0, kWidth, kHeight};
+        target.view.primary.emplace();
+        target.output_color.texture = output;
+        termin::RenderExecution execution;
+        execution.targets.emplace(target.name, termin::RenderExecutionTarget{&target, &snapshot, &capabilities});
+        termin::RenderEngine engine;
+        engine.set_graphics_host(host);
+
+        const termin::LinearColor backgrounds[] = {{0.125f, 0.25f, 0.5f, 1.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+        bool ok = true;
+        for (const auto& background : backgrounds) {
+            termin::RenderPipeline pipeline("color-pass-pipeline-clear");
+            termin::ResourceSpec spec("empty");
+            spec.format = "render_target";
+            spec.clear_color = background;
+            pipeline.add_spec(spec);
+
+            termin::ColorPassConfig config;
+            config.shadow_res.clear();
+            config.environment_res.clear();
+            pipeline.add_pass((new termin::ColorPass(config))->tc_pass_ptr());
+            pipeline.set_color_export(config.output_res, termin::ColorContent::DisplayLinear);
+            execution.pipeline = &pipeline;
+
+            conflicting_color_clears = false;
+            tc_log_set_callback(capture_color_clear_conflict);
+            engine.execute_pipeline(execution);
+            tc_log_set_callback(nullptr);
+            host.device().wait_idle();
+
+            float pixel[4] = {};
+            constexpr float tolerance = 1.0f / 255.0f;
+            if (conflicting_color_clears || !host.device().read_pixel_rgba8(output, 0, 0, pixel) ||
+                std::abs(pixel[0] - background.r) > tolerance || std::abs(pixel[1] - background.g) > tolerance ||
+                std::abs(pixel[2] - background.b) > tolerance || std::abs(pixel[3] - background.a) > tolerance) {
+                std::fprintf(stderr, "ColorPass pipeline clear failed for (%g %g %g %g), conflict=%d\n",
+                             background.r, background.g, background.b, background.a, conflicting_color_clears);
+                print_pixel("pipeline clear readback", pixel);
+                ok = false;
+            }
+            pipeline.destroy();
+        }
+        scene.destroy();
+        return ok;
+    }
+
     int run_smoke(const char* argv0) {
         const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
         const ScopedTempDirectory artifact_root{
@@ -327,19 +398,20 @@ FragmentOutput fs_main(FragmentInput input) {
             return 1;
         }
 
-        std::unique_ptr<tgfx::IRenderDevice> device;
+        std::unique_ptr<tgfx::GraphicsHost> host;
         try {
-            device = tgfx::create_device(tgfx::BackendType::Vulkan);
+            host = tgfx::GraphicsHost::create_isolated(tgfx::BackendType::Vulkan);
         } catch (const std::exception& e) {
             std::fprintf(stderr, "Failed to create Vulkan device: %s\n", e.what());
             return 1;
         }
+        auto* device = &host->device();
 
         tgfx::TextureDesc target_desc;
         target_desc.width = kWidth;
         target_desc.height = kHeight;
         target_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
-        target_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+        target_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc | tgfx::TextureUsage::CopyDst;
         tgfx::TextureHandle target = device->create_texture(target_desc);
         if (!target) {
             std::fprintf(stderr, "Failed to create output texture\n");
@@ -363,7 +435,7 @@ FragmentOutput fs_main(FragmentInput input) {
         source_request.debug_name = "ColorPassPixelSmoke";
         if (!item_source.publish(render_item_snapshot, source_request)) {
             std::fprintf(stderr, "Failed to publish ColorPass RenderItem snapshot\n");
-            return false;
+            return 1;
         }
         termin::ExecuteContext exec_ctx;
         exec_ctx.render_item_snapshot = &render_item_snapshot;
@@ -423,6 +495,7 @@ FragmentOutput fs_main(FragmentInput input) {
                              missing_camera_skipped && captured_environment_lighting_error.empty();
 
         pass.destroy();
+        const bool pipeline_clear_ok = verify_pipeline_color_clear(*host, target);
         device->destroy(target);
 
         if (!pass_ok) {
@@ -438,7 +511,7 @@ FragmentOutput fs_main(FragmentInput input) {
             return 1;
         }
 
-        return 0;
+        return pipeline_clear_ok ? 0 : 1;
     }
 
 } // namespace

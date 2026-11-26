@@ -506,13 +506,10 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
     }
 
     std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
-        return {ResourceSpec{
-            input_res,
-            "fbo",                                       // resource_type
-            std::nullopt,                                // size
-            termin::LinearColor{0.0f, 0.0f, 0.0f, 1.0f}, // clear_color
-            1.0f                                         // clear_depth
-        }};
+        ResourceSpec spec;
+        spec.resource = input_res;
+        spec.clear_depth = 1.0f;
+        return {spec};
     }
 
     namespace {

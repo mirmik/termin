@@ -100,14 +100,14 @@ TEST_CASE("default scene background replaces disabled skybox without gray fallba
     CHECK(skybox_specs.front().clear_color->r == 0.0f);
     CHECK(skybox_specs.front().clear_color->g == 0.0f);
     CHECK(skybox_specs.front().clear_color->b == 0.0f);
+}
 
+TEST_CASE("ColorPass leaves color initialization to its pipeline") {
     termin::ColorPass color_pass;
     const auto color_specs = color_pass.get_resource_specs();
     REQUIRE(color_specs.size() == 1);
-    REQUIRE(color_specs.front().clear_color.has_value());
-    CHECK(color_specs.front().clear_color->r == 0.0f);
-    CHECK(color_specs.front().clear_color->g == 0.0f);
-    CHECK(color_specs.front().clear_color->b == 0.0f);
+    CHECK_FALSE(color_specs.front().clear_color.has_value());
+    CHECK(color_specs.front().clear_depth == 1.0f);
 }
 
 TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {

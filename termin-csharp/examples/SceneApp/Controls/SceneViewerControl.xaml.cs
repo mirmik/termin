@@ -167,6 +167,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
         colorSpec.resource_type = "fbo";
         colorSpec.scale = 1.0f;
         colorSpec.samples = 4;
+        colorSpec.set_clear_linear_color(0.0f, 0.0f, 0.0f, 1.0f);
         _pipeline.add_spec(colorSpec);
 
         _colorPass = new ColorPass(
