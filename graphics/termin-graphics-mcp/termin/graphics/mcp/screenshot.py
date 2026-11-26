@@ -17,6 +17,7 @@ def capture_surface_screenshot(
     surface: Any,
     device: Any,
     *,
+    source_is_linear: bool = False,
     output_path: str | None = None,
     include_image: bool = False,
     default_dir: Path,
@@ -40,6 +41,7 @@ def capture_surface_screenshot(
         device,
         width=width,
         height=height,
+        source_is_linear=source_is_linear,
         output_path=output_path,
         include_image=include_image,
         default_dir=default_dir,
@@ -54,13 +56,14 @@ def capture_texture_screenshot(
     *,
     width: int,
     height: int,
+    source_is_linear: bool = False,
     output_path: str | None = None,
     include_image: bool = False,
     default_dir: Path,
     default_prefix: str,
     log_prefix: str,
 ) -> dict[str, object]:
-    """Read a backend-neutral tgfx2 texture and save it as a PNG image."""
+    """Save display RGB to PNG, encoding linear RGB sources to sRGB on export."""
     if texture is None:
         raise RuntimeError("Screenshot texture is not available")
     if device is None:
@@ -76,7 +79,11 @@ def capture_texture_screenshot(
 
     # tgfx2 readback returns rows in top-left CPU order for all backends.
     rgba = pixels.reshape((height, width, 4))
-    rgba8 = np.clip(rgba * 255.0, 0.0, 255.0).astype(np.uint8)
+    np.clip(rgba, 0.0, 1.0, out=rgba)
+    if source_is_linear:
+        rgb = rgba[:, :, :3]
+        rgb[:] = np.where(rgb <= 0.0031308, 12.92 * rgb, 1.055 * rgb ** (1.0 / 2.4) - 0.055)
+    rgba8 = np.rint(rgba * 255.0).astype(np.uint8)
 
     path = _resolve_png_path(
         output_path,

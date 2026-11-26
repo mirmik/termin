@@ -247,6 +247,7 @@ class OffscreenEditorContent:
         return capture_texture_screenshot(
             texture,
             self.device,
+            source_is_linear=True,
             width=width,
             height=height,
             output_path=output_path,

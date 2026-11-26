@@ -30,6 +30,7 @@ def capture_player_screenshot(
     return capture_surface_screenshot(
         runtime.display,
         device,
+        source_is_linear=True,
         output_path=output_path,
         include_image=include_image,
         default_dir=Path(tempfile.gettempdir()) / "termin-player-screenshots",

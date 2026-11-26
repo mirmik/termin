@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from termin.graphics.mcp import capture_texture_screenshot
+from termin.image import decode_rgba8_file
 
 
 class FakeDevice:
@@ -16,11 +17,19 @@ class FakeDevice:
         if not self.read_ok:
             return False
         pixels = np.asarray(output).reshape((-1, 4))
-        pixels[:, :] = [0.25, 0.5, 1.0, 1.0]
+        pixels[::2] = [0.25, 0.5, 1.0, 0.5]
+        pixels[1::2] = [0.002, -0.1, 1.25, 1.0]
         return True
 
 
-def test_capture_texture_screenshot_writes_png_and_optional_image(tmp_path):
+@pytest.mark.parametrize(
+    ("source_is_linear", "expected"),
+    [
+        (True, [[137, 188, 255, 128], [7, 0, 255, 255]]),
+        (False, [[64, 128, 255, 128], [1, 0, 255, 255]]),
+    ],
+)
+def test_capture_texture_screenshot_writes_png_and_optional_image(tmp_path, source_is_linear, expected):
     device = FakeDevice()
     texture = object()
     result = capture_texture_screenshot(
@@ -28,6 +37,7 @@ def test_capture_texture_screenshot_writes_png_and_optional_image(tmp_path):
         device,
         width=3,
         height=2,
+        source_is_linear=source_is_linear,
         output_path=str(tmp_path / "native-editor"),
         include_image=True,
         default_dir=tmp_path,
@@ -42,7 +52,8 @@ def test_capture_texture_screenshot_writes_png_and_optional_image(tmp_path):
     assert result["height"] == 2
     assert result["mime_type"] == "image/png"
     assert base64.b64decode(result["base64"]) == path.read_bytes()
-    assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    pixels = decode_rgba8_file(path).to_numpy()
+    np.testing.assert_array_equal(pixels.reshape(-1, 4), expected * 3)
 
 
 def test_capture_texture_screenshot_rejects_invalid_source(tmp_path):

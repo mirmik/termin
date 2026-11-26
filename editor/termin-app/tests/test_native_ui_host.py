@@ -524,6 +524,7 @@ def test_native_screenshot_composes_current_document_before_readback(monkeypatch
     host.render = render
 
     def capture(source, device, **options):
+        assert options["source_is_linear"] is True
         calls.append((source, device, options["width"], options["height"]))
         return {"path": options["output_path"]}
 

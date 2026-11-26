@@ -28,3 +28,4 @@ def test_player_screenshot_uses_runtime_rendering_manager(monkeypatch):
     assert result == {"path": "/tmp/player.png"}
     assert captured[0][0] is runtime.display
     assert captured[0][1] is device
+    assert captured[0][2]["source_is_linear"] is True

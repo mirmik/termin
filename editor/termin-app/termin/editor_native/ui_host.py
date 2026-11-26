@@ -350,6 +350,7 @@ class NativeWidgetContent:
         return capture_texture_screenshot(
             color_target,
             self.device,
+            source_is_linear=True,
             width=width,
             height=height,
             output_path=output_path,
