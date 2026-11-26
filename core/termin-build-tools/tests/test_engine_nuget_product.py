@@ -5,7 +5,7 @@ import subprocess
 import pytest
 
 from termin_build.engine_nuget_product import _combine_shaders, EngineNugetError, pack
-from termin_build.graphics_nuget_product import PackageDefinition, compose_package
+from termin_build.graphics_nuget_product import PACKAGE_OUTPUT_TARGETS, PackageDefinition, compose_package
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -43,7 +43,10 @@ def test_engine_package_reports_plot_profile_conflicts(tmp_path, transitive):
             feed, version="1.0.0", source_revision="", license_path="LICENSE",
         )
 
-    package("Termin.Engine", files={"buildTransitive/net8.0/Termin.Engine.targets": targets})
+    package("Termin.Engine", files={
+        "buildTransitive/net8.0/Termin.Engine.targets": targets,
+        f"buildTransitive/net8.0/{PACKAGE_OUTPUT_TARGETS.name}": (REPO / PACKAGE_OUTPUT_TARGETS).read_bytes(),
+    })
     package("Termin.Graphics")
     if transitive:
         package("EngineConflictFixture", dependencies=(("Termin.Graphics", "[1.0.0]"),))

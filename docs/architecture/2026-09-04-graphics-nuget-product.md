@@ -39,6 +39,12 @@ libraries, required shader artifacts, and release licenses. The product builder
 rejects inputs that violate that contract and emits an exact manifest containing
 the SHA-256 of every archive and archive member.
 
+Graphics and Engine share an MSBuild target that refreshes package files when
+the resolved package or output path changes. The target tracks the last copy
+in the project's intermediate directory. This keeps incremental build and
+publish output current even when two package versions contain files with the
+same size and reproducible ZIP timestamp.
+
 Every archive part must have a content type in `[Content_Types].xml`, including
 explicit overrides for extensionless release-license files. Candidate validation
 rejects missing declarations before upload. The package pairs its file license

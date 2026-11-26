@@ -22,6 +22,7 @@ from .versioning import public_version
 
 LOCK_RELATIVE_PATH = Path("build-system/graphics-nuget-lock.json")
 README_RELATIVE_PATH = Path("termin-csharp/NUGET_README.md")
+PACKAGE_OUTPUT_TARGETS = Path("termin-csharp/nuget/Termin.PackageOutputs.targets")
 PRODUCT_MANIFEST = "termin-graphics-nuget-product.json"
 PRODUCT_MANIFEST_KIND = "termin-graphics-nuget-product"
 PRODUCT_MANIFEST_SCHEMA = 3
@@ -364,10 +365,10 @@ def _targets_payload(lock: GraphicsNugetLock) -> bytes:
         f'{escape(lock.target_framework)}</_TerminGraphicsWpfFramework>\n'
         "  </PropertyGroup>\n"
         '  <ItemGroup Condition="\'$(_TerminGraphicsWpfFramework)\' != \'\'">\n'
-        '    <Reference Include="Termin.Wpf"\n'
-        '               HintPath="$(MSBuildThisFileDirectory)..\\..\\wpf\\$(_TerminGraphicsWpfFramework)\\Termin.Wpf.dll"\n'
+        '    <Reference Include="$(MSBuildThisFileDirectory)..\\..\\wpf\\$(_TerminGraphicsWpfFramework)\\Termin.Wpf.dll"\n'
         '               Private="true" />\n'
         "  </ItemGroup>\n"
+        '  <Import Project="Termin.PackageOutputs.targets" />\n'
         "</Project>\n"
     ).encode("utf-8")
 
@@ -696,6 +697,9 @@ def build_product(
     runtime_payloads[
         f"buildTransitive/{lock.runtime_framework}/{lock.runtime_package}.targets"
     ] = _targets_payload(lock)
+    runtime_payloads[f"buildTransitive/{lock.runtime_framework}/{PACKAGE_OUTPUT_TARGETS.name}"] = (
+        _read_regular_file(repo_root / PACKAGE_OUTPUT_TARGETS, "NuGet package output targets")
+    )
     termin_license = next(
         record["package_path"]
         for record in license_records

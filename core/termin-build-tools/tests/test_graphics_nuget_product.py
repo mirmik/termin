@@ -12,6 +12,7 @@ import pytest
 
 from termin_build.graphics_nuget_product import (
     GraphicsNugetProductError,
+    PACKAGE_OUTPUT_TARGETS,
     PRODUCT_MANIFEST,
     _validate_nuspec,
     build_product,
@@ -130,7 +131,14 @@ def test_builds_single_package_candidate_with_exact_metadata(tmp_path: Path) -> 
             "buildTransitive/netstandard2.1/Termin.Graphics.targets"
         )
         targets = archive.read(targets_name).decode("utf-8")
-        content = ElementTree.fromstring(targets).find(".//{*}Content")
+        root = ElementTree.fromstring(targets)
+        package_import = root.find(".//{*}Import")
+        assert package_import is not None
+        assert package_import.attrib["Project"] == PACKAGE_OUTPUT_TARGETS.name
+        assert archive.read(f"buildTransitive/netstandard2.1/{PACKAGE_OUTPUT_TARGETS.name}") == (
+            REPO_ROOT / PACKAGE_OUTPUT_TARGETS
+        ).read_bytes()
+        content = root.find(".//{*}Content")
         assert content is not None
         assert content.attrib["Link"] == r"share\termin\%(RecursiveDir)%(Filename)%(Extension)"
         assert content.attrib["CopyToOutputDirectory"] == "PreserveNewest"
@@ -305,13 +313,13 @@ def test_dotnet_selects_managed_assets_for_each_framework(
     )
     assert result.returncode == 0, result.stdout + result.stderr
     references = json.loads(result.stdout)["Items"]["Reference"]
-    wpf_references = [item for item in references if item["Identity"] == "Termin.Wpf"]
+    wpf_references = [item for item in references if Path(item["Identity"]).name == "Termin.Wpf.dll"]
     if wpf_tfm is None:
         assert not wpf_references
     else:
         (wpf_reference,) = wpf_references
         expected = packages / "termin.graphics" / VERSION / "wpf" / wpf_tfm / "Termin.Wpf.dll"
-        assert Path(wpf_reference["HintPath"]).resolve() == expected.resolve()
+        assert Path(wpf_reference["FullPath"]).resolve() == expected.resolve()
 
 
 def test_rejects_missing_required_native_library(tmp_path: Path) -> None:
