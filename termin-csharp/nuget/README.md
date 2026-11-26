@@ -13,7 +13,7 @@ Linux binaries require glibc 2.43, libstdc++ with GLIBCXX_3.4.32, and
 `libshaderc.so.1`.
 
 ```xml
-<PackageReference Include="Termin.Engine" Version="[0.5.4]" />
+<PackageReference Include="Termin.Engine" Version="[0.5.5]" />
 ```
 
 Initialize Termin at app scope and acquire a `Tgfx2Host` for the backend.
