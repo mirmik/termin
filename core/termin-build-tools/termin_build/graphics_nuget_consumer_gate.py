@@ -24,7 +24,7 @@ from .graphics_nuget_product import (
 
 REPORT_NAME = "termin-graphics-nuget-consumer-report.json"
 REPORT_KIND = "termin-graphics-nuget-consumer-gate"
-REPORT_SCHEMA = 2
+REPORT_SCHEMA = 3
 SMOKE_MARKER = "TERMIN_GRAPHICS_NUGET_SMOKE="
 NATIVE_DOCUMENT_MODULES = frozenset({
     "termin_nodegraph_core.dll",
@@ -66,7 +66,7 @@ def consumer_project_files(lock: GraphicsNugetLock, version: str) -> dict[str, s
     <UseAppHost>false</UseAppHost>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="{lock.wpf_package}" Version="{version}" />
+    <PackageReference Include="{lock.runtime_package}" Version="[{version}]" />
   </ItemGroup>
 </Project>
 """
@@ -341,14 +341,15 @@ def _check_base_consumer(
     environment: dict[str, str],
     config: Path,
     log: Path,
+    framework: str,
 ) -> str:
-    """Compile the base bindings as a portable library without WPF references."""
-    project_root = workspace / "base-consumer"
+    """Verify the base bindings and output of a consumer without UseWPF."""
+    project_root = workspace / f"base-consumer-{framework}"
     project_root.mkdir()
     project = project_root / "BaseConsumer.csproj"
     project.write_text(f'''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>{lock.runtime_framework}</TargetFramework>
+    <TargetFramework>{framework}</TargetFramework>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
@@ -361,8 +362,10 @@ def _check_base_consumer(
         "public static class Consumer { public static NativeNodeGraph CreateGraph() => new NativeNodeGraph(); }\n",
         encoding="utf-8",
     )
+    output = workspace / f"base-publish-{framework}"
     _run_command(
-        [str(dotnet), "build", str(project), "--configuration", "Release", f"-p:RestoreConfigFile={config}"],
+        [str(dotnet), "publish", str(project), "--configuration", "Release",
+         "--output", str(output), f"-p:RestoreConfigFile={config}"],
         cwd=project_root, environment=environment, log=log, timeout_seconds=300,
     )
     assets = json.loads((project_root / "obj" / "project.assets.json").read_text(encoding="utf-8-sig"))
@@ -370,7 +373,9 @@ def _check_base_consumer(
     assembly = f"lib/{lock.runtime_framework}/Termin.Native.dll"
     (selected,) = assets["targets"].values()
     if set(selected) != {package} or set(selected[package]["compile"]) != {assembly}:
-        raise GraphicsNugetConsumerGateError(f"Unexpected {lock.runtime_framework} compile assets: {selected}")
+        raise GraphicsNugetConsumerGateError(f"Unexpected {framework} compile assets: {selected}")
+    if any(output.rglob("Termin.Wpf.dll")) or any((project_root / "bin").rglob("Termin.Wpf.dll")):
+        raise GraphicsNugetConsumerGateError(f"{framework} consumer without UseWPF contains Termin.Wpf.dll")
     return assembly
 
 
@@ -500,7 +505,7 @@ def validate_consumer_output(
     """Validate and describe the package payload copied to consumer output."""
     managed_package_paths = {
         "Termin.Native.dll": f"lib/{lock.runtime_framework}/Termin.Native.dll",
-        "Termin.Wpf.dll": f"lib/{wpf_framework}/Termin.Wpf.dll",
+        "Termin.Wpf.dll": f"wpf/{wpf_framework}/Termin.Wpf.dll",
     }
     native_prefix = f"runtimes/{lock.runtime_identifier}/native/"
     resource_prefix = "share/termin/"
@@ -854,6 +859,7 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
         failure: str | None = None
         frameworks: dict[str, dict[str, object]] = {}
         base_compile_asset: str | None = None
+        non_wpf_windows_compile_asset: str | None = None
         try:
             sdk_version = _run_command(
                 [str(dotnet), "--version"], cwd=project_root, environment=environment,
@@ -861,7 +867,12 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
             ).strip()
             print(f"Graphics NuGet consumer gate using .NET SDK {sdk_version}", flush=True)
             base_compile_asset = _check_base_consumer(
-                workspace, lock, version, dotnet, environment, config, results / "build-base.log"
+                workspace, lock, version, dotnet, environment, config,
+                results / "publish-base.log", lock.runtime_framework,
+            )
+            non_wpf_windows_compile_asset = _check_base_consumer(
+                workspace, lock, version, dotnet, environment, config,
+                results / "publish-non-wpf-windows.log", lock.target_framework,
             )
             _run_command(
                 [
@@ -941,6 +952,7 @@ def run_consumer_gate(repo_root: Path, candidate: Path, output_dir: Path) -> Pat
             ],
             "frameworks": frameworks,
             "base_compile_asset": base_compile_asset,
+            "non_wpf_windows_compile_asset": non_wpf_windows_compile_asset,
             "logs": sorted(path.name for path in results.glob("*.log")),
             "failure": failure,
         }

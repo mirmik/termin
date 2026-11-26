@@ -60,6 +60,10 @@ namespace {
                std::isfinite(range.y_max) && range.x_max > range.x_min && range.y_max > range.y_min;
     }
 
+    bool valid_axis_range(double minimum, double maximum) {
+        return std::isfinite(minimum) && std::isfinite(maximum) && maximum > minimum;
+    }
+
     bool valid_theme(const tc_chart2d_theme& theme) {
         return finite_color(theme.background_color) && finite_color(theme.plot_background_color) &&
                finite_color(theme.foreground_color) && finite_color(theme.axis_color) &&
@@ -173,6 +177,13 @@ namespace {
         tc_plot_range2d range() const {
             return range_;
         }
+        std::pair<double, double> y_axis_range(tc_chart_y_axis2d axis) const {
+            if (axis == TC_CHART_Y_AXIS_LEFT_2D)
+                return {range_.y_min, range_.y_max};
+            if (axis == TC_CHART_Y_AXIS_RIGHT_2D)
+                return {right_y_min_, right_y_max_};
+            throw std::invalid_argument("chart Y axis is invalid");
+        }
         tc_chart2d_theme theme() const {
             return theme_;
         }
@@ -201,25 +212,33 @@ namespace {
             case TC_CHART2D_PART_X_AXIS_ROOT:
                 return x_axis_root_;
             case TC_CHART2D_PART_Y_AXIS_ROOT:
-                return y_axis_root_;
+                return left_y_axis_.root;
             case TC_CHART2D_PART_X_AXIS:
                 return x_axis_;
             case TC_CHART2D_PART_Y_AXIS:
-                return y_axis_;
+                return left_y_axis_.path;
             case TC_CHART2D_PART_X_TICK_LABELS_ROOT:
                 return x_tick_labels_root_;
             case TC_CHART2D_PART_Y_TICK_LABELS_ROOT:
-                return y_tick_labels_root_;
+                return left_y_axis_.tick_root;
             case TC_CHART2D_PART_TITLE:
                 return title_item_;
             case TC_CHART2D_PART_X_AXIS_LABEL:
                 return x_axis_label_item_;
             case TC_CHART2D_PART_Y_AXIS_LABEL:
-                return y_axis_label_item_;
+                return left_y_axis_.label;
             case TC_CHART2D_PART_LEGEND_ROOT:
                 return legend_root_;
             case TC_CHART2D_PART_OVERLAY_ROOT:
                 return overlay_root_;
+            case TC_CHART2D_PART_RIGHT_Y_AXIS_ROOT:
+                return right_y_axis_.root;
+            case TC_CHART2D_PART_RIGHT_Y_AXIS:
+                return right_y_axis_.path;
+            case TC_CHART2D_PART_RIGHT_Y_TICK_LABELS_ROOT:
+                return right_y_axis_.tick_root;
+            case TC_CHART2D_PART_RIGHT_Y_AXIS_LABEL:
+                return right_y_axis_.label;
             }
             return tc_graphic_item_handle_invalid();
         }
@@ -237,6 +256,27 @@ namespace {
                 throw std::invalid_argument("chart range is invalid");
             range_ = range;
             apply_layout();
+        }
+
+        void set_y_axis_range(tc_chart_y_axis2d axis, double minimum, double maximum) {
+            const auto [old_min, old_max] = y_axis_range(axis);
+            tc_plot_range2d next{range_.x_min, range_.x_max, minimum, maximum};
+            if (!valid_axis_range(minimum, maximum))
+                throw std::invalid_argument("chart Y range is invalid");
+            if (axis == TC_CHART_Y_AXIS_LEFT_2D) {
+                set_range(next);
+                return;
+            }
+            if (has_right_axis() && old_min == minimum && old_max == maximum)
+                return;
+            right_y_min_ = minimum;
+            right_y_max_ = maximum;
+            if (has_right_axis()) {
+                update_right_y_axis();
+                ++layout_revision_;
+            } else {
+                enable_right_axis();
+            }
         }
 
         void set_x_range(double x_min, double x_max) {
@@ -261,32 +301,51 @@ namespace {
         void fit(double padding_fraction, bool fit_x, bool fit_y) {
             if (!std::isfinite(padding_fraction) || padding_fraction < 0.0)
                 throw std::invalid_argument("chart fit padding is invalid");
-            const std::optional<tcplot::PlotRange2D> bounds = series_bounds();
-            const auto fitted = tcplot::fit_optional_plot_range2d(bounds, padding_fraction);
-            if (!fitted)
+            const auto [left, right] = series_bounds();
+            auto shared = left;
+            extend_bounds(shared, right);
+            const auto fitted_x = tcplot::fit_optional_plot_range2d(shared, padding_fraction);
+            if (!fitted_x)
                 throw std::runtime_error("failed to fit chart series bounds");
+            if (!fit_y) {
+                set_x_range(fitted_x->x_min(), fitted_x->x_max());
+                return;
+            }
+            const auto fitted_left = tcplot::fit_optional_plot_range2d(left, padding_fraction);
+            const auto fitted_right = right ? tcplot::fit_plot_range2d(*right, padding_fraction) : std::nullopt;
             const tc_plot_range2d next = {
-                fit_x ? fitted->x_min() : range_.x_min,
-                fit_x ? fitted->x_max() : range_.x_max,
-                fit_y ? fitted->y_min() : range_.y_min,
-                fit_y ? fitted->y_max() : range_.y_max,
+                fit_x ? fitted_x->x_min() : range_.x_min,
+                fit_x ? fitted_x->x_max() : range_.x_max,
+                fitted_left && (left || !has_right_axis()) ? fitted_left->y_min() : range_.y_min,
+                fitted_left && (left || !has_right_axis()) ? fitted_left->y_max() : range_.y_max,
             };
+            if (!fitted_left || !valid_range(next) ||
+                (right && (!fitted_right || !valid_axis_range(fitted_right->y_min(), fitted_right->y_max()))))
+                throw std::runtime_error("failed to fit chart Y bounds");
+            if (fitted_right) {
+                right_y_min_ = fitted_right->y_min();
+                right_y_max_ = fitted_right->y_max();
+            }
             set_range(next);
         }
 
         bool pointer_down(float x, float y, int button) {
-            return interaction_.pointer_down(frame(), x, y, button);
+            const bool consumed = interaction_.pointer_down(frame(), x, y, button);
+            if (consumed && has_right_axis())
+                right_interaction_.pointer_down(frame(TC_CHART_Y_AXIS_RIGHT_2D), x, y, button);
+            return consumed;
         }
 
         bool pointer_move(float x, float y) {
             const auto next = interaction_.pointer_move(x, y);
             if (!next)
                 return false;
-            set_range(c_range(*next));
+            apply_navigation(*next, right_interaction_.pointer_move(x, y));
             return true;
         }
 
         bool pointer_up(int button) {
+            right_interaction_.pointer_up(button);
             return interaction_.pointer_up(button);
         }
 
@@ -294,12 +353,20 @@ namespace {
             const auto next = interaction_.wheel(frame(), x, y, steps, x_only);
             if (!next)
                 return false;
-            set_range(c_range(*next));
+            if (x_only) {
+                set_x_range(next->x_min(), next->x_max());
+            } else {
+                const auto right = has_right_axis()
+                    ? right_interaction_.wheel(frame(TC_CHART_Y_AXIS_RIGHT_2D), x, y, steps, false)
+                    : std::nullopt;
+                apply_navigation(*next, right);
+            }
             return true;
         }
 
         void cancel_interaction() {
             interaction_.cancel();
+            right_interaction_.cancel();
         }
 
         void set_theme(tc_chart2d_theme theme) {
@@ -320,6 +387,14 @@ namespace {
         void set_y_label(std::string value) {
             y_label_ = std::move(value);
             apply_layout();
+        }
+
+        void set_right_y_label(std::string value) {
+            right_y_label_ = std::move(value);
+            if (has_right_axis())
+                apply_layout();
+            else
+                enable_right_axis();
         }
 
         bool replace_part(tc_chart2d_part part_id, tc_graphic_item_handle replacement) {
@@ -383,7 +458,9 @@ namespace {
                                                 const double* y,
                                                 const double* scalar,
                                                 size_t count,
-                                                tc_plot_line_style_state2d style) {
+                                                tc_plot_line_style_state2d style,
+                                                tc_chart_y_axis2d axis = TC_CHART_Y_AXIS_LEFT_2D) {
+            y_axis_range(axis);
             tc_graphic_item_handle item =
                 adopt_series(tc_plot_line_series_item2d_create(scene_, projection_, x, y, scalar, count, style));
             if (tc_graphic_item_handle_is_invalid(item))
@@ -395,7 +472,13 @@ namespace {
                 slot.item = item;
                 slot.name = std::move(name);
                 slot.show_in_legend = show_in_legend;
+                slot.axis = axis;
                 create_legend_items(slot);
+                if (axis == TC_CHART_Y_AXIS_RIGHT_2D) {
+                    enable_right_axis();
+                    if (!tc_plot_line_series_item2d_set_projection(scene_, item, right_projection_))
+                        throw std::runtime_error("failed to assign chart line series to right axis");
+                }
                 update_legend();
                 return series_handle(slot);
             } catch (...) {
@@ -573,11 +656,12 @@ namespace {
         }
 
     private:
-        tcplot::PlotFrame2D frame() const {
+        tcplot::PlotFrame2D frame(tc_chart_y_axis2d axis = TC_CHART_Y_AXIS_LEFT_2D) const {
+            const auto [y_min, y_max] = y_axis_range(axis);
             return {
                 {viewport_.x, viewport_.y, viewport_.width, viewport_.height},
                 {plot_area_.x, plot_area_.y, plot_area_.width, plot_area_.height},
-                {range_.x_min, range_.x_max, range_.y_min, range_.y_max},
+                {range_.x_min, range_.x_max, y_min, y_max},
                 {plot_area_.x, plot_area_.y, plot_area_.width, plot_area_.height},
                 pixel_scale_,
             };
@@ -586,6 +670,25 @@ namespace {
         static tc_plot_range2d c_range(const tcplot::PlotRange2D& value) {
             return {value.x_min(), value.x_max(), value.y_min(), value.y_max()};
         }
+
+        void apply_navigation(const tcplot::PlotRange2D& left, const std::optional<tcplot::PlotRange2D>& right) {
+            const tc_plot_range2d next = c_range(left);
+            if (!valid_range(next) || (right && !valid_axis_range(right->y_min(), right->y_max())))
+                throw std::invalid_argument("chart navigation range is invalid");
+            if (right) {
+                right_y_min_ = right->y_min();
+                right_y_max_ = right->y_max();
+            }
+            set_range(next);
+        }
+
+        struct YAxisChrome {
+            tc_graphic_item_handle root = tc_graphic_item_handle_invalid();
+            tc_graphic_item_handle path = tc_graphic_item_handle_invalid();
+            tc_graphic_item_handle tick_root = tc_graphic_item_handle_invalid();
+            tc_graphic_item_handle label = tc_graphic_item_handle_invalid();
+            std::vector<tc_graphic_item_handle> tick_labels;
+        };
 
         struct PartSlot {
             tc_graphic_item_handle* handle = nullptr;
@@ -602,6 +705,7 @@ namespace {
             tc_graphic_item_handle item = tc_graphic_item_handle_invalid();
             std::string name;
             bool show_in_legend = false;
+            tc_chart_y_axis2d axis = TC_CHART_Y_AXIS_LEFT_2D;
             tc_graphic_item_handle legend_group = tc_graphic_item_handle_invalid();
             tc_graphic_item_handle legend_swatch = tc_graphic_item_handle_invalid();
             tc_graphic_item_handle legend_label = tc_graphic_item_handle_invalid();
@@ -621,6 +725,7 @@ namespace {
             slot.alive = true;
             slot.kind = kind;
             slot.show_in_legend = false;
+            slot.axis = TC_CHART_Y_AXIS_LEFT_2D;
             return slot;
         }
 
@@ -837,14 +942,14 @@ namespace {
             annotations_root_ = create_group(plot_area_root_);
             chrome_root_ = create_group(root_);
             x_axis_root_ = create_group(chrome_root_);
-            y_axis_root_ = create_group(chrome_root_);
+            left_y_axis_.root = create_group(chrome_root_);
             x_axis_ = create_path(x_axis_root_);
-            y_axis_ = create_path(y_axis_root_);
+            left_y_axis_.path = create_path(left_y_axis_.root);
             x_tick_labels_root_ = create_group(x_axis_root_);
-            y_tick_labels_root_ = create_group(y_axis_root_);
+            left_y_axis_.tick_root = create_group(left_y_axis_.root);
             title_item_ = create_text(chrome_root_, TC_VISUAL_TEXT_ANCHOR_CENTER);
             x_axis_label_item_ = create_text(chrome_root_, TC_VISUAL_TEXT_ANCHOR_CENTER);
-            y_axis_label_item_ = create_text(chrome_root_, TC_VISUAL_TEXT_ANCHOR_LEFT);
+            left_y_axis_.label = create_text(chrome_root_, TC_VISUAL_TEXT_ANCHOR_LEFT);
             legend_root_ = create_group(root_);
             legend_background_ = create_rect(legend_root_, theme_.plot_background_color);
             overlay_root_ = create_group(root_);
@@ -859,6 +964,72 @@ namespace {
             tc_visual_scene_item_set_z_order(scene_, legend_root_, 50);
             tc_visual_scene_item_set_z_order(scene_, legend_background_, 0);
             tc_visual_scene_item_set_z_order(scene_, overlay_root_, 60);
+        }
+
+        bool has_right_axis() const {
+            return !tc_plot_projection_handle2d_is_invalid(right_projection_);
+        }
+
+        void enable_right_axis() {
+            if (has_right_axis())
+                return;
+            try {
+                right_y_axis_.root = create_group(chrome_root_);
+                right_y_axis_.path = create_path(right_y_axis_.root);
+                right_y_axis_.tick_root = create_group(right_y_axis_.root);
+                right_y_axis_.label = create_text(right_y_axis_.root, TC_VISUAL_TEXT_ANCHOR_RIGHT);
+                const tc_plot_range2d range{range_.x_min, range_.x_max, right_y_min_, right_y_max_};
+                const tc_plot_projection_desc2d desc{viewport_, plot_area_, range, plot_area_, pixel_scale_};
+                right_projection_ = tc_plot_projection2d_create(scene_, &desc);
+                if (!has_right_axis())
+                    throw std::runtime_error("failed to create right chart projection");
+                apply_layout();
+            } catch (...) {
+                if (has_right_axis())
+                    tc_plot_projection2d_destroy(right_projection_);
+                if (!tc_graphic_item_handle_is_invalid(right_y_axis_.root))
+                    tc_visual_scene_destroy_item(scene_, right_y_axis_.root);
+                right_projection_ = tc_plot_projection_handle2d_invalid();
+                right_y_axis_ = {};
+                throw;
+            }
+        }
+
+        void update_right_projection() {
+            const tc_plot_range2d range{range_.x_min, range_.x_max, right_y_min_, right_y_max_};
+            const tc_plot_projection_desc2d desc{viewport_, plot_area_, range, plot_area_, pixel_scale_};
+            if (!tc_plot_projection2d_update(right_projection_, &desc))
+                throw std::runtime_error("failed to update right chart projection");
+        }
+
+        void update_right_y_axis() {
+            update_right_projection();
+            const auto ticks = tcplot::make_plot_axis_ticks2d(
+                right_y_min_, right_y_max_, plot_area_.height, theme_.y_tick_spacing_logical_px, pixel_scale_);
+            if (!ticks)
+                throw std::runtime_error("failed to generate right Y ticks");
+            const auto right_frame = frame(TC_CHART_Y_AXIS_RIGHT_2D);
+            set_y_axis(right_y_axis_, *ticks, right_frame, true);
+            update_y_tick_labels(right_y_axis_, *ticks, tick_line_height_, right_frame, true);
+        }
+
+        float measure_axis_text(std::string_view label) const {
+            const auto measured =
+                tcplot::measure_plot_text2d(host_->font(), label, theme_.font_size_logical_px, pixel_scale_);
+            if (!measured)
+                throw std::runtime_error("failed to measure chart axis text");
+            return measured->width;
+        }
+
+        float right_axis_width(float gap, float tick_length) const {
+            // Reserve one tick column independent of the current right range so
+            // rescaling that axis cannot move the left series in either direction.
+            // format_tick uses at most 11 characters with its current precision.
+            float widest_character = 0.0f;
+            for (const char glyph : std::string_view{"0123456789-.+e"})
+                widest_character = std::max(widest_character, measure_axis_text(std::string_view{&glyph, 1}));
+            const float label_width = right_y_label_.empty() ? 0.0f : measure_axis_text(right_y_label_) + gap;
+            return widest_character * 12.0f + label_width + tick_length + gap * 2.0f;
         }
 
         void apply_layout() {
@@ -885,15 +1056,11 @@ namespace {
                 tcplot::measure_plot_text2d(host_->font(), "Mg", theme_.font_size_logical_px, scale);
             if (!ticks || !tick_metrics)
                 throw std::runtime_error("failed to measure chart layout");
+            tick_line_height_ = tick_metrics->line_height;
 
             float widest_y = 0.0f;
-            for (const std::string& label : ticks->y.labels) {
-                const auto measured =
-                    tcplot::measure_plot_text2d(host_->font(), label, theme_.font_size_logical_px, scale);
-                if (!measured)
-                    throw std::runtime_error("failed to measure Y tick label");
-                widest_y = std::max(widest_y, measured->width);
-            }
+            for (const std::string& label : ticks->y.labels)
+                widest_y = std::max(widest_y, measure_axis_text(label));
             float title_height = 0.0f;
             if (!title_.empty()) {
                 const auto measured =
@@ -903,18 +1070,11 @@ namespace {
                 title_height = measured->line_height;
             }
             const float x_label_height = x_label_.empty() ? 0.0f : tick_metrics->line_height + gap;
-            float y_label_width = 0.0f;
-            if (!y_label_.empty()) {
-                const auto measured =
-                    tcplot::measure_plot_text2d(host_->font(), y_label_, theme_.font_size_logical_px, scale);
-                if (!measured)
-                    throw std::runtime_error("failed to measure Y axis label");
-                y_label_width = measured->width + gap;
-            }
+            const float y_label_width = y_label_.empty() ? 0.0f : measure_axis_text(y_label_) + gap;
 
             const float left = viewport_.x + padding + y_label_width + widest_y + tick_length + gap * 2.0f;
             const float top = viewport_.y + padding + title_height + (title_height > 0.0f ? gap : 0.0f);
-            const float right = padding;
+            const float right = padding + (has_right_axis() ? right_axis_width(gap, tick_length) : 0.0f);
             const float bottom = padding + tick_length + gap + tick_metrics->line_height + x_label_height;
             plot_area_ = {left,
                           top,
@@ -951,8 +1111,10 @@ namespace {
                                                    exact_ticks->y.values.size()))
                     throw std::runtime_error("failed to update chart grid");
             }
-            set_axes(*exact_ticks, tick_length, exact_frame);
-            update_tick_labels(*exact_ticks, *tick_metrics, exact_frame);
+            set_x_axis(exact_ticks->x, tick_length, exact_frame);
+            set_y_axis(left_y_axis_, exact_ticks->y, exact_frame, false);
+            update_x_tick_labels(exact_ticks->x, exact_frame);
+            update_y_tick_labels(left_y_axis_, exact_ticks->y, tick_line_height_, exact_frame, false);
             set_text_line_top(title_item_,
                               title_,
                               {viewport_.x + viewport_.width * 0.5f, viewport_.y + padding},
@@ -964,12 +1126,22 @@ namespace {
                                viewport_.y + viewport_.height - padding - tick_metrics->line_height},
                               tick_font_px,
                               TC_VISUAL_TEXT_ANCHOR_CENTER);
-            set_text_line_center(y_axis_label_item_,
+            set_text_line_center(left_y_axis_.label,
                                  y_label_,
                                  {viewport_.x + padding, plot_area_.y + plot_area_.height * 0.5f},
                                  tick_metrics->line_height,
                                  tick_font_px,
                                  TC_VISUAL_TEXT_ANCHOR_LEFT);
+            if (has_right_axis()) {
+                update_right_y_axis();
+                set_text_line_center(right_y_axis_.label,
+                                     right_y_label_,
+                                     {viewport_.x + viewport_.width - padding,
+                                      plot_area_.y + plot_area_.height * 0.5f},
+                                     tick_line_height_,
+                                     tick_font_px,
+                                     TC_VISUAL_TEXT_ANCHOR_RIGHT);
+            }
             update_legend();
             ++layout_revision_;
         }
@@ -981,6 +1153,8 @@ namespace {
             const tc_plot_projection_desc2d projection_desc = {viewport_, plot_area_, range_, plot_area_, pixel_scale_};
             if (!tc_plot_projection2d_update(projection_, &projection_desc))
                 throw std::runtime_error("failed to update chart X projection");
+            if (has_right_axis())
+                update_right_projection();
 
             const tcplot::PlotFrame2D frame({viewport_.x, viewport_.y, viewport_.width, viewport_.height},
                                             {plot_area_.x, plot_area_.y, plot_area_.width, plot_area_.height},
@@ -1059,11 +1233,6 @@ namespace {
             set_text_line_top(item, text, origin, size, anchor);
         }
 
-        void set_axes(const tcplot::PlotTicks2D& ticks, float tick_length, const tcplot::PlotFrame2D& frame) {
-            set_x_axis(ticks.x, tick_length, frame);
-            set_y_axis(ticks.y, tick_length, frame);
-        }
-
         void set_x_axis(const tcplot::PlotAxisTicks2D& ticks, float tick_length, const tcplot::PlotFrame2D& frame) {
             tc_visual_stroke_paint2d paint = stroke(theme_.axis_color, theme_.axis_width_logical_px * pixel_scale_);
             if (!tc_graphic_item_handle_is_invalid(x_axis_)) {
@@ -1089,18 +1258,26 @@ namespace {
             }
         }
 
-        void set_y_axis(const tcplot::PlotAxisTicks2D& ticks, float tick_length, const tcplot::PlotFrame2D& frame) {
+        float y_axis_x(bool right) const {
+            return right ? plot_area_.x + plot_area_.width : plot_area_.x;
+        }
+
+        void set_y_axis(const YAxisChrome& axis,
+                        const tcplot::PlotAxisTicks2D& ticks,
+                        const tcplot::PlotFrame2D& frame,
+                        bool right) {
             tc_visual_stroke_paint2d paint = stroke(theme_.axis_color, theme_.axis_width_logical_px * pixel_scale_);
-            if (!tc_graphic_item_handle_is_invalid(y_axis_)) {
+            if (!tc_graphic_item_handle_is_invalid(axis.path)) {
+                const float x = y_axis_x(right);
+                const float tick_offset = (right ? 1.0f : -1.0f) * theme_.tick_length_logical_px * pixel_scale_;
                 std::vector<tc_visual_path_verb2d> verbs;
                 std::vector<tc_vec2f> points;
-                append_path_line(
-                    verbs, points, plot_area_.x, plot_area_.y, plot_area_.x, plot_area_.y + plot_area_.height);
+                append_path_line(verbs, points, x, plot_area_.y, x, plot_area_.y + plot_area_.height);
                 for (double value : ticks.values) {
                     const auto p = frame.data_to_pixel(range_.x_min, value);
-                    append_path_line(verbs, points, plot_area_.x - tick_length, p.y, plot_area_.x, p.y);
+                    append_path_line(verbs, points, x, p.y, x + tick_offset, p.y);
                 }
-                if (!tc_visual_path_item2d_set(scene_, y_axis_, path_view(verbs, points), nullptr, &paint))
+                if (!tc_visual_path_item2d_set(scene_, axis.path, path_view(verbs, points), nullptr, &paint))
                     throw std::runtime_error("failed to update Y axis");
             }
         }
@@ -1113,13 +1290,6 @@ namespace {
                 pool.push_back(create_text(parent, anchor));
             for (size_t index = 0; index < pool.size(); ++index)
                 tc_visual_scene_item_set_visible(scene_, pool[index], index < count);
-        }
-
-        void update_tick_labels(const tcplot::PlotTicks2D& ticks,
-                                const tcplot::PlotTextMetrics2D& metrics,
-                                const tcplot::PlotFrame2D& frame) {
-            update_x_tick_labels(ticks.x, frame);
-            update_y_tick_labels(ticks.y, metrics.line_height, frame);
         }
 
         void update_x_tick_labels(const tcplot::PlotAxisTicks2D& ticks,
@@ -1138,21 +1308,25 @@ namespace {
             }
         }
 
-        void update_y_tick_labels(const tcplot::PlotAxisTicks2D& ticks,
+        void update_y_tick_labels(YAxisChrome& axis,
+                                  const tcplot::PlotAxisTicks2D& ticks,
                                   float line_height,
-                                  const tcplot::PlotFrame2D& frame) {
-            ensure_tick_pool(y_tick_labels_, ticks.values.size(), y_tick_labels_root_, TC_VISUAL_TEXT_ANCHOR_RIGHT);
+                                  const tcplot::PlotFrame2D& frame,
+                                  bool right) {
+            const auto anchor = right ? TC_VISUAL_TEXT_ANCHOR_LEFT : TC_VISUAL_TEXT_ANCHOR_RIGHT;
+            ensure_tick_pool(axis.tick_labels, ticks.values.size(), axis.tick_root, anchor);
             const float gap = theme_.gap_logical_px * pixel_scale_;
             const float tick_length = theme_.tick_length_logical_px * pixel_scale_;
             const float font_size = theme_.font_size_logical_px * pixel_scale_;
+            const float label_x = y_axis_x(right) + (right ? 1.0f : -1.0f) * (tick_length + gap);
             for (size_t index = 0; index < ticks.values.size(); ++index) {
                 const auto p = frame.data_to_pixel(range_.x_min, ticks.values[index]);
-                set_text_line_center(y_tick_labels_[index],
+                set_text_line_center(axis.tick_labels[index],
                                      ticks.labels[index],
-                                     {plot_area_.x - tick_length - gap, p.y},
+                                     {label_x, p.y},
                                      line_height,
                                      font_size,
-                                     TC_VISUAL_TEXT_ANCHOR_RIGHT);
+                                     anchor);
             }
         }
 
@@ -1167,13 +1341,21 @@ namespace {
             case TC_CHART2D_PART_X_AXIS:
                 return {&x_axis_, &x_axis_root_, kPathType, 0};
             case TC_CHART2D_PART_Y_AXIS:
-                return {&y_axis_, &y_axis_root_, kPathType, 0};
+                return {&left_y_axis_.path, &left_y_axis_.root, kPathType, 0};
+            case TC_CHART2D_PART_RIGHT_Y_AXIS:
+                if (has_right_axis())
+                    return {&right_y_axis_.path, &right_y_axis_.root, kPathType, 0};
+                return {};
             case TC_CHART2D_PART_TITLE:
                 return {&title_item_, &chrome_root_, kTextType, 30};
             case TC_CHART2D_PART_X_AXIS_LABEL:
                 return {&x_axis_label_item_, &chrome_root_, kTextType, 30};
             case TC_CHART2D_PART_Y_AXIS_LABEL:
-                return {&y_axis_label_item_, &chrome_root_, kTextType, 30};
+                return {&left_y_axis_.label, &chrome_root_, kTextType, 30};
+            case TC_CHART2D_PART_RIGHT_Y_AXIS_LABEL:
+                if (has_right_axis())
+                    return {&right_y_axis_.label, &right_y_axis_.root, kTextType, 30};
+                return {};
             default:
                 return {};
             }
@@ -1225,31 +1407,45 @@ namespace {
             return tcplot::PlotRange2D{x_min, x_max, y_min, y_max};
         }
 
-        std::optional<tcplot::PlotRange2D> series_bounds() const {
-            double x_min = std::numeric_limits<double>::infinity();
-            double x_max = -std::numeric_limits<double>::infinity();
-            double y_min = std::numeric_limits<double>::infinity();
-            double y_max = -std::numeric_limits<double>::infinity();
-            bool found = false;
+        static void extend_bounds(std::optional<tcplot::PlotRange2D>& total,
+                                  const std::optional<tcplot::PlotRange2D>& bounds) {
+            if (!bounds)
+                return;
+            if (!total) {
+                total = bounds;
+                return;
+            }
+            total = tcplot::PlotRange2D{
+                std::min(total->x_min(), bounds->x_min()),
+                std::max(total->x_max(), bounds->x_max()),
+                std::min(total->y_min(), bounds->y_min()),
+                std::max(total->y_max(), bounds->y_max()),
+            };
+        }
+
+        struct SeriesBounds {
+            std::optional<tcplot::PlotRange2D> left;
+            std::optional<tcplot::PlotRange2D> right;
+        };
+
+        SeriesBounds series_bounds() const {
+            SeriesBounds result;
             termin::visual::TcVisualScene scene{scene_};
             for (const SeriesSlot& slot : series_) {
                 const tc_graphic_item* item = scene.resolve(slot.item);
                 if (!slot.alive || item == nullptr || !scene.effective_visible(*item))
                     continue;
-                const auto bounds = series_item_bounds(slot.item);
-                if (!bounds)
-                    continue;
-                x_min = std::min(x_min, bounds->x_min());
-                x_max = std::max(x_max, bounds->x_max());
-                y_min = std::min(y_min, bounds->y_min());
-                y_max = std::max(y_max, bounds->y_max());
-                found = true;
+                auto& bounds = slot.axis == TC_CHART_Y_AXIS_RIGHT_2D ? result.right : result.left;
+                extend_bounds(bounds, series_item_bounds(slot.item));
             }
-            return found ? std::optional<tcplot::PlotRange2D>{tcplot::PlotRange2D{x_min, x_max, y_min, y_max}}
-                         : std::nullopt;
+            return result;
         }
 
         void cleanup() {
+            if (has_right_axis()) {
+                tc_plot_projection2d_destroy(right_projection_);
+                right_projection_ = tc_plot_projection_handle2d_invalid();
+            }
             if (!tc_plot_projection_handle2d_is_invalid(projection_)) {
                 tc_plot_projection2d_destroy(projection_);
                 projection_ = tc_plot_projection_handle2d_invalid();
@@ -1270,17 +1466,23 @@ namespace {
         tc_plot_rect2d viewport_{};
         tc_plot_rect2d plot_area_{};
         tc_plot_range2d range_{};
+        double right_y_min_ = 0.0;
+        double right_y_max_ = 1.0;
         std::string font_uri_;
         float pixel_scale_ = 1.0f;
+        float tick_line_height_ = 0.0f;
         tc_chart2d_theme theme_{};
         tcplot::PlotAxisTicks2D y_ticks_{};
         std::string title_;
         std::string x_label_;
         std::string y_label_;
+        std::string right_y_label_;
         uint64_t chart_id_ = next_chart_id.fetch_add(1);
         uint64_t layout_revision_ = 0;
         tcplot::ChartInteraction2D interaction_{};
+        tcplot::ChartInteraction2D right_interaction_{};
         tc_plot_projection_handle2d projection_ = tc_plot_projection_handle2d_invalid();
+        tc_plot_projection_handle2d right_projection_ = tc_plot_projection_handle2d_invalid();
         tc_graphic_item_handle root_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle background_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle plot_area_root_ = tc_graphic_item_handle_invalid();
@@ -1290,19 +1492,16 @@ namespace {
         tc_graphic_item_handle annotations_root_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle chrome_root_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle x_axis_root_ = tc_graphic_item_handle_invalid();
-        tc_graphic_item_handle y_axis_root_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle x_axis_ = tc_graphic_item_handle_invalid();
-        tc_graphic_item_handle y_axis_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle x_tick_labels_root_ = tc_graphic_item_handle_invalid();
-        tc_graphic_item_handle y_tick_labels_root_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle title_item_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle x_axis_label_item_ = tc_graphic_item_handle_invalid();
-        tc_graphic_item_handle y_axis_label_item_ = tc_graphic_item_handle_invalid();
+        YAxisChrome left_y_axis_;
+        YAxisChrome right_y_axis_;
         tc_graphic_item_handle legend_root_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle legend_background_ = tc_graphic_item_handle_invalid();
         tc_graphic_item_handle overlay_root_ = tc_graphic_item_handle_invalid();
         std::vector<tc_graphic_item_handle> x_tick_labels_;
-        std::vector<tc_graphic_item_handle> y_tick_labels_;
         std::vector<SeriesSlot> series_;
         std::vector<uint32_t> free_series_;
     };
@@ -1443,6 +1642,28 @@ bool tc_retained_chart2d_set_range(tc_retained_chart2d* chart, tc_plot_range2d r
            });
 }
 
+bool tc_retained_chart2d_y_axis_range(const tc_retained_chart2d* chart,
+                                     tc_chart_y_axis2d axis,
+                                     double* out_min,
+                                     double* out_max) {
+    return chart && out_min && out_max && logged("y_axis_range", false, [&] {
+        const auto [minimum, maximum] = chart->value.y_axis_range(axis);
+        *out_min = minimum;
+        *out_max = maximum;
+        return true;
+    });
+}
+
+bool tc_retained_chart2d_set_y_axis_range(tc_retained_chart2d* chart,
+                                         tc_chart_y_axis2d axis,
+                                         double minimum,
+                                         double maximum) {
+    return chart && logged("set_y_axis_range", false, [&] {
+        chart->value.set_y_axis_range(axis, minimum, maximum);
+        return true;
+    });
+}
+
 bool tc_retained_chart2d_set_x_range(tc_retained_chart2d* chart, double x_min, double x_max) {
     return chart && logged("set_x_range", false, [&] {
                chart->value.set_x_range(x_min, x_max);
@@ -1530,6 +1751,13 @@ bool tc_retained_chart2d_set_y_axis_label(tc_retained_chart2d* chart, const char
            });
 }
 
+bool tc_retained_chart2d_set_right_y_axis_label(tc_retained_chart2d* chart, const char* utf8) {
+    return chart && logged("set_right_y_axis_label", false, [&] {
+        chart->value.set_right_y_label(utf8 ? utf8 : "");
+        return true;
+    });
+}
+
 bool tc_retained_chart2d_replace_part(tc_retained_chart2d* chart,
                                       tc_chart2d_part part,
                                       tc_graphic_item_handle replacement) {
@@ -1575,11 +1803,24 @@ tc_chart_series_handle2d tc_retained_chart2d_add_named_line(tc_retained_chart2d*
                                                             const double* scalar,
                                                             size_t point_count,
                                                             tc_plot_line_style_state2d style) {
-    return chart ? logged("add_named_line",
+    return tc_retained_chart2d_add_named_line_on_axis(
+        chart, name_utf8, show_in_legend, x, y, scalar, point_count, style, TC_CHART_Y_AXIS_LEFT_2D);
+}
+
+tc_chart_series_handle2d tc_retained_chart2d_add_named_line_on_axis(tc_retained_chart2d* chart,
+                                                                    const char* name_utf8,
+                                                                    bool show_in_legend,
+                                                                    const double* x,
+                                                                    const double* y,
+                                                                    const double* scalar,
+                                                                    size_t point_count,
+                                                                    tc_plot_line_style_state2d style,
+                                                                    tc_chart_y_axis2d axis) {
+    return chart ? logged("add_named_line_on_axis",
                           invalid_series(),
                           [&] {
                               return chart->value.add_named_line(
-                                  name_utf8 ? name_utf8 : "", show_in_legend, x, y, scalar, point_count, style);
+                                  name_utf8 ? name_utf8 : "", show_in_legend, x, y, scalar, point_count, style, axis);
                           })
                  : invalid_series();
 }

@@ -160,6 +160,29 @@ namespace {
                     "Y tick line cells must fit vertical viewport margins");
         }
         require(xcount > 1 && ycount > 1, "fixture must exercise multiple labels on both axes");
+        const auto right_axis = part(TC_CHART2D_PART_RIGHT_Y_AXIS);
+        if (!tc_graphic_item_handle_is_invalid(right_axis)) {
+            const auto& path = snapshot.get<tgfx::DrawPath2D>(right_axis);
+            require(close(path.path.points().front().x, plot.x + plot.width),
+                    "right Y axis must lie on the right edge of the common plot area");
+            const auto label = text_cell(font, snapshot.get<tgfx::DrawText2D>(part(TC_CHART2D_PART_RIGHT_Y_AXIS_LABEL)));
+            require(inside(label, padded), "right Y axis label must remain inside the padded viewport");
+            require(close((label.top + label.bottom) * 0.5f, plot.y + plot.height * 0.5f),
+                    "right Y axis label must be vertically centered on the plot");
+            size_t right_count = 0;
+            for (const auto handle : children(scene_handle, part(TC_CHART2D_PART_RIGHT_Y_TICK_LABELS_ROOT))) {
+                const auto* text = snapshot.find<tgfx::DrawText2D>(handle);
+                if (!text)
+                    continue;
+                ++right_count;
+                const auto cell = text_cell(font, *text);
+                require(has_tick(path, (cell.top + cell.bottom) * 0.5f, false),
+                        "right Y tick labels must align with right axis ticks");
+                require(close(cell.left, plot.x + plot.width + tick + gap) && cell.right <= label.left - gap + 0.1f,
+                        "right Y tick labels must fit between the right axis and its label");
+            }
+            require(right_count > 1, "right Y axis must show multiple tick labels");
+        }
 
         const auto legend = part(TC_CHART2D_PART_LEGEND_ROOT);
         const tgfx::DrawRect2D* background = nullptr;
@@ -207,6 +230,13 @@ namespace {
             tc_retained_multi_chart2d_panel_chart(chart.get(), tc_retained_multi_chart2d_panel_at(chart.get(), 1));
         require(first && second && tc_retained_chart2d_set_range(second, {-4, 8, -7, 7}),
                 "multi-chart panel setup failed");
+        const double x[]{-3, 3}, y[]{-120, 80};
+        const tc_plot_line_style_state2d line{
+            {0.2f, 0.6f, 0.9f, 1}, 2, TC_PLOT_LINE_STYLE_SOLID_2D, 8, 5, TC_PLOT_COLORMAP_SOLID_2D, false, 0, 1};
+        const auto right = tc_retained_chart2d_add_named_line_on_axis(
+            first, "Right series", true, x, y, nullptr, 2, line, TC_CHART_Y_AXIS_RIGHT_2D);
+        require(right.chart_id != 0 && tc_retained_chart2d_set_y_axis_range(first, TC_CHART_Y_AXIS_RIGHT_2D, -180, 180),
+                "multi-chart right axis setup failed");
 
         tc_chart2d_layout previous_layout{}, layout{};
         tc_plot_range2d previous_range{}, first_range{}, second_range{};
@@ -226,6 +256,17 @@ namespace {
                     second_range.x_max == 9 && first_range.y_min == -2 && first_range.y_max == 6 &&
                     second_range.y_min == -7 && second_range.y_max == 7,
                 "shared X range must update both panels while preserving each Y range");
+        tc_chart_series_snapshot2d series{};
+        tc_plot_series_snapshot2d item{};
+        tc_plot_line_style_state2d style{};
+        tc_plot_projection_state2d right_projection{};
+        require(tc_retained_chart2d_series_snapshot(first, right, &series) &&
+                    tc_plot_line_series_item2d_snapshot(tc_retained_chart2d_scene(first), series.item, &item, &style) &&
+                    tc_plot_projection2d_snapshot(item.projection, &right_projection) &&
+                    right_projection.projection.range.x_min == -3 && right_projection.projection.range.x_max == 9 &&
+                    right_projection.projection.range.y_min == -180 && right_projection.projection.range.y_max == 180 &&
+                    close(right_projection.projection.plot_area.width, layout.plot_area.width),
+                "multi-chart viewport and shared X must reach the right series projection");
     }
 
     int run(tgfx::BackendType backend) {
@@ -246,6 +287,10 @@ namespace {
             const auto series = tc_retained_chart2d_add_named_line(chart, name, true, x, y, nullptr, 3, line);
             require(series.chart_id != 0, "named series setup failed");
         }
+        verify(chart, host.font(), theme, 1);
+        require(tc_retained_chart2d_set_y_axis_range(chart, TC_CHART_Y_AXIS_RIGHT_2D, -180, 180) &&
+                    tc_retained_chart2d_set_right_y_axis_label(chart, "Phase [deg]"),
+                "right Y axis setup failed");
         for (float dpi : {1.0f, 1.25f, 2.0f}) {
             for (float font_size : {12.0f, 17.0f, 24.0f}) {
                 std::printf("chart2d layout: DPI %.2f, logical font %.0f\n", dpi, font_size);

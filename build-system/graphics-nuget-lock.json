@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "product": "termin-graphics",
   "platform": "windows-x64",
   "runtime_identifier": "win-x64",
@@ -7,8 +7,7 @@
   "runtime_framework": "netstandard2.1",
   "csharp_profile": "plot-d3d11",
   "packages": {
-    "runtime": "Termin.Graphics",
-    "wpf": "Termin.Graphics.Wpf"
+    "runtime": "Termin.Graphics"
   },
   "managed_assemblies": {
     "runtime": "csharp/lib/netstandard2.1/Termin.Native.dll",

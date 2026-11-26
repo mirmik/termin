@@ -13,6 +13,7 @@ import zipfile
 from .engine_nuget_native import collect_native
 from .graphics_nuget_product import (
     FIXED_ZIP_TIME,
+    PACKAGE_OUTPUT_TARGETS,
     PackageDefinition,
     compose_package,
     load_lock,
@@ -246,6 +247,9 @@ def pack(repo: Path, stages: dict[str, Path], destination: Path, *, prerelease_v
     payload[f"ref/{FRAMEWORK}/{MANAGED}"] = payload[f"runtimes/win-x64/lib/{FRAMEWORK}/{MANAGED}"]
     payload["buildTransitive/net8.0/Termin.Engine.targets"] = _asset(
         repo, "termin-csharp/nuget/Termin.Engine.targets"
+    )
+    payload[f"buildTransitive/net8.0/{PACKAGE_OUTPUT_TARGETS.name}"] = _asset(
+        repo, PACKAGE_OUTPUT_TARGETS.as_posix()
     )
     payload["README.md"] = _asset(repo, "termin-csharp/nuget/README.md")
     payload.update(_licenses(repo))

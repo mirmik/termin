@@ -16,4 +16,5 @@
     <Error Condition="'$(RuntimeIdentifier)' != '' And '$(RuntimeIdentifier)' != 'win-x64' And '$(RuntimeIdentifier)' != 'linux-x64'" Code="TERMIN002"
            Text="Termin.Engine supports win-x64 and linux-x64. RuntimeIdentifier '$(RuntimeIdentifier)' is unsupported." />
   </Target>
+  <Import Project="Termin.PackageOutputs.targets" />
 </Project>

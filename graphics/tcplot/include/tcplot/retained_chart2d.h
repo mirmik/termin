@@ -30,6 +30,11 @@ typedef enum tc_chart_series_kind2d {
     TC_CHART_SERIES_HEATMAP_2D = 3,
 } tc_chart_series_kind2d;
 
+typedef enum tc_chart_y_axis2d {
+    TC_CHART_Y_AXIS_LEFT_2D = 0,
+    TC_CHART_Y_AXIS_RIGHT_2D = 1,
+} tc_chart_y_axis2d;
+
 typedef struct tc_chart_series_snapshot2d {
     tc_chart_series_kind2d kind;
     tc_graphic_item_handle item;
@@ -82,6 +87,10 @@ typedef enum tc_chart2d_part {
     TC_CHART2D_PART_Y_AXIS_LABEL = 16,
     TC_CHART2D_PART_LEGEND_ROOT = 17,
     TC_CHART2D_PART_OVERLAY_ROOT = 18,
+    TC_CHART2D_PART_RIGHT_Y_AXIS_ROOT = 19,
+    TC_CHART2D_PART_RIGHT_Y_AXIS = 20,
+    TC_CHART2D_PART_RIGHT_Y_TICK_LABELS_ROOT = 21,
+    TC_CHART2D_PART_RIGHT_Y_AXIS_LABEL = 22,
 } tc_chart2d_part;
 
 TCPLOT_API tc_chart2d_theme tc_retained_chart2d_default_theme(void);
@@ -119,6 +128,16 @@ TCPLOT_API bool tc_retained_chart2d_theme(const tc_retained_chart2d* chart, tc_c
 TCPLOT_API bool
 tc_retained_chart2d_set_viewport(tc_retained_chart2d* chart, tc_plot_rect2d viewport, float pixel_scale);
 TCPLOT_API bool tc_retained_chart2d_set_range(tc_retained_chart2d* chart, tc_plot_range2d range);
+// Existing range and projection accessors refer to the left axis. The
+// right axis starts at [0, 1] and becomes visible when configured or used.
+TCPLOT_API bool tc_retained_chart2d_y_axis_range(const tc_retained_chart2d* chart,
+                                                 tc_chart_y_axis2d axis,
+                                                 double* out_min,
+                                                 double* out_max);
+TCPLOT_API bool tc_retained_chart2d_set_y_axis_range(tc_retained_chart2d* chart,
+                                                     tc_chart_y_axis2d axis,
+                                                     double minimum,
+                                                     double maximum);
 // Updates only the horizontal projection, grid and X-axis chrome. The
 // plot rectangle and Y-axis layout remain valid, so moving-window charts
 // avoid a full text-measure/layout pass.
@@ -146,6 +165,7 @@ TCPLOT_API bool tc_retained_chart2d_set_theme(tc_retained_chart2d* chart, const 
 TCPLOT_API bool tc_retained_chart2d_set_title(tc_retained_chart2d* chart, const char* utf8);
 TCPLOT_API bool tc_retained_chart2d_set_x_axis_label(tc_retained_chart2d* chart, const char* utf8);
 TCPLOT_API bool tc_retained_chart2d_set_y_axis_label(tc_retained_chart2d* chart, const char* utf8);
+TCPLOT_API bool tc_retained_chart2d_set_right_y_axis_label(tc_retained_chart2d* chart, const char* utf8);
 
 // Replaceable standard leaves retain their semantic slot. Root/group parts
 // are intentionally not replaceable because they define composer topology.
@@ -178,6 +198,15 @@ TCPLOT_API tc_chart_series_handle2d tc_retained_chart2d_add_named_line(tc_retain
                                                                        const double* scalar,
                                                                        size_t point_count,
                                                                        tc_plot_line_style_state2d style);
+TCPLOT_API tc_chart_series_handle2d tc_retained_chart2d_add_named_line_on_axis(tc_retained_chart2d* chart,
+                                                                               const char* name_utf8,
+                                                                               bool show_in_legend,
+                                                                               const double* x,
+                                                                               const double* y,
+                                                                               const double* scalar,
+                                                                               size_t point_count,
+                                                                               tc_plot_line_style_state2d style,
+                                                                               tc_chart_y_axis2d axis);
 TCPLOT_API tc_chart_series_handle2d tc_retained_chart2d_add_named_scatter(tc_retained_chart2d* chart,
                                                                           const char* name_utf8,
                                                                           bool show_in_legend,

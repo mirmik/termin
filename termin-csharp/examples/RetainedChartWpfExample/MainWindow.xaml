@@ -21,11 +21,14 @@
             <termin:RetainedScene2DHost x:Name="SceneHost" />
         </Border>
 
-        <TextBlock x:Name="StatusText"
-                   Grid.Row="1"
-                   Margin="2,10,2,0"
-                   Foreground="#D9DCE3"
-                   FontSize="13"
-                   Text="Middle-drag pans; wheel zooms; Ctrl+wheel zooms X only." />
+        <DockPanel Grid.Row="1" Margin="2,10,2,0">
+            <Button DockPanel.Dock="Right" Content="Fit" Padding="12,2"
+                    Click="OnFitClick" />
+            <TextBlock x:Name="StatusText"
+                       VerticalAlignment="Center"
+                       Foreground="#D9DCE3"
+                       FontSize="13"
+                       Text="Middle-drag pans; wheel zooms; Ctrl+wheel zooms X only." />
+        </DockPanel>
     </Grid>
 </Window>

@@ -1,0 +1,65 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_TerminPackageRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..'))</_TerminPackageRoot>
+  </PropertyGroup>
+
+  <!-- Reproducible NuGet archives give files identical timestamps across versions.
+       Refresh the SDK-selected files once when the package or output path changes. -->
+  <Target Name="_RefreshTerminBuildOutputs" AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_TerminBuildStamp>$(IntermediateOutputPath)Termin.BuildOutputs</_TerminBuildStamp>
+      <_TerminBuildIdentity>$(_TerminPackageRoot)|$(OutDir)</_TerminBuildIdentity>
+    </PropertyGroup>
+    <ReadLinesFromFile File="$(_TerminBuildStamp)" Condition="Exists('$(_TerminBuildStamp)')">
+      <Output TaskParameter="Lines" PropertyName="_PreviousTerminBuildIdentity" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="'$(_PreviousTerminBuildIdentity)' != '$(_TerminBuildIdentity)'">
+      <_TerminBuildFile Include="@(ReferenceCopyLocalPaths)"
+                        Condition="$([System.String]::Copy('%(ReferenceCopyLocalPaths.FullPath)').StartsWith('$(_TerminPackageRoot)'))">
+        <TerminOutputPath>%(ReferenceCopyLocalPaths.DestinationSubDirectory)%(ReferenceCopyLocalPaths.Filename)%(ReferenceCopyLocalPaths.Extension)</TerminOutputPath>
+      </_TerminBuildFile>
+      <_TerminBuildFile Include="@(ContentWithTargetPath)"
+                        Condition="'%(ContentWithTargetPath.CopyToOutputDirectory)' != '' and '%(ContentWithTargetPath.CopyToOutputDirectory)' != 'Never' and $([System.String]::Copy('%(ContentWithTargetPath.FullPath)').StartsWith('$(_TerminPackageRoot)'))">
+        <TerminOutputPath>%(ContentWithTargetPath.TargetPath)</TerminOutputPath>
+      </_TerminBuildFile>
+    </ItemGroup>
+    <Copy SourceFiles="@(_TerminBuildFile)"
+          DestinationFiles="@(_TerminBuildFile->'$(OutDir)%(TerminOutputPath)')"
+          SkipUnchangedFiles="false">
+      <Output TaskParameter="DestinationFiles" ItemName="FileWrites" />
+    </Copy>
+    <WriteLinesToFile File="$(_TerminBuildStamp)" Lines="$(_TerminBuildIdentity)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Condition="'@(_TerminBuildFile)' != ''" />
+    <ItemGroup Condition="Exists('$(_TerminBuildStamp)')">
+      <FileWrites Include="$(_TerminBuildStamp)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_RefreshTerminPublishOutputs" AfterTargets="CopyFilesToPublishDirectory"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_TerminPublishStamp>$(IntermediateOutputPath)Termin.PublishOutputs</_TerminPublishStamp>
+      <_TerminPublishIdentity>$(_TerminPackageRoot)|$(PublishDir)</_TerminPublishIdentity>
+    </PropertyGroup>
+    <ReadLinesFromFile File="$(_TerminPublishStamp)" Condition="Exists('$(_TerminPublishStamp)')">
+      <Output TaskParameter="Lines" PropertyName="_PreviousTerminPublishIdentity" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="'$(_PreviousTerminPublishIdentity)' != '$(_TerminPublishIdentity)'">
+      <_TerminPublishFile Include="@(ResolvedFileToPublish)"
+                          Condition="'%(ResolvedFileToPublish.CopyToPublishDirectory)' != 'Never' and $([System.String]::Copy('%(ResolvedFileToPublish.FullPath)').StartsWith('$(_TerminPackageRoot)'))" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_TerminPublishFile)"
+          DestinationFiles="@(_TerminPublishFile->'$(PublishDir)%(RelativePath)')"
+          SkipUnchangedFiles="false">
+      <Output TaskParameter="DestinationFiles" ItemName="FileWrites" />
+    </Copy>
+    <WriteLinesToFile File="$(_TerminPublishStamp)" Lines="$(_TerminPublishIdentity)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Condition="'@(_TerminPublishFile)' != ''" />
+    <ItemGroup Condition="Exists('$(_TerminPublishStamp)')">
+      <FileWrites Include="$(_TerminPublishStamp)" />
+    </ItemGroup>
+  </Target>
+</Project>
