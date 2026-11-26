@@ -30,6 +30,7 @@ namespace termin {
                                     const std::vector<Light>& lights,
                                     const std::string& default_render_target = "",
                                     const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests = {},
-                                    StaticMeshBatchCache* batches = nullptr);
+                                    StaticMeshBatchCache* batches = nullptr,
+                                    const FrameGraphSchedule* schedule = nullptr);
 
 } // namespace termin

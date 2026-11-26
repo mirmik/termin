@@ -55,16 +55,14 @@ namespace termin {
             return _c ? _c->passthrough : false;
         }
         void set_passthrough(bool v) {
-            if (_c)
-                _c->passthrough = v;
+            tc_pass_set_passthrough(_c, v);
         }
 
         bool side_effect() const {
             return _c && _c->side_effect;
         }
         void set_side_effect(bool v) {
-            if (_c)
-                _c->side_effect = v;
+            tc_pass_set_side_effect(_c, v);
         }
 
         std::string type_name() const {
@@ -80,12 +78,7 @@ namespace termin {
         }
 
         void set_viewport_name(const std::string& name) {
-            if (!_c)
-                return;
-            if (_c->viewport_name) {
-                free((void*)_c->viewport_name);
-            }
-            _c->viewport_name = name.empty() ? nullptr : tc_strdup(name.c_str());
+            tc_pass_set_viewport_name(_c, name.c_str());
         }
 
         RENDER_CORE_API void* object_ptr() const;

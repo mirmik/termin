@@ -230,6 +230,7 @@ TC_API void tc_pass_delete_unowned(tc_pass* p);
 TC_API void tc_pass_set_name(tc_pass* p, const char* name);
 TC_API void tc_pass_set_enabled(tc_pass* p, bool enabled);
 TC_API void tc_pass_set_passthrough(tc_pass* p, bool passthrough);
+TC_API void tc_pass_set_side_effect(tc_pass* p, bool side_effect);
 TC_API void tc_pass_set_viewport_name(tc_pass* p, const char* viewport_name);
 
 typedef bool (*tc_pass_prepare_unload_fn)(const char* type_name, void* context, void* user_data);

@@ -34,6 +34,7 @@ namespace termin {
 
     class ShaderArtifactResolver;
     struct FrameGraphCaptureRequest;
+    struct FrameGraphSchedule;
 
     struct RenderPipelineCacheStats {
         uint64_t hit_count = 0;
@@ -90,6 +91,8 @@ namespace termin {
         std::vector<FrameGraphCaptureRequest*> debug_capture_requests;
         // Non-color graph results the caller will observe after execution.
         std::vector<std::string> required_resources;
+        // Optional selection already used to resolve this execution's inputs.
+        const FrameGraphSchedule* schedule = nullptr;
     };
 
     class RENDER_CORE_API RenderEngine {

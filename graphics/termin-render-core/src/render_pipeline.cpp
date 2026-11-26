@@ -226,10 +226,12 @@ namespace termin {
 
     void RenderPipeline::add_spec(const ResourceSpec& spec) {
         cache().specs.push_back(spec);
+        mark_dirty();
     }
 
     void RenderPipeline::clear_specs() {
         cache().specs.clear();
+        mark_dirty();
     }
 
     size_t RenderPipeline::spec_count() const {

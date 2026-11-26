@@ -1,6 +1,7 @@
 #pragma once
 
 #include "termin/render/render_topology.hpp"
+#include "termin/render/frame_graph_schedule.hpp"
 #include "core/tc_drawable_protocol.h"
 
 #include <cstddef>
@@ -51,7 +52,13 @@ namespace termin::rendering_manager_detail {
         uint32_t producer_job = UINT32_MAX;
     };
 
-    using OffscreenRenderJobCallback = bool (*)(void* user_data, const OffscreenRenderJob* job);
+    struct OffscreenRenderExecution {
+        FrameGraphSchedule schedule;
+        std::vector<FrameGraphCaptureRequest*> captures;
+    };
+
+    using OffscreenRenderJobCallback = bool (*)(void* user_data, const OffscreenRenderJob* job,
+                                                const OffscreenRenderExecution& execution);
     using OffscreenRenderDiagnosticCallback = void (*)(void* user_data, const OffscreenRenderDiagnostic* diagnostic);
     // Supplies execution-equivalent producer contexts, preparing material state
     // once before enumeration. The callback only emits material handles.
@@ -63,6 +70,11 @@ namespace termin::rendering_manager_detail {
     struct OffscreenRenderCacheOptions {
         bool force = false;
         bool (*has_output)(tc_render_target_handle) = nullptr;
+    };
+
+    struct OffscreenRenderCaptureCallbacks {
+        void (*prepare)(void*, const OffscreenRenderJob*, std::vector<FrameGraphCaptureRequest*>&) = nullptr;
+        void (*finish)(void*, const OffscreenRenderJob*, const std::vector<FrameGraphCaptureRequest*>&) = nullptr;
     };
 
     class OffscreenRenderPlanner {
@@ -83,7 +95,8 @@ namespace termin::rendering_manager_detail {
                      size_t demand_count = 0,
                      OffscreenMaterialDependencyCallback material_callback = nullptr,
                      void* material_user_data = nullptr,
-                     const OffscreenRenderCacheOptions* cache_options = nullptr);
+                     const OffscreenRenderCacheOptions* cache_options = nullptr,
+                     OffscreenRenderCaptureCallbacks capture_callbacks = {});
 
         void invalidate_outputs();
         uint64_t output_revision(tc_render_target_handle target) const;

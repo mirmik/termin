@@ -19,6 +19,7 @@ namespace termin::rendering_manager_detail {
         std::unordered_map<std::string, tc_entity_handle>& internal_entities_by_context;
         std::string& default_context_name;
         bool bind_resources = true;
+        const FrameGraphSchedule* schedule = nullptr;
     };
 
     bool build_render_target_contexts(const RenderTargetContextBuildRequest& request);

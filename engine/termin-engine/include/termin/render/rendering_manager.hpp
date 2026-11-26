@@ -111,9 +111,9 @@ namespace termin {
         std::vector<RenderExecutionTargetId> targets;
     };
 
-    // Main-thread observer of actual render executions. Implementations may
-    // provide one frame-local capture request. RenderingManager never retains the
-    // returned request beyond the matching RenderEngine call.
+    // Main-thread observer of render executions. Preparation can precede
+    // dependency execution. A returned capture request must stay valid until
+    // its matching finish callback, including while producer jobs execute.
     class TERMIN_ENGINE_API RenderExecutionObserver {
     public:
         virtual ~RenderExecutionObserver() = default;
@@ -415,7 +415,7 @@ namespace termin {
         void render_render_target_offscreen(tc_render_target_handle rt);
 
         // Render a managed target together with every render-target dependency
-        // declared through its pipeline parameters.
+        // used by its selected framegraph through its pipeline parameters.
         void render_render_target_tree_offscreen(tc_render_target_handle rt);
 
     private:

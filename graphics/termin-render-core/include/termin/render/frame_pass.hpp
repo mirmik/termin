@@ -175,9 +175,7 @@ namespace termin {
         }
 
         void viewport_name_set(const std::string& name) {
-            if (_c.viewport_name)
-                free(_c.viewport_name);
-            _c.viewport_name = name.empty() ? nullptr : tc_strdup(name.c_str());
+            tc_pass_set_viewport_name(&_c, name.c_str());
         }
 
         const std::string get_pass_name() const {

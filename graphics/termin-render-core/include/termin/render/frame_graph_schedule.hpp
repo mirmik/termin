@@ -25,6 +25,8 @@ namespace termin {
     };
 
     struct FrameGraphSchedule {
+        tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+        uint64_t pipeline_revision = 0;
         std::array<FrameGraphPassReason, TC_FRAME_GRAPH_MAX_PASSES> reasons{};
         std::array<size_t, TC_FRAME_GRAPH_MAX_PASSES> order{};
         size_t count = 0;
@@ -35,6 +37,10 @@ namespace termin {
         std::vector<size_t> capture_writers;
 
         std::span<const size_t> indices() const { return {order.data(), count}; }
+        bool matches(tc_pipeline_handle handle) const {
+            return tc_pipeline_handle_eq(pipeline, handle) && pipeline_revision != 0 &&
+                   pipeline_revision == tc_pipeline_render_revision(handle);
+        }
     };
 
     // The schedule borrows resource names from the pipeline and the requests.

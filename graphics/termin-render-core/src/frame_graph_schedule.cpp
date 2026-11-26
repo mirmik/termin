@@ -227,7 +227,10 @@ namespace termin {
         for (const auto& resource : required_resources)
             builder.require_resource(resource.c_str(), FrameGraphPassReason::RequiredResource);
         builder.select_captures(pipeline, captures);
-        return builder.finish(captures);
+        auto result = builder.finish(captures);
+        result.pipeline = pipeline.handle();
+        result.pipeline_revision = tc_pipeline_render_revision(pipeline.handle());
+        return result;
     }
 
     const char* frame_graph_pass_reason_name(FrameGraphPassReason reason) {

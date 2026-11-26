@@ -355,6 +355,11 @@ namespace termin {
 
         tc_profiler_begin_section("Get Frame Graph");
         const auto frame_graph_begin = RenderTimingClock::now();
+        if (execution.schedule && !execution.schedule->matches(pipeline.handle())) {
+            tc_profiler_end_section();
+            tc::Log::error("RenderEngine::execute_pipeline: pipeline changed after frame graph selection");
+            return false;
+        }
         tc_frame_graph* fg = tc_pipeline_get_frame_graph(pipeline.handle());
         if (!fg) {
             tc_profiler_end_section();
@@ -368,8 +373,10 @@ namespace termin {
             tc_profiler_end_section();
             return false;
         }
-        const FrameGraphSchedule schedule =
-            select_frame_graph_schedule(pipeline, fg, debug_capture_requests, execution.required_resources);
+        const FrameGraphSchedule local_schedule = execution.schedule
+            ? FrameGraphSchedule{}
+            : select_frame_graph_schedule(pipeline, fg, debug_capture_requests, execution.required_resources);
+        const FrameGraphSchedule& schedule = execution.schedule ? *execution.schedule : local_schedule;
         tc_profiler_end_section();
         if (!schedule.valid)
             return false;

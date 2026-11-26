@@ -16,7 +16,8 @@ namespace termin {
                                     const std::vector<Light>& lights,
                                     const std::string& default_render_target,
                                     const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests,
-                                    StaticMeshBatchCache* batches) {
+                                    StaticMeshBatchCache* batches,
+                                    const FrameGraphSchedule* schedule) {
         const tc::ProfilerScope scope("Scene render execution");
         if (!tc_scene_handle_valid(scene)) {
             tc::Log::error("render_scene_pipeline_offscreen: invalid scene handle");
@@ -39,6 +40,7 @@ namespace termin {
         execution.targets.reserve(target_count);
         execution.default_render_target = default_render_target;
         execution.debug_capture_requests = debug_capture_requests;
+        execution.schedule = schedule;
 
         size_t target_index = 0;
         for (const auto& [name, target] : render_target_contexts) {
