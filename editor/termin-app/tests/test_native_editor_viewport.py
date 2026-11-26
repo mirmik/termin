@@ -2,6 +2,7 @@ from __future__ import annotations
 from termin.gui_native import tc_ui_document_create, tc_ui_document_destroy
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -214,7 +215,7 @@ class _Attachment:
     def attach(self, scene, restore_state: bool) -> None:
         self.scene = scene
         self.restore_state = restore_state
-        self.viewport = SimpleNamespace(_viewport_handle=lambda: (3, 9))
+        self.viewport = SimpleNamespace(_viewport_handle=lambda: (3, 9), render_target=None)
 
     def close(self, save_state: bool = True) -> None:
         self.save_state = save_state
@@ -322,7 +323,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
         device="device",
         rendering_manager=manager,
         scene="scene",
-        request_render=lambda: renders.append(True),
+        request_ui_render=lambda: renders.append(True),
     )
 
     assert runtime.root.stable_id == "editor.viewport"
@@ -356,7 +357,10 @@ root:
     assert renders == [True]
     renders.clear()
 
-    runtime.attachment.viewport = SimpleNamespace(_viewport_handle=lambda: (7, 11))
+    target = Mock()
+    runtime.attachment.viewport = SimpleNamespace(
+        _viewport_handle=lambda: (7, 11), render_target=target
+    )
     runtime.rebind_input_manager()
     assert runtime.input_manager.rebinds == [(7, 11, 41, 1)]
     assert runtime._camera_overlay.rebind_count == 1
@@ -379,9 +383,11 @@ root:
     runtime.after_render()
     assert runtime.interaction.after_render_count == 1
     assert not renders
+    target.request_render.assert_not_called()
     overlay_enabled = True
     runtime.after_render()
     assert renders == [True]
+    target.request_render.assert_called_once_with()
 
     runtime.close()
     assert CameraOverlay.instances[0].closed
@@ -418,7 +424,6 @@ def test_editor_interaction_callbacks_can_be_cleared_for_owner_shutdown():
 
 
 def test_camera_update_respects_editor_lifecycle_flags():
-    from unittest.mock import Mock
     runtime = object.__new__(NativeEditorViewport)
     camera = SimpleNamespace(enabled=True, active_in_editor=True,
                              entity=SimpleNamespace(enabled=True), update=Mock())

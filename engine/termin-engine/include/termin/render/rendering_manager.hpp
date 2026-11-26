@@ -44,7 +44,9 @@ namespace termin {
 
     namespace rendering_manager_detail {
         class OffscreenRenderPlanner;
+    struct OffscreenRenderCacheOptions;
         class RenderDisplayRegistry;
+    class DisplayPresentationCache;
         class RenderStateStore;
     } // namespace rendering_manager_detail
 
@@ -137,6 +139,7 @@ namespace termin {
         // Runtime GPU output state helpers.
         std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
         std::unique_ptr<rendering_manager_detail::OffscreenRenderPlanner> offscreen_planner_;
+        std::unique_ptr<rendering_manager_detail::DisplayPresentationCache> presentation_cache_;
 
         // Engine-owned live scene/pipeline/target topology.
         RenderTopology& topology_;
@@ -292,6 +295,9 @@ namespace termin {
         // Phase 2: present_all() - blits to displays
         void render_all(bool present = true);
 
+        // Engine-loop entry: update invalid outputs and reuse valid textures.
+        void render_pending(bool force);
+
         // Phase 1: Render all viewports to their output_fbos
         // All viewports (from all displays) rendered in single pass.
         void render_all_offscreen();
@@ -398,7 +404,8 @@ namespace termin {
 
     private:
         void render_planned_offscreen(tc_display_handle only_display,
-                                      tc_render_target_handle requested_target = TC_RENDER_TARGET_HANDLE_INVALID);
+                                      tc_render_target_handle requested_target = TC_RENDER_TARGET_HANDLE_INVALID,
+                                      const rendering_manager_detail::OffscreenRenderCacheOptions* cache = nullptr);
 
         // Render single viewport to its output FBO
         void render_viewport_offscreen(tc_viewport_handle viewport);

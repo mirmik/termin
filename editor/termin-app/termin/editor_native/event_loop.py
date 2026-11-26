@@ -4,15 +4,10 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Callable
 
 from termin.base import log
 
 from termin.editor_core.terminal_interrupt import TerminalInterruptController
-
-
-def _game_mode_requires_continuous_render(game_mode_controller) -> bool:
-    return game_mode_controller is not None and game_mode_controller.model.is_game_mode
 
 
 def _smoke_frame_limit() -> int:
@@ -42,7 +37,6 @@ class NativeEditorEventLoop:
         profiler_panel,
         editor_log_capture,
         game_mode_controller,
-        request_editor_render: Callable[[], None],
         window,
         frame_limit: int,
         editor_viewport,
@@ -61,7 +55,6 @@ class NativeEditorEventLoop:
         self._profiler_panel = profiler_panel
         self._editor_log_capture = editor_log_capture
         self._game_mode_controller = game_mode_controller
-        self._request_editor_render = request_editor_render
         self._window = window
         self._frame_limit = frame_limit
         self._frame_count = 0
@@ -146,9 +139,6 @@ class NativeEditorEventLoop:
         with self._capture_profiler.section("Editor Camera"):
             if self._editor_viewport is not None:
                 self._editor_viewport.update(dt)
-        with self._capture_profiler.section("UI Schedule"):
-            if _game_mode_requires_continuous_render(self._game_mode_controller):
-                self._request_editor_render()
 
     def after_frame(self) -> None:
         if self._engine.last_frame_rendered:
@@ -182,7 +172,6 @@ def attach_native_editor_event_loop(
     profiler_panel,
     editor_log_capture,
     game_mode_controller,
-    request_editor_render: Callable[[], None],
     window,
     editor_viewport,
     frame_limit: int | None = None,
@@ -212,7 +201,6 @@ def attach_native_editor_event_loop(
             profiler_panel=profiler_panel,
             editor_log_capture=editor_log_capture,
             game_mode_controller=game_mode_controller,
-            request_editor_render=request_editor_render,
             window=window,
             editor_viewport=editor_viewport,
             frame_limit=_smoke_frame_limit() if frame_limit is None else frame_limit,

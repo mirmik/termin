@@ -122,7 +122,7 @@ namespace termin {
         RenderEngine();
         ~RenderEngine();
 
-        void execute_pipeline(const RenderExecution& execution);
+        bool execute_pipeline(const RenderExecution& execution);
     };
 
 } // namespace termin

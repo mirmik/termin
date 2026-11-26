@@ -16,6 +16,9 @@ TEST_CASE("SceneManager aggregates non-consuming work and scopes explicit update
     termin::SceneManager manager;
     const auto scene = manager.create_scene(termin::SceneKey("work", termin::SceneRole::Authoring));
     tc_scene_set_mode(scene, TC_SCENE_MODE_STOP);
+    CHECK(manager.tick(0.0));
+    CHECK_FALSE(manager.render_all_requested_this_tick());
+    CHECK_FALSE(manager.work_state().render_requested);
     int wakes = 0;
     manager.set_work_callback([&]() { ++wakes; });
     CHECK_FALSE(manager.work_state().continuous_update);
@@ -26,6 +29,15 @@ TEST_CASE("SceneManager aggregates non-consuming work and scopes explicit update
         CHECK(manager.work_state().continuous_update);
     }
     CHECK_FALSE(manager.work_state().continuous_update);
+    const uint64_t revision = tc_scene_render_revision(scene);
+    tc_scene_request_frame(scene);
+    CHECK(manager.tick(0.0));
+    CHECK_FALSE(manager.render_all_requested_this_tick());
+    CHECK_EQ(tc_scene_render_revision(scene), revision);
+    tc_scene_request_render(scene);
+    CHECK(manager.tick(0.0));
+    CHECK_FALSE(manager.render_all_requested_this_tick());
+    CHECK_EQ(tc_scene_render_revision(scene), revision + 1);
     manager.request_render();
     CHECK(manager.work_state().render_requested);
     CHECK(manager.work_state().render_requested);

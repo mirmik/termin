@@ -115,9 +115,12 @@ TC_API void tc_scene_notify_work_changed(tc_scene_handle h);
 TC_API void tc_scene_acquire_update_request(tc_scene_handle h);
 TC_API void tc_scene_release_update_request(tc_scene_handle h);
 
-// Scene-local render invalidation. Mutations request a frame on their owning
-// scene; a host SceneManager consumes the flag when scheduling that scene.
+// Scene-local render invalidation. The revision survives consumption of the
+// request, so inactive outputs can catch up when they are used again.
 TC_API void tc_scene_request_render(tc_scene_handle h);
+TC_API uint64_t tc_scene_render_revision(tc_scene_handle h);
+// Schedule a frame for narrower work, such as a change to one render target.
+TC_API void tc_scene_request_frame(tc_scene_handle h);
 TC_API bool tc_scene_consume_render_request(tc_scene_handle h);
 
 // Notify all components that scene started in editor mode

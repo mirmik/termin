@@ -124,6 +124,7 @@ typedef struct tc_scene_slot {
     double time_scale;
     double accumulated_time;
     bool render_requested;
+    uint64_t render_revision;
     size_t update_requests;
     tc_scene_work_callback work_callback;
     void* work_userdata;
@@ -1132,6 +1133,17 @@ tc_scene_work_state tc_scene_get_work_state(tc_scene_handle h) {
 void tc_scene_request_render(tc_scene_handle h) {
     if (!handle_alive(h))
         return;
+    ++g_pool->slots[h.index].render_revision;
+    tc_scene_request_frame(h);
+}
+
+uint64_t tc_scene_render_revision(tc_scene_handle h) {
+    return handle_alive(h) ? g_pool->slots[h.index].render_revision : 0;
+}
+
+void tc_scene_request_frame(tc_scene_handle h) {
+    if (!handle_alive(h))
+        return;
     g_pool->slots[h.index].render_requested = true;
     tc_scene_notify_work_changed(h);
 }
@@ -1504,7 +1516,8 @@ void tc_scene_set_mode(tc_scene_handle h, tc_scene_mode mode) {
 
     tc_scene_mode old_mode = g_pool->slots[h.index].mode;
     g_pool->slots[h.index].mode = mode;
-    tc_scene_notify_work_changed(h);
+    if (mode != old_mode)
+        tc_scene_request_render(h);
 
     if (mode == TC_SCENE_MODE_INACTIVE && old_mode != TC_SCENE_MODE_INACTIVE) {
         tc_scene_notify_scene_inactive(h);

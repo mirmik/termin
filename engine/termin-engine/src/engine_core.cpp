@@ -977,7 +977,7 @@ namespace termin {
         if (should_render) {
             if (profile)
                 tc_profiler_begin_section("SceneManager Render");
-            rendering_manager.render_all(true);
+            rendering_manager.render_pending(scene_manager.render_all_requested_this_tick());
             if (profile)
                 tc_profiler_end_section();
 

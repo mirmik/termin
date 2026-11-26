@@ -59,6 +59,7 @@ def test_scene_local_render_request_is_consumed_by_scene_manager_tick():
     scene = manager.create_scene(key)
     manager.set_mode(key, engine_scene.SceneMode.STOP)
 
+    assert manager.tick(0.0)
     assert not manager.tick(0.0)
     scene.request_render()
     assert manager.tick(0.0)

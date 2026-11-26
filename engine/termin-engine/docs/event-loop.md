@@ -35,6 +35,9 @@ active. Pending component starts and primary-scene transitions request a tick.
 Render invalidation is separate from continuous simulation demand. The
 `request_updates(scene)` Python method returns an owner with `close()`; its
 destruction also releases the request, including after scene destruction.
+Scene and render-target revisions survive this wakeup query and its consuming
+tick. The renderer uses them to select the outputs for the frame. See
+[RenderingManager](rendering-manager.md) for the scope of each request.
 
 Scene mutations and work queries remain on the scene owner thread. The single
 scene work callback is owned by its SceneManager and may only notify the host;

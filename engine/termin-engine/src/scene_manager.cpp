@@ -361,7 +361,7 @@ namespace termin {
 
     tc_scene_work_state SceneManager::work_state() const {
         tc_scene_work_state result{};
-        result.render_requested = _render_requested;
+        result.render_requested = _render_requested || _frame_requested;
         for (const auto& [key, record] : _scenes) {
             const auto state = tc_scene_get_work_state(record.handle);
             result.pending_update |= state.pending_update;
@@ -391,12 +391,13 @@ namespace termin {
             (void)key;
             scene_requested = tc_scene_consume_render_request(record.handle) || scene_requested;
         }
-        const bool should_render = has_play_scenes() || _render_requested || scene_requested;
-        if (should_render) _render_requested = false;
-        return should_render;
+        _render_all_this_tick = consume_render_request();
+        const bool frame_requested = std::exchange(_frame_requested, false);
+        return has_play_scenes() || _render_all_this_tick || frame_requested || scene_requested;
     }
 
     void SceneManager::request_render() { _render_requested = true; notify_work_changed(); }
+    void SceneManager::request_frame() { _frame_requested = true; notify_work_changed(); }
     bool SceneManager::consume_render_request() {
         const bool requested = _render_requested;
         _render_requested = false;

@@ -79,6 +79,8 @@ namespace termin {
 
         std::unordered_map<SceneKey, SceneRecord, SceneKeyHash> _scenes;
         bool _render_requested = false;
+        bool _frame_requested = false;
+        bool _render_all_this_tick = false;
         AfterRenderCallback _on_after_render;
         BeforeSceneCloseCallback _on_before_scene_close;
         BeforeSceneDestroyGuard _before_scene_destroy_guard;
@@ -136,7 +138,9 @@ namespace termin {
         void notify_work_changed();
 
         virtual bool tick(double dt);
+        bool render_all_requested_this_tick() const { return _render_all_this_tick; }
         void request_render();
+        void request_frame();
         bool consume_render_request();
 
         void set_on_after_render(AfterRenderCallback callback);

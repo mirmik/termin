@@ -330,10 +330,10 @@ namespace termin {
         }
     }
 
-    void RenderEngine::execute_pipeline(const RenderExecution& execution) {
+    bool RenderEngine::execute_pipeline(const RenderExecution& execution) {
         if (!execution.pipeline || !execution.pipeline->is_valid()) {
             tc::Log::error("RenderEngine::execute_pipeline: pipeline is null");
-            return;
+            return false;
         }
         RenderPipeline& pipeline = *execution.pipeline;
         const std::vector<FrameGraphCaptureRequest*>& debug_capture_requests = execution.debug_capture_requests;
@@ -343,12 +343,12 @@ namespace termin {
         for (const auto& [name, target] : execution.targets) {
             if (!target.context) {
                 tc::Log::error("RenderEngine::execute_pipeline: target '%s' has no RenderTargetContext", name.c_str());
-                return;
+                return false;
             }
             if (!target.render_items || !target.render_items->valid()) {
                 tc::Log::error("RenderEngine::execute_pipeline: target '%s' has no published RenderItemSnapshot",
                                name.c_str());
-                return;
+                return false;
             }
             render_target_contexts.emplace(name, *target.context);
         }
@@ -357,11 +357,11 @@ namespace termin {
         tgfx::RenderContext2* ctx2 = tgfx2_ctx();
         if (!device) {
             tc::Log::error("RenderEngine::execute_pipeline: tgfx2 device unavailable");
-            return;
+            return false;
         }
         if (render_target_contexts.empty()) {
             tc::Log::error("RenderEngine::execute_pipeline: no render target contexts");
-            return;
+            return false;
         }
 
         const bool collect_render_timing = render_engine_timing_enabled();
@@ -394,14 +394,14 @@ namespace termin {
         if (!fg) {
             tc_profiler_end_section();
             tc::Log::error("RenderEngine::execute_pipeline: failed to get frame graph");
-            return;
+            return false;
         }
 
         if (tc_frame_graph_get_error(fg) != TC_FG_OK) {
             tc::Log::error("RenderEngine::execute_pipeline: frame graph error: %s",
                            tc_frame_graph_get_error_message(fg));
             tc_profiler_end_section();
-            return;
+            return false;
         }
         tc_profiler_end_section();
         frame_graph_ms = timing_ms(frame_graph_begin, RenderTimingClock::now());
@@ -481,7 +481,7 @@ namespace termin {
                 resolve_resource_extent(canon, spec, render_target_contexts, default_rt_ctx);
             if (!extent) {
                 tc_profiler_end_section();
-                return;
+                return false;
             }
             resolved_resource_extents.emplace(canon, *extent);
         }
@@ -641,7 +641,7 @@ namespace termin {
                     if (!pipeline_cache.texture_pool.ensure(*device, canon, texture_desc)) {
                         tc::Log::error("RenderEngine::execute_pipeline: failed to allocate color_texture '%s'", canon);
                         tc_profiler_end_section();
-                        return;
+                        return false;
                     }
                 }
 
@@ -669,7 +669,7 @@ namespace termin {
                 if (!pipeline_cache.texture_pool.ensure(*device, canon, texture_desc)) {
                     tc::Log::error("RenderEngine::execute_pipeline: failed to allocate depth_texture '%s'", canon);
                     tc_profiler_end_section();
-                    return;
+                    return false;
                 }
 
                 std::vector<const char*> aliases = collect_alias_group(fg, canon);
@@ -688,7 +688,7 @@ namespace termin {
                     tc::Log::error("RenderEngine::execute_pipeline: non-texture resource '%s' has no ResourceSpec",
                                    canon);
                     tc_profiler_end_section();
-                    return;
+                    return false;
                 }
                 auto& resource = pipeline_cache.frame_graph_resources[canon];
                 if (resource) {
@@ -705,7 +705,7 @@ namespace termin {
                                    canon,
                                    resource_type.c_str());
                     tc_profiler_end_section();
-                    return;
+                    return false;
                 }
                 std::vector<const char*> aliases = collect_alias_group(fg, canon);
                 size_t alias_count = aliases.size();
@@ -750,7 +750,7 @@ namespace termin {
             if (!fbo_pool.ensure_native(*device, canon, target_desc, direct_color)) {
                 tc::Log::error("RenderEngine::execute_pipeline: failed to allocate fbo '%s'", canon);
                 tc_profiler_end_section();
-                return;
+                return false;
             }
             (void)filter;
 
@@ -906,6 +906,7 @@ namespace termin {
             ColorOutputBindingPlan plan;
         };
         std::vector<PreparedColorOutputBinding> color_output_bindings;
+        bool completed = true;
         color_output_bindings.reserve(pipeline.color_exports().size());
         for (const PipelineColorExport& color_export : pipeline.color_exports()) {
             auto target_it = color_export.viewport_name.empty() ? default_it
@@ -914,12 +915,14 @@ namespace termin {
                 tc::Log::error("RenderEngine: color export '%s' refers to unknown target '%s'",
                                color_export.resource.c_str(),
                                color_export.viewport_name.c_str());
+                completed = false;
                 continue;
             }
             const tgfx::TextureHandle target = target_it->second.output_color.texture;
             if (!target) {
                 tc::Log::error("RenderEngine: color export '%s' has no physical target texture",
                                color_export.resource.c_str());
+                completed = false;
                 continue;
             }
 
@@ -938,6 +941,7 @@ namespace termin {
             if (!source) {
                 tc::Log::error("RenderEngine: color export resource '%s' is unavailable",
                                color_export.resource.c_str());
+                completed = false;
                 continue;
             }
 
@@ -949,6 +953,7 @@ namespace termin {
             if (!plan.valid) {
                 tc::Log::error("RenderEngine: refusing to bind scene-linear export '%s' to an SDR color target",
                                color_export.resource.c_str());
+                completed = false;
                 color_output_bindings.push_back(
                     {color_export, canonical_resource, storage_resource, source, target, plan});
                 continue;
@@ -1914,6 +1919,7 @@ namespace termin {
                 tc::Log::error("RenderEngine: color export '%s' binding failed: %s",
                                binding.export_desc.resource.c_str(),
                                error.what());
+                completed = false;
             }
         }
 
@@ -1964,6 +1970,7 @@ namespace termin {
             }
             maybe_report_render_engine_timing();
         }
+        return completed;
     }
 
 } // namespace termin

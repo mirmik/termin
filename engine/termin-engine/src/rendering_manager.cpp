@@ -29,6 +29,7 @@ extern "C" {
 #include "tc_profiler.h"
 #include "tc_viewport_config.h"
 #include <tcbase/tc_log.h>
+#include <tgfx/resources/tc_texture_registry.h>
 }
 
 #include <algorithm>
@@ -41,6 +42,7 @@ namespace termin {
         display_registry_ = std::make_unique<rendering_manager_detail::RenderDisplayRegistry>();
         render_states_ = std::make_unique<rendering_manager_detail::RenderStateStore>();
         offscreen_planner_ = std::make_unique<rendering_manager_detail::OffscreenRenderPlanner>();
+        presentation_cache_ = std::make_unique<rendering_manager_detail::DisplayPresentationCache>();
     }
 
     RenderingManager::~RenderingManager() {
@@ -52,6 +54,8 @@ namespace termin {
     // ============================================================================
 
     void RenderingManager::set_render_engine(RenderEngine* engine) {
+        offscreen_planner_->invalidate_outputs();
+        presentation_cache_->clear();
         render_engine_ = engine;
         owned_render_engine_.reset(); // Release owned engine if any
     }
@@ -371,6 +375,7 @@ namespace termin {
     }
 
     void RenderingManager::remove_display(tc_display_handle display) {
+        presentation_cache_->invalidate(display);
         display_registry_->remove_display(
             display,
             [this](tc_viewport_handle viewport) {
@@ -394,6 +399,7 @@ namespace termin {
     }
 
     void RenderingManager::remove_editor_display(tc_display_handle display) {
+        presentation_cache_->invalidate(display);
         display_registry_->remove_editor_display(display, [this](tc_viewport_handle viewport) {
             unregister_viewport_attachment(viewport);
             remove_viewport_state(viewport);
@@ -401,13 +407,16 @@ namespace termin {
     }
 
     bool RenderingManager::try_auto_remove_display(tc_display_handle display) {
-        return display_registry_->try_auto_remove_display(
+        const bool removed = display_registry_->try_auto_remove_display(
             display,
             [this](tc_viewport_handle viewport) {
                 unregister_viewport_attachment(viewport);
                 remove_viewport_state(viewport);
             },
             display_removed_callback_);
+        if (removed)
+            presentation_cache_->invalidate(display);
+        return removed;
     }
 
     tc_input_manager* RenderingManager::display_input_endpoint(tc_display_handle display) {
@@ -937,6 +946,27 @@ namespace termin {
         }
     }
 
+    void RenderingManager::render_pending(bool force) {
+        if (!render_engine()) {
+            tc_log(TC_LOG_WARN, "[RenderingManager] render_pending: no render engine");
+            return;
+        }
+        const rendering_manager_detail::OffscreenRenderCacheOptions cache{
+            force, [](tc_render_target_handle target) {
+                return tc_texture_is_valid(tc_render_target_get_color_texture(target));
+            }};
+        {
+            const tc::ProfilerScope scope("Render pending outputs");
+            render_planned_offscreen(TC_DISPLAY_HANDLE_INVALID, TC_RENDER_TARGET_HANDLE_INVALID, &cache);
+        }
+        if (force)
+            presentation_cache_->clear();
+        for (const auto display : display_registry_->displays())
+            presentation_cache_->present_pending(*this, *offscreen_planner_, display);
+        for (const auto display : display_registry_->editor_displays())
+            presentation_cache_->present_pending(*this, *offscreen_planner_, display);
+    }
+
     void RenderingManager::render_all_offscreen() {
         RenderEngine* engine = render_engine();
         if (!engine) {
@@ -978,7 +1008,10 @@ namespace termin {
     }
 
     void RenderingManager::render_planned_offscreen(tc_display_handle only_display,
-                                                    tc_render_target_handle requested_target) {
+                                                    tc_render_target_handle requested_target,
+                                                    const rendering_manager_detail::OffscreenRenderCacheOptions* cache) {
+        if (!cache)
+            offscreen_planner_->invalidate_outputs();
         std::vector<RenderExecutionTargetId> requested_targets;
         for (const RenderExecutionObserver* observer : render_execution_observers_) {
             if (observer)
@@ -1045,12 +1078,20 @@ namespace termin {
                         manager->render_target_context_providers_, manager->missing_render_target_provider_warnings_,
                         prepared->contexts, prepared->internal_entities, prepared->default_context};
                     if (!rendering_manager_detail::bind_render_target_context_resources(request))
-                        return;
+                        return false;
+                    if (tc_render_target_get_kind(prepared->target) == TC_RENDER_TARGET_TEXTURE_2D &&
+                        std::any_of(prepared->contexts.begin(), prepared->contexts.end(), [](const auto& entry) {
+                            return !entry.second.output_color.texture || !entry.second.output_depth_tex;
+                        })) {
+                        tc_log(TC_LOG_ERROR, "[RenderingManager] could not allocate attachments for target '%s'",
+                               tc_render_target_get_name(prepared->target));
+                        return false;
+                    }
                     contexts.merge(prepared->contexts);
                     internal_entities.merge(prepared->internal_entities);
                     if (!prepared->contexts.empty()) {
                         tc_log(TC_LOG_ERROR, "[RenderingManager] duplicate prepared context name in render job");
-                        return;
+                        return false;
                     }
                     if (default_context.empty())
                         default_context = prepared->default_context;
@@ -1060,13 +1101,14 @@ namespace termin {
                                                  prepared->viewport, prepared->target});
                 }
                 if (contexts.empty())
-                    return;
+                    return false;
                 const auto lights = manager->collect_lights(job.scene);
                 RenderPipeline pipeline(job.pipeline);
                 const auto captures = manager->prepare_render_execution(execution);
-                termin::render_scene_pipeline_offscreen(*manager->render_engine(), pipeline, job.scene, contexts,
+                const bool rendered = termin::render_scene_pipeline_offscreen(*manager->render_engine(), pipeline, job.scene, contexts,
                     internal_entities, lights, default_context, captures, &manager->static_mesh_batches_);
                 manager->finish_render_execution(execution, captures);
+                return rendered;
             },
             &planned_context,
             nullptr,
@@ -1130,7 +1172,8 @@ namespace termin {
                 planned.outputs.push_back(std::move(prepared_output));
                 return ok;
             },
-            &planned_context);
+            &planned_context,
+            cache);
     }
 
     void RenderingManager::render_render_target_tree_offscreen(tc_render_target_handle rt) {
@@ -1354,6 +1397,7 @@ namespace termin {
     }
 
     void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {
+        offscreen_planner_->invalidate_outputs();
         if (!tc_render_target_handle_valid(rt))
             return;
         if (!tc_render_target_get_enabled(rt))
@@ -1428,6 +1472,7 @@ namespace termin {
     }
 
     void RenderingManager::present_display(tc_display_handle display) {
+        presentation_cache_->invalidate(display);
         rendering_manager_detail::present_display(*this, display);
     }
 
@@ -1495,6 +1540,8 @@ namespace termin {
     // ============================================================================
 
     void RenderingManager::shutdown() {
+        offscreen_planner_->invalidate_outputs();
+        presentation_cache_->clear();
         if (render_states_) {
             render_states_->clear_all();
         }

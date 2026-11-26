@@ -52,7 +52,6 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
     editor_viewport = Mock()
     editor_viewport.needs_update = False
     engine = SimpleNamespace(last_frame_rendered=False)
-    request_editor_render = Mock()
     window = Mock()
     window.should_close.return_value = False
     event_loop = NativeEditorEventLoop(
@@ -69,7 +68,6 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         profiler_panel=profiler_panel,
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
-        request_editor_render=request_editor_render,
         editor_viewport=editor_viewport,
         window=window,
         frame_limit=frame_limit,
@@ -88,7 +86,6 @@ def _build_event_loop(*, frame_limit: int = 0, game_mode: bool = False):
         profiler_panel=profiler_panel,
         editor_log_capture=editor_log_capture,
         game_mode_controller=game_mode_controller,
-        request_editor_render=request_editor_render,
         editor_viewport=editor_viewport,
         window=window,
         engine=engine,
@@ -112,7 +109,6 @@ def test_native_editor_event_loop_polls_services_and_honors_frame_limit() -> Non
     services.framegraph_debugger.update.assert_not_called()
     services.frame_profiler.update.assert_not_called()
     services.editor_log_capture.drain.assert_called_once_with()
-    services.request_editor_render.assert_called_once_with()
     services.window_manager.render_requested.assert_called_once_with()
     services.window.set_should_close.assert_called_once_with(True)
 
@@ -176,7 +172,6 @@ def test_attach_native_editor_event_loop_owns_reverse_order_teardown(
         profiler_panel=services.profiler_panel,
         editor_log_capture=services.editor_log_capture,
         game_mode_controller=services.game_mode_controller,
-        request_editor_render=services.request_editor_render,
         editor_viewport=services.editor_viewport,
         window=services.window,
     )
@@ -224,11 +219,11 @@ def test_idle_camera_updates_after_input_before_composition(monkeypatch):
     loop.before_frame(.125)
     loop.after_frame()
     assert order == ["input", ("camera", .125), "compose"] * 2
-    services.request_editor_render.assert_not_called()
 
 
-def test_idle_plan_has_no_work_or_periodic_frame_deadline() -> None:
-    loop, services = _build_event_loop()
+@pytest.mark.parametrize("game_mode", [False, True])
+def test_idle_plan_has_no_work_or_periodic_frame_deadline(game_mode: bool) -> None:
+    loop, services = _build_event_loop(game_mode=game_mode)
     for now in (1.0, 60.0, 3600.0):
         plan = loop.plan_work(now)
         assert not plan.immediate_work

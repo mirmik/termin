@@ -21,7 +21,7 @@ namespace termin {
     // tc_scene adapter for the scene-neutral RenderEngine::execute_pipeline().
     // It publishes one immutable item snapshot and one typed capability bundle per
     // target, then keeps those borrowed values alive for the complete execution.
-    RENDER_API void
+    RENDER_API bool
     render_scene_pipeline_offscreen(RenderEngine& engine,
                                     RenderPipeline& pipeline,
                                     tc_scene_handle scene,

@@ -36,6 +36,7 @@ typedef struct {
     uint64_t layer_mask;
     bool enabled;
     bool locked;
+    uint64_t render_revision;
     // Owned color + depth textures, allocated lazily by
     // tc_render_target_ensure_textures(). Invalid handles before the
     // first ensure call — getters return them as-is.
@@ -270,6 +271,18 @@ bool tc_render_target_alive(tc_render_target_handle h) {
     return render_target_handle_alive(h);
 }
 
+void tc_render_target_request_render(tc_render_target_handle h) {
+    if (!render_target_handle_alive(h))
+        return;
+    RenderTargetSlot* slot = &RT_SLOTS[h.index];
+    ++slot->render_revision;
+    tc_scene_request_frame(slot->scene);
+}
+
+uint64_t tc_render_target_render_revision(tc_render_target_handle h) {
+    return render_target_handle_alive(h) ? RT_SLOTS[h.index].render_revision : 0;
+}
+
 bool tc_render_target_kind_from_string(const char* name, tc_render_target_kind* out_kind) {
     if (!name || !out_kind)
         return false;
@@ -332,6 +345,7 @@ void tc_render_target_pool_free(tc_render_target_handle h) {
     }
 
     RenderTargetSlot* slot = &RT_SLOTS[h.index];
+    tc_scene_request_render(slot->scene);
     rt_slot_release_owned(slot);
     rt_slot_set_defaults(slot);
     const tc_handle pool_handle = {h.index, h.generation};
@@ -386,6 +400,7 @@ void tc_render_target_set_kind(tc_render_target_handle h, tc_render_target_kind 
             RT_SLOTS[h.index].depth_texture = tc_texture_handle_invalid();
         }
     }
+    tc_render_target_request_render(h);
 }
 
 tc_render_target_kind tc_render_target_get_kind(tc_render_target_handle h) {
@@ -397,7 +412,12 @@ tc_render_target_kind tc_render_target_get_kind(tc_render_target_handle h) {
 void tc_render_target_set_name(tc_render_target_handle h, const char* name) {
     if (!render_target_handle_alive(h))
         return;
-    rt_strset(&RT_SLOTS[h.index].name, name);
+    RenderTargetSlot* slot = &RT_SLOTS[h.index];
+    if (slot->name == name || (slot->name && name && strcmp(slot->name, name) == 0))
+        return;
+    rt_strset(&slot->name, name);
+    // Symbolic render-target inputs resolve against names in this scene.
+    tc_scene_request_render(slot->scene);
 }
 
 const char* tc_render_target_get_name(tc_render_target_handle h) {
@@ -441,6 +461,7 @@ void tc_render_target_set_width(tc_render_target_handle h, int width) {
     RT_SLOTS[h.index].width = width;
     rt_resize_owned_texture(RT_SLOTS[h.index].color_texture, (uint32_t)width, (uint32_t)RT_SLOTS[h.index].height);
     rt_resize_owned_texture(RT_SLOTS[h.index].depth_texture, (uint32_t)width, (uint32_t)RT_SLOTS[h.index].height);
+    tc_render_target_request_render(h);
 }
 
 int tc_render_target_get_width(tc_render_target_handle h) {
@@ -460,6 +481,7 @@ void tc_render_target_set_height(tc_render_target_handle h, int height) {
     RT_SLOTS[h.index].height = height;
     rt_resize_owned_texture(RT_SLOTS[h.index].color_texture, (uint32_t)RT_SLOTS[h.index].width, (uint32_t)height);
     rt_resize_owned_texture(RT_SLOTS[h.index].depth_texture, (uint32_t)RT_SLOTS[h.index].width, (uint32_t)height);
+    tc_render_target_request_render(h);
 }
 
 int tc_render_target_get_height(tc_render_target_handle h) {
@@ -469,9 +491,10 @@ int tc_render_target_get_height(tc_render_target_handle h) {
 }
 
 void tc_render_target_set_dynamic_resolution(tc_render_target_handle h, bool dynamic_resolution) {
-    if (!render_target_handle_alive(h))
+    if (!render_target_handle_alive(h) || RT_SLOTS[h.index].dynamic_resolution == dynamic_resolution)
         return;
     RT_SLOTS[h.index].dynamic_resolution = dynamic_resolution;
+    tc_render_target_request_render(h);
 }
 
 bool tc_render_target_get_dynamic_resolution(tc_render_target_handle h) {
@@ -499,6 +522,7 @@ void tc_render_target_set_color_format(tc_render_target_handle h, tc_texture_for
     RT_SLOTS[h.index].color_format = format;
     rt_reformat_owned_texture(
         RT_SLOTS[h.index].color_texture, (uint32_t)RT_SLOTS[h.index].width, (uint32_t)RT_SLOTS[h.index].height, format);
+    tc_render_target_request_render(h);
 }
 
 void tc_render_target_set_color_encoding(tc_render_target_handle h, tc_texture_encoding encoding) {
@@ -520,6 +544,7 @@ void tc_render_target_set_color_encoding(tc_render_target_handle h, tc_texture_e
             tc_log_error("[tc_render_target] failed to apply color encoding to owned texture");
         }
     }
+    tc_render_target_request_render(h);
 }
 
 tc_texture_encoding tc_render_target_get_color_encoding(tc_render_target_handle h) {
@@ -571,6 +596,7 @@ void tc_render_target_set_depth_format(tc_render_target_handle h, tc_texture_for
     RT_SLOTS[h.index].depth_format = format;
     rt_reformat_owned_texture(
         RT_SLOTS[h.index].depth_texture, (uint32_t)RT_SLOTS[h.index].width, (uint32_t)RT_SLOTS[h.index].height, format);
+    tc_render_target_request_render(h);
 }
 
 tc_texture_format tc_render_target_get_depth_format(tc_render_target_handle h) {
@@ -580,9 +606,10 @@ tc_texture_format tc_render_target_get_depth_format(tc_render_target_handle h) {
 }
 
 void tc_render_target_set_clear_color_enabled(tc_render_target_handle h, bool enabled) {
-    if (!render_target_handle_alive(h))
+    if (!render_target_handle_alive(h) || RT_SLOTS[h.index].clear_color_enabled == enabled)
         return;
     RT_SLOTS[h.index].clear_color_enabled = enabled;
+    tc_render_target_request_render(h);
 }
 
 bool tc_render_target_get_clear_color_enabled(tc_render_target_handle h) {
@@ -594,7 +621,11 @@ bool tc_render_target_get_clear_color_enabled(tc_render_target_handle h) {
 void tc_render_target_set_clear_linear_color(tc_render_target_handle h, tc_linear_color value) {
     if (!render_target_handle_alive(h))
         return;
+    const tc_linear_color old = RT_SLOTS[h.index].clear_linear_color;
+    if (old.r == value.r && old.g == value.g && old.b == value.b && old.a == value.a)
+        return;
     RT_SLOTS[h.index].clear_linear_color = value;
+    tc_render_target_request_render(h);
 }
 
 void tc_render_target_get_clear_linear_color(tc_render_target_handle h, tc_linear_color* out_value) {
@@ -607,9 +638,10 @@ void tc_render_target_get_clear_linear_color(tc_render_target_handle h, tc_linea
 }
 
 void tc_render_target_set_clear_depth_enabled(tc_render_target_handle h, bool enabled) {
-    if (!render_target_handle_alive(h))
+    if (!render_target_handle_alive(h) || RT_SLOTS[h.index].clear_depth_enabled == enabled)
         return;
     RT_SLOTS[h.index].clear_depth_enabled = enabled;
+    tc_render_target_request_render(h);
 }
 
 bool tc_render_target_get_clear_depth_enabled(tc_render_target_handle h) {
@@ -619,9 +651,10 @@ bool tc_render_target_get_clear_depth_enabled(tc_render_target_handle h) {
 }
 
 void tc_render_target_set_clear_depth_value(tc_render_target_handle h, float value) {
-    if (!render_target_handle_alive(h))
+    if (!render_target_handle_alive(h) || RT_SLOTS[h.index].clear_depth_value == value)
         return;
     RT_SLOTS[h.index].clear_depth_value = value;
+    tc_render_target_request_render(h);
 }
 
 float tc_render_target_get_clear_depth_value(tc_render_target_handle h) {
@@ -719,13 +752,16 @@ void tc_render_target_set_scene(tc_render_target_handle h, tc_scene_handle scene
     if (!render_target_handle_alive(h))
         return;
     RenderTargetSlot* slot = &RT_SLOTS[h.index];
-    if (!tc_scene_handle_eq(slot->scene, scene)) {
-        slot->camera_entity = TC_ENTITY_HANDLE_INVALID;
-        slot->camera_resolution_error_reported = false;
-        slot->xr_origin_entity = TC_ENTITY_HANDLE_INVALID;
-        slot->xr_origin_resolution_error_reported = false;
-    }
+    if (tc_scene_handle_eq(slot->scene, scene))
+        return;
+    tc_scene_request_render(slot->scene);
+    slot->camera_entity = TC_ENTITY_HANDLE_INVALID;
+    slot->camera_resolution_error_reported = false;
+    slot->xr_origin_entity = TC_ENTITY_HANDLE_INVALID;
+    slot->xr_origin_resolution_error_reported = false;
     slot->scene = scene;
+    ++slot->render_revision;
+    tc_scene_request_render(scene);
 }
 
 tc_scene_handle tc_render_target_get_scene(tc_render_target_handle h) {
@@ -831,15 +867,14 @@ void tc_render_target_set_camera(tc_render_target_handle h, tc_component* camera
     if (!render_target_handle_alive(h))
         return;
     RenderTargetSlot* slot = &RT_SLOTS[h.index];
-    if (!camera) {
-        slot->camera_entity = TC_ENTITY_HANDLE_INVALID;
-        slot->camera_resolution_error_reported = false;
+    if (camera && !rt_validate_component_binding(slot, camera, "CameraComponent", "camera"))
         return;
-    }
-    if (rt_validate_component_binding(slot, camera, "CameraComponent", "camera")) {
-        slot->camera_entity = camera->owner;
-        slot->camera_resolution_error_reported = false;
-    }
+    const tc_entity_handle entity = camera ? camera->owner : TC_ENTITY_HANDLE_INVALID;
+    if (tc_entity_handle_eq(slot->camera_entity, entity))
+        return;
+    slot->camera_entity = entity;
+    slot->camera_resolution_error_reported = false;
+    tc_render_target_request_render(h);
 }
 
 tc_component* tc_render_target_get_camera(tc_render_target_handle h) {
@@ -860,15 +895,14 @@ void tc_render_target_set_xr_origin(tc_render_target_handle h, tc_component* xr_
     if (!render_target_handle_alive(h))
         return;
     RenderTargetSlot* slot = &RT_SLOTS[h.index];
-    if (!xr_origin) {
-        slot->xr_origin_entity = TC_ENTITY_HANDLE_INVALID;
-        slot->xr_origin_resolution_error_reported = false;
+    if (xr_origin && !rt_validate_component_binding(slot, xr_origin, "XrOriginComponent", "XR origin"))
         return;
-    }
-    if (rt_validate_component_binding(slot, xr_origin, "XrOriginComponent", "XR origin")) {
-        slot->xr_origin_entity = xr_origin->owner;
-        slot->xr_origin_resolution_error_reported = false;
-    }
+    const tc_entity_handle entity = xr_origin ? xr_origin->owner : TC_ENTITY_HANDLE_INVALID;
+    if (tc_entity_handle_eq(slot->xr_origin_entity, entity))
+        return;
+    slot->xr_origin_entity = entity;
+    slot->xr_origin_resolution_error_reported = false;
+    tc_render_target_request_render(h);
 }
 
 tc_component* tc_render_target_get_xr_origin(tc_render_target_handle h) {
@@ -886,9 +920,10 @@ tc_entity_handle tc_render_target_get_xr_origin_entity(tc_render_target_handle h
 }
 
 void tc_render_target_set_pipeline(tc_render_target_handle h, tc_pipeline_handle pipeline) {
-    if (!render_target_handle_alive(h))
+    if (!render_target_handle_alive(h) || tc_pipeline_handle_eq(RT_SLOTS[h.index].pipeline, pipeline))
         return;
     RT_SLOTS[h.index].pipeline = pipeline;
+    tc_render_target_request_render(h);
 }
 
 tc_pipeline_handle tc_render_target_get_pipeline(tc_render_target_handle h) {
@@ -898,9 +933,10 @@ tc_pipeline_handle tc_render_target_get_pipeline(tc_render_target_handle h) {
 }
 
 void tc_render_target_set_layer_mask(tc_render_target_handle h, uint64_t mask) {
-    if (!render_target_handle_alive(h))
+    if (!render_target_handle_alive(h) || RT_SLOTS[h.index].layer_mask == mask)
         return;
     RT_SLOTS[h.index].layer_mask = mask;
+    tc_render_target_request_render(h);
 }
 
 uint64_t tc_render_target_get_layer_mask(tc_render_target_handle h) {
@@ -910,9 +946,10 @@ uint64_t tc_render_target_get_layer_mask(tc_render_target_handle h) {
 }
 
 void tc_render_target_set_enabled(tc_render_target_handle h, bool enabled) {
-    if (!render_target_handle_alive(h))
+    if (!render_target_handle_alive(h) || RT_SLOTS[h.index].enabled == enabled)
         return;
     RT_SLOTS[h.index].enabled = enabled;
+    tc_render_target_request_render(h);
 }
 
 bool tc_render_target_get_enabled(tc_render_target_handle h) {
@@ -943,13 +980,22 @@ void tc_render_target_set_pipeline_params(tc_render_target_handle h, const tc_va
     if (!render_target_handle_alive(h))
         return;
     tc_value** slot = &RT_SLOTS[h.index].pipeline_params;
+    const bool nonempty = dict && dict->type == TC_VALUE_DICT && dict->data.dict.count > 0;
+    if ((!nonempty && !*slot) || (nonempty && tc_value_equals(dict, *slot)))
+        return;
+    tc_value* params = NULL;
+    if (nonempty) {
+        params = (tc_value*)malloc(sizeof(tc_value));
+        if (!params) {
+            tc_log_error("[tc_render_target] could not allocate pipeline parameters");
+            return;
+        }
+        *params = tc_value_copy(dict);
+    }
     if (*slot) {
         tc_value_free(*slot);
         free(*slot);
-        *slot = NULL;
     }
-    if (dict && dict->type == TC_VALUE_DICT && dict->data.dict.count > 0) {
-        *slot = (tc_value*)malloc(sizeof(tc_value));
-        **slot = tc_value_copy(dict);
-    }
+    *slot = params;
+    tc_render_target_request_render(h);
 }
