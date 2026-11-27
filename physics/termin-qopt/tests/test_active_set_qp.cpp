@@ -119,6 +119,31 @@ namespace {
         TERMIN_QOPT_CHECK(upper_dual[1] == 0.0);
     }
 
+    void test_equality_optimum_inside_inequalities() {
+        // The equality fixes the negative-curvature direction. The unique
+        // minimizer on that line lies strictly inside all three bounds.
+        const std::vector<double> hessian{-2, 0, 0, 4}, gradient{0, -8};
+        const std::vector<double> equality{2, 0}, target{6};
+        const std::vector<double> inequality{3, 3}, limit{18}, lower{-5, -5};
+        std::vector<double> primal(2), equality_dual(1), inequality_dual(1, 123), lower_dual(2, 123);
+        const auto result = solve_active_set_qp(
+            {row_major(hessian, 2, 2),
+             const_vector(gradient),
+             row_major(equality, 1, 2),
+             const_vector(target),
+             row_major(inequality, 1, 2),
+             const_vector(limit),
+             const_vector(lower),
+             {}},
+            {vector(primal), vector(equality_dual), vector(inequality_dual), vector(lower_dual), {}});
+        TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(result.constraint_rank == 1 && result.reduced_hessian_rank == 1);
+        TERMIN_QOPT_CHECK(result.active_set_size == 0 && result.iterations == 1);
+        TERMIN_QOPT_CHECK(linf_difference(primal, {3, 2}) < 1e-12);
+        TERMIN_QOPT_CHECK(std::abs(equality_dual[0] - 3) < 1e-12);
+        TERMIN_QOPT_CHECK(all_equal(inequality_dual, 0) && all_equal(lower_dual, 0));
+    }
+
     void test_previous_contact_face() {
         const std::vector<double> mass{2.0}, contact{-1.0}, empty;
         std::vector<double> gradient{2.0}, limit{-0.125}, active{1.0}, velocity(1), impulse(1);
@@ -856,6 +881,7 @@ namespace {
 int main() {
     test_shared_oracle();
     test_bounds_and_full_duals();
+    test_equality_optimum_inside_inequalities();
     test_previous_contact_face();
     test_contact_face_keeps_cold_load_sharing_for_redundant_contacts();
     test_warm_start_can_drop_an_incorrect_constraint();

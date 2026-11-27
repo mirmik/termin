@@ -942,25 +942,34 @@ namespace termin::qopt {
             const NormalizedInequalities normalized =
                 normalize_inequalities(inequalities, inequality_limits, lower, upper);
 
-            Vector feasible_origin = Vector::Zero(hessian.rows());
-            if (equalities.rows() > 0) {
-                EqualityResult feasible = solve_equalities(Matrix::Identity(hessian.rows(), hessian.cols()),
-                                                           feasible_origin,
-                                                           equalities,
-                                                           equality_targets,
-                                                           options.tolerance);
-                if (feasible.result.status != QpStatus::Optimal) {
-                    if (feasible.result.status == QpStatus::Infeasible) {
-                        feasible.result.diagnostic = QpDiagnostic::InconsistentEqualities;
-                    }
-                    return feasible.result;
-                }
-                feasible_origin = std::move(feasible.primal);
+            // A cold solve needs the equality-constrained minimizer as its Phase I seed.
+            // An optimal equality solve already checked feasibility and reduced curvature.
+            std::optional<EqualityResult> objective_seed;
+            if (warm_start.primal.empty() && inequality_hint.empty()) {
+                objective_seed = solve_equalities(hessian, gradient, equalities, equality_targets, options.tolerance);
             }
+            Vector feasible_origin;
+            if (!objective_seed || objective_seed->result.status != QpStatus::Optimal) {
+                feasible_origin = Vector::Zero(hessian.rows());
+                if (equalities.rows() > 0) {
+                    EqualityResult feasible = solve_equalities(Matrix::Identity(hessian.rows(), hessian.cols()),
+                                                               feasible_origin,
+                                                               equalities,
+                                                               equality_targets,
+                                                               options.tolerance);
+                    if (feasible.result.status != QpStatus::Optimal) {
+                        if (feasible.result.status == QpStatus::Infeasible) {
+                            feasible.result.diagnostic = QpDiagnostic::InconsistentEqualities;
+                        }
+                        return feasible.result;
+                    }
+                    feasible_origin = std::move(feasible.primal);
+                }
 
-            const QpSolveResult convexity = check_convexity(hessian, equalities, options.tolerance);
-            if (convexity.status != QpStatus::Optimal) {
-                return convexity;
+                const QpSolveResult convexity = check_convexity(hessian, equalities, options.tolerance);
+                if (convexity.status != QpStatus::Optimal) {
+                    return convexity;
+                }
             }
 
             const auto finish = [&](CoreResult& solved) {
@@ -1060,9 +1069,11 @@ namespace termin::qopt {
                 // through every intermediate facet of a fine polygon before reaching the
                 // relevant face. Phase I retains feasibility guarantees while this seed
                 // preserves the objective's useful directional information.
-                const EqualityResult objective_seed =
-                    solve_equalities(hessian, gradient, equalities, equality_targets, options.tolerance);
-                primal = objective_seed.result.status == QpStatus::Optimal ? objective_seed.primal : feasible_origin;
+                if (!objective_seed) {
+                    objective_seed =
+                        solve_equalities(hessian, gradient, equalities, equality_targets, options.tolerance);
+                }
+                primal = objective_seed->result.status == QpStatus::Optimal ? objective_seed->primal : feasible_origin;
                 if (!constraints_feasible(normalized.matrix, normalized.limits, primal, 0.0, options.tolerance)) {
                     CoreResult phase = find_feasible_point(equalities,
                                                            equality_targets,
@@ -1087,6 +1098,16 @@ namespace termin::qopt {
                     }
                 }
                 initial_active = tight_constraints(normalized.matrix, normalized.limits, primal, options.tolerance);
+                if (iterations == 0 && initial_active.empty() && objective_seed->result.status == QpStatus::Optimal) {
+                    // All inequalities are slack. The first working-set solve would
+                    // repeat exactly the equality problem that produced this seed.
+                    CoreResult solved;
+                    solved.primal = std::move(primal);
+                    solved.equality_dual = std::move(objective_seed->dual);
+                    solved.result = objective_seed->result;
+                    solved.result.iterations = 1;
+                    return finish(solved);
+                }
             }
 
             CoreResult solved = solve_feasible_core(hessian,
