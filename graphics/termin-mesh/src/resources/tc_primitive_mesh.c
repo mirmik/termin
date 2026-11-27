@@ -16,7 +16,8 @@ static tc_mesh* alloc_mesh(size_t vertex_count, size_t index_count) {
     if (!mesh)
         return NULL;
 
-    mesh->layout = tc_vertex_layout_pos_normal_uv();
+    // Match Mesh3's material layout. The zero-filled tangent denotes an unauthored tangent.
+    mesh->layout = tc_vertex_layout_pos_normal_uv_tangent();
     mesh->vertex_count = vertex_count;
     mesh->index_count = index_count;
     mesh->draw_mode = TC_DRAW_TRIANGLES;

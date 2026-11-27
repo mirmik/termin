@@ -47,6 +47,8 @@ namespace termin {
         std::unordered_map<std::string, FboComposition> fbo_compositions;
         std::unordered_map<std::string, std::string> texture_alias_to_canonical;
         std::vector<PipelineColorExport> color_exports;
+        // Separate from graph-named textures so user resource names cannot collide.
+        PipelineTexturePool color_export_scratch;
     };
 
     // Mutable execution instance. It owns live passes and device-local caches while

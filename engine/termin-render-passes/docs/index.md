@@ -31,7 +31,13 @@ linear HDR scene -> bloom -> TonemapPass -> linear UI -> PipelineColorExport(Dis
 `TonemapPass` owns exposure and the selected tone curve (ACES by default). Its
 result is still linear; it never performs gamma or sRGB encoding.
 The render executor binds the semantic pipeline export to the caller-owned
-physical target. Matching descriptors are bound directly. Format, extent or
+physical target. In a graph that renders into the viewport, connect
+`RenderTargetInput.color → ColorPass.input_res` and
+`ColorPass.output_res → PipelineOutput.color`. To supply a separate depth
+texture, split the input FBO and join its color with the chosen depth before
+`ColorPass`. The export resolves the color attachment in its viewport. When
+it already occupies the target with compatible encoding, the export is complete.
+Matching internal resources can also be bound directly. Format, extent or
 sample-count mismatches receive a copy/resolve epilogue. A single-sample 2D
 display export receives a programmable output operation whenever its transfer
 function differs from the target or an unquantized image enters an 8-bit

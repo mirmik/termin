@@ -898,6 +898,8 @@ TEST_CASE("external composed attachment clears follow each consuming viewport") 
     pipeline.add_pass((new ExternalReadProbe("Right"))->tc_pass_ptr());
     pipeline.cache().fbo_compositions.emplace("external_composed",
                                               termin::FboComposition{"OUTPUT", "RT_DEPTH"});
+    pipeline.set_color_export("external_composed", termin::ColorContent::DisplayLinear, "Left");
+    pipeline.set_color_export("external_composed", termin::ColorContent::DisplayLinear, "Right");
     termin::ResourceSpec spec{"external_composed", "fbo", std::pair<int, int>{16, 16},
                               termin::LinearColor{0.2f, 0.4f, 0.6f, 0.8f}, 0.25f};
     pipeline.add_spec(spec);
@@ -951,9 +953,11 @@ TEST_CASE("external composed attachment clears follow each consuming viewport") 
         g_error_log.clear();
         recording_device->state.scopes.clear();
         tc_log_set_callback(capture_error);
-        engine.execute_pipeline(execution);
+        const bool executed = engine.execute_pipeline(execution);
         tc_log_set_callback(nullptr);
+        CHECK(executed);
         CHECK(g_error_log.empty());
+        CHECK(recording_device->state.texture_copies.empty());
         REQUIRE(recording_device->state.scopes.size() == 2u);
         for (const auto& recorded : recording_device->state.scopes) {
             const auto& scope = recorded.pass;

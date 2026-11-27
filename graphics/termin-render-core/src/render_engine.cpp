@@ -169,6 +169,51 @@ namespace termin {
         return nullptr;
     }
 
+    // External attachments belong to the selected viewport. Keep their physical
+    // handles out of the maps shared by all passes and exports.
+    struct ViewportTextureBindings {
+        tc_frame_graph* graph;
+        const PipelineRenderCache& cache;
+        const Tex2Map& colors;
+        const Tex2Map& depths;
+        const RenderTargetContext& target;
+
+        tgfx::TextureHandle resolve(const std::string& name, AttachmentKind attachment) const {
+            const bool color = attachment == AttachmentKind::Color;
+            if (find_external_alias(graph, name.c_str(), color ? is_external_color_output : is_external_output_resource))
+                return color ? target.output_color.texture : target.output_depth_tex;
+
+            const char* canonical = tc_frame_graph_canonical_resource(graph, name.c_str());
+            if (canonical && name != canonical) {
+                if (auto texture = resolve(canonical, attachment))
+                    return texture;
+            }
+            if (color) {
+                auto external = target.external_textures.find(name);
+                if (external != target.external_textures.end())
+                    return external->second;
+            }
+            auto view = cache.resource_views.find(name);
+            if (view != cache.resource_views.end()) {
+                // A depth view is also a sampled texture in pass texture reads.
+                if (color || view->second.attachment == AttachmentKind::Depth)
+                    return resolve(view->second.parent, view->second.attachment);
+                return {};
+            }
+            auto composition = cache.fbo_compositions.find(name);
+            if (composition != cache.fbo_compositions.end()) {
+                if (color)
+                    return resolve(composition->second.color, AttachmentKind::Color);
+                if (auto depth = resolve(composition->second.depth, AttachmentKind::Depth))
+                    return depth;
+                return resolve(composition->second.depth, AttachmentKind::Color);
+            }
+            const auto& textures = color ? colors : depths;
+            auto texture = textures.find(name);
+            return texture != textures.end() ? texture->second : tgfx::TextureHandle{};
+        }
+    };
+
     static bool is_external_graph_input_resource(
         const char* name, const std::unordered_map<std::string, RenderTargetContext>& render_target_contexts) {
         if (!name || name[0] == '\0') {
@@ -882,8 +927,6 @@ namespace termin {
 
         struct PreparedColorOutputBinding {
             PipelineColorExport export_desc;
-            std::string canonical_resource;
-            std::string storage_resource;
             tgfx::TextureHandle source;
             tgfx::TextureHandle target;
             ColorOutputBindingPlan plan;
@@ -909,18 +952,9 @@ namespace termin {
                 continue;
             }
 
-            tgfx::TextureHandle source;
-            auto source_it = tex2_resources.find(color_export.resource);
-            if (source_it != tex2_resources.end())
-                source = source_it->second;
-            if (!source) {
-                const char* canonical = tc_frame_graph_canonical_resource(fg, color_export.resource.c_str());
-                if (canonical) {
-                    source_it = tex2_resources.find(canonical);
-                    if (source_it != tex2_resources.end())
-                        source = source_it->second;
-                }
-            }
+            const ViewportTextureBindings bindings{
+                fg, pipeline_cache, tex2_resources, tex2_depth_resources, target_it->second};
+            const tgfx::TextureHandle source = bindings.resolve(color_export.resource, AttachmentKind::Color);
             if (!source) {
                 tc::Log::error("RenderEngine: color export resource '%s' is unavailable",
                                color_export.resource.c_str());
@@ -928,43 +962,24 @@ namespace termin {
                 continue;
             }
 
-            const ColorOutputBindingPlan plan = plan_color_output_binding(
-                device->texture_desc(source), color_export.content, device->texture_desc(target));
-            const char* canonical = tc_frame_graph_canonical_resource(fg, color_export.resource.c_str());
-            const std::string canonical_resource = canonical ? canonical : color_export.resource;
-            const std::string storage_resource = resolve_color_storage(canonical_resource);
+            const auto source_desc = device->texture_desc(source);
+            if (tgfx::is_depth_format(source_desc.format)) {
+                tc::Log::error("RenderEngine: color export '%s' resolves to a depth texture", color_export.resource.c_str());
+                completed = false;
+                continue;
+            }
+            auto plan = plan_color_output_binding(source_desc, color_export.content, device->texture_desc(target));
             if (!plan.valid) {
                 tc::Log::error("RenderEngine: refusing to bind scene-linear export '%s' to an SDR color target",
                                color_export.resource.c_str());
                 completed = false;
-                color_output_bindings.push_back(
-                    {color_export, canonical_resource, storage_resource, source, target, plan});
                 continue;
             }
-            color_output_bindings.push_back({color_export, canonical_resource, storage_resource, source, target, plan});
-        }
-
-        std::unordered_map<std::string, size_t> color_export_consumer_counts;
-        for (const PreparedColorOutputBinding& binding : color_output_bindings) {
-            if (binding.plan.valid)
-                ++color_export_consumer_counts[binding.storage_resource];
-        }
-        for (PreparedColorOutputBinding& binding : color_output_bindings) {
-            if (!binding.plan.valid || binding.plan.operation != ColorOutputBindingOp::Direct)
-                continue;
-
-            // One internal result may fan out to several physical targets. It
-            // cannot be rebound directly in that case because the global
-            // resource map can name only one texture; preserve the internal
-            // producer and copy once to each consumer instead.
-            if (color_export_consumer_counts[binding.storage_resource] != 1) {
-                binding.plan.operation = ColorOutputBindingOp::CopyOrResolve;
-                continue;
-            }
-
-            for (const char* alias : collect_alias_group(fg, binding.canonical_resource.c_str()))
-                tex2_resources[alias] = binding.target;
-            tex2_resources[binding.export_desc.resource] = binding.target;
+            // Direct allocation has already happened. Distinct compatible textures
+            // (e.g. an external input or a shared internal result) still need a copy.
+            if (plan.operation == ColorOutputBindingOp::Direct && source != target)
+                plan.operation = ColorOutputBindingOp::CopyOrResolve;
+            color_output_bindings.push_back({color_export, source, target, plan});
         }
 
         const auto& debug_capture_boundaries = schedule.capture_writers;
@@ -1123,75 +1138,7 @@ namespace termin {
             Tex2Map pass_tex2_depth_writes;
             ResourceMap pass_frame_graph_resources;
 
-            std::function<tgfx::TextureHandle(const std::string&)> resolve_depth_resource;
-            std::function<tgfx::TextureHandle(const std::string&)> resolve_color_resource;
-
-            resolve_color_resource = [&](const std::string& name) -> tgfx::TextureHandle {
-                if (find_external_alias(fg, name.c_str(), is_external_color_output)) {
-                    return rt_ctx.output_color.texture;
-                }
-                const char* canonical_c = tc_frame_graph_canonical_resource(fg, name.c_str());
-                std::string canonical = canonical_c ? canonical_c : name;
-                if (canonical != name) {
-                    tgfx::TextureHandle canonical_handle = resolve_color_resource(canonical);
-                    if (canonical_handle) {
-                        return canonical_handle;
-                    }
-                }
-                if (is_external_color_output(name.c_str())) {
-                    return rt_ctx.output_color.texture;
-                }
-                auto ext_it = rt_ctx.external_textures.find(name);
-                if (ext_it != rt_ctx.external_textures.end()) {
-                    return ext_it->second;
-                }
-                auto view_it = pipeline_cache.resource_views.find(name);
-                if (view_it != pipeline_cache.resource_views.end()) {
-                    const ResourceView& view = view_it->second;
-                    if (view.attachment == AttachmentKind::Color) {
-                        return resolve_color_resource(view.parent);
-                    }
-                    return resolve_depth_resource(view.parent);
-                }
-                auto comp_it = pipeline_cache.fbo_compositions.find(name);
-                if (comp_it != pipeline_cache.fbo_compositions.end()) {
-                    return resolve_color_resource(comp_it->second.color);
-                }
-                auto it = tex2_resources.find(name);
-                return it != tex2_resources.end() ? it->second : tgfx::TextureHandle{};
-            };
-
-            resolve_depth_resource = [&](const std::string& name) -> tgfx::TextureHandle {
-                if (find_external_alias(fg, name.c_str(), is_external_output_resource)) {
-                    return rt_ctx.output_depth_tex;
-                }
-                const char* canonical_c = tc_frame_graph_canonical_resource(fg, name.c_str());
-                std::string canonical = canonical_c ? canonical_c : name;
-                if (canonical != name) {
-                    tgfx::TextureHandle canonical_handle = resolve_depth_resource(canonical);
-                    if (canonical_handle) {
-                        return canonical_handle;
-                    }
-                }
-                if (is_external_color_output(name.c_str()) || is_external_depth_output(name.c_str())) {
-                    return rt_ctx.output_depth_tex;
-                }
-                auto view_it = pipeline_cache.resource_views.find(name);
-                if (view_it != pipeline_cache.resource_views.end()) {
-                    const ResourceView& view = view_it->second;
-                    if (view.attachment == AttachmentKind::Depth) {
-                        return resolve_depth_resource(view.parent);
-                    }
-                    return tgfx::TextureHandle{};
-                }
-                auto comp_it = pipeline_cache.fbo_compositions.find(name);
-                if (comp_it != pipeline_cache.fbo_compositions.end()) {
-                    tgfx::TextureHandle depth = resolve_depth_resource(comp_it->second.depth);
-                    return depth ? depth : resolve_color_resource(comp_it->second.depth);
-                }
-                auto it = tex2_depth_resources.find(name);
-                return it != tex2_depth_resources.end() ? it->second : tgfx::TextureHandle{};
-            };
+            const ViewportTextureBindings bindings{fg, pipeline_cache, tex2_resources, tex2_depth_resources, rt_ctx};
 
             auto collect_frame_graph_resource = [&](const char* name) {
                 auto it = resources.find(name);
@@ -1227,9 +1174,9 @@ namespace termin {
                     pass_tex2_reads[read_name] = ext_it->second;
                     continue;
                 }
-                if (tgfx::TextureHandle color_handle = resolve_color_resource(read_name))
+                if (tgfx::TextureHandle color_handle = bindings.resolve(read_name, AttachmentKind::Color))
                     pass_tex2_reads[read_name] = color_handle;
-                if (tgfx::TextureHandle depth_handle = resolve_depth_resource(read_name))
+                if (tgfx::TextureHandle depth_handle = bindings.resolve(read_name, AttachmentKind::Depth))
                     pass_tex2_depth_reads[read_name] = depth_handle;
             }
 
@@ -1244,9 +1191,9 @@ namespace termin {
                         pass_tex2_depth_writes[write_name] = rt_ctx.output_depth_tex;
                 } else {
                     collect_frame_graph_resource(write_name);
-                    if (tgfx::TextureHandle color_handle = resolve_color_resource(write_name))
+                    if (tgfx::TextureHandle color_handle = bindings.resolve(write_name, AttachmentKind::Color))
                         pass_tex2_writes[write_name] = color_handle;
-                    if (tgfx::TextureHandle depth_handle = resolve_depth_resource(write_name))
+                    if (tgfx::TextureHandle depth_handle = bindings.resolve(write_name, AttachmentKind::Depth))
                         pass_tex2_depth_writes[write_name] = depth_handle;
                 }
             }
@@ -1856,20 +1803,44 @@ namespace termin {
         tc_profiler_end_section();
 
         for (const PreparedColorOutputBinding& binding : color_output_bindings) {
-            if (!binding.plan.valid || binding.plan.operation == ColorOutputBindingOp::Direct ||
-                binding.source == binding.target) {
+            if (binding.plan.operation == ColorOutputBindingOp::Direct) {
                 continue;
             }
             try {
                 if (binding.plan.operation == ColorOutputBindingOp::Transform) {
                     const tgfx::TextureDesc source_desc = device->texture_desc(binding.source);
                     const tgfx::TextureDesc target_desc = device->texture_desc(binding.target);
-                    output_transform_.record(*ctx2,
-                                             binding.source,
-                                             binding.target,
-                                             make_output_transform_params(source_desc,
-                                                                          binding.export_desc.content,
-                                                                          target_desc));
+                    auto input = binding.source;
+                    auto output = binding.target;
+                    if (input == output) {
+                        // A transform must sample a different texture from its attachment.
+                        auto scratch_desc = source_desc;
+                        const bool copy_before = tgfx::has_flag(source_desc.usage, tgfx::TextureUsage::CopySrc);
+                        if (copy_before) {
+                            scratch_desc.usage = tgfx::TextureUsage::CopyDst | tgfx::TextureUsage::Sampled;
+                        } else if (tgfx::has_flag(source_desc.usage, tgfx::TextureUsage::Sampled) &&
+                                   tgfx::has_flag(target_desc.usage, tgfx::TextureUsage::CopyDst)) {
+                            scratch_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+                        } else {
+                            throw std::runtime_error("in-place color conversion requires CopySrc or Sampled and CopyDst");
+                        }
+                        auto& scratch = pipeline_cache.color_export_scratch;
+                        if (!scratch.ensure(*device, binding.export_desc.viewport_name, scratch_desc))
+                            throw std::runtime_error("could not allocate color conversion texture");
+                        if (copy_before) {
+                            input = scratch.get(binding.export_desc.viewport_name);
+                            ctx2->blit(binding.source, input);
+                        } else {
+                            output = scratch.get(binding.export_desc.viewport_name);
+                        }
+                    }
+                    if (!output_transform_.record(*ctx2, input, output,
+                                                  make_output_transform_params(source_desc, binding.export_desc.content,
+                                                                               target_desc))) {
+                        completed = false;
+                    } else if (output != binding.target) {
+                        ctx2->blit(output, binding.target);
+                    }
                 } else {
                     // Pure transport/resolve remains a backend copy operation.
                     ctx2->blit(binding.source, binding.target);

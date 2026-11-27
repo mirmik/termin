@@ -3,6 +3,21 @@ using System.Runtime.InteropServices;
 
 namespace Termin.Native;
 
+/// <summary>Linear RGBA matching tc_linear_color.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public readonly struct TcLinearColor
+{
+    public readonly float R, G, B, A;
+
+    public TcLinearColor(float r, float g, float b, float a)
+    {
+        R = r;
+        G = g;
+        B = b;
+        A = a;
+    }
+}
+
 /// <summary>
 /// P/Invoke declarations for native runtime lifecycle APIs.
 /// </summary>
@@ -524,6 +539,10 @@ public static class TerminCore
 
     [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_add_phase", CharSet = CharSet.Ansi)]
     public static extern IntPtr MaterialAddPhase(IntPtr material, TcShaderHandle shader, string phaseMark, int priority);
+
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_set_linear_color", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool MaterialSetLinearColor(IntPtr material, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, TcLinearColor value);
 
     [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_phase_make_transparent")]
     public static extern void MaterialPhaseMakeTransparent(IntPtr phase);

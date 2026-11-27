@@ -12,7 +12,6 @@ public partial class MainWindow : Window
     private TcEntityId _selectedEntityId;
 
     // Shared resources
-    private TcShaderHandle _defaultShader;
     private TcMaterialHandle _defaultMaterial;
     private bool _resourcesCreated;
     private readonly bool _smokeMode =
@@ -97,31 +96,19 @@ public partial class MainWindow : Window
     {
         if (_resourcesCreated) return;
 
-        _defaultShader = TerminCore.Tgfx2RegisterBuiltinShader(
-            "termin-runtime-default-color");
-        if (_defaultShader.Index != 0xFFFFFFFF)
-        {
-            Console.WriteLine($"[SceneApp] Shader registered: {_defaultShader.Index}:{_defaultShader.Generation}");
-        }
-        else
-        {
-            Console.WriteLine("[SceneApp] ERROR: Failed to create shader");
-        }
+        // This position-only shader reads u_color from the material for both primitives.
+        var shader = TerminCore.Tgfx2RegisterBuiltinShader("termin-engine-line-default");
+        if (shader.Index == uint.MaxValue)
+            throw new InvalidOperationException("SceneApp could not register its solid-color shader.");
 
-        // Create material with opaque phase
-        _defaultMaterial = TerminCore.MaterialCreate(null, "DefaultMaterial");
-        var matPtr = TerminCore.MaterialGet(_defaultMaterial);
-        if (matPtr != IntPtr.Zero)
-        {
-            TerminCore.MaterialAddPhase(matPtr, _defaultShader, "opaque", 0);
-            TerminCore.MaterialSetColor(matPtr, 0.7f, 0.5f, 0.3f, 1.0f);
-            Console.WriteLine($"[SceneApp] Material created: {_defaultMaterial.Index}:{_defaultMaterial.Generation}");
-        }
-        else
-        {
-            Console.WriteLine("[SceneApp] ERROR: Failed to get material pointer");
-        }
+        var material = TerminCore.MaterialCreate(null, "DefaultMaterial");
+        var matPtr = TerminCore.MaterialGet(material);
+        if (matPtr == IntPtr.Zero || TerminCore.MaterialAddPhase(matPtr, shader, "opaque", 0) == IntPtr.Zero)
+            throw new InvalidOperationException("SceneApp could not create the opaque material.");
+        if (!TerminCore.MaterialSetLinearColor(matPtr, "u_color", new TcLinearColor(0.7f, 0.5f, 0.3f, 1.0f)))
+            throw new InvalidOperationException("SceneApp could not set the material color.");
 
+        _defaultMaterial = material;
         _resourcesCreated = true;
     }
 

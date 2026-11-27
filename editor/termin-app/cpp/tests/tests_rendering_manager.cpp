@@ -566,6 +566,10 @@ TEST_CASE("Graph compiler supports DepthOnlyPass depth texture output") {
     CHECK(pass_specs[0].resource == naming.socket_names["2"]["output_res"]);
     CHECK(pass_specs[0].resource_type == "depth_texture");
 
+    // Only depth comes from the render target. The join owns a separate color input.
+    const char* join_aliases[2];
+    CHECK(tc_pass_get_inplace_aliases(pipeline->get_pass_at(3), join_aliases, 1) == 0u);
+
     pipeline->destroy();
     delete pipeline;
 }

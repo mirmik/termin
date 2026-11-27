@@ -524,28 +524,24 @@ namespace tc {
 
             if (node.node_type == "fbo_join" || node.node_type == "multiview_fbo_join") {
                 const bool multiview = node.node_type == "multiview_fbo_join";
-                auto color_it = sockets.find("color");
-                if (color_it == sockets.end()) {
+                if (!sockets.contains("color")) {
                     std::string name = generated_input_name(node, idx, "color");
                     sockets["color"] = name;
                     result.resource_types[name] = multiview ? "multiview_color_texture" : "color_texture";
-                    color_it = sockets.find("color");
                 }
 
-                auto depth_it = sockets.find("depth");
-                if (depth_it == sockets.end()) {
+                if (!sockets.contains("depth")) {
                     std::string name = generated_input_name(node, idx, "depth");
                     sockets["depth"] = name;
                     result.resource_types[name] = multiview ? "multiview_depth_texture" : "depth_texture";
-                    depth_it = sockets.find("depth");
                 }
 
                 std::string output_name = node.name.empty() ? "fbo_join_" + std::to_string(idx) : node.name;
                 sockets["fbo"] = output_name;
                 result.resource_types[output_name] = multiview ? "multiview_fbo" : "fbo";
                 result.fbo_compositions[output_name] = termin::FboComposition{
-                    color_it->second,
-                    depth_it->second,
+                    sockets.at("color"),
+                    sockets.at("depth"),
                 };
             }
         }
@@ -655,25 +651,14 @@ namespace tc {
             push_resource_if_present(writes, sockets, "fbo");
             auto fbo_it = sockets.find("fbo");
             if (fbo_it != sockets.end()) {
-                std::optional<std::string> parent;
-                for (const char* input_socket : {"color", "depth"}) {
-                    auto input_it = sockets.find(input_socket);
-                    if (input_it == sockets.end()) {
-                        continue;
-                    }
-                    auto view_it = naming.resource_views.find(input_it->second);
-                    if (view_it == naming.resource_views.end()) {
-                        continue;
-                    }
-                    if (!parent.has_value()) {
-                        parent = view_it->second.parent;
-                    } else if (*parent != view_it->second.parent) {
-                        parent.reset();
-                        break;
-                    }
-                }
-                if (parent.has_value()) {
-                    push_alias_pair(aliases, *parent, fbo_it->second);
+                // assign_resource_names supplies both join inputs, including unconnected sockets.
+                const auto color = naming.resource_views.find(sockets.at("color"));
+                const auto depth = naming.resource_views.find(sockets.at("depth"));
+                if (color != naming.resource_views.end() && depth != naming.resource_views.end() &&
+                    color->second.parent == depth->second.parent &&
+                    color->second.attachment == termin::AttachmentKind::Color &&
+                    depth->second.attachment == termin::AttachmentKind::Depth) {
+                    push_alias_pair(aliases, color->second.parent, fbo_it->second);
                 }
             }
         } else {

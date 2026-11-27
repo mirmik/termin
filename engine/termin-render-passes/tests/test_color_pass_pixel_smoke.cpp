@@ -11,6 +11,7 @@
 
 #include <tgfx/resources/tc_material_registry.h>
 #include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx/resources/tc_primitive_mesh.h>
 #include <tgfx/resources/tc_shader_registry.h>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -144,13 +145,6 @@ FragmentOutput fs_main(FragmentInput input) {
 }
 )";
 
-    struct SmokeVertex {
-        float position[3];
-        float normal[3];
-        float uv[2];
-        float tangent[4];
-    };
-
     bool matches_clear_color(const float pixel[4]) {
         return pixel[0] >= 0.00f && pixel[0] < 0.08f && pixel[1] >= 0.01f && pixel[1] < 0.09f && pixel[2] >= 0.02f &&
                pixel[2] < 0.10f && pixel[3] > 0.95f;
@@ -261,28 +255,12 @@ FragmentOutput fs_main(FragmentInput input) {
         return material;
     }
 
-    termin::TcMesh create_triangle_mesh() {
-        const SmokeVertex vertices[] = {
-            {{-0.65f, -0.65f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-            {{0.65f, -0.65f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-            {{0.00f, 0.65f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-        };
-        const uint32_t indices[] = {0, 1, 2};
-        tc_vertex_layout layout = tc_vertex_layout_pos_normal_uv_tangent();
-
-        termin::TcMeshCreateInfo create_info;
-        create_info.data = termin::TcMeshInterleavedDataView{vertices, 3, indices, 3, &layout};
-        create_info.name = "ColorPassPixelSmokeTriangle";
-        create_info.uuid_hint = "termin-color-pass-pixel-smoke-triangle";
-        return termin::TcMesh::from_interleaved(create_info);
-    }
-
     termin::TcSceneRef create_scene(const termin::TcMesh& mesh, const termin::TcMaterial& material) {
         termin::MeshComponent::register_type();
         termin::MeshRenderer::register_type();
 
         termin::TcSceneRef scene = termin::TcSceneRef::create("color-pass-pixel-smoke");
-        termin::Entity entity = scene.create_entity("ColorPassSmokeTriangle");
+        termin::Entity entity = scene.create_entity("ColorPassSmokeCube");
         if (!entity.valid()) {
             return {};
         }
@@ -299,6 +277,8 @@ FragmentOutput fs_main(FragmentInput input) {
         if (!camera_entity.valid()) {
             return {};
         }
+        const double camera_position[] = {0.0, -4.0, 0.0};
+        camera_entity.set_local_position(camera_position);
         auto* camera = new termin::CameraComponent();
         camera_entity.add_component(camera);
 
@@ -345,10 +325,20 @@ FragmentOutput fs_main(FragmentInput input) {
         struct ClearCase {
             termin::LinearColor background;
             bool pass_clears_depth;
+            termin::ColorContent export_content;
+            termin::LinearColor expected_pixel;
         };
-        const ClearCase cases[] = {{{0.125f, 0.25f, 0.5f, 1.0f}, false}, {{0.0f, 0.0f, 0.0f, 1.0f}, true}};
+        const termin::LinearColor background_color{0.125f, 0.25f, 0.5f, 1.0f};
+        const termin::LinearColor black{0.0f, 0.0f, 0.0f, 1.0f};
+        const ClearCase cases[] = {
+            {background_color, false, termin::ColorContent::DisplayLinear, background_color},
+            {black, true, termin::ColorContent::DisplayLinear, black},
+            // The pipeline publishes sRGB codes in a linear UNorm attachment.
+            {{0.5f, 0.5f, 0.5f, 1.0f}, false, termin::ColorContent::DisplaySRGB,
+             termin::srgb_to_linear(termin::SrgbColor{0.5f, 0.5f, 0.5f, 1.0f})},
+        };
         bool ok = true;
-        for (const auto& [background, pass_clears_depth] : cases) {
+        for (const auto& [background, pass_clears_depth, export_content, expected_pixel] : cases) {
             termin::RenderPipeline pipeline("color-pass-pipeline-clear");
             pipeline.cache().fbo_compositions.emplace("empty", termin::FboComposition{"RT_COLOR", "RT_DEPTH"});
             termin::ResourceSpec spec("empty");
@@ -361,13 +351,17 @@ FragmentOutput fs_main(FragmentInput input) {
             config.shadow_res.clear();
             config.environment_res.clear();
             pipeline.add_pass((new termin::ColorPass(config))->tc_pass_ptr());
-            pipeline.set_color_export(config.output_res, termin::ColorContent::DisplayLinear);
+            pipeline.set_color_export(config.output_res, export_content);
             execution.pipeline = &pipeline;
 
             conflicting_color_clears = false;
             tc_log_set_callback(capture_color_clear_conflict);
-            engine.execute_pipeline(execution);
+            const bool executed = engine.execute_pipeline(execution);
             tc_log_set_callback(nullptr);
+            if (!executed) {
+                std::fprintf(stderr, "ColorPass pipeline execution failed\n");
+                ok = false;
+            }
             host.device().wait_idle();
 
             float pixel[4] = {};
@@ -379,8 +373,8 @@ FragmentOutput fs_main(FragmentInput input) {
             }
             constexpr float tolerance = 1.0f / 255.0f;
             if (conflicting_color_clears || !host.device().read_pixel_rgba8(output, 0, 0, pixel) ||
-                std::abs(pixel[0] - background.r) > tolerance || std::abs(pixel[1] - background.g) > tolerance ||
-                std::abs(pixel[2] - background.b) > tolerance || std::abs(pixel[3] - background.a) > tolerance) {
+                std::abs(pixel[0] - expected_pixel.r) > tolerance || std::abs(pixel[1] - expected_pixel.g) > tolerance ||
+                std::abs(pixel[2] - expected_pixel.b) > tolerance || std::abs(pixel[3] - expected_pixel.a) > tolerance) {
                 std::fprintf(stderr, "ColorPass pipeline clear failed for (%g %g %g %g), conflict=%d\n",
                              background.r, background.g, background.b, background.a, conflicting_color_clears);
                 print_pixel("pipeline clear readback", pixel);
@@ -413,7 +407,7 @@ FragmentOutput fs_main(FragmentInput input) {
             return 1;
         }
 
-        termin::TcMesh mesh = create_triangle_mesh();
+        termin::TcMesh mesh(tc_primitive_unit_cube());
         if (!mesh.is_valid()) {
             std::fprintf(stderr, "Failed to create ColorPass smoke mesh\n");
             return 1;
@@ -484,7 +478,7 @@ FragmentOutput fs_main(FragmentInput input) {
         pass.execute(exec_ctx);
         tc_log_set_callback(nullptr);
         const bool named_camera_reached_draw_collection =
-            pass.entity_names.size() == 1 && pass.entity_names[0] == "ColorPassSmokeTriangle";
+            pass.entity_names.size() == 1 && pass.entity_names[0] == "ColorPassSmokeCube";
 
         termin::ColorPassConfig missing_camera_config = pass_config;
         missing_camera_config.camera_name = "MissingColorPassCamera";
@@ -516,7 +510,7 @@ FragmentOutput fs_main(FragmentInput input) {
         print_pixel("top-left", corner);
 
         const size_t pipeline_cache_size = cache.size();
-        const bool entity_seen = pass.entity_names.size() == 1 && pass.entity_names[0] == "ColorPassSmokeTriangle";
+        const bool entity_seen = pass.entity_names.size() == 1 && pass.entity_names[0] == "ColorPassSmokeCube";
         const bool pass_ok = read_ok && matches_material_color(center) && matches_clear_color(corner) &&
                              pipeline_cache_size >= 1 && entity_seen && named_camera_reached_draw_collection &&
                              missing_camera_skipped && captured_environment_lighting_error.empty();
