@@ -172,6 +172,24 @@ namespace termin::physics_qopt {
         assembly_counters_ = {};
     }
 
+    PointMotion3DResult
+    Articulation3DDynamicsContribution::floating_base_point_motion(termin::Vec3 point_local) const noexcept {
+        PointMotion3DResult result;
+        result.diagnostic = point_diagnostic(articulation_.floating_base_point_motion(point_local, result.value));
+        if (result.ok())
+            result.dofs = dofs_;
+        return result;
+    }
+
+    PointMotion3DResult Articulation3DDynamicsContribution::point_motion(std::size_t unit_index,
+                                                                         termin::Vec3 point_local) const noexcept {
+        PointMotion3DResult result;
+        result.diagnostic = point_diagnostic(articulation_.point_motion(unit_index, point_local, result.value));
+        if (result.ok())
+            result.dofs = dofs_;
+        return result;
+    }
+
     PointKinematics3DResult
     Articulation3DDynamicsContribution::floating_base_point_kinematics(termin::Vec3 point_local) const noexcept {
         ArticulationPointKinematics3DResult source = articulation_.floating_base_point_kinematics(point_local);

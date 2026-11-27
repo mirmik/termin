@@ -54,6 +54,7 @@ namespace termin::physics_qopt {
         [[nodiscard]] termin::Screw3 velocity_at_body_origin_world() const noexcept;
         [[nodiscard]] DynamicsDofHandle dofs() const noexcept;
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
+        [[nodiscard]] PointMotion3DResult point_motion(termin::Vec3 point_local) const noexcept;
         [[nodiscard]] PointKinematics3DResult point_kinematics(termin::Vec3 point_local) const noexcept;
         [[nodiscard]] Multibody3DDiagnostic set_state(RigidBody3DState state) noexcept;
         [[nodiscard]] Multibody3DDiagnostic set_gravity_world(termin::Vec3 gravity) noexcept;

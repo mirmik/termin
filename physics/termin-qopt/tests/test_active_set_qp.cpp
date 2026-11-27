@@ -144,6 +144,59 @@ namespace {
         TERMIN_QOPT_CHECK(all_equal(inequality_dual, 0) && all_equal(lower_dual, 0));
     }
 
+    void test_cold_equality_seed_matches_spectral_ranks_and_duals() {
+        const std::vector<double> identity{1, 0, 0, 0, 1, 0, 0, 0, 1};
+        const std::vector<double> empty;
+        const auto compare = [&](const std::vector<double>& hessian,
+                                 const std::vector<double>& gradient,
+                                 const std::vector<double>& equalities,
+                                 const std::vector<double>& targets,
+                                 QpStatus status) {
+            const auto h = row_major(hessian, 3, 3);
+            const auto g = const_vector(gradient);
+            const auto a = row_major(equalities, targets.size(), 3);
+            const auto b = const_vector(targets);
+            std::vector<double> expected_x(3), expected_dual(targets.size());
+            const auto reference = solve_equality_qp({h, g, a, b}, {vector(expected_x), vector(expected_dual)});
+            TERMIN_QOPT_CHECK(reference.status == status);
+
+            std::vector<double> x(3, 17.0), dual(targets.size(), 19.0);
+            const auto result = solve_active_set_qp({h, g, a, b, row_major(empty, 0, 3), {}, {}, {}},
+                                                    {vector(x), vector(dual), {}, {}, {}});
+            TERMIN_QOPT_CHECK(result.status == reference.status);
+            TERMIN_QOPT_CHECK(result.diagnostic == reference.diagnostic);
+            if (status == QpStatus::Optimal) {
+                TERMIN_QOPT_CHECK(result.constraint_rank == reference.constraint_rank);
+                TERMIN_QOPT_CHECK(result.reduced_hessian_rank == reference.reduced_hessian_rank);
+                TERMIN_QOPT_CHECK(std::isfinite(result.stationarity_linf) && std::isfinite(result.equality_linf));
+                TERMIN_QOPT_CHECK(linf_difference(x, expected_x) < 1e-10);
+                for (std::size_t i = 0; i < dual.size(); ++i) {
+                    TERMIN_QOPT_CHECK(std::abs(dual[i] - expected_dual[i]) < 1e-10 * std::max(1.0, std::abs(dual[i])));
+                }
+            } else {
+                TERMIN_QOPT_CHECK(all_equal(x, 17.0));
+                TERMIN_QOPT_CHECK(all_equal(dual, 19.0));
+            }
+        };
+
+        // Independent, differently scaled equalities with nonzero targets and physical duals.
+        compare({2, 0, 0, 0, 3, 0, 0, 0, 4}, {1, 2, -3}, {0, 2e-6, 0, 0, 0, 3e6}, {1e-6, -1.5e6}, QpStatus::Optimal);
+        // Duplicate and nearly parallel rows must retain the SVD dual distribution.
+        compare(identity, {0, 1, 0}, {1, 0, 0, 2, 0, 0}, {0.5, 1.0}, QpStatus::Optimal);
+        compare(identity, {0, 1, 0}, {1, 1e-12, 0, 1, -1e-12, 0}, {0, 0}, QpStatus::Optimal);
+        compare(identity, {0, 1, 0}, {1, 0, 0, 1, 0, 0}, {0, 1}, QpStatus::Infeasible);
+        // The final Cholesky pivot exceeds the scalar pivot cutoff, but the
+        // smallest reduced eigenvalue is below its spectral rank cutoff.
+        compare({1, 1 - 2e-12, 0, 1 - 2e-12, 1, 0, 0, 0, 1}, {1, 1, 0}, {0, 0, 1}, {0}, QpStatus::Optimal);
+        // Negative curvature in a constrained direction is harmless.
+        compare({-1, 0, 0, 0, 2, 0, 0, 0, 3}, {1, 2, -3}, {1, 0, 0}, {0.5}, QpStatus::Optimal);
+        compare({0.25, 0, 0, 0, 0.5, 0, 0, 0, 1},
+                {0, -std::numeric_limits<double>::max(), 0},
+                {0, 0, 1},
+                {0},
+                QpStatus::NumericalFailure);
+    }
+
     void test_previous_contact_face() {
         const std::vector<double> mass{2.0}, contact{-1.0}, empty;
         std::vector<double> gradient{2.0}, limit{-0.125}, active{1.0}, velocity(1), impulse(1);
@@ -917,6 +970,7 @@ int main() {
     test_shared_oracle();
     test_bounds_and_full_duals();
     test_equality_optimum_inside_inequalities();
+    test_cold_equality_seed_matches_spectral_ranks_and_duals();
     test_previous_contact_face();
     test_contact_face_keeps_cold_load_sharing_for_redundant_contacts();
     test_warm_start_can_drop_an_incorrect_constraint();

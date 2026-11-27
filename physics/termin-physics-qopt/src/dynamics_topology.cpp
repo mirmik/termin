@@ -1,3 +1,5 @@
+#include "friction_polygon.hpp"
+
 #include <termin/physics_qopt/dynamics.hpp>
 
 #include <cstdio>
@@ -123,8 +125,16 @@ namespace termin::physics_qopt {
     }
 
     AssemblyDiagnostic DynamicsFrictionTopology::finalize() noexcept {
+        return finalize(DynamicsSystemStepOptions{}.friction_cone_facets);
+    }
+
+    AssemblyDiagnostic DynamicsFrictionTopology::finalize(std::size_t cone_facets) noexcept {
         if (finalized_) {
             return AssemblyDiagnostic::TopologyFinalized;
+        }
+        if (!detail::FrictionPolygon::valid_side_count(cone_facets)) {
+            std::fprintf(stderr, "[termin-qopt] invalid friction polygon with %zu sides\n", cone_facets);
+            return AssemblyDiagnostic::DimensionMismatch;
         }
         const AssemblyDiagnostic contact = contacts_.finalize();
         if (contact != AssemblyDiagnostic::None) {
@@ -134,6 +144,7 @@ namespace termin::physics_qopt {
         if (tangent != AssemblyDiagnostic::None) {
             return tangent;
         }
+        cone_facets_ = cone_facets;
         finalized_ = true;
         return AssemblyDiagnostic::None;
     }

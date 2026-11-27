@@ -85,19 +85,20 @@ namespace termin::qopt {
             return false;
         }
 
+        using EqualitySolver = QpSolveResult (*)(EqualityQpProblemView, EqualityQpSolutionView, QpTolerance);
+
         [[nodiscard]] EqualityResult solve_equalities(const Matrix& hessian,
                                                       const Vector& gradient,
                                                       const Matrix& equalities,
                                                       const Vector& targets,
                                                       QpTolerance tolerance,
-                                                      bool prefer_spd = false) {
+                                                      EqualitySolver solve = solve_equality_qp) {
             EqualityResult solved;
             solved.primal = Vector::Zero(hessian.rows());
             solved.dual = Vector::Zero(equalities.rows());
             const EqualityQpProblemView problem = {view(hessian), view(gradient), view(equalities), view(targets)};
             const EqualityQpSolutionView solution = {view(solved.primal), view(solved.dual)};
-            solved.result = prefer_spd ? solve_equality_qp_spd_first(problem, solution, tolerance)
-                                       : solve_equality_qp(problem, solution, tolerance);
+            solved.result = solve(problem, solution, tolerance);
             return solved;
         }
 
@@ -342,7 +343,12 @@ namespace termin::qopt {
                 }
             }
 
-            return solve_equalities(hessian, gradient, working, working_targets, tolerance, !active.empty());
+            return solve_equalities(hessian,
+                                    gradient,
+                                    working,
+                                    working_targets,
+                                    tolerance,
+                                    active.empty() ? solve_equality_qp : solve_equality_qp_spd_first);
         }
 
         [[nodiscard]] CoreResult solve_feasible_core(const Matrix& hessian,
@@ -951,7 +957,8 @@ namespace termin::qopt {
             // An optimal equality solve already checked feasibility and reduced curvature.
             std::optional<EqualityResult> objective_seed;
             if (warm_start.primal.empty() && inequality_hint.empty()) {
-                objective_seed = solve_equalities(hessian, gradient, equalities, equality_targets, options.tolerance);
+                objective_seed = solve_equalities(
+                    hessian, gradient, equalities, equality_targets, options.tolerance, solve_equality_qp_seed);
             }
             Vector feasible_origin;
             if (!objective_seed || objective_seed->result.status != QpStatus::Optimal) {
@@ -1075,8 +1082,8 @@ namespace termin::qopt {
                 // relevant face. Phase I retains feasibility guarantees while this seed
                 // preserves the objective's useful directional information.
                 if (!objective_seed) {
-                    objective_seed =
-                        solve_equalities(hessian, gradient, equalities, equality_targets, options.tolerance);
+                    objective_seed = solve_equalities(
+                        hessian, gradient, equalities, equality_targets, options.tolerance, solve_equality_qp_seed);
                 }
                 primal = objective_seed->result.status == QpStatus::Optimal ? objective_seed->primal : feasible_origin;
                 if (!constraints_feasible(normalized.matrix, normalized.limits, primal, 0.0, options.tolerance)) {

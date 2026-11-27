@@ -264,25 +264,37 @@ namespace termin::physics_qopt {
         return gravity_world_;
     }
 
-    PointKinematics3DResult RigidBody3DContribution::point_kinematics(termin::Vec3 point_local) const noexcept {
+    PointMotion3DResult RigidBody3DContribution::point_motion(termin::Vec3 point_local) const noexcept {
         if (diagnostic_ != Multibody3DDiagnostic::None) {
             std::fprintf(stderr,
                          "[termin-qopt] cannot query point kinematics of invalid "
                          "rigid body '%s'\n",
                          diagnostic_name_.c_str());
-            return {{}, PointKinematics3DDiagnostic::InvalidModel};
+            return {.diagnostic = PointKinematics3DDiagnostic::InvalidModel};
         }
         if (!point_local.is_finite()) {
             std::fprintf(stderr, "[termin-qopt] rejected non-finite rigid-body point\n");
-            return {{}, PointKinematics3DDiagnostic::NonFinitePoint};
+            return {.diagnostic = PointKinematics3DDiagnostic::NonFinitePoint};
         }
 
+        const auto motion = robotics::PointMotion3D::from_local_point(state_.pose, state_.velocity_local, point_local);
+        if (!motion.position_world.is_finite() || !motion.velocity_world.is_finite()) {
+            std::fprintf(stderr, "[termin-qopt] non-finite rigid-body point motion\n");
+            return {.diagnostic = PointKinematics3DDiagnostic::InvalidModel};
+        }
+        return {motion, dofs_};
+    }
+
+    PointKinematics3DResult RigidBody3DContribution::point_kinematics(termin::Vec3 point_local) const noexcept {
+        const auto motion = point_motion(point_local);
+        if (!motion.ok()) {
+            return {{}, motion.diagnostic};
+        }
         try {
             PointKinematics3D value;
-            value.position_world = state_.pose.transform_point(point_local);
-            value.velocity_world =
-                state_.velocity_local.velocity_at_offset(point_local).rotated_by(state_.pose.ang).lin;
-            value.dofs = dofs_;
+            value.position_world = motion.value.position_world;
+            value.velocity_world = motion.value.velocity_world;
+            value.dofs = motion.dofs;
             value.linear_jacobian_world_storage.assign(18, 0.0);
 
             const std::array<termin::Screw3, 6> basis{
@@ -299,9 +311,6 @@ namespace termin::physics_qopt {
                 value.linear_jacobian_world_storage[column] = response.x;
                 value.linear_jacobian_world_storage[6 + column] = response.y;
                 value.linear_jacobian_world_storage[12 + column] = response.z;
-            }
-            if (!value.position_world.is_finite() || !value.velocity_world.is_finite()) {
-                return {{}, PointKinematics3DDiagnostic::InvalidModel};
             }
             return {std::move(value), PointKinematics3DDiagnostic::None};
         } catch (const std::exception& error) {

@@ -8,6 +8,7 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/physics_qopt/dynamics.hpp>
 #include <termin/physics_qopt/termin_physics_qopt_api.hpp>
+#include <termin/robotics/point_motion3d.hpp>
 
 namespace termin::physics_qopt {
 
@@ -23,6 +24,18 @@ namespace termin::physics_qopt {
 
     [[nodiscard]] TERMIN_PHYSICS_QOPT_API std::string_view
     point_kinematics3d_diagnostic_name(PointKinematics3DDiagnostic diagnostic) noexcept;
+
+    struct PointMotion3DResult {
+        robotics::PointMotion3D value;
+        DynamicsDofHandle dofs;
+        PointKinematics3DDiagnostic diagnostic = PointKinematics3DDiagnostic::None;
+
+        [[nodiscard]] bool ok() const noexcept {
+            return diagnostic == PointKinematics3DDiagnostic::None;
+        }
+    };
+
+    [[nodiscard]] TERMIN_PHYSICS_QOPT_API PointMotion3DResult static_point_motion(termin::Vec3 position_world) noexcept;
 
     // Solver-facing kinematics of one material point. The Jacobian maps the
     // owner's local generalized velocity block to world linear velocity:

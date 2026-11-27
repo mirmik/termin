@@ -1,10 +1,11 @@
 #include <termin/physics_qopt/contact_friction.hpp>
 
+#include "friction_polygon.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <exception>
-#include <numbers>
 #include <vector>
 
 #include <termin/qopt/equality_qp.hpp>
@@ -80,7 +81,7 @@ namespace termin::physics_qopt {
             !valid(solution.bilateral_impulse)) {
             return invalid_result(QpDiagnostic::NullData);
         }
-        if (options.cone_facets < 4 || options.cone_facets % 2 != 0) {
+        if (!detail::FrictionPolygon::valid_side_count(options.cone_facets)) {
             return invalid_result(QpDiagnostic::InvalidOptions);
         }
         if (!finite(problem.mass) || !finite(problem.bilateral_jacobian) ||
@@ -138,8 +139,7 @@ namespace termin::physics_qopt {
                 std::max(std::abs(normal_velocity), std::abs(problem.minimum_normal_velocity[row]));
             const double normal_velocity_tolerance =
                 std::max(options.qp.active_tolerance,
-                         options.qp.tolerance.absolute +
-                             options.qp.tolerance.relative * std::max(1.0, velocity_scale));
+                         options.qp.tolerance.absolute + options.qp.tolerance.relative * std::max(1.0, velocity_scale));
             if (normal_velocity + normal_velocity_tolerance < problem.minimum_normal_velocity[row]) {
                 std::fprintf(stderr,
                              "[termin-qopt] contact friction input violates normal velocity: "
@@ -293,22 +293,20 @@ namespace termin::physics_qopt {
                 ++inequality_row;
             }
 
+            const detail::FrictionPolygon polygon(options.cone_facets);
             for (std::size_t contact = 0; contact < contacts; ++contact) {
                 const std::size_t lower_row = inequality_row++;
                 inequalities[lower_row * variables + contact * 3] = -1.0;
                 limits[lower_row] = base_normal_impulse[contact];
                 const double radius = problem.friction_coefficient[contact] * base_normal_impulse[contact];
-                const double polygon_limit =
-                    radius * std::cos(std::numbers::pi / static_cast<double>(options.cone_facets));
+                const double polygon_limit = radius * polygon.apothem;
                 for (std::size_t facet = 0; facet < options.cone_facets; ++facet) {
                     const std::size_t row = inequality_row++;
-                    const double angle = (static_cast<double>(facet) + 0.5) * 2.0 * std::numbers::pi /
-                                         static_cast<double>(options.cone_facets);
+                    const auto normal = polygon.normal(facet);
                     inequalities[row * variables + contact * 3] =
-                        -problem.friction_coefficient[contact] *
-                        std::cos(std::numbers::pi / static_cast<double>(options.cone_facets));
-                    inequalities[row * variables + contact * 3 + 1] = std::cos(angle);
-                    inequalities[row * variables + contact * 3 + 2] = std::sin(angle);
+                        -problem.friction_coefficient[contact] * polygon.apothem;
+                    inequalities[row * variables + contact * 3 + 1] = normal[0];
+                    inequalities[row * variables + contact * 3 + 2] = normal[1];
                     limits[row] = polygon_limit;
                 }
             }

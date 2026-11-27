@@ -54,6 +54,8 @@ namespace termin::physics_qopt {
         [[nodiscard]] termin::Vec3 gravity_world() const noexcept;
         [[nodiscard]] ArticulationDynamicsAssemblyCounters assembly_counters() const noexcept;
         void reset_assembly_counters() noexcept;
+        [[nodiscard]] PointMotion3DResult point_motion(std::size_t unit_index, termin::Vec3 point_local) const noexcept;
+        [[nodiscard]] PointMotion3DResult floating_base_point_motion(termin::Vec3 point_local) const noexcept;
         [[nodiscard]] PointKinematics3DResult point_kinematics(std::size_t unit_index,
                                                                termin::Vec3 point_local) const noexcept;
         [[nodiscard]] PointKinematics3DResult floating_base_point_kinematics(termin::Vec3 point_local) const noexcept;

@@ -13,6 +13,7 @@
 #include <termin/geom/screw3.hpp>
 #include <termin/geom/spatial_inertia3.hpp>
 #include <termin/qopt/dense_views.hpp>
+#include <termin/robotics/point_motion3d.hpp>
 #include <termin/robotics/termin_robotics_api.hpp>
 
 namespace termin::robotics::detail {
@@ -171,6 +172,10 @@ namespace termin::robotics {
         [[nodiscard]] const std::optional<ArticulationFloatingBase3D>& floating_base() const noexcept;
         [[nodiscard]] const std::vector<termin::Pose3>& unit_poses_world() const noexcept;
         [[nodiscard]] const std::vector<termin::Screw3>& unit_velocities_local() const noexcept;
+        [[nodiscard]] Articulation3DDiagnostic
+        point_motion(std::size_t unit_index, termin::Vec3 point_local, PointMotion3D& motion) const noexcept;
+        [[nodiscard]] Articulation3DDiagnostic floating_base_point_motion(termin::Vec3 point_local,
+                                                                          PointMotion3D& motion) const noexcept;
         [[nodiscard]] ArticulationPointKinematics3DResult point_kinematics(std::size_t unit_index,
                                                                            termin::Vec3 point_local) const noexcept;
         [[nodiscard]] ArticulationPointKinematics3DResult

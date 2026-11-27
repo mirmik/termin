@@ -1,3 +1,5 @@
+#include "friction_polygon.hpp"
+
 #include "dynamics_internal.hpp"
 
 #include <termin/physics_qopt/contact_friction.hpp>
@@ -649,7 +651,7 @@ namespace termin::physics_qopt {
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] DynamicsSystemDiagnostic prepare_friction_topology(double time_step) {
+        [[nodiscard]] DynamicsSystemDiagnostic prepare_friction_topology(double time_step, std::size_t cone_facets) {
             friction_topology = DynamicsFrictionTopology{};
             for (std::size_t index = 0; index < contributions.size(); ++index) {
                 const AssemblyDiagnostic diagnostic =
@@ -663,7 +665,7 @@ namespace termin::physics_qopt {
                     return DynamicsSystemDiagnostic::TopologyFailure;
                 }
             }
-            const AssemblyDiagnostic finalize_diagnostic = friction_topology.finalize();
+            const AssemblyDiagnostic finalize_diagnostic = friction_topology.finalize(cone_facets);
             if (finalize_diagnostic != AssemblyDiagnostic::None) {
                 std::fprintf(stderr,
                              "[termin-qopt] transient friction topology "
@@ -1094,7 +1096,7 @@ namespace termin::physics_qopt {
         if (!std::isfinite(options.position_tolerance) || !std::isfinite(options.velocity_tolerance) ||
             options.position_tolerance < 0.0 || options.velocity_tolerance < 0.0 ||
             (impl_->topology.constraint_count() != 0 && options.max_position_iterations == 0) ||
-            options.friction_cone_facets < 4 || options.friction_cone_facets % 2 != 0) {
+            !detail::FrictionPolygon::valid_side_count(options.friction_cone_facets)) {
             return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::InvalidProjectionOptions);
         }
 
@@ -1119,7 +1121,7 @@ namespace termin::physics_qopt {
             }
             const std::size_t unilateral_constraint_count = impl_->unilateral_topology.constraint_count();
             const DynamicsSystemDiagnostic friction_topology_diagnostic =
-                impl_->prepare_friction_topology(options.time_step);
+                impl_->prepare_friction_topology(options.time_step, options.friction_cone_facets);
             if (friction_topology_diagnostic != DynamicsSystemDiagnostic::None) {
                 rollback();
                 return dynamics_system_failure(
@@ -1554,7 +1556,7 @@ namespace termin::physics_qopt {
                                 {impl_->friction_bilateral_impulse.data(), impl_->friction_bilateral_impulse.size(), 1},
                             },
                             {
-                                .cone_facets = options.friction_cone_facets,
+                                .cone_facets = impl_->friction_topology.cone_facets(),
                                 .qp =
                                     {
                                         .tolerance = velocity_projection_tolerance,

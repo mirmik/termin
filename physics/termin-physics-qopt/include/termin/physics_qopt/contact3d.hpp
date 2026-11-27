@@ -51,6 +51,7 @@ namespace termin::physics_qopt {
         [[nodiscard]] bool valid() const noexcept;
         [[nodiscard]] bool is_static() const noexcept;
         [[nodiscard]] bool belongs_to(const Articulation3DDynamicsContribution& articulation) const noexcept;
+        [[nodiscard]] PointMotion3DResult point_motion() const noexcept;
         [[nodiscard]] PointKinematics3DResult point_kinematics() const noexcept;
 
     private:
@@ -96,6 +97,7 @@ namespace termin::physics_qopt {
         termin::Vec3 tangent_impulse_world = termin::Vec3::zero();
         double friction_work = 0.0;
         bool active = false;
+        // Loaded contact moving tangentially at the friction polygon boundary.
         bool sliding = false;
     };
 
@@ -156,6 +158,9 @@ namespace termin::physics_qopt {
         [[nodiscard]] Contact3DDiagnostic validate_contacts() const noexcept;
         [[nodiscard]] bool
         update_state(std::size_t index, PointKinematics3D& endpoint_a, PointKinematics3D& endpoint_b) noexcept;
+
+        [[nodiscard]] bool
+        update_relative_motion(std::size_t index, termin::Vec3 separation, termin::Vec3 relative_velocity) noexcept;
 
         std::vector<Contact3D> contacts_;
         std::vector<ContactState3D> states_;

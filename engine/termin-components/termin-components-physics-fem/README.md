@@ -148,7 +148,10 @@ mechanical energy, motor effort, power, accumulated work, saturation, contact
 count, cached and warm-started contact count, active normal rows, minimum gap,
 normal impulse sum, normal reaction sum, and maximum normal reaction.
 With contact friction enabled it also reports sliding-contact count, tangent
-speed, tangent impulse, available friction capacity, and friction work.
+speed, tangent impulse, available friction capacity, and friction work. A loaded
+friction contact counts as sliding when its post-solve tangential speed exceeds
+1e-8 m/s and the impulse reaches a face of the configured friction polygon
+(within a relative tolerance of 1e-8).
 The global friction QP uses the configured QP tolerance, relaxed only up to one
 hundredth of the physical velocity tolerance. This avoids rejecting a
 physically negligible friction residual while keeping it well below the

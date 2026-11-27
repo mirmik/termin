@@ -1,12 +1,13 @@
 #include <termin/physics_qopt/contact3d.hpp>
 
+#include "friction_polygon.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
 #include <exception>
 #include <limits>
-#include <numbers>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -20,7 +21,7 @@ namespace termin::physics_qopt {
 
         constexpr double kNormalTolerance = 1e-8;
         constexpr double kWarmImpulseTolerance = 1e-12;
-        constexpr double kFrictionBoundaryTolerance = 1e-8;
+        constexpr double kSlidingSpeedTolerance = 1e-8; // m/s, post-solve contact telemetry
 
         AssemblyDiagnostic assembly_failure(Contact3DDiagnostic diagnostic) noexcept {
             return diagnostic == Contact3DDiagnostic::InternalFailure ? AssemblyDiagnostic::InternalFailure
@@ -123,6 +124,32 @@ namespace termin::physics_qopt {
         return articulation_ == &articulation && (kind_ == Kind::ArticulationBase || kind_ == Kind::ArticulationUnit);
     }
 
+    PointMotion3DResult ContactEndpoint3D::point_motion() const noexcept {
+        switch (kind_) {
+        case Kind::StaticWorld:
+            return static_point_motion(point_);
+        case Kind::RigidBody:
+            if (body_ != nullptr) {
+                return body_->point_motion(point_);
+            }
+            break;
+        case Kind::ArticulationBase:
+            if (articulation_ != nullptr) {
+                return articulation_->floating_base_point_motion(point_);
+            }
+            break;
+        case Kind::ArticulationUnit:
+            if (articulation_ != nullptr) {
+                return articulation_->point_motion(unit_index_, point_);
+            }
+            break;
+        case Kind::Invalid:
+            break;
+        }
+        std::fprintf(stderr, "[termin-qopt] contact references invalid endpoint\n");
+        return {.diagnostic = PointKinematics3DDiagnostic::InvalidModel};
+    }
+
     PointKinematics3DResult ContactEndpoint3D::point_kinematics() const noexcept {
         switch (kind_) {
         case Kind::StaticWorld:
@@ -199,8 +226,8 @@ namespace termin::physics_qopt {
                     cached->normal_impulse <= kWarmImpulseTolerance) {
                     continue;
                 }
-                const PointKinematics3DResult endpoint_a = previous.endpoint_a.point_kinematics();
-                const PointKinematics3DResult endpoint_b = previous.endpoint_b.point_kinematics();
+                const PointMotion3DResult endpoint_a = previous.endpoint_a.point_motion();
+                const PointMotion3DResult endpoint_b = previous.endpoint_b.point_motion();
                 if (!endpoint_a.ok() || !endpoint_b.ok()) {
                     continue;
                 }
@@ -368,14 +395,21 @@ namespace termin::physics_qopt {
                                      [](const ContactState3D& state, std::uint64_t key) { return state.key < key; });
                 if (cached != state_cache_.end() && cached->key == contacts_[index].key) {
                     states_[index] = *cached;
+                    if (contacts_[index].friction_coefficient == 0.0) {
+                        // A fully frictionless step never calls apply_friction_solution.
+                        states_[index].tangent_velocity_world = termin::Vec3::zero();
+                        states_[index].tangent_impulse_world = termin::Vec3::zero();
+                        states_[index].friction_work = 0.0;
+                        states_[index].sliding = false;
+                    }
                     warm_started_contact_count_ +=
                         cached->active && cached->normal_impulse > kWarmImpulseTolerance ? 1U : 0U;
                 }
-                PointKinematics3DResult endpoint_a = contacts_[index].endpoint_a.point_kinematics();
-                PointKinematics3DResult endpoint_b = contacts_[index].endpoint_b.point_kinematics();
+                const PointMotion3DResult endpoint_a = contacts_[index].endpoint_a.point_motion();
+                const PointMotion3DResult endpoint_b = contacts_[index].endpoint_b.point_motion();
                 if (!endpoint_a.ok() || !endpoint_b.ok() ||
-                    (!endpoint_a.value.is_static() && !endpoint_a.value.dofs.valid()) ||
-                    (!endpoint_b.value.is_static() && !endpoint_b.value.dofs.valid())) {
+                    (!contacts_[index].endpoint_a.is_static() && !endpoint_a.dofs.valid()) ||
+                    (!contacts_[index].endpoint_b.is_static() && !endpoint_b.dofs.valid())) {
                     diagnostic_ = Contact3DDiagnostic::InvalidEndpoint;
                     std::fprintf(stderr,
                                  "[termin-qopt] contact %llu has invalid endpoint "
@@ -461,13 +495,20 @@ namespace termin::physics_qopt {
         }
         endpoint_a = std::move(a.value);
         endpoint_b = std::move(b.value);
+        return update_relative_motion(index,
+                                      endpoint_b.position_world - endpoint_a.position_world,
+                                      endpoint_b.velocity_world - endpoint_a.velocity_world);
+    }
+
+    bool ContactSet3DContribution::update_relative_motion(std::size_t index,
+                                                          termin::Vec3 separation,
+                                                          termin::Vec3 relative_velocity) noexcept {
         const termin::Vec3& normal = contacts_[index].normal_from_a_to_b_world;
         ContactState3D& state = states_[index];
         state.key = contacts_[index].key;
-        state.signed_gap = contacts_[index].signed_gap +
-                           normal.dot(endpoint_b.position_world - endpoint_a.position_world) -
-                           step_contacts_[index].reference_separation;
-        state.normal_velocity = normal.dot(endpoint_b.velocity_world - endpoint_a.velocity_world);
+        state.signed_gap =
+            contacts_[index].signed_gap + normal.dot(separation) - step_contacts_[index].reference_separation;
+        state.normal_velocity = normal.dot(relative_velocity);
         return std::isfinite(state.signed_gap) && std::isfinite(state.normal_velocity);
     }
 
@@ -646,10 +687,18 @@ namespace termin::physics_qopt {
         if (states_.size() != step_contacts_.size()) {
             return;
         }
+        if (states_.size() > contacts_.size()) {
+            diagnostic_ = Contact3DDiagnostic::InvalidState;
+            std::fprintf(stderr, "[termin-qopt] invalid solved contact count\n");
+            return;
+        }
         for (std::size_t index = 0; index < states_.size(); ++index) {
-            PointKinematics3D endpoint_a;
-            PointKinematics3D endpoint_b;
-            if (!update_state(index, endpoint_a, endpoint_b)) {
+            const auto endpoint_a = contacts_[index].endpoint_a.point_motion();
+            const auto endpoint_b = contacts_[index].endpoint_b.point_motion();
+            if (!endpoint_a.ok() || !endpoint_b.ok() ||
+                !update_relative_motion(index,
+                                        endpoint_b.value.position_world - endpoint_a.value.position_world,
+                                        endpoint_b.value.velocity_world - endpoint_a.value.velocity_world)) {
                 diagnostic_ = Contact3DDiagnostic::InvalidState;
                 std::fprintf(stderr, "[termin-qopt] cannot update solved contact state\n");
                 continue;
@@ -695,6 +744,12 @@ namespace termin::physics_qopt {
         if (states_.size() != step_contacts_.size()) {
             return;
         }
+        if (!topology.finalized()) {
+            diagnostic_ = Contact3DDiagnostic::InvalidState;
+            std::fprintf(stderr, "[termin-qopt] cannot apply friction using an unfinished topology\n");
+            return;
+        }
+        const detail::FrictionPolygon polygon(topology.cone_facets());
         for (std::size_t index = 0; index < states_.size(); ++index) {
             const DynamicsFrictionContactHandle handle = step_contacts_[index].friction;
             if (!handle.valid()) {
@@ -719,19 +774,21 @@ namespace termin::physics_qopt {
                 step_contacts_[index].tangent_1_world * first + step_contacts_[index].tangent_2_world * second;
             states_[index].normal_impulse = normal_impulses[contact_info.offset];
             states_[index].normal_reaction = states_[index].normal_impulse / time_step_;
-            const PointKinematics3DResult endpoint_a = contacts_[index].endpoint_a.point_kinematics();
-            const PointKinematics3DResult endpoint_b = contacts_[index].endpoint_b.point_kinematics();
-            if (endpoint_a.ok() && endpoint_b.ok()) {
-                const termin::Vec3 relative_velocity =
-                    endpoint_b.value.velocity_world - endpoint_a.value.velocity_world;
-                const termin::Vec3& normal = contacts_[index].normal_from_a_to_b_world;
-                states_[index].tangent_velocity_world = relative_velocity - normal * normal.dot(relative_velocity);
+            const PointMotion3DResult endpoint_a = contacts_[index].endpoint_a.point_motion();
+            const PointMotion3DResult endpoint_b = contacts_[index].endpoint_b.point_motion();
+            if (!endpoint_a.ok() || !endpoint_b.ok()) {
+                diagnostic_ = Contact3DDiagnostic::InvalidState;
+                std::fprintf(stderr, "[termin-qopt] cannot read solved contact tangent velocity\n");
+                continue;
             }
+            const termin::Vec3 relative_velocity = endpoint_b.value.velocity_world - endpoint_a.value.velocity_world;
+            const termin::Vec3& normal = contacts_[index].normal_from_a_to_b_world;
+            const termin::Vec3 tangent_velocity = relative_velocity - normal * normal.dot(relative_velocity);
+            states_[index].tangent_velocity_world = tangent_velocity;
             states_[index].friction_work = friction_work[contact_info.offset];
             const double capacity = contacts_[index].friction_coefficient * states_[index].normal_impulse;
             states_[index].sliding =
-                capacity > 0.0 && states_[index].tangent_impulse_world.norm() >=
-                                      capacity * std::cos(std::numbers::pi / 32.0) * (1.0 - kFrictionBoundaryTolerance);
+                tangent_velocity.norm() > kSlidingSpeedTolerance && polygon.at_limit(first, second, capacity);
             state_cache_[index] = states_[index];
         }
     }
@@ -742,8 +799,8 @@ namespace termin::physics_qopt {
             return contacts_.empty() ? 0.0 : std::numeric_limits<double>::infinity();
         }
         for (std::size_t index = 0; index < contacts_.size(); ++index) {
-            const PointKinematics3DResult endpoint_a = contacts_[index].endpoint_a.point_kinematics();
-            const PointKinematics3DResult endpoint_b = contacts_[index].endpoint_b.point_kinematics();
+            const PointMotion3DResult endpoint_a = contacts_[index].endpoint_a.point_motion();
+            const PointMotion3DResult endpoint_b = contacts_[index].endpoint_b.point_motion();
             if (!endpoint_a.ok() || !endpoint_b.ok()) {
                 return std::numeric_limits<double>::infinity();
             }
@@ -765,8 +822,8 @@ namespace termin::physics_qopt {
         }
         double result = 0.0;
         for (std::size_t index = 0; index < contacts_.size(); ++index) {
-            const PointKinematics3DResult endpoint_a = contacts_[index].endpoint_a.point_kinematics();
-            const PointKinematics3DResult endpoint_b = contacts_[index].endpoint_b.point_kinematics();
+            const PointMotion3DResult endpoint_a = contacts_[index].endpoint_a.point_motion();
+            const PointMotion3DResult endpoint_b = contacts_[index].endpoint_b.point_motion();
             if (!endpoint_a.ok() || !endpoint_b.ok()) {
                 return std::numeric_limits<double>::infinity();
             }

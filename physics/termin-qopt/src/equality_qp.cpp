@@ -23,7 +23,8 @@ namespace termin::qopt {
         enum class FactorizationPolicy {
             Spectral,
             CertifiedUnconstrained,
-            SchurFirst
+            SchurFirst,
+            CertifiedSchur
         };
 
         struct EqualityFactorization {
@@ -198,6 +199,23 @@ namespace termin::qopt {
             return result;
         }
 
+        [[nodiscard]] bool certifies_full_row_rank(const Matrix& normalized, QpTolerance tolerance) {
+            // G = A A^T. Its smallest Gershgorin lower bound certifies full row
+            // rank if it exceeds the squared SVD cutoff. ||A||_F bounds sigma_max.
+            const Matrix gram = normalized * normalized.transpose();
+            const double frobenius_squared = normalized.squaredNorm();
+            const double rank_cutoff = scaled_tolerance(tolerance, std::sqrt(frobenius_squared));
+            // For normalized rows, dot-product roundoff in each Gram entry is
+            // bounded by gamma_n ||a_i|| ||a_j||. Allow for a sum of m such
+            // errors, the computed row sums, and rounding the cutoff.
+            const double m = static_cast<double>(normalized.rows());
+            const double n = static_cast<double>(normalized.cols());
+            const double margin =
+                16.0 * (m + 1.0) * (n + m + 1.0) * std::numeric_limits<double>::epsilon() * frobenius_squared;
+            const double lower_bound = (2.0 * gram.diagonal() - gram.cwiseAbs().rowwise().sum()).minCoeff();
+            return lower_bound > rank_cutoff * rank_cutoff + margin;
+        }
+
         [[nodiscard]] QpSolveResult solve_impl(EqualityQpProblemView problem,
                                                EqualityQpSolutionView solution,
                                                QpTolerance tolerance,
@@ -267,8 +285,10 @@ namespace termin::qopt {
             // independent active constraints. Solve that common case through the Schur
             // complement, while retaining the rank-revealing path below for singular,
             // semidefinite, or inconsistent problems.
-            if (policy == FactorizationPolicy::SchurFirst && constraint_count > 0 &&
-                constraint_count <= variable_count) {
+            if (constraint_count > 0 && constraint_count <= variable_count &&
+                (policy == FactorizationPolicy::SchurFirst ||
+                 (policy == FactorizationPolicy::CertifiedSchur && certifies_full_row_rank(equalities, tolerance) &&
+                  certifies_positive_definiteness(hessian, tolerance)))) {
                 Eigen::LLT<Matrix> hessian_factor(hessian);
                 if (hessian_factor.info() == Eigen::Success) {
                     const Vector hessian_pivots = hessian_factor.matrixL().toDenseMatrix().diagonal().array().square();
@@ -294,19 +314,16 @@ namespace termin::qopt {
                             Vector equality_dual = normalized_dual;
                             equality_dual.array() /= equality_row_scales.array();
 
-                            const Vector objective_gradient = hessian * primal + gradient;
-                            const Vector stationarity_error =
-                                objective_gradient + input_equalities.transpose() * equality_dual;
-                            const Vector equality_error = input_equalities * primal - input_equality_targets;
+                            const Vector hessian_primal = hessian * primal;
+                            const Vector dual_gradient = input_equalities.transpose() * equality_dual;
+                            const Vector stationarity_error = hessian_primal + gradient + dual_gradient;
+                            const Vector constraint_values = input_equalities * primal;
+                            const Vector equality_error = constraint_values - input_equality_targets;
                             const double feasibility_scale =
-                                std::max(linf(input_equalities * primal), linf(input_equality_targets));
+                                std::max(linf(constraint_values), linf(input_equality_targets));
                             const double feasibility_tolerance = scaled_tolerance(tolerance, feasibility_scale);
-                            const double stationarity_scale = std::max({
-                                1.0,
-                                linf(hessian * primal),
-                                linf(gradient),
-                                linf(input_equalities.transpose() * equality_dual),
-                            });
+                            const double stationarity_scale =
+                                std::max({1.0, linf(hessian_primal), linf(gradient), linf(dual_gradient)});
 
                             QpSolveResult result;
                             result.status = QpStatus::Optimal;
@@ -315,7 +332,9 @@ namespace termin::qopt {
                             result.equality_linf = linf(equality_error);
                             result.constraint_rank = constraints;
                             result.reduced_hessian_rank = variables - constraints;
-                            if (result.stationarity_linf <= scaled_tolerance(tolerance, stationarity_scale) &&
+                            if (primal.allFinite() && equality_dual.allFinite() &&
+                                stationarity_error.allFinite() && equality_error.allFinite() &&
+                                result.stationarity_linf <= scaled_tolerance(tolerance, stationarity_scale) &&
                                 result.equality_linf <= feasibility_tolerance) {
                                 copy_to_view(primal, solution.primal);
                                 copy_to_view(equality_dual, solution.equality_dual);
@@ -711,6 +730,12 @@ namespace termin::qopt {
             std::fprintf(stderr, "[termin-qopt] batch equality QP failed with an unknown exception\n");
         }
         return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
+    }
+
+    QpSolveResult detail::solve_equality_qp_seed(EqualityQpProblemView problem,
+                                                 EqualityQpSolutionView solution,
+                                                 QpTolerance tolerance) {
+        return solve_impl(problem, solution, tolerance, FactorizationPolicy::CertifiedSchur, nullptr, nullptr);
     }
 
     QpSolveResult detail::solve_equality_qp_spd_first(EqualityQpProblemView problem,

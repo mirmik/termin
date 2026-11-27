@@ -65,13 +65,21 @@ namespace termin::physics_qopt {
         return diagnostic == PointKinematics3DDiagnostic::None;
     }
 
-    PointKinematics3DResult static_point_kinematics(termin::Vec3 position_world) noexcept {
+    PointMotion3DResult static_point_motion(termin::Vec3 position_world) noexcept {
         if (!position_world.is_finite()) {
             std::fprintf(stderr, "[termin-qopt] rejected non-finite static point\n");
-            return {{}, PointKinematics3DDiagnostic::NonFinitePoint};
+            return {.diagnostic = PointKinematics3DDiagnostic::NonFinitePoint};
+        }
+        return {.value = {.position_world = position_world}};
+    }
+
+    PointKinematics3DResult static_point_kinematics(termin::Vec3 position_world) noexcept {
+        const auto motion = static_point_motion(position_world);
+        if (!motion.ok()) {
+            return {{}, motion.diagnostic};
         }
         PointKinematics3D value;
-        value.position_world = position_world;
+        value.position_world = motion.value.position_world;
         return {std::move(value), PointKinematics3DDiagnostic::None};
     }
 

@@ -107,6 +107,10 @@ namespace termin::physics_qopt {
                          std::string_view diagnostic_name) noexcept;
         [[nodiscard]] AssemblyDiagnostic finalize() noexcept;
 
+        [[nodiscard]] AssemblyDiagnostic finalize(std::size_t cone_facets) noexcept;
+        [[nodiscard]] std::size_t cone_facets() const noexcept {
+            return cone_facets_;
+        }
         [[nodiscard]] bool finalized() const noexcept;
         [[nodiscard]] std::size_t contact_count() const noexcept;
         [[nodiscard]] std::size_t tangent_count() const noexcept;
@@ -118,6 +122,7 @@ namespace termin::physics_qopt {
         DenseBlockTopology contacts_;
         DenseBlockTopology tangents_;
         std::vector<DynamicsUnilateralConstraintHandle> normal_constraints_;
+        std::size_t cone_facets_ = 0;
         bool finalized_ = false;
     };
 

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <utility>
 #include <vector>
 
@@ -275,7 +276,9 @@ namespace {
         TERMIN_QOPT_CHECK(contact_set->states()[0].sliding);
 
         RigidBody3DState slow = body->state();
-        slow.velocity_local.lin = {0.01, 0.0, 0.0};
+        // Almost the full vertex impulse is needed, but it brings the foot to rest.
+        const double sticking_speed = 0.998 * contact.friction_coefficient * normal_impulse;
+        slow.velocity_local.lin = {sticking_speed, 0.0, 0.0};
         TERMIN_QOPT_CHECK(body->set_state(slow) == Multibody3DDiagnostic::None);
         DynamicsSystemStepOptions fine_options = step_options();
         fine_options.friction_cone_facets = 8;
@@ -285,8 +288,73 @@ namespace {
         TERMIN_QOPT_CHECK(sticking_result.friction_contact_count == 1);
         TERMIN_QOPT_CHECK(sticking_result.friction_cone_facets == 8);
         check_near(body->state().velocity_local.lin.x, 0.0, 2e-8);
-        check_near(contact_set->states()[0].tangent_impulse_world.x, -0.01, 2e-8);
+        check_near(contact_set->states()[0].tangent_impulse_world.x, -sticking_speed, 2e-8);
         TERMIN_QOPT_CHECK(!contact_set->states()[0].sliding);
+    }
+
+    void test_sliding_on_polygon_faces() {
+        for (const std::size_t facets : {6U, 8U, 16U}) {
+            const double half_facet = std::numbers::pi / static_cast<double>(facets);
+            const Vec3 direction{std::cos(half_facet), 0.0, std::sin(half_facet)};
+            DynamicsSystem system;
+            auto* body =
+                add(system,
+                    std::make_unique<RigidBody3DContribution>(
+                        unit_inertia(), RigidBody3DState{Pose3::identity(), {{}, direction}}, Vec3{0.0, -9.81, 0.0}));
+            auto* contacts = add(system, std::make_unique<ContactSet3DContribution>("polygon-face"));
+            Contact3D contact = ground_contact(40, *body, 0.0);
+            contact.friction_coefficient = 0.5;
+            TERMIN_QOPT_CHECK(contacts->set_contacts({contact}) == Contact3DDiagnostic::None);
+            TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
+            auto options = step_options();
+            options.friction_cone_facets = facets;
+            TERMIN_QOPT_CHECK(system.step(options).ok());
+            const auto& state = contacts->states()[0];
+            const double face_impulse = contact.friction_coefficient * state.normal_impulse * std::cos(half_facet);
+            check_near(state.tangent_impulse_world.norm(), face_impulse);
+            check_near(state.tangent_velocity_world.norm(), 1.0 - face_impulse);
+            TERMIN_QOPT_CHECK(state.sliding);
+
+            // A persisted contact with friction switched off no longer reports the previous slip.
+            contact.friction_coefficient = 0.0;
+            TERMIN_QOPT_CHECK(contacts->set_contacts({contact}) == Contact3DDiagnostic::None);
+            TERMIN_QOPT_CHECK(system.step(options).ok());
+            TERMIN_QOPT_CHECK(!contacts->states()[0].sliding);
+            check_near(contacts->states()[0].tangent_impulse_world.norm(), 0.0);
+        }
+    }
+
+    void test_sliding_distinguishes_equal_length_impulses_near_a_vertex() {
+        RigidBody3DContribution body(unit_inertia(), {Pose3::identity(), {{}, {-1, 0, 1}}});
+        ContactSet3DContribution contacts;
+        Contact3D contact = ground_contact(42, body, 0);
+        contact.friction_coefficient = 1.0;
+        TERMIN_QOPT_CHECK(contacts.set_contacts({contact}) == Contact3DDiagnostic::None);
+        DynamicsTopology topology;
+        TERMIN_QOPT_CHECK(body.register_topology(topology) == AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK(contacts.register_topology(topology) == AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK(topology.finalize() == AssemblyDiagnostic::None);
+        DynamicsUnilateralTopology unilateral;
+        TERMIN_QOPT_CHECK(contacts.register_unilateral_constraints(unilateral, 0.01) == AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK(unilateral.finalize() == AssemblyDiagnostic::None);
+        DynamicsFrictionTopology friction;
+        TERMIN_QOPT_CHECK(contacts.register_friction_contacts(friction, 0.01) == AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK(friction.finalize(4) == AssemblyDiagnostic::None);
+
+        // For unit capacity the square has |p1|+|p2| <= 1. Both impulses
+        // exceed its inradius and have the same length; only the second touches a facet.
+        const double radius = std::hypot(0.75, 0.25);
+        const double normal = 1.0, work = -1.0;
+        const auto check = [&](std::array<double, 2> impulse, bool expected_sliding) {
+            contacts.apply_friction_solution(friction, {&normal, 1}, {impulse.data(), 2}, {&work, 1});
+            TERMIN_QOPT_CHECK(contacts.diagnostic() == Contact3DDiagnostic::None);
+            const auto& state = contacts.states().front();
+            check_near(state.tangent_velocity_world.norm(), std::sqrt(2.0));
+            check_near(state.tangent_impulse_world.norm(), radius);
+            TERMIN_QOPT_CHECK(state.sliding == expected_sliding);
+        };
+        check({radius, 0.0}, false);
+        check({0.75, 0.25}, true);
     }
 
     struct ForcedContactResult {
@@ -555,6 +623,8 @@ int main() {
     test_impact_and_removal();
     test_resting_support_and_separation();
     test_ground_coulomb_friction();
+    test_sliding_on_polygon_faces();
+    test_sliding_distinguishes_equal_length_impulses_near_a_vertex();
     test_sticking_contact_does_not_accumulate_tangential_drift();
     test_persistent_contact_cache_and_warm_start();
     test_contact_cache_order_capacity_and_rollback();

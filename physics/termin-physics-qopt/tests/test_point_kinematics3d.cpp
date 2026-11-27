@@ -1,5 +1,6 @@
 #include <termin/geom/se3.hpp>
 #include <termin/physics_qopt/articulation3d_dynamics.hpp>
+#include <termin/physics_qopt/contact3d.hpp>
 #include <termin/physics_qopt/multibody3d.hpp>
 #include <termin/physics_qopt/point_kinematics3d.hpp>
 
@@ -218,6 +219,63 @@ namespace {
         check_near(dot(state.velocities, effort), result.value.velocity_world.dot(force_world));
     }
 
+    void test_endpoint_motion() {
+        const Vec3 point{0.2, -0.7, 0.5};
+        const Pose3 pose = Pose3::translation(1, 2, 3) * Pose3::rotation(Vec3::unit_y(), 0.45);
+        const Screw3 velocity{{0.4, 0.7, -0.3}, {-1, 2, 0.5}};
+        RigidBody3DContribution body(inertia(), {pose, velocity});
+        Articulation3D model(
+            {inertia(), pose, velocity, "base"}, branching_units(), {{0.1, 0.2, 0.3}, {0.2, -0.4, 0.6}});
+        Articulation3DDynamicsContribution articulation(model);
+        const auto rigid = ContactEndpoint3D::rigid_body(body, point);
+        const auto ground = ContactEndpoint3D::static_world(point);
+        const auto base = ContactEndpoint3D::articulation_base(articulation, point);
+        const auto unit = ContactEndpoint3D::articulation_unit(articulation, 1, point);
+
+        // A point can be queried before binding, but cannot register a dynamic contact row yet.
+        ContactSet3DContribution contacts;
+        TERMIN_QOPT_CHECK(
+            contacts.set_contacts(
+                {{.key = 1, .endpoint_a = ground, .endpoint_b = rigid, .normal_from_a_to_b_world = Vec3::unit_z()}}) ==
+            Contact3DDiagnostic::None);
+        DynamicsUnilateralTopology topology;
+        TERMIN_QOPT_CHECK(contacts.register_unilateral_constraints(topology, 0.001) != AssemblyDiagnostic::None);
+        TERMIN_QOPT_CHECK(contacts.diagnostic() == Contact3DDiagnostic::InvalidEndpoint);
+        bind(body);
+        bind(articulation);
+        for (const auto& endpoint : {ground, rigid, base, unit}) {
+            const auto motion = endpoint.point_motion();
+            const auto full = endpoint.point_kinematics();
+            TERMIN_QOPT_CHECK(motion.ok() && full.ok());
+            TERMIN_QOPT_CHECK(motion.dofs.block == full.value.dofs.block);
+            TERMIN_QOPT_CHECK(motion.dofs.valid() != endpoint.is_static());
+            check_near(motion.value.position_world, full.value.position_world);
+            check_near(motion.value.velocity_world, full.value.velocity_world);
+        }
+        const double largest = std::numeric_limits<double>::max();
+        const auto overflowing = ContactEndpoint3D::articulation_base(articulation, {largest, 0.0, largest});
+        TERMIN_QOPT_CHECK(overflowing.point_motion().diagnostic == PointKinematics3DDiagnostic::InvalidModel);
+        const auto base_motion = base.point_motion();
+        check_near(base_motion.value.position_world, pose.transform_point(point));
+        check_near(base_motion.value.velocity_world, pose.transform_vector(velocity.lin + velocity.ang.cross(point)));
+        const auto unit_motion = unit.point_motion();
+        check_near(unit_motion.value.position_world, model.unit_poses_world()[1].transform_point(point));
+        const auto& link_twist = model.unit_velocities_local()[1];
+        check_near(unit_motion.value.velocity_world,
+                   model.unit_poses_world()[1].transform_vector(link_twist.lin + link_twist.ang.cross(point)));
+
+        const Vec3 bad{0, std::numeric_limits<double>::quiet_NaN(), 0};
+        for (const auto& endpoint : {ContactEndpoint3D::static_world(bad),
+                                     ContactEndpoint3D::rigid_body(body, bad),
+                                     ContactEndpoint3D::articulation_base(articulation, bad),
+                                     ContactEndpoint3D::articulation_unit(articulation, 1, bad)}) {
+            TERMIN_QOPT_CHECK(endpoint.point_motion().diagnostic == PointKinematics3DDiagnostic::NonFinitePoint);
+        }
+        TERMIN_QOPT_CHECK(ContactEndpoint3D{}.point_motion().diagnostic == PointKinematics3DDiagnostic::InvalidModel);
+        TERMIN_QOPT_CHECK(ContactEndpoint3D::articulation_unit(articulation, 3, point).point_motion().diagnostic ==
+                          PointKinematics3DDiagnostic::InvalidUnit);
+    }
+
     void test_diagnostics() {
         const double nan = std::numeric_limits<double>::quiet_NaN();
         TERMIN_QOPT_CHECK(static_point_kinematics({nan, 0.0, 0.0}).diagnostic ==
@@ -233,6 +291,8 @@ namespace {
 
         Articulation3D model(branching_units(), {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}});
         Articulation3DDynamicsContribution articulation(model);
+        TERMIN_QOPT_CHECK(articulation.floating_base_point_motion(Vec3::zero()).diagnostic ==
+                          PointKinematics3DDiagnostic::InvalidModel);
         TERMIN_QOPT_CHECK(articulation.point_kinematics(3, Vec3::zero()).diagnostic ==
                           PointKinematics3DDiagnostic::InvalidUnit);
         TERMIN_QOPT_CHECK(articulation.point_kinematics(0, {0.0, 0.0, nan}).diagnostic ==
@@ -255,6 +315,7 @@ int main() {
     test_static_point();
     test_rigid_body_point();
     test_articulation_point();
+    test_endpoint_motion();
     test_diagnostics();
     return 0;
 }

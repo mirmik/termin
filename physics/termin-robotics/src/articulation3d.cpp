@@ -349,26 +349,41 @@ namespace termin::robotics {
         return {{}, Articulation3DDiagnostic::InternalFailure};
     }
 
-    ArticulationPointKinematics3DResult
-    Articulation3D::floating_base_point_kinematics(termin::Vec3 point_local) const noexcept {
+    Articulation3DDiagnostic Articulation3D::floating_base_point_motion(termin::Vec3 point_local,
+                                                                        PointMotion3D& motion) const noexcept {
         if (diagnostic_ != Articulation3DDiagnostic::None || !floating_base_.has_value()) {
             std::fprintf(stderr,
                          "[termin-robotics] articulation '%s' has no valid floating "
                          "base point\n",
                          diagnostic_name_.c_str());
-            return {{}, Articulation3DDiagnostic::InvalidModel};
+            return Articulation3DDiagnostic::InvalidModel;
         }
         if (!point_local.is_finite()) {
             std::fprintf(stderr, "[termin-robotics] rejected non-finite floating-base point\n");
-            return {{}, Articulation3DDiagnostic::NonFinitePoint};
+            return Articulation3DDiagnostic::NonFinitePoint;
         }
 
+        const auto result =
+            PointMotion3D::from_local_point(floating_base_->pose_world, floating_base_->velocity_local, point_local);
+        if (!result.position_world.is_finite() || !result.velocity_world.is_finite()) {
+            std::fprintf(stderr, "[termin-robotics] non-finite floating-base point motion\n");
+            return Articulation3DDiagnostic::InvalidModel;
+        }
+        motion = result;
+        return Articulation3DDiagnostic::None;
+    }
+
+    ArticulationPointKinematics3DResult
+    Articulation3D::floating_base_point_kinematics(termin::Vec3 point_local) const noexcept {
+        PointMotion3D motion;
+        const auto diagnostic = floating_base_point_motion(point_local, motion);
+        if (diagnostic != Articulation3DDiagnostic::None) {
+            return {{}, diagnostic};
+        }
         try {
             ArticulationPointKinematics3D value;
-            value.position_world = floating_base_->pose_world.transform_point(point_local);
-            value.velocity_world = floating_base_->velocity_local.velocity_at_offset(point_local)
-                                       .rotated_by(floating_base_->pose_world.ang)
-                                       .lin;
+            value.position_world = motion.position_world;
+            value.velocity_world = motion.velocity_world;
             const termin::Screw3 point_velocity_local = floating_base_->velocity_local.velocity_at_offset(point_local);
             value.bias_acceleration_world = floating_base_->pose_world.transform_vector(
                 floating_base_->velocity_local.ang.cross(point_velocity_local.lin));
@@ -394,8 +409,9 @@ namespace termin::robotics {
         return {{}, Articulation3DDiagnostic::InternalFailure};
     }
 
-    ArticulationPointKinematics3DResult Articulation3D::point_kinematics(std::size_t unit_index,
-                                                                         termin::Vec3 point_local) const noexcept {
+    Articulation3DDiagnostic Articulation3D::point_motion(std::size_t unit_index,
+                                                          termin::Vec3 point_local,
+                                                          PointMotion3D& motion) const noexcept {
         if (diagnostic_ != Articulation3DDiagnostic::None || unit_poses_world_.size() != units_.size() ||
             parent_to_unit_.size() != units_.size() || motion_twists_at_unit_.size() != units_.size() ||
             unit_velocities_local_.size() != units_.size()) {
@@ -403,27 +419,41 @@ namespace termin::robotics {
                          "[termin-robotics] cannot query point kinematics of invalid "
                          "articulation '%s'\n",
                          diagnostic_name_.c_str());
-            return {{}, Articulation3DDiagnostic::InvalidModel};
+            return Articulation3DDiagnostic::InvalidModel;
         }
         if (unit_index >= units_.size()) {
             std::fprintf(stderr,
                          "[termin-robotics] articulation point references invalid unit "
                          "%zu\n",
                          unit_index);
-            return {{}, Articulation3DDiagnostic::InvalidUnit};
+            return Articulation3DDiagnostic::InvalidUnit;
         }
         if (!point_local.is_finite()) {
             std::fprintf(stderr, "[termin-robotics] rejected non-finite articulation point\n");
-            return {{}, Articulation3DDiagnostic::NonFinitePoint};
+            return Articulation3DDiagnostic::NonFinitePoint;
         }
 
+        const auto result = PointMotion3D::from_local_point(
+            unit_poses_world_[unit_index], unit_velocities_local_[unit_index], point_local);
+        if (!result.position_world.is_finite() || !result.velocity_world.is_finite()) {
+            std::fprintf(stderr, "[termin-robotics] non-finite articulation point motion\n");
+            return Articulation3DDiagnostic::InvalidModel;
+        }
+        motion = result;
+        return Articulation3DDiagnostic::None;
+    }
+
+    ArticulationPointKinematics3DResult Articulation3D::point_kinematics(std::size_t unit_index,
+                                                                         termin::Vec3 point_local) const noexcept {
+        PointMotion3D motion;
+        const auto diagnostic = point_motion(unit_index, point_local, motion);
+        if (diagnostic != Articulation3DDiagnostic::None) {
+            return {{}, diagnostic};
+        }
         try {
             ArticulationPointKinematics3D value;
-            value.position_world = unit_poses_world_[unit_index].transform_point(point_local);
-            value.velocity_world = unit_velocities_local_[unit_index]
-                                       .velocity_at_offset(point_local)
-                                       .rotated_by(unit_poses_world_[unit_index].ang)
-                                       .lin;
+            value.position_world = motion.position_world;
+            value.velocity_world = motion.velocity_world;
             std::vector<std::size_t> ancestry;
             for (std::size_t current = unit_index;;) {
                 ancestry.push_back(current);
@@ -474,9 +504,6 @@ namespace termin::robotics {
                     response = response.adjoint_inv(parent_to_unit_[ancestry[descendant]]);
                 }
                 write_response(unit_offset + joint, response);
-            }
-            if (!value.position_world.is_finite() || !value.velocity_world.is_finite()) {
-                return {{}, Articulation3DDiagnostic::InvalidModel};
             }
             return {std::move(value), Articulation3DDiagnostic::None};
         } catch (const std::exception& error) {
