@@ -360,9 +360,14 @@ future persistent contact contribution rather than `DynamicsSystem`.
    in the contact contribution. Geometry remains stateless and solver-neutral:
    collision supplies stable pair/feature identities, while the contribution
    owns bounded temporal state, supporting-point selection and active-set hints.
+   For the position and velocity projections, the solver tries the hinted
+   normal rows as equalities using the current Jacobian, mass matrix and
+   right-hand side. It accepts an unambiguous face after checking the
+   original QP residuals and multiplier signs. The ordinary active-set search
+   handles contact transitions and degenerate faces.
 9. Coulomb friction is implemented as a second global maximum-dissipation QP.
-   A deterministic tangent basis and an inscribed regular 32-gon approximate
-   each circular friction disk. The pass jointly corrects tangent impulses and
+   A deterministic tangent basis and an inscribed regular polygon approximate
+   each circular friction disk. The default is six facets. The pass jointly corrects tangent impulses and
    redistributes normal impulses among tight contacts, preserves every normal
    velocity inequality, respects non-negative normal impulses, and includes
    bilateral-compatible inverse-mass response. This redistribution is required

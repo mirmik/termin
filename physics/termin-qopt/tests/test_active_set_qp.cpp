@@ -119,6 +119,70 @@ namespace {
         TERMIN_QOPT_CHECK(upper_dual[1] == 0.0);
     }
 
+    void test_previous_contact_face() {
+        const std::vector<double> mass{2.0}, contact{-1.0}, empty;
+        std::vector<double> gradient{2.0}, limit{-0.125}, active{1.0}, velocity(1), impulse(1);
+        const ActiveSetQpProblemView problem{
+            row_major(mass, 1, 1),
+            const_vector(gradient),
+            row_major(empty, 0, 1),
+            {},
+            row_major(contact, 1, 1),
+            const_vector(limit),
+            {},
+            {},
+        };
+        const ActiveSetQpSolutionView solution{vector(velocity), {}, vector(impulse), {}, {}};
+        ActiveSetQpOptions one_iteration;
+        one_iteration.max_iterations = 1;
+        // A changed surface velocity requires reconstructing the primal from the new right-hand side.
+        for (double surface_velocity : {0.125, 0.25}) {
+            limit[0] = -surface_velocity;
+            auto result =
+                solve_active_set_qp_with_inequality_hint(problem, solution, const_vector(active), one_iteration);
+            TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+            TERMIN_QOPT_CHECK(result.iterations == 1);
+            TERMIN_QOPT_CHECK(std::abs(velocity[0] - surface_velocity) < 1e-12);
+            TERMIN_QOPT_CHECK(std::abs(impulse[0] - (2.0 * surface_velocity + gradient[0])) < 1e-12);
+        }
+        // Lift-off would require a tensile impulse on the predicted face.
+        gradient[0] = -4.0;
+        auto result = solve_active_set_qp_with_inequality_hint(problem, solution, const_vector(active));
+        TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(std::abs(velocity[0] - 2.0) < 1e-12);
+        TERMIN_QOPT_CHECK(impulse[0] == 0.0);
+        // A newly blocking contact must also be found when the hint misses it.
+        active[0] = 0.0;
+        gradient[0] = 2.0;
+        result = solve_active_set_qp_with_inequality_hint(problem, solution, const_vector(active));
+        TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(std::abs(velocity[0] - 0.25) < 1e-12);
+        TERMIN_QOPT_CHECK(std::abs(impulse[0] - 2.5) < 1e-12);
+    }
+
+    void test_contact_face_keeps_cold_load_sharing_for_redundant_contacts() {
+        const std::vector<double> mass{1.0}, gradient{1.0}, contacts{-1.0, -1.0}, limits{0.0, 0.0}, empty;
+        const ActiveSetQpProblemView problem{
+            row_major(mass, 1, 1),
+            const_vector(gradient),
+            row_major(empty, 0, 1),
+            {},
+            row_major(contacts, 2, 1),
+            const_vector(limits),
+            {},
+            {},
+        };
+        std::vector<double> velocity(1), impulses(2);
+        const ActiveSetQpSolutionView solution{vector(velocity), {}, vector(impulses), {}, {}};
+        TERMIN_QOPT_CHECK(solve_active_set_qp(problem, solution).status == QpStatus::Optimal);
+        const auto reference = impulses;
+        for (const std::vector<double>& mask : {std::vector<double>{0, 1}, std::vector<double>{1, 1}}) {
+            const auto result = solve_active_set_qp_with_inequality_hint(problem, solution, const_vector(mask));
+            TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+            TERMIN_QOPT_CHECK(linf_difference(reference, impulses) <= 1e-12);
+        }
+    }
+
     void test_warm_start_can_drop_an_incorrect_constraint() {
         const std::vector<double> hessian{2.0};
         const std::vector<double> gradient{0.0};
@@ -792,6 +856,8 @@ namespace {
 int main() {
     test_shared_oracle();
     test_bounds_and_full_duals();
+    test_previous_contact_face();
+    test_contact_face_keeps_cold_load_sharing_for_redundant_contacts();
     test_warm_start_can_drop_an_incorrect_constraint();
     test_nearly_tight_dependent_constraints_do_not_form_an_inconsistent_set();
     test_dependent_tight_rows_do_not_enter_zero_step_cycle();

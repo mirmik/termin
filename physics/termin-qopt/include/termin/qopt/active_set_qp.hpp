@@ -65,4 +65,12 @@ namespace termin::qopt {
                                                                     ActiveSetQpWarmStartView warm_start = {},
                                                                     ActiveSetQpOptions options = {}) noexcept;
 
+    // Try the current optimum on a previously active face. The mask addresses
+    // inequality rows in the current problem. A stale face triggers a cold solve.
+    [[nodiscard]] TERMIN_QOPT_API QpSolveResult
+    solve_active_set_qp_with_inequality_hint(ActiveSetQpProblemView problem,
+                                             ActiveSetQpSolutionView solution,
+                                             ConstDenseVectorView active_inequalities,
+                                             ActiveSetQpOptions options = {}) noexcept;
+
 } // namespace termin::qopt

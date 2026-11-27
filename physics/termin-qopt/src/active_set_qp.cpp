@@ -136,20 +136,25 @@ namespace termin::qopt {
 
         [[nodiscard]] QpSolveResult
         check_convexity(const Matrix& hessian, const Matrix& equalities, QpTolerance tolerance) {
-            bool success = false;
-            const Matrix nullspace = nullspace_basis(equalities, tolerance, success);
-            if (!success) {
-                return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
-            }
-            if (nullspace.cols() == 0) {
-                QpSolveResult result;
-                result.status = QpStatus::Optimal;
-                return result;
-            }
+            Eigen::SelfAdjointEigenSolver<Matrix> eigensolver;
+            if (equalities.rows() == 0) {
+                eigensolver.compute(hessian, Eigen::EigenvaluesOnly);
+            } else {
+                bool success = false;
+                const Matrix nullspace = nullspace_basis(equalities, tolerance, success);
+                if (!success) {
+                    return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
+                }
+                if (nullspace.cols() == 0) {
+                    QpSolveResult result;
+                    result.status = QpStatus::Optimal;
+                    return result;
+                }
 
-            const Matrix raw_reduced = nullspace.transpose() * hessian * nullspace;
-            const Matrix reduced = 0.5 * (raw_reduced + raw_reduced.transpose());
-            Eigen::SelfAdjointEigenSolver<Matrix> eigensolver(reduced);
+                const Matrix raw_reduced = nullspace.transpose() * hessian * nullspace;
+                const Matrix reduced = 0.5 * (raw_reduced + raw_reduced.transpose());
+                eigensolver.compute(reduced, Eigen::EigenvaluesOnly);
+            }
             if (eigensolver.info() != Eigen::Success) {
                 return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
             }
@@ -306,6 +311,35 @@ namespace termin::qopt {
             return independent;
         }
 
+        [[nodiscard]] EqualityResult solve_working_equalities(const Matrix& hessian,
+                                                              const Vector& gradient,
+                                                              const Matrix& equalities,
+                                                              const Vector& targets,
+                                                              const Matrix& inequalities,
+                                                              const Vector& limits,
+                                                              const std::vector<std::size_t>& active,
+                                                              const Vector& limit_perturbations,
+                                                              QpTolerance tolerance,
+                                                              Matrix& working) {
+            working.resize(equalities.rows() + static_cast<Eigen::Index>(active.size()), hessian.rows());
+            Vector working_targets(targets.size() + static_cast<Eigen::Index>(active.size()));
+            if (equalities.rows() > 0) {
+                working.topRows(equalities.rows()) = equalities;
+                working_targets.head(targets.size()) = targets;
+            }
+            for (std::size_t offset = 0; offset < active.size(); ++offset) {
+                const auto row = static_cast<Eigen::Index>(active[offset]);
+                const auto working_row = equalities.rows() + static_cast<Eigen::Index>(offset);
+                working.row(working_row) = inequalities.row(row);
+                working_targets[working_row] = limits[row];
+                if (limit_perturbations.size() != 0) {
+                    working_targets[working_row] += limit_perturbations[row];
+                }
+            }
+
+            return solve_equalities(hessian, gradient, working, working_targets, tolerance, !active.empty());
+        }
+
         [[nodiscard]] CoreResult solve_feasible_core(const Matrix& hessian,
                                                      const Vector& gradient,
                                                      const Matrix& equalities,
@@ -336,22 +370,17 @@ namespace termin::qopt {
             while (iterations < options.max_iterations) {
                 ++iterations;
 
-                Matrix working(equalities.rows() + static_cast<Eigen::Index>(active.size()), hessian.rows());
-                Vector working_targets(targets.size() + static_cast<Eigen::Index>(active.size()));
-                if (equalities.rows() > 0) {
-                    working.topRows(equalities.rows()) = equalities;
-                    working_targets.head(targets.size()) = targets;
-                }
-                for (std::size_t offset = 0; offset < active.size(); ++offset) {
-                    working.row(equality_count + static_cast<Eigen::Index>(offset)) =
-                        inequalities.row(static_cast<Eigen::Index>(active[offset]));
-                    working_targets[equality_count + static_cast<Eigen::Index>(offset)] =
-                        limits[static_cast<Eigen::Index>(active[offset])] +
-                        limit_perturbations[static_cast<Eigen::Index>(active[offset])];
-                }
-
-                const EqualityResult subproblem =
-                    solve_equalities(hessian, gradient, working, working_targets, options.tolerance, !active.empty());
+                Matrix working;
+                const EqualityResult subproblem = solve_working_equalities(hessian,
+                                                                           gradient,
+                                                                           equalities,
+                                                                           targets,
+                                                                           inequalities,
+                                                                           limits,
+                                                                           active,
+                                                                           limit_perturbations,
+                                                                           options.tolerance,
+                                                                           working);
                 Vector direction;
                 bool finite_target = false;
                 if (subproblem.result.status == QpStatus::Optimal) {
@@ -683,235 +712,18 @@ namespace termin::qopt {
                                        iterations);
         }
 
-        [[nodiscard]] QpSolveResult solve_impl(ActiveSetQpProblemView problem,
-                                               ActiveSetQpSolutionView solution,
-                                               ActiveSetQpWarmStartView warm_start,
-                                               ActiveSetQpOptions options) {
-            if (!valid_tolerance(options.tolerance)) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
-            }
-            if (!std::isfinite(options.active_tolerance) || options.active_tolerance < 0.0 ||
-                options.max_iterations == 0) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidOptions);
-            }
-
-            const QpDiagnostic view_diagnostics[] = {
-                validate_matrix(problem.hessian),
-                validate_vector(problem.gradient),
-                validate_matrix(problem.equalities),
-                validate_vector(problem.equality_targets),
-                validate_matrix(problem.inequalities),
-                validate_vector(problem.inequality_limits),
-                validate_vector(problem.lower_bounds),
-                validate_vector(problem.upper_bounds),
-                validate_vector(warm_start.primal),
-                validate_vector(warm_start.active_inequalities),
-                validate_vector(warm_start.active_lower_bounds),
-                validate_vector(warm_start.active_upper_bounds),
-                validate_vector(solution.primal),
-                validate_vector(solution.equality_dual),
-                validate_vector(solution.inequality_dual),
-                validate_vector(solution.lower_bound_dual),
-                validate_vector(solution.upper_bound_dual),
-            };
-            for (QpDiagnostic diagnostic : view_diagnostics) {
-                if (diagnostic != QpDiagnostic::None) {
-                    return failure(QpStatus::InvalidInput, diagnostic);
-                }
-            }
-
-            const std::size_t variables = problem.hessian.rows;
-            const std::size_t equality_count = problem.equalities.rows;
-            const std::size_t inequality_count = problem.inequalities.rows;
-            const bool has_lower_bounds = !problem.lower_bounds.empty();
-            const bool has_upper_bounds = !problem.upper_bounds.empty();
-            if (variables == 0 || problem.hessian.columns != variables || problem.gradient.size != variables ||
-                problem.equalities.columns != variables || problem.equality_targets.size != equality_count ||
-                problem.inequalities.columns != variables || problem.inequality_limits.size != inequality_count ||
-                (has_lower_bounds && problem.lower_bounds.size != variables) ||
-                (has_upper_bounds && problem.upper_bounds.size != variables) || solution.primal.size != variables ||
-                solution.equality_dual.size != equality_count || solution.inequality_dual.size != inequality_count ||
-                solution.lower_bound_dual.size != problem.lower_bounds.size ||
-                solution.upper_bound_dual.size != problem.upper_bounds.size ||
-                (!warm_start.primal.empty() && warm_start.primal.size != variables) ||
-                (!warm_start.active_inequalities.empty() && warm_start.active_inequalities.size != inequality_count) ||
-                (!warm_start.active_lower_bounds.empty() &&
-                 warm_start.active_lower_bounds.size != problem.lower_bounds.size) ||
-                (!warm_start.active_upper_bounds.empty() &&
-                 warm_start.active_upper_bounds.size != problem.upper_bounds.size)) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::DimensionMismatch);
-            }
-            if (any_outputs_overlap(solution)) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::OverlappingOutputs);
-            }
-            if (!finite(problem.hessian) || !finite(problem.gradient) || !finite(problem.equalities) ||
-                !finite(problem.equality_targets) || !finite(problem.inequalities) ||
-                !finite(problem.inequality_limits) || (!warm_start.primal.empty() && !finite(warm_start.primal)) ||
-                !finite(warm_start.active_inequalities) || !finite(warm_start.active_lower_bounds) ||
-                !finite(warm_start.active_upper_bounds)) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::NonFiniteInput);
-            }
-            if (!valid_mask(warm_start.active_inequalities) || !valid_mask(warm_start.active_lower_bounds) ||
-                !valid_mask(warm_start.active_upper_bounds)) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
-            }
-
-            for (std::size_t index = 0; index < variables; ++index) {
-                const double lower =
-                    has_lower_bounds ? problem.lower_bounds[index] : -std::numeric_limits<double>::infinity();
-                const double upper =
-                    has_upper_bounds ? problem.upper_bounds[index] : std::numeric_limits<double>::infinity();
-                if (std::isnan(lower) || std::isnan(upper) || lower == std::numeric_limits<double>::infinity() ||
-                    upper == -std::numeric_limits<double>::infinity()) {
-                    return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidBounds);
-                }
-            }
-
-            const bool has_warm_masks = !warm_start.active_inequalities.empty() ||
-                                        !warm_start.active_lower_bounds.empty() ||
-                                        !warm_start.active_upper_bounds.empty();
-            if (has_warm_masks && warm_start.primal.empty()) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
-            }
-            if (!warm_start.active_lower_bounds.empty()) {
-                for (std::size_t index = 0; index < variables; ++index) {
-                    if (warm_start.active_lower_bounds[index] == 1.0 && !std::isfinite(problem.lower_bounds[index])) {
-                        return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
-                    }
-                }
-            }
-            if (!warm_start.active_upper_bounds.empty()) {
-                for (std::size_t index = 0; index < variables; ++index) {
-                    if (warm_start.active_upper_bounds[index] == 1.0 && !std::isfinite(problem.upper_bounds[index])) {
-                        return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
-                    }
-                }
-            }
-
-            const Matrix input_hessian = copy_matrix(problem.hessian);
-            const Vector gradient = copy_vector(problem.gradient);
-            const Matrix equalities = copy_matrix(problem.equalities);
-            const Vector equality_targets = copy_vector(problem.equality_targets);
-            const Matrix inequalities = copy_matrix(problem.inequalities);
-            const Vector inequality_limits = copy_vector(problem.inequality_limits);
-            const Vector lower = copy_vector(problem.lower_bounds);
-            const Vector upper = copy_vector(problem.upper_bounds);
-            const Vector warm_primal = copy_vector(warm_start.primal);
-
-            const double hessian_scale = matrix_linf(input_hessian);
-            const double symmetry_residual = matrix_linf(input_hessian - input_hessian.transpose());
-            if (symmetry_residual > options.tolerance.symmetry * std::max(1.0, hessian_scale)) {
-                return failure(QpStatus::InvalidInput, QpDiagnostic::NonSymmetricHessian);
-            }
-            const Matrix hessian = 0.5 * (input_hessian + input_hessian.transpose());
-
-            const NormalizedInequalities normalized =
-                normalize_inequalities(inequalities, inequality_limits, lower, upper);
-
-            Matrix feasibility_hessian =
-                Matrix::Identity(static_cast<Eigen::Index>(variables), static_cast<Eigen::Index>(variables));
-            const Vector feasibility_gradient = Vector::Zero(static_cast<Eigen::Index>(variables));
-            const EqualityResult equality_feasible = solve_equalities(
-                feasibility_hessian, feasibility_gradient, equalities, equality_targets, options.tolerance);
-            if (equality_feasible.result.status != QpStatus::Optimal) {
-                QpSolveResult result = equality_feasible.result;
-                if (result.status == QpStatus::Infeasible) {
-                    result.diagnostic = QpDiagnostic::InconsistentEqualities;
-                }
-                return result;
-            }
-
-            const QpSolveResult convexity = check_convexity(hessian, equalities, options.tolerance);
-            if (convexity.status != QpStatus::Optimal) {
-                return convexity;
-            }
-
-            std::size_t iterations = 0;
-            Vector primal;
-            std::vector<std::size_t> initial_active;
-            if (!warm_start.primal.empty()) {
-                primal = warm_primal;
-                const double equality_error = linf(equalities * primal - equality_targets);
-                if (equality_error > options.active_tolerance ||
-                    !constraints_feasible(
-                        normalized.matrix, normalized.limits, primal, options.active_tolerance, options.tolerance)) {
-                    return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
-                }
-
-                if (has_warm_masks) {
-                    for (std::size_t row = 0; row < normalized.origins.size(); ++row) {
-                        if (!warm_mask_selected(normalized.origins[row],
-                                                warm_start.active_inequalities,
-                                                warm_start.active_lower_bounds,
-                                                warm_start.active_upper_bounds)) {
-                            continue;
-                        }
-                        const ConstraintResidual checked = constraint_residual(normalized.matrix,
-                                                                               normalized.limits,
-                                                                               primal,
-                                                                               static_cast<Eigen::Index>(row),
-                                                                               options.tolerance);
-                        if (std::abs(checked.residual) > std::max(options.active_tolerance, checked.tolerance)) {
-                            return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
-                        }
-                        if (std::abs(checked.residual) <= checked.tolerance) {
-                            initial_active.push_back(row);
-                        }
-                    }
-                } else {
-                    initial_active = tight_constraints(normalized.matrix, normalized.limits, primal, options.tolerance);
-                }
-            } else {
-                // Start Phase I from the equality-constrained objective minimizer when it
-                // exists. The old minimum-norm origin can force a feasible active-set walk
-                // through every intermediate facet of a fine polygon before reaching the
-                // relevant face. Phase I retains feasibility guarantees while this seed
-                // preserves the objective's useful directional information.
-                const EqualityResult objective_seed =
-                    solve_equalities(hessian, gradient, equalities, equality_targets, options.tolerance);
-                primal = objective_seed.result.status == QpStatus::Optimal ? objective_seed.primal
-                                                                           : equality_feasible.primal;
-                if (!constraints_feasible(normalized.matrix, normalized.limits, primal, 0.0, options.tolerance)) {
-                    CoreResult phase = find_feasible_point(equalities,
-                                                           equality_targets,
-                                                           normalized.matrix,
-                                                           normalized.limits,
-                                                           primal,
-                                                           options,
-                                                           iterations);
-                    if (phase.result.status != QpStatus::Optimal) {
-                        phase.result.iterations = iterations;
-                        return phase.result;
-                    }
-                    primal = phase.primal.head(static_cast<Eigen::Index>(variables));
-                    const double phase_slack = phase.primal[static_cast<Eigen::Index>(variables)];
-                    const double feasibility_tolerance =
-                        scaled_tolerance(options.tolerance, std::max(1.0, std::abs(phase_slack)));
-                    if (phase_slack > feasibility_tolerance) {
-                        QpSolveResult result =
-                            failure(QpStatus::Infeasible, QpDiagnostic::InconsistentInequalities, iterations);
-                        result.inequality_linf = phase_slack;
-                        return result;
-                    }
-                }
-                initial_active = tight_constraints(normalized.matrix, normalized.limits, primal, options.tolerance);
-            }
-
-            CoreResult solved = solve_feasible_core(hessian,
-                                                    gradient,
-                                                    equalities,
-                                                    equality_targets,
-                                                    normalized.matrix,
-                                                    normalized.limits,
-                                                    std::move(primal),
-                                                    std::move(initial_active),
-                                                    options,
-                                                    iterations);
-            if (solved.result.status != QpStatus::Optimal) {
-                solved.result.iterations = iterations;
-                return solved.result;
-            }
-
+        [[nodiscard]] QpSolveResult finish_solution(CoreResult& solved,
+                                                    ActiveSetQpSolutionView solution,
+                                                    const Matrix& hessian,
+                                                    const Vector& gradient,
+                                                    const Matrix& equalities,
+                                                    const Vector& equality_targets,
+                                                    const Matrix& inequalities,
+                                                    const Vector& inequality_limits,
+                                                    const Vector& lower,
+                                                    const Vector& upper,
+                                                    const NormalizedInequalities& normalized,
+                                                    ActiveSetQpOptions options) {
             Vector normalized_dual = Vector::Zero(normalized.matrix.rows());
             for (std::size_t offset = 0; offset < solved.active.size(); ++offset) {
                 const double multiplier = solved.active_dual[static_cast<Eigen::Index>(offset)];
@@ -971,7 +783,6 @@ namespace termin::qopt {
                 upper_dual.size() == 0 ? 0.0 : std::max(0.0, -upper_dual.minCoeff()),
             });
             solved.result.complementarity_linf = linf(complementarity);
-            solved.result.iterations = iterations;
 
             const double residual_scale = std::max({
                 1.0,
@@ -1003,6 +814,299 @@ namespace termin::qopt {
             return solved.result;
         }
 
+        [[nodiscard]] QpSolveResult solve_impl(ActiveSetQpProblemView problem,
+                                               ActiveSetQpSolutionView solution,
+                                               ActiveSetQpWarmStartView warm_start,
+                                               ActiveSetQpOptions options,
+                                               ConstDenseVectorView inequality_hint = {}) {
+            if (!valid_tolerance(options.tolerance)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
+            }
+            if (!std::isfinite(options.active_tolerance) || options.active_tolerance < 0.0 ||
+                options.max_iterations == 0) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidOptions);
+            }
+
+            const QpDiagnostic view_diagnostics[] = {
+                validate_matrix(problem.hessian),
+                validate_vector(problem.gradient),
+                validate_matrix(problem.equalities),
+                validate_vector(problem.equality_targets),
+                validate_matrix(problem.inequalities),
+                validate_vector(problem.inequality_limits),
+                validate_vector(problem.lower_bounds),
+                validate_vector(problem.upper_bounds),
+                validate_vector(inequality_hint),
+                validate_vector(warm_start.primal),
+                validate_vector(warm_start.active_inequalities),
+                validate_vector(warm_start.active_lower_bounds),
+                validate_vector(warm_start.active_upper_bounds),
+                validate_vector(solution.primal),
+                validate_vector(solution.equality_dual),
+                validate_vector(solution.inequality_dual),
+                validate_vector(solution.lower_bound_dual),
+                validate_vector(solution.upper_bound_dual),
+            };
+            for (QpDiagnostic diagnostic : view_diagnostics) {
+                if (diagnostic != QpDiagnostic::None) {
+                    return failure(QpStatus::InvalidInput, diagnostic);
+                }
+            }
+
+            const std::size_t variables = problem.hessian.rows;
+            const std::size_t equality_count = problem.equalities.rows;
+            const std::size_t inequality_count = problem.inequalities.rows;
+            const bool has_lower_bounds = !problem.lower_bounds.empty();
+            const bool has_upper_bounds = !problem.upper_bounds.empty();
+            if (variables == 0 || problem.hessian.columns != variables || problem.gradient.size != variables ||
+                problem.equalities.columns != variables || problem.equality_targets.size != equality_count ||
+                problem.inequalities.columns != variables || problem.inequality_limits.size != inequality_count ||
+                (has_lower_bounds && problem.lower_bounds.size != variables) ||
+                (has_upper_bounds && problem.upper_bounds.size != variables) || solution.primal.size != variables ||
+                solution.equality_dual.size != equality_count || solution.inequality_dual.size != inequality_count ||
+                solution.lower_bound_dual.size != problem.lower_bounds.size ||
+                solution.upper_bound_dual.size != problem.upper_bounds.size ||
+                (!inequality_hint.empty() && inequality_hint.size != inequality_count) ||
+                (!warm_start.primal.empty() && warm_start.primal.size != variables) ||
+                (!warm_start.active_inequalities.empty() && warm_start.active_inequalities.size != inequality_count) ||
+                (!warm_start.active_lower_bounds.empty() &&
+                 warm_start.active_lower_bounds.size != problem.lower_bounds.size) ||
+                (!warm_start.active_upper_bounds.empty() &&
+                 warm_start.active_upper_bounds.size != problem.upper_bounds.size)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::DimensionMismatch);
+            }
+            if (any_outputs_overlap(solution)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::OverlappingOutputs);
+            }
+            if (!finite(problem.hessian) || !finite(problem.gradient) || !finite(problem.equalities) ||
+                !finite(problem.equality_targets) || !finite(problem.inequalities) ||
+                !finite(problem.inequality_limits) || !finite(inequality_hint) ||
+                (!warm_start.primal.empty() && !finite(warm_start.primal)) || !finite(warm_start.active_inequalities) ||
+                !finite(warm_start.active_lower_bounds) || !finite(warm_start.active_upper_bounds)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::NonFiniteInput);
+            }
+            if (!valid_mask(inequality_hint) || !valid_mask(warm_start.active_inequalities) ||
+                !valid_mask(warm_start.active_lower_bounds) || !valid_mask(warm_start.active_upper_bounds)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
+            }
+
+            for (std::size_t index = 0; index < variables; ++index) {
+                const double lower =
+                    has_lower_bounds ? problem.lower_bounds[index] : -std::numeric_limits<double>::infinity();
+                const double upper =
+                    has_upper_bounds ? problem.upper_bounds[index] : std::numeric_limits<double>::infinity();
+                if (std::isnan(lower) || std::isnan(upper) || lower == std::numeric_limits<double>::infinity() ||
+                    upper == -std::numeric_limits<double>::infinity()) {
+                    return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidBounds);
+                }
+            }
+
+            const bool has_warm_masks = !warm_start.active_inequalities.empty() ||
+                                        !warm_start.active_lower_bounds.empty() ||
+                                        !warm_start.active_upper_bounds.empty();
+            if (has_warm_masks && warm_start.primal.empty()) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
+            }
+            if (!warm_start.active_lower_bounds.empty()) {
+                for (std::size_t index = 0; index < variables; ++index) {
+                    if (warm_start.active_lower_bounds[index] == 1.0 && !std::isfinite(problem.lower_bounds[index])) {
+                        return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
+                    }
+                }
+            }
+            if (!warm_start.active_upper_bounds.empty()) {
+                for (std::size_t index = 0; index < variables; ++index) {
+                    if (warm_start.active_upper_bounds[index] == 1.0 && !std::isfinite(problem.upper_bounds[index])) {
+                        return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
+                    }
+                }
+            }
+
+            const Matrix input_hessian = copy_matrix(problem.hessian);
+            const Vector gradient = copy_vector(problem.gradient);
+            const Matrix equalities = copy_matrix(problem.equalities);
+            const Vector equality_targets = copy_vector(problem.equality_targets);
+            const Matrix inequalities = copy_matrix(problem.inequalities);
+            const Vector inequality_limits = copy_vector(problem.inequality_limits);
+            const Vector lower = copy_vector(problem.lower_bounds);
+            const Vector upper = copy_vector(problem.upper_bounds);
+            const Vector warm_primal = copy_vector(warm_start.primal);
+
+            const double hessian_scale = matrix_linf(input_hessian);
+            const double symmetry_residual = matrix_linf(input_hessian - input_hessian.transpose());
+            if (symmetry_residual > options.tolerance.symmetry * std::max(1.0, hessian_scale)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::NonSymmetricHessian);
+            }
+            const Matrix hessian = 0.5 * (input_hessian + input_hessian.transpose());
+
+            const NormalizedInequalities normalized =
+                normalize_inequalities(inequalities, inequality_limits, lower, upper);
+
+            Vector feasible_origin = Vector::Zero(hessian.rows());
+            if (equalities.rows() > 0) {
+                EqualityResult feasible = solve_equalities(Matrix::Identity(hessian.rows(), hessian.cols()),
+                                                           feasible_origin,
+                                                           equalities,
+                                                           equality_targets,
+                                                           options.tolerance);
+                if (feasible.result.status != QpStatus::Optimal) {
+                    if (feasible.result.status == QpStatus::Infeasible) {
+                        feasible.result.diagnostic = QpDiagnostic::InconsistentEqualities;
+                    }
+                    return feasible.result;
+                }
+                feasible_origin = std::move(feasible.primal);
+            }
+
+            const QpSolveResult convexity = check_convexity(hessian, equalities, options.tolerance);
+            if (convexity.status != QpStatus::Optimal) {
+                return convexity;
+            }
+
+            const auto finish = [&](CoreResult& solved) {
+                return finish_solution(solved,
+                                       solution,
+                                       hessian,
+                                       gradient,
+                                       equalities,
+                                       equality_targets,
+                                       inequalities,
+                                       inequality_limits,
+                                       lower,
+                                       upper,
+                                       normalized,
+                                       options);
+            };
+            if (!inequality_hint.empty()) {
+                CoreResult candidate;
+                for (std::size_t row = 0; row < inequality_hint.size; ++row) {
+                    if (inequality_hint[row] == 1.0) {
+                        candidate.active.push_back(row);
+                    }
+                }
+                // Normalize and solve the hinted face at the current configuration. Reject
+                // ambiguous multipliers so contact load sharing stays with the regular solver.
+                Matrix working;
+                EqualityResult face = solve_working_equalities(hessian,
+                                                               gradient,
+                                                               equalities,
+                                                               equality_targets,
+                                                               normalized.matrix,
+                                                               normalized.limits,
+                                                               candidate.active,
+                                                               {},
+                                                               options.tolerance,
+                                                               working);
+                if (face.result.status == QpStatus::Optimal &&
+                    face.result.constraint_rank == static_cast<std::size_t>(working.rows()) &&
+                    face.result.constraint_rank + face.result.reduced_hessian_rank == variables) {
+                    candidate.result = face.result;
+                    candidate.result.iterations = 1;
+                    candidate.result.active_set_size = candidate.active.size();
+                    candidate.primal = std::move(face.primal);
+                    candidate.equality_dual = face.dual.head(equalities.rows());
+                    candidate.active_dual = face.dual.tail(candidate.active.size());
+                    // An unselected tight row can share its load with a selected one.
+                    // Leave such degenerate cases to the ordinary working-set selection.
+                    if ((candidate.active_dual.array() > 0.0).all() &&
+                        tight_constraints(normalized.matrix, normalized.limits, candidate.primal, options.tolerance) ==
+                            candidate.active) {
+                        const QpSolveResult certified = finish(candidate);
+                        if (certified.status == QpStatus::Optimal) {
+                            return certified;
+                        }
+                    }
+                }
+            }
+
+            std::size_t iterations = 0;
+            Vector primal;
+            std::vector<std::size_t> initial_active;
+            if (!warm_start.primal.empty()) {
+                primal = warm_primal;
+                const double equality_error = linf(equalities * primal - equality_targets);
+                if (equality_error > options.active_tolerance ||
+                    !constraints_feasible(
+                        normalized.matrix, normalized.limits, primal, options.active_tolerance, options.tolerance)) {
+                    return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
+                }
+
+                if (has_warm_masks) {
+                    for (std::size_t row = 0; row < normalized.origins.size(); ++row) {
+                        if (!warm_mask_selected(normalized.origins[row],
+                                                warm_start.active_inequalities,
+                                                warm_start.active_lower_bounds,
+                                                warm_start.active_upper_bounds)) {
+                            continue;
+                        }
+                        const ConstraintResidual checked = constraint_residual(normalized.matrix,
+                                                                               normalized.limits,
+                                                                               primal,
+                                                                               static_cast<Eigen::Index>(row),
+                                                                               options.tolerance);
+                        if (std::abs(checked.residual) > std::max(options.active_tolerance, checked.tolerance)) {
+                            return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidWarmStart);
+                        }
+                        if (std::abs(checked.residual) <= checked.tolerance) {
+                            initial_active.push_back(row);
+                        }
+                    }
+                } else {
+                    initial_active = tight_constraints(normalized.matrix, normalized.limits, primal, options.tolerance);
+                }
+            } else {
+                // Start Phase I from the equality-constrained objective minimizer when it
+                // exists. The old minimum-norm origin can force a feasible active-set walk
+                // through every intermediate facet of a fine polygon before reaching the
+                // relevant face. Phase I retains feasibility guarantees while this seed
+                // preserves the objective's useful directional information.
+                const EqualityResult objective_seed =
+                    solve_equalities(hessian, gradient, equalities, equality_targets, options.tolerance);
+                primal = objective_seed.result.status == QpStatus::Optimal ? objective_seed.primal : feasible_origin;
+                if (!constraints_feasible(normalized.matrix, normalized.limits, primal, 0.0, options.tolerance)) {
+                    CoreResult phase = find_feasible_point(equalities,
+                                                           equality_targets,
+                                                           normalized.matrix,
+                                                           normalized.limits,
+                                                           primal,
+                                                           options,
+                                                           iterations);
+                    if (phase.result.status != QpStatus::Optimal) {
+                        phase.result.iterations = iterations;
+                        return phase.result;
+                    }
+                    primal = phase.primal.head(static_cast<Eigen::Index>(variables));
+                    const double phase_slack = phase.primal[static_cast<Eigen::Index>(variables)];
+                    const double feasibility_tolerance =
+                        scaled_tolerance(options.tolerance, std::max(1.0, std::abs(phase_slack)));
+                    if (phase_slack > feasibility_tolerance) {
+                        QpSolveResult result =
+                            failure(QpStatus::Infeasible, QpDiagnostic::InconsistentInequalities, iterations);
+                        result.inequality_linf = phase_slack;
+                        return result;
+                    }
+                }
+                initial_active = tight_constraints(normalized.matrix, normalized.limits, primal, options.tolerance);
+            }
+
+            CoreResult solved = solve_feasible_core(hessian,
+                                                    gradient,
+                                                    equalities,
+                                                    equality_targets,
+                                                    normalized.matrix,
+                                                    normalized.limits,
+                                                    std::move(primal),
+                                                    std::move(initial_active),
+                                                    options,
+                                                    iterations);
+            if (solved.result.status != QpStatus::Optimal) {
+                solved.result.iterations = iterations;
+                return solved.result;
+            }
+
+            return finish(solved);
+        }
+
     } // namespace
 
     QpSolveResult solve_active_set_qp(ActiveSetQpProblemView problem,
@@ -1015,6 +1119,20 @@ namespace termin::qopt {
             std::fprintf(stderr, "[termin-qopt] active-set QP failed with an exception: %s\n", error.what());
         } catch (...) {
             std::fprintf(stderr, "[termin-qopt] active-set QP failed with an unknown exception\n");
+        }
+        return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
+    }
+
+    QpSolveResult solve_active_set_qp_with_inequality_hint(ActiveSetQpProblemView problem,
+                                                           ActiveSetQpSolutionView solution,
+                                                           ConstDenseVectorView active_inequalities,
+                                                           ActiveSetQpOptions options) noexcept {
+        try {
+            return solve_impl(problem, solution, {}, options, active_inequalities);
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[termin-qopt] hinted active-set QP failed: %s\n", error.what());
+        } catch (...) {
+            std::fprintf(stderr, "[termin-qopt] hinted active-set QP failed with an unknown exception\n");
         }
         return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
     }

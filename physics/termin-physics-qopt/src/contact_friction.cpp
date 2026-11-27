@@ -7,7 +7,7 @@
 #include <numbers>
 #include <vector>
 
-#include <termin/physics_qopt/dynamics.hpp>
+#include "dynamics_internal.hpp"
 
 namespace termin::physics_qopt {
     namespace {
@@ -205,6 +205,7 @@ namespace termin::physics_qopt {
             std::vector<double> correction(dofs, 0.0);
             std::vector<double> equality_reaction(bilateral, 0.0);
             std::vector<double> zero_rhs(bilateral, 0.0);
+            EqualityQpFactorizationCache response_factorization;
             for (std::size_t variable = 0; variable < variables; ++variable) {
                 const std::size_t contact = variable / 3;
                 const std::size_t axis = variable % 3;
@@ -212,7 +213,7 @@ namespace termin::physics_qopt {
                     load[dof] = axis == 0 ? problem.contact_normal_jacobian(contact, dof)
                                           : problem.tangent_jacobian(contact * 2 + axis - 1, dof);
                 }
-                const QpSolveResult response_result = solve_constrained_dynamics(
+                const QpSolveResult response_result = detail::solve_constrained_dynamics_impl(
                     {
                         problem.mass,
                         {load.data(), load.size(), 1},
@@ -223,7 +224,8 @@ namespace termin::physics_qopt {
                         {correction.data(), correction.size(), 1},
                         {equality_reaction.data(), equality_reaction.size(), 1},
                     },
-                    options.qp.tolerance);
+                    options.qp.tolerance,
+                    &response_factorization);
                 if (response_result.status != QpStatus::Optimal) {
                     return response_result;
                 }

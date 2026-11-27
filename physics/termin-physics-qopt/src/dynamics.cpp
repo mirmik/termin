@@ -1,4 +1,4 @@
-#include <termin/physics_qopt/dynamics.hpp>
+#include "dynamics_internal.hpp"
 
 #include <termin/physics_qopt/contact_friction.hpp>
 
@@ -315,10 +315,10 @@ namespace termin::physics_qopt {
         };
     }
 
-    static QpSolveResult solve_constrained_dynamics_impl(ConstDynamicsSystemView system,
-                                                         DynamicsSolutionView solution,
-                                                         QpTolerance tolerance,
-                                                         EqualityQpFactorizationCache* factorization_cache) noexcept {
+    QpSolveResult detail::solve_constrained_dynamics_impl(ConstDynamicsSystemView system,
+                                                          DynamicsSolutionView solution,
+                                                          QpTolerance tolerance,
+                                                          EqualityQpFactorizationCache* factorization_cache) noexcept {
         const std::size_t dof_count = system.load.size;
         const std::size_t constraint_count = system.constraint_rhs.size;
         const QpDiagnostic system_diagnostic = validate_system(system);
@@ -389,14 +389,15 @@ namespace termin::physics_qopt {
     QpSolveResult solve_constrained_dynamics(ConstDynamicsSystemView system,
                                              DynamicsSolutionView solution,
                                              QpTolerance tolerance) noexcept {
-        return solve_constrained_dynamics_impl(system, solution, tolerance, nullptr);
+        return detail::solve_constrained_dynamics_impl(system, solution, tolerance, nullptr);
     }
 
-    QpSolveResult solve_unilateral_velocity(ConstDynamicsSystemView system,
-                                            ConstDynamicsUnilateralView unilateral,
-                                            DynamicsVelocitySolutionView solution,
-                                            ActiveSetQpWarmStartView warm_start,
-                                            ActiveSetQpOptions options) noexcept {
+    static QpSolveResult solve_unilateral_velocity_impl(ConstDynamicsSystemView system,
+                                                        ConstDynamicsUnilateralView unilateral,
+                                                        DynamicsVelocitySolutionView solution,
+                                                        ActiveSetQpWarmStartView warm_start,
+                                                        ActiveSetQpOptions options,
+                                                        ConstDenseVectorView active_hint) noexcept {
         const std::size_t dof_count = system.load.size;
         const std::size_t equality_count = system.constraint_rhs.size;
         const std::size_t unilateral_count = unilateral.limit.size;
@@ -450,26 +451,27 @@ namespace termin::physics_qopt {
                 gradient[index] = -system.load[index];
             }
 
-            const QpSolveResult result = solve_active_set_qp(
-                {
-                    system.mass,
-                    {gradient.data(), gradient.size(), 1},
-                    system.constraint_jacobian,
-                    system.constraint_rhs,
-                    unilateral.jacobian,
-                    unilateral.limit,
-                    {},
-                    {},
-                },
-                {
-                    {velocity.data(), velocity.size(), 1},
-                    {equality_dual.data(), equality_dual.size(), 1},
-                    {unilateral_dual.data(), unilateral_dual.size(), 1},
-                    {},
-                    {},
-                },
-                warm_start,
-                options);
+            const ActiveSetQpProblemView problem = {
+                system.mass,
+                {gradient.data(), gradient.size(), 1},
+                system.constraint_jacobian,
+                system.constraint_rhs,
+                unilateral.jacobian,
+                unilateral.limit,
+                {},
+                {},
+            };
+            const ActiveSetQpSolutionView qp_solution = {
+                {velocity.data(), velocity.size(), 1},
+                {equality_dual.data(), equality_dual.size(), 1},
+                {unilateral_dual.data(), unilateral_dual.size(), 1},
+                {},
+                {},
+            };
+            const QpSolveResult result =
+                active_hint.empty()
+                    ? solve_active_set_qp(problem, qp_solution, warm_start, options)
+                    : solve_active_set_qp_with_inequality_hint(problem, qp_solution, active_hint, options);
             if (result.status != QpStatus::Optimal) {
                 return result;
             }
@@ -510,6 +512,14 @@ namespace termin::physics_qopt {
         result.status = QpStatus::NumericalFailure;
         result.diagnostic = QpDiagnostic::DecompositionFailure;
         return result;
+    }
+
+    QpSolveResult solve_unilateral_velocity(ConstDynamicsSystemView system,
+                                            ConstDynamicsUnilateralView unilateral,
+                                            DynamicsVelocitySolutionView solution,
+                                            ActiveSetQpWarmStartView warm_start,
+                                            ActiveSetQpOptions options) noexcept {
+        return solve_unilateral_velocity_impl(system, unilateral, solution, warm_start, options, {});
     }
 
     namespace {
@@ -553,7 +563,6 @@ namespace termin::physics_qopt {
         std::vector<double> friction_tangent_impulse;
         std::vector<double> friction_work;
         std::vector<double> friction_bilateral_impulse;
-        std::vector<double> velocity_warm_primal;
         std::vector<double> dof_solution;
         std::vector<double> constraint_reaction;
         std::vector<double> velocity;
@@ -566,7 +575,6 @@ namespace termin::physics_qopt {
         std::vector<double> endpoint_velocity_predictor;
         std::size_t step_contribution_count = 0;
         bool finalized = false;
-        bool velocity_warm_primal_valid = false;
 
         [[nodiscard]] DynamicsSystemDiagnostic assemble(DynamicsAssembly& assembly,
                                                         DynamicsAssemblyPhase phase) noexcept {
@@ -716,9 +724,8 @@ namespace termin::physics_qopt {
             return DynamicsSystemDiagnostic::None;
         }
 
-        [[nodiscard]] ActiveSetQpWarmStartView unilateral_warm_start() noexcept {
-            if (!velocity_warm_primal_valid || velocity_warm_primal.size() != topology.dof_count() ||
-                unilateral_warm_mask.size() != unilateral_topology.constraint_count()) {
+        [[nodiscard]] ConstDenseVectorView unilateral_active_hint() noexcept {
+            if (unilateral_warm_mask.size() != unilateral_topology.constraint_count()) {
                 return {};
             }
             std::fill(unilateral_warm_mask.begin(), unilateral_warm_mask.end(), 0.0);
@@ -734,12 +741,7 @@ namespace termin::physics_qopt {
             if (!has_hint) {
                 return {};
             }
-            return {
-                {velocity_warm_primal.data(), velocity_warm_primal.size(), 1},
-                {unilateral_warm_mask.data(), unilateral_warm_mask.size(), 1},
-                {},
-                {},
-            };
+            return {unilateral_warm_mask.data(), unilateral_warm_mask.size(), 1};
         }
 
         void commit_step() noexcept {
@@ -1070,8 +1072,6 @@ namespace termin::physics_qopt {
             impl_->pre_friction_velocity.assign(dofs, 0.0);
             impl_->post_friction_velocity.assign(dofs, 0.0);
             impl_->endpoint_velocity_predictor.assign(dofs, 0.0);
-            impl_->velocity_warm_primal.assign(dofs, 0.0);
-            impl_->velocity_warm_primal_valid = false;
             impl_->finalized = true;
             return DynamicsSystemDiagnostic::None;
         } catch (const std::exception& error) {
@@ -1268,32 +1268,33 @@ namespace termin::physics_qopt {
                                                                 },
                                                                 position_projection_tolerance);
                     } else {
-                        projection = solve_unilateral_velocity(assembly.system(),
-                                                               assembly.unilateral_constraints(),
-                                                               {
-                                                                   {
-                                                                       impl_->dof_solution.data(),
-                                                                       impl_->dof_solution.size(),
-                                                                       1,
-                                                                   },
-                                                                   {
-                                                                       impl_->constraint_reaction.data(),
-                                                                       impl_->constraint_reaction.size(),
-                                                                       1,
-                                                                   },
-                                                                   {
-                                                                       impl_->unilateral_reaction.data(),
-                                                                       impl_->unilateral_reaction.size(),
-                                                                       1,
-                                                                   },
-                                                                   {
-                                                                       impl_->unilateral_tight_mask.data(),
-                                                                       impl_->unilateral_tight_mask.size(),
-                                                                       1,
-                                                                   },
-                                                               },
-                                                               {},
-                                                               position_projection_qp_options);
+                        projection = solve_unilateral_velocity_impl(assembly.system(),
+                                                                    assembly.unilateral_constraints(),
+                                                                    {
+                                                                        {
+                                                                            impl_->dof_solution.data(),
+                                                                            impl_->dof_solution.size(),
+                                                                            1,
+                                                                        },
+                                                                        {
+                                                                            impl_->constraint_reaction.data(),
+                                                                            impl_->constraint_reaction.size(),
+                                                                            1,
+                                                                        },
+                                                                        {
+                                                                            impl_->unilateral_reaction.data(),
+                                                                            impl_->unilateral_reaction.size(),
+                                                                            1,
+                                                                        },
+                                                                        {
+                                                                            impl_->unilateral_tight_mask.data(),
+                                                                            impl_->unilateral_tight_mask.size(),
+                                                                            1,
+                                                                        },
+                                                                    },
+                                                                    {},
+                                                                    position_projection_qp_options,
+                                                                    impl_->unilateral_active_hint());
                     }
                     ++result.position_iterations;
                     result.position_projection = projection;
@@ -1366,21 +1367,21 @@ namespace termin::physics_qopt {
                         return dynamics_system_failure(
                             QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure, first_dynamics);
                     }
-                    second_dynamics = solve_constrained_dynamics_impl(assembly.system(),
-                                                                      {
-                                                                          {
-                                                                              impl_->dof_solution.data(),
-                                                                              impl_->dof_solution.size(),
-                                                                              1,
-                                                                          },
-                                                                          {
-                                                                              impl_->constraint_reaction.data(),
-                                                                              impl_->constraint_reaction.size(),
-                                                                              1,
-                                                                          },
-                                                                      },
-                                                                      options.qp_tolerance,
-                                                                      &endpoint_factorization);
+                    second_dynamics = detail::solve_constrained_dynamics_impl(assembly.system(),
+                                                                              {
+                                                                                  {
+                                                                                      impl_->dof_solution.data(),
+                                                                                      impl_->dof_solution.size(),
+                                                                                      1,
+                                                                                  },
+                                                                                  {
+                                                                                      impl_->constraint_reaction.data(),
+                                                                                      impl_->constraint_reaction.size(),
+                                                                                      1,
+                                                                                  },
+                                                                              },
+                                                                              options.qp_tolerance,
+                                                                              &endpoint_factorization);
                     if (second_dynamics.status != QpStatus::Optimal) {
                         rollback();
                         return dynamics_system_failure(
@@ -1432,49 +1433,34 @@ namespace termin::physics_qopt {
                         return dynamics_system_failure(
                             QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure, second_dynamics);
                     }
-                    const ActiveSetQpWarmStartView warm_start = impl_->unilateral_warm_start();
-                    QpSolveResult velocity_projection =
-                        solve_unilateral_velocity(assembly.system(),
-                                                  assembly.unilateral_constraints(),
-                                                  {
-                                                      {
-                                                          impl_->dof_solution.data(),
-                                                          impl_->dof_solution.size(),
-                                                          1,
-                                                      },
-                                                      {
-                                                          impl_->constraint_reaction.data(),
-                                                          impl_->constraint_reaction.size(),
-                                                          1,
-                                                      },
-                                                      {
-                                                          impl_->unilateral_reaction.data(),
-                                                          impl_->unilateral_reaction.size(),
-                                                          1,
-                                                      },
-                                                      {
-                                                          impl_->unilateral_tight_mask.data(),
-                                                          impl_->unilateral_tight_mask.size(),
-                                                          1,
-                                                      },
-                                                  },
-                                                  warm_start,
-                                                  velocity_projection_qp_options);
-                    if (velocity_projection.status != QpStatus::Optimal &&
-                        velocity_projection.diagnostic == QpDiagnostic::InvalidWarmStart &&
-                        !warm_start.primal.empty()) {
-                        velocity_projection = solve_unilateral_velocity(
-                            assembly.system(),
-                            assembly.unilateral_constraints(),
-                            {
-                                {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
-                                {impl_->constraint_reaction.data(), impl_->constraint_reaction.size(), 1},
-                                {impl_->unilateral_reaction.data(), impl_->unilateral_reaction.size(), 1},
-                                {impl_->unilateral_tight_mask.data(), impl_->unilateral_tight_mask.size(), 1},
-                            },
-                            {},
-                            velocity_projection_qp_options);
-                    }
+                    const QpSolveResult velocity_projection =
+                        solve_unilateral_velocity_impl(assembly.system(),
+                                                       assembly.unilateral_constraints(),
+                                                       {
+                                                           {
+                                                               impl_->dof_solution.data(),
+                                                               impl_->dof_solution.size(),
+                                                               1,
+                                                           },
+                                                           {
+                                                               impl_->constraint_reaction.data(),
+                                                               impl_->constraint_reaction.size(),
+                                                               1,
+                                                           },
+                                                           {
+                                                               impl_->unilateral_reaction.data(),
+                                                               impl_->unilateral_reaction.size(),
+                                                               1,
+                                                           },
+                                                           {
+                                                               impl_->unilateral_tight_mask.data(),
+                                                               impl_->unilateral_tight_mask.size(),
+                                                               1,
+                                                           },
+                                                       },
+                                                       {},
+                                                       velocity_projection_qp_options,
+                                                       impl_->unilateral_active_hint());
                     result.velocity_projection = velocity_projection;
                     if (velocity_projection.status != QpStatus::Optimal) {
                         rollback();
@@ -1528,12 +1514,11 @@ namespace termin::physics_qopt {
 
                         // Friction is another velocity projection, so it shares the
                         // tolerance and headroom established above.
-                        const std::size_t friction_support_count = static_cast<std::size_t>(std::count_if(
-                            impl_->friction_normal_impulse.begin(),
-                            impl_->friction_normal_impulse.end(),
-                            [active_tolerance = velocity_projection_qp_options.active_tolerance](double impulse) {
-                                return impulse > active_tolerance;
-                            }));
+                        const std::size_t friction_support_count = static_cast<std::size_t>(
+                            std::count_if(impl_->friction_normal_impulse.begin(),
+                                          impl_->friction_normal_impulse.end(),
+                                          [active_tolerance = velocity_projection_qp_options.active_tolerance](
+                                              double impulse) { return impulse > active_tolerance; }));
                         const std::size_t friction_inequality_count =
                             unilateral_constraint_count - friction_support_count +
                             friction_contact_count * (options.friction_cone_facets + 1);
@@ -1662,9 +1647,6 @@ namespace termin::physics_qopt {
                 failure.friction_cone_facets = result.friction_cone_facets;
                 return failure;
             }
-
-            impl_->velocity_warm_primal = impl_->dof_solution;
-            impl_->velocity_warm_primal_valid = true;
 
             impl_->commit_step();
             step_open = false;
