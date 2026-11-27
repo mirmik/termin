@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -113,13 +114,13 @@ namespace termin::physics_qopt {
 
         robotics::Articulation3DWorkspace articulation_workspace_;
         std::vector<double> mass_matrix_cache_;
+        std::optional<std::uint64_t> mass_matrix_revision_;
         std::vector<double> bias_work_;
         std::vector<double> load_work_;
         std::vector<double> generalized_velocity_work_;
         std::vector<double> limit_row_work_;
         std::vector<double> zero_acceleration_work_;
         ArticulationDynamicsAssemblyCounters assembly_counters_;
-        bool mass_matrix_cache_valid_ = false;
 
         robotics::Articulation3DState state_snapshot_;
         std::optional<robotics::ArticulationFloatingBase3D> floating_base_snapshot_;
@@ -127,7 +128,6 @@ namespace termin::physics_qopt {
         std::vector<ArticulationUnitLimitState3D> unit_limit_state_snapshot_;
         bool snapshot_ready_ = false;
 
-        void invalidate_mass_matrix_cache() noexcept;
         [[nodiscard]] bool prepare_mass_matrix();
         [[nodiscard]] bool prepare_bias();
     };

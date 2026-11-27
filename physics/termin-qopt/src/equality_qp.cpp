@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <exception>
 #include <limits>
 #include <numeric>
@@ -41,6 +42,7 @@ namespace termin::qopt {
             Vector eigenvalues;
             Matrix eigenvectors;
             QpTolerance tolerance;
+            QpTolerance cholesky_tolerance;
             std::size_t constraint_rank = 0;
             std::size_t reduced_rank = 0;
             double curvature_tolerance = 0.0;
@@ -221,7 +223,8 @@ namespace termin::qopt {
                                                QpTolerance tolerance,
                                                FactorizationPolicy policy,
                                                EqualityFactorization* cache,
-                                               EqualityQpFactorizationCounters* counters) {
+                                               EqualityQpFactorizationCounters* counters,
+                                               const PreparedCholesky* prepared = nullptr) {
             if (!valid_tolerance(tolerance)) {
                 return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
             }
@@ -289,7 +292,9 @@ namespace termin::qopt {
                 (policy == FactorizationPolicy::SchurFirst ||
                  (policy == FactorizationPolicy::CertifiedSchur && certifies_full_row_rank(equalities, tolerance) &&
                   certifies_positive_definiteness(hessian, tolerance)))) {
-                Eigen::LLT<Matrix> hessian_factor(hessian);
+                Eigen::LLT<Matrix> local_factor;
+                const auto& hessian_factor =
+                    prepared && prepared->matches(hessian) ? prepared->factor : local_factor.compute(hessian);
                 if (hessian_factor.info() == Eigen::Success) {
                     const Vector hessian_pivots = hessian_factor.matrixL().toDenseMatrix().diagonal().array().square();
                     const double hessian_rank_tolerance = scaled_tolerance(tolerance, hessian_scale);
@@ -332,8 +337,8 @@ namespace termin::qopt {
                             result.equality_linf = linf(equality_error);
                             result.constraint_rank = constraints;
                             result.reduced_hessian_rank = variables - constraints;
-                            if (primal.allFinite() && equality_dual.allFinite() &&
-                                stationarity_error.allFinite() && equality_error.allFinite() &&
+                            if (primal.allFinite() && equality_dual.allFinite() && stationarity_error.allFinite() &&
+                                equality_error.allFinite() &&
                                 result.stationarity_linf <= scaled_tolerance(tolerance, stationarity_scale) &&
                                 result.equality_linf <= feasibility_tolerance) {
                                 copy_to_view(primal, solution.primal);
@@ -362,6 +367,7 @@ namespace termin::qopt {
                 factor.equalities = equalities;
                 factor.equality_row_scales = equality_row_scales;
                 factor.tolerance = tolerance;
+                factor.cholesky_tolerance = tolerance;
                 factor.constraint_rank = 0;
                 factor.reduced_rank = 0;
                 factor.curvature_tolerance = 0.0;
@@ -534,7 +540,8 @@ namespace termin::qopt {
         [[nodiscard]] std::optional<QpSolveResult> try_full_rank_batch(ConstDenseMatrixView hessian_view,
                                                                        ConstDenseMatrixView gradients_view,
                                                                        QpTolerance tolerance,
-                                                                       Matrix& responses) {
+                                                                       Matrix& responses,
+                                                                       const PreparedCholesky* prepared) {
             const Matrix input = copy_matrix(hessian_view);
             if (!input.allFinite()) {
                 return failure(QpStatus::InvalidInput, QpDiagnostic::NonFiniteInput);
@@ -543,6 +550,13 @@ namespace termin::qopt {
                 return failure(QpStatus::InvalidInput, QpDiagnostic::NonSymmetricHessian);
             }
             const Matrix hessian = 0.5 * (input + input.transpose());
+            if (prepared && prepared->matches(hessian)) {
+                if (!prepared->certify(tolerance)) {
+                    return std::nullopt;
+                }
+                return solve_certified_cholesky(
+                    hessian, prepared->factor, copy_matrix(gradients_view), responses, tolerance);
+            }
             Eigen::LLT<Matrix> factor;
             if (!compute_certified_cholesky(hessian, tolerance, factor)) {
                 return std::nullopt;
@@ -601,9 +615,32 @@ namespace termin::qopt {
         return factor.info() == Eigen::Success && factor.matrixLLT().allFinite();
     }
 
+    bool detail::PreparedCholesky::matches(const Matrix& current) const noexcept {
+        return hessian.rows() == current.rows() && hessian.cols() == current.cols() &&
+               std::memcmp(hessian.data(), current.data(), current.size() * sizeof(double)) == 0;
+    }
+
+    bool detail::PreparedCholesky::certify(QpTolerance tolerance) const {
+        if (same_tolerance(certified_tolerance, tolerance)) {
+            return true;
+        }
+        if (!certifies_positive_definiteness(hessian, tolerance)) {
+            return false;
+        }
+        certified_tolerance = tolerance;
+        return true;
+    }
+
     struct EqualityQpFactorizationCache::Impl {
         EqualityFactorization factor;
         EqualityQpFactorizationCounters counters;
+
+        std::optional<PreparedCholesky> prepared_cholesky() noexcept {
+            if (factor.valid && factor.cholesky) {
+                return PreparedCholesky{factor.hessian, *factor.cholesky, factor.cholesky_tolerance};
+            }
+            return std::nullopt;
+        }
     };
 
     EqualityQpFactorizationCache::EqualityQpFactorizationCache()
@@ -670,12 +707,13 @@ namespace termin::qopt {
         return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
     }
 
-    QpSolveResult solve_homogeneous_equality_qp_batch(ConstDenseMatrixView hessian,
+    static QpSolveResult solve_homogeneous_batch_impl(ConstDenseMatrixView hessian,
                                                       ConstDenseMatrixView equalities,
                                                       ConstDenseMatrixView gradients,
                                                       DenseMatrixView primal,
                                                       DenseMatrixView equality_dual,
-                                                      QpTolerance tolerance) noexcept {
+                                                      QpTolerance tolerance,
+                                                      const PreparedCholesky* prepared) noexcept {
         try {
             if (!valid_tolerance(tolerance)) {
                 return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
@@ -708,7 +746,8 @@ namespace termin::qopt {
             // Stage every column so failures are transactional even when inputs alias outputs.
             Matrix responses(n, columns);
             Matrix duals(m, columns);
-            auto fast_result = m == 0 ? try_full_rank_batch(hessian, gradients, tolerance, responses) : std::nullopt;
+            auto fast_result =
+                m == 0 ? try_full_rank_batch(hessian, gradients, tolerance, responses, prepared) : std::nullopt;
             const QpSolveResult result =
                 fast_result ? *fast_result
                             : solve_spectral_batch(hessian, equalities, gradients, tolerance, responses, duals);
@@ -732,6 +771,35 @@ namespace termin::qopt {
         return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
     }
 
+    QpSolveResult solve_homogeneous_equality_qp_batch(ConstDenseMatrixView hessian,
+                                                      ConstDenseMatrixView equalities,
+                                                      ConstDenseMatrixView gradients,
+                                                      DenseMatrixView primal,
+                                                      DenseMatrixView equality_dual,
+                                                      QpTolerance tolerance) noexcept {
+        return solve_homogeneous_batch_impl(hessian, equalities, gradients, primal, equality_dual, tolerance, nullptr);
+    }
+
+    QpSolveResult EqualityQpFactorizationCache::solve_homogeneous_batch(ConstDenseMatrixView hessian,
+                                                                        ConstDenseMatrixView equalities,
+                                                                        ConstDenseMatrixView gradients,
+                                                                        DenseMatrixView primal,
+                                                                        DenseMatrixView equality_dual,
+                                                                        QpTolerance tolerance) noexcept {
+        const auto prepared = impl_ ? impl_->prepared_cholesky() : std::nullopt;
+        return solve_homogeneous_batch_impl(
+            hessian, equalities, gradients, primal, equality_dual, tolerance, prepared ? &*prepared : nullptr);
+    }
+
+    QpSolveResult EqualityQpFactorizationCache::solve_with_inequality_hint(ActiveSetQpProblemView problem,
+                                                                           ActiveSetQpSolutionView solution,
+                                                                           ConstDenseVectorView active_inequalities,
+                                                                           ActiveSetQpOptions options) noexcept {
+        const auto prepared = impl_ ? impl_->prepared_cholesky() : std::nullopt;
+        return detail::solve_hinted_qp(
+            problem, solution, active_inequalities, options, prepared ? &*prepared : nullptr);
+    }
+
     QpSolveResult detail::solve_equality_qp_seed(EqualityQpProblemView problem,
                                                  EqualityQpSolutionView solution,
                                                  QpTolerance tolerance) {
@@ -740,9 +808,11 @@ namespace termin::qopt {
 
     QpSolveResult detail::solve_equality_qp_spd_first(EqualityQpProblemView problem,
                                                       EqualityQpSolutionView solution,
-                                                      QpTolerance tolerance) noexcept {
+                                                      QpTolerance tolerance,
+                                                      const PreparedCholesky* prepared) noexcept {
         try {
-            return solve_impl(problem, solution, tolerance, FactorizationPolicy::SchurFirst, nullptr, nullptr);
+            return solve_impl(
+                problem, solution, tolerance, FactorizationPolicy::SchurFirst, nullptr, nullptr, prepared);
         } catch (const std::exception& error) {
             std::fprintf(stderr,
                          "[termin-qopt] SPD-first equality QP failed with an "

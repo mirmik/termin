@@ -1,5 +1,6 @@
 #pragma once
 
+#include <termin/physics_qopt/contact_friction.hpp>
 #include <termin/physics_qopt/dynamics.hpp>
 
 namespace termin::physics_qopt::detail {
@@ -8,4 +9,10 @@ namespace termin::physics_qopt::detail {
                                     DynamicsSolutionView solution,
                                     QpTolerance tolerance,
                                     EqualityQpFactorizationCache* factorization_cache) noexcept;
+
+    [[nodiscard]] QpSolveResult
+    solve_contact_friction_impl(ContactFrictionProblemView problem,
+                                ContactFrictionSolutionView solution,
+                                ContactFrictionOptions options,
+                                EqualityQpFactorizationCache* mass_factorization) noexcept;
 }

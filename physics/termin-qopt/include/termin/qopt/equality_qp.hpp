@@ -1,5 +1,6 @@
 #pragma once
 
+#include <termin/qopt/active_set_qp.hpp>
 #include <termin/qopt/dense_views.hpp>
 #include <termin/qopt/qp_types.hpp>
 #include <termin/qopt/termin_qopt_api.hpp>
@@ -52,6 +53,20 @@ namespace termin::qopt {
 
         [[nodiscard]] QpSolveResult
         solve(EqualityQpProblemView problem, EqualityQpSolutionView solution, QpTolerance tolerance = {}) noexcept;
+        // These solves can borrow the Cholesky factor prepared by solve() for an
+        // unconstrained Hessian. Both validate their current input independently.
+        // Numerical rank certification is specific to the requested tolerance.
+        [[nodiscard]] QpSolveResult solve_with_inequality_hint(ActiveSetQpProblemView problem,
+                                                               ActiveSetQpSolutionView solution,
+                                                               ConstDenseVectorView active_inequalities,
+                                                               ActiveSetQpOptions options = {}) noexcept;
+        [[nodiscard]] QpSolveResult solve_homogeneous_batch(ConstDenseMatrixView hessian,
+                                                            ConstDenseMatrixView equalities,
+                                                            ConstDenseMatrixView gradients,
+                                                            DenseMatrixView primal,
+                                                            DenseMatrixView equality_dual,
+                                                            QpTolerance tolerance = {}) noexcept;
+
         void clear() noexcept;
         [[nodiscard]] EqualityQpFactorizationCounters counters() const noexcept;
         void reset_counters() noexcept;

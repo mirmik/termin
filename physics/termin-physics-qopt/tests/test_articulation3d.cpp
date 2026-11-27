@@ -358,12 +358,39 @@ namespace {
 
         Articulation3DState changed_state = contribution.state();
         changed_state.coordinates[1] += 0.2;
-        TERMIN_QOPT_CHECK(contribution.set_state(std::move(changed_state)) == Articulation3DDiagnostic::None);
+        // The owner can mutate the borrowed model between direct assemble calls.
+        TERMIN_QOPT_CHECK(model.set_state(std::move(changed_state)) == Articulation3DDiagnostic::None);
         const AssembledSystem changed = assemble(contribution);
+        std::vector<double> expected;
+        TERMIN_QOPT_CHECK(model.mass_matrix(expected));
+        TERMIN_QOPT_CHECK(changed.mass == expected);
         TERMIN_QOPT_CHECK(changed.mass != repeated.mass);
         counters = contribution.assembly_counters();
         TERMIN_QOPT_CHECK(counters.mass_matrix_evaluations == 2);
         TERMIN_QOPT_CHECK(counters.bias_evaluations == 3);
+    }
+
+    void test_articulation_mass_cache_is_local_and_survives_rollback() {
+        const Articulation3DState initial{{0.2, -0.5}, {0.0, 0.0}};
+        Articulation3D first_model(double_pendulum_units(), initial);
+        auto heavier_units = double_pendulum_units();
+        heavier_units.back().inertia.mass *= 2.0;
+        Articulation3D other_model(std::move(heavier_units), initial);
+        Articulation3DDynamicsContribution first(first_model), other(other_model);
+        const auto initial_mass = assemble(first).mass;
+        const auto other_mass = assemble(other).mass;
+        TERMIN_QOPT_CHECK(initial_mass != other_mass);
+
+        TERMIN_QOPT_CHECK(first.begin_step() == AssemblyDiagnostic::None);
+        auto changed = initial;
+        changed.coordinates[1] += 0.3;
+        TERMIN_QOPT_CHECK(first.set_state(std::move(changed)) == Articulation3DDiagnostic::None);
+        TERMIN_QOPT_CHECK(assemble(first).mass != initial_mass);
+        first.rollback_step();
+        TERMIN_QOPT_CHECK(assemble(first).mass == initial_mass);
+        TERMIN_QOPT_CHECK(assemble(other).mass == other_mass);
+        TERMIN_QOPT_CHECK(first.assembly_counters().mass_matrix_evaluations == 3);
+        TERMIN_QOPT_CHECK(other.assembly_counters().mass_matrix_evaluations == 1);
     }
 
     void test_endpoint_iterations_reuse_mass_matrix() {
@@ -383,6 +410,10 @@ namespace {
         const ArticulationDynamicsAssemblyCounters counters = state->assembly_counters();
         TERMIN_QOPT_CHECK(counters.mass_matrix_evaluations == 2);
         TERMIN_QOPT_CHECK(counters.bias_evaluations > counters.mass_matrix_evaluations);
+
+        // The accepted endpoint is the next step's initial configuration.
+        TERMIN_QOPT_CHECK(system.step(options(0.002)).ok());
+        TERMIN_QOPT_CHECK(state->assembly_counters().mass_matrix_evaluations == 3);
     }
 
     void test_prismatic_joint_equations() {
@@ -807,6 +838,7 @@ int main() {
     test_double_pendulum_equations();
     test_velocity_bias();
     test_mass_matrix_cache_tracks_configuration();
+    test_articulation_mass_cache_is_local_and_survives_rollback();
     test_endpoint_iterations_reuse_mass_matrix();
     test_prismatic_joint_equations();
     test_joint_limits();

@@ -1,4 +1,4 @@
-#include <termin/physics_qopt/contact_friction.hpp>
+#include "dynamics_internal.hpp"
 
 #include "friction_polygon.hpp"
 
@@ -55,6 +55,13 @@ namespace termin::physics_qopt {
     QpSolveResult solve_contact_friction(ContactFrictionProblemView problem,
                                          ContactFrictionSolutionView solution,
                                          ContactFrictionOptions options) noexcept {
+        return detail::solve_contact_friction_impl(problem, solution, options, nullptr);
+    }
+
+    QpSolveResult detail::solve_contact_friction_impl(ContactFrictionProblemView problem,
+                                                      ContactFrictionSolutionView solution,
+                                                      ContactFrictionOptions options,
+                                                      EqualityQpFactorizationCache* mass_factorization) noexcept {
         const std::size_t dofs = problem.normal_projected_velocity.size;
         const std::size_t contacts = problem.normal_impulse.size;
         const std::size_t normal_constraints = problem.minimum_normal_velocity.size;
@@ -212,13 +219,15 @@ namespace termin::physics_qopt {
             }
             std::vector<double> response(dofs * variables);
             std::vector<double> bilateral_dual(bilateral * variables);
-            const QpSolveResult response_result = solve_homogeneous_equality_qp_batch(
-                problem.mass,
-                problem.bilateral_jacobian,
-                ConstDenseMatrixView::column_major(response_gradients.data(), dofs, variables),
-                DenseMatrixView::row_major(response.data(), dofs, variables),
-                DenseMatrixView::row_major(bilateral_dual.data(), bilateral, variables),
-                options.qp.tolerance);
+            const auto gradients = ConstDenseMatrixView::column_major(response_gradients.data(), dofs, variables);
+            const auto primal = DenseMatrixView::row_major(response.data(), dofs, variables);
+            const auto dual = DenseMatrixView::row_major(bilateral_dual.data(), bilateral, variables);
+            const QpSolveResult response_result =
+                mass_factorization
+                    ? mass_factorization->solve_homogeneous_batch(
+                          problem.mass, problem.bilateral_jacobian, gradients, primal, dual, options.qp.tolerance)
+                    : solve_homogeneous_equality_qp_batch(
+                          problem.mass, problem.bilateral_jacobian, gradients, primal, dual, options.qp.tolerance);
             if (response_result.status != QpStatus::Optimal) {
                 return response_result;
             }

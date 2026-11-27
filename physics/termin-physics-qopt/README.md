@@ -33,6 +33,14 @@ Physical types live in `termin::physics_qopt` and are included through
 `<termin/physics_qopt/...>`. Numerical solver types remain in `termin::qopt` and
 are included through `<termin/qopt/...>`.
 
+An articulation's mass block is reusable across velocity updates and from an
+accepted endpoint to the start of the next step. The dynamics contribution
+checks the borrowed articulation's configuration revision whenever it reads
+the block, including after the caller changes the model or a step rolls back.
+Within each contact pass, endpoint acceleration, normal velocity projection
+and friction response share a factorization workspace. The corrected endpoint
+gets a new workspace.
+
 The dynamic-control loop keeps controller policy outside the physics system:
 
 ```cpp

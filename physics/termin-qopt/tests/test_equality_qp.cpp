@@ -706,6 +706,69 @@ namespace {
         }
     }
 
+    void test_borrowed_cholesky_rechecks_batch_rank_and_constraints() {
+        std::vector<double> hessian{1, 0, 0, 1e-10};
+        const auto h = row_major(hessian, 2, 2);
+        const auto no_equalities = ConstDenseMatrixView::row_major(nullptr, 0, 2);
+        const auto no_duals = DenseMatrixView::row_major(nullptr, 0, 1);
+        const double gradient[]{0, -1};
+        const auto gradients = ConstDenseMatrixView::column_major(gradient, 2, 1);
+        double x[]{0, 0};
+        const auto primal = DenseMatrixView::column_major(x, 2, 1);
+        EqualityQpFactorizationCache cache;
+        TERMIN_QOPT_CHECK(cache.solve({h, {gradient, 2}, no_equalities, {}}, {{x, 2}, {}}).status == QpStatus::Optimal);
+
+        // At the higher cutoff the second eigenvalue is in the numerical nullspace.
+        const QpTolerance tolerance{1e-9, 1e-9, 1e-10};
+        x[1] = 123;
+        const auto unbounded = cache.solve_homogeneous_batch(h, no_equalities, gradients, primal, no_duals, tolerance);
+        TERMIN_QOPT_CHECK(unbounded.status == QpStatus::Unbounded);
+        TERMIN_QOPT_CHECK(unbounded.diagnostic == QpDiagnostic::LinearDescentInNullspace);
+        TERMIN_QOPT_CHECK(x[1] == 123);
+
+        const double constraint[]{0, 1};
+        double dual = 0;
+        const auto constrained = cache.solve_homogeneous_batch(h,
+                                                               ConstDenseMatrixView::row_major(constraint, 1, 2),
+                                                               gradients,
+                                                               primal,
+                                                               DenseMatrixView::row_major(&dual, 1, 1),
+                                                               tolerance);
+        TERMIN_QOPT_CHECK(constrained.status == QpStatus::Optimal && constrained.constraint_rank == 1);
+        TERMIN_QOPT_CHECK(x[0] == 0 && x[1] == 0 && dual == 1);
+
+        hessian[3] = 4;
+        const auto updated = cache.solve_homogeneous_batch(h, no_equalities, gradients, primal, no_duals, tolerance);
+        TERMIN_QOPT_CHECK(updated.status == QpStatus::Optimal && x[1] == 0.25);
+    }
+
+    void test_borrowed_cholesky_on_hinted_face() {
+        std::vector<double> hessian{2, 0, 0, 4};
+        const auto h = row_major(hessian, 2, 2);
+        const auto a = ConstDenseMatrixView::row_major(nullptr, 0, 2);
+        const double gradient[]{-3, -8}, row[]{1, 0}, limit = 1, hint = 1;
+        double x[]{0, 0};
+        double dual = 0;
+        EqualityQpFactorizationCache cache;
+        TERMIN_QOPT_CHECK(cache.solve({h, {gradient, 2}, a, {}}, {{x, 2}, {}}).status == QpStatus::Optimal);
+        const ActiveSetQpProblemView problem{
+            h, {gradient, 2}, a, {}, ConstDenseMatrixView::row_major(row, 1, 2), {&limit, 1}, {}, {}};
+        const ActiveSetQpSolutionView solution{{x, 2}, {}, {&dual, 1}, {}, {}};
+        const auto check = [&](double curvature, double expected) {
+            hessian[3] = curvature;
+            const auto result =
+                cache.solve_with_inequality_hint(problem, solution, {&hint, 1}, {.tolerance = {1e-9, 1e-9, 1e-10}});
+            TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal && result.active_set_size == 1);
+            TERMIN_QOPT_CHECK(std::abs(x[0] - 1) < 1e-12 && std::abs(x[1] - expected) < 1e-12);
+            TERMIN_QOPT_CHECK(std::abs(dual - 1) < 1e-12);
+        };
+        check(4, 2);
+        check(8, 1);
+        hessian[3] = -1;
+        TERMIN_QOPT_CHECK(cache.solve_with_inequality_hint(problem, solution, {&hint, 1}).status ==
+                          QpStatus::NonConvex);
+    }
+
     void test_homogeneous_batch_snapshots_strided_gradients() {
         const std::vector<double> hessian{2, 0, 0, 4};
         std::vector<double> storage{-4, -10, 77, 4, 12, 77};
@@ -775,6 +838,8 @@ int main() {
     test_homogeneous_batch_matches_cached_columns();
     test_cached_spd_solve_recovers_after_overflowing_rhs();
     test_unconstrained_solvers_at_spectral_rank_and_symmetry_boundaries();
+    test_borrowed_cholesky_rechecks_batch_rank_and_constraints();
+    test_borrowed_cholesky_on_hinted_face();
     test_homogeneous_batch_snapshots_strided_gradients();
     test_homogeneous_batch_rejects_invalid_inputs();
     return 0;

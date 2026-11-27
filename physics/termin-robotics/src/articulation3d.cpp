@@ -546,6 +546,8 @@ namespace termin::robotics {
     }
 
     bool Articulation3D::update_configuration_kinematics() noexcept {
+        // A failed update can also change some of the transforms used by CRBA.
+        ++configuration_revision_;
         const std::size_t count = units_.size();
         if (parent_to_unit_.size() != count || unit_poses_world_.size() != count ||
             motion_twists_at_unit_.size() != count || state_.coordinates.size() != count) {

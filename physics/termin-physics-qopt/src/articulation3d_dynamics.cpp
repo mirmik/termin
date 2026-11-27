@@ -102,7 +102,6 @@ namespace termin::physics_qopt {
     }
 
     Articulation3D& Articulation3DDynamicsContribution::articulation() noexcept {
-        invalidate_mass_matrix_cache();
         return articulation_;
     }
 
@@ -220,7 +219,6 @@ namespace termin::physics_qopt {
     }
 
     Articulation3DDiagnostic Articulation3DDynamicsContribution::set_state(Articulation3DState value) noexcept {
-        invalidate_mass_matrix_cache();
         return articulation_.set_state(std::move(value));
     }
 
@@ -236,23 +234,20 @@ namespace termin::physics_qopt {
     Articulation3DDiagnostic
     Articulation3DDynamicsContribution::set_floating_base_state(termin::Pose3 pose_world,
                                                                 termin::Screw3 velocity_local) noexcept {
-        invalidate_mass_matrix_cache();
         return articulation_.set_floating_base_state(pose_world, velocity_local);
     }
 
-    void Articulation3DDynamicsContribution::invalidate_mass_matrix_cache() noexcept {
-        mass_matrix_cache_valid_ = false;
-    }
-
     bool Articulation3DDynamicsContribution::prepare_mass_matrix() {
-        if (!mass_matrix_cache_valid_) {
-            if (!articulation_.mass_matrix(mass_matrix_cache_, articulation_workspace_)) {
-                return false;
-            }
-            mass_matrix_cache_valid_ = true;
-            ++assembly_counters_.mass_matrix_evaluations;
+        const auto revision = ArticulationAccess::configuration_revision(articulation_);
+        if (mass_matrix_revision_ == revision) {
+            return true;
         }
-        return finite(mass_matrix_cache_);
+        if (!articulation_.mass_matrix(mass_matrix_cache_, articulation_workspace_)) {
+            return false;
+        }
+        mass_matrix_revision_ = revision;
+        ++assembly_counters_.mass_matrix_evaluations;
+        return true;
     }
 
     bool Articulation3DDynamicsContribution::prepare_bias() {
@@ -461,7 +456,6 @@ namespace termin::physics_qopt {
     }
 
     AssemblyDiagnostic Articulation3DDynamicsContribution::begin_step() noexcept {
-        invalidate_mass_matrix_cache();
         std::copy(ArticulationAccess::state(articulation_).coordinates.begin(),
                   ArticulationAccess::state(articulation_).coordinates.end(),
                   state_snapshot_.coordinates.begin());
@@ -491,7 +485,6 @@ namespace termin::physics_qopt {
             std::copy(unit_limit_state_snapshot_.begin(), unit_limit_state_snapshot_.end(), unit_limit_states_.begin());
             ArticulationAccess::floating_base(articulation_) = floating_base_snapshot_;
             (void)ArticulationAccess::update_kinematics(articulation_);
-            invalidate_mass_matrix_cache();
             snapshot_ready_ = false;
         }
     }
@@ -582,7 +575,6 @@ namespace termin::physics_qopt {
 
     AssemblyDiagnostic Articulation3DDynamicsContribution::set_trial_configuration(
         const DynamicsTopology& topology, ConstDenseVectorView midpoint_velocity, double time_step) noexcept {
-        invalidate_mass_matrix_cache();
         if (!snapshot_ready_ || !std::isfinite(time_step) || time_step <= 0.0) {
             return AssemblyDiagnostic::NonFiniteContribution;
         }

@@ -23,6 +23,10 @@ namespace termin::robotics::detail {
             return articulation.update_kinematics();
         }
 
+        [[nodiscard]] static std::uint64_t configuration_revision(const Articulation3D& articulation) noexcept {
+            return articulation.configuration_revision_;
+        }
+
         // Only generalized velocities may have changed since the last full
         // update. Configuration changes and rollback require update_kinematics.
         [[nodiscard]] static bool update_velocity_kinematics(Articulation3D& articulation) noexcept {

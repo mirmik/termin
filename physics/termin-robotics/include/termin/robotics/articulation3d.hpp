@@ -218,6 +218,7 @@ namespace termin::robotics {
         std::vector<termin::Pose3> unit_poses_world_;
         std::vector<termin::Screw3> motion_twists_at_unit_;
         std::vector<termin::Screw3> unit_velocities_local_;
+        std::uint64_t configuration_revision_ = 0;
 
         [[nodiscard]] Articulation3DDiagnostic validate_model() const noexcept;
         [[nodiscard]] bool update_kinematics() noexcept;

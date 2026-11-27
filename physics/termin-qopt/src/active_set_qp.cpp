@@ -87,12 +87,13 @@ namespace termin::qopt {
 
         using EqualitySolver = QpSolveResult (*)(EqualityQpProblemView, EqualityQpSolutionView, QpTolerance);
 
+        template <typename Solver = EqualitySolver>
         [[nodiscard]] EqualityResult solve_equalities(const Matrix& hessian,
                                                       const Vector& gradient,
                                                       const Matrix& equalities,
                                                       const Vector& targets,
                                                       QpTolerance tolerance,
-                                                      EqualitySolver solve = solve_equality_qp) {
+                                                      Solver solve = solve_equality_qp) {
             EqualityResult solved;
             solved.primal = Vector::Zero(hessian.rows());
             solved.dual = Vector::Zero(equalities.rows());
@@ -135,11 +136,13 @@ namespace termin::qopt {
             return svd.matrixV().rightCols(variables - rank);
         }
 
-        [[nodiscard]] QpSolveResult
-        check_convexity(const Matrix& hessian, const Matrix& equalities, QpTolerance tolerance) {
+        [[nodiscard]] QpSolveResult check_convexity(const Matrix& hessian,
+                                                    const Matrix& equalities,
+                                                    QpTolerance tolerance,
+                                                    const PreparedCholesky* prepared) {
             Eigen::SelfAdjointEigenSolver<Matrix> eigensolver;
             if (equalities.rows() == 0) {
-                if (certifies_positive_definiteness(hessian, tolerance)) {
+                if (prepared ? prepared->certify(tolerance) : certifies_positive_definiteness(hessian, tolerance)) {
                     QpSolveResult result;
                     result.status = QpStatus::Optimal;
                     return result;
@@ -326,7 +329,8 @@ namespace termin::qopt {
                                                               const std::vector<std::size_t>& active,
                                                               const Vector& limit_perturbations,
                                                               QpTolerance tolerance,
-                                                              Matrix& working) {
+                                                              Matrix& working,
+                                                              const PreparedCholesky* prepared = nullptr) {
             working.resize(equalities.rows() + static_cast<Eigen::Index>(active.size()), hessian.rows());
             Vector working_targets(targets.size() + static_cast<Eigen::Index>(active.size()));
             if (equalities.rows() > 0) {
@@ -348,7 +352,10 @@ namespace termin::qopt {
                                     working,
                                     working_targets,
                                     tolerance,
-                                    active.empty() ? solve_equality_qp : solve_equality_qp_spd_first);
+                                    [&](EqualityQpProblemView p, EqualityQpSolutionView s, QpTolerance t) {
+                                        return active.empty() ? solve_equality_qp(p, s, t)
+                                                              : solve_equality_qp_spd_first(p, s, t, prepared);
+                                    });
         }
 
         [[nodiscard]] CoreResult solve_feasible_core(const Matrix& hessian,
@@ -829,7 +836,8 @@ namespace termin::qopt {
                                                ActiveSetQpSolutionView solution,
                                                ActiveSetQpWarmStartView warm_start,
                                                ActiveSetQpOptions options,
-                                               ConstDenseVectorView inequality_hint = {}) {
+                                               ConstDenseVectorView inequality_hint = {},
+                                               const PreparedCholesky* prepared = nullptr) {
             if (!valid_tolerance(options.tolerance)) {
                 return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
             }
@@ -978,7 +986,10 @@ namespace termin::qopt {
                     feasible_origin = std::move(feasible.primal);
                 }
 
-                const QpSolveResult convexity = check_convexity(hessian, equalities, options.tolerance);
+                if (prepared && !prepared->matches(hessian)) {
+                    prepared = nullptr;
+                }
+                const QpSolveResult convexity = check_convexity(hessian, equalities, options.tolerance, prepared);
                 if (convexity.status != QpStatus::Optimal) {
                     return convexity;
                 }
@@ -1017,7 +1028,8 @@ namespace termin::qopt {
                                                                candidate.active,
                                                                {},
                                                                options.tolerance,
-                                                               working);
+                                                               working,
+                                                               prepared);
                 if (face.result.status == QpStatus::Optimal &&
                     face.result.constraint_rank == static_cast<std::size_t>(working.rows()) &&
                     face.result.constraint_rank + face.result.reduced_hessian_rank == variables) {
@@ -1160,8 +1172,16 @@ namespace termin::qopt {
                                                            ActiveSetQpSolutionView solution,
                                                            ConstDenseVectorView active_inequalities,
                                                            ActiveSetQpOptions options) noexcept {
+        return detail::solve_hinted_qp(problem, solution, active_inequalities, options, nullptr);
+    }
+
+    QpSolveResult detail::solve_hinted_qp(ActiveSetQpProblemView problem,
+                                          ActiveSetQpSolutionView solution,
+                                          ConstDenseVectorView active_inequalities,
+                                          ActiveSetQpOptions options,
+                                          const PreparedCholesky* prepared) noexcept {
         try {
-            return solve_impl(problem, solution, {}, options, active_inequalities);
+            return solve_impl(problem, solution, {}, options, active_inequalities, prepared);
         } catch (const std::exception& error) {
             std::fprintf(stderr, "[termin-qopt] hinted active-set QP failed: %s\n", error.what());
         } catch (...) {

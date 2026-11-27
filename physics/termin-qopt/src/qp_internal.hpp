@@ -19,13 +19,29 @@ namespace termin::qopt::detail {
     // For a finite, nonempty symmetric Hessian. A false result is inconclusive.
     [[nodiscard]] bool certifies_positive_definiteness(const Matrix& hessian, QpTolerance tolerance);
 
-    [[nodiscard]] QpSolveResult solve_equality_qp_seed(EqualityQpProblemView problem,
-                                                       EqualityQpSolutionView solution,
-                                                       QpTolerance tolerance);
+    // Non-owning view of a validated scalar solve's symmetrized coefficients.
+    struct PreparedCholesky {
+        const Matrix& hessian;
+        const Eigen::LLT<Matrix>& factor;
+        QpTolerance& certified_tolerance;
+
+        [[nodiscard]] bool matches(const Matrix& current) const noexcept;
+        [[nodiscard]] bool certify(QpTolerance tolerance) const;
+    };
+
+    [[nodiscard]] QpSolveResult solve_hinted_qp(ActiveSetQpProblemView problem,
+                                                ActiveSetQpSolutionView solution,
+                                                ConstDenseVectorView active_inequalities,
+                                                ActiveSetQpOptions options,
+                                                const PreparedCholesky* prepared) noexcept;
+
+    [[nodiscard]] QpSolveResult
+    solve_equality_qp_seed(EqualityQpProblemView problem, EqualityQpSolutionView solution, QpTolerance tolerance);
 
     [[nodiscard]] QpSolveResult solve_equality_qp_spd_first(EqualityQpProblemView problem,
                                                             EqualityQpSolutionView solution,
-                                                            QpTolerance tolerance) noexcept;
+                                                            QpTolerance tolerance,
+                                                            const PreparedCholesky* prepared) noexcept;
 
     [[nodiscard]] inline QpSolveResult
     failure(QpStatus status, QpDiagnostic diagnostic, std::size_t iterations = 0) noexcept {

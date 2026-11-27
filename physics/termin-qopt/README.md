@@ -4,12 +4,13 @@
 foundation. Its public C++ API contains no Eigen types; Eigen remains a private
 backend dependency.
 
-Equality QPs with no equality rows use the full variable space directly rather
-than materializing an identity nullspace. They retain the same spectral
-decomposition, rank/curvature thresholds and residual validation as the general
-rank-revealing path, including singular, unbounded and nonconvex diagnostics.
-Factorization caches can switch between constrained and unconstrained inputs;
-the exact coefficient/tolerance comparison still controls invalidation.
+Equality QPs with no equality rows operate directly in the full variable
+space. For a numerically full-rank positive-definite Hessian, the scoped
+factorization cache can use Cholesky. A subsequent hinted active-set solve
+or a batch of equality solves can reuse that factor when its symmetric
+coefficients match exactly. The numerical rank certificate depends on the
+requested tolerance. Each solve checks its own residuals, and the spectral
+path handles singular and indefinite systems.
 
 The native library exports:
 

@@ -2,8 +2,6 @@
 
 #include "dynamics_internal.hpp"
 
-#include <termin/physics_qopt/contact_friction.hpp>
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -394,12 +392,14 @@ namespace termin::physics_qopt {
         return detail::solve_constrained_dynamics_impl(system, solution, tolerance, nullptr);
     }
 
-    static QpSolveResult solve_unilateral_velocity_impl(ConstDynamicsSystemView system,
-                                                        ConstDynamicsUnilateralView unilateral,
-                                                        DynamicsVelocitySolutionView solution,
-                                                        ActiveSetQpWarmStartView warm_start,
-                                                        ActiveSetQpOptions options,
-                                                        ConstDenseVectorView active_hint) noexcept {
+    static QpSolveResult
+    solve_unilateral_velocity_impl(ConstDynamicsSystemView system,
+                                   ConstDynamicsUnilateralView unilateral,
+                                   DynamicsVelocitySolutionView solution,
+                                   ActiveSetQpWarmStartView warm_start,
+                                   ActiveSetQpOptions options,
+                                   ConstDenseVectorView active_hint,
+                                   EqualityQpFactorizationCache* mass_factorization = nullptr) noexcept {
         const std::size_t dof_count = system.load.size;
         const std::size_t equality_count = system.constraint_rhs.size;
         const std::size_t unilateral_count = unilateral.limit.size;
@@ -470,10 +470,14 @@ namespace termin::physics_qopt {
                 {},
                 {},
             };
-            const QpSolveResult result =
-                active_hint.empty()
-                    ? solve_active_set_qp(problem, qp_solution, warm_start, options)
-                    : solve_active_set_qp_with_inequality_hint(problem, qp_solution, active_hint, options);
+            QpSolveResult result;
+            if (active_hint.empty()) {
+                result = solve_active_set_qp(problem, qp_solution, warm_start, options);
+            } else if (mass_factorization) {
+                result = mass_factorization->solve_with_inequality_hint(problem, qp_solution, active_hint, options);
+            } else {
+                result = solve_active_set_qp_with_inequality_hint(problem, qp_solution, active_hint, options);
+            }
             if (result.status != QpStatus::Optimal) {
                 return result;
             }
@@ -1457,7 +1461,8 @@ namespace termin::physics_qopt {
                                                        },
                                                        {},
                                                        velocity_projection_qp_options,
-                                                       impl_->unilateral_active_hint());
+                                                       impl_->unilateral_active_hint(),
+                                                       &endpoint_factorization);
                     result.velocity_projection = velocity_projection;
                     if (velocity_projection.status != QpStatus::Optimal) {
                         rollback();
@@ -1527,7 +1532,7 @@ namespace termin::physics_qopt {
                                     : friction_inequality_count * 2;
                             friction_max_iterations = std::max(friction_max_iterations, scaled_budget);
                         }
-                        const QpSolveResult friction_result = solve_contact_friction(
+                        const QpSolveResult friction_result = detail::solve_contact_friction_impl(
                             {
                                 ConstDenseMatrixView::row_major(impl_->mass.data(), dofs, dofs),
                                 ConstDenseMatrixView::row_major(
@@ -1563,7 +1568,8 @@ namespace termin::physics_qopt {
                                         .active_tolerance = velocity_projection_qp_options.active_tolerance,
                                         .max_iterations = friction_max_iterations,
                                     },
-                            });
+                            },
+                            &endpoint_factorization);
                         result.friction_projection = friction_result;
                         if (friction_result.status != QpStatus::Optimal) {
                             if (friction_result.diagnostic == QpDiagnostic::IterationLimit) {
