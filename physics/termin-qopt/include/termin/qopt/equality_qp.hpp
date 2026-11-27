@@ -59,6 +59,19 @@ namespace termin::qopt {
         std::unique_ptr<Impl> impl_;
     };
 
+    // Solve one equality QP per gradient column with shared H, A and targets A x = 0.
+    // At least one column is required. All columns use one rank-revealing factorization.
+    // On success the residuals are the largest over all columns. On failure both
+    // output matrices retain their original values. Each must address distinct elements,
+    // and the address ranges of the two output views must be disjoint.
+    [[nodiscard]] TERMIN_QOPT_API QpSolveResult
+    solve_homogeneous_equality_qp_batch(ConstDenseMatrixView hessian,
+                                        ConstDenseMatrixView equalities,
+                                        ConstDenseMatrixView gradients,
+                                        DenseMatrixView primal,
+                                        DenseMatrixView equality_dual,
+                                        QpTolerance tolerance = {}) noexcept;
+
     [[nodiscard]] TERMIN_QOPT_API QpSolveResult solve_equality_qp(EqualityQpProblemView problem,
                                                                   EqualityQpSolutionView solution,
                                                                   QpTolerance tolerance = {}) noexcept;

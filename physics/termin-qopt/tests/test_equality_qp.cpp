@@ -505,6 +505,137 @@ namespace {
         solve(false, 6, 1, 2, 0.05);
     }
 
+    void test_homogeneous_batch_matches_cached_columns() {
+        struct Case {
+            std::vector<double> hessian;
+            std::vector<double> equalities;
+            std::vector<double> gradients;
+            QpStatus status;
+        };
+        constexpr std::size_t variables = 3, columns = 2;
+        const std::vector<double> spd{4, 1, 0, 1, 3, 1, 0, 1, 2};
+        const std::vector<double> singular{2, 0, 0, 0, 0, 0, 0, 0, 0};
+        const std::vector<double> gradients{-1, 4, 3, 0, 2, -3};
+        const std::vector<Case> cases{
+            {spd, {}, gradients, QpStatus::Optimal},
+            {spd, {1, 1, 0, 0, 1, -1}, gradients, QpStatus::Optimal},
+            {spd, {0.001, 0.001, 0, -3, -3, 0}, gradients, QpStatus::Optimal},
+            {spd, {1, 0, 0, 0, 1, 0, 0, 0, 1}, gradients, QpStatus::Optimal},
+            {singular, {0, 1, 0}, {-2, 4, 3, -1, 0, 0}, QpStatus::Optimal},
+            // Both residuals are below tolerance. The maximum can come from either column.
+            {singular, {0, 1, 0}, {-2, 4, 3, -1, 1e-12, 0}, QpStatus::Optimal},
+            {singular, {0, 1, 0}, {-2, 4, 3, -1, 0, 1e-12}, QpStatus::Optimal},
+            // The first gradient is large but has no component along the free null direction.
+            // The second column must use its own tolerance, and its failure must roll back the batch.
+            {singular, {0, 1, 0}, {1e6, 0.1, 3, -1, 0, 1e-7}, QpStatus::Unbounded},
+            {{2, 0, 0, 0, 1, 0, 0, 0, -1}, {0, 1, 0}, gradients, QpStatus::NonConvex},
+        };
+        for (const Case& test : cases) {
+            const std::size_t constraints = test.equalities.size() / variables;
+            const auto hessian = row_major(test.hessian, variables, variables);
+            const auto equalities = row_major(test.equalities, constraints, variables);
+            const auto gradients_view = row_major(test.gradients, variables, columns);
+            std::vector<double> primal_storage(variables * columns, 123);
+            std::vector<double> dual_storage(constraints * columns, 456);
+            const auto primal = DenseMatrixView::column_major(primal_storage.data(), variables, columns);
+            const auto dual = DenseMatrixView::row_major(dual_storage.data(), constraints, columns);
+            const auto batch = solve_homogeneous_equality_qp_batch(hessian, equalities, gradients_view, primal, dual);
+            TERMIN_QOPT_CHECK(batch.status == test.status);
+
+            EqualityQpFactorizationCache cache;
+            const std::vector<double> targets(constraints, 0.0);
+            std::vector<double> scalar_primal(variables), scalar_dual(constraints);
+            double max_stationarity = 0.0;
+            double max_equality = 0.0;
+            for (std::size_t col = 0; col < columns; ++col) {
+                const ConstDenseVectorView gradient{&gradients_view(0, col), variables, gradients_view.row_stride};
+                const auto scalar = cache.solve({hessian, gradient, equalities, const_vector(targets)},
+                                                {vector(scalar_primal), vector(scalar_dual)});
+                if (scalar.status != QpStatus::Optimal) {
+                    TERMIN_QOPT_CHECK(scalar.status == batch.status && scalar.diagnostic == batch.diagnostic);
+                    TERMIN_QOPT_CHECK(batch.constraint_rank == scalar.constraint_rank);
+                    TERMIN_QOPT_CHECK(batch.reduced_hessian_rank == scalar.reduced_hessian_rank);
+                    if (batch.status == QpStatus::Unbounded) {
+                        TERMIN_QOPT_CHECK(col == 1);
+                    }
+                    break;
+                }
+                if (batch.status == QpStatus::Optimal) {
+                    max_stationarity = std::max(max_stationarity, scalar.stationarity_linf);
+                    max_equality = std::max(max_equality, scalar.equality_linf);
+                    TERMIN_QOPT_CHECK(batch.constraint_rank == scalar.constraint_rank);
+                    TERMIN_QOPT_CHECK(batch.reduced_hessian_rank == scalar.reduced_hessian_rank);
+                    for (std::size_t row = 0; row < variables; ++row) {
+                        TERMIN_QOPT_CHECK(std::abs(primal(row, col) - scalar_primal[row]) < 1e-10);
+                    }
+                    for (std::size_t row = 0; row < constraints; ++row) {
+                        TERMIN_QOPT_CHECK(std::abs(dual(row, col) - scalar_dual[row]) < 1e-10);
+                    }
+                } else {
+                    TERMIN_QOPT_CHECK(col + 1 < columns);
+                }
+            }
+            if (batch.status == QpStatus::Optimal) {
+                TERMIN_QOPT_CHECK(std::abs(batch.stationarity_linf - max_stationarity) <= 2e-14);
+                TERMIN_QOPT_CHECK(std::abs(batch.equality_linf - max_equality) <= 2e-14);
+            } else {
+                TERMIN_QOPT_CHECK(std::ranges::all_of(primal_storage, [](double v) { return v == 123; }));
+                TERMIN_QOPT_CHECK(std::ranges::all_of(dual_storage, [](double v) { return v == 456; }));
+            }
+        }
+    }
+
+    void test_homogeneous_batch_snapshots_strided_gradients() {
+        const std::vector<double> hessian{2, 0, 0, 4};
+        std::vector<double> storage{-4, -10, 77, 4, 12, 77};
+        const ConstDenseMatrixView gradient{storage.data(), 2, 2, 3, 1};
+        // The first output column overwrites the second input column.
+        const DenseMatrixView primal{storage.data() + 1, 2, 2, 3, -1};
+        const auto result = solve_homogeneous_equality_qp_batch(row_major(hessian, 2, 2),
+                                                                ConstDenseMatrixView::row_major(nullptr, 0, 2),
+                                                                gradient,
+                                                                primal,
+                                                                DenseMatrixView::row_major(nullptr, 0, 2));
+        TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(linf_difference(storage, {5, 2, 77, -3, -1, 77}) < 1e-12);
+    }
+
+    void test_homogeneous_batch_rejects_invalid_inputs() {
+        const std::vector<double> identity{1, 0, 0, 1}, equality{1, 0};
+        const auto hessian = row_major(identity, 2, 2);
+        const auto equalities = row_major(equality, 1, 2);
+        std::vector<double> primal_storage(4, 123), dual_storage(2, 456);
+        const auto primal = DenseMatrixView::row_major(primal_storage.data(), 2, 2);
+        const auto dual = DenseMatrixView::row_major(dual_storage.data(), 1, 2);
+        const auto check = [&](ConstDenseMatrixView coefficients,
+                               ConstDenseMatrixView gradients,
+                               DenseMatrixView primal_out,
+                               DenseMatrixView dual_out,
+                               QpDiagnostic expected) {
+            const auto result =
+                solve_homogeneous_equality_qp_batch(coefficients, equalities, gradients, primal_out, dual_out);
+            TERMIN_QOPT_CHECK(result.status == QpStatus::InvalidInput && result.diagnostic == expected);
+            TERMIN_QOPT_CHECK(std::ranges::all_of(primal_storage, [](double v) { return v == 123; }));
+            TERMIN_QOPT_CHECK(std::ranges::all_of(dual_storage, [](double v) { return v == 456; }));
+        };
+        const std::vector<double> asymmetric{1, 1, 0, 1}, invalid{1, 0, 0, std::numeric_limits<double>::infinity()};
+        check(row_major(asymmetric, 2, 2), hessian, primal, dual, QpDiagnostic::NonSymmetricHessian);
+        check(hessian, row_major(invalid, 2, 2), primal, dual, QpDiagnostic::NonFiniteInput);
+        check(hessian, {identity.data(), 2, 2, 0, 1}, primal, dual, QpDiagnostic::InvalidStride);
+        check(hessian, row_major(identity, 2, 1), primal, dual, QpDiagnostic::DimensionMismatch);
+        check(hessian, hessian, {primal_storage.data(), 2, 2, 1, 1}, dual, QpDiagnostic::OverlappingOutputs);
+        check(hessian,
+              hessian,
+              primal,
+              DenseMatrixView::row_major(primal_storage.data() + 1, 1, 2),
+              QpDiagnostic::OverlappingOutputs);
+        check(hessian,
+              row_major(identity, 2, 0),
+              DenseMatrixView::row_major(nullptr, 2, 0),
+              DenseMatrixView::row_major(nullptr, 1, 0),
+              QpDiagnostic::DimensionMismatch);
+    }
+
 } // namespace
 
 int main() {
@@ -520,5 +651,8 @@ int main() {
     test_unconstrained_spectral_classification_matches_general_path();
     test_unconstrained_strided_aliasing();
     test_cache_switches_constraint_modes_and_spectral_tolerance();
+    test_homogeneous_batch_matches_cached_columns();
+    test_homogeneous_batch_snapshots_strided_gradients();
+    test_homogeneous_batch_rejects_invalid_inputs();
     return 0;
 }

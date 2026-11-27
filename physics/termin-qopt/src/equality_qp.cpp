@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdio>
 #include <exception>
+#include <numeric>
 #include <utility>
 
 namespace termin::qopt {
@@ -52,6 +53,97 @@ namespace termin::qopt {
                                       QpTolerance tolerance) noexcept {
             return factor.valid && same_tolerance(factor.tolerance, tolerance) &&
                    same_matrix(factor.input_hessian, hessian) && same_matrix(factor.input_equalities, equalities);
+        }
+
+        [[nodiscard]] QpSolveResult solve_factored_gradient(const RankRevealingFactorization& factor,
+                                                            const Vector& gradient,
+                                                            const Vector& feasible,
+                                                            const Vector& input_equality_targets,
+                                                            double feasibility_tolerance,
+                                                            EqualityQpSolutionView solution) {
+            const Eigen::Index constraint_count = factor.input_equalities.rows();
+            const bool unconstrained = constraint_count == 0;
+            const Eigen::Index reduced_variables = factor.eigenvalues.size();
+            const QpTolerance tolerance = factor.tolerance;
+            Vector primal;
+            if (!unconstrained)
+                primal = feasible;
+            if (reduced_variables > 0) {
+                Vector reduced_gradient;
+                if (unconstrained)
+                    reduced_gradient = gradient;
+                else
+                    reduced_gradient = factor.nullspace.transpose() * (factor.hessian * feasible + gradient);
+                const Vector spectral_gradient = factor.eigenvectors.transpose() * reduced_gradient;
+                const double gradient_tolerance = scaled_tolerance(tolerance, linf(reduced_gradient));
+                Vector spectral_solution = Vector::Zero(reduced_variables);
+
+                for (Eigen::Index index = 0; index < reduced_variables; ++index) {
+                    const double eigenvalue = factor.eigenvalues[index];
+                    if (eigenvalue < -factor.curvature_tolerance) {
+                        QpSolveResult result = failure(QpStatus::NonConvex, QpDiagnostic::NegativeCurvature);
+                        result.constraint_rank = factor.constraint_rank;
+                        return result;
+                    }
+                    if (eigenvalue > factor.curvature_tolerance) {
+                        spectral_solution[index] = -spectral_gradient[index] / eigenvalue;
+                    } else if (std::abs(spectral_gradient[index]) > gradient_tolerance) {
+                        QpSolveResult result = failure(QpStatus::Unbounded, QpDiagnostic::LinearDescentInNullspace);
+                        result.constraint_rank = factor.constraint_rank;
+                        result.reduced_hessian_rank = factor.reduced_rank;
+                        return result;
+                    }
+                }
+
+                if (unconstrained)
+                    primal = factor.eigenvectors * spectral_solution;
+                else
+                    primal += factor.nullspace * factor.eigenvectors * spectral_solution;
+            }
+
+            const Vector hessian_primal = factor.hessian * primal;
+            const Vector objective_gradient = hessian_primal + gradient;
+            Vector equality_dual;
+            double stationarity_linf = linf(objective_gradient);
+            double equality_linf = 0.0;
+            double stationarity_scale = std::max({
+                1.0,
+                linf(hessian_primal),
+                linf(gradient),
+            });
+            if (!unconstrained) {
+                equality_dual = Vector::Zero(constraint_count);
+                if (factor.constraint_rank > 0) {
+                    equality_dual = -factor.left_range * factor.inverse_singular_values.asDiagonal() *
+                                    factor.right_range.transpose() * objective_gradient;
+                    equality_dual.array() /= factor.equality_row_scales.array();
+                }
+                const Vector dual_gradient = factor.input_equalities.transpose() * equality_dual;
+                stationarity_linf = linf(objective_gradient + dual_gradient);
+                equality_linf = linf(factor.input_equalities * primal - input_equality_targets);
+                stationarity_scale = std::max(stationarity_scale, linf(dual_gradient));
+            }
+
+            QpSolveResult result;
+            result.status = QpStatus::Optimal;
+            result.diagnostic = QpDiagnostic::None;
+            result.stationarity_linf = stationarity_linf;
+            result.equality_linf = equality_linf;
+            result.constraint_rank = factor.constraint_rank;
+            result.reduced_hessian_rank = factor.reduced_rank;
+
+            if (!primal.allFinite() || !equality_dual.allFinite() || !std::isfinite(result.stationarity_linf) ||
+                !std::isfinite(result.equality_linf) ||
+                result.stationarity_linf > scaled_tolerance(tolerance, stationarity_scale) ||
+                result.equality_linf > feasibility_tolerance) {
+                result.status = QpStatus::NumericalFailure;
+                result.diagnostic = QpDiagnostic::ResidualTooLarge;
+                return result;
+            }
+
+            copy_to_view(primal, solution.primal);
+            copy_to_view(equality_dual, solution.equality_dual);
+            return result;
         }
 
         [[nodiscard]] QpSolveResult solve_impl(EqualityQpProblemView problem,
@@ -310,81 +402,36 @@ namespace termin::qopt {
                 factor.reduced_valid = true;
             }
 
-            Vector primal;
-            if (!unconstrained)
-                primal = feasible;
-            if (reduced_variables > 0) {
-                Vector reduced_gradient;
-                if (unconstrained)
-                    reduced_gradient = gradient;
-                else
-                    reduced_gradient = factor.nullspace.transpose() * (factor.hessian * feasible + gradient);
-                const Vector spectral_gradient = factor.eigenvectors.transpose() * reduced_gradient;
-                const double gradient_tolerance = scaled_tolerance(tolerance, linf(reduced_gradient));
-                Vector spectral_solution = Vector::Zero(reduced_variables);
+            return solve_factored_gradient(
+                factor, gradient, feasible, input_equality_targets, feasibility_tolerance, solution);
+        }
 
-                for (Eigen::Index index = 0; index < reduced_variables; ++index) {
-                    const double eigenvalue = factor.eigenvalues[index];
-                    if (eigenvalue < -factor.curvature_tolerance) {
-                        QpSolveResult result = failure(QpStatus::NonConvex, QpDiagnostic::NegativeCurvature);
-                        result.constraint_rank = factor.constraint_rank;
-                        return result;
-                    }
-                    if (eigenvalue > factor.curvature_tolerance) {
-                        spectral_solution[index] = -spectral_gradient[index] / eigenvalue;
-                    } else if (std::abs(spectral_gradient[index]) > gradient_tolerance) {
-                        QpSolveResult result = failure(QpStatus::Unbounded, QpDiagnostic::LinearDescentInNullspace);
-                        result.constraint_rank = factor.constraint_rank;
-                        result.reduced_hessian_rank = factor.reduced_rank;
-                        return result;
-                    }
-                }
-
-                if (unconstrained)
-                    primal = factor.eigenvectors * spectral_solution;
-                else
-                    primal += factor.nullspace * factor.eigenvectors * spectral_solution;
+        // For a valid strided view the four corners bound all storage addresses.
+        [[nodiscard]] AddressInterval storage_interval(DenseMatrixView view) {
+            if (view.empty()) {
+                return {};
             }
+            const std::size_t last_row = view.rows - 1;
+            const std::size_t last_column = view.columns - 1;
+            const auto first = reinterpret_cast<std::uintptr_t>(
+                &view(view.row_stride < 0 ? last_row : 0, view.column_stride < 0 ? last_column : 0));
+            const auto last = reinterpret_cast<std::uintptr_t>(
+                &view(view.row_stride > 0 ? last_row : 0, view.column_stride > 0 ? last_column : 0));
+            return {first, last + sizeof(double) - 1, false};
+        }
 
-            const Vector objective_gradient = factor.hessian * primal + gradient;
-            Vector equality_dual;
-            double stationarity_linf = linf(objective_gradient);
-            double equality_linf = 0.0;
-            double stationarity_scale = std::max({
-                1.0,
-                linf(factor.hessian * primal),
-                linf(gradient),
-            });
-            if (!unconstrained) {
-                equality_dual = Vector::Zero(constraint_count);
-                if (factor.constraint_rank > 0) {
-                    equality_dual = -factor.left_range * factor.inverse_singular_values.asDiagonal() *
-                                    factor.right_range.transpose() * objective_gradient;
-                    equality_dual.array() /= factor.equality_row_scales.array();
-                }
-                stationarity_linf = linf(objective_gradient + input_equalities.transpose() * equality_dual);
-                equality_linf = linf(input_equalities * primal - input_equality_targets);
-                stationarity_scale = std::max(stationarity_scale, linf(input_equalities.transpose() * equality_dual));
+        [[nodiscard]] bool repeats_elements(DenseMatrixView view) {
+            if (view.rows < 2 || view.columns < 2) {
+                return false;
             }
-
-            QpSolveResult result;
-            result.status = QpStatus::Optimal;
-            result.diagnostic = QpDiagnostic::None;
-            result.stationarity_linf = stationarity_linf;
-            result.equality_linf = equality_linf;
-            result.constraint_rank = factor.constraint_rank;
-            result.reduced_hessian_rank = factor.reduced_rank;
-
-            if (result.stationarity_linf > scaled_tolerance(tolerance, stationarity_scale) ||
-                result.equality_linf > feasibility_tolerance) {
-                result.status = QpStatus::NumericalFailure;
-                result.diagnostic = QpDiagnostic::ResidualTooLarge;
-                return result;
-            }
-
-            copy_to_view(primal, solution.primal);
-            copy_to_view(equality_dual, solution.equality_dual);
-            return result;
+            const auto magnitude = [](DenseIndex stride) -> std::size_t {
+                return stride < 0 ? static_cast<std::size_t>(-(stride + 1)) + 1 : static_cast<std::size_t>(stride);
+            };
+            const auto row = magnitude(view.row_stride);
+            const auto column = magnitude(view.column_stride);
+            const auto divisor = std::gcd(row, column);
+            // Smallest displacement mapping two coordinates to the same address.
+            return column / divisor < view.rows && row / divisor < view.columns;
         }
 
     } // namespace
@@ -449,6 +496,88 @@ namespace termin::qopt {
             std::fprintf(stderr, "[termin-qopt] equality QP failed with an exception: %s\n", error.what());
         } catch (...) {
             std::fprintf(stderr, "[termin-qopt] equality QP failed with an unknown exception\n");
+        }
+        return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
+    }
+
+    QpSolveResult solve_homogeneous_equality_qp_batch(ConstDenseMatrixView hessian,
+                                                      ConstDenseMatrixView equalities,
+                                                      ConstDenseMatrixView gradients,
+                                                      DenseMatrixView primal,
+                                                      DenseMatrixView equality_dual,
+                                                      QpTolerance tolerance) noexcept {
+        try {
+            if (!valid_tolerance(tolerance)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
+            }
+            for (const auto view :
+                 {hessian, equalities, gradients, ConstDenseMatrixView(primal), ConstDenseMatrixView(equality_dual)}) {
+                const QpDiagnostic diagnostic = validate_matrix(view);
+                if (diagnostic != QpDiagnostic::None) {
+                    return failure(QpStatus::InvalidInput, diagnostic);
+                }
+            }
+            const std::size_t n = hessian.rows;
+            const std::size_t m = equalities.rows;
+            const std::size_t columns = gradients.columns;
+            if (n == 0 || columns == 0 || hessian.columns != n || equalities.columns != n || gradients.rows != n ||
+                primal.rows != n || primal.columns != columns || equality_dual.rows != m ||
+                equality_dual.columns != columns) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::DimensionMismatch);
+            }
+            const auto x_storage = storage_interval(primal);
+            const auto dual_storage = storage_interval(equality_dual);
+            if (repeats_elements(primal) || repeats_elements(equality_dual) ||
+                (!dual_storage.empty && x_storage.first <= dual_storage.last && dual_storage.first <= x_storage.last)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::OverlappingOutputs);
+            }
+            if (!finite(gradients)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::NonFiniteInput);
+            }
+
+            // Stage every column so failures are transactional even when inputs alias outputs.
+            Matrix responses(n, columns);
+            Matrix duals(m, columns);
+            const Vector targets = Vector::Zero(m);
+            const auto outputs = [&](std::size_t col) -> EqualityQpSolutionView {
+                return {{responses.col(col).data(), n, 1}, {m ? duals.col(col).data() : nullptr, m, 1}};
+            };
+            RankRevealingFactorization factor;
+            // The first column prepares exactly the same coefficients and rank thresholds as the scalar solver.
+            auto result = solve_impl({hessian, {gradients.data, n, gradients.row_stride}, equalities, view(targets)},
+                                     outputs(0),
+                                     tolerance,
+                                     false,
+                                     &factor,
+                                     nullptr);
+            if (result.status != QpStatus::Optimal) {
+                return result;
+            }
+            const Vector feasible = Vector::Zero(m ? n : 0);
+            const double feasibility_tolerance = scaled_tolerance(tolerance, 0.0);
+            for (std::size_t col = 1; col < columns; ++col) {
+                const Vector gradient = copy_vector({&gradients(0, col), n, gradients.row_stride});
+                const auto current =
+                    solve_factored_gradient(factor, gradient, feasible, targets, feasibility_tolerance, outputs(col));
+                if (current.status != QpStatus::Optimal) {
+                    return current;
+                }
+                result.stationarity_linf = std::max(result.stationarity_linf, current.stationarity_linf);
+                result.equality_linf = std::max(result.equality_linf, current.equality_linf);
+            }
+            for (std::size_t col = 0; col < columns; ++col) {
+                for (std::size_t row = 0; row < n; ++row) {
+                    primal(row, col) = responses(row, col);
+                }
+                for (std::size_t row = 0; row < m; ++row) {
+                    equality_dual(row, col) = duals(row, col);
+                }
+            }
+            return result;
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "[termin-qopt] batch equality QP failed: %s\n", error.what());
+        } catch (...) {
+            std::fprintf(stderr, "[termin-qopt] batch equality QP failed with an unknown exception\n");
         }
         return failure(QpStatus::NumericalFailure, QpDiagnostic::DecompositionFailure);
     }

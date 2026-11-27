@@ -108,6 +108,25 @@ namespace {
         TERMIN_QOPT_CHECK(sliding.work[0] < 0.0);
     }
 
+    void test_bilateral_impulse_balances_contact_momentum() {
+        OneContactFixture fixture;
+        fixture.mass[1] = fixture.mass[3] = 0.5;
+        fixture.coefficient[0] = 0.5;
+        const std::array<double, 3> lock_y{0.0, 1.0, 0.0};
+        double bilateral_impulse = 0.0;
+        auto problem = fixture.problem();
+        problem.bilateral_jacobian = ConstDenseMatrixView::row_major(lock_y.data(), 1, 3);
+        auto solution = fixture.solution();
+        solution.bilateral_impulse = {&bilateral_impulse, 1, 1};
+
+        TERMIN_QOPT_CHECK(solve_contact_friction(problem, solution).status == QpStatus::Optimal);
+        check_near(fixture.solved_velocity[0], 0.5, 2e-10);
+        check_near(fixture.solved_velocity[1], 0.0, 2e-10);
+        check_near(fixture.tangent_impulse[0], -0.5, 2e-10);
+        check_near(fixture.tangent_impulse[1], 0.0, 2e-10);
+        check_near(bilateral_impulse, -0.25, 2e-10);
+    }
+
     void test_rotated_tangent_basis() {
         constexpr double rotation = 0.37;
         for (const std::size_t facets : {6U, 8U, 16U, 32U}) {
@@ -442,6 +461,7 @@ int main() {
     TERMIN_QOPT_CHECK(ContactFrictionOptions{}.cone_facets == 6);
     test_zero_friction_is_exact_noop();
     test_static_and_sliding_regimes();
+    test_bilateral_impulse_balances_contact_momentum();
     test_rotated_tangent_basis();
     test_six_contact_support_across_facet_counts();
     test_friction_preserves_normal_nonpenetration();

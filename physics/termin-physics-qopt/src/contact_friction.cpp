@@ -7,7 +7,7 @@
 #include <numbers>
 #include <vector>
 
-#include "dynamics_internal.hpp"
+#include <termin/qopt/equality_qp.hpp>
 
 namespace termin::physics_qopt {
     namespace {
@@ -197,60 +197,39 @@ namespace termin::physics_qopt {
                 return result;
             }
 
-            // K maps variable impulses to bilateral-compatible velocity
-            // corrections: delta_v = K * p.
-            std::vector<double> response(dofs * variables, 0.0);
-            std::vector<double> bilateral_response(bilateral * variables, 0.0);
-            std::vector<double> load(dofs, 0.0);
-            std::vector<double> correction(dofs, 0.0);
-            std::vector<double> equality_reaction(bilateral, 0.0);
-            std::vector<double> zero_rhs(bilateral, 0.0);
-            EqualityQpFactorizationCache response_factorization;
+            // Column i is the response to a unit contact impulse. With G = -J_contact^T
+            // the QP solves M K + G + J_b^T Y = 0, J_b K = 0. The physical
+            // bilateral impulse for contact impulses p is -Y p.
+            std::vector<double> response_gradients(dofs * variables);
             for (std::size_t variable = 0; variable < variables; ++variable) {
                 const std::size_t contact = variable / 3;
                 const std::size_t axis = variable % 3;
                 for (std::size_t dof = 0; dof < dofs; ++dof) {
-                    load[dof] = axis == 0 ? problem.contact_normal_jacobian(contact, dof)
-                                          : problem.tangent_jacobian(contact * 2 + axis - 1, dof);
+                    const double jacobian = axis == 0 ? problem.contact_normal_jacobian(contact, dof)
+                                                      : problem.tangent_jacobian(contact * 2 + axis - 1, dof);
+                    response_gradients[variable * dofs + dof] = -jacobian;
                 }
-                const QpSolveResult response_result = detail::solve_constrained_dynamics_impl(
-                    {
-                        problem.mass,
-                        {load.data(), load.size(), 1},
-                        problem.bilateral_jacobian,
-                        {zero_rhs.data(), zero_rhs.size(), 1},
-                    },
-                    {
-                        {correction.data(), correction.size(), 1},
-                        {equality_reaction.data(), equality_reaction.size(), 1},
-                    },
-                    options.qp.tolerance,
-                    &response_factorization);
-                if (response_result.status != QpStatus::Optimal) {
-                    return response_result;
-                }
-                for (std::size_t dof = 0; dof < dofs; ++dof) {
-                    response[dof * variables + variable] = correction[dof];
-                }
-                for (std::size_t row = 0; row < bilateral; ++row) {
-                    bilateral_response[row * variables + variable] = equality_reaction[row];
-                }
+            }
+            std::vector<double> response(dofs * variables);
+            std::vector<double> bilateral_dual(bilateral * variables);
+            const QpSolveResult response_result = solve_homogeneous_equality_qp_batch(
+                problem.mass,
+                problem.bilateral_jacobian,
+                ConstDenseMatrixView::column_major(response_gradients.data(), dofs, variables),
+                DenseMatrixView::row_major(response.data(), dofs, variables),
+                DenseMatrixView::row_major(bilateral_dual.data(), bilateral, variables),
+                options.qp.tolerance);
+            if (response_result.status != QpStatus::Optimal) {
+                return response_result;
             }
 
             std::vector<double> hessian(variables * variables, 0.0);
             std::vector<double> gradient(variables, 0.0);
             for (std::size_t row = 0; row < variables; ++row) {
-                const std::size_t contact = row / 3;
-                const std::size_t axis = row % 3;
                 for (std::size_t dof = 0; dof < dofs; ++dof) {
-                    const double jacobian = axis == 0 ? problem.contact_normal_jacobian(contact, dof)
-                                                      : problem.tangent_jacobian(contact * 2 + axis - 1, dof);
+                    const double jacobian = -response_gradients[row * dofs + dof];
                     gradient[row] += jacobian * problem.normal_projected_velocity[dof];
-                }
-                for (std::size_t column = 0; column < variables; ++column) {
-                    for (std::size_t dof = 0; dof < dofs; ++dof) {
-                        const double jacobian = axis == 0 ? problem.contact_normal_jacobian(contact, dof)
-                                                          : problem.tangent_jacobian(contact * 2 + axis - 1, dof);
+                    for (std::size_t column = 0; column < variables; ++column) {
                         hessian[row * variables + column] += jacobian * response[dof * variables + column];
                     }
                 }
@@ -403,7 +382,7 @@ namespace termin::physics_qopt {
                 for (std::size_t row = 0; row < bilateral; ++row) {
                     double impulse = 0.0;
                     for (std::size_t variable = 0; variable < variables; ++variable) {
-                        impulse += bilateral_response[row * variables + variable] * variable_impulse[variable];
+                        impulse -= bilateral_dual[row * variables + variable] * variable_impulse[variable];
                     }
                     solution.bilateral_impulse[row] = impulse;
                 }
