@@ -50,35 +50,54 @@ class Bridge:
         self.lib.spider_dynamics_batch.argtypes = [ptr, ptr, ptr, ct.c_int, double_ptr, ct.c_int]
 
     @contextmanager
-    def workspace(self, model):
+    def workspace(self, model, *, predict=False):
         work = self.lib.spider_dynamics_create(model._address)
         if not work:
             raise ValueError("Unsupported model")
         try:
+            if predict:
+                self.lib.spider_dynamics_enable_prediction.argtypes = [ct.c_void_p]
+                if self.lib.spider_dynamics_enable_prediction(work):
+                    raise RuntimeError("Could not initialize predictive contacts")
             yield work
         finally:
             self.lib.spider_dynamics_destroy(work)
 
 
-def quality(bridge, args):
+def hybrid_record(bridge, path, case, time_constant, *, predict=False):
     # record constructs its own model and supplies that live model on every step.
     with ExitStack() as stack:
         work = None
+        hits = []
+        earliest = []
+        if predict:
+            bridge.lib.spider_dynamics_prediction_hits.argtypes = [ct.c_void_p]
+            bridge.lib.spider_dynamics_prediction_fraction.argtypes = [ct.c_void_p, ct.c_int]
+            bridge.lib.spider_dynamics_prediction_fraction.restype = ct.c_double
 
         def step(model, data):
             nonlocal work
             if work is None:
-                work = stack.enter_context(bridge.workspace(model))
+                work = stack.enter_context(bridge.workspace(model, predict=predict))
             if bridge.lib.spider_dynamics_step(work, data._address, 1):
-                raise RuntimeError("Hybrid dynamics failed")
+                raise RuntimeError(f"Hybrid dynamics failed in {case} at t={data.time:.9g} s")
+            if predict:
+                count = bridge.lib.spider_dynamics_prediction_hits(work)
+                fractions = [bridge.lib.spider_dynamics_prediction_fraction(work, i) for i in range(count)]
+                if count < 0 or not all(0 <= fraction <= 1 for fraction in fractions):
+                    raise RuntimeError("Invalid predictive contact telemetry")
+                hits.append(count)
+                earliest.append(min(fractions, default=1.))
 
-        values = record(run, run.MODEL, args.case, .001, contact_time_constant=args.contact_time_constant, step=step)
+        values = record(run, path, case, .001, contact_time_constant=time_constant, step=step)
         mass_error, bias_error = ct.c_double(), ct.c_double()
         bridge.lib.spider_dynamics_errors(work, ct.byref(mass_error), ct.byref(bias_error))
         if not max(mass_error.value, bias_error.value) < 1e-8:
             raise RuntimeError(f"Mass/bias mismatch {mass_error.value}, {bias_error.value}")
         print(json.dumps(dict(peak_mass_error=mass_error.value, peak_bias_error=bias_error.value)))
-        np.savez_compressed(args.output, **values)
+        if predict:
+            values.update(swept_hits=np.array([0, *hits]), earliest_sweep_fraction=np.array([1., *earliest]))
+        return values
 
 
 def time_run(bridge, use_termin, time_constant):
@@ -131,7 +150,7 @@ def main():
     bridge = Bridge(args.library)
     if args.mode == "quality":
         with geometry(args.geometry):
-            quality(bridge, args)
+            np.savez_compressed(args.output, **hybrid_record(bridge, run.MODEL, args.case, args.contact_time_constant))
         return
     modes = {"mujoco": (False, None), "termin_dynamics": (True, None)}
     if args.geometry:

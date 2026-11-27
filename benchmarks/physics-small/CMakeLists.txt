@@ -16,6 +16,24 @@ if(TERMIN_BENCHMARK_SPIDER_SNAPSHOT)
     target_link_libraries(_spider_termin_snapshot PRIVATE termin_robotics::termin_robotics)
 endif()
 
+set(TERMIN_BENCHMARK_MUJOCO_DIR "" CACHE PATH "Directory of the Linux MuJoCo 3.15.0 Python wheel")
+if(TERMIN_BENCHMARK_MUJOCO_DIR)
+    find_package(termin_robotics CONFIG REQUIRED)
+    add_library(benchmark_mujoco SHARED IMPORTED)
+    set_target_properties(benchmark_mujoco PROPERTIES
+        IMPORTED_LOCATION "${TERMIN_BENCHMARK_MUJOCO_DIR}/libmujoco.so.3.15.0"
+        INTERFACE_INCLUDE_DIRECTORIES "${TERMIN_BENCHMARK_MUJOCO_DIR}/include")
+
+    add_library(predict_contact SHARED predict_contact_sweep.cpp predict_contact_step.cpp spider_termin_dynamics_mj.cpp)
+    target_compile_features(predict_contact PRIVATE cxx_std_20)
+    target_compile_definitions(predict_contact PRIVATE TERMIN_CONTACT_PREDICTION)
+    target_link_libraries(predict_contact PRIVATE benchmark_mujoco termin_robotics::termin_robotics)
+
+    add_library(predict_geometry SHARED spider_mujoco_hybrid.cpp)
+    target_compile_features(predict_geometry PRIVATE cxx_std_20)
+    target_link_libraries(predict_geometry PRIVATE benchmark_mujoco termin_collision::termin_collision)
+endif()
+
 if(UNIX AND NOT APPLE)
     # ELF symbol interposition lets a separate probe count SDK C++ new calls
     # without adding allocation hooks to the throughput executable.

@@ -4,6 +4,10 @@
 #include <termin/robotics/articulation3d.hpp>
 #include <termin/robotics/detail/articulation3d_access.hpp>
 
+#ifdef TERMIN_CONTACT_PREDICTION
+#include "predict_contact_step.hpp"
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -36,6 +40,9 @@ namespace {
         Articulation3DWorkspace workspace;
         std::vector<double> velocity, acceleration, mass, bias;
         double peak_mass_error = 0, peak_bias_error = 0;
+#ifdef TERMIN_CONTACT_PREDICTION
+        std::unique_ptr<predict_contact::Step> prediction;
+#endif
 
         explicit Dynamics(const mjModel* m)
             : model(m),
@@ -157,6 +164,10 @@ namespace {
             std::copy(bias.begin(), bias.end(), d->qfrc_bias);
             mj_fwdActuation(m, d);
             mj_fwdAcceleration(m, d);
+#ifdef TERMIN_CONTACT_PREDICTION
+            if (prediction)
+                prediction->prepare(d);
+#endif
             mj_fwdConstraint(m, d);
             mj_Euler(m, d);
         }
@@ -174,6 +185,23 @@ extern "C" void* spider_dynamics_create(const mjModel* m) {
 extern "C" void spider_dynamics_destroy(Dynamics* work) {
     delete work;
 }
+#ifdef TERMIN_CONTACT_PREDICTION
+extern "C" int spider_dynamics_enable_prediction(Dynamics* work) {
+    try {
+        work->prediction = std::make_unique<predict_contact::Step>(work->model);
+        return 0;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "Spider predictive workspace: %s\n", e.what());
+        return -1;
+    }
+}
+extern "C" int spider_dynamics_prediction_hits(const Dynamics* work) {
+    return work->prediction ? work->prediction->hit_count() : 0;
+}
+extern "C" double spider_dynamics_prediction_fraction(const Dynamics* work, int i) {
+    return work->prediction ? work->prediction->fraction(i) : std::nan("");
+}
+#endif
 extern "C" int spider_dynamics_step(Dynamics* work, mjData* d, int validate) {
     try {
         work->step(d, validate);
