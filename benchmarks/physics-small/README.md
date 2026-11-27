@@ -1,6 +1,8 @@
 # Small-system native physics benchmark
 
 Spider contacts: [single-pass experiment against the frozen reference and MuJoCo](results/2026-11-27-spider-contact-schemes.md).
+The [MuJoCo solver transfer experiment](results/2026-11-27-spider-mujoco-transfer.md)
+uses Termin articulated dynamics and foot geometry in a closed-loop spider.
 
 Recorded experiment: [CRBA before/after, 2026-11-10](results/2026-11-10-crba.md).
 Follow-up: [velocity-only kinematics, 2026-11-10](results/2026-11-10-velocity-kinematics.md).

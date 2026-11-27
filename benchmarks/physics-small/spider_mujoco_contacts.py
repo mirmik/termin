@@ -27,10 +27,18 @@ def target(run, case, time):
     return run.command(time)
 
 
-def record(run, model_path, case, dt, noslip=10):
+def record(run, model_path, case, dt, noslip=10, contact_time_constant=None, *, step=mj.mj_step):
     model = mj.MjModel.from_xml_path(str(model_path))
     model.opt.timestep = dt
     model.opt.noslip_iterations = noslip
+    if contact_time_constant is not None:
+        # Both sides use the same positive-format solref. MuJoCo's default
+        # refsafe setting bounds the effective time constant at twice the step.
+        if model.npair or np.any(model.geom_solref[:, 1] <= 0):
+            raise ValueError("Expected positive-format geom solref and no explicit pairs")
+        if not math.isfinite(contact_time_constant) or contact_time_constant < 2 * dt:
+            raise ValueError("Contact time constant must be finite and at least twice dt")
+        model.geom_solref[:, 0] = contact_time_constant
     if case == "slide":
         model.geom_friction[:, 0] = 0.15
     data = mj.MjData(model)
@@ -62,7 +70,7 @@ def record(run, model_path, case, dt, noslip=10):
     for k in range(len(t)):
         if k:
             data.ctrl[hip] = commands[k - 1]
-            mj.mj_step(model, data)
+            step(model, data)
             for contact_id in range(data.ncon):
                 c = data.contact[contact_id]
                 g1, g2 = c.geom
@@ -103,8 +111,10 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     parser.add_argument("--twister-root", type=Path, default=Path(__file__).resolve().parents[3] / "twister-capper")
     parser.add_argument("--dt", type=float, choices=(.0005, .001, .002, .005), default=.001)
+    parser.add_argument("--contact-time-constant", type=float, help="Set solref time constant in seconds on every geom")
     args = parser.parse_args()
     sys.path.insert(0, str(args.twister_root / "scripts/spider"))
     import run
 
-    np.savez_compressed(args.output, **record(run, run.MODEL, args.case, args.dt))
+    np.savez_compressed(args.output, **record(run, run.MODEL, args.case, args.dt,
+                                            contact_time_constant=args.contact_time_constant))
