@@ -102,12 +102,22 @@ TEST_CASE("default scene background replaces disabled skybox without gray fallba
     CHECK(skybox_specs.front().clear_color->b == 0.0f);
 }
 
-TEST_CASE("ColorPass leaves color initialization to its pipeline") {
+TEST_CASE("ColorPass only requests depth clears in its own raster pass") {
     termin::ColorPass color_pass;
-    const auto color_specs = color_pass.get_resource_specs();
-    REQUIRE(color_specs.size() == 1);
-    CHECK_FALSE(color_specs.front().clear_color.has_value());
-    CHECK(color_specs.front().clear_depth == 1.0f);
+    termin::ExecuteContext ctx;
+    ctx.tex2_writes[color_pass.output_res] = tgfx::TextureHandle{1};
+    ctx.tex2_depth_writes[color_pass.output_res] = tgfx::TextureHandle{2};
+    tc_raster_pass_contract contract{};
+    CHECK(color_pass.get_resource_specs().empty());
+    REQUIRE(color_pass.get_raster_contract(ctx, contract));
+    CHECK(contract.color_load == TC_RASTER_LOAD);
+    CHECK(contract.depth_load == TC_RASTER_LOAD);
+
+    color_pass.clear_depth = true;
+    CHECK(color_pass.get_resource_specs().empty());
+    REQUIRE(color_pass.get_raster_contract(ctx, contract));
+    CHECK(contract.color_load == TC_RASTER_LOAD);
+    CHECK(contract.depth_load == TC_RASTER_CLEAR);
 }
 
 TEST_CASE("shadow matrix array uses driver-safe explicit row ABI") {

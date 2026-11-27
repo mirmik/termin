@@ -176,7 +176,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
             shadow_res: "",
             phase_mark: "opaque",
             pass_name: "ColorPass"
-        );
+        ) { clear_depth = true };
         _pipeline.add_pass(_colorPass.tc_pass_ptr());
 
         // PresentToScreenPass - copies to screen

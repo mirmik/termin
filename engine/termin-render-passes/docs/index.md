@@ -10,10 +10,13 @@ or Python package `termin.render_passes`, not compile pass sources from
 
 ## Color pipeline contract
 
-`ColorPass` loads the contents of its shared input/output color attachment
-before drawing. When a pipeline starts with `ColorPass`, set `clear_color` on
-the input's `ResourceSpec` to initialize the background. A preceding background
-pass can supply the initial color instead.
+`ColorPass` loads the existing color and depth from its shared input/output
+target. Set the pass's `clear_depth` flag to clear the depth attachment to
+`1.0` when the pass begins. Color stays loaded in either case.
+
+The pipeline owns the resource specifications. It can set `clear_color` and
+`clear_depth` on the input's `ResourceSpec` for initial attachment values,
+or pass through contents produced earlier.
 
 The built-in default and editor pipelines keep every internal scene and
 post-processing color resource in linear `RGBA16F`. Their terminal path is:

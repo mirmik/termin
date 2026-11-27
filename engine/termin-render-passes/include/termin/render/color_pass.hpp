@@ -14,7 +14,6 @@
 #include "termin/render/render_context.hpp"
 #include "termin/render/render_item_culling.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
-#include "termin/render/resource_spec.hpp"
 #include "termin/render/scene_shader_usage_provider.hpp"
 #include "termin/render_passes/export.h"
 
@@ -202,8 +201,6 @@ namespace termin {
         bool record_raster(ExecuteContext& ctx) override;
         void collect_scene_shader_usages(tc_scene_handle scene,
                                          const std::function<void(TcShader)>& emit) const override;
-
-        std::vector<ResourceSpec> get_resource_specs() const override;
 
         // Compute read resources dynamically.
         std::set<const char*> compute_reads() const override;

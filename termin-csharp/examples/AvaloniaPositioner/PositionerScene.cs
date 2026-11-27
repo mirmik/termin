@@ -58,7 +58,7 @@ internal sealed class PositionerScene : IDisposable
             colorBuffer.set_format("render_target");
             colorBuffer.set_clear_linear_color(0.0f, 0.0f, 0.0f, 1.0f);
             _pipeline.add_spec(colorBuffer);
-            using var colorPass = new PositionerColorPass();
+            using var colorPass = new PositionerColorPass { clear_depth = true };
             colorPass.AttachTo(_pipeline);
             _pipeline.set_color_export("color", ColorContent.DisplayLinear);
 

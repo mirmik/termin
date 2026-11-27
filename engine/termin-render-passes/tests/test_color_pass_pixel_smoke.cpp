@@ -305,7 +305,7 @@ FragmentOutput fs_main(FragmentInput input) {
         return scene;
     }
 
-    bool verify_pipeline_color_clear(tgfx::GraphicsHost& host, tgfx::TextureHandle output) {
+    bool verify_pipeline_clears(tgfx::GraphicsHost& host, tgfx::TextureHandle output) {
         auto scene = termin::TcSceneRef::create("color-pass-empty-scene");
         termin::TcSceneRenderItemSource item_source(scene.handle());
         termin::RenderItemSnapshot snapshot;
@@ -323,21 +323,41 @@ FragmentOutput fs_main(FragmentInput input) {
         target.render_rect = {0, 0, kWidth, kHeight};
         target.view.primary.emplace();
         target.output_color.texture = output;
+        tgfx::TextureDesc depth_desc;
+        depth_desc.width = kWidth;
+        depth_desc.height = kHeight;
+        depth_desc.format = tgfx::PixelFormat::D32F;
+        depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment | tgfx::TextureUsage::CopySrc;
+        target.output_depth_tex = host.device().create_texture(depth_desc);
+        if (!target.output_depth_tex) {
+            std::fprintf(stderr, "Failed to create pipeline depth attachment\n");
+            scene.destroy();
+            return false;
+        }
+        target.output_depth_format = depth_desc.format;
+        target.clear_depth_enabled = true;
+        target.clear_depth = 0.25f;
         termin::RenderExecution execution;
         execution.targets.emplace(target.name, termin::RenderExecutionTarget{&target, &snapshot, &capabilities});
         termin::RenderEngine engine;
         engine.set_graphics_host(host);
 
-        const termin::LinearColor backgrounds[] = {{0.125f, 0.25f, 0.5f, 1.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+        struct ClearCase {
+            termin::LinearColor background;
+            bool pass_clears_depth;
+        };
+        const ClearCase cases[] = {{{0.125f, 0.25f, 0.5f, 1.0f}, false}, {{0.0f, 0.0f, 0.0f, 1.0f}, true}};
         bool ok = true;
-        for (const auto& background : backgrounds) {
+        for (const auto& [background, pass_clears_depth] : cases) {
             termin::RenderPipeline pipeline("color-pass-pipeline-clear");
+            pipeline.cache().fbo_compositions.emplace("empty", termin::FboComposition{"RT_COLOR", "RT_DEPTH"});
             termin::ResourceSpec spec("empty");
             spec.format = "render_target";
             spec.clear_color = background;
             pipeline.add_spec(spec);
 
             termin::ColorPassConfig config;
+            config.clear_depth = pass_clears_depth;
             config.shadow_res.clear();
             config.environment_res.clear();
             pipeline.add_pass((new termin::ColorPass(config))->tc_pass_ptr());
@@ -351,6 +371,12 @@ FragmentOutput fs_main(FragmentInput input) {
             host.device().wait_idle();
 
             float pixel[4] = {};
+            float depth = 0.0f;
+            const float expected_depth = pass_clears_depth ? 1.0f : target.clear_depth;
+            if (!host.device().read_pixel_depth_float(target.output_depth_tex, 0, 0, &depth) || depth != expected_depth) {
+                std::fprintf(stderr, "ColorPass pipeline depth was %g, expected %g\n", depth, expected_depth);
+                ok = false;
+            }
             constexpr float tolerance = 1.0f / 255.0f;
             if (conflicting_color_clears || !host.device().read_pixel_rgba8(output, 0, 0, pixel) ||
                 std::abs(pixel[0] - background.r) > tolerance || std::abs(pixel[1] - background.g) > tolerance ||
@@ -362,6 +388,7 @@ FragmentOutput fs_main(FragmentInput input) {
             }
             pipeline.destroy();
         }
+        host.device().destroy(target.output_depth_tex);
         scene.destroy();
         return ok;
     }
@@ -495,7 +522,7 @@ FragmentOutput fs_main(FragmentInput input) {
                              missing_camera_skipped && captured_environment_lighting_error.empty();
 
         pass.destroy();
-        const bool pipeline_clear_ok = verify_pipeline_color_clear(*host, target);
+        const bool pipeline_clear_ok = verify_pipeline_clears(*host, target);
         device->destroy(target);
 
         if (!pass_ok) {

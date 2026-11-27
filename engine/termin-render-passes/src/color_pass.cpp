@@ -505,13 +505,6 @@ FragmentOutput termin_standard_pbr_forward(FragmentInput input) {
         extra_textures[name] = resource_name;
     }
 
-    std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
-        ResourceSpec spec;
-        spec.resource = input_res;
-        spec.clear_depth = 1.0f;
-        return {spec};
-    }
-
     namespace {
 
         struct CollectShaderUsagesData {
