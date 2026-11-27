@@ -71,14 +71,14 @@ must not reconstruct canonical identity by looking an instance up by name.
 
 ## Descriptor format
 
-`tc_pipeline_template_payload_desc.descriptor_version` is currently `2`.
+`tc_pipeline_template_payload_desc.descriptor_version` is currently `5`.
 `tc_pipeline_template_set_payload()` validates and atomically replaces the full
 payload, then increments the template version. Partial mutation is not part of
-the compiled-template contract. Every resource view must name an existing
-concrete parent resource. Every FBO composition attachment must name either a
-concrete resource or a view of the matching attachment kind. Invalid or
-conflicting recipe names reject the candidate without changing the live
-template version.
+the compiled-template contract. A resource view selects an attachment from a
+concrete resource or an FBO composition. Each composition attachment can refer
+to a concrete resource, another composition, or a view of the matching kind.
+Forward references are valid. Conflicting names, missing references, and
+cycles reject the candidate and preserve the current template version.
 
 `tc_pipeline_template_serialize()` writes the versioned `TPLT` binary envelope.
 The envelope records its own binary version and the descriptor version, then

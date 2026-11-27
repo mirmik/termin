@@ -302,7 +302,9 @@ class NativeNodeGraphView:
         )
 
     def _append_socket_visuals(self, parent: GraphicItemRef2D, node: Node) -> None:
+        socket_labels = node.data.get("socket_labels", {})
         for output, sockets in ((False, node.inputs), (True, node.outputs)):
+            labels = socket_labels.get("outputs" if output else "inputs", {})
             for index, socket in enumerate(sockets):
                 local = Point(
                     node.width if output else 0.0,
@@ -319,7 +321,7 @@ class NativeNodeGraphView:
                 label_x = local.x + 8.0 if not output else local.x - node.width * 0.45
                 self._append_label(
                     parent,
-                    socket.name,
+                    labels.get(socket.name, socket.name),
                     Rect(label_x, local.y - 8.0, node.width * 0.4, 16.0),
                     11.0,
                     _TEXT,

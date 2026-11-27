@@ -10,7 +10,134 @@
 namespace termin {
     namespace {
         using PassSet = std::bitset<TC_FRAME_GRAPH_MAX_PASSES>;
-        constexpr unsigned MaxAttachmentDepth = 32;
+
+        // Compile the attachment graph independently of pass ordering. An
+        // in-place write has the same storage as its input but is a distinct
+        // logical version for scheduling and capture boundaries.
+        bool prepare_attachment_sources(RenderPipeline& pipeline, tc_frame_graph* graph) {
+            auto& cache = pipeline.cache();
+            const uint64_t revision = tc_pipeline_render_revision(pipeline.handle());
+            if (cache.attachment_sources_revision == revision)
+                return true;
+
+            struct Node {
+                AttachmentSources sources;
+                Node* color_input = nullptr;
+                Node* depth_input = nullptr;
+                std::vector<Node*> users;
+                unsigned pending = 0;
+            };
+            std::unordered_map<std::string, Node> nodes;
+            std::unordered_map<std::string, std::string> viewport_slots;
+            std::unordered_map<std::string_view, const char*> inplace_inputs;
+            const auto add_slot = [&](const char* name) {
+                nodes.try_emplace(name);
+                viewport_slots[tc_frame_graph_canonical_resource(graph, name)] = name;
+            };
+            for (const auto& slot : cache.external_texture_slots)
+                add_slot(slot.c_str());
+            for (const auto& spec : cache.specs) {
+                nodes.try_emplace(spec.resource);
+                if (spec.resource_type.starts_with("external"))
+                    add_slot(spec.resource.c_str());
+            }
+            for (const char* slot : {"RT_COLOR", "DISPLAY", "OUTPUT", "RT_DEPTH"})
+                add_slot(slot);
+            for (const auto& output : cache.color_exports)
+                nodes.try_emplace(output.resource);
+            for (const auto& [name, view] : cache.resource_views) {
+                nodes.try_emplace(name);
+                nodes.try_emplace(view.parent);
+            }
+            for (const auto& [name, composition] : cache.fbo_compositions) {
+                nodes.try_emplace(name);
+                if (!composition.color.empty())
+                    nodes.try_emplace(composition.color);
+                if (!composition.depth.empty())
+                    nodes.try_emplace(composition.depth);
+            }
+            for (size_t i = 0; i < tc_frame_graph_schedule_count(graph); ++i) {
+                const auto pass = tc_frame_graph_resources_at(graph, i);
+                for (size_t j = 0; j < pass.read_count; ++j)
+                    nodes.try_emplace(pass.reads[j]);
+                for (size_t j = 0; j < pass.write_count; ++j)
+                    nodes.try_emplace(pass.writes[j]);
+                for (size_t j = 0; j < pass.alias_count; ++j) {
+                    const char* from = pass.aliases[j * 2];
+                    const char* to = pass.aliases[j * 2 + 1];
+                    nodes.try_emplace(from);
+                    nodes.try_emplace(to);
+                    if (std::string_view(from) != to)
+                        inplace_inputs.emplace(to, from);
+                }
+            }
+
+            std::vector<Node*> ready;
+            for (auto& [name, node] : nodes) {
+                const auto input = [&](const std::string& resource) -> Node* {
+                    if (resource.empty())
+                        return nullptr;
+                    Node& source = nodes.at(resource);
+                    source.users.push_back(&node);
+                    ++node.pending;
+                    return &source;
+                };
+                const char* canonical = tc_frame_graph_canonical_resource(graph, name.c_str());
+                if (auto view = cache.resource_views.find(name); view != cache.resource_views.end()) {
+                    if (view->second.attachment == AttachmentKind::Color) {
+                        node.color_input = input(view->second.parent);
+                    } else {
+                        node.depth_input = input(view->second.parent);
+                        node.sources.depth_view = true;
+                    }
+                } else if (auto composition = cache.fbo_compositions.find(name); composition != cache.fbo_compositions.end()) {
+                    node.color_input = input(composition->second.color);
+                    node.depth_input = input(composition->second.depth);
+                } else if (auto alias = inplace_inputs.find(name); alias != inplace_inputs.end() &&
+                           !is_external_output_resource(name.c_str())) {
+                    // Going straight to the alias group's canonical name can
+                    // skip a split and turn a depth view back into an FBO.
+                    node.color_input = node.depth_input = input(alias->second);
+                } else if (auto slot = viewport_slots.find(canonical); slot != viewport_slots.end()) {
+                    const std::string& external = slot->second;
+                    const AttachmentSource source{external, is_external_output_resource(external.c_str())
+                        ? AttachmentStorage::ViewportOutput : AttachmentStorage::ViewportSlot};
+                    if (!is_external_depth_output(external.c_str()))
+                        node.sources.color = source;
+                    // A named slot can carry a color or a depth texture;
+                    // the current viewport supplies its format with the handle.
+                    node.sources.depth = source;
+                } else {
+                    node.sources.color = node.sources.depth = AttachmentSource{name};
+                }
+                if (!node.pending)
+                    ready.push_back(&node);
+            }
+            for (size_t i = 0; i < ready.size(); ++i) {
+                Node& node = *ready[i];
+                if (node.color_input)
+                    node.sources.color = node.color_input->sources.color;
+                if (node.depth_input) {
+                    const auto& source = node.depth_input->sources;
+                    node.sources.depth = source.depth;
+                    if (node.depth_input == node.color_input)
+                        node.sources.depth_view = source.depth_view;
+                }
+                for (Node* user : node.users)
+                    if (--user->pending == 0)
+                        ready.push_back(user);
+            }
+            if (ready.size() != nodes.size()) {
+                const auto unresolved = std::find_if(nodes.begin(), nodes.end(), [](const auto& p) { return p.second.pending; });
+                tc::Log::error("[FrameGraph] cyclic attachment references at '%s'", unresolved->first.c_str());
+                return false;
+            }
+            cache.attachment_sources.clear();
+            for (auto& [name, node] : nodes)
+                cache.attachment_sources.emplace(name, std::move(node.sources));
+            cache.attachment_sources_revision = revision;
+            return true;
+        }
 
         struct ResourceInputs {
             const char* first = nullptr;
@@ -29,7 +156,7 @@ namespace termin {
                                  [name](const auto& spec) { return spec.resource == name; })) {
                     return;
                 }
-                require_read(name, reason, SIZE_MAX, 0);
+                require_read(name, reason, SIZE_MAX);
             }
 
             void select_outputs() {
@@ -42,7 +169,9 @@ namespace termin {
                         select_pass(index, FrameGraphPassReason::SideEffect);
                     const auto resources = tc_frame_graph_resources_at(graph_, index);
                     for (size_t i = 0; i < resources.write_count; ++i) {
-                        if (writes_external_output(resources.writes[i], 0)) {
+                        const auto& sources = cache_.attachment_sources.at(resources.writes[i]);
+                        if (sources.color.storage == AttachmentStorage::ViewportOutput ||
+                            sources.depth.storage == AttachmentStorage::ViewportOutput) {
                             select_pass(index, FrameGraphPassReason::ExternalOutput);
                             break;
                         }
@@ -107,7 +236,7 @@ namespace termin {
                     const auto* request = captures[i];
                     if (request && request->kind == FrameGraphCaptureRequestKind::Resource &&
                         !request->paused && request->capture) {
-                        result_.capture_writers[i] = capture_writer(request->resource.c_str(), order_positions, 0);
+                        result_.capture_writers[i] = capture_writer(request->resource.c_str(), order_positions);
                     }
                 }
                 return std::move(result_);
@@ -122,55 +251,44 @@ namespace termin {
                 return {};
             }
 
-            bool writes_external_output(const char* name, unsigned depth) const {
-                if (!name || !name[0] || depth == MaxAttachmentDepth)
-                    return false;
-                const char* canonical = tc_frame_graph_canonical_resource(graph_, name);
-                if (is_external_output_resource(name) || is_external_output_resource(canonical))
-                    return true;
-                const auto inputs = backing_inputs(name);
-                return writes_external_output(inputs.first, depth + 1) ||
-                       writes_external_output(inputs.second, depth + 1);
-            }
-
             void retain_storage(const char* name) {
-                if (!name || !name[0] || !result_.resources.insert(name).second)
-                    return;
-                const auto inputs = backing_inputs(name);
-                if (inputs.first) {
-                    retain_storage(inputs.first);
-                    retain_storage(inputs.second);
-                    return;
-                }
-                const char* canonical = tc_frame_graph_canonical_resource(graph_, name);
-                if (std::string_view(canonical) != name) {
-                    retain_storage(canonical);
-                } else if (!is_external_output_resource(canonical)) {
-                    result_.canonical_resources.push_back(canonical);
+                std::vector<const char*> pending;
+                while (name) {
+                    if (name[0] && result_.resources.insert(name).second) {
+                        const auto inputs = backing_inputs(name);
+                        if (inputs.first) {
+                            if (inputs.second && inputs.second[0] && std::string_view(inputs.first) != inputs.second)
+                                pending.push_back(inputs.second);
+                            name = inputs.first;
+                            continue;
+                        }
+                        const char* canonical = tc_frame_graph_canonical_resource(graph_, name);
+                        if (std::string_view(canonical) != name) {
+                            name = canonical;
+                            continue;
+                        }
+                        const auto& sources = cache_.attachment_sources.at(name);
+                        // A caller-owned output may be an in-place alias of
+                        // this canonical name. Keep the named slot visible to
+                        // render-target context construction as well.
+                        if (!sources.color.name.empty() && sources.color.name != name)
+                            result_.resources.insert(sources.color.name);
+                        if (!is_external_output_resource(canonical))
+                            result_.canonical_resources.push_back(canonical);
+                    }
+                    if (pending.empty())
+                        return;
+                    name = pending.back();
+                    pending.pop_back();
                 }
             }
 
-            void require_read(const char* name, FrameGraphPassReason reason, size_t consumer, unsigned depth) {
-                if (!name || !name[0])
-                    return;
-                if (depth == MaxAttachmentDepth) {
-                    if (result_.valid)
-                        tc::Log::error("[FrameGraph] excessive resource view or composition nesting at '%s'", name);
-                    result_.valid = false;
-                    return;
-                }
+            void require_read(const char* name, FrameGraphPassReason reason, size_t consumer) {
                 retain_storage(name);
-                const size_t writer = tc_frame_graph_writer_index(graph_, name);
-                if (writer != SIZE_MAX && writer != consumer) {
-                    if (consumer != SIZE_MAX)
-                        prerequisites_[consumer].set(writer);
+                visit_writers(name, consumer, false, [&](size_t writer) {
+                    if (consumer != SIZE_MAX) prerequisites_[consumer].set(writer);
                     select_pass(writer, reason);
-                    return;
-                }
-                const auto inputs = backing_inputs(name);
-                require_read(inputs.first, reason, consumer, depth + 1);
-                if (inputs.second && std::string_view(inputs.second) != inputs.first)
-                    require_read(inputs.second, reason, consumer, depth + 1);
+                });
             }
 
             void select_pass(size_t index, FrameGraphPassReason reason) {
@@ -180,34 +298,73 @@ namespace termin {
                     return;
                 const auto resources = tc_frame_graph_resources_at(graph_, index);
                 for (size_t i = 0; i < resources.read_count; ++i)
-                    require_read(resources.reads[i], FrameGraphPassReason::Dependency, index, 0);
+                    require_read(resources.reads[i], FrameGraphPassReason::Dependency, index);
                 for (size_t i = 0; i < resources.alias_count; ++i)
-                    require_read(resources.aliases[i * 2], FrameGraphPassReason::Dependency, index, 0);
+                    require_read(resources.aliases[i * 2], FrameGraphPassReason::Dependency, index);
                 for (size_t i = 0; i < resources.write_count; ++i)
                     retain_storage(resources.writes[i]);
             }
 
-            size_t capture_writer(const char* name,
-                                  const std::array<size_t, TC_FRAME_GRAPH_MAX_PASSES>& positions,
-                                  unsigned depth) const {
-                if (!name || !name[0] || depth == MaxAttachmentDepth)
-                    return SIZE_MAX;
-                const size_t writer = tc_frame_graph_writer_index(graph_, name);
-                if (writer != SIZE_MAX) {
-                    if (!tc_frame_graph_schedule_at(graph_, writer)->passthrough)
-                        return writer;
-                    const auto resources = tc_frame_graph_resources_at(graph_, writer);
-                    for (size_t i = 0; i < resources.alias_count; ++i) {
-                        if (std::string_view(name) == resources.aliases[i * 2 + 1])
-                            return capture_writer(resources.aliases[i * 2], positions, depth + 1);
+            template<class Visitor>
+            void visit_writers(const char* root, size_t consumer, bool skip_passthrough, Visitor visit) const {
+                std::vector<const char*> pending;
+                std::unordered_set<std::string_view> visited;
+                const char* name = root;
+                while (name && name[0]) {
+                    const size_t writer = tc_frame_graph_writer_index(graph_, name);
+                    ResourceInputs inputs;
+                    if (writer != SIZE_MAX && writer != consumer) {
+                        const auto* pass = tc_frame_graph_schedule_at(graph_, writer);
+                        const bool alias_marker = skip_passthrough &&
+                            std::string_view(tc_pass_type_name(pass)) == "GraphAliasPass";
+                        if (!skip_passthrough || (!alias_marker && !pass->passthrough)) {
+                            visit(writer);
+                        } else {
+                            // A split/join marker labels attachments. It never
+                            // writes pixels, even when old serialized pass data
+                            // sets passthrough=false. A join can have two writers.
+                            if (alias_marker)
+                                inputs = backing_inputs(name);
+                            if (!inputs.first) {
+                                const auto resources = tc_frame_graph_resources_at(graph_, writer);
+                                for (size_t i = 0; i < resources.alias_count; ++i) {
+                                    if (std::string_view(name) == resources.aliases[i * 2 + 1]) {
+                                        inputs.first = resources.aliases[i * 2];
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!inputs.first)
+                                inputs = backing_inputs(name);
+                        }
+                    } else {
+                        inputs = backing_inputs(name);
                     }
+                    // The common direct writer or unproduced leaf needs no
+                    // worklist allocation. Deduplicate only derived inputs.
+                    if ((inputs.first || inputs.second) && visited.insert(name).second) {
+                        if (inputs.second && inputs.second[0] &&
+                            (!inputs.first || std::string_view(inputs.first) != inputs.second))
+                            pending.push_back(inputs.second);
+                        if (inputs.first && inputs.first[0]) {
+                            name = inputs.first;
+                            continue;
+                        }
+                    }
+                    if (pending.empty())
+                        return;
+                    name = pending.back();
+                    pending.pop_back();
                 }
-                const auto inputs = backing_inputs(name);
-                const size_t first = capture_writer(inputs.first, positions, depth + 1);
-                const size_t second = capture_writer(inputs.second, positions, depth + 1);
-                if (first == SIZE_MAX || (second != SIZE_MAX && positions[second] > positions[first]))
-                    return second;
-                return first;
+            }
+
+            size_t capture_writer(const char* name,
+                                  const std::array<size_t, TC_FRAME_GRAPH_MAX_PASSES>& positions) const {
+                size_t latest = SIZE_MAX;
+                visit_writers(name, SIZE_MAX, true, [&](size_t writer) {
+                    if (latest == SIZE_MAX || positions[writer] > positions[latest]) latest = writer;
+                });
+                return latest;
             }
 
             tc_frame_graph* graph_;
@@ -222,6 +379,11 @@ namespace termin {
                                                   tc_frame_graph* graph,
                                                   std::span<FrameGraphCaptureRequest* const> captures,
                                                   std::span<const std::string> required_resources) {
+        if (!prepare_attachment_sources(pipeline, graph)) {
+            FrameGraphSchedule invalid;
+            invalid.valid = false;
+            return invalid;
+        }
         ScheduleBuilder builder(graph, pipeline.cache());
         builder.select_outputs();
         for (const auto& resource : required_resources)

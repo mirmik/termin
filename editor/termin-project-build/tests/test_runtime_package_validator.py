@@ -225,6 +225,8 @@ def _pipeline_template_payload(
     descriptor_version: int = 5,
     dependency_pass_index: int = 0,
     target_color_content: int = 1,
+    views: tuple[tuple[str, str, int], ...] = (),
+    compositions: tuple[tuple[str, str, str], ...] = (),
 ) -> bytes:
     payload = bytearray(b"TPLT")
 
@@ -250,8 +252,8 @@ def _pipeline_template_payload(
     u32(1)  # resources
     u32(1)  # dependencies
     u32(1)  # targets
-    u32(0)  # resource views
-    u32(0)  # FBO compositions
+    u32(len(views))
+    u32(len(compositions))
     text("ColorPass")
     text("color")
     text('{"phase_mark":"opaque"}')
@@ -280,7 +282,40 @@ def _pipeline_template_payload(
     u32(target_color_content)
     i32(0)
     i32(0)
+    for name, parent, kind in views:
+        text(name)
+        text(parent)
+        u32(kind)
+    for name, color, depth in compositions:
+        text(name)
+        text(color)
+        text(depth)
     return bytes(payload)
+
+
+def test_pipeline_template_decoder_accepts_forward_attachment_references() -> None:
+    payload = _pipeline_template_payload(
+        views=(("scene.color", "scene", 1),),
+        compositions=(("final", "scene.color", "scene"), ("scene", "OUTPUT", "OUTPUT")),
+    )
+    decoded = runtime_package_resource_validator._decode_pipeline_template(payload)
+    assert decoded["resource_views"][0]["parent"] == "scene"
+    assert decoded["fbo_compositions"][0]["depth"] == "scene"
+
+
+@pytest.mark.parametrize(
+    ("parent", "kind", "message"),
+    [("absent", 1, "missing parent"), ("final", 1, "cyclic FBO"), ("OUTPUT", 2, "wrong attachment kind")],
+)
+def test_pipeline_template_decoder_rejects_invalid_attachment_graph(
+    parent: str, kind: int, message: str
+) -> None:
+    payload = _pipeline_template_payload(
+        views=(("scene.view", parent, kind),),
+        compositions=(("final", "scene.view", ""),),
+    )
+    with pytest.raises(ValueError, match=message):
+        runtime_package_resource_validator._decode_pipeline_template(payload)
 
 
 def test_pipeline_template_decoder_accepts_complete_v5_target_layout() -> None:

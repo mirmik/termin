@@ -15,6 +15,44 @@ extern "C" {
 
 static void keep_external_cache(void*) {}
 
+TEST_CASE("pipeline template validates forward attachment references and rejects cycles atomically") {
+    tc_pipeline_template_init();
+    const auto handle = tc_pipeline_template_create("nested-attachments", "nested");
+    tc_pipeline_template* resource = tc_pipeline_template_get(handle);
+    REQUIRE(resource != nullptr);
+    const tc_pipeline_template_resource_desc target = {"target", "fbo", nullptr, nullptr, 0, 0, 1.0f, 1, 1, 0};
+    const tc_pipeline_template_resource_view_desc view = {"view", "inner", TC_PIPELINE_ATTACHMENT_COLOR};
+    tc_pipeline_template_fbo_composition_desc compositions[] = {
+        {"outer", "view", "inner"},
+        {"inner", "target", "target"},
+    };
+    tc_pipeline_template_payload_desc payload = {};
+    payload.descriptor_version = TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION;
+    payload.execution_model = TC_PIPELINE_EXECUTION_SINGLE_VIEW;
+    payload.name = "nested";
+    payload.resources = &target;
+    payload.resource_count = 1;
+    payload.resource_views = &view;
+    payload.resource_view_count = 1;
+    payload.fbo_compositions = compositions;
+    payload.fbo_composition_count = 2;
+    REQUIRE(tc_pipeline_template_set_payload(resource, &payload));
+    const uint32_t version = tc_pipeline_template_version(resource);
+
+    compositions[1].color = "view";
+    CHECK_FALSE(tc_pipeline_template_set_payload(resource, &payload));
+    CHECK(tc_pipeline_template_version(resource) == version);
+    CHECK(std::strcmp(resource->fbo_compositions[1].color, "target") == 0);
+
+    compositions[1].color = "target";
+    compositions[0].depth = "outer";
+    CHECK_FALSE(tc_pipeline_template_set_payload(resource, &payload));
+    CHECK(tc_pipeline_template_version(resource) == version);
+    CHECK(std::strcmp(resource->fbo_compositions[0].depth, "inner") == 0);
+    REQUIRE(tc_pipeline_template_remove(handle));
+    tc_pipeline_template_shutdown();
+}
+
 TEST_CASE("compiled pipeline template round-trips without execution state") {
     tc_pipeline_template_init();
     const tc_pipeline_template_pass_desc passes[] = {

@@ -5,6 +5,7 @@
 #include <deque>
 #include <optional>
 #include <tcbase/tc_log.hpp>
+#include <tcbase/tc_trent_json.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/graph_alias_pass.hpp>
 #include <termin/render/graph_node_def.hpp>
@@ -157,40 +158,6 @@ namespace tc {
         return "empty_" + node_name + "_" + std::to_string(node_index) + "_" + socket_name;
     }
 
-    static void propagate_non_target_connections(const GraphData& graph, ResourceNaming& result) {
-        for (const auto& conn : graph.connections) {
-            if (graph_compiler_is_target_socket_name(conn.to_socket)) {
-                continue;
-            }
-            auto from_it = result.socket_names.find(conn.from_node_id);
-            if (from_it == result.socket_names.end()) {
-                continue;
-            }
-            auto socket_it = from_it->second.find(conn.from_socket);
-            if (socket_it == from_it->second.end()) {
-                continue;
-            }
-            result.socket_names[conn.to_node_id][conn.to_socket] = socket_it->second;
-        }
-    }
-
-    static void propagate_target_connections(const GraphData& graph, ResourceNaming& result) {
-        for (const auto& conn : graph.connections) {
-            if (!graph_compiler_is_target_socket_name(conn.to_socket)) {
-                continue;
-            }
-            auto from_it = result.socket_names.find(conn.from_node_id);
-            if (from_it == result.socket_names.end()) {
-                continue;
-            }
-            auto socket_it = from_it->second.find(conn.from_socket);
-            if (socket_it == from_it->second.end()) {
-                continue;
-            }
-            result.socket_names[conn.to_node_id][conn.to_socket] = socket_it->second;
-        }
-    }
-
     static std::optional<std::string>
     socket_type_for(const NodeData& node, const std::string& socket_name, bool input) {
         const std::vector<SocketData>& sockets = input ? node.inputs : node.outputs;
@@ -214,86 +181,73 @@ namespace tc {
         return source_type == "external_xr_multiview_fbo" && target_type == "multiview_fbo";
     }
 
-    static void apply_target_overrides(const GraphData& graph, ResourceNaming& result) {
-        for (const auto& node : graph.nodes) {
-            for (const auto& inp : node.inputs) {
-                if (!graph_compiler_is_target_socket_name(inp.name)) {
-                    continue;
-                }
-                std::string base_name = inp.name.substr(0, inp.name.size() - 7);
-                auto& sockets = result.socket_names[node.id];
-                auto target_it = sockets.find(inp.name);
-                if (target_it == sockets.end()) {
-                    continue;
-                }
+    static void bind_pass_target(const NodeData& node, const SocketData& inp, ResourceNaming& result) {
+        std::string base_name = inp.name.substr(0, inp.name.size() - 7);
+        auto& sockets = result.socket_names[node.id];
+        const std::string& target_res = sockets.at(inp.name);
 
-                const std::string& target_res = target_it->second;
+        auto output_it = sockets.find(base_name);
+        if (output_it == sockets.end() || output_it->second.empty()) {
+            std::string output_res = node.pass_class.empty()
+                                         ? node.id + "_" + base_name
+                                         : node.pass_class + "_" + node.id + "_" + base_name;
+            sockets[base_name] = output_res;
+            output_it = sockets.find(base_name);
+        }
 
-                auto output_it = sockets.find(base_name);
-                if (output_it == sockets.end() || output_it->second.empty()) {
-                    std::string output_res = node.pass_class.empty()
-                                                 ? node.id + "_" + base_name
-                                                 : node.pass_class + "_" + node.id + "_" + base_name;
-                    sockets[base_name] = output_res;
-                    output_it = sockets.find(base_name);
-                }
+        const std::string output_res = output_it->second;
+        auto output_type = socket_type_for(node, base_name, false);
+        std::string resolved_output_type = output_type.has_value() ? *output_type : inp.socket_type;
+        if (resolved_output_type == "fbo" && inp.socket_type != "fbo") {
+            resolved_output_type = inp.socket_type;
+        }
+        result.resource_types[output_res] = resolved_output_type;
 
-                const std::string& output_res = output_it->second;
-                auto output_type = socket_type_for(node, base_name, false);
-                std::string resolved_output_type = output_type.has_value() ? *output_type : inp.socket_type;
-                if (resolved_output_type == "fbo" && inp.socket_type != "fbo") {
-                    resolved_output_type = inp.socket_type;
-                }
-                result.resource_types[output_res] = resolved_output_type;
+        if (output_res != target_res && is_direct_target_resource_type(resolved_output_type)) {
+            sockets[base_name] = target_res;
+            result.resource_types[target_res] = resolved_output_type;
+            result.resource_types.erase(output_res);
+            return;
+        }
 
-                if (output_res != target_res && is_direct_target_resource_type(resolved_output_type)) {
-                    sockets[base_name] = target_res;
-                    result.resource_types[target_res] = resolved_output_type;
-                    result.resource_types.erase(output_res);
-                    continue;
-                }
+        auto target_view_it = result.resource_views.find(target_res);
+        if (target_view_it != result.resource_views.end()) {
+            if (output_res != target_res) {
+                result.resource_views[output_res] = target_view_it->second;
+            }
+            return;
+        }
 
-                auto target_view_it = result.resource_views.find(target_res);
-                if (target_view_it != result.resource_views.end()) {
-                    if (output_res != target_res) {
-                        result.resource_views[output_res] = target_view_it->second;
-                    }
-                    continue;
-                }
+        if (is_external_resource_name(target_res)) {
+            if (resolved_output_type == "fbo" || resolved_output_type == "external_color") {
+                result.fbo_compositions[output_res] = termin::FboComposition{target_res, target_res};
+            } else if (resolved_output_type == "depth_texture") {
+                result.resource_views[output_res] = termin::ResourceView{
+                    target_res,
+                    termin::AttachmentKind::Depth,
+                };
+            } else {
+                result.resource_views[output_res] = termin::ResourceView{
+                    target_res,
+                    termin::AttachmentKind::Color,
+                };
+            }
+            return;
+        }
 
-                if (is_external_resource_name(target_res)) {
-                    if (result.resource_types[output_res] == "fbo" ||
-                        result.resource_types[output_res] == "external_color") {
-                        result.fbo_compositions[output_res] = termin::FboComposition{target_res, target_res};
-                    } else if (result.resource_types[output_res] == "depth_texture") {
-                        result.resource_views[output_res] = termin::ResourceView{
-                            target_res,
-                            termin::AttachmentKind::Depth,
-                        };
-                    } else {
-                        result.resource_views[output_res] = termin::ResourceView{
-                            target_res,
-                            termin::AttachmentKind::Color,
-                        };
-                    }
-                    continue;
-                }
-
-                if (output_res != target_res) {
-                    if (result.resource_types[output_res] == "depth_texture") {
-                        result.resource_views[output_res] = termin::ResourceView{
-                            target_res,
-                            termin::AttachmentKind::Depth,
-                        };
-                    } else if (result.resource_types[output_res] == "color_texture") {
-                        result.resource_views[output_res] = termin::ResourceView{
-                            target_res,
-                            termin::AttachmentKind::Color,
-                        };
-                    } else if (!is_attachment_texture_type(result.resource_types[output_res])) {
-                        result.fbo_compositions[output_res] = termin::FboComposition{target_res, target_res};
-                    }
-                }
+        if (output_res != target_res) {
+            if (resolved_output_type == "depth_texture") {
+                result.resource_views[output_res] = termin::ResourceView{
+                    target_res,
+                    termin::AttachmentKind::Depth,
+                };
+            } else if (resolved_output_type == "color_texture") {
+                result.resource_views[output_res] = termin::ResourceView{
+                    target_res,
+                    termin::AttachmentKind::Color,
+                };
+            } else if (!is_attachment_texture_type(resolved_output_type)) {
+                result.fbo_compositions[output_res] = termin::FboComposition{target_res, target_res};
             }
         }
     }
@@ -325,94 +279,103 @@ namespace tc {
     // Topological Sort (Kahn's algorithm)
     // ============================================================================
 
-    std::vector<NodeData*> topological_sort(GraphData& graph) {
-        // Build adjacency: node_id -> list of dependent node_ids
-        std::unordered_map<std::string, std::vector<std::string>> dependents;
-        std::unordered_map<std::string, int> in_degree;
+    struct GraphTraversal {
+        std::vector<size_t> order;
+        std::vector<std::vector<const ConnectionData*>> incoming;
+    };
 
-        for (auto& node : graph.nodes) {
-            dependents[node.id] = {};
-            in_degree[node.id] = 0;
+    static GraphTraversal build_graph_traversal(const GraphData& graph) {
+        GraphTraversal traversal;
+        traversal.incoming.resize(graph.nodes.size());
+        std::unordered_map<std::string, size_t> indices;
+        for (size_t i = 0; i < graph.nodes.size(); ++i)
+            indices.emplace(graph.nodes[i].id, i);
+
+        std::vector<std::vector<size_t>> dependents(graph.nodes.size());
+        for (const ConnectionData& edge : graph.connections) {
+            auto source = indices.find(edge.from_node_id);
+            auto target = indices.find(edge.to_node_id);
+            if (source == indices.end() || target == indices.end())
+                throw GraphCompileError("Connection references missing node");
+            dependents[source->second].push_back(target->second);
+            traversal.incoming[target->second].push_back(&edge);
         }
 
-        for (const auto& conn : graph.connections) {
-            if (dependents.count(conn.from_node_id) && in_degree.count(conn.to_node_id)) {
-                dependents[conn.from_node_id].push_back(conn.to_node_id);
-                in_degree[conn.to_node_id]++;
+        std::vector<size_t> remaining;
+        std::deque<size_t> ready;
+        for (size_t i = 0; i < graph.nodes.size(); ++i) {
+            remaining.push_back(traversal.incoming[i].size());
+            if (remaining.back() == 0)
+                ready.push_back(i);
+        }
+
+        traversal.order.reserve(graph.nodes.size());
+        while (!ready.empty()) {
+            size_t index = ready.front();
+            ready.pop_front();
+            traversal.order.push_back(index);
+            for (size_t dependent : dependents[index]) {
+                if (--remaining[dependent] == 0)
+                    ready.push_back(dependent);
             }
         }
-
-        // Kahn's algorithm
-        std::deque<std::string> queue;
-        for (auto& node : graph.nodes) {
-            if (in_degree[node.id] == 0) {
-                queue.push_back(node.id);
-            }
-        }
-
-        std::vector<std::string> sorted_ids;
-        while (!queue.empty()) {
-            std::string node_id = queue.front();
-            queue.pop_front();
-            sorted_ids.push_back(node_id);
-
-            for (const auto& dep_id : dependents[node_id]) {
-                in_degree[dep_id]--;
-                if (in_degree[dep_id] == 0) {
-                    queue.push_back(dep_id);
-                }
-            }
-        }
-
-        if (sorted_ids.size() != graph.nodes.size()) {
+        if (traversal.order.size() != graph.nodes.size())
             throw GraphCompileError("Graph has cycles");
-        }
-
-        // Return nodes in sorted order
-        std::unordered_map<std::string, NodeData*> node_map;
-        for (auto& node : graph.nodes) {
-            node_map[node.id] = &node;
-        }
-
-        std::vector<NodeData*> result;
-        result.reserve(sorted_ids.size());
-        for (const auto& id : sorted_ids) {
-            result.push_back(node_map[id]);
-        }
-
-        return result;
+        return traversal;
     }
 
-    // ============================================================================
-    // Assign Resource Names
-    // ============================================================================
+    std::vector<NodeData*> topological_sort(GraphData& graph) {
+        const auto traversal = build_graph_traversal(graph);
+        std::vector<NodeData*> sorted;
+        sorted.reserve(graph.nodes.size());
+        for (size_t index : traversal.order)
+            sorted.push_back(&graph.nodes[index]);
+        return sorted;
+    }
 
-    ResourceNaming assign_resource_names(const GraphData& graph) {
+    static ResourceNaming assign_resource_names(const GraphData& graph, const GraphTraversal& traversal) {
         ResourceNaming result;
+        for (size_t index : traversal.order) {
+            const NodeData& node = graph.nodes[index];
+            auto& sockets = result.socket_names[node.id];
+            for (const ConnectionData* edge : traversal.incoming[index]) {
+                const auto& source = result.socket_names.at(edge->from_node_id);
+                auto output = source.find(edge->from_socket);
+                if (output == source.end())
+                    throw GraphCompileError("Unresolved output socket: " + edge->from_node_id + "." + edge->from_socket);
+                sockets[edge->to_socket] = output->second;
+            }
 
-        // Initialize socket_names for all nodes
-        for (const auto& node : graph.nodes) {
-            result.socket_names[node.id] = {};
-        }
-
-        // Build node index map
-        std::unordered_map<std::string, int> node_index;
-        for (size_t i = 0; i < graph.nodes.size(); ++i) {
-            node_index[graph.nodes[i].id] = static_cast<int>(i);
-        }
-
-        // Pass 1: Assign names to FBO resource nodes, external RT nodes, and
-        // render-target external input nodes.
-        for (const auto& node : graph.nodes) {
-            if (node.node_type == "resource") {
-                std::string resource_type = graph_compiler_resource_type_for_node(node);
-                std::string name = default_resource_name(node, node_index[node.id], resource_type);
+            if (is_pass_node(node)) {
                 for (const auto& output : node.outputs) {
-                    result.socket_names[node.id][output.name] = name;
-                    result.resource_types[name] = output.socket_type;
+                    if (!sockets.contains(output.name)) {
+                        std::string name = node.pass_class + "_" + std::to_string(index) + "_" + output.name;
+                        sockets[output.name] = name;
+                        result.resource_types[name] = output.socket_type;
+                    }
+                }
+                for (const SocketData& input : node.inputs) {
+                    if (graph_compiler_is_target_socket_name(input.name) && sockets.contains(input.name))
+                        bind_pass_target(node, input, result);
                 }
             }
-            if (node.node_type == "external_rt") {
+
+            for (const SocketData& input : node.inputs) {
+                if (graph_compiler_is_target_socket_name(input.name) || sockets.contains(input.name))
+                    continue;
+                std::string name = generated_input_name(node, index, input.name);
+                sockets[input.name] = name;
+                result.resource_types[name] = input.socket_type;
+            }
+
+            if (node.node_type == "resource") {
+                std::string resource_type = graph_compiler_resource_type_for_node(node);
+                std::string name = default_resource_name(node, index, resource_type);
+                for (const auto& output : node.outputs) {
+                    sockets[output.name] = name;
+                    result.resource_types[name] = output.socket_type;
+                }
+            } else if (node.node_type == "external_rt") {
                 std::string name;
                 if (node.params.contains("slot") && node.params["slot"].is_string()) {
                     name = node.params["slot"].as_string();
@@ -427,72 +390,30 @@ namespace tc {
                                   name.c_str());
                 }
                 for (const auto& output : node.outputs) {
-                    result.socket_names[node.id][output.name] = name;
+                    sockets[output.name] = name;
                     result.resource_types[name] = "external_color";
                     result.external_resources[name] = "external_texture";
                 }
-            }
-            if (node.node_type == "external_xr_multiview_fbo") {
+            } else if (node.node_type == "external_xr_multiview_fbo") {
                 std::string name = "XR_MULTIVIEW_TARGET";
                 if (node.params.contains("slot") && node.params["slot"].is_string() &&
                     !node.params["slot"].as_string().empty()) {
                     name = node.params["slot"].as_string();
                 }
-                result.socket_names[node.id]["fbo"] = name;
+                sockets["fbo"] = name;
                 result.resource_types[name] = "external_xr_multiview_fbo";
                 result.external_resources[name] = "external_xr_multiview_fbo";
-            }
-            if (node.node_type == "render_target_input") {
+            } else if (node.node_type == "render_target_input") {
                 for (const auto& output : node.outputs) {
                     if (output.name == "color") {
-                        result.socket_names[node.id][output.name] = "RT_COLOR";
+                        sockets[output.name] = "RT_COLOR";
                         result.resource_types["RT_COLOR"] = "external_color";
                         result.external_resources["RT_COLOR"] = "render_target_color";
                     }
                 }
-            }
-        }
-
-        // Pass 2: Assign names to output sockets of pass nodes
-        for (const auto& node : graph.nodes) {
-            if (is_pass_node(node)) {
-                int idx = node_index[node.id];
-                for (const auto& output : node.outputs) {
-                    if (result.socket_names[node.id].find(output.name) == result.socket_names[node.id].end()) {
-                        std::string name = node.pass_class + "_" + std::to_string(idx) + "_" + output.name;
-                        result.socket_names[node.id][output.name] = name;
-                        result.resource_types[name] = output.socket_type;
-                    }
-                }
-            }
-        }
-
-        // Pass 3a: Propagate _target connections first (FBO -> pass._target)
-        propagate_target_connections(graph, result);
-
-        // Pass 3b: Apply _target overrides to output socket names
-        // If X_target input is connected, X output should use that resource name
-        apply_target_overrides(graph, result);
-
-        // Pass 3c: Propagate all other connections (now output names are correct)
-        propagate_non_target_connections(graph, result);
-
-        // Pass 3d: Apply FboSplit nodes. They create attachment view resources.
-        for (const auto& node : graph.nodes) {
-            auto& sockets = result.socket_names[node.id];
-            int idx = node_index[node.id];
-
-            if (node.node_type == "fbo_split" || node.node_type == "multiview_fbo_split") {
+            } else if (node.node_type == "fbo_split" || node.node_type == "multiview_fbo_split") {
                 const bool multiview = node.node_type == "multiview_fbo_split";
-                auto input_it = sockets.find("fbo");
-                if (input_it == sockets.end()) {
-                    std::string name = generated_input_name(node, idx, "fbo");
-                    sockets["fbo"] = name;
-                    result.resource_types[name] = multiview ? "multiview_fbo" : "fbo";
-                    input_it = sockets.find("fbo");
-                }
-
-                const std::string& parent = input_it->second;
+                const std::string& parent = sockets.at("fbo");
                 std::string color_name = parent + ".color";
                 std::string depth_name = parent + ".depth";
 
@@ -508,35 +429,9 @@ namespace tc {
                     parent,
                     termin::AttachmentKind::Depth,
                 };
-            }
-        }
-
-        // Pass 3f: Propagate FboSplit outputs before FboJoin consumes them.
-        propagate_non_target_connections(graph, result);
-        propagate_target_connections(graph, result);
-        apply_target_overrides(graph, result);
-        propagate_non_target_connections(graph, result);
-
-        // Pass 3g: Apply FboJoin nodes. They create composed FBO views.
-        for (const auto& node : graph.nodes) {
-            auto& sockets = result.socket_names[node.id];
-            int idx = node_index[node.id];
-
-            if (node.node_type == "fbo_join" || node.node_type == "multiview_fbo_join") {
+            } else if (node.node_type == "fbo_join" || node.node_type == "multiview_fbo_join") {
                 const bool multiview = node.node_type == "multiview_fbo_join";
-                if (!sockets.contains("color")) {
-                    std::string name = generated_input_name(node, idx, "color");
-                    sockets["color"] = name;
-                    result.resource_types[name] = multiview ? "multiview_color_texture" : "color_texture";
-                }
-
-                if (!sockets.contains("depth")) {
-                    std::string name = generated_input_name(node, idx, "depth");
-                    sockets["depth"] = name;
-                    result.resource_types[name] = multiview ? "multiview_depth_texture" : "depth_texture";
-                }
-
-                std::string output_name = node.name.empty() ? "fbo_join_" + std::to_string(idx) : node.name;
+                std::string output_name = node.name.empty() ? "fbo_join_" + std::to_string(index) : node.name;
                 sockets["fbo"] = output_name;
                 result.resource_types[output_name] = multiview ? "multiview_fbo" : "fbo";
                 result.fbo_compositions[output_name] = termin::FboComposition{
@@ -546,30 +441,11 @@ namespace tc {
             }
         }
 
-        // Pass 3h: Propagate outputs from compile-time utility nodes.
-        propagate_non_target_connections(graph, result);
-
-        // Pass 3i: Re-propagate downstream connections after compile-time utility
-        // nodes have assigned their final output names.
-        propagate_non_target_connections(graph, result);
-
-        // Pass 4: Default names for unconnected inputs
-        for (const auto& node : graph.nodes) {
-            int idx = node_index[node.id];
-            for (const auto& inp : node.inputs) {
-                auto& sockets = result.socket_names[node.id];
-                if (sockets.find(inp.name) == sockets.end()) {
-                    if (graph_compiler_is_target_socket_name(inp.name)) {
-                        continue;
-                    }
-                    std::string name = generated_input_name(node, idx, inp.name);
-                    sockets[inp.name] = name;
-                    result.resource_types[name] = inp.socket_type;
-                }
-            }
-        }
-
         return result;
+    }
+
+    ResourceNaming assign_resource_names(const GraphData& graph) {
+        return assign_resource_names(graph, build_graph_traversal(graph));
     }
 
     // ============================================================================
@@ -709,46 +585,6 @@ namespace tc {
         return result;
     }
 
-    // ============================================================================
-    // Convert trent to tc_value
-    // ============================================================================
-
-    static tc_value trent_to_tc_value(const nos::trent& t) {
-        if (t.is_nil()) {
-            return tc_value_nil();
-        }
-        if (t.is_bool()) {
-            return tc_value_bool(t.as_bool());
-        }
-        if (t.is_numer()) {
-            double val = t.as_numer();
-            // Check if it's an integer
-            if (val == static_cast<int64_t>(val)) {
-                return tc_value_int(static_cast<int64_t>(val));
-            }
-            return tc_value_double(val);
-        }
-        if (t.is_string()) {
-            return tc_value_string(t.as_string().c_str());
-        }
-        if (t.is_list()) {
-            tc_value list = tc_value_list_new();
-            for (const auto& item : t.as_list()) {
-                tc_value v = trent_to_tc_value(item);
-                tc_value_list_push(&list, v);
-            }
-            return list;
-        }
-        if (t.is_dict()) {
-            tc_value dict = tc_value_dict_new();
-            for (const auto& [key, val] : t.as_dict()) {
-                tc_value v = trent_to_tc_value(val);
-                tc_value_dict_set(&dict, key.c_str(), v);
-            }
-            return dict;
-        }
-        return tc_value_nil();
-    }
 
     // ============================================================================
     // Set pass property via TcPassRef
@@ -1212,10 +1048,10 @@ namespace tc {
         validate_connection_types(graph);
 
         // 1. Topological sort
-        auto sorted_nodes = topological_sort(graph);
+        const auto traversal = build_graph_traversal(graph);
 
         // 2. Assign resource names
-        auto naming = assign_resource_names(graph);
+        auto naming = assign_resource_names(graph, traversal);
 
         // 3. Build viewport map
         auto viewport_map = build_node_viewport_map(graph.nodes, graph.viewport_frames);
@@ -1224,12 +1060,13 @@ namespace tc {
         // resource and never materializes an OUTPUT resource or executable pass.
         std::vector<PipelineTemplateTarget> color_exports;
         std::unordered_set<std::string> export_viewports;
-        for (const NodeData& node : graph.nodes) {
+        for (size_t index = 0; index < graph.nodes.size(); ++index) {
+            const NodeData& node = graph.nodes[index];
             if (node.node_type != "pipeline_output")
                 continue;
             size_t incoming_count = 0;
-            for (const ConnectionData& connection : graph.connections) {
-                if (connection.to_node_id == node.id && connection.to_socket == "color")
+            for (const ConnectionData* edge : traversal.incoming[index]) {
+                if (edge->to_socket == "color")
                     ++incoming_count;
             }
             if (incoming_count != 1) {
@@ -1286,7 +1123,8 @@ namespace tc {
 
         // 6. Add passes
         bool had_pass_nodes = false;
-        for (const auto* node : sorted_nodes) {
+        for (size_t index : traversal.order) {
+            const auto* node = &graph.nodes[index];
             if (!is_pass_node(*node)) {
                 if (is_graph_alias_node(*node)) {
                     add_graph_alias_pass(pipeline, *node, naming);
@@ -1418,24 +1256,14 @@ namespace tc {
         }
 
         if (pipeline_template) {
+            tc::init_cpp_inspect_vtable();
             std::vector<std::string> pass_parameters;
             pass_parameters.reserve(pipeline->pass_count());
-            std::unordered_set<const NodeData*> consumed_nodes;
             for (uint32_t i = 0; i < pipeline->pass_count(); ++i) {
-                tc_pass* pass = pipeline->get_pass_at(i);
-                const std::string type_name = pass ? tc_pass_type_name(pass) : "";
-                const std::string pass_name = pass && pass->pass_name ? pass->pass_name : type_name;
-                std::string parameters;
-                for (const NodeData& node : graph.nodes) {
-                    if (consumed_nodes.contains(&node) || node.pass_class != type_name)
-                        continue;
-                    if (!node.name.empty() && node.name != pass_name)
-                        continue;
-                    parameters = nos::json::dump(node.params);
-                    consumed_nodes.insert(&node);
-                    break;
-                }
-                pass_parameters.push_back(std::move(parameters));
+                TcPassRef pass(pipeline->get_pass_at(i));
+                const auto fields =
+                    tc::trent::adopt(tc_inspect_serialize(pass.object_ptr(), tc_pass_type_name(pass.ptr())));
+                pass_parameters.push_back(tc::json::dump(fields));
             }
             const tc_pipeline_execution_model execution_model = graph.execution_model == "xr_multiview"
                                                                     ? TC_PIPELINE_EXECUTION_XR_MULTIVIEW

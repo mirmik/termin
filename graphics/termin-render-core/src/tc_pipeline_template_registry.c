@@ -212,6 +212,131 @@ bool tc_pipeline_template_remove(tc_pipeline_template_handle handle) {
     return destroy_pipeline_template(handle);
 }
 
+typedef struct attachment_node {
+    const char* name;
+    const tc_pipeline_template_resource_view_desc* view;
+    const tc_pipeline_template_fbo_composition_desc* composition;
+    struct attachment_node* sources[2];
+    size_t consumer_count;
+    struct attachment_node* next_ready;
+} attachment_node;
+
+static int compare_attachment_names(const void* lhs, const void* rhs) {
+    return strcmp(((const attachment_node*)lhs)->name, ((const attachment_node*)rhs)->name);
+}
+
+static attachment_node* find_attachment_node(attachment_node* nodes, size_t count, const char* name) {
+    const attachment_node key = {.name = name};
+    return bsearch(&key, nodes, count, sizeof(*nodes), compare_attachment_names);
+}
+
+static bool validate_resource_links(const tc_pipeline_template_payload_desc* desc) {
+    const uint64_t count64 = (uint64_t)desc->resource_count + desc->resource_view_count + desc->fbo_composition_count;
+    if (count64 == 0) {
+        if (desc->dependency_count != 0)
+            tc_log_error("tc_pipeline_template_set_payload: dependency references missing resource '%s'",
+                         desc->dependencies[0].resource);
+        return desc->dependency_count == 0;
+    }
+    if (count64 > SIZE_MAX / sizeof(attachment_node)) {
+        tc_log_error("tc_pipeline_template_set_payload: resource table too large");
+        return false;
+    }
+    const size_t count = (size_t)count64;
+    attachment_node* nodes = calloc(count, sizeof(*nodes));
+    if (!nodes) {
+        tc_log_error("tc_pipeline_template_set_payload: cannot allocate resource validation table");
+        return false;
+    }
+
+    size_t index = 0;
+    for (uint32_t i = 0; i < desc->resource_count; ++i)
+        nodes[index++].name = desc->resources[i].name;
+    for (uint32_t i = 0; i < desc->resource_view_count; ++i) {
+        nodes[index].view = &desc->resource_views[i];
+        nodes[index++].name = desc->resource_views[i].name;
+    }
+    for (uint32_t i = 0; i < desc->fbo_composition_count; ++i) {
+        nodes[index].composition = &desc->fbo_compositions[i];
+        nodes[index++].name = desc->fbo_compositions[i].name;
+    }
+
+    bool valid = false;
+    qsort(nodes, count, sizeof(*nodes), compare_attachment_names);
+    for (size_t i = 1; i < count; ++i) {
+        if (strcmp(nodes[i - 1].name, nodes[i].name) == 0) {
+            tc_log_error("tc_pipeline_template_set_payload: duplicate resource name '%s'", nodes[i].name);
+            goto done;
+        }
+    }
+    for (uint32_t i = 0; i < desc->dependency_count; ++i) {
+        if (!find_attachment_node(nodes, count, desc->dependencies[i].resource)) {
+            tc_log_error("tc_pipeline_template_set_payload: dependency %u references missing resource '%s'",
+                         i, desc->dependencies[i].resource);
+            goto done;
+        }
+    }
+    for (size_t i = 0; i < count; ++i) {
+        attachment_node* node = &nodes[i];
+        const char* names[2] = {NULL, NULL};
+        if (node->view) {
+            names[0] = node->view->parent;
+        } else if (node->composition) {
+            names[0] = node->composition->color;
+            names[1] = node->composition->depth;
+        }
+        for (size_t slot = 0; slot < 2; ++slot) {
+            if (!names[slot] || !names[slot][0])
+                continue;
+            attachment_node* source = find_attachment_node(nodes, count, names[slot]);
+            if (!source) {
+                tc_log_error("tc_pipeline_template_set_payload: '%s' references missing attachment source '%s'",
+                             node->name, names[slot]);
+                goto done;
+            }
+            if (source->view) {
+                tc_pipeline_attachment_kind kind =
+                    slot == 0 ? TC_PIPELINE_ATTACHMENT_COLOR : TC_PIPELINE_ATTACHMENT_DEPTH;
+                if (node->view || source->view->attachment != kind) {
+                    tc_log_error("tc_pipeline_template_set_payload: '%s' uses an incompatible view '%s'",
+                                 node->name, source->name);
+                    goto done;
+                }
+            }
+            node->sources[slot] = source;
+            ++source->consumer_count;
+        }
+    }
+
+    // Visit consumers before their sources. A directed cycle leaves nodes behind.
+    attachment_node* ready = NULL;
+    for (size_t i = 0; i < count; ++i) {
+        if (nodes[i].consumer_count == 0) {
+            nodes[i].next_ready = ready;
+            ready = &nodes[i];
+        }
+    }
+    size_t visited = 0;
+    while (ready) {
+        attachment_node* node = ready;
+        ready = node->next_ready;
+        ++visited;
+        for (size_t slot = 0; slot < 2; ++slot) {
+            attachment_node* source = node->sources[slot];
+            if (source && --source->consumer_count == 0) {
+                source->next_ready = ready;
+                ready = source;
+            }
+        }
+    }
+    valid = visited == count;
+    if (!valid)
+        tc_log_error("tc_pipeline_template_set_payload: cyclic attachment references");
+done:
+    free(nodes);
+    return valid;
+}
+
 static bool validate_payload(const tc_pipeline_template_payload_desc* desc) {
     if (!desc || desc->descriptor_version != TC_PIPELINE_TEMPLATE_DESCRIPTOR_VERSION || !desc->name || !desc->name[0]) {
         tc_log_error("tc_pipeline_template_set_payload: invalid descriptor version or name");
@@ -289,12 +414,6 @@ static bool validate_payload(const tc_pipeline_template_payload_desc* desc) {
             tc_log_error("tc_pipeline_template_set_payload: resource %u has non-finite clear depth", i);
             return false;
         }
-        for (uint32_t previous = 0; previous < i; ++previous) {
-            if (strcmp(desc->resources[previous].name, desc->resources[i].name) == 0) {
-                tc_log_error("tc_pipeline_template_set_payload: duplicate resource '%s'", desc->resources[i].name);
-                return false;
-            }
-        }
     }
     for (uint32_t i = 0; i < desc->target_count; ++i) {
         if (desc->targets[i].color_content < TC_COLOR_CONTENT_SCENE_LINEAR ||
@@ -312,29 +431,6 @@ static bool validate_payload(const tc_pipeline_template_payload_desc* desc) {
             tc_log_error("tc_pipeline_template_set_payload: invalid resource view %u", i);
             return false;
         }
-        bool parent_found = false;
-        for (uint32_t resource_index = 0; resource_index < desc->resource_count; ++resource_index) {
-            const char* resource_name = desc->resources[resource_index].name;
-            if (strcmp(resource_name, view->name) == 0) {
-                tc_log_error("tc_pipeline_template_set_payload: resource view '%s' conflicts with a concrete resource",
-                             view->name);
-                return false;
-            }
-            if (strcmp(resource_name, view->parent) == 0)
-                parent_found = true;
-        }
-        if (!parent_found) {
-            tc_log_error("tc_pipeline_template_set_payload: resource view '%s' references missing parent '%s'",
-                         view->name,
-                         view->parent);
-            return false;
-        }
-        for (uint32_t previous = 0; previous < i; ++previous) {
-            if (strcmp(desc->resource_views[previous].name, view->name) == 0) {
-                tc_log_error("tc_pipeline_template_set_payload: duplicate resource view '%s'", view->name);
-                return false;
-            }
-        }
     }
     for (uint32_t i = 0; i < desc->fbo_composition_count; ++i) {
         const tc_pipeline_template_fbo_composition_desc* composition = &desc->fbo_compositions[i];
@@ -342,64 +438,6 @@ static bool validate_payload(const tc_pipeline_template_payload_desc* desc) {
             ((!composition->color || !composition->color[0]) && (!composition->depth || !composition->depth[0]))) {
             tc_log_error("tc_pipeline_template_set_payload: invalid FBO composition %u", i);
             return false;
-        }
-        for (uint32_t resource_index = 0; resource_index < desc->resource_count; ++resource_index) {
-            if (strcmp(desc->resources[resource_index].name, composition->name) == 0) {
-                tc_log_error(
-                    "tc_pipeline_template_set_payload: FBO composition '%s' conflicts with a concrete resource",
-                    composition->name);
-                return false;
-            }
-        }
-        for (uint32_t view_index = 0; view_index < desc->resource_view_count; ++view_index) {
-            if (strcmp(desc->resource_views[view_index].name, composition->name) == 0) {
-                tc_log_error("tc_pipeline_template_set_payload: FBO composition '%s' conflicts with a resource view",
-                             composition->name);
-                return false;
-            }
-        }
-        for (uint32_t previous = 0; previous < i; ++previous) {
-            if (strcmp(desc->fbo_compositions[previous].name, composition->name) == 0) {
-                tc_log_error("tc_pipeline_template_set_payload: duplicate FBO composition '%s'", composition->name);
-                return false;
-            }
-        }
-        const char* attachments[2] = {composition->color, composition->depth};
-        const tc_pipeline_attachment_kind expected_kinds[2] = {
-            TC_PIPELINE_ATTACHMENT_COLOR,
-            TC_PIPELINE_ATTACHMENT_DEPTH,
-        };
-        for (uint32_t attachment_index = 0; attachment_index < 2; ++attachment_index) {
-            const char* attachment = attachments[attachment_index];
-            if (!attachment || !attachment[0])
-                continue;
-            bool found = false;
-            for (uint32_t resource_index = 0; resource_index < desc->resource_count; ++resource_index) {
-                if (strcmp(desc->resources[resource_index].name, attachment) == 0) {
-                    found = true;
-                    break;
-                }
-            }
-            for (uint32_t view_index = 0; !found && view_index < desc->resource_view_count; ++view_index) {
-                const tc_pipeline_template_resource_view_desc* view = &desc->resource_views[view_index];
-                if (strcmp(view->name, attachment) == 0) {
-                    if (view->attachment != expected_kinds[attachment_index]) {
-                        tc_log_error("tc_pipeline_template_set_payload: FBO composition '%s' uses view '%s' for the "
-                                     "wrong attachment kind",
-                                     composition->name,
-                                     attachment);
-                        return false;
-                    }
-                    found = true;
-                }
-            }
-            if (!found) {
-                tc_log_error(
-                    "tc_pipeline_template_set_payload: FBO composition '%s' references missing attachment '%s'",
-                    composition->name,
-                    attachment);
-                return false;
-            }
         }
     }
     for (uint32_t i = 0; i < desc->dependency_count; ++i) {
@@ -409,29 +447,8 @@ static bool validate_payload(const tc_pipeline_template_payload_desc* desc) {
             tc_log_error("tc_pipeline_template_set_payload: invalid dependency %u", i);
             return false;
         }
-        bool resource_found = false;
-        for (uint32_t resource_index = 0; resource_index < desc->resource_count; ++resource_index) {
-            if (strcmp(desc->resources[resource_index].name, desc->dependencies[i].resource) == 0) {
-                resource_found = true;
-                break;
-            }
-        }
-        for (uint32_t view_index = 0; !resource_found && view_index < desc->resource_view_count; ++view_index) {
-            resource_found = strcmp(desc->resource_views[view_index].name, desc->dependencies[i].resource) == 0;
-        }
-        for (uint32_t composition_index = 0; !resource_found && composition_index < desc->fbo_composition_count;
-             ++composition_index) {
-            resource_found =
-                strcmp(desc->fbo_compositions[composition_index].name, desc->dependencies[i].resource) == 0;
-        }
-        if (!resource_found) {
-            tc_log_error("tc_pipeline_template_set_payload: dependency %u references missing resource '%s'",
-                         i,
-                         desc->dependencies[i].resource);
-            return false;
-        }
     }
-    return true;
+    return validate_resource_links(desc);
 }
 
 #define ALLOC_COPY(field, count)                                                                                       \

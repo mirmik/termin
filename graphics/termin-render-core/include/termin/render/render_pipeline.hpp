@@ -49,6 +49,10 @@ namespace termin {
         std::vector<PipelineColorExport> color_exports;
         // Separate from graph-named textures so user resource names cannot collide.
         PipelineTexturePool color_export_scratch;
+        // Template-declared external resources are slots, not allocation specs.
+        std::vector<std::string> external_texture_slots;
+        std::unordered_map<std::string, AttachmentSources> attachment_sources;
+        uint64_t attachment_sources_revision = 0;
     };
 
     // Mutable execution instance. It owns live passes and device-local caches while

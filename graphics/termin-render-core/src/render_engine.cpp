@@ -6,7 +6,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
-#include <functional>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -138,6 +137,8 @@ namespace termin {
 
     static std::vector<const char*> collect_alias_group(tc_frame_graph* fg, const char* canonical) {
         std::vector<const char*> values(tc_frame_graph_get_alias_group(fg, canonical, nullptr, 0));
+        if (values.empty())
+            return {canonical}; // Storage referenced only by views/compositions is absent from the C pass graph.
         size_t count = tc_frame_graph_get_alias_group(fg, canonical, values.data(), values.size());
         values.resize(count);
         return values;
@@ -147,70 +148,45 @@ namespace termin {
         return std::chrono::duration<double, std::milli>(end - begin).count();
     }
 
-    using ExternalResourcePredicate = bool (*)(const char*);
-
-    static const char*
-    find_external_alias(tc_frame_graph* frame_graph, const char* resource_name, ExternalResourcePredicate predicate) {
-        if (!frame_graph || !resource_name || !predicate) {
-            return nullptr;
-        }
-        const char* canonical = tc_frame_graph_canonical_resource(frame_graph, resource_name);
-        if (predicate(canonical)) {
-            return canonical;
-        }
-        // In-place passes intentionally keep the input resource as the framegraph
-        // canonical name. When their output is caller-owned (for example OUTPUT),
-        // the whole alias group must still resolve to that external attachment.
-        for (const char* alias : collect_alias_group(frame_graph, canonical)) {
-            if (predicate(alias)) {
-                return alias;
-            }
-        }
-        return nullptr;
-    }
-
-    // External attachments belong to the selected viewport. Keep their physical
-    // handles out of the maps shared by all passes and exports.
+    // The plan contains storage names only. Resolve viewport and sampled
+    // resources at the point of use, including captures after pass execution.
     struct ViewportTextureBindings {
-        tc_frame_graph* graph;
-        const PipelineRenderCache& cache;
+        const std::unordered_map<std::string, AttachmentSources>& sources;
         const Tex2Map& colors;
         const Tex2Map& depths;
+        const ResourceMap& resources;
         const RenderTargetContext& target;
+        const tgfx::IRenderDevice& device;
 
         tgfx::TextureHandle resolve(const std::string& name, AttachmentKind attachment) const {
+            const auto entry = sources.find(name);
+            if (entry == sources.end())
+                return {};
             const bool color = attachment == AttachmentKind::Color;
-            if (find_external_alias(graph, name.c_str(), color ? is_external_color_output : is_external_output_resource))
+            const auto& source = color ? entry->second.color : entry->second.depth;
+            if (source.name.empty())
+                return {};
+            if (source.storage == AttachmentStorage::ViewportOutput)
                 return color ? target.output_color.texture : target.output_depth_tex;
-
-            const char* canonical = tc_frame_graph_canonical_resource(graph, name.c_str());
-            if (canonical && name != canonical) {
-                if (auto texture = resolve(canonical, attachment))
+            if (const auto it = target.external_textures.find(source.name); it != target.external_textures.end()) {
+                const auto texture = it->second;
+                if (texture && tgfx::is_depth_format(device.texture_desc(texture).format) == !color)
                     return texture;
-            }
-            if (color) {
-                auto external = target.external_textures.find(name);
-                if (external != target.external_textures.end())
-                    return external->second;
-            }
-            auto view = cache.resource_views.find(name);
-            if (view != cache.resource_views.end()) {
-                // A depth view is also a sampled texture in pass texture reads.
-                if (color || view->second.attachment == AttachmentKind::Depth)
-                    return resolve(view->second.parent, view->second.attachment);
                 return {};
             }
-            auto composition = cache.fbo_compositions.find(name);
-            if (composition != cache.fbo_compositions.end()) {
-                if (color)
-                    return resolve(composition->second.color, AttachmentKind::Color);
-                if (auto depth = resolve(composition->second.depth, AttachmentKind::Depth))
-                    return depth;
-                return resolve(composition->second.depth, AttachmentKind::Color);
-            }
+            if (source.storage == AttachmentStorage::ViewportSlot)
+                return {};
             const auto& textures = color ? colors : depths;
-            auto texture = textures.find(name);
-            return texture != textures.end() ? texture->second : tgfx::TextureHandle{};
+            if (const auto it = textures.find(source.name); it != textures.end())
+                return it->second;
+            if (const auto it = resources.find(source.name); it != resources.end() && it->second) {
+                const auto sampled = frame_graph_resource_sampled_texture(*it->second);
+                const auto kind = color ? FrameGraphResourceSampledTextureKind::Color
+                                        : FrameGraphResourceSampledTextureKind::Depth;
+                if (sampled.kind == kind)
+                    return sampled.texture;
+            }
+            return {};
         }
     };
 
@@ -491,12 +467,16 @@ namespace termin {
 
         const auto& canonical_names = schedule.canonical_resources;
         const size_t canon_count = canonical_names.size();
+        const auto viewport_owns_storage = [&](const char* canon) {
+            const auto& sources = pipeline_cache.attachment_sources.at(canon);
+            return sources.color.storage != AttachmentStorage::Resource ||
+                   sources.depth.storage != AttachmentStorage::Resource ||
+                   is_external_graph_input_resource(sources.color.name.c_str(), render_target_contexts);
+        };
         std::unordered_map<std::string, ResolvedResourceExtent> resolved_resource_extents;
         resolved_resource_extents.reserve(canon_count);
         for (const char* canon : canonical_names) {
-            if (pipeline_cache.fbo_compositions.contains(canon) ||
-                find_external_alias(fg, canon, is_external_output_resource) ||
-                is_external_graph_input_resource(canon, render_target_contexts)) {
+            if (pipeline_cache.fbo_compositions.contains(canon) || viewport_owns_storage(canon)) {
                 continue;
             }
             const ResourceSpec* spec = find_resource_spec(canon);
@@ -515,37 +495,6 @@ namespace termin {
             resolved_resource_extents.emplace(canon, *extent);
         }
 
-        // Resolve the allocation that physically owns a color result. FBO
-        // compositions and attachment views are names for an underlying color
-        // resource; direct export binding must replace that resource's color
-        // attachment while preserving any separately allocated depth.
-        auto resolve_color_storage = [&](const std::string& resource) {
-            std::string current = resource;
-            for (size_t depth = 0; depth < 8; ++depth) {
-                const char* canonical = tc_frame_graph_canonical_resource(fg, current.c_str());
-                if (canonical) {
-                    current = canonical;
-                }
-
-                auto view = pipeline_cache.resource_views.find(current);
-                if (view != pipeline_cache.resource_views.end()) {
-                    if (view->second.attachment != AttachmentKind::Color) {
-                        return std::string{};
-                    }
-                    current = view->second.parent;
-                    continue;
-                }
-
-                auto composition = pipeline_cache.fbo_compositions.find(current);
-                if (composition != pipeline_cache.fbo_compositions.end()) {
-                    current = composition->second.color;
-                    continue;
-                }
-                return current;
-            }
-            tc::Log::error("RenderEngine: color resource '%s' has a cyclic view/composition chain", resource.c_str());
-            return std::string{};
-        };
 
         struct DirectColorCandidate {
             std::string storage_resource;
@@ -561,10 +510,10 @@ namespace termin {
                 return false;
             }
 
-            candidate.storage_resource = resolve_color_storage(color_export.resource);
-            if (candidate.storage_resource.empty()) {
+            const auto& sources = pipeline_cache.attachment_sources.at(color_export.resource);
+            candidate.storage_resource = sources.color.name;
+            if (candidate.storage_resource.empty())
                 return false;
-            }
             const ResourceSpec* spec = find_resource_spec(candidate.storage_resource);
             const std::string resource_type = spec && !spec->resource_type.empty() ? spec->resource_type : "fbo";
             if (resource_type != "fbo" && resource_type != "multiview_fbo" && resource_type != "color_texture" &&
@@ -628,8 +577,7 @@ namespace termin {
                 continue;
             }
 
-            if (find_external_alias(fg, canon, is_external_output_resource) ||
-                is_external_graph_input_resource(canon, render_target_contexts)) {
+            if (viewport_owns_storage(canon)) {
                 // OUTPUT/DISPLAY/RT_* are viewport-owned native textures, and
                 // External RT resources are supplied through RenderTargetContext.
                 // Never allocate an internal FBO/texture for these names: doing
@@ -807,118 +755,19 @@ namespace termin {
         std::unordered_map<std::string, tgfx::TextureHandle> tex2_resources;
         std::unordered_map<std::string, tgfx::TextureHandle> tex2_depth_resources;
         if (ctx2 && device) {
-            for (const auto& [storage_resource, target] : direct_color_allocations) {
-                for (const char* alias : collect_alias_group(fg, storage_resource.c_str())) {
-                    tex2_resources[alias] = target;
-                }
-                tex2_resources[storage_resource] = target;
-            }
+            tex2_resources = direct_color_allocations;
             FBOPool& fbo_pool = pipeline.fbo_pool();
-            for (const auto& [name, res] : resources) {
-                tgfx::TextureHandle color_handle = fbo_pool.get_color_tgfx2(name);
-                if (color_handle)
-                    tex2_resources[name] = color_handle;
-                tgfx::TextureHandle depth_handle = fbo_pool.get_depth_tgfx2(name);
-                if (depth_handle)
-                    tex2_depth_resources[name] = depth_handle;
-            }
-
-            for (size_t i = 0; i < canon_count; i++) {
-                const char* canon = canonical_names[i];
-                tgfx::TextureHandle handle = pipeline_cache.texture_pool.get(canon);
-                if (!handle) {
+            for (const char* canon : canonical_names) {
+                if (!resolved_resource_extents.contains(canon))
                     continue;
-                }
-                const tgfx::TextureDesc desc = device->texture_desc(handle);
-                const bool depth_texture = tgfx::is_depth_format(desc.format);
-
-                std::vector<const char*> aliases = collect_alias_group(fg, canon);
-                size_t alias_count = aliases.size();
-                for (size_t j = 0; j < alias_count; j++) {
-                    if (depth_texture) {
-                        tex2_depth_resources[aliases[j]] = handle;
-                        if (tex2_resources.find(aliases[j]) == tex2_resources.end()) {
-                            tex2_resources[aliases[j]] = handle;
-                        }
-                    } else {
-                        tex2_resources[aliases[j]] = handle;
-                    }
-                }
-            }
-
-            for (const auto& [view_name, view] : pipeline_cache.resource_views) {
-                if (!schedule.resources.contains(view_name) || is_external_output_resource(view.parent.c_str())) {
-                    continue;
-                }
-                if (view.attachment == AttachmentKind::Color) {
-                    auto it = tex2_resources.find(view.parent);
-                    if (it != tex2_resources.end() && it->second) {
-                        tex2_resources[view_name] = it->second;
-                    } else {
-                        tc::Log::error("RenderEngine: color view '%s' parent '%s' is missing",
-                                       view_name.c_str(),
-                                       view.parent.c_str());
-                    }
+                if (tgfx::TextureHandle handle = pipeline_cache.texture_pool.get(canon)) {
+                    if (tgfx::is_depth_format(device->texture_desc(handle).format))
+                        tex2_depth_resources[canon] = handle;
+                    else
+                        tex2_resources[canon] = handle;
                 } else {
-                    auto it = tex2_depth_resources.find(view.parent);
-                    if (it != tex2_depth_resources.end() && it->second) {
-                        tex2_resources[view_name] = it->second;
-                        tex2_depth_resources[view_name] = it->second;
-                    } else {
-                        tc::Log::error("RenderEngine: depth view '%s' parent '%s' is missing",
-                                       view_name.c_str(),
-                                       view.parent.c_str());
-                    }
-                }
-            }
-
-            for (const auto& [fbo_name, composition] : pipeline_cache.fbo_compositions) {
-                if (!schedule.resources.contains(fbo_name))
-                    continue;
-                auto composition_input_is_external = [&](const std::string& name) {
-                    if (is_external_output_resource(name.c_str())) {
-                        return true;
-                    }
-                    if (is_external_graph_input_resource(name.c_str(), render_target_contexts)) {
-                        return true;
-                    }
-                    auto view_it = pipeline_cache.resource_views.find(name);
-                    return view_it != pipeline_cache.resource_views.end() &&
-                           is_external_output_resource(view_it->second.parent.c_str());
-                };
-                if (composition_input_is_external(composition.color) ||
-                    composition_input_is_external(composition.depth)) {
-                    // Viewport-owned textures are only available once a concrete
-                    // render target context is selected. Per-pass resolvers below handle
-                    // those compositions without populating the global maps here.
-                    continue;
-                }
-
-                auto color_it = tex2_resources.find(composition.color);
-                if (color_it != tex2_resources.end() && color_it->second) {
-                    tex2_resources[fbo_name] = color_it->second;
-                } else {
-                    tc::Log::error("RenderEngine: composed FBO '%s' color input '%s' is missing",
-                                   fbo_name.c_str(),
-                                   composition.color.c_str());
-                }
-
-                tgfx::TextureHandle depth_handle;
-                auto depth_it = tex2_depth_resources.find(composition.depth);
-                if (depth_it != tex2_depth_resources.end() && depth_it->second) {
-                    depth_handle = depth_it->second;
-                } else {
-                    auto depth_as_color_it = tex2_resources.find(composition.depth);
-                    if (depth_as_color_it != tex2_resources.end() && depth_as_color_it->second) {
-                        depth_handle = depth_as_color_it->second;
-                    }
-                }
-                if (depth_handle) {
-                    tex2_depth_resources[fbo_name] = depth_handle;
-                } else {
-                    tc::Log::error("RenderEngine: composed FBO '%s' depth input '%s' is missing",
-                                   fbo_name.c_str(),
-                                   composition.depth.c_str());
+                    if (auto color = fbo_pool.get_color_tgfx2(canon)) tex2_resources[canon] = color;
+                    if (auto depth = fbo_pool.get_depth_tgfx2(canon)) tex2_depth_resources[canon] = depth;
                 }
             }
         }
@@ -953,7 +802,7 @@ namespace termin {
             }
 
             const ViewportTextureBindings bindings{
-                fg, pipeline_cache, tex2_resources, tex2_depth_resources, target_it->second};
+                pipeline_cache.attachment_sources, tex2_resources, tex2_depth_resources, resources, target_it->second, *device};
             const tgfx::TextureHandle source = bindings.resolve(color_export.resource, AttachmentKind::Color);
             if (!source) {
                 tc::Log::error("RenderEngine: color export resource '%s' is unavailable",
@@ -989,86 +838,10 @@ namespace termin {
         }
 
         auto capture_debug_resource = [&](FrameGraphCaptureRequest& request, const RenderTargetContext& rt_ctx) {
-            std::function<tgfx::TextureHandle(const std::string&)> resolve_depth;
-            std::function<tgfx::TextureHandle(const std::string&)> resolve_color;
-            resolve_color = [&](const std::string& name) -> tgfx::TextureHandle {
-                if (find_external_alias(fg, name.c_str(), is_external_color_output)) {
-                    return rt_ctx.output_color.texture;
-                }
-                const char* canonical_c = tc_frame_graph_canonical_resource(fg, name.c_str());
-                const std::string canonical = canonical_c ? canonical_c : name;
-                if (canonical != name) {
-                    tgfx::TextureHandle canonical_handle = resolve_color(canonical);
-                    if (canonical_handle)
-                        return canonical_handle;
-                }
-                if (is_external_color_output(name.c_str()))
-                    return rt_ctx.output_color.texture;
-                auto external = rt_ctx.external_textures.find(name);
-                if (external != rt_ctx.external_textures.end())
-                    return external->second;
-                auto view = pipeline_cache.resource_views.find(name);
-                if (view != pipeline_cache.resource_views.end()) {
-                    return view->second.attachment == AttachmentKind::Color ? resolve_color(view->second.parent)
-                                                                            : tgfx::TextureHandle{};
-                }
-                auto composition = pipeline_cache.fbo_compositions.find(name);
-                if (composition != pipeline_cache.fbo_compositions.end()) {
-                    return resolve_color(composition->second.color);
-                }
-                auto texture = tex2_resources.find(name);
-                if (texture != tex2_resources.end()) {
-                    return texture->second;
-                }
-                auto resource = resources.find(name);
-                if (resource == resources.end() || !resource->second) {
-                    return {};
-                }
-                const FrameGraphResourceSampledTexture sampled =
-                    frame_graph_resource_sampled_texture(*resource->second);
-                return sampled.kind == FrameGraphResourceSampledTextureKind::Color ? sampled.texture
-                                                                                   : tgfx::TextureHandle{};
-            };
-            resolve_depth = [&](const std::string& name) -> tgfx::TextureHandle {
-                if (find_external_alias(fg, name.c_str(), is_external_output_resource)) {
-                    return rt_ctx.output_depth_tex;
-                }
-                const char* canonical_c = tc_frame_graph_canonical_resource(fg, name.c_str());
-                const std::string canonical = canonical_c ? canonical_c : name;
-                if (canonical != name) {
-                    tgfx::TextureHandle canonical_handle = resolve_depth(canonical);
-                    if (canonical_handle)
-                        return canonical_handle;
-                }
-                if (is_external_color_output(name.c_str()) || is_external_depth_output(name.c_str())) {
-                    return rt_ctx.output_depth_tex;
-                }
-                auto view = pipeline_cache.resource_views.find(name);
-                if (view != pipeline_cache.resource_views.end()) {
-                    return view->second.attachment == AttachmentKind::Depth ? resolve_depth(view->second.parent)
-                                                                            : tgfx::TextureHandle{};
-                }
-                auto composition = pipeline_cache.fbo_compositions.find(name);
-                if (composition != pipeline_cache.fbo_compositions.end()) {
-                    tgfx::TextureHandle depth = resolve_depth(composition->second.depth);
-                    return depth ? depth : resolve_color(composition->second.depth);
-                }
-                auto texture = tex2_depth_resources.find(name);
-                if (texture != tex2_depth_resources.end()) {
-                    return texture->second;
-                }
-                auto resource = resources.find(name);
-                if (resource == resources.end() || !resource->second) {
-                    return {};
-                }
-                const FrameGraphResourceSampledTexture sampled =
-                    frame_graph_resource_sampled_texture(*resource->second);
-                return sampled.kind == FrameGraphResourceSampledTextureKind::Depth ? sampled.texture
-                                                                                   : tgfx::TextureHandle{};
-            };
-
-            const tgfx::TextureHandle color = resolve_color(request.resource);
-            const tgfx::TextureHandle depth = resolve_depth(request.resource);
+            const ViewportTextureBindings bindings{
+                pipeline_cache.attachment_sources, tex2_resources, tex2_depth_resources, resources, rt_ctx, *device};
+            const tgfx::TextureHandle color = bindings.resolve(request.resource, AttachmentKind::Color);
+            const tgfx::TextureHandle depth = bindings.resolve(request.resource, AttachmentKind::Depth);
             const tgfx::TextureHandle primary = color ? color : depth;
             if (!primary) {
                 request.status = FrameGraphCaptureRequestStatus::ResourceUnavailable;
@@ -1138,65 +911,39 @@ namespace termin {
             Tex2Map pass_tex2_depth_writes;
             ResourceMap pass_frame_graph_resources;
 
-            const ViewportTextureBindings bindings{fg, pipeline_cache, tex2_resources, tex2_depth_resources, rt_ctx};
-
-            auto collect_frame_graph_resource = [&](const char* name) {
-                auto it = resources.find(name);
-                if (it != resources.end() && it->second) {
-                    pass_frame_graph_resources[name] = it->second;
-                    const FrameGraphResourceSampledTexture sampled = frame_graph_resource_sampled_texture(*it->second);
+            const ViewportTextureBindings bindings{
+                pipeline_cache.attachment_sources, tex2_resources, tex2_depth_resources, resources, rt_ctx, *device};
+            const auto bind_resource = [&](const char* name, Tex2Map& color_map, Tex2Map& depth_map) {
+                const auto& sources = pipeline_cache.attachment_sources.at(name);
+                auto resource = resources.find(name);
+                if (resource != resources.end() && resource->second) {
+                    pass_frame_graph_resources[name] = resource->second;
+                    // Registered resources expose sampled previews to reads
+                    // even when a pass declares only a write to the object.
+                    const auto sampled = frame_graph_resource_sampled_texture(*resource->second);
                     if (sampled.texture) {
-                        if (sampled.kind == FrameGraphResourceSampledTextureKind::Depth) {
-                            pass_tex2_depth_reads[name] = sampled.texture;
-                        } else {
-                            pass_tex2_reads[name] = sampled.texture;
-                        }
+                        auto& reads = sampled.kind == FrameGraphResourceSampledTextureKind::Depth
+                            ? pass_tex2_depth_reads : pass_tex2_reads;
+                        reads[name] = sampled.texture;
                     }
+                    return;
+                }
+                const auto color = bindings.resolve(name, AttachmentKind::Color);
+                const auto depth = bindings.resolve(name, AttachmentKind::Depth);
+                if (color) color_map[name] = color;
+                if (depth) {
+                    depth_map[name] = depth;
+                    // A depth view or standalone depth texture can be sampled
+                    // through the generic texture socket as well.
+                    if (!color && (sources.depth_view || pipeline_cache.texture_pool.get(sources.depth.name) == depth ||
+                                   (sources.color == sources.depth && rt_ctx.external_textures.contains(sources.depth.name))))
+                        color_map[name] = depth;
                 }
             };
-
-            for (const char* read_name : reads) {
-                if (is_external_color_output(read_name)) {
-                    if (rt_ctx.output_color.texture)
-                        pass_tex2_reads[read_name] = rt_ctx.output_color.texture;
-                    if (rt_ctx.output_depth_tex)
-                        pass_tex2_depth_reads[read_name] = rt_ctx.output_depth_tex;
-                    continue;
-                }
-                if (is_external_depth_output(read_name)) {
-                    if (rt_ctx.output_depth_tex)
-                        pass_tex2_depth_reads[read_name] = rt_ctx.output_depth_tex;
-                    continue;
-                }
-                collect_frame_graph_resource(read_name);
-                auto ext_it = rt_ctx.external_textures.find(read_name);
-                if (ext_it != rt_ctx.external_textures.end() && ext_it->second) {
-                    pass_tex2_reads[read_name] = ext_it->second;
-                    continue;
-                }
-                if (tgfx::TextureHandle color_handle = bindings.resolve(read_name, AttachmentKind::Color))
-                    pass_tex2_reads[read_name] = color_handle;
-                if (tgfx::TextureHandle depth_handle = bindings.resolve(read_name, AttachmentKind::Depth))
-                    pass_tex2_depth_reads[read_name] = depth_handle;
-            }
-
-            for (const char* write_name : writes) {
-                if (is_external_color_output(write_name)) {
-                    if (rt_ctx.output_color.texture)
-                        pass_tex2_writes[write_name] = rt_ctx.output_color.texture;
-                    if (rt_ctx.output_depth_tex)
-                        pass_tex2_depth_writes[write_name] = rt_ctx.output_depth_tex;
-                } else if (is_external_depth_output(write_name)) {
-                    if (rt_ctx.output_depth_tex)
-                        pass_tex2_depth_writes[write_name] = rt_ctx.output_depth_tex;
-                } else {
-                    collect_frame_graph_resource(write_name);
-                    if (tgfx::TextureHandle color_handle = bindings.resolve(write_name, AttachmentKind::Color))
-                        pass_tex2_writes[write_name] = color_handle;
-                    if (tgfx::TextureHandle depth_handle = bindings.resolve(write_name, AttachmentKind::Depth))
-                        pass_tex2_depth_writes[write_name] = depth_handle;
-                }
-            }
+            for (const char* name : reads)
+                bind_resource(name, pass_tex2_reads, pass_tex2_depth_reads);
+            for (const char* name : writes)
+                bind_resource(name, pass_tex2_writes, pass_tex2_depth_writes);
 
             ExecuteContext& ctx = prepared.context;
             ctx.ctx2 = ctx2;
@@ -1320,10 +1067,6 @@ namespace termin {
             return it == prepared.context.tex2_writes.end() ? tgfx::TextureHandle{} : it->second;
         };
 
-        const auto canonical_resource_name = [&](const std::string& resource) {
-            const char* canonical = tc_frame_graph_canonical_resource(fg, resource.c_str());
-            return std::string(canonical ? canonical : resource);
-        };
 
         tc_profiler_begin_section("Plan Resource Clears");
         struct PhysicalTextureClear {
@@ -1334,14 +1077,6 @@ namespace termin {
             std::string target_scope;
         };
         std::unordered_map<uint32_t, PhysicalTextureClear> physical_texture_clears;
-        const auto find_texture = [&](const Tex2Map& textures, const std::string& resource) {
-            auto texture = textures.find(resource);
-            if (texture != textures.end())
-                return texture->second;
-            const std::string canonical = canonical_resource_name(resource);
-            texture = textures.find(canonical);
-            return texture != textures.end() ? texture->second : tgfx::TextureHandle{};
-        };
         const auto merge_color_clear = [&](const ResourceSpec& spec, tgfx::TextureHandle texture, const std::string& target_scope) {
             if (!spec.clear_color)
                 return;
@@ -1399,19 +1134,21 @@ namespace termin {
             // viewport-scoped. They are deliberately absent from the global
             // texture maps; use the same physical bindings as pass execution.
             const auto plan_attachment_clear = [&](const Tex2Map& global_textures,
+                                                   AttachmentSource AttachmentSources::* source_member,
                                                    auto reads_member,
                                                    auto writes_member,
                                                    auto merge_clear) {
-                if (tgfx::TextureHandle texture = find_texture(global_textures, spec.resource)) {
-                    merge_clear(spec, texture, "");
+                const auto& source = pipeline_cache.attachment_sources.at(spec.resource).*source_member;
+                if (auto texture = global_textures.find(source.name); texture != global_textures.end()) {
+                    merge_clear(spec, texture->second, "");
                     return;
                 }
-                const std::string canonical = canonical_resource_name(spec.resource);
                 bool resolved = false;
                 for (const PreparedPass& prepared : prepared_passes) {
                     const auto merge_bindings = [&](const Tex2Map& bindings) {
                         for (const auto& [resource, texture] : bindings) {
-                            if (texture && canonical_resource_name(resource) == canonical) {
+                            if (texture && !source.name.empty() &&
+                                pipeline_cache.attachment_sources.at(resource).*source_member == source) {
                                 merge_clear(spec, texture, prepared.context.render_target_name);
                                 resolved = true;
                             }
@@ -1425,11 +1162,13 @@ namespace termin {
             };
             if (!depth_texture && spec.clear_color)
                 plan_attachment_clear(tex2_resources,
+                                      &AttachmentSources::color,
                                       &ExecuteContext::tex2_reads,
                                       &ExecuteContext::tex2_writes,
                                       merge_color_clear);
             if (!color_texture && spec.clear_depth)
                 plan_attachment_clear(tex2_depth_resources,
+                                      &AttachmentSources::depth,
                                       &ExecuteContext::tex2_depth_reads,
                                       &ExecuteContext::tex2_depth_writes,
                                       merge_depth_clear);
