@@ -723,6 +723,41 @@ namespace {
         }
     }
 
+    void test_warm_contact_face_checks_curvature_outside_the_face() {
+        // At x=0 the face x0=x1 is stationary with multiplier 1. Its tangent
+        // always has positive curvature. The feasible direction (-1,1) has
+        // negative curvature when the off-diagonal coefficient exceeds 1.
+        const std::vector<double> gradient{-1, 1}, contact{1, -1}, limit{0}, origin{0, 0}, active{1};
+        const ActiveSetQpWarmStartView warm{const_vector(origin), const_vector(active), {}, {}};
+        for (double coupling : {2.0, 1.0}) {
+            const std::vector<double> hessian{1, coupling, coupling, 1};
+            const ActiveSetQpProblemView problem{row_major(hessian, 2, 2),
+                                                 const_vector(gradient),
+                                                 ConstDenseMatrixView::row_major(nullptr, 0, 2),
+                                                 {},
+                                                 row_major(contact, 1, 2),
+                                                 const_vector(limit),
+                                                 {},
+                                                 {}};
+            for (bool hint_only : {false, true}) {
+                std::vector<double> primal(2, 123), dual(1, 456);
+                const ActiveSetQpSolutionView solution{vector(primal), {}, vector(dual), {}, {}};
+                const auto result =
+                    hint_only ? solve_active_set_qp_with_inequality_hint(problem, solution, const_vector(active))
+                              : solve_active_set_qp(problem, solution, warm);
+                if (coupling == 2.0) {
+                    TERMIN_QOPT_CHECK(result.status == QpStatus::NonConvex);
+                    TERMIN_QOPT_CHECK(result.diagnostic == QpDiagnostic::NegativeCurvature);
+                    TERMIN_QOPT_CHECK(all_equal(primal, 123) && all_equal(dual, 456));
+                } else {
+                    TERMIN_QOPT_CHECK(result.status == QpStatus::Optimal);
+                    TERMIN_QOPT_CHECK(linf_difference(primal, origin) <= 1e-12);
+                    TERMIN_QOPT_CHECK(std::abs(dual[0] - 1) <= 1e-12);
+                }
+            }
+        }
+    }
+
     void test_nonconvexity_and_output_overlap_are_rejected() {
         const std::vector<double> negative_hessian{-1.0};
         const std::vector<double> gradient{0.0};
@@ -895,6 +930,7 @@ int main() {
     test_unrelated_large_inequality_does_not_corrupt_phase_one();
     test_active_inequality_scaling_preserves_original_unit_dual();
     test_scaled_phase_one_with_equality_bound_and_warm_start();
+    test_warm_contact_face_checks_curvature_outside_the_face();
     test_nonconvexity_and_output_overlap_are_rejected();
     test_deterministic_2d_corpus_against_active_subset_oracle();
     return 0;

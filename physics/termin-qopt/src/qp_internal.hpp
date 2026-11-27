@@ -16,6 +16,9 @@ namespace termin::qopt::detail {
     using Matrix = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
     using Vector = Eigen::Matrix<double, Eigen::Dynamic, 1>;
 
+    // For a finite, nonempty symmetric Hessian. A false result is inconclusive.
+    [[nodiscard]] bool certifies_positive_definiteness(const Matrix& hessian, QpTolerance tolerance);
+
     [[nodiscard]] QpSolveResult solve_equality_qp_spd_first(EqualityQpProblemView problem,
                                                             EqualityQpSolutionView solution,
                                                             QpTolerance tolerance) noexcept;

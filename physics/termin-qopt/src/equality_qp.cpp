@@ -10,7 +10,9 @@
 #include <cmath>
 #include <cstdio>
 #include <exception>
+#include <limits>
 #include <numeric>
+#include <optional>
 #include <utility>
 
 namespace termin::qopt {
@@ -18,7 +20,14 @@ namespace termin::qopt {
 
         using namespace detail;
 
-        struct RankRevealingFactorization {
+        enum class FactorizationPolicy {
+            Spectral,
+            CertifiedUnconstrained,
+            SchurFirst
+        };
+
+        struct EqualityFactorization {
+            std::optional<Eigen::LLT<Matrix>> cholesky;
             Matrix input_hessian;
             Matrix input_equalities;
             Matrix hessian;
@@ -47,7 +56,7 @@ namespace termin::qopt {
             return left.rows() == right.rows() && left.cols() == right.cols() && (left.array() == right.array()).all();
         }
 
-        [[nodiscard]] bool compatible(const RankRevealingFactorization& factor,
+        [[nodiscard]] bool compatible(const EqualityFactorization& factor,
                                       const Matrix& hessian,
                                       const Matrix& equalities,
                                       QpTolerance tolerance) noexcept {
@@ -55,7 +64,7 @@ namespace termin::qopt {
                    same_matrix(factor.input_hessian, hessian) && same_matrix(factor.input_equalities, equalities);
         }
 
-        [[nodiscard]] QpSolveResult solve_factored_gradient(const RankRevealingFactorization& factor,
+        [[nodiscard]] QpSolveResult solve_factored_gradient(const EqualityFactorization& factor,
                                                             const Vector& gradient,
                                                             const Vector& feasible,
                                                             const Vector& input_equality_targets,
@@ -146,11 +155,54 @@ namespace termin::qopt {
             return result;
         }
 
+        [[nodiscard]] bool symmetric_within_tolerance(const Matrix& input, double scale, QpTolerance tolerance) {
+            return matrix_linf(input - input.transpose()) <= tolerance.symmetry * std::max(1.0, scale);
+        }
+
+        [[nodiscard]] bool
+        compute_certified_cholesky(const Matrix& hessian, QpTolerance tolerance, Eigen::LLT<Matrix>& factor) {
+            if (!certifies_positive_definiteness(hessian, tolerance)) {
+                return false;
+            }
+            // Solve with the original coefficients; the shift is only a rank test.
+            factor.compute(hessian);
+            return factor.info() == Eigen::Success && factor.matrixLLT().allFinite();
+        }
+
+        template <typename Rhs>
+        [[nodiscard]] std::optional<QpSolveResult> solve_certified_cholesky(const Matrix& hessian,
+                                                                            const Eigen::LLT<Matrix>& factor,
+                                                                            const Rhs& gradients,
+                                                                            Rhs& responses,
+                                                                            QpTolerance tolerance) {
+            responses = -gradients;
+            factor.solveInPlace(responses);
+            const Rhs hessian_times_x = hessian * responses;
+            if (!responses.allFinite() || !hessian_times_x.allFinite()) {
+                return std::nullopt;
+            }
+            QpSolveResult result;
+            result.status = QpStatus::Optimal;
+            result.reduced_hessian_rank = static_cast<std::size_t>(hessian.rows());
+            result.equality_linf = 0.0;
+            result.stationarity_linf = 0.0;
+            for (Eigen::Index col = 0; col < responses.cols(); ++col) {
+                const double residual = (hessian_times_x.col(col) + gradients.col(col)).cwiseAbs().maxCoeff();
+                const double scale =
+                    std::max(hessian_times_x.col(col).cwiseAbs().maxCoeff(), gradients.col(col).cwiseAbs().maxCoeff());
+                if (!std::isfinite(residual) || residual > scaled_tolerance(tolerance, scale)) {
+                    return std::nullopt;
+                }
+                result.stationarity_linf = std::max(result.stationarity_linf, residual);
+            }
+            return result;
+        }
+
         [[nodiscard]] QpSolveResult solve_impl(EqualityQpProblemView problem,
                                                EqualityQpSolutionView solution,
                                                QpTolerance tolerance,
-                                               bool try_spd_fast_path,
-                                               RankRevealingFactorization* cache,
+                                               FactorizationPolicy policy,
+                                               EqualityFactorization* cache,
                                                EqualityQpFactorizationCounters* counters) {
             if (!valid_tolerance(tolerance)) {
                 return failure(QpStatus::InvalidInput, QpDiagnostic::InvalidTolerance);
@@ -191,8 +243,7 @@ namespace termin::qopt {
             const Vector input_equality_targets = copy_vector(problem.equality_targets);
 
             const double hessian_scale = matrix_linf(input_hessian);
-            const double symmetry_residual = matrix_linf(input_hessian - input_hessian.transpose());
-            if (symmetry_residual > tolerance.symmetry * std::max(1.0, hessian_scale)) {
+            if (!symmetric_within_tolerance(input_hessian, hessian_scale, tolerance)) {
                 return failure(QpStatus::InvalidInput, QpDiagnostic::NonSymmetricHessian);
             }
             const Matrix hessian = 0.5 * (input_hessian + input_hessian.transpose());
@@ -216,7 +267,8 @@ namespace termin::qopt {
             // independent active constraints. Solve that common case through the Schur
             // complement, while retaining the rank-revealing path below for singular,
             // semidefinite, or inconsistent problems.
-            if (try_spd_fast_path && constraint_count > 0 && constraint_count <= variable_count) {
+            if (policy == FactorizationPolicy::SchurFirst && constraint_count > 0 &&
+                constraint_count <= variable_count) {
                 Eigen::LLT<Matrix> hessian_factor(hessian);
                 if (hessian_factor.info() == Eigen::Success) {
                     const Vector hessian_pivots = hessian_factor.matrixL().toDenseMatrix().diagonal().array().square();
@@ -274,8 +326,8 @@ namespace termin::qopt {
                 }
             }
 
-            RankRevealingFactorization local_factor;
-            RankRevealingFactorization& factor = cache == nullptr ? local_factor : *cache;
+            EqualityFactorization local_factor;
+            EqualityFactorization& factor = cache == nullptr ? local_factor : *cache;
             if (compatible(factor, input_hessian, input_equalities, tolerance)) {
                 if (counters != nullptr) {
                     ++counters->reuse_hits;
@@ -295,6 +347,7 @@ namespace termin::qopt {
                 factor.reduced_rank = 0;
                 factor.curvature_tolerance = 0.0;
                 factor.reduced_valid = false;
+                factor.cholesky.reset();
 
                 if (unconstrained) {
                     // The whole variable space is free. Represent its identity
@@ -303,6 +356,10 @@ namespace termin::qopt {
                     factor.left_range.resize(0, 0);
                     factor.right_range.resize(variable_count, 0);
                     factor.inverse_singular_values.resize(0);
+                    if (policy == FactorizationPolicy::CertifiedUnconstrained &&
+                        !compute_certified_cholesky(factor.hessian, tolerance, factor.cholesky.emplace())) {
+                        factor.cholesky.reset();
+                    }
                 } else {
                     Eigen::JacobiSVD<Matrix> svd(factor.equalities, Eigen::ComputeFullU | Eigen::ComputeFullV);
                     if (svd.info() != Eigen::Success) {
@@ -336,6 +393,16 @@ namespace termin::qopt {
                 }
 
                 factor.valid = true;
+            }
+
+            if (factor.cholesky) {
+                Vector primal;
+                const auto result =
+                    solve_certified_cholesky(factor.hessian, *factor.cholesky, gradient, primal, tolerance);
+                if (result) {
+                    copy_to_view(primal, solution.primal);
+                    return *result;
+                }
             }
 
             Vector feasible;
@@ -406,6 +473,64 @@ namespace termin::qopt {
                 factor, gradient, feasible, input_equality_targets, feasibility_tolerance, solution);
         }
 
+        [[nodiscard]] QpSolveResult solve_spectral_batch(ConstDenseMatrixView hessian,
+                                                         ConstDenseMatrixView equalities,
+                                                         ConstDenseMatrixView gradients,
+                                                         QpTolerance tolerance,
+                                                         Matrix& responses,
+                                                         Matrix& duals) {
+            const std::size_t n = hessian.rows;
+            const std::size_t m = equalities.rows;
+            const std::size_t columns = gradients.columns;
+            const Vector targets = Vector::Zero(m);
+            const auto outputs = [&](std::size_t col) -> EqualityQpSolutionView {
+                return {{responses.col(col).data(), n, 1}, {m ? duals.col(col).data() : nullptr, m, 1}};
+            };
+            EqualityFactorization factor;
+            // The first column prepares exactly the same coefficients and rank thresholds as the scalar solver.
+            auto result = solve_impl({hessian, {gradients.data, n, gradients.row_stride}, equalities, view(targets)},
+                                     outputs(0),
+                                     tolerance,
+                                     FactorizationPolicy::Spectral,
+                                     &factor,
+                                     nullptr);
+            if (result.status != QpStatus::Optimal) {
+                return result;
+            }
+            const Vector feasible = Vector::Zero(m ? n : 0);
+            const double feasibility_tolerance = scaled_tolerance(tolerance, 0.0);
+            for (std::size_t col = 1; col < columns; ++col) {
+                const Vector gradient = copy_vector({&gradients(0, col), n, gradients.row_stride});
+                const auto current =
+                    solve_factored_gradient(factor, gradient, feasible, targets, feasibility_tolerance, outputs(col));
+                if (current.status != QpStatus::Optimal) {
+                    return current;
+                }
+                result.stationarity_linf = std::max(result.stationarity_linf, current.stationarity_linf);
+                result.equality_linf = std::max(result.equality_linf, current.equality_linf);
+            }
+            return result;
+        }
+
+        [[nodiscard]] std::optional<QpSolveResult> try_full_rank_batch(ConstDenseMatrixView hessian_view,
+                                                                       ConstDenseMatrixView gradients_view,
+                                                                       QpTolerance tolerance,
+                                                                       Matrix& responses) {
+            const Matrix input = copy_matrix(hessian_view);
+            if (!input.allFinite()) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::NonFiniteInput);
+            }
+            if (!symmetric_within_tolerance(input, matrix_linf(input), tolerance)) {
+                return failure(QpStatus::InvalidInput, QpDiagnostic::NonSymmetricHessian);
+            }
+            const Matrix hessian = 0.5 * (input + input.transpose());
+            Eigen::LLT<Matrix> factor;
+            if (!compute_certified_cholesky(hessian, tolerance, factor)) {
+                return std::nullopt;
+            }
+            return solve_certified_cholesky(hessian, factor, copy_matrix(gradients_view), responses, tolerance);
+        }
+
         // For a valid strided view the four corners bound all storage addresses.
         [[nodiscard]] AddressInterval storage_interval(DenseMatrixView view) {
             if (view.empty()) {
@@ -436,8 +561,29 @@ namespace termin::qopt {
 
     } // namespace
 
+    bool detail::certifies_positive_definiteness(const Matrix& hessian, QpTolerance tolerance) {
+        const double norm = hessian.cwiseAbs().colwise().sum().maxCoeff();
+        const double n = static_cast<double>(hessian.rows());
+        // ||H||_1 bounds the spectral radius of symmetric H. A successful LLT
+        // of H - shift*I certifies that every eigenvalue exceeds the rank
+        // cutoff, even when all RHS miss a near-null direction. In floating
+        // point the LLT backward error is bounded by gamma_(n+1) * ||L||_F^2,
+        // where ||L||_F^2 is at most about n*||H||_1. Allow slack for this
+        // error, the norm sum and rounding the diagonal shift.
+        const double margin = 8.0 * (n + 1.0) * (n + 1.0) * std::numeric_limits<double>::epsilon() * norm;
+        const double shift = scaled_tolerance(tolerance, norm) + margin;
+        if (!std::isnormal(margin) || !(shift < hessian.diagonal().minCoeff()) ||
+            (tolerance.absolute == 0.0 && tolerance.relative == 0.0)) {
+            return false;
+        }
+        Matrix shifted = hessian;
+        shifted.diagonal().array() -= shift;
+        const Eigen::LLT<Matrix> factor(shifted);
+        return factor.info() == Eigen::Success && factor.matrixLLT().allFinite();
+    }
+
     struct EqualityQpFactorizationCache::Impl {
-        RankRevealingFactorization factor;
+        EqualityFactorization factor;
         EqualityQpFactorizationCounters counters;
     };
 
@@ -458,7 +604,12 @@ namespace termin::qopt {
             if (impl_ == nullptr) {
                 impl_ = std::make_unique<Impl>();
             }
-            return solve_impl(problem, solution, tolerance, false, &impl_->factor, &impl_->counters);
+            return solve_impl(problem,
+                              solution,
+                              tolerance,
+                              FactorizationPolicy::CertifiedUnconstrained,
+                              &impl_->factor,
+                              &impl_->counters);
         } catch (const std::exception& error) {
             std::fprintf(stderr,
                          "[termin-qopt] cached equality QP failed with an exception: "
@@ -491,7 +642,7 @@ namespace termin::qopt {
     QpSolveResult
     solve_equality_qp(EqualityQpProblemView problem, EqualityQpSolutionView solution, QpTolerance tolerance) noexcept {
         try {
-            return solve_impl(problem, solution, tolerance, false, nullptr, nullptr);
+            return solve_impl(problem, solution, tolerance, FactorizationPolicy::Spectral, nullptr, nullptr);
         } catch (const std::exception& error) {
             std::fprintf(stderr, "[termin-qopt] equality QP failed with an exception: %s\n", error.what());
         } catch (...) {
@@ -538,32 +689,12 @@ namespace termin::qopt {
             // Stage every column so failures are transactional even when inputs alias outputs.
             Matrix responses(n, columns);
             Matrix duals(m, columns);
-            const Vector targets = Vector::Zero(m);
-            const auto outputs = [&](std::size_t col) -> EqualityQpSolutionView {
-                return {{responses.col(col).data(), n, 1}, {m ? duals.col(col).data() : nullptr, m, 1}};
-            };
-            RankRevealingFactorization factor;
-            // The first column prepares exactly the same coefficients and rank thresholds as the scalar solver.
-            auto result = solve_impl({hessian, {gradients.data, n, gradients.row_stride}, equalities, view(targets)},
-                                     outputs(0),
-                                     tolerance,
-                                     false,
-                                     &factor,
-                                     nullptr);
+            auto fast_result = m == 0 ? try_full_rank_batch(hessian, gradients, tolerance, responses) : std::nullopt;
+            const QpSolveResult result =
+                fast_result ? *fast_result
+                            : solve_spectral_batch(hessian, equalities, gradients, tolerance, responses, duals);
             if (result.status != QpStatus::Optimal) {
                 return result;
-            }
-            const Vector feasible = Vector::Zero(m ? n : 0);
-            const double feasibility_tolerance = scaled_tolerance(tolerance, 0.0);
-            for (std::size_t col = 1; col < columns; ++col) {
-                const Vector gradient = copy_vector({&gradients(0, col), n, gradients.row_stride});
-                const auto current =
-                    solve_factored_gradient(factor, gradient, feasible, targets, feasibility_tolerance, outputs(col));
-                if (current.status != QpStatus::Optimal) {
-                    return current;
-                }
-                result.stationarity_linf = std::max(result.stationarity_linf, current.stationarity_linf);
-                result.equality_linf = std::max(result.equality_linf, current.equality_linf);
             }
             for (std::size_t col = 0; col < columns; ++col) {
                 for (std::size_t row = 0; row < n; ++row) {
@@ -586,7 +717,7 @@ namespace termin::qopt {
                                                       EqualityQpSolutionView solution,
                                                       QpTolerance tolerance) noexcept {
         try {
-            return solve_impl(problem, solution, tolerance, true, nullptr, nullptr);
+            return solve_impl(problem, solution, tolerance, FactorizationPolicy::SchurFirst, nullptr, nullptr);
         } catch (const std::exception& error) {
             std::fprintf(stderr,
                          "[termin-qopt] SPD-first equality QP failed with an "

@@ -1153,20 +1153,15 @@ namespace termin::physics_qopt {
                 return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::AssemblyFailure);
             }
 
-            const QpSolveResult first_dynamics = solve_constrained_dynamics(assembly.system(),
-                                                                            {
-                                                                                {
-                                                                                    impl_->dof_solution.data(),
-                                                                                    impl_->dof_solution.size(),
-                                                                                    1,
-                                                                                },
-                                                                                {
-                                                                                    impl_->constraint_reaction.data(),
-                                                                                    impl_->constraint_reaction.size(),
-                                                                                    1,
-                                                                                },
-                                                                            },
-                                                                            options.qp_tolerance);
+            EqualityQpFactorizationCache initial_factorization;
+            const QpSolveResult first_dynamics = detail::solve_constrained_dynamics_impl(
+                assembly.system(),
+                {
+                    {impl_->dof_solution.data(), impl_->dof_solution.size(), 1},
+                    {impl_->constraint_reaction.data(), impl_->constraint_reaction.size(), 1},
+                },
+                options.qp_tolerance,
+                &initial_factorization);
             if (first_dynamics.status != QpStatus::Optimal) {
                 rollback();
                 return dynamics_system_failure(

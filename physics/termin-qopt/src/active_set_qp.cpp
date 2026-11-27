@@ -138,6 +138,11 @@ namespace termin::qopt {
         check_convexity(const Matrix& hessian, const Matrix& equalities, QpTolerance tolerance) {
             Eigen::SelfAdjointEigenSolver<Matrix> eigensolver;
             if (equalities.rows() == 0) {
+                if (certifies_positive_definiteness(hessian, tolerance)) {
+                    QpSolveResult result;
+                    result.status = QpStatus::Optimal;
+                    return result;
+                }
                 eigensolver.compute(hessian, Eigen::EigenvaluesOnly);
             } else {
                 bool success = false;

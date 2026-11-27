@@ -4,6 +4,7 @@
 #include "test_check.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <string_view>
@@ -585,6 +586,126 @@ namespace {
         }
     }
 
+    void test_cached_spd_solve_recovers_after_overflowing_rhs() {
+        const std::vector<double> hessian{0.25, 0, 0, 0.5};
+        std::vector<double> gradient{1, -2};
+        const EqualityQpProblemView problem{
+            row_major(hessian, 2, 2), const_vector(gradient), ConstDenseMatrixView::row_major(nullptr, 0, 2), {}};
+        EqualityQpFactorizationCache cache;
+        const auto solve = [&](QpStatus expected) {
+            double primal[]{123, 123};
+            double reference[]{123, 123};
+            const auto cached = cache.solve(problem, {{primal, 2}, {}});
+            const auto spectral = solve_equality_qp(problem, {{reference, 2}, {}});
+            TERMIN_QOPT_CHECK(cached.status == expected && spectral.status == expected);
+            TERMIN_QOPT_CHECK(cached.diagnostic == spectral.diagnostic);
+            if (expected == QpStatus::Optimal) {
+                TERMIN_QOPT_CHECK(cached.reduced_hessian_rank == 2);
+                TERMIN_QOPT_CHECK(std::abs(primal[0] - reference[0]) < 1e-12);
+                TERMIN_QOPT_CHECK(std::abs(primal[1] - reference[1]) < 1e-12);
+            } else {
+                TERMIN_QOPT_CHECK(primal[0] == 123 && primal[1] == 123);
+            }
+        };
+        solve(QpStatus::Optimal);
+        gradient[0] = std::numeric_limits<double>::max();
+        solve(QpStatus::NumericalFailure);
+        gradient[0] = -3;
+        solve(QpStatus::Optimal);
+        TERMIN_QOPT_CHECK(cache.counters().factorizations == 1 && cache.counters().reuse_hits == 2);
+    }
+
+    void test_unconstrained_solvers_at_spectral_rank_and_symmetry_boundaries() {
+        const QpTolerance tolerance{.absolute = 0, .relative = 1e-7, .symmetry = 0.125};
+        using Matrix2 = std::array<double, 4>;
+        // These eigenvalues are e and 2-e. At e=1.5e-7 both Cholesky pivots
+        // exceed the spectral cutoff (~2e-7), but the smaller eigenvalue does not.
+        const auto coupled = [](double e) -> Matrix2 {
+            return {1, 1 - e, 1 - e, 1};
+        };
+        const Matrix2 nearly_orthogonal{1, 1 + 2e-8, 1, 1 - 2e-8};
+        const Matrix2 mixed_directions{1, -1, 1, 1};
+        struct Case {
+            Matrix2 hessian;
+            Matrix2 gradients;
+            QpStatus status;
+            std::size_t rank;
+        };
+        const Case cases[] = {
+            {coupled(1.5e-7), nearly_orthogonal, QpStatus::Optimal, 1},
+            {coupled(1.5e-7), mixed_directions, QpStatus::Unbounded, 1},
+            {coupled(3e-7), mixed_directions, QpStatus::Optimal, 2},
+            {coupled(0), nearly_orthogonal, QpStatus::Optimal, 1},
+            {coupled(0), mixed_directions, QpStatus::Unbounded, 1},
+            {coupled(-1.5e-7), nearly_orthogonal, QpStatus::Optimal, 1},
+            {coupled(-3e-7), mixed_directions, QpStatus::NonConvex, 0},
+            // Symmetrize at the allowed boundary and reject one ulp beyond it.
+            {{2, 0.375, 0.125, 2}, mixed_directions, QpStatus::Optimal, 2},
+            {{2, std::nextafter(0.375, 1.0), 0.125, 2}, mixed_directions, QpStatus::InvalidInput, 0},
+        };
+        const auto no_equalities = ConstDenseMatrixView::row_major(nullptr, 0, 2);
+        EqualityQpFactorizationCache cache;
+        for (const Case& test : cases) {
+            const auto hessian = ConstDenseMatrixView::row_major(test.hessian.data(), 2, 2);
+            const auto gradients = ConstDenseMatrixView::row_major(test.gradients.data(), 2, 2);
+            Matrix2 storage{123, 123, 123, 123};
+            const auto primal = DenseMatrixView::row_major(storage.data(), 2, 2);
+            const auto batch = solve_homogeneous_equality_qp_batch(
+                hessian, no_equalities, gradients, primal, DenseMatrixView::row_major(nullptr, 0, 2), tolerance);
+            TERMIN_QOPT_CHECK(batch.status == test.status && batch.reduced_hessian_rank == test.rank);
+
+            double max_residual = 0.0;
+            double max_roundoff = 0.0;
+            for (std::size_t col = 0; col < 2; ++col) {
+                double reference[2]{};
+                const EqualityQpProblemView problem{hessian, {&gradients(0, col), 2, 2}, no_equalities, {}};
+                const auto scalar = solve_equality_qp(problem, {{reference, 2}, {}}, tolerance);
+                double cached_primal[]{123, 123};
+                const auto cached = cache.solve(problem, {{cached_primal, 2}, {}}, tolerance);
+                TERMIN_QOPT_CHECK(cached.status == scalar.status && cached.diagnostic == scalar.diagnostic);
+                TERMIN_QOPT_CHECK(cached.reduced_hessian_rank == scalar.reduced_hessian_rank);
+                if (cached.status == QpStatus::Optimal) {
+                    for (std::size_t row = 0; row < 2; ++row) {
+                        TERMIN_QOPT_CHECK(std::abs(cached_primal[row] - reference[row]) <=
+                                          2e-9 * std::max(1.0, std::abs(reference[row])));
+                    }
+                } else {
+                    TERMIN_QOPT_CHECK(cached_primal[0] == 123 && cached_primal[1] == 123);
+                }
+                if (batch.status != QpStatus::Optimal) {
+                    if (col == 0 && batch.status == QpStatus::Unbounded) {
+                        TERMIN_QOPT_CHECK(scalar.status == QpStatus::Optimal);
+                    } else {
+                        TERMIN_QOPT_CHECK(scalar.status == batch.status && scalar.diagnostic == batch.diagnostic);
+                    }
+                    continue;
+                }
+                TERMIN_QOPT_CHECK(scalar.status == QpStatus::Optimal && scalar.reduced_hessian_rank == test.rank);
+                for (std::size_t row = 0; row < 2; ++row) {
+                    // The full-rank ill-conditioned case has a solution of order 1/e.
+                    TERMIN_QOPT_CHECK(std::abs(primal(row, col) - reference[row]) <=
+                                      2e-9 * std::max(1.0, std::abs(reference[row])));
+                    double residual = gradients(row, col);
+                    double scale = std::abs(residual);
+                    for (std::size_t k = 0; k < 2; ++k) {
+                        const double term = 0.5 * (hessian(row, k) + hessian(k, row)) * primal(k, col);
+                        residual += term;
+                        scale += std::abs(term);
+                    }
+                    max_residual = std::max(max_residual, std::abs(residual));
+                    max_roundoff = std::max(max_roundoff, 4 * std::numeric_limits<double>::epsilon() * scale);
+                }
+            }
+            if (batch.status == QpStatus::Optimal) {
+                TERMIN_QOPT_CHECK(batch.equality_linf == 0.0);
+                TERMIN_QOPT_CHECK(std::abs(batch.stationarity_linf - max_residual) <= max_roundoff);
+                TERMIN_QOPT_CHECK(max_residual <= 1.01 * tolerance.relative);
+            } else {
+                TERMIN_QOPT_CHECK(std::ranges::all_of(storage, [](double v) { return v == 123; }));
+            }
+        }
+    }
+
     void test_homogeneous_batch_snapshots_strided_gradients() {
         const std::vector<double> hessian{2, 0, 0, 4};
         std::vector<double> storage{-4, -10, 77, 4, 12, 77};
@@ -652,6 +773,8 @@ int main() {
     test_unconstrained_strided_aliasing();
     test_cache_switches_constraint_modes_and_spectral_tolerance();
     test_homogeneous_batch_matches_cached_columns();
+    test_cached_spd_solve_recovers_after_overflowing_rhs();
+    test_unconstrained_solvers_at_spectral_rank_and_symmetry_boundaries();
     test_homogeneous_batch_snapshots_strided_gradients();
     test_homogeneous_batch_rejects_invalid_inputs();
     return 0;

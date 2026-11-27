@@ -38,6 +38,8 @@ namespace termin::qopt {
     // equality Jacobian remain exactly unchanged while their right-hand sides
     // vary. The cache always revalidates the coefficient matrices and
     // automatically refactorizes on any coefficient or tolerance change.
+    // Unconstrained systems use Cholesky when the full numerical rank can be
+    // certified, and use the spectral solve if certification or a residual fails.
     class TERMIN_QOPT_API EqualityQpFactorizationCache {
     public:
         EqualityQpFactorizationCache();
@@ -60,7 +62,8 @@ namespace termin::qopt {
     };
 
     // Solve one equality QP per gradient column with shared H, A and targets A x = 0.
-    // At least one column is required. All columns use one rank-revealing factorization.
+    // At least one column is required. Unconstrained, certified full-rank systems
+    // use Cholesky. Other systems use the shared rank-revealing factorization.
     // On success the residuals are the largest over all columns. On failure both
     // output matrices retain their original values. Each must address distinct elements,
     // and the address ranges of the two output views must be disjoint.
