@@ -1097,6 +1097,13 @@ namespace termin::physics_qopt {
         if (!std::isfinite(options.time_step) || options.time_step <= 0.0) {
             return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::InvalidTimeStep);
         }
+        if (options.contact_step_scheme != ContactStepScheme::CorrectedEndpoint &&
+            options.contact_step_scheme != ContactStepScheme::PredictedEndpoint) {
+            std::fprintf(stderr,
+                         "[termin-qopt] invalid contact step scheme: %u\n",
+                         static_cast<unsigned>(options.contact_step_scheme));
+            return dynamics_system_failure(QpStatus::InvalidInput, DynamicsSystemDiagnostic::InvalidProjectionOptions);
+        }
         if (!std::isfinite(options.position_tolerance) || !std::isfinite(options.velocity_tolerance) ||
             options.position_tolerance < 0.0 || options.velocity_tolerance < 0.0 ||
             (impl_->topology.constraint_count() != 0 && options.max_position_iterations == 0) ||
@@ -1232,15 +1239,16 @@ namespace termin::physics_qopt {
             velocity_projection_qp_options.active_tolerance =
                 std::max(velocity_projection_qp_options.active_tolerance, velocity_projection_accuracy);
 
-            // The first pass predicts the endpoint configuration and solves
-            // contact velocities there. Friction can then correct the
-            // configuration midpoint. A second, final pass rebuilds all
-            // position, acceleration, unilateral, and friction equations on
-            // that corrected configuration without changing it afterward.
-            constexpr std::size_t kMaximumConfigurationPasses = 2;
-            for (std::size_t configuration_pass = 0; configuration_pass < kMaximumConfigurationPasses;
-                 ++configuration_pass) {
-                bool configuration_corrected = false;
+            // Both schemes project the free-motion endpoint and solve velocities there.
+            // CorrectedEndpoint uses the resulting friction impulse to update the
+            // midpoint and solves again on that geometry. PredictedEndpoint commits
+            // the projected geometry and the post-impulse velocity as one step.
+            const std::size_t friction_contact_count = impl_->friction_topology.contact_count();
+            const bool uses_friction_correction =
+                options.contact_step_scheme == ContactStepScheme::CorrectedEndpoint && friction_contact_count != 0;
+            const std::size_t configuration_passes = uses_friction_correction ? 2 : 1;
+            for (std::size_t configuration_pass = 0; configuration_pass < configuration_passes; ++configuration_pass) {
+                const bool correct_endpoint = configuration_pass + 1 < configuration_passes;
                 for (std::size_t iteration = 0; iteration < options.max_position_iterations; ++iteration) {
                     result.position_constraint_linf = impl_->max_position_error();
                     if (result.position_constraint_linf <= options.position_tolerance) {
@@ -1421,7 +1429,7 @@ namespace termin::physics_qopt {
                     return dynamics_system_failure(
                         QpStatus::NumericalFailure, DynamicsSystemDiagnostic::DynamicsFailure, second_dynamics);
                 }
-                if (configuration_pass == 0) {
+                if (correct_endpoint) {
                     impl_->endpoint_velocity_predictor = impl_->velocity;
                 }
                 impl_->apply_solution(DynamicsAssemblyPhase::Acceleration);
@@ -1477,10 +1485,11 @@ namespace termin::physics_qopt {
                     impl_->apply_solution(DynamicsAssemblyPhase::VelocityProjection);
                     impl_->apply_unilateral_solution();
 
-                    const std::size_t friction_contact_count = impl_->friction_topology.contact_count();
                     result.friction_contact_count = friction_contact_count;
                     if (friction_contact_count != 0) {
-                        impl_->pre_friction_velocity = impl_->dof_solution;
+                        if (correct_endpoint) {
+                            impl_->pre_friction_velocity = impl_->dof_solution;
+                        }
                         DynamicsFrictionAssembly friction_assembly(
                             impl_->topology,
                             impl_->friction_topology,
@@ -1611,25 +1620,23 @@ namespace termin::physics_qopt {
                             failure.friction_cone_facets = options.friction_cone_facets;
                             return failure;
                         }
-                        impl_->post_friction_velocity = impl_->dof_solution;
                         for (std::size_t row = 0; row < impl_->constraint_reaction.size(); ++row) {
                             impl_->constraint_reaction[row] += impl_->friction_bilateral_impulse[row];
                         }
                         impl_->apply_solution(DynamicsAssemblyPhase::VelocityProjection);
                         impl_->apply_friction_solution();
-                        if (configuration_pass == 0 && impl_->apply_friction_configuration_correction(
-                                                           options.time_step) != DynamicsSystemDiagnostic::None) {
-                            rollback();
-                            return dynamics_system_failure(QpStatus::NumericalFailure,
-                                                           DynamicsSystemDiagnostic::InternalFailure,
-                                                           second_dynamics,
-                                                           unilateral_constraint_count);
+                        if (correct_endpoint) {
+                            impl_->post_friction_velocity = impl_->dof_solution;
+                            if (impl_->apply_friction_configuration_correction(options.time_step) !=
+                                DynamicsSystemDiagnostic::None) {
+                                rollback();
+                                return dynamics_system_failure(QpStatus::NumericalFailure,
+                                                               DynamicsSystemDiagnostic::InternalFailure,
+                                                               second_dynamics,
+                                                               unilateral_constraint_count);
+                            }
                         }
-                        configuration_corrected = configuration_pass == 0;
                     }
-                }
-                if (!configuration_corrected) {
-                    break;
                 }
             }
             result.velocity_constraint_linf = impl_->max_velocity_error();

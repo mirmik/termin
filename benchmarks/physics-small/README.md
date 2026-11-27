@@ -1,5 +1,7 @@
 # Small-system native physics benchmark
 
+Spider contacts: [single-pass experiment against the frozen reference and MuJoCo](results/2026-11-27-spider-contact-schemes.md).
+
 Recorded experiment: [CRBA before/after, 2026-11-10](results/2026-11-10-crba.md).
 Follow-up: [velocity-only kinematics, 2026-11-10](results/2026-11-10-velocity-kinematics.md).
 Complete profile: [controller, collision/contact, solver replay and allocations](results/2026-11-10-expanded-profile.md).

@@ -406,6 +406,13 @@ namespace termin::physics_qopt {
     [[nodiscard]] TERMIN_PHYSICS_QOPT_API std::string_view
     dynamics_system_diagnostic_name(DynamicsSystemDiagnostic diagnostic) noexcept;
 
+    enum class ContactStepScheme : std::uint8_t {
+        // Correct the configuration midpoint for friction, then solve again there.
+        CorrectedEndpoint,
+        // Experimental. Apply the contact impulses at the projected free-motion endpoint.
+        PredictedEndpoint,
+    };
+
     struct DynamicsSystemStepOptions {
         double time_step = 0.001;
         double position_tolerance = 1e-9;
@@ -416,6 +423,7 @@ namespace termin::physics_qopt {
         // approximation when the additional inequalities are justified.
         std::size_t friction_cone_facets = 6;
         QpTolerance qp_tolerance;
+        ContactStepScheme contact_step_scheme = ContactStepScheme::CorrectedEndpoint;
     };
 
     struct DynamicsSystemStepResult {

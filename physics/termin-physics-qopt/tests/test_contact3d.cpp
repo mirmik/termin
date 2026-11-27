@@ -249,7 +249,7 @@ namespace {
         TERMIN_QOPT_CHECK(!contact_set->states()[0].active);
     }
 
-    void test_ground_coulomb_friction() {
+    void test_ground_coulomb_friction(ContactStepScheme scheme) {
         DynamicsSystem system;
         auto* body =
             add(system,
@@ -263,7 +263,9 @@ namespace {
         add(system, std::move(contacts));
         TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
 
-        const DynamicsSystemStepResult sliding_result = system.step(step_options());
+        auto options = step_options();
+        options.contact_step_scheme = scheme;
+        const DynamicsSystemStepResult sliding_result = system.step(options);
         TERMIN_QOPT_CHECK(sliding_result.ok());
         TERMIN_QOPT_CHECK(sliding_result.friction_projection.status == QpStatus::Optimal);
         TERMIN_QOPT_CHECK(sliding_result.friction_contact_count == 1);
@@ -271,6 +273,14 @@ namespace {
         const double normal_impulse = 9.81 * 0.01;
         check_near(contact_set->states()[0].normal_impulse, normal_impulse, 2e-8);
         check_near(body->state().velocity_local.lin.x, 1.0 - 0.5 * normal_impulse, 2e-8);
+        // At this translating contact the friction impulse changes only x velocity.
+        // The predicted endpoint travels the full initial speed times dt. The
+        // midpoint correction additionally advances by half the velocity change times dt.
+        const bool corrected = scheme == ContactStepScheme::CorrectedEndpoint;
+        const double expected_x = options.time_step * (corrected ? 1.0 - 0.25 * normal_impulse : 1.0);
+        check_near(body->state().pose.lin.x, expected_x);
+        check_near(body->state().pose.lin.y, 0.0);
+        TERMIN_QOPT_CHECK(sliding_result.endpoint_equality_factorizations == (corrected ? 2U : 1U));
         check_near(contact_set->states()[0].tangent_impulse_world.x, -0.5 * normal_impulse, 2e-8);
         TERMIN_QOPT_CHECK(contact_set->states()[0].friction_work < 0.0);
         TERMIN_QOPT_CHECK(contact_set->states()[0].sliding);
@@ -280,7 +290,7 @@ namespace {
         const double sticking_speed = 0.998 * contact.friction_coefficient * normal_impulse;
         slow.velocity_local.lin = {sticking_speed, 0.0, 0.0};
         TERMIN_QOPT_CHECK(body->set_state(slow) == Multibody3DDiagnostic::None);
-        DynamicsSystemStepOptions fine_options = step_options();
+        DynamicsSystemStepOptions fine_options = options;
         fine_options.friction_cone_facets = 8;
         const DynamicsSystemStepResult sticking_result = system.step(fine_options);
         TERMIN_QOPT_CHECK(sticking_result.ok());
@@ -290,6 +300,17 @@ namespace {
         check_near(body->state().velocity_local.lin.x, 0.0, 2e-8);
         check_near(contact_set->states()[0].tangent_impulse_world.x, -sticking_speed, 2e-8);
         TERMIN_QOPT_CHECK(!contact_set->states()[0].sliding);
+
+        // With contacts removed both schemes use the free-motion midpoint.
+        TERMIN_QOPT_CHECK(contact_set->set_contacts({}) == Contact3DDiagnostic::None);
+        const double initial_height = body->state().pose.lin.y;
+        const double initial_speed = body->state().velocity_local.lin.y;
+        const auto free_result = system.step(options);
+        TERMIN_QOPT_CHECK(free_result.ok() && free_result.friction_contact_count == 0);
+        TERMIN_QOPT_CHECK(free_result.endpoint_equality_factorizations == 1);
+        check_near(body->state().pose.lin.y,
+                   initial_height + options.time_step * (initial_speed - 0.5 * 9.81 * options.time_step));
+        check_near(body->state().velocity_local.lin.y, initial_speed - 9.81 * options.time_step);
     }
 
     void test_sliding_on_polygon_faces() {
@@ -364,7 +385,9 @@ namespace {
         bool sliding = false;
     };
 
-    ForcedContactResult run_forced_ground_contact(double friction_coefficient) {
+    ForcedContactResult run_forced_ground_contact(double friction_coefficient,
+                                                 DynamicsSystemStepOptions options = step_options(0.002),
+                                                 std::size_t step_count = 5000) {
         DynamicsSystem system;
         auto* body =
             add(system,
@@ -378,10 +401,8 @@ namespace {
         add(system, std::move(contacts));
         TERMIN_QOPT_CHECK(system.finalize() == DynamicsSystemDiagnostic::None);
 
-        constexpr double time_step = 0.002;
-        constexpr std::size_t step_count = 5000;
         for (std::size_t step = 0; step < step_count; ++step) {
-            TERMIN_QOPT_CHECK(system.step(step_options(time_step)).ok());
+            TERMIN_QOPT_CHECK(system.step(options).ok());
         }
 
         const ContactState3D& state = contact_set->states()[0];
@@ -406,6 +427,20 @@ namespace {
         TERMIN_QOPT_CHECK(sliding.tangent_speed > 0.1);
         TERMIN_QOPT_CHECK(sliding.tangent_impulse < sticking.tangent_impulse);
         TERMIN_QOPT_CHECK(sliding.sliding);
+    }
+
+    void test_predicted_endpoint_sticking_displacement() {
+        // The free position predictor includes a = 1 m/s² even while the
+        // contact impulse cancels the final tangent velocity on every step.
+        for (const double dt : {0.0005, 0.001, 0.002}) {
+            auto options = step_options(dt);
+            options.contact_step_scheme = ContactStepScheme::PredictedEndpoint;
+            const auto steps = static_cast<std::size_t>(std::lround(1.0 / dt));
+            const auto result = run_forced_ground_contact(0.5, options, steps);
+            check_near(result.displacement, steps * 0.5 * dt * dt, 1e-9);
+            check_near(result.tangent_speed, 0.0, 1e-8);
+            TERMIN_QOPT_CHECK(!result.sliding);
+        }
     }
 
     void test_persistent_contact_cache_and_warm_start() {
@@ -622,10 +657,12 @@ int main() {
     test_split_position_correction();
     test_impact_and_removal();
     test_resting_support_and_separation();
-    test_ground_coulomb_friction();
+    test_ground_coulomb_friction(ContactStepScheme::CorrectedEndpoint);
+    test_ground_coulomb_friction(ContactStepScheme::PredictedEndpoint);
     test_sliding_on_polygon_faces();
     test_sliding_distinguishes_equal_length_impulses_near_a_vertex();
     test_sticking_contact_does_not_accumulate_tangential_drift();
+    test_predicted_endpoint_sticking_displacement();
     test_persistent_contact_cache_and_warm_start();
     test_contact_cache_order_capacity_and_rollback();
     test_articulation_endpoint();

@@ -728,6 +728,12 @@ namespace termin {
                                 4.0,
                                 64.0,
                                 2.0);
+        tc::stage_inspect_field(inspect,
+                                &FEMPhysicsWorldComponent::experimental_single_pass_contacts,
+                                "FEMPhysicsWorldComponent",
+                                "experimental_single_pass_contacts",
+                                "Single-Pass Contacts (Experimental)",
+                                "bool");
         register_collision_layer_mask_field(inspect);
         tc::stage_inspect_field(inspect,
                                 &FEMPhysicsWorldComponent::adjacent_unit_collision_enabled,
@@ -1408,6 +1414,9 @@ namespace termin {
         options.velocity_tolerance = 1.0e-8;
         options.max_position_iterations = 8;
         options.friction_cone_facets = static_cast<std::size_t>(contact_friction_cone_facets);
+        if (experimental_single_pass_contacts) {
+            options.contact_step_scheme = physics_qopt::ContactStepScheme::PredictedEndpoint;
+        }
         const physics_qopt::Multibody3DStepResult result = system_.step(options);
         if (result.status != physics_qopt::QpStatus::Optimal ||
             result.diagnostic != physics_qopt::DynamicsSystemDiagnostic::None) {

@@ -41,6 +41,17 @@ Within each contact pass, endpoint acceleration, normal velocity projection
 and friction response share a factorization workspace. The corrected endpoint
 gets a new workspace.
 
+`DynamicsSystemStepOptions::contact_step_scheme` selects how friction enters
+the configuration update. Both schemes advance free motion by the midpoint
+rule, project the trial pose onto the position constraints and compute the
+normal and friction impulses there. The default `ContactStepScheme::CorrectedEndpoint`
+uses half the friction-induced velocity change to correct the midpoint and
+solves again at the corrected endpoint. The experimental
+`ContactStepScheme::PredictedEndpoint` commits the projected trial pose
+with the post-impulse velocity. Tangential forces can therefore move a
+sticking contact during the position update even when its final tangential
+velocity is zero.
+
 The dynamic-control loop keeps controller policy outside the physics system:
 
 ```cpp

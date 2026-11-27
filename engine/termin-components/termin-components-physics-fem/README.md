@@ -222,6 +222,16 @@ be selected when finer directional accuracy justifies the additional
 inequality rows. The value is a geometric accuracy/performance setting, not a
 power-of-two allocation size.
 
+`experimental_single_pass_contacts` selects the predicted-endpoint contact
+scheme for this world. The solver projects the predicted pose to satisfy the
+position constraints and computes normal and friction impulses there. It
+commits that pose with the resulting velocity. With the default setting of
+`false`, the solver applies the friction correction to the pose and evaluates
+contact on the corrected configuration. The editor exposes this setting as
+**Single-Pass Contacts (Experimental)**. With this setting, a loaded foot can
+drift tangentially during stance even when its reported slip velocity is zero.
+See the [spider comparison](../../../benchmarks/physics-small/results/2026-11-27-spider-contact-schemes.md).
+
 `collision_layer_mask` selects entity layers accepted by the FEM world.
 Same-body contacts are always discarded. Contacts between directly connected
 maximal bodies and adjacent links of one articulation are discarded by

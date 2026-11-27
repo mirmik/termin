@@ -283,6 +283,7 @@ namespace {
 
 int main() {
     TERMIN_QOPT_CHECK(DynamicsSystemStepOptions{}.friction_cone_facets == 6);
+    TERMIN_QOPT_CHECK(DynamicsSystemStepOptions{}.contact_step_scheme == ContactStepScheme::CorrectedEndpoint);
     DynamicsSystem invalid_options_system;
     TERMIN_QOPT_CHECK(invalid_options_system.finalize() == DynamicsSystemDiagnostic::None);
     for (const std::size_t invalid_facets : {3U, 5U}) {
@@ -291,6 +292,10 @@ int main() {
         TERMIN_QOPT_CHECK(invalid_facets_result.status == QpStatus::InvalidInput);
         TERMIN_QOPT_CHECK(invalid_facets_result.diagnostic == DynamicsSystemDiagnostic::InvalidProjectionOptions);
     }
+    const auto invalid_scheme =
+        invalid_options_system.step({.contact_step_scheme = static_cast<ContactStepScheme>(255)});
+    TERMIN_QOPT_CHECK(invalid_scheme.status == QpStatus::InvalidInput);
+    TERMIN_QOPT_CHECK(invalid_scheme.diagnostic == DynamicsSystemDiagnostic::InvalidProjectionOptions);
 
     DynamicsTopology topology;
     const auto first = topology.register_dofs(1, "first");
