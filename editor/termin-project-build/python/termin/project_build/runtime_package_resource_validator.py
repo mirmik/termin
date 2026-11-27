@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import struct
 from dataclasses import dataclass
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -1043,20 +1044,16 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
         )
 
     resource_views: list[dict[str, Any]] = []
-    view_names: set[str] = set()
+    view_kinds: dict[str, int] = {}
     for index in range(resource_view_count):
         view_name = text()
         parent = text()
         attachment = u32()
         if not view_name or not parent or attachment not in (1, 2):
             raise ValueError(f"resource view {index} is invalid")
-        if view_name in resource_names or view_name in view_names:
+        if view_name in resource_names or view_name in view_kinds:
             raise ValueError(f"resource view '{view_name}' is duplicated")
-        if parent not in resource_names:
-            raise ValueError(
-                f"resource view '{view_name}' references missing parent '{parent}'"
-            )
-        view_names.add(view_name)
+        view_kinds[view_name] = attachment
         resource_views.append(
             {"name": view_name, "parent": parent, "attachment": attachment}
         )
@@ -1071,33 +1068,43 @@ def _decode_pipeline_template(payload: bytes) -> dict[str, Any]:
             raise ValueError(f"FBO composition {index} is invalid")
         if (
             composition_name in resource_names
-            or composition_name in view_names
+            or composition_name in view_kinds
             or composition_name in composition_names
         ):
             raise ValueError(f"FBO composition '{composition_name}' is duplicated")
-        for attachment_name, expected_kind in ((color, 1), (depth, 2)):
-            if not attachment_name:
-                continue
-            if attachment_name in resource_names:
-                continue
-            view = next(
-                (item for item in resource_views if item["name"] == attachment_name),
-                None,
-            )
-            if view is None:
-                raise ValueError(
-                    f"FBO composition '{composition_name}' references missing attachment '{attachment_name}'"
-                )
-            if view["attachment"] != expected_kind:
-                raise ValueError(
-                    f"FBO composition '{composition_name}' uses view '{attachment_name}' for the wrong attachment kind"
-                )
         composition_names.add(composition_name)
         fbo_compositions.append(
             {"name": composition_name, "color": color, "depth": depth}
         )
 
-    dependency_resources = resource_names | view_names | composition_names
+    fbo_parents = resource_names | composition_names
+    dependency_resources = fbo_parents | view_kinds.keys()
+    attachment_graph = TopologicalSorter()
+    for view in resource_views:
+        if view["parent"] not in fbo_parents:
+            raise ValueError(
+                f"resource view '{view['name']}' references missing parent '{view['parent']}'"
+            )
+        attachment_graph.add(view["name"], view["parent"])
+    for composition in fbo_compositions:
+        composition_name = composition["name"]
+        for attachment_name, expected_kind in ((composition["color"], 1), (composition["depth"], 2)):
+            if not attachment_name:
+                continue
+            if attachment_name not in dependency_resources:
+                raise ValueError(
+                    f"FBO composition '{composition_name}' references missing attachment '{attachment_name}'"
+                )
+            if attachment_name in view_kinds and view_kinds[attachment_name] != expected_kind:
+                raise ValueError(
+                    f"FBO composition '{composition_name}' uses view '{attachment_name}' for the wrong attachment kind"
+                )
+            attachment_graph.add(composition_name, attachment_name)
+    try:
+        attachment_graph.prepare()
+    except CycleError as exc:
+        raise ValueError(f"cyclic FBO attachments: {' -> '.join(exc.args[1])}") from exc
+
     for index, dependency in enumerate(dependencies):
         if dependency["resource"] not in dependency_resources:
             raise ValueError(

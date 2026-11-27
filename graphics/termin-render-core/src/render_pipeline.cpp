@@ -36,10 +36,7 @@ namespace termin {
 
         try {
             tc::init_cpp_inspect_vtable();
-            // tc_pipeline_adopt_pass prepends, so walk backwards to preserve the
-            // canonical descriptor order.
-            for (uint32_t offset = 0; offset < definition->pass_count; ++offset) {
-                const uint32_t index = definition->pass_count - offset - 1;
+            for (uint32_t index = 0; index < definition->pass_count; ++index) {
                 const tc_pipeline_template_pass_desc& desc = definition->passes[index];
                 tc_pass* pass = tc_pass_registry_create(desc.type_name);
                 if (!pass) {
@@ -86,11 +83,14 @@ namespace termin {
                 }
             }
 
+            PipelineRenderCache& render_cache = cache();
             for (uint32_t i = 0; i < definition->resource_count; ++i) {
                 const tc_pipeline_template_resource_desc& desc = definition->resources[i];
                 const std::string resource_type = desc.resource_type;
-                if (resource_type.starts_with("external"))
+                if (resource_type.starts_with("external")) {
+                    render_cache.external_texture_slots.emplace_back(desc.name);
                     continue;
+                }
                 ResourceSpec spec;
                 spec.resource = desc.name;
                 spec.resource_type = resource_type;
@@ -119,7 +119,6 @@ namespace termin {
                 add_spec(spec);
             }
 
-            PipelineRenderCache& render_cache = cache();
             for (uint32_t i = 0; i < definition->target_count; ++i) {
                 const tc_pipeline_template_target_desc& desc = definition->targets[i];
                 if (!desc.export_name || !desc.export_name[0])

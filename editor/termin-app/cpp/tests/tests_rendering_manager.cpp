@@ -2,6 +2,7 @@
 #include "termin/editor/frame_graph_debugger_source.hpp"
 #include "termin/editor/frame_graph_debugger_view.hpp"
 #include "termin/render/frame_graph_capture.hpp"
+#include "termin/render/frame_graph_schedule.hpp"
 #include "termin/render/frame_graph_debugger.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/graph_compiler.hpp"
@@ -11,6 +12,7 @@
 #include "termin/render/tc_pipeline_template.hpp"
 #include "termin/render/tc_scene_render_ext.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <optional>
 #include <set>
@@ -519,6 +521,164 @@ TEST_CASE("Graph compiler keeps FboJoin name and aliases it to parent FBO") {
     REQUIRE(alias_count == 1u);
     CHECK(std::string(aliases[0]) == "RT_COLOR");
     CHECK(std::string(aliases[1]) == "JoinedFbo");
+    pipeline->destroy();
+    delete pipeline;
+}
+
+TEST_CASE("Graph compiler resolves nested split join and target sockets in dependency order") {
+    nos::trent data = nos::json::parse(R"JSON({
+        "nodes": [
+            {"type": "RenderTargetInput", "node_type": "render_target_input"},
+            {"type": "FBO Split", "node_type": "fbo_split"},
+            {"type": "FBO Join", "node_type": "fbo_join", "name": "Joined"},
+            {"type": "FBO Split", "node_type": "fbo_split"},
+            {"type": "DepthOnlyPass"},
+            {"type": "FBO Join", "node_type": "fbo_join", "name": "Published"},
+            {"type": "PipelineOutput", "node_type": "pipeline_output"}
+        ],
+        "connections": [
+            {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo"},
+            {"from_node": 1, "from_socket": "color", "to_node": 2, "to_socket": "color"},
+            {"from_node": 1, "from_socket": "depth", "to_node": 2, "to_socket": "depth"},
+            {"from_node": 2, "from_socket": "fbo", "to_node": 3, "to_socket": "fbo"},
+            {"from_node": 3, "from_socket": "depth", "to_node": 4, "to_socket": "output_res_target"},
+            {"from_node": 3, "from_socket": "color", "to_node": 5, "to_socket": "color"},
+            {"from_node": 4, "from_socket": "output_res", "to_node": 5, "to_socket": "depth"},
+            {"from_node": 5, "from_socket": "fbo", "to_node": 6, "to_socket": "color"}
+        ]
+    })JSON");
+
+    auto check_bindings = [](const nos::trent& serialized, const char* pass_output) {
+        tc::GraphData graph = tc::GraphData::from_trent(serialized);
+        TcPipelineTemplate published = make_empty_pipeline_template("nested-split-join");
+        auto* pipeline = tc::compile_graph(graph, published);
+        REQUIRE(pipeline != nullptr);
+        REQUIRE(pipeline->pass_count() == 6u);
+        tc_pass* second_split = pipeline->get_pass_at(3);
+        REQUIRE(std::string(tc_pass_type_name(second_split)) == "GraphAliasPass");
+        const char* resources[4] = {};
+        REQUIRE(tc_pass_get_reads(second_split, resources, 4) == 1u);
+        CHECK(std::string(resources[0]) == "Joined");
+        REQUIRE(tc_pass_get_inplace_aliases(second_split, resources, 2) == 2u);
+        CHECK(std::string(resources[0]) == "Joined");
+        CHECK(std::string(resources[1]) == "Joined.color");
+        CHECK(std::string(resources[2]) == "Joined");
+        CHECK(std::string(resources[3]) == "Joined.depth");
+
+        tc_pass* depth = pipeline->get_pass_at(4);
+        REQUIRE(std::string(tc_pass_type_name(depth)) == "DepthOnlyPass");
+        REQUIRE(tc_pass_get_reads(depth, resources, 4) == 1u);
+        CHECK(std::string(resources[0]) == "Joined.depth");
+        REQUIRE(tc_pass_get_writes(depth, resources, 4) == 1u);
+        CHECK(std::string(resources[0]) == pass_output);
+
+        const auto& cache = pipeline->cache();
+        CHECK(cache.fbo_compositions.at("Joined").color == "RT_COLOR.color");
+        CHECK(cache.fbo_compositions.at("Joined").depth == "RT_COLOR.depth");
+        CHECK(cache.resource_views.at("Joined.color").parent == "Joined");
+        CHECK(cache.resource_views.at("Joined.depth").parent == "Joined");
+        const auto& output_view = cache.resource_views.at(pass_output);
+        CHECK(output_view.parent == "Joined");
+        CHECK(output_view.attachment == termin::AttachmentKind::Depth);
+        CHECK(cache.fbo_compositions.at("Published").color == "Joined.color");
+        CHECK(cache.fbo_compositions.at("Published").depth == pass_output);
+        const tc_pipeline_template* definition = published.get();
+        REQUIRE(definition != nullptr);
+        REQUIRE(definition->target_count == 1u);
+        CHECK(std::string(definition->targets[0].export_name) == "Published");
+        pipeline->destroy();
+        delete pipeline;
+    };
+    check_bindings(data, "DepthOnlyPass_4_output_res");
+
+    // Serialized edges address nodes by array index; remap them along with the nodes.
+    auto& nodes = data["nodes"].as_list();
+    std::reverse(nodes.begin(), nodes.end());
+    auto& edges = data["connections"].as_list();
+    std::reverse(edges.begin(), edges.end());
+    const int last = static_cast<int>(nodes.size()) - 1;
+    for (auto& edge : edges) {
+        edge["from_node"] = last - static_cast<int>(edge["from_node"].as_numer());
+        edge["to_node"] = last - static_cast<int>(edge["to_node"].as_numer());
+    }
+    check_bindings(data, "DepthOnlyPass_2_output_res");
+}
+
+TEST_CASE("Compiled ColorPass preserves composed attachments and writer boundaries through split markers") {
+    const auto data = nos::json::parse(R"JSON({
+        "nodes": [
+            {"type": "RenderTargetInput", "node_type": "render_target_input"},
+            {"type": "FBO Split", "node_type": "fbo_split"},
+            {"type": "Depth Texture", "node_type": "resource", "name": "PrivateDepth"},
+            {"type": "FBO Join", "node_type": "fbo_join", "name": "Joined"},
+            {"type": "ColorPass", "x": 500},
+            {"type": "FBO Split", "node_type": "fbo_split"},
+            {"type": "DepthToColorPass"},
+            {"type": "PipelineOutput", "node_type": "pipeline_output", "x": 500},
+            {"type": "ColorToDepthPass", "x": 800},
+            {"type": "FBO Join", "node_type": "fbo_join", "name": "Latest"}
+        ],
+        "viewport_frames": [
+            {"viewport_name": "Shading", "x": 500, "y": 0, "width": 200, "height": 100},
+            {"viewport_name": "Conversion", "x": 800, "y": 0, "width": 200, "height": 100}
+        ],
+        "connections": [
+            {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo"},
+            {"from_node": 1, "from_socket": "color", "to_node": 3, "to_socket": "color"},
+            {"from_node": 2, "from_socket": "depth", "to_node": 3, "to_socket": "depth"},
+            {"from_node": 3, "from_socket": "fbo", "to_node": 4, "to_socket": "input_res"},
+            {"from_node": 4, "from_socket": "output_res", "to_node": 5, "to_socket": "fbo"},
+            {"from_node": 5, "from_socket": "depth", "to_node": 6, "to_socket": "input_res"},
+            {"from_node": 4, "from_socket": "output_res", "to_node": 7, "to_socket": "color"},
+            {"from_node": 6, "from_socket": "output_res", "to_node": 8, "to_socket": "input_res"},
+            {"from_node": 5, "from_socket": "color", "to_node": 9, "to_socket": "color"},
+            {"from_node": 8, "from_socket": "output_res", "to_node": 9, "to_socket": "depth"}
+        ]
+    })JSON");
+    auto graph = tc::GraphData::from_trent(data);
+    auto* pipeline = tc::compile_graph(graph);
+    REQUIRE(pipeline);
+    auto* fg = tc_pipeline_get_frame_graph(pipeline->handle());
+    REQUIRE(fg);
+    REQUIRE(tc_frame_graph_get_error(fg) == TC_FG_OK);
+
+    REQUIRE(pipeline->color_exports().size() == 1u);
+    const auto& output = pipeline->color_exports().front().resource;
+    CHECK(output == "ColorPass_4_output_res");
+    const std::string depth_view = output + ".depth";
+    termin::FrameGraphCapture capture, composed_capture;
+    termin::FrameGraphCaptureRequest request{.resource = depth_view, .capture = &capture};
+    termin::FrameGraphCaptureRequest composed{.resource = "Latest", .capture = &composed_capture};
+    termin::FrameGraphCaptureRequest* captures[] = {&request, &composed};
+    const auto schedule = termin::select_frame_graph_schedule(*pipeline, fg, captures);
+    REQUIRE(schedule.valid);
+
+    const auto& sources = pipeline->cache().attachment_sources;
+    for (const auto& fbo : {std::string{"Joined"}, output}) {
+        CHECK(sources.at(fbo).color.name == "RT_COLOR");
+        CHECK(sources.at(fbo).color.storage == termin::AttachmentStorage::ViewportOutput);
+        CHECK(sources.at(fbo).depth.name == "PrivateDepth");
+        CHECK(sources.at(fbo).depth.storage == termin::AttachmentStorage::Resource);
+    }
+    CHECK(sources.at(depth_view).depth_view);
+    CHECK(sources.at(depth_view).color.name.empty());
+    CHECK(sources.at(depth_view).depth.name == "PrivateDepth");
+    const size_t writer = tc_frame_graph_writer_index(fg, output.c_str());
+    const size_t consumer = tc_frame_graph_writer_index(fg, "DepthToColorPass_6_output_res");
+    const size_t last_depth_writer = tc_frame_graph_writer_index(fg, "ColorToDepthPass_8_output_res");
+    REQUIRE(writer != SIZE_MAX);
+    REQUIRE(consumer != SIZE_MAX);
+    REQUIRE(last_depth_writer != SIZE_MAX);
+    CHECK(termin::TcPassRef(tc_frame_graph_schedule_at(fg, writer)).viewport_name() == "Shading");
+    CHECK(termin::TcPassRef(tc_frame_graph_schedule_at(fg, last_depth_writer)).viewport_name() == "Conversion");
+    const auto end = schedule.order.begin() + schedule.count;
+    const auto writer_position = std::find(schedule.order.begin(), end, writer);
+    const auto consumer_position = std::find(schedule.order.begin(), end, consumer);
+    REQUIRE(consumer_position != end);
+    CHECK(writer_position < consumer_position);
+    REQUIRE(schedule.capture_writers.size() == 2u);
+    CHECK(schedule.capture_writers[0] == writer);
+    CHECK(schedule.capture_writers[1] == last_depth_writer);
     pipeline->destroy();
     delete pipeline;
 }

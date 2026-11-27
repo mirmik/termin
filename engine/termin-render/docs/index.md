@@ -114,10 +114,14 @@ attachments:
   generic executor знает только его `FrameGraphResource` contract и sampled
   preview.
 
-`FboSplit` and `FboJoin` are compile-time graph utility nodes. They do not
-create runtime passes or `tc_pass` instances. Direct conversion between `fbo`,
-`color_texture`, and `depth_texture` must go through these nodes so the compiler
-can record `ResourceView` and `FboComposition` metadata in `PipelineRenderCache`.
+`RenderTargetInput` exposes the viewport FBO through the socket labeled **FBO**.
+Its serialized socket key is `color`. Connect it to `FboSplit.fbo` to read
+the viewport color and depth separately.
+
+The compiler resolves `FboSplit`, `FboJoin`, and pass target sockets in
+dependency order. It records `ResourceView` and `FboComposition` metadata
+and emits marker passes that declare dependencies and perform no drawing. Each
+viewport supplies its current textures to the pass, export, and debug capture.
 
 ## Связь с termin-graphics
 

@@ -86,6 +86,26 @@ def test_pipeline_editor_controller_load_save_and_signals_are_consistent(tmp_pat
     assert status_events[-1] == f"Saved: {saved}"
 
 
+def test_render_target_input_fbo_label_preserves_color_connection(tmp_path: Path):
+    controller = PipelineEditorController()
+    target = controller.create_node("render_target_input", "RenderTargetInput", 0.0, 0.0)
+    split = controller.create_node("fbo_split", "FBO Split", 200.0, 0.0)
+    output = controller.create_node("pipeline_output", "PipelineOutput", 200.0, 150.0)
+    assert target.data["socket_labels"]["outputs"]["color"] == "FBO"
+    assert controller.graph_controller.connect(target.id, "color", split.id, "fbo").ok
+    assert controller.graph_controller.connect(target.id, "color", output.id, "color").ok
+
+    path = controller.save(tmp_path / "target.pipeline")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert {"from_node": 0, "from_socket": "color", "to_node": 1, "to_socket": "fbo"} in payload["connections"]
+
+    graph = controller.load(path)
+    target = graph.nodes["node_0"]
+    assert [(socket.name, socket.socket_type) for socket in target.outputs] == [("color", "fbo")]
+    assert target.data["socket_labels"]["outputs"]["color"] == "FBO"
+    assert any(edge.src_socket == "color" and edge.dst_socket == "fbo" for edge in graph.edges.values())
+
+
 def test_pipeline_editor_controller_failed_load_preserves_current_document(tmp_path: Path):
     controller = PipelineEditorController()
     original_graph = controller.graph

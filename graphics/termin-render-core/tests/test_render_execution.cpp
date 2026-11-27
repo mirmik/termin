@@ -144,6 +144,7 @@ namespace {
     int g_resource_create_count = 0;
     int g_resource_destroy_count = 0;
     int g_resource_preview_count = 0;
+    termin::FrameGraphResourceSampledTexture g_resource_preview;
     bool g_resource_producer_executed = false;
     bool g_resource_alias_executed = false;
     bool g_external_alias_producer_executed = false;
@@ -606,10 +607,7 @@ namespace {
     termin::FrameGraphResourceSampledTexture preview_test_resource(const termin::FrameGraphResource& resource) {
         CHECK(std::string(resource.resource_type()) == kTestResourceType);
         ++g_resource_preview_count;
-        return {
-            .texture = tgfx::TextureHandle{42},
-            .kind = termin::FrameGraphResourceSampledTextureKind::Depth,
-        };
+        return g_resource_preview;
     }
 
     class TestResourceProducer final : public termin::CxxFramePass {
@@ -634,10 +632,12 @@ namespace {
             auto* resource = context.get_frame_graph_resource_as<TestFrameGraphResource>("test_resource");
             REQUIRE(resource != nullptr);
             CHECK(resource->extent == 17);
-            CHECK(context.tex2_reads.find("test_resource") == context.tex2_reads.end());
-            const auto preview = context.tex2_depth_reads.find("test_resource");
-            REQUIRE(preview != context.tex2_depth_reads.end());
-            CHECK(preview->second == tgfx::TextureHandle{42});
+            const bool depth = g_resource_preview.kind == termin::FrameGraphResourceSampledTextureKind::Depth;
+            const auto& reads = depth ? context.tex2_depth_reads : context.tex2_reads;
+            const auto& other = depth ? context.tex2_reads : context.tex2_depth_reads;
+            CHECK_FALSE(other.contains("test_resource"));
+            REQUIRE(reads.contains("test_resource"));
+            CHECK(reads.at("test_resource") == g_resource_preview.texture);
             g_resource_producer_executed = true;
         }
     };
@@ -985,6 +985,128 @@ TEST_CASE("external composed attachment clears follow each consuming viewport") 
     pipeline.destroy();
 }
 
+TEST_CASE("debug captures and exports use the color and separate depth bound to each viewport writer after resize") {
+    using namespace termin;
+    class ViewportWriter final : public CxxFramePass {
+    public:
+        explicit ViewportWriter(const std::string& viewport)
+            : input(viewport + ".input"), output(viewport + ".written") {
+            pass_name_set(output);
+            viewport_name_set(viewport);
+        }
+        std::set<const char*> compute_reads() const override { return {input.c_str()}; }
+        std::set<const char*> compute_writes() const override { return {output.c_str()}; }
+        std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override {
+            return {{input, output}};
+        }
+        void execute(ExecuteContext& context) override {
+            color = context.tex2_writes.at(output);
+            const auto depth_write = context.tex2_depth_writes.find(output);
+            depth = depth_write == context.tex2_depth_writes.end() ? tgfx::TextureHandle{} : depth_write->second;
+            CHECK(context.tex2_reads.at(input) == color);
+            if (depth)
+                CHECK(context.tex2_depth_reads.at(input) == depth);
+            else
+                CHECK_FALSE(context.tex2_depth_reads.contains(input));
+        }
+        std::string input;
+        std::string output;
+        tgfx::TextureHandle color;
+        tgfx::TextureHandle depth;
+    };
+
+    auto device = std::make_unique<ExecutionRecordingDevice>();
+    auto& gpu = *device;
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
+    RenderPipeline pipeline("capture-composed-viewports");
+    RenderEngine engine;
+    engine.set_graphics_host(*host);
+    RenderItemSnapshot snapshot;
+    publish_empty_snapshot(snapshot);
+    RenderExecution execution;
+    execution.pipeline = &pipeline;
+    execution.default_render_target = "Left";
+    struct Viewport {
+        RenderTargetContext target;
+        ViewportWriter* writer;
+        FrameGraphCapture color;
+        FrameGraphCapture depth;
+        FrameGraphCaptureRequest capture;
+    } viewports[2]{};
+    viewports[0].target.name = "Left";
+    viewports[1].target.name = "Right";
+    for (auto& viewport : viewports) {
+        const auto& name = viewport.target.name;
+        auto* writer = new ViewportWriter(name);
+        viewport.writer = writer;
+        pipeline.add_pass(writer->tc_pass_ptr());
+        ResourceSpec depth{name + ".depth", name == "Left" ? "depth_texture" : "external_color"};
+        depth.viewport_name = name;
+        pipeline.add_spec(depth);
+        pipeline.cache().fbo_compositions.emplace(writer->input, FboComposition{"RT_COLOR", depth.resource});
+        pipeline.set_color_export(writer->output, ColorContent::DisplayLinear, name);
+        viewport.capture.resource = writer->output;
+        viewport.capture.capture = &viewport.color;
+        viewport.capture.depth_capture = &viewport.depth;
+        execution.debug_capture_requests.push_back(&viewport.capture);
+        execution.targets.emplace(name, RenderExecutionTarget{&viewport.target, &snapshot});
+    }
+
+    for (int size : {16, 32}) {
+        for (auto& viewport : viewports) {
+            auto& target = viewport.target;
+            const int width = size + (target.name == "Left" ? 0 : 4);
+            target.render_rect = {0, 0, width, size};
+            tgfx::TextureDesc desc;
+            desc.width = width;
+            desc.height = size;
+            desc.format = tgfx::PixelFormat::RGBA16F;
+            desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+            if (target.output_color.texture)
+                gpu.destroy(target.output_color.texture);
+            target.output_color.texture = gpu.create_texture(desc);
+            if (target.name == "Right") {
+                auto& imported_depth = target.external_textures["Right.depth"];
+                if (imported_depth)
+                    gpu.destroy(imported_depth);
+                desc.format = tgfx::PixelFormat::D32F;
+                desc.usage = tgfx::TextureUsage::DepthStencilAttachment | tgfx::TextureUsage::CopySrc;
+                imported_depth = gpu.create_texture(desc);
+            }
+        }
+        auto& copies = gpu.state.texture_copies;
+        copies.clear();
+        REQUIRE(engine.execute_pipeline(execution));
+        // The four capture copies are the only copies. Each export already writes its viewport color.
+        REQUIRE(copies.size() == 4u);
+        for (const auto& viewport : viewports) {
+            const auto& target = viewport.target;
+            const auto& writer = *viewport.writer;
+            REQUIRE(viewport.capture.status == FrameGraphCaptureRequestStatus::Captured);
+            REQUIRE(viewport.depth.has_capture());
+            CHECK(viewport.depth.is_depth());
+            CHECK(viewport.depth.width() == target.render_rect.width);
+            CHECK(viewport.depth.height() == target.render_rect.height);
+            CHECK(writer.color == target.output_color.texture);
+            const auto expected_depth = target.name == "Left" ? pipeline.cache().texture_pool.get("Left.depth")
+                                                               : target.external_textures.at("Right.depth");
+            CHECK(writer.depth == expected_depth);
+            const auto color_copy = std::make_pair(writer.color, viewport.color.capture_tex());
+            const auto depth_copy = std::make_pair(writer.depth, viewport.depth.capture_tex());
+            CHECK(std::find(copies.begin(), copies.end(), color_copy) != copies.end());
+            CHECK(std::find(copies.begin(), copies.end(), depth_copy) != copies.end());
+        }
+    }
+    // A color texture supplied under the same slot must not count as a depth attachment.
+    auto& right = viewports[1];
+    right.target.external_textures["Right.depth"] = right.target.output_color.texture;
+    REQUIRE(engine.execute_pipeline(execution));
+    CHECK_FALSE(right.writer->depth);
+    CHECK(right.capture.status == FrameGraphCaptureRequestStatus::Captured);
+    CHECK_FALSE(right.depth.has_capture());
+    pipeline.destroy();
+}
+
 TEST_CASE("explicit color and depth textures clear before their first read every frame") {
     termin::RenderPipeline pipeline("explicit-texture-clear-before-read-test");
     REQUIRE(pipeline.is_valid());
@@ -1206,7 +1328,7 @@ TEST_CASE("color-only FBO does not allocate or bind a depth attachment") {
     pipeline.destroy();
 }
 
-TEST_CASE("direct composed color export preserves its internal depth view") {
+TEST_CASE("direct color export follows a long split and join chain and preserves its internal depth view") {
     termin::RenderPipeline pipeline("direct-composed-color-export-test");
     REQUIRE(pipeline.is_valid());
     pipeline.add_pass((new ComposedClearRasterProbe())->tc_pass_ptr());
@@ -1217,7 +1339,15 @@ TEST_CASE("direct composed color export preserves its internal depth view") {
                                             termin::ResourceView{"scene_depth", termin::AttachmentKind::Depth});
     pipeline.cache().fbo_compositions.emplace("joined_target",
                                               termin::FboComposition{"scene_color_view", "scene_depth_view"});
-    pipeline.set_color_export("joined_target", termin::ColorContent::DisplayLinear);
+    std::string export_target = "joined_target";
+    for (int i = 0; i < 5; ++i) {
+        const auto color = export_target + ".color";
+        pipeline.cache().resource_views.emplace(color,
+                                                termin::ResourceView{export_target, termin::AttachmentKind::Color});
+        export_target = "joined_" + std::to_string(i);
+        pipeline.cache().fbo_compositions.emplace(export_target, termin::FboComposition{color, "scene_depth_view"});
+    }
+    pipeline.set_color_export(export_target, termin::ColorContent::DisplayLinear);
 
     auto device = std::make_unique<ExecutionRecordingDevice>();
     ExecutionRecordingDevice* recording_device = device.get();
@@ -1521,15 +1651,38 @@ TEST_CASE("generic execution allocates and binds registered non-texture resource
                                   .render_items = &snapshot,
                               });
 
-    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::make_unique<ExecutionRecordingDevice>());
+    auto device = std::make_unique<ExecutionRecordingDevice>();
+    auto& recording = device->state;
+    tgfx::TextureDesc preview_desc;
+    preview_desc.width = preview_desc.height = 17;
+    preview_desc.usage = tgfx::TextureUsage::Sampled | tgfx::TextureUsage::CopySrc;
+    preview_desc.format = tgfx::PixelFormat::D32F;
+    const auto depth = device->create_texture(preview_desc);
+    preview_desc.format = tgfx::PixelFormat::RGBA16F;
+    const auto color = device->create_texture(preview_desc);
+    auto host = tgfx::GraphicsHost::adopt_isolated_device(std::move(device));
+    termin::FrameGraphCapture capture;
+    termin::FrameGraphCapture sidecar;
+    termin::FrameGraphCaptureRequest request{
+        .resource = "test_resource_alias", .capture = &capture, .depth_capture = &sidecar};
+    execution.debug_capture_requests = {&request};
     termin::RenderEngine engine;
     engine.set_graphics_host(*host);
-    for (int execution_index = 0; execution_index < 2; ++execution_index) {
+    using Preview = termin::FrameGraphResourceSampledTexture;
+    using Kind = termin::FrameGraphResourceSampledTextureKind;
+    for (const Preview preview : {Preview{depth, Kind::Depth}, Preview{color, Kind::Color}}) {
+        g_resource_preview = preview;
         g_resource_producer_executed = false;
         g_resource_alias_executed = false;
+        recording.texture_copies.clear();
         engine.execute_pipeline(execution);
         CHECK(g_resource_producer_executed);
         CHECK(g_resource_alias_executed);
+        CHECK(request.status == termin::FrameGraphCaptureRequestStatus::Captured);
+        CHECK(capture.is_depth() == (preview.kind == Kind::Depth));
+        CHECK_FALSE(sidecar.has_capture());
+        REQUIRE(recording.texture_copies.size() == 1u);
+        CHECK(recording.texture_copies.front() == std::make_pair(preview.texture, capture.capture_tex()));
     }
     CHECK(g_resource_create_count == 1);
     CHECK(g_resource_preview_count >= 2);
@@ -1911,13 +2064,15 @@ TEST_CASE("a requested attachment view retains and orders its backing producer")
     std::vector<std::string> executed;
     RenderPipeline pipeline("attachment-schedule-test");
     auto* consumer = (new ScheduleProbe("consumer", executed, "source.color", "result"))->tc_pass_ptr();
-    auto* producer = (new ScheduleProbe("producer", executed, nullptr, "source"))->tc_pass_ptr();
+    auto* producer = (new ScheduleProbe("ColorPass", executed, "input", "source", true))->tc_pass_ptr();
     pipeline.add_pass(consumer);
     pipeline.add_pass(producer);
     pipeline.cache().resource_views.emplace("source.color", ResourceView{"source", AttachmentKind::Color});
+    pipeline.cache().fbo_compositions.emplace("input", FboComposition{"RT_COLOR", "separate_depth"});
     const std::vector<std::string> required{"result"};
     auto* graph = tc_pipeline_get_frame_graph(pipeline.handle());
     const auto schedule = select_frame_graph_schedule(pipeline, graph, {}, required);
+    REQUIRE(schedule.valid);
     REQUIRE(schedule.count == 2);
     CHECK(tc_frame_graph_schedule_at(graph, schedule.order[0]) == producer);
     CHECK(tc_frame_graph_schedule_at(graph, schedule.order[1]) == consumer);
