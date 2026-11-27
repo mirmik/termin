@@ -3,11 +3,10 @@ r"""Transfer the native state at a loaded Termin sweep step into a MuJoCo keyfra
 From the repository root with the Linux free-threaded SDK and sibling robot checkouts:
 
     out=build/spider-contacts
-    mkdir -p "$out"
-    g++ -std=c++20 -O2 -fPIC -fvisibility=hidden -shared -DNB_SHARED -DNB_FREE_THREADED \
-        -Isdk/include -Isdk/include/python3.14t -Isdk/lib/nanobind/include \
-        benchmarks/physics-small/spider_termin_snapshot.cpp -Lsdk/lib -lnanobind-ft -ltermin_robotics \
-        -o "$out/_spider_termin_snapshot.so"
+    cmake -S benchmarks/physics-small -B "$out" -DCMAKE_BUILD_TYPE=Release \
+        -DTERMIN_BENCHMARK_SPIDER_SNAPSHOT=ON -DCMAKE_PREFIX_PATH="$PWD/sdk" \
+        -DPython_EXECUTABLE="$PWD/build/python-runtime/build-env/bin/python"
+    cmake --build "$out" --target _spider_termin_snapshot
     LD_LIBRARY_PATH="$PWD/sdk/lib" sdk/bin/termin_python benchmarks/physics-small/spider_termin_snapshot.py capture "$out/frame.json" \
         --extension-dir "$out"
     ../twister-capper/.venv/bin/python benchmarks/physics-small/spider_termin_snapshot.py keyframe \

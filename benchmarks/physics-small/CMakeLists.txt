@@ -6,6 +6,16 @@ add_executable(physics_small_benchmark bench.cpp benchmark_common.cpp controller
 target_compile_features(physics_small_benchmark PRIVATE cxx_std_20)
 target_link_libraries(physics_small_benchmark PRIVATE termin_physics_qopt::termin_physics_qopt termin_collision::termin_collision)
 
+option(TERMIN_BENCHMARK_SPIDER_SNAPSHOT "Build the live spider articulation reader" OFF)
+if(TERMIN_BENCHMARK_SPIDER_SNAPSHOT)
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
+    find_package(termin_robotics CONFIG REQUIRED)
+    nanobind_add_module(_spider_termin_snapshot NB_SHARED spider_termin_snapshot.cpp)
+    target_compile_features(_spider_termin_snapshot PRIVATE cxx_std_20)
+    target_link_libraries(_spider_termin_snapshot PRIVATE termin_robotics::termin_robotics)
+endif()
+
 if(UNIX AND NOT APPLE)
     # ELF symbol interposition lets a separate probe count SDK C++ new calls
     # without adding allocation hooks to the throughput executable.
